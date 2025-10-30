@@ -6,13 +6,13 @@ import (
 	"encoding/base64"
 	"encoding/json"
 	"fmt"
-	"io"
+	// "io" // REMOVED (Fix 1: Not used)
 	"log"
 	"net/http"
 	// "net/url" // No longer needed for Apps Script
 	"os"
 	"sort"
-	// "strconv" // No longer needed, logic moved to sheet read
+	"strconv" // ADDED (Fix 2: Was undefined)
 	"strings"
 	"sync"
 	"time"
@@ -298,6 +298,7 @@ func convertSheetValuesToMaps(values *sheets.ValueRange) ([]map[string]interface
 					// --- Data Type Coercion ---
 					// Try to parse numbers (float)
 					if cellStr, ok := cell.(string); ok {
+						// *** FIX 2: Use strconv ***
 						if f, err := strconv.ParseFloat(cellStr, 64); err == nil {
 							rowData[header] = f // Store as float
 						} else if b, err := strconv.ParseBool(cellStr); err == nil {
@@ -469,6 +470,7 @@ func handleGetUsers(c *gin.Context) {
 func handleGetStaticData(c *gin.Context) {
 	// Fetch all required static data sequentially (safer for Sheets API quotas)
 	
+	// *** MODIFIED (Fix 2: 'goto' error): Declare all variables at the top ***
 	result := make(map[string]interface{})
 	var err error
 
@@ -482,21 +484,23 @@ func handleGetStaticData(c *gin.Context) {
 	var drivers []Driver
 	var bankAccounts []BankAccount
 	var phoneCarriers []PhoneCarrier
+	// *** END MODIFICATION ***
+
 
 	err = getCachedSheetData("TeamsPages", &pages, cacheTTL)
-	if err != nil { goto handleError }
+	if err != nil { goto handleError } // Now safe to jump
 	result["pages"] = pages
 
 	err = getCachedSheetData("Products", &products, cacheTTL)
-	if err != nil { goto handleError }
+	if err != nil { goto handleError } // Now safe to jump
 	result["products"] = products
 
 	err = getCachedSheetData("Locations", &locations, cacheTTL)
-	if err != nil { goto handleError }
+	if err != nil { goto handleError } // Now safe to jump
 	result["locations"] = locations
 
 	err = getCachedSheetData("ShippingMethods", &shippingMethods, cacheTTL)
-	if err != nil { goto handleError }
+	if err != nil { goto handleError } // Now safe to jump
 	result["shippingMethods"] = shippingMethods
 
 	// --- Get UploadFolderID from Settings ---
@@ -515,19 +519,19 @@ func handleGetStaticData(c *gin.Context) {
 	// ---
 
 	err = getCachedSheetData("Colors", &colors, cacheTTL)
-	if err != nil { goto handleError }
+	if err != nil { goto handleError } // Now safe to jump
 	result["colors"] = colors
 
 	err = getCachedSheetData("Drivers", &drivers, cacheTTL)
-	if err != nil { goto handleError }
+	if err != nil { goto handleError } // Now safe to jump
 	result["drivers"] = drivers
 
 	err = getCachedSheetData("BankAccounts", &bankAccounts, cacheTTL)
-	if err != nil { goto handleError }
+	if err != nil { goto handleError } // Now safe to jump
 	result["bankAccounts"] = bankAccounts
 
 	err = getCachedSheetData("PhoneCarriers", &phoneCarriers, cacheTTL)
-	if err != nil { goto handleError }
+	if err != nil { goto handleError } // Now safe to jump
 	result["phoneCarriers"] = phoneCarriers
 
 	c.JSON(http.StatusOK, gin.H{"status": "success", "data": result})
@@ -814,7 +818,8 @@ func handleImageUploadProxy(c *gin.Context) {
             }
 
 			// Find the column letter (e.g., "D")
-			sheetRange, ok := sheetRanges[uploadRequest.SheetName]
+			// *** MODIFIED (Fix 3: 'sheetRange' unused) ***
+			_, ok := sheetRanges[uploadRequest.SheetName]
 			if !ok {
 				log.Printf("Error: No A1 range defined for %s, cannot update cell.", uploadRequest.SheetName)
 				return
@@ -879,7 +884,8 @@ func handleUpdateFormulaReport(c *gin.Context) {
 
 	if len(allOrders) == 0 {
 		// Overwrite with headers only if no data
-		_, err = overwriteSheetDataInAPI(FormulaReportSheet, reportData)
+		// *** MODIFIED (Fix 4: Assignment mismatch) ***
+		err = overwriteSheetDataInAPI(FormulaReportSheet, reportData)
 		if err != nil {
 			c.JSON(http.StatusInternalServerError, gin.H{"status": "error", "message": "Failed to clear/write headers to report sheet: " + err.Error()})
 			return
@@ -991,7 +997,8 @@ func handleUpdateFormulaReport(c *gin.Context) {
 	}
 
 	// 4. Write Data to Sheet via Apps Script
-	_, err = overwriteSheetDataInAPI(FormulaReportSheet, reportData)
+	// *** MODIFIED (Fix 5: Assignment mismatch) ***
+	err = overwriteSheetDataInAPI(FormulaReportSheet, reportData)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"status": "error", "message": "Failed to write report data: " + err.Error()})
 		return
