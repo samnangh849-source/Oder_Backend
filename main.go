@@ -10,6 +10,7 @@ import (
 	"net/url"
 	"os"
 	"sort"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -193,7 +194,8 @@ type ReportSummary struct {
     TotalExpense float64 // Used in FormulaReport
 }
 
-// *** NEW: Struct for Revenue Summary ***
+// ... (All Struct definitions remain the same) ...
+
 type RevenueAggregate struct {
     YearlyByTeam   map[int]map[string]float64    `json:"yearlyByTeam"`   // year -> team -> totalRevenue
     YearlyByPage   map[int]map[string]float64    `json:"yearlyByPage"`   // year -> page -> totalRevenue
@@ -324,7 +326,7 @@ func callAppsScriptPOST(requestData AppsScriptRequest) (AppsScriptResponse, erro
 
 	return scriptResponse, nil
 }
-
+// ... (callAppsScriptGET and callAppsScriptPOST remain the same) ...
 
 // --- Fetch & Cache Sheet Data ---
 func fetchSheetData(sheetName string, target interface{}) error {
@@ -388,7 +390,7 @@ func getCachedSheetData(sheetName string, target interface{}, duration time.Dura
 		setCache(cacheKey, dataToCache, duration)
 	}
 	return err
-}
+// ... (getCachedSheetData remains the same) ...
 
 // --- API Handlers ---
 
@@ -408,43 +410,63 @@ func handleGetUsers(c *gin.Context) {
 }
 
 func handleGetStaticData(c *gin.Context) {
-	// Fetch all required static data concurrently
-	var wg sync.WaitGroup
-	var mu sync.Mutex // Mutex to protect concurrent writes to result map and errors
+	// Fetch all required static data sequentially to avoid rate limiting
+	
+	// *** MODIFIED (Problem 2): Switched from concurrent to sequential fetching ***
 	result := make(map[string]interface{})
-	errors := []string{}
+	var err error
 
-	fetch := func(sheetName string, target interface{}, keyName string) {
-		defer wg.Done()
-		err := getCachedSheetData(sheetName, target, cacheTTL) // Use same TTL for simplicity
-		mu.Lock()
-		if err != nil {
-			errors = append(errors, fmt.Sprintf("Failed to fetch %s: %v", keyName, err))
-		} else {
-			result[keyName] = target
-		}
-		mu.Unlock()
-	}
+	var pages []TeamPage
+	err = getCachedSheetData("TeamsPages", &pages, cacheTTL)
+	if err != nil { goto handleError }
+	result["pages"] = pages
 
-	wg.Add(9) // Increased count for PhoneCarriers
-	go fetch("TeamsPages", &[]TeamPage{}, "pages")
-	go fetch("Products", &[]Product{}, "products")
-	go fetch("Locations", &[]Location{}, "locations")
-	go fetch("ShippingMethods", &[]ShippingMethod{}, "shippingMethods")
-	go fetch("Settings", &[]map[string]interface{}{}, "settings") // Fetch settings as map for flexibility
-	go fetch("Colors", &[]Color{}, "colors")
-	go fetch("Drivers", &[]Driver{}, "drivers")
-	go fetch("BankAccounts", &[]BankAccount{}, "bankAccounts")
-    go fetch("PhoneCarriers", &[]PhoneCarrier{}, "phoneCarriers")
+	var products []Product
+	err = getCachedSheetData("Products", &products, cacheTTL)
+	if err != nil { goto handleError }
+	result["products"] = products
 
-	wg.Wait()
+	var locations []Location
+	err = getCachedSheetData("Locations", &locations, cacheTTL)
+	if err != nil { goto handleError }
+	result["locations"] = locations
 
-	if len(errors) > 0 {
-		c.JSON(http.StatusInternalServerError, gin.H{"status": "error", "message": strings.Join(errors, "; ")})
-		return
-	}
+	var shippingMethods []ShippingMethod
+	err = getCachedSheetData("ShippingMethods", &shippingMethods, cacheTTL)
+	if err != nil { goto handleError }
+	result["shippingMethods"] = shippingMethods
+
+	var settings []map[string]interface{}
+	err = getCachedSheetData("Settings", &settings, cacheTTL)
+	if err != nil { goto handleError }
+	result["settings"] = settings
+
+	var colors []Color
+	err = getCachedSheetData("Colors", &colors, cacheTTL)
+	if err != nil { goto handleError }
+	result["colors"] = colors
+
+	var drivers []Driver
+	err = getCachedSheetData("Drivers", &drivers, cacheTTL)
+	if err != nil { goto handleError }
+	result["drivers"] = drivers
+
+	var bankAccounts []BankAccount
+	err = getCachedSheetData("BankAccounts", &bankAccounts, cacheTTL)
+	if err != nil { goto handleError }
+	result["bankAccounts"] = bankAccounts
+
+	var phoneCarriers []PhoneCarrier
+	err = getCachedSheetData("PhoneCarriers", &phoneCarriers, cacheTTL)
+	if err != nil { goto handleError }
+	result["phoneCarriers"] = phoneCarriers
 
 	c.JSON(http.StatusOK, gin.H{"status": "success", "data": result})
+	return
+
+handleError:
+	c.JSON(http.StatusInternalServerError, gin.H{"status": "error", "message": err.Error()})
+	// *** END MODIFICATION ***
 }
 
 
@@ -1082,4 +1104,5 @@ func main() {
 		log.Fatalf("Failed to start server: %v", err)
 	}
 }
+
 
