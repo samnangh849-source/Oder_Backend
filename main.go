@@ -10,7 +10,7 @@ import (
 	"net/url"
 	"os"
 	"sort"
-	"strconv"
+	// "strconv" // REMOVED (Fix 1: Not used)
 	"strings"
 	"sync"
 	"time"
@@ -390,6 +390,7 @@ func getCachedSheetData(sheetName string, target interface{}, duration time.Dura
 		setCache(cacheKey, dataToCache, duration)
 	}
 	return err
+}
 // ... (getCachedSheetData remains the same) ...
 
 // --- API Handlers ---
@@ -412,53 +413,57 @@ func handleGetUsers(c *gin.Context) {
 func handleGetStaticData(c *gin.Context) {
 	// Fetch all required static data sequentially to avoid rate limiting
 	
-	// *** MODIFIED (Problem 2): Switched from concurrent to sequential fetching ***
+	// *** MODIFIED (Fix 2: 'goto' error): Declare all variables at the top ***
 	result := make(map[string]interface{})
 	var err error
 
+	// Declare all variables here, before any 'goto'
 	var pages []TeamPage
+	var products []Product
+	var locations []Location
+	var shippingMethods []ShippingMethod
+	var settings []map[string]interface{}
+	var colors []Color
+	var drivers []Driver
+	var bankAccounts []BankAccount
+	var phoneCarriers []PhoneCarrier
+	// *** END MODIFICATION ***
+
+
 	err = getCachedSheetData("TeamsPages", &pages, cacheTTL)
-	if err != nil { goto handleError }
+	if err != nil { goto handleError } // Now safe to jump
 	result["pages"] = pages
 
-	var products []Product
 	err = getCachedSheetData("Products", &products, cacheTTL)
-	if err != nil { goto handleError }
+	if err != nil { goto handleError } // Now safe to jump
 	result["products"] = products
 
-	var locations []Location
 	err = getCachedSheetData("Locations", &locations, cacheTTL)
-	if err != nil { goto handleError }
+	if err != nil { goto handleError } // Now safe to jump
 	result["locations"] = locations
 
-	var shippingMethods []ShippingMethod
 	err = getCachedSheetData("ShippingMethods", &shippingMethods, cacheTTL)
-	if err != nil { goto handleError }
+	if err != nil { goto handleError } // Now safe to jump
 	result["shippingMethods"] = shippingMethods
 
-	var settings []map[string]interface{}
 	err = getCachedSheetData("Settings", &settings, cacheTTL)
-	if err != nil { goto handleError }
+	if err != nil { goto handleError } // Now safe to jump
 	result["settings"] = settings
 
-	var colors []Color
 	err = getCachedSheetData("Colors", &colors, cacheTTL)
-	if err != nil { goto handleError }
+	if err != nil { goto handleError } // Now safe to jump
 	result["colors"] = colors
 
-	var drivers []Driver
 	err = getCachedSheetData("Drivers", &drivers, cacheTTL)
-	if err != nil { goto handleError }
+	if err != nil { goto handleError } // Now safe to jump
 	result["drivers"] = drivers
 
-	var bankAccounts []BankAccount
 	err = getCachedSheetData("BankAccounts", &bankAccounts, cacheTTL)
-	if err != nil { goto handleError }
+	if err != nil { goto handleError } // Now safe to jump
 	result["bankAccounts"] = bankAccounts
 
-	var phoneCarriers []PhoneCarrier
 	err = getCachedSheetData("PhoneCarriers", &phoneCarriers, cacheTTL)
-	if err != nil { goto handleError }
+	if err != nil { goto handleError } // Now safe to jump
 	result["phoneCarriers"] = phoneCarriers
 
 	c.JSON(http.StatusOK, gin.H{"status": "success", "data": result})
@@ -466,7 +471,6 @@ func handleGetStaticData(c *gin.Context) {
 
 handleError:
 	c.JSON(http.StatusInternalServerError, gin.H{"status": "error", "message": err.Error()})
-	// *** END MODIFICATION ***
 }
 
 
@@ -1104,5 +1108,4 @@ func main() {
 		log.Fatalf("Failed to start server: %v", err)
 	}
 }
-
 
