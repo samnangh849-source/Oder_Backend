@@ -2,40 +2,75 @@ package main
 
 import (
 	"bytes"
+	"context"
+	"encoding/base64"
 	"encoding/json"
 	"fmt"
 	"io"
 	"log"
 	"net/http"
-	"net/url"
+	// "net/url" // No longer needed for Apps Script
 	"os"
 	"sort"
-	// "strconv" // REMOVED (Fix 1: Not used)
+	// "strconv" // No longer needed, logic moved to sheet read
 	"strings"
 	"sync"
 	"time"
 
 	"github.com/gin-contrib/cors"
 	"github.com/gin-gonic/gin"
+	
+	// --- NEW: Google API Imports ---
+	"google.golang.org/api/drive/v3"
+	"google.golang.org/api/option"
+	"google.golang.org/api/sheets/v4"
+	// --- End Google API Imports ---
+
 	// Consider adding a Go Telegram library, e.g., "github.com/go-telegram-bot-api/telegram-bot-api/v5"
 	// Consider adding a PDF library if needed, e.g., "github.com/jung-kurt/gofpdf"
 )
 
 // --- Configuration ---
 var (
-	appsScriptURL    string
-	appsScriptSecret string
-	// Add Telegram Bot Tokens/Group IDs here from environment variables
+	// --- NEW: Google API Services ---
+	sheetsService *sheets.Service
+	driveService  *drive.Service
+	// ---
+	spreadsheetID  string
+	uploadFolderID string
+	// ---
 	telegramConfig = make(map[string]map[string]string) // e.g., map[TeamName]map["token"/"groupID"]
 	renderBaseURL    string                               // URL of this Render service itself
 )
 
 // --- Constants from Apps Script Config (Keep consistent) ---
+// *** NEW: Define A1 Ranges for all sheets we read ***
+var sheetRanges = map[string]string{
+	"Users":             "Users!A:G", // Assuming G is IsSystemAdmin
+	"Settings":          "Settings!A:B", // Assuming A=Team, B=UploadFolderID (BotToken/etc are env vars now)
+	"TeamsPages":        "TeamsPages!A:C",
+	"Products":          "Products!A:D",
+	"Locations":         "Locations!A:C",
+	"ShippingMethods":   "ShippingMethods!A:D",
+	"Colors":            "Colors!A:A",
+	"Drivers":           "Drivers!A:B",
+	"BankAccounts":    "BankAccounts!A:B",
+	"PhoneCarriers":   "PhoneCarriers!A:C",
+	"TelegramTemplates": "TelegramTemplates!A:C",
+	"AllOrders":         "AllOrders!A:U", // Assuming Timestamp to Team
+	"RevenueDashboard":  "RevenueDashboard!A:D",
+	// Write-only sheets don't need a read range
+	"FormulaReportSheet": "FormulaReport!A:Z", // Use full range for clear/overwrite
+	"UserActivityLogs":   "UserActivityLogs!A:Z", // Append only
+	"EditLogs":           "EditLogs!A:Z",         // Append only
+}
+
 const (
     AllOrdersSheet     = "AllOrders"
     FormulaReportSheet = "FormulaReport"
-    RevenueSheet       = "RevenueDashboard" // *** IMPORTANT ***
+    RevenueSheet       = "RevenueDashboard"
     UserActivitySheet  = "UserActivityLogs"
+	EditLogsSheet	   = "EditLogs"
     TelegramTemplatesSheet = "TelegramTemplates"
     // ... add others if needed directly in Go
 )
@@ -98,7 +133,7 @@ func invalidateSheetCache(sheetName string) {
 // Use `json:"Header Name"` if header has spaces or special chars
 type User struct {
 	UserName          string `json:"UserName"`
-	Password          string `json:"Password"`
+	Password          string `json:"Password"` // This will be read as string
 	Team              string `json:"Team"` // Comma-separated
 	FullName          string `json:"FullName"`
 	ProfilePictureURL string `json:"ProfilePictureURL"`
@@ -108,7 +143,7 @@ type User struct {
 
 type Product struct {
 	ProductName string  `json:"ProductName"`
-	Barcode     string  `json:"Barcode"`
+	Barcode     string  `json:"Barcode"` // This will be read as string
 	Price       float64 `json:"Price"`
 	ImageURL    string  `json:"ImageURL"`
 }
@@ -162,7 +197,7 @@ type Order struct {
 	Page                 string  `json:"Page"`
 	TelegramValue        string  `json:"TelegramValue"`
 	CustomerName         string  `json:"Customer Name"`
-	CustomerPhone        string  `json:"Customer Phone"`
+	CustomerPhone        string  `json:"Customer Phone"` // This will be read as string
 	Location             string  `json:"Location"`
 	AddressDetails       string  `json:"Address Details"`
 	Note                 string  `json:"Note"`
@@ -207,163 +242,176 @@ type RevenueAggregate struct {
 
 
 
-// --- Apps Script Communication ---
-type AppsScriptRequest struct {
-	Action    string      `json:"action"`
-	Secret    string      `json:"secret"`
-	SheetName string      `json:"sheetName,omitempty"`
-	RowData   []interface{} `json:"rowData,omitempty"` // For appendRow
-	OrderId   string      `json:"orderId,omitempty"` // For findOrderRowById
-	Row       int         `json:"row,omitempty"` // For update/delete
-	UpdatedData map[string]interface{} `json:"updatedData,omitempty"` // For updateRow
-	LogData   map[string]interface{} `json:"logData,omitempty"` // For logging
-	// For image upload
-	FileData string `json:"fileData,omitempty"`
-	FileName string `json:"fileName,omitempty"`
-	MimeType string `json:"mimeType,omitempty"`
-	// *** For overwriteSheetData ***
-	Data      [][]interface{} `json:"data,omitempty"`
-}
-
-type AppsScriptResponse struct {
-	Status  string      `json:"status"`
-	Message string      `json:"message,omitempty"`
-	Data    interface{} `json:"data,omitempty"`
-	URL     string      `json:"url,omitempty"` // For image upload response
-}
-
-// ... (callAppsScriptGET remains the same) ...
-func callAppsScriptGET(action string, params map[string]string) (AppsScriptResponse, error) {
-	baseURL, _ := url.Parse(appsScriptURL)
-	query := baseURL.Query()
-	query.Set("action", action)
-	query.Set("secret", appsScriptSecret)
-	for key, value := range params {
-		query.Set(key, value)
+// --- *** NEW: Google API Client Setup *** ---
+func createGoogleAPIClient(ctx context.Context) error {
+	credentialsJSON := os.Getenv("GCP_CREDENTIALS")
+	if credentialsJSON == "" {
+		return fmt.Errorf("GCP_CREDENTIALS environment variable is not set")
 	}
-	baseURL.RawQuery = query.Encode()
 
-	resp, err := http.Get(baseURL.String())
+	creds := []byte(credentialsJSON)
+
+	// Create Sheets Service
+	sheetsSrv, err := sheets.NewService(ctx, option.WithCredentialsJSON(creds), option.WithScopes(sheets.SpreadsheetsScope))
 	if err != nil {
-		log.Printf("Error calling Apps Script GET (%s): %v", action, err)
-		return AppsScriptResponse{}, fmt.Errorf("failed to connect to Google Sheets API")
+		return fmt.Errorf("unable to retrieve Sheets client: %v", err)
 	}
-	defer resp.Body.Close()
+	sheetsService = sheetsSrv
+	log.Println("Google Sheets API client created successfully.")
 
-	body, err := io.ReadAll(resp.Body)
+	// Create Drive Service
+	driveSrv, err := drive.NewService(ctx, option.WithCredentialsJSON(creds), option.WithScopes(drive.DriveScope)) // Use DriveScope for file uploads/permissions
 	if err != nil {
-		log.Printf("Error reading Apps Script GET response (%s): %v", action, err)
-		return AppsScriptResponse{}, fmt.Errorf("failed to read Google Sheets API response")
+		return fmt.Errorf("unable to retrieve Drive client: %v", err)
 	}
-
-	var scriptResponse AppsScriptResponse
-	err = json.Unmarshal(body, &scriptResponse)
-	if err != nil {
-		log.Printf("Error unmarshalling Apps Script GET response (%s): %v. Body: %s", action, err, string(body))
-		return AppsScriptResponse{}, fmt.Errorf("invalid response format from Google Sheets API")
-	}
-
-	if scriptResponse.Status != "success" {
-		log.Printf("Apps Script GET Error (%s): %s", action, scriptResponse.Message)
-		return AppsScriptResponse{}, fmt.Errorf("Google Sheets API error: %s", scriptResponse.Message)
-	}
-
-	return scriptResponse, nil
-}
-
-
-// ... (callAppsScriptPOST remains the same) ...
-func callAppsScriptPOST(requestData AppsScriptRequest) (AppsScriptResponse, error) {
-	requestData.Secret = appsScriptSecret // Ensure secret is included
-	jsonData, err := json.Marshal(requestData)
-	if err != nil {
-		log.Printf("Error marshalling Apps Script POST request (%s): %v", requestData.Action, err)
-		return AppsScriptResponse{}, fmt.Errorf("internal error preparing data")
-	}
-
-	resp, err := http.Post(appsScriptURL, "application/json", bytes.NewBuffer(jsonData))
-	if err != nil {
-		log.Printf("Error calling Apps Script POST (%s): %v", requestData.Action, err)
-		return AppsScriptResponse{}, fmt.Errorf("failed to connect to Google Sheets API")
-	}
-	defer resp.Body.Close()
-
-	body, err := io.ReadAll(resp.Body)
-	if err != nil {
-		log.Printf("Error reading Apps Script POST response (%s): %v", requestData.Action, err)
-		return AppsScriptResponse{}, fmt.Errorf("failed to read Google Sheets API response")
-	}
-
-	var scriptResponse AppsScriptResponse
-	err = json.Unmarshal(body, &scriptResponse)
-	if err != nil {
-		log.Printf("Error unmarshalling Apps Script POST response (%s): %v. Body: %s", requestData.Action, err, string(body))
-		// Try to return the raw body if unmarshalling fails
-		log.Printf("Raw response body: %s", string(body))
-		return AppsScriptResponse{}, fmt.Errorf("invalid response format from Google Sheets API")
-	}
-
-	// Handle specific non-200 status codes from Apps Script if needed (e.g., locked)
-	if resp.StatusCode != http.StatusOK {
-	    log.Printf("Apps Script POST request (%s) returned status %d. Body: %s", requestData.Action, resp.StatusCode, string(body))
-	    // If it's a known error from Apps Script JSON, use that message
-	    if scriptResponse.Status == "locked" {
-	         return AppsScriptResponse{}, fmt.Errorf("Google Sheets API is busy, please try again")
-	    }
-	     if scriptResponse.Status == "error" && scriptResponse.Message != "" {
-			 return AppsScriptResponse{}, fmt.Errorf("Google Sheets API error: %s", scriptResponse.Message)
-		}
-		// Otherwise, use a generic error based on HTTP status
-		return AppsScriptResponse{}, fmt.Errorf("Google Sheets API returned status %d", resp.StatusCode)
-	}
-
-    // Even with 200 OK, check the internal status field
-	if scriptResponse.Status != "success" {
-		log.Printf("Apps Script POST Error (%s): %s", requestData.Action, scriptResponse.Message)
-		return AppsScriptResponse{}, fmt.Errorf("Google Sheets API error: %s", scriptResponse.Message)
-	}
-
-
-	return scriptResponse, nil
-}
-// ... (callAppsScriptGET and callAppsScriptPOST remain the same) ...
-
-// --- Fetch & Cache Sheet Data ---
-func fetchSheetData(sheetName string, target interface{}) error {
-	resp, err := callAppsScriptGET("getSheetData", map[string]string{"sheetName": sheetName})
-	if err != nil {
-		return err
-	}
-
-	// Apps Script returns data as []interface{}. We need to marshal it back to JSON
-	// and then unmarshal it into our specific Go struct slice.
-	jsonData, err := json.Marshal(resp.Data)
-	if err != nil {
-		log.Printf("Error marshalling data from Apps Script for %s: %v", sheetName, err)
-		return fmt.Errorf("internal error processing sheet data")
-	}
-
-	err = json.Unmarshal(jsonData, target)
-	if err != nil {
-		log.Printf("Error unmarshalling data for %s: %v. JSON: %s", sheetName, err, string(jsonData))
-		// Log the first few items to see the structure
-		var rawData []map[string]interface{}
-		_ = json.Unmarshal(jsonData, &rawData) // Ignore error here
-		if len(rawData) > 0 {
-			log.Printf("First item structure: %+v", rawData[0])
-		}
-		return fmt.Errorf("mismatched data structure for %s", sheetName)
-	}
+	driveService = driveSrv
+	log.Println("Google Drive API client created successfully.")
 
 	return nil
 }
 
+// --- *** NEW: Google Sheets API Helper Functions *** ---
 
+// Converts Sheets API ValueRange (array of rows) to what our app expects (array of maps)
+func convertSheetValuesToMaps(values *sheets.ValueRange) ([]map[string]interface{}, error) {
+	if values == nil || len(values.Values) < 2 {
+		// No data or only headers
+		return []map[string]interface{}{}, nil
+	}
+
+	headers := values.Values[0] // First row is headers
+	dataRows := values.Values[1:]
+
+	result := make([]map[string]interface{}, 0, len(dataRows))
+
+	for _, row := range dataRows {
+		if len(row) == 0 || (len(row) == 1 && row[0] == "") {
+			continue // Skip empty rows
+		}
+
+		rowData := make(map[string]interface{})
+		for i, cell := range row {
+			if i < len(headers) {
+				header := fmt.Sprintf("%v", headers[i]) // Convert header to string
+				if header != "" {
+					
+					// --- Data Type Coercion ---
+					// Try to parse numbers (float)
+					if cellStr, ok := cell.(string); ok {
+						if f, err := strconv.ParseFloat(cellStr, 64); err == nil {
+							rowData[header] = f // Store as float
+						} else if b, err := strconv.ParseBool(cellStr); err == nil {
+							rowData[header] = b // Store as bool
+						} else {
+							rowData[header] = cellStr // Keep as string
+						}
+					} else {
+						// It's likely already a float64 or bool from JSON/API
+						rowData[header] = cell 
+					}
+
+					// *** Specific Fixes for string fields that look like numbers ***
+					if header == "Password" || header == "Customer Phone" || header == "Barcode" {
+						rowData[header] = fmt.Sprintf("%v", cell) // Force to string
+					}
+					// *** End Fixes ***
+
+				}
+			}
+		}
+		result = append(result, rowData)
+	}
+	return result, nil
+}
+
+
+// Replaces callAppsScriptGET("getSheetData", ...)
+func fetchSheetDataFromAPI(sheetName string) ([]map[string]interface{}, error) {
+	readRange, ok := sheetRanges[sheetName]
+	if !ok {
+		return nil, fmt.Errorf("no A1 range defined for sheet: %s", sheetName)
+	}
+
+	resp, err := sheetsService.Spreadsheets.Values.Get(spreadsheetID, readRange).Do()
+	if err != nil {
+		log.Printf("Error calling Sheets API GET for %s: %v", sheetName, err)
+		return nil, fmt.Errorf("failed to retrieve data from Google Sheets API")
+	}
+
+	// Convert [][]interface{} to []map[string]interface{}
+	mappedData, err := convertSheetValuesToMaps(resp)
+	if err != nil {
+		log.Printf("Error converting sheet data for %s: %v", sheetName, err)
+		return nil, fmt.Errorf("failed to process data structure from Google Sheets")
+	}
+
+	return mappedData, nil
+}
+
+// Replaces callAppsScriptPOST({Action: "appendRow", ...})
+func appendRowToSheet(sheetName string, rowData []interface{}) error {
+	// A1 notation for appending to a sheet is just the sheet name
+	writeRange := sheetName 
+	
+	valueRange := &sheets.ValueRange{
+		Values: [][]interface{}{rowData},
+	}
+
+	// Use "USER_ENTERED" to parse values correctly (e.g., convert strings to numbers if sheet cell is formatted as number)
+	// Use "RAW" to insert as-is (safer, but might be all strings)
+	// Let's stick to RAW to match how Apps Script .appendRow() works
+	_, err := sheetsService.Spreadsheets.Values.Append(spreadsheetID, writeRange, valueRange).ValueInputOption("RAW").Do()
+	if err != nil {
+		log.Printf("Error calling Sheets API APPEND for %s: %v", sheetName, err)
+		return fmt.Errorf("failed to append row to Google Sheets API")
+	}
+	return nil
+}
+
+// Replaces callAppsScriptPOST({Action: "overwriteSheetData", ...})
+func overwriteSheetDataInAPI(sheetName string, data [][]interface{}) error {
+	// 1. Clear the sheet first
+	clearRange, ok := sheetRanges[sheetName] // Use the defined range (e.g., "FormulaReport!A:Z")
+	if !ok {
+		return fmt.Errorf("no A1 range defined for sheet: %s", sheetName)
+	}
+	
+	_, err := sheetsService.Spreadsheets.Values.Clear(spreadsheetID, clearRange, &sheets.ClearValuesRequest{}).Do()
+	if err != nil {
+		log.Printf("Error calling Sheets API CLEAR for %s: %v", sheetName, err)
+		return fmt.Errorf("failed to clear sheet %s: %v", sheetName, err)
+	}
+
+	// 2. Write new data
+	if len(data) == 0 {
+		log.Printf("No data provided to overwrite sheet %s. Sheet cleared.", sheetName)
+		return nil // Nothing to write
+	}
+	
+	// Determine the exact range to write (e.g., "FormulaReport!A1:D100")
+	// Simple way: just write starting at A1
+	writeRange := fmt.Sprintf("%s!A1", sheetName)
+
+	valueRange := &sheets.ValueRange{
+		Values: data,
+	}
+
+	_, err = sheetsService.Spreadsheets.Values.Update(spreadsheetID, writeRange, valueRange).ValueInputOption("RAW").Do()
+	if err != nil {
+		log.Printf("Error calling Sheets API UPDATE for %s: %v", sheetName, err)
+		return fmt.Errorf("failed to write data to sheet %s: %v", sheetName, err)
+	}
+	
+	return nil
+}
+
+
+// --- Fetch & Cache Sheet Data (Rewritten) ---
 func getCachedSheetData(sheetName string, target interface{}, duration time.Duration) error {
 	cacheKey := "sheet_" + sheetName
 	cachedData, found := getCache(cacheKey)
 	if found {
-		// Try to cast cached data
+		// Try to cast cached data (which is already []map[string]interface{})
 		jsonData, err := json.Marshal(cachedData)
 		if err == nil {
 			err = json.Unmarshal(jsonData, target)
@@ -371,27 +419,36 @@ func getCachedSheetData(sheetName string, target interface{}, duration time.Dura
 				return nil // Cache hit and conversion successful
 			}
 			log.Printf("Error unmarshalling cached data for %s: %v", sheetName, err)
-			// Proceed to fetch if cache data is invalid format
 		} else {
              log.Printf("Error marshalling cached data for %s: %v", sheetName, err)
-            // Proceed to fetch if cache data is invalid format
         }
 	}
 
 	// Fetch from source if not found or cache is invalid
-	log.Printf("Fetching fresh data for %s", sheetName)
-	err := fetchSheetData(sheetName, target)
-	if err == nil {
-		// Need to marshal the target back to interface{} for caching
-		// This is inefficient but necessary if target is a pointer to a slice
-		var dataToCache interface{}
-		jsonData, _ := json.Marshal(target) // Marshal the fetched data
-		_ = json.Unmarshal(jsonData, &dataToCache) // Unmarshal back into interface{}
-		setCache(cacheKey, dataToCache, duration)
+	log.Printf("Fetching fresh data for %s (via Sheets API)", sheetName)
+	// *** MODIFIED: Call new API function ***
+	mappedData, err := fetchSheetDataFromAPI(sheetName)
+	if err != nil {
+		return err
 	}
-	return err
+	
+	// Convert mappedData to the target struct (e.g., []User)
+	// This requires the same two-step marshal/unmarshal as before
+	jsonData, err := json.Marshal(mappedData)
+	if err != nil {
+		log.Printf("Error marshalling data from Sheets API for %s: %v", sheetName, err)
+		return fmt.Errorf("internal error processing sheet data")
+	}
+	err = json.Unmarshal(jsonData, target)
+	if err != nil {
+		log.Printf("Error unmarshalling data for %s: %v. JSON: %s", sheetName, err, string(jsonData))
+		return fmt.Errorf("mismatched data structure for %s", sheetName)
+	}
+
+	// Cache the *mapped* data
+	setCache(cacheKey, mappedData, duration)
+	return nil
 }
-// ... (getCachedSheetData remains the same) ...
 
 // --- API Handlers ---
 
@@ -401,7 +458,6 @@ func handlePing(c *gin.Context) {
 
 func handleGetUsers(c *gin.Context) {
 	var users []User
-	// Use slightly longer cache for users as they change less often?
 	err := getCachedSheetData("Users", &users, 15*time.Minute) // 15 min cache
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"status": "error", "message": err.Error()})
@@ -411,9 +467,8 @@ func handleGetUsers(c *gin.Context) {
 }
 
 func handleGetStaticData(c *gin.Context) {
-	// Fetch all required static data sequentially to avoid rate limiting
+	// Fetch all required static data sequentially (safer for Sheets API quotas)
 	
-	// *** MODIFIED (Fix 2: 'goto' error): Declare all variables at the top ***
 	result := make(map[string]interface{})
 	var err error
 
@@ -422,48 +477,57 @@ func handleGetStaticData(c *gin.Context) {
 	var products []Product
 	var locations []Location
 	var shippingMethods []ShippingMethod
-	var settings []map[string]interface{}
+	var settingsMaps []map[string]interface{} // Settings is special
 	var colors []Color
 	var drivers []Driver
 	var bankAccounts []BankAccount
 	var phoneCarriers []PhoneCarrier
-	// *** END MODIFICATION ***
-
 
 	err = getCachedSheetData("TeamsPages", &pages, cacheTTL)
-	if err != nil { goto handleError } // Now safe to jump
+	if err != nil { goto handleError }
 	result["pages"] = pages
 
 	err = getCachedSheetData("Products", &products, cacheTTL)
-	if err != nil { goto handleError } // Now safe to jump
+	if err != nil { goto handleError }
 	result["products"] = products
 
 	err = getCachedSheetData("Locations", &locations, cacheTTL)
-	if err != nil { goto handleError } // Now safe to jump
+	if err != nil { goto handleError }
 	result["locations"] = locations
 
 	err = getCachedSheetData("ShippingMethods", &shippingMethods, cacheTTL)
-	if err != nil { goto handleError } // Now safe to jump
+	if err != nil { goto handleError }
 	result["shippingMethods"] = shippingMethods
 
-	err = getCachedSheetData("Settings", &settings, cacheTTL)
-	if err != nil { goto handleError } // Now safe to jump
-	result["settings"] = settings
+	// --- Get UploadFolderID from Settings ---
+	err = getCachedSheetData("Settings", &settingsMaps, cacheTTL)
+	if err != nil { goto handleError }
+	result["settings"] = settingsMaps // Frontend might not even need this now
+	// Also set the global variable
+	if len(settingsMaps) > 0 {
+		if id, ok := settingsMaps[0]["UploadFolderID"].(string); ok {
+			uploadFolderID = id
+		}
+	}
+	if uploadFolderID == "" {
+		uploadFolderID = os.Getenv("UPLOAD_FOLDER_ID") // Use env var as fallback
+	}
+	// ---
 
 	err = getCachedSheetData("Colors", &colors, cacheTTL)
-	if err != nil { goto handleError } // Now safe to jump
+	if err != nil { goto handleError }
 	result["colors"] = colors
 
 	err = getCachedSheetData("Drivers", &drivers, cacheTTL)
-	if err != nil { goto handleError } // Now safe to jump
+	if err != nil { goto handleError }
 	result["drivers"] = drivers
 
 	err = getCachedSheetData("BankAccounts", &bankAccounts, cacheTTL)
-	if err != nil { goto handleError } // Now safe to jump
+	if err != nil { goto handleError }
 	result["bankAccounts"] = bankAccounts
 
 	err = getCachedSheetData("PhoneCarriers", &phoneCarriers, cacheTTL)
-	if err != nil { goto handleError } // Now safe to jump
+	if err != nil { goto handleError }
 	result["phoneCarriers"] = phoneCarriers
 
 	c.JSON(http.StatusOK, gin.H{"status": "success", "data": result})
@@ -578,52 +642,36 @@ func handleSubmitOrder(c *gin.Context) {
 		orderRequest.Subtotal, orderRequest.GrandTotal, string(productsJSON),
 		orderRequest.Shipping["method"], orderRequest.Shipping["details"], shippingCost,
 		orderRequest.Payment["status"], orderRequest.Payment["info"],
-		"", // Placeholder for Telegram Message ID (Apps Script no longer handles sending)
+		"", // Placeholder for Telegram Message ID (Go backend handles sending)
 	}
 
 	// Append to the specific team's order sheet
-	_, err = callAppsScriptPOST(AppsScriptRequest{
-		Action:    "appendRow",
-		SheetName: orderSheetName,
-		RowData:   rowData,
-	})
+	err = appendRowToSheet(orderSheetName, rowData)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"status": "error", "message": "Failed to save order to Google Sheet: " + err.Error()})
 		return
 	}
 
-    // Append to AllOrders sheet (optional but good for consistency)
+    // Append to AllOrders sheet
     rowDataWithTeam := append(rowData, team)
-    _, err = callAppsScriptPOST(AppsScriptRequest{
-        Action: "appendRow",
-        SheetName: AllOrdersSheet,
-        RowData: rowDataWithTeam,
-    })
+    err = appendRowToSheet(AllOrdersSheet, rowDataWithTeam)
     if err != nil {
         log.Printf("Warning: Failed to append to AllOrders sheet: %v", err)
-        // Don't fail the whole request, just log it.
     }
 
 	// Append to Revenue sheet
-	_, err = callAppsScriptPOST(AppsScriptRequest{
-		Action:    "appendRow",
-		SheetName: RevenueSheet,
-		RowData:   []interface{}{timestamp, team, orderRequest.Page, orderRequest.GrandTotal},
-	})
+	err = appendRowToSheet(RevenueSheet, []interface{}{timestamp, team, orderRequest.Page, orderRequest.GrandTotal})
 	if err != nil {
 		log.Printf("Warning: Failed to append to RevenueDashboard: %v", err)
 	}
     
     // Log user activity via Apps Script
-    _, err = callAppsScriptPOST(AppsScriptRequest{
-        Action: "logUserActivity",
-        SheetName: UserActivitySheet, // Specify sheet name here if needed by Apps Script
-        LogData: map[string]interface{}{
-            "username": orderRequest.CurrentUser.UserName,
-            "action": "SUBMIT_ORDER_GO", // Indicate it came via Go backend
-            "details": map[string]interface{}{"orderId": orderId, "team": team, "grandTotal": orderRequest.GrandTotal},
-        },
-    })
+    err = appendRowToSheet(UserActivitySheet, []interface{}{
+		timestamp,
+		orderRequest.CurrentUser.UserName, 
+		"SUBMIT_ORDER_GO", 
+		fmt.Sprintf(`{"orderId":"%s","team":"%s","grandTotal":%.2f}`, orderId, team, orderRequest.GrandTotal),
+	})
     if err != nil {
         log.Printf("Warning: Failed to log user activity for order submission: %v", err)
     }
@@ -667,19 +715,16 @@ func handleSubmitOrder(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{"status": "success", "orderId": orderId})
 }
 
-// --- Handler for Image Upload Proxy ---
+// --- Handler for Image Upload Proxy (Rewritten for Drive API) ---
 func handleImageUploadProxy(c *gin.Context) {
     var uploadRequest struct {
-		Action    string      `json:"action"` // Should be "uploadImage"
 		FileData string `json:"fileData"`
 		FileName string `json:"fileName"`
 		MimeType string `json:"mimeType"`
-		// Pass through sheet/pk/column info needed by Apps Script for cell update
+		// Pass through sheet/pk/column info
 		SheetName string `json:"sheetName"`
 		PrimaryKey map[string]string `json:"primaryKey"`
 		ColumnName string `json:"columnName"`
-		// Admin user for logging (optional, could be added by Go backend based on session)
-		// AdminUser string `json:"adminUser"`
 	}
 
 	if err := c.ShouldBindJSON(&uploadRequest); err != nil {
@@ -687,22 +732,50 @@ func handleImageUploadProxy(c *gin.Context) {
 		return
 	}
 
-	// Call the Apps Script upload function to get the URL
-	resp, err := callAppsScriptPOST(AppsScriptRequest{
-		Action:    "uploadImage", // Action for Apps Script
-		FileData: uploadRequest.FileData,
-		FileName: uploadRequest.FileName,
-		MimeType: uploadRequest.MimeType,
-        // Log activity from Go backend or pass user info if needed
-		// LogData: map[string]interface{}{"username": "GoBackendProxy", "action": "PROXY_IMAGE_UPLOAD", "details": ...},
-	})
+	// 1. Decode Base64
+	fileData, err := base64.StdEncoding.DecodeString(uploadRequest.FileData)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"status": "error", "message": "Failed to upload image via Google API: " + err.Error()})
+		c.JSON(http.StatusBadRequest, gin.H{"status": "error", "message": "Invalid base64 data"})
+		return
+	}
+	fileReader := bytes.NewReader(fileData)
+	
+	if uploadFolderID == "" {
+		c.JSON(http.StatusInternalServerError, gin.H{"status": "error", "message": "Upload Folder ID is not configured on the server."})
 		return
 	}
 
-    // --- Update the specific sheet cell after upload ---
-    if uploadRequest.SheetName != "" && uploadRequest.PrimaryKey != nil && uploadRequest.ColumnName != "" && resp.URL != "" {
+	// 2. Upload to Google Drive
+	file := &drive.File{
+		Name:     uploadRequest.FileName,
+		MimeType: uploadRequest.MimeType,
+		Parents:  []string{uploadFolderID}, // Set parent folder
+	}
+
+	createdFile, err := driveService.Files.Create(file).Media(fileReader).Do()
+	if err != nil {
+		log.Printf("Error uploading file to Drive: %v", err)
+		c.JSON(http.StatusInternalServerError, gin.H{"status": "error", "message": "Failed to upload file to Google Drive: " + err.Error()})
+		return
+	}
+
+	// 3. Set file permissions to public (Anyone with link can view)
+	permission := &drive.Permission{
+		Role: "reader",
+		Type: "anyone",
+	}
+	_, err = driveService.Permissions.Create(createdFile.Id, permission).Do()
+	if err != nil {
+		log.Printf("Error setting permissions on Drive file %s: %v", createdFile.Id, err)
+		// Don't fail the whole request, just log a warning
+	}
+
+	// 4. Construct the direct download URL
+	fileUrl := fmt.Sprintf("https://drive.google.com/uc?id=%s", createdFile.Id)
+
+
+    // 5. Update the specific sheet cell (in background)
+    if uploadRequest.SheetName != "" && uploadRequest.PrimaryKey != nil && uploadRequest.ColumnName != "" {
         go func() { // Update sheet in the background
             pkHeader := ""
             pkValue := ""
@@ -716,29 +789,16 @@ func handleImageUploadProxy(c *gin.Context) {
                 return
             }
 
-            // Fetch current sheet data (use cache if available, but might be slightly stale)
             var sheetRows []map[string]interface{}
             targetRowIndex := -1
-
-            // Prioritize cache for finding row quickly
-            cacheKey := "sheet_" + uploadRequest.SheetName
-            cachedData, found := getCache(cacheKey)
-            if found {
-                 jsonData, err := json.Marshal(cachedData)
-                 if err == nil {
-                     _ = json.Unmarshal(jsonData, &sheetRows) // Ignore error, try fetching if fail
-                 }
-            }
-            
-            // If cache missed or was invalid format, fetch fresh
-            if len(sheetRows) == 0 {
-                 err := fetchSheetData(uploadRequest.SheetName, &sheetRows)
-                 if err != nil {
-                     log.Printf("Error fetching sheet %s to update image URL: %v", uploadRequest.SheetName, err)
-                     return
-                 }
-            }
-
+			
+			// Fetch fresh data (don't use cache) to find the correct row
+			mappedData, err := fetchSheetDataFromAPI(uploadRequest.SheetName)
+			if err != nil {
+				log.Printf("Error fetching sheet %s to update image URL: %v", uploadRequest.SheetName, err)
+				return
+			}
+			sheetRows = mappedData
 
             // Find the row index
             for i, row := range sheetRows {
@@ -753,50 +813,73 @@ func handleImageUploadProxy(c *gin.Context) {
                  return
             }
 
-            // Call updateRow in Apps Script
-            updatePayload := AppsScriptRequest{
-                Action: "updateRow",
-                SheetName: uploadRequest.SheetName,
-                Row: targetRowIndex,
-                UpdatedData: map[string]interface{}{
-                    uploadRequest.ColumnName: resp.URL,
-                },
-            }
-             _, updateErr := callAppsScriptPOST(updatePayload)
-             if updateErr != nil {
-                  log.Printf("Error updating sheet %s row %d with image URL: %v", uploadRequest.SheetName, targetRowIndex, updateErr)
+			// Find the column letter (e.g., "D")
+			sheetRange, ok := sheetRanges[uploadRequest.SheetName]
+			if !ok {
+				log.Printf("Error: No A1 range defined for %s, cannot update cell.", uploadRequest.SheetName)
+				return
+			}
+			
+			headersResp, err := sheetsService.Spreadsheets.Values.Get(spreadsheetID, fmt.Sprintf("%s!1:1", uploadRequest.SheetName)).Do()
+			if err != nil || len(headersResp.Values) == 0 {
+				log.Printf("Error fetching headers for %s: %v", uploadRequest.SheetName, err)
+				return
+			}
+			
+			colIndex := -1
+			for i, header := range headersResp.Values[0] {
+				if fmt.Sprintf("%v", header) == uploadRequest.ColumnName {
+					colIndex = i
+					break
+				}
+			}
+			if colIndex == -1 {
+				log.Printf("Error: Column '%s' not found in sheet '%s'", uploadRequest.ColumnName, uploadRequest.SheetName)
+				return
+			}
+			
+			// Convert column index (0-based) to letter (A-based)
+			colLetter := string(rune('A' + colIndex))
+			updateA1Range := fmt.Sprintf("%s!%s%d", uploadRequest.SheetName, colLetter, targetRowIndex)
+
+            // Call Update in Sheets API
+            valueRange := &sheets.ValueRange{
+				Values: [][]interface{}{{fileUrl}},
+			}
+			_, updateErr := sheetsService.Spreadsheets.Values.Update(spreadsheetID, updateA1Range, valueRange).ValueInputOption("RAW").Do()
+             
+			if updateErr != nil {
+                  log.Printf("Error updating sheet %s (Range %s) with image URL: %v", uploadRequest.SheetName, updateA1Range, updateErr)
              } else {
-                  log.Printf("Successfully updated sheet %s row %d with image URL for column %s", uploadRequest.SheetName, targetRowIndex, uploadRequest.ColumnName)
+                  log.Printf("Successfully updated sheet %s (Range %s) with image URL", uploadRequest.SheetName, updateA1Range)
                   invalidateSheetCache(uploadRequest.SheetName) // Invalidate cache
              }
         }() // End background update
     }
 
-	c.JSON(http.StatusOK, gin.H{"status": "success", "url": resp.URL})
+	c.JSON(http.StatusOK, gin.H{"status": "success", "url": fileUrl})
 }
 
 
-// --- Handler for Formula Report Update ---
+// --- Handler for Formula Report Update (Rewritten) ---
 func handleUpdateFormulaReport(c *gin.Context) {
 	// 1. Fetch AllOrders data
 	var allOrders []Order
-	// Use a longer timeout cache for reports? Or maybe no cache to ensure freshness? Let's use standard cache for now.
-	err := getCachedSheetData(AllOrdersSheet, &allOrders, cacheTTL)
+	// Invalidate cache first to ensure fresh data for report
+	invalidateSheetCache(AllOrdersSheet) 
+	err := getCachedSheetData(AllOrdersSheet, &allOrders, cacheTTL) // Fetch fresh, then cache
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"status": "error", "message": "Failed to fetch order data: " + err.Error()})
 		return
 	}
 
+	reportData := [][]interface{}{
+		{"Category", "Period", "Total Sales", "Total Expense"}, // Header row
+	}
+
 	if len(allOrders) == 0 {
 		// Overwrite with headers only if no data
-		reportData := [][]interface{}{
-			{"Category", "Period", "Total Sales", "Total Expense"},
-		}
-		_, err = callAppsScriptPOST(AppsScriptRequest{
-			Action:    "overwriteSheetData",
-			SheetName: FormulaReportSheet,
-			Data:      reportData,
-		})
+		_, err = overwriteSheetDataInAPI(FormulaReportSheet, reportData)
 		if err != nil {
 			c.JSON(http.StatusInternalServerError, gin.H{"status": "error", "message": "Failed to clear/write headers to report sheet: " + err.Error()})
 			return
@@ -814,15 +897,14 @@ func handleUpdateFormulaReport(c *gin.Context) {
 	currentYear := now.Year()
 	currentMonth := now.Month()
     loc, _ := time.LoadLocation("Asia/Phnom_Penh") // Load Cambodia timezone
+	if loc == nil {
+		loc = time.UTC // Fallback
+	}
 
 
 	for _, order := range allOrders {
-		// Try parsing different potential timestamp formats from Apps Script
 		ts, err := time.Parse(time.RFC3339, order.Timestamp) // Try ISO string first
         if err != nil {
-             // Try common Apps Script Date object string format (might vary)
-             // Example: "Sat Oct 26 2024 14:30:00 GMT+0700 (Indochina Time)" - Needs specific layout
-             // Let's assume RFC3339 works for now based on the getSheetData modification
              log.Printf("Warning: Could not parse timestamp '%s' for order %s: %v. Skipping record.", order.Timestamp, order.OrderID, err)
              continue
         }
@@ -831,9 +913,9 @@ func handleUpdateFormulaReport(c *gin.Context) {
 
 		year := ts.Year()
 		month := ts.Month()
-		day := ts.Day()
+		// day := ts.Day()
 		yearMonthKey := fmt.Sprintf("%d-%02d", year, month)
-		yearMonthDayKey := fmt.Sprintf("%d-%02d-%02d", year, month, day)
+		yearMonthDayKey := ts.Format("2006-01-02") // Use standard format for daily key
 
 		// Aggregate Yearly
 		if _, ok := yearlyData[year]; !ok {
@@ -862,9 +944,7 @@ func handleUpdateFormulaReport(c *gin.Context) {
 	}
 
 	// 3. Format Output for Sheet
-	reportData := [][]interface{}{
-		{"Category", "Period", "Total Sales", "Total Expense"}, // Header row
-	}
+	// (Headers already added)
 
 	// Add Yearly Data
 	reportData = append(reportData, []interface{}{"YEARLY REPORT", "", "", ""})
@@ -881,16 +961,6 @@ func handleUpdateFormulaReport(c *gin.Context) {
 
 	// Add Monthly Data (Current Year)
 	reportData = append(reportData, []interface{}{fmt.Sprintf("MONTHLY REPORT (%d)", currentYear), "", "", ""})
-	// monthKeys := make([]string, 0, 12) // No need to pre-collect keys
-    // for m := 1; m <= 12; m++ {
-    //     monthKey := fmt.Sprintf("%d-%02d", currentYear, m)
-    //     // Check if data exists for this month before adding the key
-    //     if _, ok := monthlyData[monthKey]; ok {
-    //         monthKeys = append(monthKeys, monthKey)
-    //     }
-    // }
-    // No need to sort monthKeys if generated sequentially 1-12
-	// sort.Strings(monthKeys) // Sort months chronologically
 	for m := 1; m <= 12; m++ {
         monthKey := fmt.Sprintf("%d-%02d", currentYear, m)
         summary, ok := monthlyData[monthKey]
@@ -898,8 +968,8 @@ func handleUpdateFormulaReport(c *gin.Context) {
 		if ok {
 		     reportData = append(reportData, []interface{}{"", monthName, fmt.Sprintf("%.2f", summary.TotalSales), fmt.Sprintf("%.2f", summary.TotalExpense)})
 		} else {
-             // Optionally show months with zero values
-             // reportData = append(reportData, []interface{}{"", monthName, "0.00", "0.00"})
+             // Show months with zero values
+             reportData = append(reportData, []interface{}{"", monthName, "0.00", "0.00"})
         }
     }
 
@@ -921,28 +991,23 @@ func handleUpdateFormulaReport(c *gin.Context) {
 	}
 
 	// 4. Write Data to Sheet via Apps Script
-	_, err = callAppsScriptPOST(AppsScriptRequest{
-		Action:    "overwriteSheetData",
-		SheetName: FormulaReportSheet,
-		Data:      reportData,
-	})
+	_, err = overwriteSheetDataInAPI(FormulaReportSheet, reportData)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"status": "error", "message": "Failed to write report data: " + err.Error()})
 		return
 	}
     
-    // Invalidate AllOrders cache? Maybe not necessary just for report generation.
-
 	c.JSON(http.StatusOK, gin.H{"status": "success", "message": "Formula Report updated successfully."})
 }
 
 
-// --- *** NEW: Handler for Revenue Summary Report *** ---
+// --- Handler for Revenue Summary Report ---
 func handleGetRevenueSummary(c *gin.Context) {
 	// 1. Fetch RevenueDashboard data
 	var revenueEntries []RevenueEntry
-	// Use cache
-	err := getCachedSheetData(RevenueSheet, &revenueEntries, cacheTTL)
+	// Invalidate cache first to ensure fresh data
+	invalidateSheetCache(RevenueSheet)
+	err := getCachedSheetData(RevenueSheet, &revenueEntries, cacheTTL) // Fetch fresh, then cache
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"status": "error", "message": "Failed to fetch revenue data: " + err.Error()})
 		return
@@ -972,6 +1037,9 @@ func handleGetRevenueSummary(c *gin.Context) {
 	currentYear := now.Year()
 	currentMonth := now.Month()
     loc, _ := time.LoadLocation("Asia/Phnom_Penh") // Load Cambodia timezone
+	if loc == nil {
+		loc = time.UTC // Fallback
+	}
 
 
 	for _, entry := range revenueEntries {
@@ -989,7 +1057,9 @@ func handleGetRevenueSummary(c *gin.Context) {
 		yearMonthDayKey := ts.Format("2006-01-02") // Use standard format for daily key
 
         team := entry.Team
+		if team == "" { team = "Unknown" }
         page := entry.Page
+		if page == "" { page = "Unknown" }
         revenue := entry.Revenue
 
         // --- Aggregate Yearly ---
@@ -1034,19 +1104,28 @@ func handleGetRevenueSummary(c *gin.Context) {
 
 // --- Main Function ---
 func main() {
-	// Load configuration from environment variables
-	appsScriptURL = os.Getenv("APPS_SCRIPT_URL")
-	appsScriptSecret = os.Getenv("APPS_SCRIPT_SECRET")
+	// --- Load configuration from environment variables ---
+	spreadsheetID = os.Getenv("GOOGLE_SHEET_ID")
+	uploadFolderID = os.Getenv("UPLOAD_FOLDER_ID") // Can be overridden by Settings sheet
 	port := os.Getenv("PORT")
 	if port == "" {
 		port = "8080" // Default port for local development
 	}
 	renderBaseURL = os.Getenv("RENDER_EXTERNAL_URL") // Render provides this automatically
 
-	if appsScriptURL == "" || appsScriptSecret == "" {
-		log.Fatal("APPS_SCRIPT_URL and APPS_SCRIPT_SECRET environment variables are required.")
+	if spreadsheetID == "" {
+		log.Fatal("GOOGLE_SHEET_ID environment variable is required.")
 	}
-	log.Printf("Connecting to Apps Script URL: %s", appsScriptURL)
+	// Note: GCP_CREDENTIALS is read directly in createGoogleAPIClient
+
+	// --- Create Google API Clients ---
+	ctx := context.Background()
+	err := createGoogleAPIClient(ctx)
+	if err != nil {
+		log.Fatalf("Failed to create Google API clients: %v", err)
+	}
+
+	log.Printf("Connected to Google Sheet ID: %s", spreadsheetID)
 	log.Printf("Render Base URL: %s", renderBaseURL)
 
 
@@ -1068,8 +1147,7 @@ func main() {
 		api.GET("/ping", handlePing)
 		api.GET("/users", handleGetUsers) // Corresponds to ?action=getUsers
 		api.GET("/static-data", handleGetStaticData) // Corresponds to ?action=getStaticData
-		// Add GET handlers for other data types if needed (e.g., /api/products, /api/locations)
-
+		
 		api.POST("/submit-order", handleSubmitOrder) // Corresponds to { action: 'submitOrder', ... }
         api.POST("/upload-image", handleImageUploadProxy) // Proxy for image uploads
 
@@ -1103,7 +1181,7 @@ func main() {
 
 	// --- Start Server ---
 	log.Printf("Starting Go backend server on port %s", port)
-	err := router.Run(":" + port)
+	err = router.Run(":" + port)
 	if err != nil {
 		log.Fatalf("Failed to start server: %v", err)
 	}
