@@ -6,45 +6,48 @@ import (
 	"encoding/base64"
 	"encoding/json"
 	"fmt"
-	// "io" // REMOVED (Fix 1: Not used)
+	// "io" // No longer needed
 	"log"
 	"net/http"
-	// "net/url" // No longer needed for Apps Script
+	"net/url" // Needed for label button
 	"os"
 	"sort"
-	"strconv" // ADDED (Fix 2: Was undefined)
+	"strconv" // Needed for formatting
 	"strings"
 	"sync"
 	"time"
 
 	"github.com/gin-contrib/cors"
 	"github.com/gin-gonic/gin"
-	
-	// --- NEW: Google API Imports ---
+
+	// --- NEW: Telegram Bot API ---
+	tgbotapi "github.com/go-telegram-bot-api/telegram-bot-api/v5"
+
+	// --- Google API Imports ---
 	"google.golang.org/api/drive/v3"
 	"google.golang.org/api/option"
 	"google.golang.org/api/sheets/v4"
-	// --- End Google API Imports ---
-
-	// Consider adding a Go Telegram library, e.g., "github.com/go-telegram-bot-api/telegram-bot-api/v5"
-	// Consider adding a PDF library if needed, e.g., "github.com/jung-kurt/gofpdf"
 )
 
 // --- Configuration ---
 var (
-	// --- NEW: Google API Services ---
+	// --- Google API Services ---
 	sheetsService *sheets.Service
 	driveService  *drive.Service
 	// ---
-	spreadsheetID  string
-	uploadFolderID string
+	spreadsheetID    string
+	uploadFolderID   string
+	labelPrinterURL  string // NEW: Loaded from env
 	// ---
-	telegramConfig = make(map[string]map[string]string) // e.g., map[TeamName]map["token"/"groupID"]
-	renderBaseURL    string                               // URL of this Render service itself
+	renderBaseURL    string // URL of this Render service itself
+	
+	// --- NEW: Telegram Bot Management ---
+	telegramBots   = make(map[string]*tgbotapi.BotAPI)      // Map[TeamName] -> BotInstance
+	telegramConfig = make(map[string]map[string]string) // Map[TeamName] -> Map["groupID", "topicID", "archiveID"]
 )
 
 // --- Constants from Apps Script Config (Keep consistent) ---
-// *** NEW: Define A1 Ranges for all sheets we read ***
+// ... (sheetRanges map remains the same) ...
 var sheetRanges = map[string]string{
 	"Users":             "Users!A:G", // Assuming G is IsSystemAdmin
 	"Settings":          "Settings!A:B", // Assuming A=Team, B=UploadFolderID (BotToken/etc are env vars now)
@@ -77,6 +80,7 @@ const (
 
 
 // --- Cache ---
+// ... (Cache functions setCache, getCache, clearCache, invalidateSheetCache remain the same) ...
 type CacheItem struct {
 	Data      interface{}
 	ExpiresAt time.Time
@@ -130,7 +134,7 @@ func invalidateSheetCache(sheetName string) {
 
 
 // --- Models (Adjust based on your actual Sheet headers) ---
-// Use `json:"Header Name"` if header has spaces or special chars
+// ... (All struct definitions remain the same) ...
 type User struct {
 	UserName          string `json:"UserName"`
 	Password          string `json:"Password"` // This will be read as string
@@ -229,8 +233,6 @@ type ReportSummary struct {
     TotalExpense float64 // Used in FormulaReport
 }
 
-// ... (All Struct definitions remain the same) ...
-
 type RevenueAggregate struct {
     YearlyByTeam   map[int]map[string]float64    `json:"yearlyByTeam"`   // year -> team -> totalRevenue
     YearlyByPage   map[int]map[string]float64    `json:"yearlyByPage"`   // year -> page -> totalRevenue
@@ -239,8 +241,6 @@ type RevenueAggregate struct {
     DailyByTeam    map[string]map[string]float64 `json:"dailyByTeam"`    // "YYYY-MM-DD" -> team -> totalRevenue
     DailyByPage    map[string]map[string]float64 `json:"dailyByPage"`    // "YYYY-MM-DD" -> page -> totalRevenue
 }
-
-
 
 // --- *** NEW: Google API Client Setup *** ---
 func createGoogleAPIClient(ctx context.Context) error {
@@ -298,7 +298,6 @@ func convertSheetValuesToMaps(values *sheets.ValueRange) ([]map[string]interface
 					// --- Data Type Coercion ---
 					// Try to parse numbers (float)
 					if cellStr, ok := cell.(string); ok {
-						// *** FIX 2: Use strconv ***
 						if f, err := strconv.ParseFloat(cellStr, 64); err == nil {
 							rowData[header] = f // Store as float
 						} else if b, err := strconv.ParseBool(cellStr); err == nil {
@@ -406,6 +405,74 @@ func overwriteSheetDataInAPI(sheetName string, data [][]interface{}) error {
 	return nil
 }
 
+// --- *** NEW: Find Row and Update Cell (for Message ID) *** ---
+func updateTelegramMessageIDInSheet(team, orderId string, messageId int64) {
+    sheetName := "Orders_" + team
+	log.Printf("Attempting to save MessageID %d for OrderID %s in sheet %s", messageId, orderId, sheetName)
+
+    // 1. Fetch headers and Order ID column
+	headersResp, err := sheetsService.Spreadsheets.Values.Get(spreadsheetID, fmt.Sprintf("%s!1:1", sheetName)).Do()
+	if err != nil || len(headersResp.Values) == 0 {
+		log.Printf("Error fetching headers for %s: %v", sheetName, err)
+		return
+	}
+	headers := headersResp.Values[0]
+
+	orderIdColIndex := -1
+	messageIdColIndex := -1
+	for i, header := range headers {
+		headerStr := fmt.Sprintf("%v", header)
+		if headerStr == "Order ID" {
+			orderIdColIndex = i
+		}
+		if headerStr == "Telegram Message ID" {
+			messageIdColIndex = i
+		}
+	}
+
+	if orderIdColIndex == -1 || messageIdColIndex == -1 {
+		log.Printf("Error: 'Order ID' or 'Telegram Message ID' column not found in sheet %s", sheetName)
+		return
+	}
+	orderIdColLetter := string(rune('A' + orderIdColIndex))
+	messageIdColLetter := string(rune('A' + messageIdColIndex))
+
+    // 2. Fetch the Order ID column to find the row
+	readRange := fmt.Sprintf("%s!%s2:%s", sheetName, orderIdColLetter, orderIdColLetter) // e.g., "Orders_A!B2:B"
+	resp, err := sheetsService.Spreadsheets.Values.Get(spreadsheetID, readRange).Do()
+	if err != nil {
+		log.Printf("Error fetching Order ID column from %s: %v", sheetName, err)
+		return
+	}
+
+	// 3. Find the row number
+	targetRowIndex := -1
+	for i, row := range resp.Values {
+		if len(row) > 0 && fmt.Sprintf("%v", row[0]) == orderId {
+			targetRowIndex = i + 2 // +2 because data starts at row 2
+			break
+		}
+	}
+
+	if targetRowIndex == -1 {
+		log.Printf("Error: Could not find row for OrderID %s in sheet %s", orderId, sheetName)
+		return
+	}
+
+	// 4. Update the Message ID cell
+	updateA1Range := fmt.Sprintf("%s!%s%d", sheetName, messageIdColLetter, targetRowIndex) // e.g., "Orders_A!T10"
+	valueRange := &sheets.ValueRange{
+		Values: [][]interface{}{{messageId}}, // Pass messageId as int64
+	}
+	_, updateErr := sheetsService.Spreadsheets.Values.Update(spreadsheetID, updateA1Range, valueRange).ValueInputOption("RAW").Do()
+	
+	if updateErr != nil {
+		log.Printf("Error updating MessageID for OrderID %s in sheet %s: %v", orderId, sheetName, updateErr)
+	} else {
+		log.Printf("Successfully saved MessageID %d for OrderID %s in sheet %s (Row %d)", messageId, orderId, sheetName, targetRowIndex)
+	}
+}
+
 
 // --- Fetch & Cache Sheet Data (Rewritten) ---
 func getCachedSheetData(sheetName string, target interface{}, duration time.Duration) error {
@@ -510,7 +577,7 @@ func handleGetStaticData(c *gin.Context) {
 	// Also set the global variable
 	if len(settingsMaps) > 0 {
 		if id, ok := settingsMaps[0]["UploadFolderID"].(string); ok {
-			uploadFolderID = id
+			uploadFolderID = id // Get from sheet
 		}
 	}
 	if uploadFolderID == "" {
@@ -542,53 +609,253 @@ handleError:
 }
 
 
-// --- Placeholder for Telegram Logic ---
-func sendTelegramNotification(team string, orderData map[string]interface{}) {
-	log.Printf("Placeholder: Sending Telegram notification for team %s, Order ID %s", team, orderData["orderId"])
-	// TODO:
-	// 1. Fetch Telegram Templates for the team (can be cached - use getCachedSheetData("TelegramTemplates", ...))
-    var templates []TelegramTemplate
-    err := getCachedSheetData(TelegramTemplatesSheet, &templates, time.Hour) // Cache templates longer
+// --- *** NEW: Helper to format message *** ---
+func formatTelegramMessage(template string, data map[string]interface{}) string {
+	msg := template
+
+	// Extract data with type safety
+	orderId, _ := data["orderId"].(string)
+	customer, _ := data["customer"].(map[string]interface{})
+	customerName, _ := customer["name"].(string)
+	customerPhone, _ := customer["phone"].(string)
+	province, _ := customer["province"].(string)
+	district, _ := customer["district"].(string)
+	sangkat, _ := customer["sangkat"].(string)
+	additionalLocation, _ := customer["additionalLocation"].(string)
+	if additionalLocation == "" {
+		additionalLocation = "(មិនបានបញ្ជាក់)"
+	}
+	location := strings.Join(filterEmpty([]string{province, district, sangkat}), ", ")
+
+	subtotal, _ := data["subtotal"].(float64)
+	shippingFee, _ := customer["shippingFee"].(float64)
+	grandTotal, _ := data["grandTotal"].(float64)
+
+	payment, _ := data["payment"].(map[string]interface{})
+	paymentStatus, _ := payment["status"].(string)
+	paymentInfo, _ := payment["info"].(string)
+	var paymentStatusStr string
+	if paymentStatus == "Paid" {
+		paymentStatusStr = fmt.Sprintf("✅ Paid (%s)", paymentInfo)
+	} else {
+		paymentStatusStr = "🟥 COD (Unpaid)"
+	}
+
+	shipping, _ := data["shipping"].(map[string]interface{})
+	shippingMethod, _ := shipping["method"].(string)
+	shippingDetails, _ := shipping["details"].(string)
+	var shippingDetailsStr string
+	if shippingDetails != "" && shippingDetails != shippingMethod {
+		shippingDetailsStr = fmt.Sprintf(" (%s)", shippingDetails)
+	}
+
+	note, _ := data["note"].(string)
+	var noteStr string
+	if note != "" {
+		noteStr = fmt.Sprintf("\n\n📝 *ចំណាំបន្ថែម:*\n_%s_", note)
+	}
+
+	currentUser, _ := data["currentUser"].(User) // Assumes full User struct is passed
+	page, _ := data["page"].(string)
+	telegramValue, _ := data["telegramValue"].(string)
+	var sourceInfo string
+	if strings.ToLower(page) == "telegram" {
+		sourceInfo = fmt.Sprintf("*Telegram:* %s", telegramValue)
+	} else {
+		sourceInfo = fmt.Sprintf("*Page:* %s", telegramValue)
+	}
+
+	// Build Products List
+	var productsList strings.Builder
+	products, _ := data["products"].([]map[string]interface{})
+	for _, p := range products {
+		name, _ := p["name"].(string)
+		quantity, _ := p["quantity"].(float64) // JSON numbers are float64
+		colorInfo, _ := p["colorInfo"].(string)
+		total, _ := p["total"].(float64)
+		
+		productsList.WriteString(fmt.Sprintf("  - %s (x%.0f)", name, quantity))
+		if colorInfo != "" {
+			productsList.WriteString(fmt.Sprintf(" [%s]", colorInfo))
+		}
+		productsList.WriteString(fmt.Sprintf(" = *$%.2f*\n", total))
+	}
+
+
+	// Replacements
+	r := strings.NewReplacer(
+		"{{orderId}}", orderId,
+		"{{customerName}}", customerName,
+		"{{customerPhone}}", customerPhone,
+		"{{location}}", location,
+		"{{addressDetails}}", additionalLocation,
+		"{{productsList}}", strings.TrimRight(productsList.String(), "\n"),
+		"{{subtotal}}", fmt.Sprintf("%.2f", subtotal),
+		"{{shippingFee}}", fmt.Sprintf("%.2f", shippingFee),
+		"{{grandTotal}}", fmt.Sprintf("%.2f", grandTotal),
+		"{{paymentStatus}}", paymentStatusStr,
+		"{{shippingMethod}}", shippingMethod,
+		"{{shippingDetails}}", shippingDetailsStr,
+		"{{note}}", noteStr,
+		"{{user}}", currentUser.UserName,
+		"{{sourceInfo}}", sourceInfo,
+	)
+
+	return r.Replace(msg)
+}
+func filterEmpty(s []string) []string {
+	var r []string
+	for _, str := range s {
+		if str != "" {
+			r = append(r, str)
+		}
+	}
+	return r
+}
+
+// --- *** NEW: Helper to create Label Button *** ---
+func createLabelButtonInline(data map[string]interface{}) *tgbotapi.InlineKeyboardMarkup {
+	if labelPrinterURL == "" {
+		log.Println("LABEL_PRINTER_URL is not set. Skipping label button.")
+		return nil
+	}
+
+	// Extract data
+	orderId, _ := data["orderId"].(string)
+	page, _ := data["page"].(string)
+	currentUser, _ := data["currentUser"].(User)
+	customer, _ := data["customer"].(map[string]interface{})
+	customerName, _ := customer["name"].(string)
+	customerPhone, _ := customer["phone"].(string)
+	province, _ := customer["province"].(string)
+	district, _ := customer["district"].(string)
+	sangkat, _ := customer["sangkat"].(string)
+	additionalLocation, _ := customer["additionalLocation"].(string)
+	location := strings.Join(filterEmpty([]string{province, district, sangkat}), ", ")
+	payment, _ := data["payment"].(map[string]interface{})
+	paymentStatus, _ := payment["status"].(string)
+	grandTotal, _ := data["grandTotal"].(float64)
+	shipping, _ := data["shipping"].(map[string]interface{})
+	shippingMethod, _ := shipping["method"].(string)
+
+	// Build URL parameters
+	params := url.Values{}
+	params.Add("id", orderId)
+	params.Add("page", page)
+	params.Add("user", currentUser.UserName)
+	params.Add("name", customerName)
+	params.Add("phone", customerPhone)
+	params.Add("location", location)
+	params.Add("address", additionalLocation)
+	params.Add("payment", paymentStatus)
+	params.Add("total", fmt.Sprintf("%.2f", grandTotal))
+	params.Add("shipping", shippingMethod)
+	
+	fullUrl := fmt.Sprintf("%s?%s", labelPrinterURL, params.Encode())
+
+	// Create button
+	button := tgbotapi.NewInlineKeyboardButtonURL("📦 ព្រីន Label (78x50mm)", fullUrl)
+	keyboard := tgbotapi.NewInlineKeyboardMarkup(
+		tgbotapi.NewInlineKeyboardRow(button),
+	)
+	return &keyboard
+}
+
+// --- *** NEW: Fully Implemented Telegram Function *** ---
+func sendTelegramNotification(team string, fullOrderData map[string]interface{}) {
+	// 1. Get Config
+	bot, botExists := telegramBots[team]
+	config, configExists := telegramConfig[team]
+
+	if !botExists || !configExists {
+		log.Printf("Error: Telegram config or bot instance not found for team %s", team)
+		return
+	}
+	
+	groupIDStr, ok := config["groupID"]
+	if !ok {
+		log.Printf("Error: Group ID not found for team %s", team)
+		return
+	}
+	groupID, err := strconv.ParseInt(groupIDStr, 10, 64) // Telegram IDs are int64
+	if err != nil {
+		log.Printf("Error: Invalid Group ID '%s' for team %s", groupIDStr, team)
+		return
+	}
+	
+	topicIDStr, hasTopic := config["topicID"]
+	var topicID int64 // 0 means no topic
+	if hasTopic {
+		topicID, _ = strconv.ParseInt(topicIDStr, 10, 64) // Ignore error, will be 0 if invalid
+	}
+
+	// 2. Get Templates
+	var templates []TelegramTemplate
+    err = getCachedSheetData(TelegramTemplatesSheet, &templates, time.Hour) // Cache templates for 1 hour
     if err != nil {
         log.Printf("Error fetching Telegram templates for team %s: %v", team, err)
-        // Optionally send a default message
         return
     }
+    
     teamTemplates := []TelegramTemplate{}
     for _, t := range templates {
         if strings.EqualFold(t.Team, team) {
             teamTemplates = append(teamTemplates, t)
         }
     }
-    // Sort by Part
     sort.Slice(teamTemplates, func(i, j int) bool {
 		return teamTemplates[i].Part < teamTemplates[j].Part
 	})
 
-	// 2. Format messages using orderData and teamTemplates
-	// ... (Implementation depends heavily on how placeholders work, similar to Apps Script's formatOrderForTelegram)
+	if len(teamTemplates) == 0 {
+		log.Printf("Error: No Telegram templates found for team %s", team)
+		return
+	}
 
-	// 3. Get Bot Token and Group ID for the team from config/env
-	// ...
+	// 3. Create Label Button (if applicable)
+	labelButton := createLabelButtonInline(fullOrderData)
 
-	// 4. Use a Go Telegram library to send the messages
-	// ...
+	// 4. Send Messages
+	var firstMessageID int64 = 0
+	
+	for i, t := range teamTemplates {
+		part := t.Part
+		formattedText := formatTelegramMessage(t.Template, fullOrderData)
 
-	// 5. Potentially send PDF (see PDF placeholder)
+		msg := tgbotapi.NewMessage(groupID, formattedText)
+		msg.ParseMode = tgbotapi.ModeMarkdown // Use Markdown
+		if topicID != 0 {
+			msg.MessageThreadID = int(topicID) // Set Topic ID if it exists
+		}
+
+		// Attach Label Button to Part 2 (index 1)
+		if i == 1 && labelButton != nil {
+			msg.ReplyMarkup = labelButton
+		}
+
+		// Send the message
+		sentMessage, err := bot.Send(msg)
+		if err != nil {
+			log.Printf("Error sending Telegram message (Part %d) for team %s: %v", part, team, err)
+			// Continue trying to send other parts
+		} else {
+			// Save the Message ID of the *first* message (Part 1)
+			if i == 0 {
+				firstMessageID = int64(sentMessage.MessageID)
+			}
+		}
+		
+		time.Sleep(300 * time.Millisecond) // Small delay between messages
+	}
+
+	// 5. Update Sheet with Message ID (in background)
+	if firstMessageID != 0 {
+		orderId, _ := fullOrderData["orderId"].(string)
+		go updateTelegramMessageIDInSheet(team, orderId, firstMessageID)
+	}
 }
-// --- Placeholder for PDF Logic ---
-func generateAndSendPDF(team string, orderId string, orderData map[string]interface{}) {
-    log.Printf("Placeholder: Generating/Sending PDF for team %s, Order ID %s", team, orderId)
-    // TODO:
-    // 1. Option A: Use a Go PDF library (e.g., gofpdf) to generate PDF directly.
-    // 2. Option B: Generate HTML for the invoice (similar to Apps Script).
-    //    - Then, either use a Go library to convert HTML to PDF (can be complex, might need headless Chrome)
-    //    - OR send the HTML to another microservice dedicated to PDF generation.
-    //    - OR simply send the HTML content somewhere if PDF isn't strictly required by Telegram bot.
-    // 3. Send the generated PDF/document via Telegram.
-}
 
-
+// ... (handleSubmitOrder remains the same, but sendTelegramNotification is now implemented) ...
 func handleSubmitOrder(c *gin.Context) {
 	var orderRequest struct {
 		CurrentUser  User                   `json:"currentUser"`
@@ -719,7 +986,7 @@ func handleSubmitOrder(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{"status": "success", "orderId": orderId})
 }
 
-// --- Handler for Image Upload Proxy (Rewritten for Drive API) ---
+// ... (handleImageUploadProxy remains the same) ...
 func handleImageUploadProxy(c *gin.Context) {
     var uploadRequest struct {
 		FileData string `json:"fileData"`
@@ -818,7 +1085,6 @@ func handleImageUploadProxy(c *gin.Context) {
             }
 
 			// Find the column letter (e.g., "D")
-			// *** MODIFIED (Fix 3: 'sheetRange' unused) ***
 			_, ok := sheetRanges[uploadRequest.SheetName]
 			if !ok {
 				log.Printf("Error: No A1 range defined for %s, cannot update cell.", uploadRequest.SheetName)
@@ -866,7 +1132,7 @@ func handleImageUploadProxy(c *gin.Context) {
 }
 
 
-// --- Handler for Formula Report Update (Rewritten) ---
+// ... (handleUpdateFormulaReport remains the same) ...
 func handleUpdateFormulaReport(c *gin.Context) {
 	// 1. Fetch AllOrders data
 	var allOrders []Order
@@ -884,7 +1150,6 @@ func handleUpdateFormulaReport(c *gin.Context) {
 
 	if len(allOrders) == 0 {
 		// Overwrite with headers only if no data
-		// *** MODIFIED (Fix 4: Assignment mismatch) ***
 		err = overwriteSheetDataInAPI(FormulaReportSheet, reportData)
 		if err != nil {
 			c.JSON(http.StatusInternalServerError, gin.H{"status": "error", "message": "Failed to clear/write headers to report sheet: " + err.Error()})
@@ -997,7 +1262,6 @@ func handleUpdateFormulaReport(c *gin.Context) {
 	}
 
 	// 4. Write Data to Sheet via Apps Script
-	// *** MODIFIED (Fix 5: Assignment mismatch) ***
 	err = overwriteSheetDataInAPI(FormulaReportSheet, reportData)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"status": "error", "message": "Failed to write report data: " + err.Error()})
@@ -1008,7 +1272,7 @@ func handleUpdateFormulaReport(c *gin.Context) {
 }
 
 
-// --- Handler for Revenue Summary Report ---
+// ... (handleGetRevenueSummary remains the same) ...
 func handleGetRevenueSummary(c *gin.Context) {
 	// 1. Fetch RevenueDashboard data
 	var revenueEntries []RevenueEntry
@@ -1108,12 +1372,59 @@ func handleGetRevenueSummary(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{"status": "success", "data": response})
 }
 
+// --- *** NEW: Load Telegram Config at Startup *** ---
+func loadTelegramConfig() {
+	log.Println("Loading Telegram configuration from environment variables...")
+	
+	for _, env := range os.Environ() {
+		parts := strings.SplitN(env, "=", 2)
+		key := parts[0]
+		value := parts[1]
+
+		// Example Key: TELEGRAM_BOT_TOKEN_TEAM_A
+		if strings.HasPrefix(key, "TELEGRAM_BOT_TOKEN_TEAM_") {
+			teamName := strings.TrimPrefix(key, "TELEGRAM_BOT_TOKEN_TEAM_")
+			
+			if _, ok := telegramConfig[teamName]; !ok {
+				telegramConfig[teamName] = make(map[string]string)
+			}
+			telegramConfig[teamName]["token"] = value
+
+			// Initialize bot instance
+			bot, err := tgbotapi.NewBotAPI(value)
+			if err != nil {
+				log.Printf("Error: Failed to create Telegram bot instance for team %s: %v", teamName, err)
+			} else {
+				log.Printf("Successfully created Telegram bot instance for team %s (User: %s)", teamName, bot.Self.UserName)
+				telegramBots[teamName] = bot
+			}
+
+		} else if strings.HasPrefix(key, "TELEGRAM_GROUP_ID_TEAM_") {
+			teamName := strings.TrimPrefix(key, "TELEGRAM_GROUP_ID_TEAM_")
+			if _, ok := telegramConfig[teamName]; !ok { telegramConfig[teamName] = make(map[string]string) }
+			telegramConfig[teamName]["groupID"] = value
+
+		} else if strings.HasPrefix(key, "TELEGRAM_TOPIC_ID_TEAM_") {
+			teamName := strings.TrimPrefix(key, "TELEGRAM_TOPIC_ID_TEAM_")
+			if _, ok := telegramConfig[teamName]; !ok { telegramConfig[teamName] = make(map[string]string) }
+			telegramConfig[teamName]["topicID"] = value
+
+		} else if strings.HasPrefix(key, "TELEGRAM_ARCHIVE_ID_TEAM_") {
+			teamName := strings.TrimPrefix(key, "TELEGRAM_ARCHIVE_ID_TEAM_")
+			if _, ok := telegramConfig[teamName]; !ok { telegramConfig[teamName] = make(map[string]string) }
+			telegramConfig[teamName]["archiveID"] = value
+		}
+	}
+	log.Printf("Loaded %d bot configurations.", len(telegramBots))
+}
+
 
 // --- Main Function ---
 func main() {
 	// --- Load configuration from environment variables ---
 	spreadsheetID = os.Getenv("GOOGLE_SHEET_ID")
 	uploadFolderID = os.Getenv("UPLOAD_FOLDER_ID") // Can be overridden by Settings sheet
+	labelPrinterURL = os.Getenv("LABEL_PRINTER_URL") // NEW
 	port := os.Getenv("PORT")
 	if port == "" {
 		port = "8080" // Default port for local development
@@ -1124,6 +1435,9 @@ func main() {
 		log.Fatal("GOOGLE_SHEET_ID environment variable is required.")
 	}
 	// Note: GCP_CREDENTIALS is read directly in createGoogleAPIClient
+
+	// --- NEW: Load Telegram Config ---
+	loadTelegramConfig()
 
 	// --- Create Google API Clients ---
 	ctx := context.Background()
