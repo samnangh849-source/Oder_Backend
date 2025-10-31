@@ -537,7 +537,6 @@ func handleGetUsers(c *gin.Context) {
 func handleGetStaticData(c *gin.Context) {
 	// Fetch all required static data sequentially (safer for Sheets API quotas)
 	
-	// *** MODIFIED (Fix 2: 'goto' error): Declare all variables at the top ***
 	result := make(map[string]interface{})
 	var err error
 
