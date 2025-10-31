@@ -6,13 +6,13 @@ import (
 	"encoding/base64"
 	"encoding/json"
 	"fmt"
-	// "io" // REMOVED (Fix 1: Not used)
+	// "io" // No longer needed
 	"log"
 	"net/http"
 	"net/url" // Needed for label button
 	"os"
 	"sort"
-	"strconv" // ADDED (Fix 2: Was undefined)
+	"strconv" // Needed for formatting
 	"strings"
 	"sync"
 	"time"
@@ -425,14 +425,24 @@ func convertSheetValuesToMaps(values *sheets.ValueRange) ([]map[string]interface
 				if header != "" {
 					
 					// --- Data Type Coercion ---
-					// Try to parse numbers (float)
 					if cellStr, ok := cell.(string); ok {
-						if f, err := strconv.ParseFloat(cellStr, 64); err == nil {
+
+						// *** NEW FIX: Clean currency/text from number fields ***
+						cleanedStr := cellStr
+						if header == "Cost" || header == "Price" || header == "Grand Total" || header == "Subtotal" || header == "Shipping Fee (Customer)" || header == "Internal Cost" {
+							cleanedStr = strings.ReplaceAll(cleanedStr, "$", "")
+							cleanedStr = strings.ReplaceAll(cleanedStr, ",", "")
+							cleanedStr = strings.TrimSpace(cleanedStr)
+						}
+						// --- END FIX ---
+
+
+						if f, err := strconv.ParseFloat(cleanedStr, 64); err == nil {
 							rowData[header] = f // Store as float
-						} else if b, err := strconv.ParseBool(cellStr); err == nil {
+						} else if b, err := strconv.ParseBool(cellStr); err == nil { // Use original cellStr for bool
 							rowData[header] = b // Store as bool
 						} else {
-							rowData[header] = cellStr // Keep as string
+							rowData[header] = cellStr // Keep original string
 						}
 					} else {
 						// It's likely already a float64 or bool from JSON/API
