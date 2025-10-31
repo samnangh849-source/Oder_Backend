@@ -6,13 +6,14 @@ import (
 	"encoding/base64"
 	"encoding/json"
 	"fmt"
-	// "io" // REMOVED (Fix 1: Not used)
+
+	// "io" // No longer needed
 	"log"
 	"net/http"
 	"net/url" // Needed for label button
 	"os"
 	"sort"
-	"strconv" // ADDED (Fix 2: Was undefined)
+	"strconv" // Needed for formatting
 	"strings"
 	"sync"
 	"time"
@@ -22,6 +23,9 @@ import (
 
 	// --- NEW: Telegram Bot API ---
 	tgbotapi "github.com/go-telegram-bot-api/telegram-bot-api/v5"
+
+	// --- NEW: WebSocket Library ---
+	"github.com/gorilla/websocket"
 
 	// --- Google API Imports ---
 	"google.golang.org/api/drive/v3"
@@ -35,21 +39,24 @@ var (
 	sheetsService *sheets.Service
 	driveService  *drive.Service
 	// ---
-	spreadsheetID    string
-	uploadFolderID   string
-	labelPrinterURL  string // NEW: Loaded from env
+	spreadsheetID   string
+	uploadFolderID  string
+	labelPrinterURL string // NEW: Loaded from env
 	// ---
-	renderBaseURL    string // URL of this Render service itself
-	
-	// --- NEW: Telegram Bot Management ---
-	telegramBots   = make(map[string]*tgbotapi.BotAPI)      // Map[TeamName] -> BotInstance
+	renderBaseURL string // URL of this Render service itself
+
+	// --- Telegram Bot Management ---
+	telegramBots   = make(map[string]*tgbotapi.BotAPI)  // Map[TeamName] -> BotInstance
 	telegramConfig = make(map[string]map[string]string) // Map[TeamName] -> Map["groupID", "topicID", "archiveID"]
+
+	// --- NEW: WebSocket Hub ---
+	hub *Hub
 )
 
 // --- Constants from Apps Script Config (Keep consistent) ---
 // ... (sheetRanges map remains the same) ...
 var sheetRanges = map[string]string{
-	"Users":             "Users!A:G", // Assuming G is IsSystemAdmin
+	"Users":             "Users!A:G",    // Assuming G is IsSystemAdmin
 	"Settings":          "Settings!A:B", // Assuming A=Team, B=UploadFolderID (BotToken/etc are env vars now)
 	"TeamsPages":        "TeamsPages!A:C",
 	"Products":          "Products!A:D",
@@ -57,27 +64,29 @@ var sheetRanges = map[string]string{
 	"ShippingMethods":   "ShippingMethods!A:D",
 	"Colors":            "Colors!A:A",
 	"Drivers":           "Drivers!A:B",
-	"BankAccounts":    "BankAccounts!A:B",
-	"PhoneCarriers":   "PhoneCarriers!A:C",
+	"BankAccounts":      "BankAccounts!A:B",
+	"PhoneCarriers":     "PhoneCarriers!A:C",
 	"TelegramTemplates": "TelegramTemplates!A:C",
-	"AllOrders":         "AllOrders!A:U", // Assuming Timestamp to Team
-	"RevenueDashboard":  "RevenueDashboard!A:D",
+	// *** UPDATED: AllOrders range (21 + 3 = 24 cols = X) ***
+	"AllOrders":        "AllOrders!A:X",
+	"RevenueDashboard": "RevenueDashboard!A:D",
+	"ChatMessages":     "ChatMessages!A:D", // *** NEW ***
 	// Write-only sheets don't need a read range
-	"FormulaReportSheet": "FormulaReport!A:Z", // Use full range for clear/overwrite
+	"FormulaReportSheet": "FormulaReport!A:Z",    // Use full range for clear/overwrite
 	"UserActivityLogs":   "UserActivityLogs!A:Z", // Append only
 	"EditLogs":           "EditLogs!A:Z",         // Append only
 }
 
 const (
-    AllOrdersSheet     = "AllOrders"
-    FormulaReportSheet = "FormulaReport"
-    RevenueSheet       = "RevenueDashboard"
-    UserActivitySheet  = "UserActivityLogs"
-	EditLogsSheet	   = "EditLogs"
-    TelegramTemplatesSheet = "TelegramTemplates"
-    // ... add others if needed directly in Go
+	AllOrdersSheet         = "AllOrders"
+	FormulaReportSheet     = "FormulaReport"
+	RevenueSheet           = "RevenueDashboard"
+	UserActivitySheet      = "UserActivityLogs"
+	EditLogsSheet          = "EditLogs"
+	TelegramTemplatesSheet = "TelegramTemplates"
+	ChatMessagesSheet      = "ChatMessages" // *** NEW ***
+	// ... add others if needed directly in Go
 )
-
 
 // --- Cache ---
 // ... (Cache functions setCache, getCache, clearCache, invalidateSheetCache remain the same) ...
@@ -119,26 +128,26 @@ func getCache(key string) (interface{}, bool) {
 }
 
 func clearCache() {
-    cacheMutex.Lock()
-    defer cacheMutex.Unlock()
-    cache = make(map[string]CacheItem)
-    log.Println("Cache CLEARED")
-}
-// Function to invalidate specific sheet cache
-func invalidateSheetCache(sheetName string) {
-    cacheMutex.Lock()
-    defer cacheMutex.Unlock()
-    delete(cache, "sheet_"+sheetName)
-    log.Printf("Cache INVALIDATED for key: sheet_%s", sheetName)
+	cacheMutex.Lock()
+	defer cacheMutex.Unlock()
+	cache = make(map[string]CacheItem)
+	log.Println("Cache CLEARED")
 }
 
+// Function to invalidate specific sheet cache
+func invalidateSheetCache(sheetName string) {
+	cacheMutex.Lock()
+	defer cacheMutex.Unlock()
+	delete(cache, "sheet_"+sheetName)
+	log.Printf("Cache INVALIDATED for key: sheet_%s", sheetName)
+}
 
 // --- Models (Adjust based on your actual Sheet headers) ---
 // ... (All struct definitions remain the same) ...
 type User struct {
 	UserName          string `json:"UserName"`
 	Password          string `json:"Password"` // This will be read as string
-	Team              string `json:"Team"` // Comma-separated
+	Team              string `json:"Team"`     // Comma-separated
 	FullName          string `json:"FullName"`
 	ProfilePictureURL string `json:"ProfilePictureURL"`
 	Role              string `json:"Role"`
@@ -159,88 +168,202 @@ type Location struct {
 }
 
 type ShippingMethod struct {
-    MethodName            string `json:"MethodName"`
-    LogoURL               string `json:"LogoURL"`
-    AllowManualDriver     bool   `json:"AllowManualDriver"`
-    RequireDriverSelection bool   `json:"RequireDriverSelection"`
+	MethodName             string `json:"MethodName"`
+	LogoURL                string `json:"LogoURL"`
+	AllowManualDriver      bool   `json:"AllowManualDriver"`
+	RequireDriverSelection bool   `json:"RequireDriverSelection"`
 }
 
 type TeamPage struct {
-    Team           string `json:"Team"`
-    PageName       string `json:"PageName"`
-    TelegramValue string `json:"TelegramValue"`
+	Team          string `json:"Team"`
+	PageName      string `json:"PageName"`
+	TelegramValue string `json:"TelegramValue"`
 }
 
 type Color struct {
-    ColorName string `json:"ColorName"`
+	ColorName string `json:"ColorName"`
 }
 type Driver struct {
-    DriverName string `json:"DriverName"`
-    ImageURL   string `json:"ImageURL"`
+	DriverName string `json:"DriverName"`
+	ImageURL   string `json:"ImageURL"`
 }
 type BankAccount struct {
-    BankName string `json:"BankName"`
-    LogoURL  string `json:"LogoURL"`
+	BankName string `json:"BankName"`
+	LogoURL  string `json:"LogoURL"`
 }
 type PhoneCarrier struct {
-    CarrierName string `json:"CarrierName"`
-    Prefixes    string `json:"Prefixes (comma-separated)"` // Use exact header name
-    CarrierLogoURL string `json:"CarrierLogoURL"`
+	CarrierName    string `json:"CarrierName"`
+	Prefixes       string `json:"Prefixes (comma-separated)"` // Use exact header name
+	CarrierLogoURL string `json:"CarrierLogoURL"`
 }
 type TelegramTemplate struct {
-    Team     string `json:"Team"`
-    Part     int    `json:"Part"` // Assuming Part is a number
-    Template string `json:"Template"`
+	Team     string `json:"Team"`
+	Part     int    `json:"Part"` // Assuming Part is a number
+	Template string `json:"Template"`
 }
 
-// *** Model for Order data read from AllOrders (for FormulaReport) ***
+// *** UPDATED: Model for Order data read from AllOrders (for FormulaReport) ***
 type Order struct {
-	Timestamp            string  `json:"Timestamp"` // Read as ISO string
-	OrderID              string  `json:"Order ID"`
-	User                 string  `json:"User"`
-	Page                 string  `json:"Page"`
-	TelegramValue        string  `json:"TelegramValue"`
-	CustomerName         string  `json:"Customer Name"`
-	CustomerPhone        string  `json:"Customer Phone"` // This will be read as string
-	Location             string  `json:"Location"`
-	AddressDetails       string  `json:"Address Details"`
-	Note                 string  `json:"Note"`
-	ShippingFeeCustomer float64 `json:"Shipping Fee (Customer)"`
-	Subtotal             float64 `json:"Subtotal"`
-	GrandTotal           float64 `json:"Grand Total"`
-	ProductsJSON         string  `json:"Products (JSON)"`
-	InternalShippingMethod string `json:"Internal Shipping Method"`
-	InternalShippingDetails string `json:"Internal Shipping Details"`
-	InternalCost         float64 `json:"Internal Cost"`
-	PaymentStatus        string  `json:"Payment Status"`
-	PaymentInfo          string  `json:"Payment Info"`
-	TelegramMessageID    string  `json:"Telegram Message ID"`
-	Team                 string  `json:"Team"`
+	Timestamp               string  `json:"Timestamp"` // Read as ISO string
+	OrderID                 string  `json:"Order ID"`
+	User                    string  `json:"User"`
+	Page                    string  `json:"Page"`
+	TelegramValue           string  `json:"TelegramValue"`
+	CustomerName            string  `json:"Customer Name"`
+	CustomerPhone           string  `json:"Customer Phone"` // This will be read as string
+	Location                string  `json:"Location"`
+	AddressDetails          string  `json:"Address Details"`
+	Note                    string  `json:"Note"`
+	ShippingFeeCustomer     float64 `json:"Shipping Fee (Customer)"`
+	Subtotal                float64 `json:"Subtotal"`
+	GrandTotal              float64 `json:"Grand Total"`
+	ProductsJSON            string  `json:"Products (JSON)"`
+	InternalShippingMethod  string  `json:"Internal Shipping Method"`
+	InternalShippingDetails string  `json:"Internal Shipping Details"`
+	InternalCost            float64 `json:"Internal Cost"`
+	PaymentStatus           string  `json:"Payment Status"`
+	PaymentInfo             string  `json:"Payment Info"`
+	TelegramMessageID       string  `json:"Telegram Message ID"`
+	Team                    string  `json:"Team"`
+	// --- NEW COLUMNS ---
+	DiscountUSD    float64 `json:"Discount ($)"`
+	DeliveryUnpaid float64 `json:"Delivery Unpaid"`
+	DeliveryPaid   float64 `json:"Delivery Paid"`
 }
 
 // *** Model for Revenue data read from RevenueDashboard ***
 type RevenueEntry struct {
-    Timestamp string  `json:"Timestamp"` // Read as ISO string
-    Team      string  `json:"Team"`
-    Page      string  `json:"Page"`
-    Revenue   float64 `json:"Revenue"`
+	Timestamp string  `json:"Timestamp"` // Read as ISO string
+	Team      string  `json:"Team"`
+	Page      string  `json:"Page"`
+	Revenue   float64 `json:"Revenue"`
 }
 
+// --- *** NEW: Chat Message Model *** ---
+type ChatMessage struct {
+	Timestamp   string `json:"Timestamp"`
+	UserName    string `json:"UserName"`
+	MessageType string `json:"MessageType"` // "text", "audio", "image"
+	Content     string `json:"Content"`     // The text or the Google Drive URL
+}
 
 // *** Struct for report aggregation ***
 type ReportSummary struct {
-    TotalSales   float64
-    TotalExpense float64 // Used in FormulaReport
+	TotalSales   float64
+	TotalExpense float64 // Used in FormulaReport
 }
 
 type RevenueAggregate struct {
-    YearlyByTeam   map[int]map[string]float64    `json:"yearlyByTeam"`   // year -> team -> totalRevenue
-    YearlyByPage   map[int]map[string]float64    `json:"yearlyByPage"`   // year -> page -> totalRevenue
-    MonthlyByTeam  map[string]map[string]float64 `json:"monthlyByTeam"`  // "YYYY-MM" -> team -> totalRevenue
-    MonthlyByPage  map[string]map[string]float64 `json:"monthlyByPage"`  // "YYYY-MM" -> page -> totalRevenue
-    DailyByTeam    map[string]map[string]float64 `json:"dailyByTeam"`    // "YYYY-MM-DD" -> team -> totalRevenue
-    DailyByPage    map[string]map[string]float64 `json:"dailyByPage"`    // "YYYY-MM-DD" -> page -> totalRevenue
+	YearlyByTeam  map[int]map[string]float64    `json:"yearlyByTeam"`  // year -> team -> totalRevenue
+	YearlyByPage  map[int]map[string]float64    `json:"yearlyByPage"`  // year -> page -> totalRevenue
+	MonthlyByTeam map[string]map[string]float64 `json:"monthlyByTeam"` // "YYYY-MM" -> team -> totalRevenue
+	MonthlyByPage map[string]map[string]float64 `json:"monthlyByPage"` // "YYYY-MM" -> page -> totalRevenue
+	DailyByTeam   map[string]map[string]float64 `json:"dailyByTeam"`   // "YYYY-MM-DD" -> team -> totalRevenue
+	DailyByPage   map[string]map[string]float64 `json:"dailyByPage"`   // "YYYY-MM-DD" -> page -> totalRevenue
 }
+
+// --- *** NEW: WebSocket Hub & Client Structs *** ---
+var upgrader = websocket.Upgrader{
+	CheckOrigin: func(r *http.Request) bool {
+		return true // Allow all origins for simplicity
+	},
+}
+
+type Client struct {
+	hub  *Hub
+	conn *websocket.Conn
+	send chan []byte // Buffered channel of outbound messages
+}
+
+type Hub struct {
+	clients    map[*Client]bool
+	broadcast  chan []byte
+	register   chan *Client
+	unregister chan *Client
+}
+
+func NewHub() *Hub {
+	return &Hub{
+		broadcast:  make(chan []byte),
+		register:   make(chan *Client),
+		unregister: make(chan *Client),
+		clients:    make(map[*Client]bool),
+	}
+}
+
+func (h *Hub) run() {
+	for {
+		select {
+		case client := <-h.register:
+			h.clients[client] = true
+			log.Println("WebSocket client connected")
+		case client := <-h.unregister:
+			if _, ok := h.clients[client]; ok {
+				delete(h.clients, client)
+				close(client.send)
+				log.Println("WebSocket client disconnected")
+			}
+		case message := <-h.broadcast:
+			for client := range h.clients {
+				select {
+				case client.send <- message:
+				default:
+					close(client.send)
+					delete(h.clients, client)
+				}
+			}
+		}
+	}
+}
+
+// writePump pumps messages from the hub to the websocket connection.
+func (c *Client) writePump() {
+	defer func() {
+		c.conn.Close()
+	}()
+	for {
+		message, ok := <-c.send
+		if !ok {
+			// The hub closed the channel.
+			c.conn.WriteMessage(websocket.CloseMessage, []byte{})
+			return
+		}
+		c.conn.WriteMessage(websocket.TextMessage, message)
+	}
+}
+
+// serveWs handles websocket requests from the peer.
+func serveWs(c *gin.Context) {
+	conn, err := upgrader.Upgrade(c.Writer, c.Request, nil)
+	if err != nil {
+		log.Printf("Failed to upgrade websocket: %v", err)
+		return
+	}
+	client := &Client{hub: hub, conn: conn, send: make(chan []byte, 256)}
+	client.hub.register <- client
+
+	// Start the write pump in a new goroutine
+	go client.writePump()
+	// Read pump (but we don't expect messages *from* client on this socket, only broadcast)
+	// We just need to keep the connection alive
+	go func() {
+		defer func() {
+			client.hub.unregister <- client
+			client.conn.Close()
+		}()
+		for {
+			// Read messages just to keep connection alive and detect close
+			if _, _, err := client.conn.ReadMessage(); err != nil {
+				if websocket.IsUnexpectedCloseError(err, websocket.CloseGoingAway, websocket.CloseAbnormalClosure) {
+					log.Printf("WebSocket read error: %v", err)
+				}
+				break
+			}
+		}
+	}()
+}
+
+// --- *** END: WebSocket Logic *** ---
 
 // --- *** NEW: Google API Client Setup *** ---
 func createGoogleAPIClient(ctx context.Context) error {
@@ -294,7 +417,7 @@ func convertSheetValuesToMaps(values *sheets.ValueRange) ([]map[string]interface
 			if i < len(headers) {
 				header := fmt.Sprintf("%v", headers[i]) // Convert header to string
 				if header != "" {
-					
+
 					// --- Data Type Coercion ---
 					// Try to parse numbers (float)
 					if cellStr, ok := cell.(string); ok {
@@ -307,7 +430,7 @@ func convertSheetValuesToMaps(values *sheets.ValueRange) ([]map[string]interface
 						}
 					} else {
 						// It's likely already a float64 or bool from JSON/API
-						rowData[header] = cell 
+						rowData[header] = cell
 					}
 
 					// *** Specific Fixes for string fields that look like numbers ***
@@ -323,7 +446,6 @@ func convertSheetValuesToMaps(values *sheets.ValueRange) ([]map[string]interface
 	}
 	return result, nil
 }
-
 
 // Replaces callAppsScriptGET("getSheetData", ...)
 func fetchSheetDataFromAPI(sheetName string) ([]map[string]interface{}, error) {
@@ -351,8 +473,8 @@ func fetchSheetDataFromAPI(sheetName string) ([]map[string]interface{}, error) {
 // Replaces callAppsScriptPOST({Action: "appendRow", ...})
 func appendRowToSheet(sheetName string, rowData []interface{}) error {
 	// A1 notation for appending to a sheet is just the sheet name
-	writeRange := sheetName 
-	
+	writeRange := sheetName
+
 	valueRange := &sheets.ValueRange{
 		Values: [][]interface{}{rowData},
 	}
@@ -375,7 +497,7 @@ func overwriteSheetDataInAPI(sheetName string, data [][]interface{}) error {
 	if !ok {
 		return fmt.Errorf("no A1 range defined for sheet: %s", sheetName)
 	}
-	
+
 	_, err := sheetsService.Spreadsheets.Values.Clear(spreadsheetID, clearRange, &sheets.ClearValuesRequest{}).Do()
 	if err != nil {
 		log.Printf("Error calling Sheets API CLEAR for %s: %v", sheetName, err)
@@ -387,7 +509,7 @@ func overwriteSheetDataInAPI(sheetName string, data [][]interface{}) error {
 		log.Printf("No data provided to overwrite sheet %s. Sheet cleared.", sheetName)
 		return nil // Nothing to write
 	}
-	
+
 	// Determine the exact range to write (e.g., "FormulaReport!A1:D100")
 	// Simple way: just write starting at A1
 	writeRange := fmt.Sprintf("%s!A1", sheetName)
@@ -401,16 +523,16 @@ func overwriteSheetDataInAPI(sheetName string, data [][]interface{}) error {
 		log.Printf("Error calling Sheets API UPDATE for %s: %v", sheetName, err)
 		return fmt.Errorf("failed to write data to sheet %s: %v", sheetName, err)
 	}
-	
+
 	return nil
 }
 
 // --- *** NEW: Find Row and Update Cell (for Message ID) *** ---
 func updateTelegramMessageIDInSheet(team, orderId string, messageId int64) {
-    sheetName := "Orders_" + team
+	sheetName := "Orders_" + team
 	log.Printf("Attempting to save MessageID %d for OrderID %s in sheet %s", messageId, orderId, sheetName)
 
-    // 1. Fetch headers and Order ID column
+	// 1. Fetch headers and Order ID column
 	headersResp, err := sheetsService.Spreadsheets.Values.Get(spreadsheetID, fmt.Sprintf("%s!1:1", sheetName)).Do()
 	if err != nil || len(headersResp.Values) == 0 {
 		log.Printf("Error fetching headers for %s: %v", sheetName, err)
@@ -437,7 +559,7 @@ func updateTelegramMessageIDInSheet(team, orderId string, messageId int64) {
 	orderIdColLetter := string(rune('A' + orderIdColIndex))
 	messageIdColLetter := string(rune('A' + messageIdColIndex))
 
-    // 2. Fetch the Order ID column to find the row
+	// 2. Fetch the Order ID column to find the row
 	readRange := fmt.Sprintf("%s!%s2:%s", sheetName, orderIdColLetter, orderIdColLetter) // e.g., "Orders_A!B2:B"
 	resp, err := sheetsService.Spreadsheets.Values.Get(spreadsheetID, readRange).Do()
 	if err != nil {
@@ -465,14 +587,13 @@ func updateTelegramMessageIDInSheet(team, orderId string, messageId int64) {
 		Values: [][]interface{}{{messageId}}, // Pass messageId as int64
 	}
 	_, updateErr := sheetsService.Spreadsheets.Values.Update(spreadsheetID, updateA1Range, valueRange).ValueInputOption("RAW").Do()
-	
+
 	if updateErr != nil {
 		log.Printf("Error updating MessageID for OrderID %s in sheet %s: %v", orderId, sheetName, updateErr)
 	} else {
 		log.Printf("Successfully saved MessageID %d for OrderID %s in sheet %s (Row %d)", messageId, orderId, sheetName, targetRowIndex)
 	}
 }
-
 
 // --- Fetch & Cache Sheet Data (Rewritten) ---
 func getCachedSheetData(sheetName string, target interface{}, duration time.Duration) error {
@@ -488,8 +609,8 @@ func getCachedSheetData(sheetName string, target interface{}, duration time.Dura
 			}
 			log.Printf("Error unmarshalling cached data for %s: %v", sheetName, err)
 		} else {
-             log.Printf("Error marshalling cached data for %s: %v", sheetName, err)
-        }
+			log.Printf("Error marshalling cached data for %s: %v", sheetName, err)
+		}
 	}
 
 	// Fetch from source if not found or cache is invalid
@@ -499,7 +620,7 @@ func getCachedSheetData(sheetName string, target interface{}, duration time.Dura
 	if err != nil {
 		return err
 	}
-	
+
 	// Convert mappedData to the target struct (e.g., []User)
 	// This requires the same two-step marshal/unmarshal as before
 	jsonData, err := json.Marshal(mappedData)
@@ -536,7 +657,7 @@ func handleGetUsers(c *gin.Context) {
 
 func handleGetStaticData(c *gin.Context) {
 	// Fetch all required static data sequentially (safer for Sheets API quotas)
-	
+
 	result := make(map[string]interface{})
 	var err error
 
@@ -552,29 +673,38 @@ func handleGetStaticData(c *gin.Context) {
 	var phoneCarriers []PhoneCarrier
 	// *** END MODIFICATION ***
 
-
 	err = getCachedSheetData("TeamsPages", &pages, cacheTTL)
-	if err != nil { goto handleError } // Now safe to jump
+	if err != nil {
+		goto handleError
+	} // Now safe to jump
 	result["pages"] = pages
 
 	err = getCachedSheetData("Products", &products, cacheTTL)
-	if err != nil { goto handleError } // Now safe to jump
+	if err != nil {
+		goto handleError
+	} // Now safe to jump
 	result["products"] = products
 
 	err = getCachedSheetData("Locations", &locations, cacheTTL)
-	if err != nil { goto handleError } // Now safe to jump
+	if err != nil {
+		goto handleError
+	} // Now safe to jump
 	result["locations"] = locations
 
 	err = getCachedSheetData("ShippingMethods", &shippingMethods, cacheTTL)
-	if err != nil { goto handleError } // Now safe to jump
+	if err != nil {
+		goto handleError
+	} // Now safe to jump
 	result["shippingMethods"] = shippingMethods
 
 	// --- Get UploadFolderID from Settings ---
 	err = getCachedSheetData("Settings", &settingsMaps, cacheTTL)
-	if err != nil { goto handleError }
+	if err != nil {
+		goto handleError
+	}
 	result["settings"] = settingsMaps // Frontend might not even need this now
 	// Also set the global variable
-	if len(settingsMaps) > 0 {
+	if len(settingsMaps) > 0 && len(settingsMaps[0]) > 1 { // Check if map and column exist
 		if id, ok := settingsMaps[0]["UploadFolderID"].(string); ok {
 			uploadFolderID = id // Get from sheet
 		}
@@ -585,19 +715,27 @@ func handleGetStaticData(c *gin.Context) {
 	// ---
 
 	err = getCachedSheetData("Colors", &colors, cacheTTL)
-	if err != nil { goto handleError } // Now safe to jump
+	if err != nil {
+		goto handleError
+	} // Now safe to jump
 	result["colors"] = colors
 
 	err = getCachedSheetData("Drivers", &drivers, cacheTTL)
-	if err != nil { goto handleError } // Now safe to jump
+	if err != nil {
+		goto handleError
+	} // Now safe to jump
 	result["drivers"] = drivers
 
 	err = getCachedSheetData("BankAccounts", &bankAccounts, cacheTTL)
-	if err != nil { goto handleError } // Now safe to jump
+	if err != nil {
+		goto handleError
+	} // Now safe to jump
 	result["bankAccounts"] = bankAccounts
 
 	err = getCachedSheetData("PhoneCarriers", &phoneCarriers, cacheTTL)
-	if err != nil { goto handleError } // Now safe to jump
+	if err != nil {
+		goto handleError
+	} // Now safe to jump
 	result["phoneCarriers"] = phoneCarriers
 
 	c.JSON(http.StatusOK, gin.H{"status": "success", "data": result})
@@ -606,7 +744,6 @@ func handleGetStaticData(c *gin.Context) {
 handleError:
 	c.JSON(http.StatusInternalServerError, gin.H{"status": "error", "message": err.Error()})
 }
-
 
 // --- *** NEW: Helper to format message *** ---
 func formatTelegramMessage(template string, data map[string]interface{}) string {
@@ -672,14 +809,13 @@ func formatTelegramMessage(template string, data map[string]interface{}) string 
 		quantity, _ := p["quantity"].(float64) // JSON numbers are float64
 		colorInfo, _ := p["colorInfo"].(string)
 		total, _ := p["total"].(float64)
-		
+
 		productsList.WriteString(fmt.Sprintf("  - %s (x%.0f)", name, quantity))
 		if colorInfo != "" {
 			productsList.WriteString(fmt.Sprintf(" [%s]", colorInfo))
 		}
 		productsList.WriteString(fmt.Sprintf(" = *$%.2f*\n", total))
 	}
-
 
 	// Replacements
 	r := strings.NewReplacer(
@@ -749,7 +885,7 @@ func createLabelButtonInline(data map[string]interface{}) *tgbotapi.InlineKeyboa
 	params.Add("payment", paymentStatus)
 	params.Add("total", fmt.Sprintf("%.2f", grandTotal))
 	params.Add("shipping", shippingMethod)
-	
+
 	fullUrl := fmt.Sprintf("%s?%s", labelPrinterURL, params.Encode())
 
 	// Create button
@@ -770,7 +906,7 @@ func sendTelegramNotification(team string, fullOrderData map[string]interface{})
 		log.Printf("Error: Telegram config or bot instance not found for team %s", team)
 		return
 	}
-	
+
 	groupIDStr, ok := config["groupID"]
 	if !ok {
 		log.Printf("Error: Group ID not found for team %s", team)
@@ -781,7 +917,7 @@ func sendTelegramNotification(team string, fullOrderData map[string]interface{})
 		log.Printf("Error: Invalid Group ID '%s' for team %s", groupIDStr, team)
 		return
 	}
-	
+
 	topicIDStr, hasTopic := config["topicID"]
 	var topicID int64 // 0 means no topic
 	if hasTopic {
@@ -790,19 +926,19 @@ func sendTelegramNotification(team string, fullOrderData map[string]interface{})
 
 	// 2. Get Templates
 	var templates []TelegramTemplate
-    err = getCachedSheetData(TelegramTemplatesSheet, &templates, time.Hour) // Cache templates for 1 hour
-    if err != nil {
-        log.Printf("Error fetching Telegram templates for team %s: %v", team, err)
-        return
-    }
-    
-    teamTemplates := []TelegramTemplate{}
-    for _, t := range templates {
-        if strings.EqualFold(t.Team, team) {
-            teamTemplates = append(teamTemplates, t)
-        }
-    }
-    sort.Slice(teamTemplates, func(i, j int) bool {
+	err = getCachedSheetData(TelegramTemplatesSheet, &templates, time.Hour) // Cache templates for 1 hour
+	if err != nil {
+		log.Printf("Error fetching Telegram templates for team %s: %v", team, err)
+		return
+	}
+
+	teamTemplates := []TelegramTemplate{}
+	for _, t := range templates {
+		if strings.EqualFold(t.Team, team) {
+			teamTemplates = append(teamTemplates, t)
+		}
+	}
+	sort.Slice(teamTemplates, func(i, j int) bool {
 		return teamTemplates[i].Part < teamTemplates[j].Part
 	})
 
@@ -816,7 +952,7 @@ func sendTelegramNotification(team string, fullOrderData map[string]interface{})
 
 	// 4. Send Messages
 	var firstMessageID int64 = 0
-	
+
 	for i, t := range teamTemplates {
 		part := t.Part
 		formattedText := formatTelegramMessage(t.Template, fullOrderData)
@@ -846,7 +982,7 @@ func sendTelegramNotification(team string, fullOrderData map[string]interface{})
 				firstMessageID = int64(sentMessage.MessageID)
 			}
 		}
-		
+
 		time.Sleep(300 * time.Millisecond) // Small delay between messages
 	}
 
@@ -859,31 +995,30 @@ func sendTelegramNotification(team string, fullOrderData map[string]interface{})
 
 // --- *** NEW (Fix 2): Add Placeholder Function Back *** ---
 func generateAndSendPDF(team string, orderId string, orderData map[string]interface{}) {
-    log.Printf("Placeholder: Generating/Sending PDF for team %s, Order ID %s", team, orderId)
-    // TODO:
-    // 1. Option A: Use a Go PDF library (e.g., gofpdf) to generate PDF directly.
-    // 2. Option B: Generate HTML for the invoice (similar to Apps Script).
-    //    - Then, either use a Go library to convert HTML to PDF (can be complex, might need headless Chrome)
-    //    - OR send the HTML to another microservice dedicated to PDF generation.
-    // 3. Send the generated PDF/document via Telegram.
+	log.Printf("Placeholder: Generating/Sending PDF for team %s, Order ID %s", team, orderId)
+	// TODO:
+	// 1. Option A: Use a Go PDF library (e.g., gofpdf) to generate PDF directly.
+	// 2. Option B: Generate HTML for the invoice (similar to Apps Script).
+	//    - Then, either use a Go library to convert HTML to PDF (can be complex, might need headless Chrome)
+	//    - OR send the HTML to another microservice dedicated to PDF generation.
+	// 3. Send the generated PDF/document via Telegram.
 }
-
 
 // ... (handleSubmitOrder remains the same, but sendTelegramNotification is now implemented) ...
 func handleSubmitOrder(c *gin.Context) {
 	var orderRequest struct {
-		CurrentUser  User                   `json:"currentUser"`
-		SelectedTeam string                 `json:"selectedTeam"`
-		Page         string                 `json:"page"`
-		TelegramValue string                `json:"telegramValue"`
-		Customer     map[string]interface{} `json:"customer"`
-		Products     []map[string]interface{} `json:"products"`
-		Shipping     map[string]interface{} `json:"shipping"`
-		Payment      map[string]interface{} `json:"payment"`
-		Telegram     map[string]interface{} `json:"telegram"`
-		Subtotal     float64                `json:"subtotal"`
-		GrandTotal   float64                `json:"grandTotal"`
-		Note         string                 `json:"note"`
+		CurrentUser   User                     `json:"currentUser"`
+		SelectedTeam  string                   `json:"selectedTeam"`
+		Page          string                   `json:"page"`
+		TelegramValue string                   `json:"telegramValue"`
+		Customer      map[string]interface{}   `json:"customer"`
+		Products      []map[string]interface{} `json:"products"`
+		Shipping      map[string]interface{}   `json:"shipping"`
+		Payment       map[string]interface{}   `json:"payment"`
+		Telegram      map[string]interface{}   `json:"telegram"`
+		Subtotal      float64                  `json:"subtotal"`
+		GrandTotal    float64                  `json:"grandTotal"`
+		Note          string                   `json:"note"`
 	}
 
 	if err := c.ShouldBindJSON(&orderRequest); err != nil {
@@ -899,7 +1034,7 @@ func handleSubmitOrder(c *gin.Context) {
 	orderSheetName := "Orders_" + team // Assuming CONFIG.ORDER_SHEET_PREFIX
 
 	// Prepare data row for Apps Script
-	timestamp := time.Now().UTC().Format(time.RFC3339) // Use ISO format
+	timestamp := time.Now().UTC().Format(time.RFC3339)              // Use ISO format
 	orderId := fmt.Sprintf("GO-%s-%d", team, time.Now().UnixNano()) // Generate ID in Go
 
 	productsJSON, err := json.Marshal(orderRequest.Products)
@@ -907,19 +1042,39 @@ func handleSubmitOrder(c *gin.Context) {
 		c.JSON(http.StatusInternalServerError, gin.H{"status": "error", "message": "Failed to serialize products"})
 		return
 	}
-    
-    // Construct location string safely
-    var locationParts []string
-	if p, ok := orderRequest.Customer["province"].(string); ok && p != "" { locationParts = append(locationParts, p) }
-	if d, ok := orderRequest.Customer["district"].(string); ok && d != "" { locationParts = append(locationParts, d) }
-	if s, ok := orderRequest.Customer["sangkat"].(string); ok && s != "" { locationParts = append(locationParts, s) }
+
+	// Construct location string safely
+	var locationParts []string
+	if p, ok := orderRequest.Customer["province"].(string); ok && p != "" {
+		locationParts = append(locationParts, p)
+	}
+	if d, ok := orderRequest.Customer["district"].(string); ok && d != "" {
+		locationParts = append(locationParts, d)
+	}
+	if s, ok := orderRequest.Customer["sangkat"].(string); ok && s != "" {
+		locationParts = append(locationParts, s)
+	}
 	fullLocation := strings.Join(locationParts, ", ")
 
-    // Ensure numeric types from frontend are correct
-    shippingFee, _ := orderRequest.Customer["shippingFee"].(float64)
-    shippingCost, _ := orderRequest.Shipping["cost"].(float64)
+	// Ensure numeric types from frontend are correct
+	shippingFee, _ := orderRequest.Customer["shippingFee"].(float64)
+	shippingCost, _ := orderRequest.Shipping["cost"].(float64)
 
+	// *** NEW: Calculate Total Discount ***
+	var totalDiscount float64 = 0
+	for _, p := range orderRequest.Products {
+		// Data from frontend is map[string]interface{}, must assert type
+		originalPrice, opOK := p["originalPrice"].(float64)
+		finalPrice, fpOK := p["finalPrice"].(float64)
+		quantity, qOK := p["quantity"].(float64)
 
+		if opOK && fpOK && qOK && originalPrice > 0 && quantity > 0 {
+			totalDiscount += (originalPrice - finalPrice) * quantity
+		}
+	}
+	// *** END: Calculate Total Discount ***
+
+	// *** UPDATED: rowData slice now includes 3 new columns ***
 	rowData := []interface{}{
 		timestamp, orderId, orderRequest.CurrentUser.UserName, orderRequest.Page, orderRequest.TelegramValue,
 		orderRequest.Customer["name"], orderRequest.Customer["phone"], fullLocation,
@@ -927,6 +1082,11 @@ func handleSubmitOrder(c *gin.Context) {
 		orderRequest.Subtotal, orderRequest.GrandTotal, string(productsJSON),
 		orderRequest.Shipping["method"], orderRequest.Shipping["details"], shippingCost,
 		orderRequest.Payment["status"], orderRequest.Payment["info"],
+		// --- NEW COLUMNS ---
+		totalDiscount, // "Discount ($)"
+		shippingCost,  // "Delivery Unpaid" (assuming internal cost is the unpaid amount)
+		0,             // "Delivery Paid" (defaults to 0 on creation)
+		// --- END NEW ---
 		"", // Placeholder for Telegram Message ID (Go backend handles sending)
 	}
 
@@ -937,46 +1097,46 @@ func handleSubmitOrder(c *gin.Context) {
 		return
 	}
 
-    // Append to AllOrders sheet
-    rowDataWithTeam := append(rowData, team)
-    err = appendRowToSheet(AllOrdersSheet, rowDataWithTeam)
-    if err != nil {
-        log.Printf("Warning: Failed to append to AllOrders sheet: %v", err)
-    }
+	// Append to AllOrders sheet
+	rowDataWithTeam := append(rowData, team)
+	err = appendRowToSheet(AllOrdersSheet, rowDataWithTeam)
+	if err != nil {
+		log.Printf("Warning: Failed to append to AllOrders sheet: %v", err)
+	}
 
 	// Append to Revenue sheet
 	err = appendRowToSheet(RevenueSheet, []interface{}{timestamp, team, orderRequest.Page, orderRequest.GrandTotal})
 	if err != nil {
 		log.Printf("Warning: Failed to append to RevenueDashboard: %v", err)
 	}
-    
-    // Log user activity via Apps Script
-    err = appendRowToSheet(UserActivitySheet, []interface{}{
+
+	// Log user activity via Apps Script
+	err = appendRowToSheet(UserActivitySheet, []interface{}{
 		timestamp,
-		orderRequest.CurrentUser.UserName, 
-		"SUBMIT_ORDER_GO", 
+		orderRequest.CurrentUser.UserName,
+		"SUBMIT_ORDER_GO",
 		fmt.Sprintf(`{"orderId":"%s","team":"%s","grandTotal":%.2f}`, orderId, team, orderRequest.GrandTotal),
 	})
-    if err != nil {
-        log.Printf("Warning: Failed to log user activity for order submission: %v", err)
-    }
+	if err != nil {
+		log.Printf("Warning: Failed to log user activity for order submission: %v", err)
+	}
 
 	// --- Handle Telegram/PDF ---
 	// Combine all data needed for notifications/PDF
 	fullOrderData := map[string]interface{}{
-	    "orderId": orderId, // Add generated Order ID
-	    "currentUser": orderRequest.CurrentUser,
-	    "selectedTeam": orderRequest.SelectedTeam,
-	    "page": orderRequest.Page,
-	    "telegramValue": orderRequest.TelegramValue,
-	    "customer": orderRequest.Customer,
-	    "products": orderRequest.Products,
-	    "shipping": orderRequest.Shipping,
-	    "payment": orderRequest.Payment,
-	    "telegram": orderRequest.Telegram, // Keep scheduling info if needed
-	    "subtotal": orderRequest.Subtotal,
-	    "grandTotal": orderRequest.GrandTotal,
-	    "note": orderRequest.Note,
+		"orderId":       orderId, // Add generated Order ID
+		"currentUser":   orderRequest.CurrentUser,
+		"selectedTeam":  orderRequest.SelectedTeam,
+		"page":          orderRequest.Page,
+		"telegramValue": orderRequest.TelegramValue,
+		"customer":      orderRequest.Customer,
+		"products":      orderRequest.Products,
+		"shipping":      orderRequest.Shipping,
+		"payment":       orderRequest.Payment,
+		"telegram":      orderRequest.Telegram, // Keep scheduling info if needed
+		"subtotal":      orderRequest.Subtotal,
+		"grandTotal":    orderRequest.GrandTotal,
+		"note":          orderRequest.Note,
 	}
 
 	// TODO: Check scheduling logic (orderRequest.Telegram)
@@ -988,7 +1148,7 @@ func handleSubmitOrder(c *gin.Context) {
 	} else {
 		// Send notifications immediately (placeholders)
 		go sendTelegramNotification(team, fullOrderData)
-		go generateAndSendPDF(team, orderId, fullOrderData) // *** THIS IS LINE 977 ***
+		go generateAndSendPDF(team, orderId, fullOrderData)
 	}
 
 	// Invalidate relevant caches
@@ -996,20 +1156,19 @@ func handleSubmitOrder(c *gin.Context) {
 	invalidateSheetCache(RevenueSheet)
 	invalidateSheetCache(orderSheetName) // Invalidate specific team sheet
 
-
 	c.JSON(http.StatusOK, gin.H{"status": "success", "orderId": orderId})
 }
 
 // ... (handleImageUploadProxy remains the same) ...
 func handleImageUploadProxy(c *gin.Context) {
-    var uploadRequest struct {
+	var uploadRequest struct {
 		FileData string `json:"fileData"`
 		FileName string `json:"fileName"`
 		MimeType string `json:"mimeType"`
 		// Pass through sheet/pk/column info
-		SheetName string `json:"sheetName"`
+		SheetName  string            `json:"sheetName"`
 		PrimaryKey map[string]string `json:"primaryKey"`
-		ColumnName string `json:"columnName"`
+		ColumnName string            `json:"columnName"`
 	}
 
 	if err := c.ShouldBindJSON(&uploadRequest); err != nil {
@@ -1024,7 +1183,7 @@ func handleImageUploadProxy(c *gin.Context) {
 		return
 	}
 	fileReader := bytes.NewReader(fileData)
-	
+
 	if uploadFolderID == "" {
 		c.JSON(http.StatusInternalServerError, gin.H{"status": "error", "message": "Upload Folder ID is not configured on the server."})
 		return
@@ -1058,25 +1217,24 @@ func handleImageUploadProxy(c *gin.Context) {
 	// 4. Construct the direct download URL
 	fileUrl := fmt.Sprintf("https://drive.google.com/uc?id=%s", createdFile.Id)
 
+	// 5. Update the specific sheet cell (in background)
+	if uploadRequest.SheetName != "" && uploadRequest.PrimaryKey != nil && uploadRequest.ColumnName != "" {
+		go func() { // Update sheet in the background
+			pkHeader := ""
+			pkValue := ""
+			for k, v := range uploadRequest.PrimaryKey {
+				pkHeader = k
+				pkValue = v
+				break // Assuming single primary key
+			}
+			if pkHeader == "" || pkValue == "" {
+				log.Printf("Warning: Missing primary key info for image update. Sheet: %s, Column: %s", uploadRequest.SheetName, uploadRequest.ColumnName)
+				return
+			}
 
-    // 5. Update the specific sheet cell (in background)
-    if uploadRequest.SheetName != "" && uploadRequest.PrimaryKey != nil && uploadRequest.ColumnName != "" {
-        go func() { // Update sheet in the background
-            pkHeader := ""
-            pkValue := ""
-            for k, v := range uploadRequest.PrimaryKey {
-                pkHeader = k
-                pkValue = v
-                break // Assuming single primary key
-            }
-            if pkHeader == "" || pkValue == "" {
-                log.Printf("Warning: Missing primary key info for image update. Sheet: %s, Column: %s", uploadRequest.SheetName, uploadRequest.ColumnName)
-                return
-            }
+			var sheetRows []map[string]interface{}
+			targetRowIndex := -1
 
-            var sheetRows []map[string]interface{}
-            targetRowIndex := -1
-			
 			// Fetch fresh data (don't use cache) to find the correct row
 			mappedData, err := fetchSheetDataFromAPI(uploadRequest.SheetName)
 			if err != nil {
@@ -1085,18 +1243,18 @@ func handleImageUploadProxy(c *gin.Context) {
 			}
 			sheetRows = mappedData
 
-            // Find the row index
-            for i, row := range sheetRows {
-                 if val, ok := row[pkHeader]; ok && fmt.Sprintf("%v", val) == pkValue {
-                      targetRowIndex = i + 2 // +2 for 1-based index and header row
-                      break
-                 }
-            }
+			// Find the row index
+			for i, row := range sheetRows {
+				if val, ok := row[pkHeader]; ok && fmt.Sprintf("%v", val) == pkValue {
+					targetRowIndex = i + 2 // +2 for 1-based index and header row
+					break
+				}
+			}
 
-            if targetRowIndex == -1 {
-                 log.Printf("Warning: Row not found for PK %s=%s in sheet %s for image update.", pkHeader, pkValue, uploadRequest.SheetName)
-                 return
-            }
+			if targetRowIndex == -1 {
+				log.Printf("Warning: Row not found for PK %s=%s in sheet %s for image update.", pkHeader, pkValue, uploadRequest.SheetName)
+				return
+			}
 
 			// Find the column letter (e.g., "D")
 			_, ok := sheetRanges[uploadRequest.SheetName]
@@ -1104,13 +1262,13 @@ func handleImageUploadProxy(c *gin.Context) {
 				log.Printf("Error: No A1 range defined for %s, cannot update cell.", uploadRequest.SheetName)
 				return
 			}
-			
+
 			headersResp, err := sheetsService.Spreadsheets.Values.Get(spreadsheetID, fmt.Sprintf("%s!1:1", uploadRequest.SheetName)).Do()
 			if err != nil || len(headersResp.Values) == 0 {
 				log.Printf("Error fetching headers for %s: %v", uploadRequest.SheetName, err)
 				return
 			}
-			
+
 			colIndex := -1
 			for i, header := range headersResp.Values[0] {
 				if fmt.Sprintf("%v", header) == uploadRequest.ColumnName {
@@ -1122,36 +1280,35 @@ func handleImageUploadProxy(c *gin.Context) {
 				log.Printf("Error: Column '%s' not found in sheet '%s'", uploadRequest.ColumnName, uploadRequest.SheetName)
 				return
 			}
-			
+
 			// Convert column index (0-based) to letter (A-based)
 			colLetter := string(rune('A' + colIndex))
 			updateA1Range := fmt.Sprintf("%s!%s%d", uploadRequest.SheetName, colLetter, targetRowIndex)
 
-            // Call Update in Sheets API
-            valueRange := &sheets.ValueRange{
+			// Call Update in Sheets API
+			valueRange := &sheets.ValueRange{
 				Values: [][]interface{}{{fileUrl}},
 			}
 			_, updateErr := sheetsService.Spreadsheets.Values.Update(spreadsheetID, updateA1Range, valueRange).ValueInputOption("RAW").Do()
-             
+
 			if updateErr != nil {
-                  log.Printf("Error updating sheet %s (Range %s) with image URL: %v", uploadRequest.SheetName, updateA1Range, updateErr)
-             } else {
-                  log.Printf("Successfully updated sheet %s (Range %s) with image URL", uploadRequest.SheetName, updateA1Range)
-                  invalidateSheetCache(uploadRequest.SheetName) // Invalidate cache
-             }
-        }() // End background update
-    }
+				log.Printf("Error updating sheet %s (Range %s) with image URL: %v", uploadRequest.SheetName, updateA1Range, updateErr)
+			} else {
+				log.Printf("Successfully updated sheet %s (Range %s) with image URL", uploadRequest.SheetName, updateA1Range)
+				invalidateSheetCache(uploadRequest.SheetName) // Invalidate cache
+			}
+		}() // End background update
+	}
 
 	c.JSON(http.StatusOK, gin.H{"status": "success", "url": fileUrl})
 }
-
 
 // ... (handleUpdateFormulaReport remains the same) ...
 func handleUpdateFormulaReport(c *gin.Context) {
 	// 1. Fetch AllOrders data
 	var allOrders []Order
 	// Invalidate cache first to ensure fresh data for report
-	invalidateSheetCache(AllOrdersSheet) 
+	invalidateSheetCache(AllOrdersSheet)
 	err := getCachedSheetData(AllOrdersSheet, &allOrders, cacheTTL) // Fetch fresh, then cache
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"status": "error", "message": "Failed to fetch order data: " + err.Error()})
@@ -1181,20 +1338,18 @@ func handleUpdateFormulaReport(c *gin.Context) {
 	now := time.Now()
 	currentYear := now.Year()
 	currentMonth := now.Month()
-    loc, _ := time.LoadLocation("Asia/Phnom_Penh") // Load Cambodia timezone
+	loc, _ := time.LoadLocation("Asia/Phnom_Penh") // Load Cambodia timezone
 	if loc == nil {
 		loc = time.UTC // Fallback
 	}
 
-
 	for _, order := range allOrders {
 		ts, err := time.Parse(time.RFC3339, order.Timestamp) // Try ISO string first
-        if err != nil {
-             log.Printf("Warning: Could not parse timestamp '%s' for order %s: %v. Skipping record.", order.Timestamp, order.OrderID, err)
-             continue
-        }
-        ts = ts.In(loc) // Convert to local time for aggregation
-
+		if err != nil {
+			log.Printf("Warning: Could not parse timestamp '%s' for order %s: %v. Skipping record.", order.Timestamp, order.OrderID, err)
+			continue
+		}
+		ts = ts.In(loc) // Convert to local time for aggregation
 
 		year := ts.Year()
 		month := ts.Month()
@@ -1247,16 +1402,16 @@ func handleUpdateFormulaReport(c *gin.Context) {
 	// Add Monthly Data (Current Year)
 	reportData = append(reportData, []interface{}{fmt.Sprintf("MONTHLY REPORT (%d)", currentYear), "", "", ""})
 	for m := 1; m <= 12; m++ {
-        monthKey := fmt.Sprintf("%d-%02d", currentYear, m)
-        summary, ok := monthlyData[monthKey]
-        monthName := time.Month(m).String() // Get English month name
+		monthKey := fmt.Sprintf("%d-%02d", currentYear, m)
+		summary, ok := monthlyData[monthKey]
+		monthName := time.Month(m).String() // Get English month name
 		if ok {
-		     reportData = append(reportData, []interface{}{"", monthName, fmt.Sprintf("%.2f", summary.TotalSales), fmt.Sprintf("%.2f", summary.TotalExpense)})
+			reportData = append(reportData, []interface{}{"", monthName, fmt.Sprintf("%.2f", summary.TotalSales), fmt.Sprintf("%.2f", summary.TotalExpense)})
 		} else {
-             // Show months with zero values
-             reportData = append(reportData, []interface{}{"", monthName, "0.00", "0.00"})
-        }
-    }
+			// Show months with zero values
+			reportData = append(reportData, []interface{}{"", monthName, "0.00", "0.00"})
+		}
+	}
 
 	reportData = append(reportData, []interface{}{}) // Blank row
 
@@ -1269,8 +1424,8 @@ func handleUpdateFormulaReport(c *gin.Context) {
 	sort.Strings(dayKeys) // Sort days chronologically
 	for _, dayKey := range dayKeys {
 		summary := dailyData[dayKey]
-        // Format date like "Oct 28, 2025"
-        t, _ := time.Parse("2006-01-02", dayKey)
+		// Format date like "Oct 28, 2025"
+		t, _ := time.Parse("2006-01-02", dayKey)
 		dayLabel := t.Format("Jan 02, 2006")
 		reportData = append(reportData, []interface{}{"", dayLabel, fmt.Sprintf("%.2f", summary.TotalSales), fmt.Sprintf("%.2f", summary.TotalExpense)})
 	}
@@ -1281,10 +1436,9 @@ func handleUpdateFormulaReport(c *gin.Context) {
 		c.JSON(http.StatusInternalServerError, gin.H{"status": "error", "message": "Failed to write report data: " + err.Error()})
 		return
 	}
-    
+
 	c.JSON(http.StatusOK, gin.H{"status": "success", "message": "Formula Report updated successfully."})
 }
-
 
 // ... (handleGetRevenueSummary remains the same) ...
 func handleGetRevenueSummary(c *gin.Context) {
@@ -1300,40 +1454,39 @@ func handleGetRevenueSummary(c *gin.Context) {
 
 	if len(revenueEntries) == 0 {
 		c.JSON(http.StatusOK, gin.H{"status": "success", "data": RevenueAggregate{ // Return empty structure
-		    YearlyByTeam:   make(map[int]map[string]float64),
-            YearlyByPage:   make(map[int]map[string]float64),
-            MonthlyByTeam:  make(map[string]map[string]float64),
-            MonthlyByPage:  make(map[string]map[string]float64),
-            DailyByTeam:    make(map[string]map[string]float64),
-            DailyByPage:    make(map[string]map[string]float64),
+			YearlyByTeam:  make(map[int]map[string]float64),
+			YearlyByPage:  make(map[int]map[string]float64),
+			MonthlyByTeam: make(map[string]map[string]float64),
+			MonthlyByPage: make(map[string]map[string]float64),
+			DailyByTeam:   make(map[string]map[string]float64),
+			DailyByPage:   make(map[string]map[string]float64),
 		}})
 		return
 	}
 
 	// 2. Process Data in Go
 	yearlyByTeam := make(map[int]map[string]float64)
-    yearlyByPage := make(map[int]map[string]float64)
-    monthlyByTeam := make(map[string]map[string]float64) // Key: "YYYY-MM"
-    monthlyByPage := make(map[string]map[string]float64) // Key: "YYYY-MM"
-    dailyByTeam := make(map[string]map[string]float64)   // Key: "YYYY-MM-DD"
-    dailyByPage := make(map[string]map[string]float64)   // Key: "YYYY-MM-DD"
+	yearlyByPage := make(map[int]map[string]float64)
+	monthlyByTeam := make(map[string]map[string]float64) // Key: "YYYY-MM"
+	monthlyByPage := make(map[string]map[string]float64) // Key: "YYYY-MM"
+	dailyByTeam := make(map[string]map[string]float64)   // Key: "YYYY-MM-DD"
+	dailyByPage := make(map[string]map[string]float64)   // Key: "YYYY-MM-DD"
 
 	now := time.Now()
 	currentYear := now.Year()
 	currentMonth := now.Month()
-    loc, _ := time.LoadLocation("Asia/Phnom_Penh") // Load Cambodia timezone
+	loc, _ := time.LoadLocation("Asia/Phnom_Penh") // Load Cambodia timezone
 	if loc == nil {
 		loc = time.UTC // Fallback
 	}
 
-
 	for _, entry := range revenueEntries {
 		ts, err := time.Parse(time.RFC3339, entry.Timestamp)
-        if err != nil {
-             log.Printf("Warning: Could not parse timestamp '%s' for revenue entry. Skipping.", entry.Timestamp)
-             continue
-        }
-        ts = ts.In(loc) // Convert to local time
+		if err != nil {
+			log.Printf("Warning: Could not parse timestamp '%s' for revenue entry. Skipping.", entry.Timestamp)
+			continue
+		}
+		ts = ts.In(loc) // Convert to local time
 
 		year := ts.Year()
 		month := ts.Month()
@@ -1341,57 +1494,231 @@ func handleGetRevenueSummary(c *gin.Context) {
 		yearMonthKey := fmt.Sprintf("%d-%02d", year, month)
 		yearMonthDayKey := ts.Format("2006-01-02") // Use standard format for daily key
 
-        team := entry.Team
-		if team == "" { team = "Unknown" }
-        page := entry.Page
-		if page == "" { page = "Unknown" }
-        revenue := entry.Revenue
+		team := entry.Team
+		if team == "" {
+			team = "Unknown"
+		}
+		page := entry.Page
+		if page == "" {
+			page = "Unknown"
+		}
+		revenue := entry.Revenue
 
-        // --- Aggregate Yearly ---
-        if _, ok := yearlyByTeam[year]; !ok { yearlyByTeam[year] = make(map[string]float64) }
-        yearlyByTeam[year][team] += revenue
+		// --- Aggregate Yearly ---
+		if _, ok := yearlyByTeam[year]; !ok {
+			yearlyByTeam[year] = make(map[string]float64)
+		}
+		yearlyByTeam[year][team] += revenue
 
-        if _, ok := yearlyByPage[year]; !ok { yearlyByPage[year] = make(map[string]float64) }
-        yearlyByPage[year][page] += revenue
+		if _, ok := yearlyByPage[year]; !ok {
+			yearlyByPage[year] = make(map[string]float64)
+		}
+		yearlyByPage[year][page] += revenue
 
-        // --- Aggregate Monthly (Current Year Only) ---
+		// --- Aggregate Monthly (Current Year Only) ---
 		if year == currentYear {
-			if _, ok := monthlyByTeam[yearMonthKey]; !ok { monthlyByTeam[yearMonthKey] = make(map[string]float64) }
-            monthlyByTeam[yearMonthKey][team] += revenue
+			if _, ok := monthlyByTeam[yearMonthKey]; !ok {
+				monthlyByTeam[yearMonthKey] = make(map[string]float64)
+			}
+			monthlyByTeam[yearMonthKey][team] += revenue
 
-			// *** THIS IS LINE 1383 (approx) ***
-            if _, ok := monthlyByPage[yearMonthKey]; !ok { monthlyByPage[yearMonthKey] = make(map[string]float64) } // *** FIX 1: Was map[string]map[string]float64 ***
-            monthlyByPage[yearMonthKey][page] += revenue
+			if _, ok := monthlyByPage[yearMonthKey]; !ok {
+				monthlyByPage[yearMonthKey] = make(map[string]float64)
+			}
+			monthlyByPage[yearMonthKey][page] += revenue
 		}
 
 		// --- Aggregate Daily (Current Month of Current Year Only) ---
 		if year == currentYear && month == currentMonth {
-			if _, ok := dailyByTeam[yearMonthDayKey]; !ok { dailyByTeam[yearMonthDayKey] = make(map[string]float64) }
-            dailyByTeam[yearMonthDayKey][team] += revenue
+			if _, ok := dailyByTeam[yearMonthDayKey]; !ok {
+				dailyByTeam[yearMonthDayKey] = make(map[string]float64)
+			}
+			dailyByTeam[yearMonthDayKey][team] += revenue
 
-			// *** THIS IS LINE 1396 (approx) ***
-            if _, ok := dailyByPage[yearMonthDayKey]; !ok { dailyByPage[yearMonthDayKey] = make(map[string]float64) } // *** FIX 2: Was map[string]map[string]float64 ***
-            dailyByPage[yearMonthDayKey][page] += revenue
+			if _, ok := dailyByPage[yearMonthDayKey]; !ok {
+				dailyByPage[yearMonthDayKey] = make(map[string]float64)
+			}
+			dailyByPage[yearMonthDayKey][page] += revenue
 		}
 	}
 
-    // 3. Prepare response
-    response := RevenueAggregate{
-        YearlyByTeam:   yearlyByTeam,
-        YearlyByPage:   yearlyByPage,
-        MonthlyByTeam:  monthlyByTeam,
-        MonthlyByPage:  monthlyByPage,
-        DailyByTeam:    dailyByTeam,
-        DailyByPage:    dailyByPage,
-    }
+	// 3. Prepare response
+	response := RevenueAggregate{
+		YearlyByTeam:  yearlyByTeam,
+		YearlyByPage:  yearlyByPage,
+		MonthlyByTeam: monthlyByTeam,
+		MonthlyByPage: monthlyByPage,
+		DailyByTeam:   dailyByTeam,
+		DailyByPage:   dailyByPage,
+	}
 
 	c.JSON(http.StatusOK, gin.H{"status": "success", "data": response})
+}
+
+// --- *** NEW: Handler to get all orders (for Admin) *** ---
+func handleGetAllOrders(c *gin.Context) {
+	var allOrders []Order
+	// Invalidate cache first to ensure fresh data
+	invalidateSheetCache(AllOrdersSheet)
+	err := getCachedSheetData(AllOrdersSheet, &allOrders, cacheTTL) // Fetch fresh, then cache
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"status": "error", "message": "Failed to fetch all orders: " + err.Error()})
+		return
+	}
+
+	// Sort by timestamp descending (newest first)
+	sort.Slice(allOrders, func(i, j int) bool {
+		return allOrders[i].Timestamp > allOrders[j].Timestamp
+	})
+
+	c.JSON(http.StatusOK, gin.H{"status": "success", "data": allOrders})
+}
+
+// --- *** NEW: Handler to get chat messages *** ---
+func handleGetChatMessages(c *gin.Context) {
+	var chatMessages []ChatMessage
+	// Fetch fresh data, don't cache chat history heavily, or use a short cache
+	err := getCachedSheetData(ChatMessagesSheet, &chatMessages, 10*time.Second) // Short cache (10s)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"status": "error", "message": "Failed to fetch chat history: " + err.Error()})
+		return
+	}
+
+	// Sort by timestamp ascending (oldest first)
+	sort.Slice(chatMessages, func(i, j int) bool {
+		return chatMessages[i].Timestamp < chatMessages[j].Timestamp
+	})
+
+	c.JSON(http.StatusOK, gin.H{"status": "success", "data": chatMessages})
+}
+
+// --- *** NEW: Helper to upload chat media *** ---
+func uploadChatMediaToDrive(base64Data, fileName, mimeType string) (string, error) {
+	// 1. Decode Base64
+	fileData, err := base64.StdEncoding.DecodeString(base64Data)
+	if err != nil {
+		return "", fmt.Errorf("invalid base64 data")
+	}
+	fileReader := bytes.NewReader(fileData)
+
+	if uploadFolderID == "" {
+		return "", fmt.Errorf("upload Folder ID is not configured on the server")
+	}
+
+	// 2. Upload to Google Drive
+	file := &drive.File{
+		Name:     fileName,
+		MimeType: mimeType,
+		Parents:  []string{uploadFolderID}, // Set parent folder
+	}
+
+	createdFile, err := driveService.Files.Create(file).Media(fileReader).Do()
+	if err != nil {
+		return "", fmt.Errorf("failed to upload file to Google Drive: %v", err)
+	}
+
+	// 3. Set file permissions to public (Anyone with link can view)
+	permission := &drive.Permission{
+		Role: "reader",
+		Type: "anyone",
+	}
+	_, err = driveService.Permissions.Create(createdFile.Id, permission).Do()
+	if err != nil {
+		log.Printf("Warning: Error setting permissions on Drive file %s: %v", createdFile.Id, err)
+		// Don't fail, just log
+	}
+
+	// 4. Construct the direct download URL
+	fileUrl := fmt.Sprintf("https://drive.google.com/uc?id=%s", createdFile.Id)
+	return fileUrl, nil
+}
+
+// --- *** NEW: Handler to send chat message *** ---
+func handleSendChatMessage(c *gin.Context) {
+	var request struct {
+		UserName    string `json:"userName"`
+		MessageType string `json:"type"`    // "text", "audio", "image"
+		Content     string `json:"content"` // Text or Base64 data
+		MimeType    string `json:"mimeType,omitempty"`
+	}
+
+	if err := c.ShouldBindJSON(&request); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"status": "error", "message": "Invalid chat message format: " + err.Error()})
+		return
+	}
+
+	if request.UserName == "" || request.MessageType == "" || request.Content == "" {
+		c.JSON(http.StatusBadRequest, gin.H{"status": "error", "message": "Missing userName, type, or content"})
+		return
+	}
+
+	timestamp := time.Now().UTC().Format(time.RFC3339)
+	finalContent := ""
+
+	switch request.MessageType {
+	case "text":
+		finalContent = request.Content
+
+	case "audio", "image":
+		if request.MimeType == "" {
+			c.JSON(http.StatusBadRequest, gin.H{"status": "error", "message": "mimeType is required for audio/image uploads"})
+			return
+		}
+		// Assume content is Base64 data, generate a filename
+		fileName := fmt.Sprintf("chat_%s_%d.%s", request.UserName, time.Now().UnixNano(), strings.Split(request.MimeType, "/")[1])
+
+		fileUrl, err := uploadChatMediaToDrive(request.Content, fileName, request.MimeType)
+		if err != nil {
+			log.Printf("Chat media upload failed: %v", err)
+			c.JSON(http.StatusInternalServerError, gin.H{"status": "error", "message": "Failed to upload media: " + err.Error()})
+			return
+		}
+		finalContent = fileUrl // Store the URL
+
+	default:
+		c.JSON(http.StatusBadRequest, gin.H{"status": "error", "message": "Invalid messageType"})
+		return
+	}
+
+	// Save to Google Sheet
+	rowData := []interface{}{
+		timestamp,
+		request.UserName,
+		request.MessageType,
+		finalContent,
+	}
+
+	err := appendRowToSheet(ChatMessagesSheet, rowData)
+	if err != nil {
+		log.Printf("Failed to save chat message to sheet: %v", err)
+		c.JSON(http.StatusInternalServerError, gin.H{"status": "error", "message": "Failed to save message: " + err.Error()})
+		return
+	}
+
+	// Invalidate chat cache
+	invalidateSheetCache(ChatMessagesSheet)
+
+	// Broadcast message to WebSocket clients
+	broadcastMsg := ChatMessage{
+		Timestamp:   timestamp,
+		UserName:    request.UserName,
+		MessageType: request.MessageType,
+		Content:     finalContent,
+	}
+	broadcastJSON, err := json.Marshal(broadcastMsg)
+	if err == nil {
+		hub.broadcast <- broadcastJSON
+	} else {
+		log.Printf("Failed to marshal chat message for broadcast: %v", err)
+	}
+
+	c.JSON(http.StatusOK, gin.H{"status": "success", "message": broadcastMsg})
 }
 
 // --- *** NEW: Load Telegram Config at Startup *** ---
 func loadTelegramConfig() {
 	log.Println("Loading Telegram configuration from environment variables...")
-	
+
 	for _, env := range os.Environ() {
 		parts := strings.SplitN(env, "=", 2)
 		key := parts[0]
@@ -1400,7 +1727,7 @@ func loadTelegramConfig() {
 		// Example Key: TELEGRAM_BOT_TOKEN_TEAM_A
 		if strings.HasPrefix(key, "TELEGRAM_BOT_TOKEN_TEAM_") {
 			teamName := strings.TrimPrefix(key, "TELEGRAM_BOT_TOKEN_TEAM_")
-			
+
 			if _, ok := telegramConfig[teamName]; !ok {
 				telegramConfig[teamName] = make(map[string]string)
 			}
@@ -1417,29 +1744,34 @@ func loadTelegramConfig() {
 
 		} else if strings.HasPrefix(key, "TELEGRAM_GROUP_ID_TEAM_") {
 			teamName := strings.TrimPrefix(key, "TELEGRAM_GROUP_ID_TEAM_")
-			if _, ok := telegramConfig[teamName]; !ok { telegramConfig[teamName] = make(map[string]string) }
+			if _, ok := telegramConfig[teamName]; !ok {
+				telegramConfig[teamName] = make(map[string]string)
+			}
 			telegramConfig[teamName]["groupID"] = value
 
 		} else if strings.HasPrefix(key, "TELEGRAM_TOPIC_ID_TEAM_") {
 			teamName := strings.TrimPrefix(key, "TELEGRAM_TOPIC_ID_TEAM_")
-			if _, ok := telegramConfig[teamName]; !ok { telegramConfig[teamName] = make(map[string]string) }
+			if _, ok := telegramConfig[teamName]; !ok {
+				telegramConfig[teamName] = make(map[string]string)
+			}
 			telegramConfig[teamName]["topicID"] = value
 
 		} else if strings.HasPrefix(key, "TELEGRAM_ARCHIVE_ID_TEAM_") {
 			teamName := strings.TrimPrefix(key, "TELEGRAM_ARCHIVE_ID_TEAM_")
-			if _, ok := telegramConfig[teamName]; !ok { telegramConfig[teamName] = make(map[string]string) }
+			if _, ok := telegramConfig[teamName]; !ok {
+				telegramConfig[teamName] = make(map[string]string)
+			}
 			telegramConfig[teamName]["archiveID"] = value
 		}
 	}
 	log.Printf("Loaded %d bot configurations.", len(telegramBots))
 }
 
-
 // --- Main Function ---
 func main() {
 	// --- Load configuration from environment variables ---
 	spreadsheetID = os.Getenv("GOOGLE_SHEET_ID")
-	uploadFolderID = os.Getenv("UPLOAD_FOLDER_ID") // Can be overridden by Settings sheet
+	uploadFolderID = os.Getenv("UPLOAD_FOLDER_ID")   // Can be overridden by Settings sheet
 	labelPrinterURL = os.Getenv("LABEL_PRINTER_URL") // NEW
 	port := os.Getenv("PORT")
 	if port == "" {
@@ -1455,6 +1787,10 @@ func main() {
 	// --- NEW: Load Telegram Config ---
 	loadTelegramConfig()
 
+	// --- NEW: Start WebSocket Hub ---
+	hub = NewHub()
+	go hub.run()
+
 	// --- Create Google API Clients ---
 	ctx := context.Background()
 	err := createGoogleAPIClient(ctx)
@@ -1465,43 +1801,53 @@ func main() {
 	log.Printf("Connected to Google Sheet ID: %s", spreadsheetID)
 	log.Printf("Render Base URL: %s", renderBaseURL)
 
-
 	// --- Setup Gin Router ---
 	router := gin.Default()
 
 	// CORS configuration (allow requests from your frontend domain)
 	config := cors.DefaultConfig()
-    // Allow all origins for simplicity during development, restrict in production
+	// Allow all origins for simplicity during development, restrict in production
 	config.AllowOrigins = []string{"*"}
 	config.AllowMethods = []string{"GET", "POST", "OPTIONS"}
 	config.AllowHeaders = []string{"Origin", "Content-Type", "Accept"}
 	router.Use(cors.New(config))
 
-
 	// --- Define API Routes ---
 	api := router.Group("/api") // Group API routes under /api
 	{
 		api.GET("/ping", handlePing)
-		api.GET("/users", handleGetUsers) // Corresponds to ?action=getUsers
+		api.GET("/users", handleGetUsers)            // Corresponds to ?action=getUsers
 		api.GET("/static-data", handleGetStaticData) // Corresponds to ?action=getStaticData
-		
-		api.POST("/submit-order", handleSubmitOrder) // Corresponds to { action: 'submitOrder', ... }
-        api.POST("/upload-image", handleImageUploadProxy) // Proxy for image uploads
 
-        // *** Admin Endpoints ***
-        admin := api.Group("/admin")
-        // TODO: Add authentication middleware for admin routes
-        {
-             admin.POST("/update-formula-report", handleUpdateFormulaReport)
-             admin.GET("/revenue-summary", handleGetRevenueSummary) // *** NEW ***
-            // TODO: Add other admin endpoints here
-            // admin.GET("/all-orders", handleGetAllOrders)
-            // admin.POST("/update-order", handleAdminUpdateOrder)
-            // admin.POST("/delete-order", handleAdminDeleteOrder)
-            // admin.GET("/reports", handleGetReportData) // Endpoint for the specific report view in Index.html?
-            // admin.POST("/update-sheet", handleAdminUpdateSheet)
-            // admin.POST("/delete-row", handleAdminDeleteRow)
-        }
+		api.POST("/submit-order", handleSubmitOrder)      // Corresponds to { action: 'submitOrder', ... }
+		api.POST("/upload-image", handleImageUploadProxy) // Proxy for image uploads
+
+		// --- NEW: Chat Endpoints ---
+		chat := api.Group("/chat")
+		{
+			chat.GET("/messages", handleGetChatMessages)
+			chat.POST("/send", handleSendChatMessage)
+			chat.GET("/ws", serveWs)
+		}
+		// ---
+
+		// *** Admin Endpoints ***
+		admin := api.Group("/admin")
+		// TODO: Add authentication middleware for admin routes
+		{
+			admin.POST("/update-formula-report", handleUpdateFormulaReport)
+			admin.GET("/revenue-summary", handleGetRevenueSummary)
+
+			// *** NEW: Activated this endpoint ***
+			admin.GET("/all-orders", handleGetAllOrders)
+
+			// TODO: Add other admin endpoints here
+			// admin.POST("/update-order", handleAdminUpdateOrder)
+			// admin.POST("/delete-order", handleAdminDeleteOrder)
+			// admin.GET("/reports", handleGetReportData) // Endpoint for the specific report view in Index.html?
+			// admin.POST("/update-sheet", handleAdminUpdateSheet)
+			// admin.POST("/delete-row", handleAdminDeleteRow)
+		}
 
 		// TODO: Add POST handlers for:
 		// - /login (Implement authentication)
@@ -1511,10 +1857,9 @@ func main() {
 
 	// --- Serve Frontend (Optional, if hosted together) ---
 	// router.StaticFS("/", http.Dir("./frontend")) // Assuming frontend files are in ./frontend
-    // router.NoRoute(func(c *gin.Context) {
+	// router.NoRoute(func(c *gin.Context) {
 	// 	c.File("./frontend/index.html")
 	// })
-
 
 	// --- Start Server ---
 	log.Printf("Starting Go backend server on port %s", port)
@@ -1523,4 +1868,3 @@ func main() {
 		log.Fatalf("Failed to start server: %v", err)
 	}
 }
-
