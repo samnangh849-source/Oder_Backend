@@ -3,7 +3,7 @@ package main
 import (
 	"bytes"
 	"context"
-	"encoding/base64"
+	// "encoding/base64" // REMOVED (Fix 1: Not used in Hybrid model)
 	"encoding/json"
 	"fmt"
 	"io" 
