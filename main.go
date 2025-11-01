@@ -27,7 +27,7 @@ import (
 	"github.com/gorilla/websocket"
 
 	// --- Google API Imports ---
-	"google.golang.org/api/drive/v3"
+	// "google.golang.org/api/drive/v3" // REMOVED (Using Apps Script for upload)
 	"google.golang.org/api/option"
 	"google.golang.org/api/sheets/v4"
 )
@@ -36,11 +36,15 @@ import (
 var (
 	// --- Google API Services ---
 	sheetsService *sheets.Service
-	driveService  *drive.Service
+	// driveService  *drive.Service // REMOVED
 	// ---
 	spreadsheetID    string
-	uploadFolderID   string
-	labelPrinterURL  string // NEW: Loaded from env
+	// uploadFolderID   string // REMOVED (Will be passed to Apps Script)
+	labelPrinterURL  string 
+	// ---
+	// *** NEW: Apps Script API Config (for Uploads) ***
+	appsScriptURL    string
+	appsScriptSecret string
 	// ---
 	renderBaseURL    string // URL of this Render service itself
 	
@@ -56,10 +60,9 @@ var (
 // ... (sheetRanges map remains the same) ...
 var sheetRanges = map[string]string{
 	"Users":             "Users!A:G", // Assuming G is IsSystemAdmin
-	"Settings":          "Settings!A:B", // Assuming A=Team, B=UploadFolderID (BotToken/etc are env vars now)
+	"Settings":          "Settings!A:B", // Assuming A=Team, B=UploadFolderID
 	"TeamsPages":        "TeamsPages!A:C",
-	// *** UPDATED: Products range (5 cols = E) ***
-	"Products":          "Products!A:E",
+	"Products":          "Products!A:E", // A:D -> A:E (Added Cost)
 	"Locations":         "Locations!A:C",
 	"ShippingMethods":   "ShippingMethods!A:D",
 	"Colors":            "Colors!A:A",
@@ -67,10 +70,9 @@ var sheetRanges = map[string]string{
 	"BankAccounts":    "BankAccounts!A:B",
 	"PhoneCarriers":   "PhoneCarriers!A:C",
 	"TelegramTemplates": "TelegramTemplates!A:C",
-	// *** UPDATED: AllOrders range (21 + 3 + 1 = 25 cols = Y) ***
-	"AllOrders":         "AllOrders!A:Y", 
+	"AllOrders":         "AllOrders!A:Y", // A:U -> A:Y (Added 4 new cols)
 	"RevenueDashboard":  "RevenueDashboard!A:D",
-	"ChatMessages":      "ChatMessages!A:D", // *** NEW ***
+	"ChatMessages":      "ChatMessages!A:D", 
 	// Write-only sheets don't need a read range
 	"FormulaReportSheet": "FormulaReport!A:Z", // Use full range for clear/overwrite
 	"UserActivityLogs":   "UserActivityLogs!A:Z", // Append only
@@ -84,7 +86,7 @@ const (
     UserActivitySheet  = "UserActivityLogs"
 	EditLogsSheet	   = "EditLogs"
     TelegramTemplatesSheet = "TelegramTemplates"
-	ChatMessagesSheet  = "ChatMessages" // *** NEW ***
+	ChatMessagesSheet  = "ChatMessages"
     // ... add others if needed directly in Go
 )
 
@@ -388,13 +390,9 @@ func createGoogleAPIClient(ctx context.Context) error {
 	sheetsService = sheetsSrv
 	log.Println("Google Sheets API client created successfully.")
 
-	// Create Drive Service
-	driveSrv, err := drive.NewService(ctx, option.WithCredentialsJSON(creds), option.WithScopes(drive.DriveScope)) // Use DriveScope for file uploads/permissions
-	if err != nil {
-		return fmt.Errorf("unable to retrieve Drive client: %v", err)
-	}
-	driveService = driveSrv
-	log.Println("Google Drive API client created successfully.")
+	// Create Drive Service - REMOVED
+	// driveService = driveSrv
+	// log.Println("Google Drive API client created successfully (with Shared Drive support).")
 
 	return nil
 }
@@ -429,7 +427,8 @@ func convertSheetValuesToMaps(values *sheets.ValueRange) ([]map[string]interface
 
 						// *** NEW FIX: Clean currency/text from number fields ***
 						cleanedStr := cellStr
-						if header == "Cost" || header == "Price" || header == "Grand Total" || header == "Subtotal" || header == "Shipping Fee (Customer)" || header == "Internal Cost" {
+						// Check all possible number fields
+						if header == "Cost" || header == "Price" || header == "Grand Total" || header == "Subtotal" || header == "Shipping Fee (Customer)" || header == "Internal Cost" || header == "Discount ($)" || header == "Delivery Unpaid" || header == "Delivery Paid" || header == "Total Product Cost ($)" {
 							cleanedStr = strings.ReplaceAll(cleanedStr, "$", "")
 							cleanedStr = strings.ReplaceAll(cleanedStr, ",", "")
 							cleanedStr = strings.TrimSpace(cleanedStr)
@@ -450,7 +449,8 @@ func convertSheetValuesToMaps(values *sheets.ValueRange) ([]map[string]interface
 					}
 
 					// *** Specific Fixes for string fields that look like numbers ***
-					if header == "Password" || header == "Customer Phone" || header == "Barcode" {
+					// *** UPDATED: Added Customer Name and Note ***
+					if header == "Password" || header == "Customer Phone" || header == "Barcode" || header == "Customer Name" || header == "Note" {
 						rowData[header] = fmt.Sprintf("%v", cell) // Force to string
 					}
 					// *** End Fixes ***
@@ -657,6 +657,73 @@ func getCachedSheetData(sheetName string, target interface{}, duration time.Dura
 	return nil
 }
 
+// --- *** NEW: Apps Script Communication (For Uploads Only) *** ---
+type AppsScriptRequest struct {
+	Action    string      `json:"action"`
+	Secret    string      `json:"secret"`
+	UploadFolderID string `json:"uploadFolderID,omitempty"`
+	FileData string `json:"fileData,omitempty"`
+	FileName string `json:"fileName,omitempty"`
+	MimeType string `json:"mimeType,omitempty"`
+}
+
+type AppsScriptResponse struct {
+	Status  string      `json:"status"`
+	Message string      `json:"message,omitempty"`
+	URL     string      `json:"url,omitempty"` // For image upload response
+}
+
+func callAppsScriptPOST(requestData AppsScriptRequest) (AppsScriptResponse, error) {
+	requestData.Secret = appsScriptSecret // Ensure secret is included
+	jsonData, err := json.Marshal(requestData)
+	if err != nil {
+		log.Printf("Error marshalling Apps Script POST request (%s): %v", requestData.Action, err)
+		return AppsScriptResponse{}, fmt.Errorf("internal error preparing data")
+	}
+
+	resp, err := http.Post(appsScriptURL, "application/json", bytes.NewBuffer(jsonData))
+	if err != nil {
+		log.Printf("Error calling Apps Script POST (%s): %v", requestData.Action, err)
+		return AppsScriptResponse{}, fmt.Errorf("failed to connect to Google Apps Script API")
+	}
+	defer resp.Body.Close()
+
+	body, err := io.ReadAll(resp.Body)
+	if err != nil {
+		log.Printf("Error reading Apps Script POST response (%s): %v", requestData.Action, err)
+		return AppsScriptResponse{}, fmt.Errorf("failed to read Google Apps Script API response")
+	}
+
+	var scriptResponse AppsScriptResponse
+	err = json.Unmarshal(body, &scriptResponse)
+	if err != nil {
+		log.Printf("Error unmarshalling Apps Script POST response (%s): %v. Body: %s", requestData.Action, err, string(body))
+		log.Printf("Raw response body: %s", string(body))
+		return AppsScriptResponse{}, fmt.Errorf("invalid response format from Google Apps Script API")
+	}
+
+	if resp.StatusCode != http.StatusOK {
+	    log.Printf("Apps Script POST request (%s) returned status %d. Body: %s", requestData.Action, resp.StatusCode, string(body))
+	    if scriptResponse.Status == "locked" {
+	         return AppsScriptResponse{}, fmt.Errorf("Google Apps Script API is busy, please try again")
+	    }
+	     if scriptResponse.Status == "error" && scriptResponse.Message != "" {
+			 return AppsScriptResponse{}, fmt.Errorf("Google Apps Script API error: %s", scriptResponse.Message)
+		}
+		return AppsScriptResponse{}, fmt.Errorf("Google Apps Script API returned status %d", resp.StatusCode)
+	}
+
+    // Even with 200 OK, check the internal status field
+	if scriptResponse.Status != "success" {
+		log.Printf("Apps Script POST Error (%s): %s", requestData.Action, scriptResponse.Message)
+		return AppsScriptResponse{}, fmt.Errorf("Google Apps Script API error: %s", scriptResponse.Message)
+	}
+
+	return scriptResponse, nil
+}
+// --- *** END: Apps Script Communication *** ---
+
+
 // --- API Handlers ---
 
 func handlePing(c *gin.Context) {
@@ -713,13 +780,16 @@ func handleGetStaticData(c *gin.Context) {
 	if err != nil { goto handleError }
 	result["settings"] = settingsMaps // Frontend might not even need this now
 	// Also set the global variable
-	if len(settingsMaps) > 0 && len(settingsMaps[0]) > 1 { // Check if map and column exist
+	if len(settingsMaps) > 0 && len(settingsMaps[0]) > 0 { // Check if map and column exist
 		if id, ok := settingsMaps[0]["UploadFolderID"].(string); ok {
 			uploadFolderID = id // Get from sheet
 		}
 	}
 	if uploadFolderID == "" {
 		uploadFolderID = os.Getenv("UPLOAD_FOLDER_ID") // Use env var as fallback
+	}
+	if uploadFolderID == "" {
+		log.Printf("CRITICAL WARNING: UPLOAD_FOLDER_ID is not set in Settings sheet or Environment Variables. File uploads will fail.")
 	}
 	// ---
 
@@ -1165,7 +1235,7 @@ func handleSubmitOrder(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{"status": "success", "orderId": orderId})
 }
 
-// ... (handleImageUploadProxy remains the same) ...
+// --- *** UPDATED: handleImageUploadProxy (Hybrid Model) *** ---
 func handleImageUploadProxy(c *gin.Context) {
     var uploadRequest struct {
 		FileData string `json:"fileData"`
@@ -1181,50 +1251,28 @@ func handleImageUploadProxy(c *gin.Context) {
 		c.JSON(http.StatusBadRequest, gin.H{"status": "error", "message": "Invalid image upload data format: " + err.Error()})
 		return
 	}
-
-	// 1. Decode Base64
-	fileData, err := base64.StdEncoding.DecodeString(uploadRequest.FileData)
-	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"status": "error", "message": "Invalid base64 data"})
-		return
-	}
-	fileReader := bytes.NewReader(fileData)
 	
 	if uploadFolderID == "" {
 		c.JSON(http.StatusInternalServerError, gin.H{"status": "error", "message": "Upload Folder ID is not configured on the server."})
 		return
 	}
 
-	// 2. Upload to Google Drive
-	file := &drive.File{
-		Name:     uploadRequest.FileName,
+	// 1. Call Apps Script Upload API
+	resp, err := callAppsScriptPOST(AppsScriptRequest{
+		Action:    "uploadImage", // Action for Apps Script
+		FileData: uploadRequest.FileData,
+		FileName: uploadRequest.FileName,
 		MimeType: uploadRequest.MimeType,
-		Parents:  []string{uploadFolderID}, // Set parent folder
-	}
-
-	createdFile, err := driveService.Files.Create(file).Media(fileReader).Do()
+		UploadFolderID: uploadFolderID, // Pass the folder ID
+	})
 	if err != nil {
-		log.Printf("Error uploading file to Drive: %v", err)
-		c.JSON(http.StatusInternalServerError, gin.H{"status": "error", "message": "Failed to upload file to Google Drive: " + err.Error()})
+		c.JSON(http.StatusInternalServerError, gin.H{"status": "error", "message": "Failed to upload image via Google Apps Script: " + err.Error()})
 		return
 	}
+	
+	fileUrl := resp.URL // Get the URL returned from Apps Script
 
-	// 3. Set file permissions to public (Anyone with link can view)
-	permission := &drive.Permission{
-		Role: "reader",
-		Type: "anyone",
-	}
-	_, err = driveService.Permissions.Create(createdFile.Id, permission).Do()
-	if err != nil {
-		log.Printf("Error setting permissions on Drive file %s: %v", createdFile.Id, err)
-		// Don't fail the whole request, just log a warning
-	}
-
-	// 4. Construct the direct download URL
-	fileUrl := fmt.Sprintf("https://drive.google.com/uc?id=%s", createdFile.Id)
-
-
-    // 5. Update the specific sheet cell (in background)
+    // 2. Update the specific sheet cell (in background)
     if uploadRequest.SheetName != "" && uploadRequest.PrimaryKey != nil && uploadRequest.ColumnName != "" {
         go func() { // Update sheet in the background
             pkHeader := ""
@@ -1549,6 +1597,7 @@ func handleGetRevenueSummary(c *gin.Context) {
 			if _, ok := monthlyByTeam[yearMonthKey]; !ok { monthlyByTeam[yearMonthKey] = make(map[string]float64) }
             monthlyByTeam[yearMonthKey][team] += revenue
 
+			// *** FIX: Type mismatch error from log ***
             if _, ok := monthlyByPage[yearMonthKey]; !ok { monthlyByPage[yearMonthKey] = make(map[string]float64) } 
             monthlyByPage[yearMonthKey][page] += revenue
 		}
@@ -1558,6 +1607,7 @@ func handleGetRevenueSummary(c *gin.Context) {
 			if _, ok := dailyByTeam[yearMonthDayKey]; !ok { dailyByTeam[yearMonthDayKey] = make(map[string]float64) }
             dailyByTeam[yearMonthDayKey][team] += revenue
 
+			// *** FIX: Type mismatch error from log ***
             if _, ok := dailyByPage[yearMonthDayKey]; !ok { dailyByPage[yearMonthDayKey] = make(map[string]float64) }
             dailyByPage[yearMonthDayKey][page] += revenue
 		}
@@ -1618,45 +1668,25 @@ func handleGetChatMessages(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{"status": "success", "data": chatMessages})
 }
 
-// --- *** NEW: Helper to upload chat media *** ---
+// --- *** UPDATED: Helper to upload chat media (Hybrid) *** ---
 func uploadChatMediaToDrive(base64Data, fileName, mimeType string) (string, error) {
-	// 1. Decode Base64
-	fileData, err := base64.StdEncoding.DecodeString(base64Data)
-	if err != nil {
-		return "", fmt.Errorf("invalid base64 data")
-	}
-	fileReader := bytes.NewReader(fileData)
-	
 	if uploadFolderID == "" {
 		return "", fmt.Errorf("upload Folder ID is not configured on the server")
 	}
 
-	// 2. Upload to Google Drive
-	file := &drive.File{
-		Name:     fileName,
+	// 1. Call Apps Script Upload API
+	resp, err := callAppsScriptPOST(AppsScriptRequest{
+		Action:    "uploadImage", // Action for Apps Script
+		FileData: base64Data,
+		FileName: fileName,
 		MimeType: mimeType,
-		Parents:  []string{uploadFolderID}, // Set parent folder
-	}
-
-	createdFile, err := driveService.Files.Create(file).Media(fileReader).Do()
+		UploadFolderID: uploadFolderID, // Pass the folder ID
+	})
 	if err != nil {
-		return "", fmt.Errorf("failed to upload file to Google Drive: %v", err)
+		return "", fmt.Errorf("failed to upload media via Google Apps Script: %v", err)
 	}
-
-	// 3. Set file permissions to public (Anyone with link can view)
-	permission := &drive.Permission{
-		Role: "reader",
-		Type: "anyone",
-	}
-	_, err = driveService.Permissions.Create(createdFile.Id, permission).Do()
-	if err != nil {
-		log.Printf("Warning: Error setting permissions on Drive file %s: %v", createdFile.Id, err)
-		// Don't fail, just log
-	}
-
-	// 4. Construct the direct download URL
-	fileUrl := fmt.Sprintf("https://drive.google.com/uc?id=%s", createdFile.Id)
-	return fileUrl, nil
+	
+	return resp.URL, nil // Return the URL from Apps Script
 }
 
 
@@ -1698,6 +1728,7 @@ func handleSendChatMessage(c *gin.Context) {
 		}
 		fileName := fmt.Sprintf("chat_%s_%d.%s", request.UserName, time.Now().UnixNano(), fileExt[1])
 		
+		// *** UPDATED: Use Hybrid Upload Function ***
 		fileUrl, err := uploadChatMediaToDrive(request.Content, fileName, request.MimeType)
 		if err != nil {
 			log.Printf("Chat media upload failed: %v", err)
@@ -1798,16 +1829,24 @@ func loadTelegramConfig() {
 func main() {
 	// --- Load configuration from environment variables ---
 	spreadsheetID = os.Getenv("GOOGLE_SHEET_ID")
-	uploadFolderID = os.Getenv("UPLOAD_FOLDER_ID") // Can be overridden by Settings sheet
-	labelPrinterURL = os.Getenv("LABEL_PRINTER_URL") // NEW
+	// uploadFolderID = os.Getenv("UPLOAD_FOLDER_ID") // REMOVED (Get from Settings sheet now)
+	labelPrinterURL = os.Getenv("LABEL_PRINTER_URL") 
 	port := os.Getenv("PORT")
 	if port == "" {
 		port = "8080" // Default port for local development
 	}
 	renderBaseURL = os.Getenv("RENDER_EXTERNAL_URL") // Render provides this automatically
 
+	// *** NEW: Load Apps Script Upload API Config ***
+	appsScriptURL = os.Getenv("APPS_SCRIPT_URL")
+	appsScriptSecret = os.Getenv("APPS_SCRIPT_SECRET")
+	// ---
+
 	if spreadsheetID == "" {
 		log.Fatal("GOOGLE_SHEET_ID environment variable is required.")
+	}
+	if appsScriptURL == "" || appsScriptSecret == "" {
+		log.Fatal("APPS_SCRIPT_URL and APPS_SCRIPT_SECRET (for uploads) environment variables are required.")
 	}
 	// Note: GCP_CREDENTIALS is read directly in createGoogleAPIClient
 
@@ -1826,6 +1865,7 @@ func main() {
 	}
 
 	log.Printf("Connected to Google Sheet ID: %s", spreadsheetID)
+	log.Printf("Using Apps Script Upload API at: %s", appsScriptURL)
 	log.Printf("Render Base URL: %s", renderBaseURL)
 
 
