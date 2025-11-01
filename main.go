@@ -3,10 +3,10 @@ package main
 import (
 	"bytes"
 	"context"
-	// "encoding/base64" // REMOVED (Fix 1: Not used)
+	"encoding/base64"
 	"encoding/json"
 	"fmt"
-	"io" // ADDED (Fix 2: Was undefined)
+	"io" 
 	"log"
 	"net/http"
 	"net/url" // Needed for label button
@@ -39,7 +39,7 @@ var (
 	// driveService  *drive.Service // REMOVED
 	// ---
 	spreadsheetID    string
-	uploadFolderID   string // *** ADDED (Fix 3: Was undefined globally) ***
+	uploadFolderID   string 
 	labelPrinterURL  string 
 	// ---
 	// *** NEW: Apps Script API Config (for Uploads) ***
@@ -449,8 +449,8 @@ func convertSheetValuesToMaps(values *sheets.ValueRange) ([]map[string]interface
 					}
 
 					// *** Specific Fixes for string fields that look like numbers ***
-					// *** UPDATED: Added Customer Name and Note ***
-					if header == "Password" || header == "Customer Phone" || header == "Barcode" || header == "Customer Name" || header == "Note" {
+					// *** UPDATED: Added Customer Name, Note, and Content (for Chat) ***
+					if header == "Password" || header == "Customer Phone" || header == "Barcode" || header == "Customer Name" || header == "Note" || header == "Content" {
 						rowData[header] = fmt.Sprintf("%v", cell) // Force to string
 					}
 					// *** End Fixes ***
