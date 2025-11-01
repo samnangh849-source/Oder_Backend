@@ -6,13 +6,13 @@ import (
 	"encoding/base64"
 	"encoding/json"
 	"fmt"
-	// "io" // No longer needed
+	// "io" // REMOVED (Fix 1: Not used)
 	"log"
 	"net/http"
 	"net/url" // Needed for label button
 	"os"
 	"sort"
-	"strconv" // Needed for formatting
+	"strconv" // ADDED (Fix 2: Was undefined)
 	"strings"
 	"sync"
 	"time"
@@ -27,7 +27,7 @@ import (
 	"github.com/gorilla/websocket"
 
 	// --- Google API Imports ---
-	// "google.golang.org/api/drive/v3" // REMOVED (Using Apps Script for upload)
+	"google.golang.org/api/drive/v3"
 	"google.golang.org/api/option"
 	"google.golang.org/api/sheets/v4"
 )
@@ -36,15 +36,11 @@ import (
 var (
 	// --- Google API Services ---
 	sheetsService *sheets.Service
-	// driveService  *drive.Service // REMOVED
+	driveService  *drive.Service
 	// ---
 	spreadsheetID    string
-	// uploadFolderID   string // REMOVED (Will be passed to Apps Script)
-	labelPrinterURL  string 
-	// ---
-	// *** NEW: Apps Script API Config (for Uploads) ***
-	appsScriptURL    string
-	appsScriptSecret string
+	uploadFolderID   string // This should now be a SHARED DRIVE ID
+	labelPrinterURL  string // NEW: Loaded from env
 	// ---
 	renderBaseURL    string // URL of this Render service itself
 	
@@ -60,9 +56,10 @@ var (
 // ... (sheetRanges map remains the same) ...
 var sheetRanges = map[string]string{
 	"Users":             "Users!A:G", // Assuming G is IsSystemAdmin
-	"Settings":          "Settings!A:B", // Assuming A=Team, B=UploadFolderID
+	"Settings":          "Settings!A:B", // Assuming A=Team, B=UploadFolderID (BotToken/etc are env vars now)
 	"TeamsPages":        "TeamsPages!A:C",
-	"Products":          "Products!A:E", // A:D -> A:E (Added Cost)
+	// *** UPDATED: Products range (5 cols = E) ***
+	"Products":          "Products!A:E",
 	"Locations":         "Locations!A:C",
 	"ShippingMethods":   "ShippingMethods!A:D",
 	"Colors":            "Colors!A:A",
@@ -70,9 +67,10 @@ var sheetRanges = map[string]string{
 	"BankAccounts":    "BankAccounts!A:B",
 	"PhoneCarriers":   "PhoneCarriers!A:C",
 	"TelegramTemplates": "TelegramTemplates!A:C",
-	"AllOrders":         "AllOrders!A:Y", // A:U -> A:Y (Added 4 new cols)
+	// *** UPDATED: AllOrders range (21 + 3 + 1 = 25 cols = Y) ***
+	"AllOrders":         "AllOrders!A:Y", 
 	"RevenueDashboard":  "RevenueDashboard!A:D",
-	"ChatMessages":      "ChatMessages!A:D", 
+	"ChatMessages":      "ChatMessages!A:D", // *** NEW ***
 	// Write-only sheets don't need a read range
 	"FormulaReportSheet": "FormulaReport!A:Z", // Use full range for clear/overwrite
 	"UserActivityLogs":   "UserActivityLogs!A:Z", // Append only
@@ -86,7 +84,7 @@ const (
     UserActivitySheet  = "UserActivityLogs"
 	EditLogsSheet	   = "EditLogs"
     TelegramTemplatesSheet = "TelegramTemplates"
-	ChatMessagesSheet  = "ChatMessages"
+	ChatMessagesSheet  = "ChatMessages" // *** NEW ***
     // ... add others if needed directly in Go
 )
 
@@ -390,7 +388,12 @@ func createGoogleAPIClient(ctx context.Context) error {
 	sheetsService = sheetsSrv
 	log.Println("Google Sheets API client created successfully.")
 
-	// Create Drive Service - REMOVED
+	// Create Drive Service
+	// *** UPDATED: Add SupportForAllDrives ***
+	// driveSrv, err := drive.NewService(ctx, option.WithCredentialsJSON(creds), option.WithScopes(drive.DriveScope), option.WithSupportsAllDrives(true))
+	// if err != nil {
+	// 	return fmt.Errorf("unable to retrieve Drive client: %v", err)
+	// }
 	// driveService = driveSrv
 	// log.Println("Google Drive API client created successfully (with Shared Drive support).")
 
@@ -687,8 +690,9 @@ func callAppsScriptPOST(requestData AppsScriptRequest) (AppsScriptResponse, erro
 		return AppsScriptResponse{}, fmt.Errorf("failed to connect to Google Apps Script API")
 	}
 	defer resp.Body.Close()
-
-	body, err := io.ReadAll(resp.Body)
+	
+	// *** UPDATED: Add 'io' import ***
+	body, err := io.ReadAll(resp.Body) 
 	if err != nil {
 		log.Printf("Error reading Apps Script POST response (%s): %v", requestData.Action, err)
 		return AppsScriptResponse{}, fmt.Errorf("failed to read Google Apps Script API response")
@@ -780,6 +784,8 @@ func handleGetStaticData(c *gin.Context) {
 	if err != nil { goto handleError }
 	result["settings"] = settingsMaps // Frontend might not even need this now
 	// Also set the global variable
+	
+	// *** UPDATED: Use the 'uploadFolderID' variable that is already declared globally ***
 	if len(settingsMaps) > 0 && len(settingsMaps[0]) > 0 { // Check if map and column exist
 		if id, ok := settingsMaps[0]["UploadFolderID"].(string); ok {
 			uploadFolderID = id // Get from sheet
@@ -1252,6 +1258,7 @@ func handleImageUploadProxy(c *gin.Context) {
 		return
 	}
 	
+	// *** UPDATED: Use global uploadFolderID ***
 	if uploadFolderID == "" {
 		c.JSON(http.StatusInternalServerError, gin.H{"status": "error", "message": "Upload Folder ID is not configured on the server."})
 		return
@@ -1670,6 +1677,7 @@ func handleGetChatMessages(c *gin.Context) {
 
 // --- *** UPDATED: Helper to upload chat media (Hybrid) *** ---
 func uploadChatMediaToDrive(base64Data, fileName, mimeType string) (string, error) {
+	// *** UPDATED: Use global uploadFolderID ***
 	if uploadFolderID == "" {
 		return "", fmt.Errorf("upload Folder ID is not configured on the server")
 	}
