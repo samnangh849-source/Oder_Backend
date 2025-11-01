@@ -3,16 +3,16 @@ package main
 import (
 	"bytes"
 	"context"
-	"encoding/base64"
+	// "encoding/base64" // REMOVED (Fix 1: Not used)
 	"encoding/json"
 	"fmt"
-	// "io" // REMOVED (Fix 1: Not used)
+	"io" // ADDED (Fix 2: Was undefined)
 	"log"
 	"net/http"
 	"net/url" // Needed for label button
 	"os"
 	"sort"
-	"strconv" // ADDED (Fix 2: Was undefined)
+	"strconv" // Needed for formatting
 	"strings"
 	"sync"
 	"time"
@@ -27,7 +27,7 @@ import (
 	"github.com/gorilla/websocket"
 
 	// --- Google API Imports ---
-	"google.golang.org/api/drive/v3"
+	// "google.golang.org/api/drive/v3" // REMOVED (Using Apps Script for upload)
 	"google.golang.org/api/option"
 	"google.golang.org/api/sheets/v4"
 )
@@ -36,11 +36,15 @@ import (
 var (
 	// --- Google API Services ---
 	sheetsService *sheets.Service
-	driveService  *drive.Service
+	// driveService  *drive.Service // REMOVED
 	// ---
 	spreadsheetID    string
-	uploadFolderID   string // This should now be a SHARED DRIVE ID
-	labelPrinterURL  string // NEW: Loaded from env
+	uploadFolderID   string // *** ADDED (Fix 3: Was undefined globally) ***
+	labelPrinterURL  string 
+	// ---
+	// *** NEW: Apps Script API Config (for Uploads) ***
+	appsScriptURL    string
+	appsScriptSecret string
 	// ---
 	renderBaseURL    string // URL of this Render service itself
 	
@@ -56,10 +60,9 @@ var (
 // ... (sheetRanges map remains the same) ...
 var sheetRanges = map[string]string{
 	"Users":             "Users!A:G", // Assuming G is IsSystemAdmin
-	"Settings":          "Settings!A:B", // Assuming A=Team, B=UploadFolderID (BotToken/etc are env vars now)
+	"Settings":          "Settings!A:B", // Assuming A=Team, B=UploadFolderID
 	"TeamsPages":        "TeamsPages!A:C",
-	// *** UPDATED: Products range (5 cols = E) ***
-	"Products":          "Products!A:E",
+	"Products":          "Products!A:E", // A:D -> A:E (Added Cost)
 	"Locations":         "Locations!A:C",
 	"ShippingMethods":   "ShippingMethods!A:D",
 	"Colors":            "Colors!A:A",
@@ -67,8 +70,7 @@ var sheetRanges = map[string]string{
 	"BankAccounts":    "BankAccounts!A:B",
 	"PhoneCarriers":   "PhoneCarriers!A:C",
 	"TelegramTemplates": "TelegramTemplates!A:C",
-	// *** UPDATED: AllOrders range (21 + 3 + 1 = 25 cols = Y) ***
-	"AllOrders":         "AllOrders!A:Y", 
+	"AllOrders":         "AllOrders!A:Y", // A:U -> A:Y (Added 4 new cols)
 	"RevenueDashboard":  "RevenueDashboard!A:D",
 	"ChatMessages":      "ChatMessages!A:D", // *** NEW ***
 	// Write-only sheets don't need a read range
@@ -84,7 +86,7 @@ const (
     UserActivitySheet  = "UserActivityLogs"
 	EditLogsSheet	   = "EditLogs"
     TelegramTemplatesSheet = "TelegramTemplates"
-	ChatMessagesSheet  = "ChatMessages" // *** NEW ***
+	ChatMessagesSheet  = "ChatMessages"
     // ... add others if needed directly in Go
 )
 
@@ -388,12 +390,7 @@ func createGoogleAPIClient(ctx context.Context) error {
 	sheetsService = sheetsSrv
 	log.Println("Google Sheets API client created successfully.")
 
-	// Create Drive Service
-	// *** UPDATED: Add SupportForAllDrives ***
-	// driveSrv, err := drive.NewService(ctx, option.WithCredentialsJSON(creds), option.WithScopes(drive.DriveScope), option.WithSupportsAllDrives(true))
-	// if err != nil {
-	// 	return fmt.Errorf("unable to retrieve Drive client: %v", err)
-	// }
+	// Create Drive Service - REMOVED
 	// driveService = driveSrv
 	// log.Println("Google Drive API client created successfully (with Shared Drive support).")
 
