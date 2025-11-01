@@ -3,10 +3,10 @@ package main
 import (
 	"bytes"
 	"context"
-	// "encoding/base64" // REMOVED (Fix 1: Not used in Hybrid model)
+	"encoding/base64"
 	"encoding/json"
 	"fmt"
-	"io" // ADDED (Fix 2: Was undefined)
+	"io" 
 	"log"
 	"net/http"
 	"net/url" // Needed for label button
@@ -39,7 +39,7 @@ var (
 	// driveService  *drive.Service // REMOVED
 	// ---
 	spreadsheetID    string
-	uploadFolderID   string // *** ADDED (Fix 3: Was undefined globally) ***
+	uploadFolderID   string 
 	labelPrinterURL  string 
 	// ---
 	// *** NEW: Apps Script API Config (for Uploads) ***
@@ -665,9 +665,6 @@ type AppsScriptRequest struct {
 	FileData string `json:"fileData,omitempty"`
 	FileName string `json:"fileName,omitempty"`
 	MimeType string `json:"mimeType,omitempty"`
-	// *** NEW: Added Order data for PDF ***
-	OrderId string `json:"orderId,omitempty"`
-	OrderData map[string]interface{} `json:"orderData,omitempty"`
 }
 
 type AppsScriptResponse struct {
@@ -1072,71 +1069,15 @@ func sendTelegramNotification(team string, fullOrderData map[string]interface{})
 	}
 }
 
-// --- *** UPDATED: PDF Generation (Hybrid Model) *** ---
+// --- *** NEW (Fix 2): Add Placeholder Function Back *** ---
 func generateAndSendPDF(team string, orderId string, orderData map[string]interface{}) {
-    log.Printf("Requesting PDF generation from Apps Script for Order ID %s", orderId)
-
-	// 1. Get Config
-	bot, botExists := telegramBots[team]
-	config, configExists := telegramConfig[team]
-	if !botExists || !configExists {
-		log.Printf("PDF Error: Telegram config or bot instance not found for team %s", team)
-		return
-	}
-	groupIDStr, ok := config["groupID"]
-	if !ok { log.Printf("PDF Error: Group ID not found for team %s", team); return }
-	groupID, err := strconv.ParseInt(groupIDStr, 10, 64)
-	if err != nil { log.Printf("PDF Error: Invalid Group ID '%s' for team %s", groupIDStr, team); return }
-	topicIDStr, hasTopic := config["topicID"]
-	var topicID int64
-	if hasTopic { topicID, _ = strconv.ParseInt(topicIDStr, 10, 64) }
-
-	// 2. Call Apps Script 'createPdf' action
-	resp, err := callAppsScriptPOST(AppsScriptRequest{
-		Action:    "createPdf",
-		OrderId:   orderId,
-		OrderData: orderData,
-		UploadFolderID: uploadFolderID, // Pass the global upload folder ID
-	})
-	if err != nil {
-		log.Printf("Error requesting PDF from Apps Script for %s: %v", orderId, err)
-		return
-	}
-
-	if resp.URL == "" {
-		log.Printf("Error: Apps Script created PDF but did not return a URL for %s", orderId)
-		return
-	}
-	
-	pdfUrl := resp.URL // This is the Google Drive URL
-	log.Printf("Received PDF URL from Apps Script for %s: %s", orderId, pdfUrl)
-
-	// 3. Send the PDF URL as a document to Telegram
-	go sendTelegramDocumentByURL(team, groupID, topicID, pdfUrl, fmt.Sprintf("📄 Invoice PDF សម្រាប់ `%s`", orderId))
-}
-
-// --- *** NEW: Helper to send a document via URL *** ---
-func sendTelegramDocumentByURL(team string, groupID int64, topicID int64, fileUrl string, caption string) {
-	bot, botExists := telegramBots[team]
-	if !botExists {
-		log.Printf("PDF Send Error: Bot instance not found for team %s", team)
-		return
-	}
-
-	// Create a document message config using the public URL
-	doc := tgbotapi.NewDocument(groupID, tgbotapi.FileURL(fileUrl))
-	doc.Caption = caption
-	doc.ParseMode = tgbotapi.ModeMarkdown
-	if topicID != 0 {
-		doc.ReplyToMessageID = int(topicID)
-	}
-
-	// Send the document
-	if _, err := bot.Send(doc); err != nil {
-		log.Printf("Error sending PDF document to Telegram for team %s: %v", team, err)
-	} else {
-		log.Printf("Successfully sent PDF document to Telegram for team %s", team)
-	}
+    log.Printf("Placeholder: Generating/Sending PDF for team %s, Order ID %s", team, orderId)
+    // TODO:
+    // 1. Option A: Use a Go PDF library (e.g., gofpdf) to generate PDF directly.
+    // 2. Option B: Generate HTML for the invoice (similar to Apps Script).
+    //    - Then, either use a Go library to convert HTML to PDF (can be complex, might need headless Chrome)
+    //    - OR send the HTML to another microservice dedicated to PDF generation.
+    // 3. Send the generated PDF/document via Telegram.
 }
 
 
@@ -1285,7 +1226,7 @@ func handleSubmitOrder(c *gin.Context) {
 	} else {
 		// Send notifications immediately (placeholders)
 		go sendTelegramNotification(team, fullOrderData)
-		go generateAndSendPDF(team, orderId, fullOrderData) // *** This is now implemented ***
+		go generateAndSendPDF(team, orderId, fullOrderData) 
 	}
 
 	// Invalidate relevant caches
@@ -2002,4 +1943,3 @@ func main() {
 		log.Fatalf("Failed to start server: %v", err)
 	}
 }
-
