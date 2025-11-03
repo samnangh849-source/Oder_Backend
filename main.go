@@ -3,7 +3,7 @@ package main
 import (
 	"bytes"
 	"context"
-	"encoding/base64"
+	// "encoding/base64" // REMOVED (Fix 1: Not used in Hybrid model)
 	"encoding/json"
 	"fmt"
 	"io" 
@@ -198,7 +198,7 @@ type BankAccount struct {
 }
 type PhoneCarrier struct {
     CarrierName string `json:"CarrierName"`
-   Prefixes     string `json:"Prefixes"` // Use exact header name
+    Prefixes    string `json:"Prefixes"` // Use exact header name
     CarrierLogoURL string `json:"CarrierLogoURL"`
 }
 type TelegramTemplate struct {
