@@ -198,7 +198,7 @@ type BankAccount struct {
 }
 type PhoneCarrier struct {
     CarrierName string `json:"CarrierName"`
-    Prefixes    string `json:"Prefixes"` // Use exact header name
+   Prefixes     string `json:"Prefixes"` // Use exact header name
     CarrierLogoURL string `json:"CarrierLogoURL"`
 }
 type TelegramTemplate struct {
