@@ -174,7 +174,7 @@ type Location struct {
 
 type ShippingMethod struct {
     MethodName            string `json:"MethodName"`
-    LogoURL               string `json:"LogoURL"`
+    LogoURL               string `json:"LogosURL"`
     AllowManualDriver     bool   `json:"AllowManualDriver"`
     RequireDriverSelection bool   `json:"RequireDriverSelection"`
 }
