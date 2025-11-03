@@ -1221,14 +1221,51 @@ func handleSubmitOrder(c *gin.Context) {
 	isScheduled, _ := orderRequest.Telegram["schedule"].(bool)
 	if isScheduled {
 		scheduleTimeStr, _ := orderRequest.Telegram["time"].(string)
-		// TODO: Implement scheduling logic in Go (e.g., save to DB/queue, use cron)
-		log.Printf("Order %s scheduled for %s (Scheduling logic TBD in Go)", orderId, scheduleTimeStr)
-	} else {
-		// Send notifications immediately (placeholders)
-		go sendTelegramNotification(team, fullOrderData)
-		go generateAndSendPDF(team, orderId, fullOrderData) 
-	}
 
+		// 1. Parse ពេលវេលា (សន្មតថា format គឺ RFC3339/ISO 8601, ឧ: "2025-11-04T15:30:00+07:00")
+		scheduleTime, err := time.Parse(time.RFC3339, scheduleTimeStr)
+		if err != nil {
+			// បើ format ពេលវេលាមិនត្រឹមត្រូវ, ផ្ញើភ្លាមៗ
+			log.Printf("Error: Invalid schedule time format for Order %s: %v. Sending now.", orderId, err)
+			go sendTelegramNotification(team, fullOrderData)
+			go generateAndSendPDF(team, orderId, fullOrderData)
+		} else {
+			
+			// 2. គណនាពេលរង់ចាំ
+			durationToWait := time.Until(scheduleTime)
+
+			if durationToWait <= 0 {
+				// បើពេលវេលាដែលកំណត់ ជារឿងអតីតកាល (เลยเวลาแล้ว), ផ្ញើភ្លាមៗ
+				log.Printf("Scheduled time %s is in the past for Order %s. Sending now.", scheduleTimeStr, orderId)
+				go sendTelegramNotification(team, fullOrderData)
+				go generateAndSendPDF(team, orderId, fullOrderData)
+			} else {
+				// 3. ពេលវេលាត្រឹមត្រូវ! ចាប់ផ្តើម Goroutine ឲ្យរង់ចាំ
+				log.Printf("Order %s scheduled for %s. Will send in %v.", orderId, scheduleTimeStr, durationToWait)
+
+				// យើងត្រូវ Copy data ទុក ព្រោះ fullOrderData ដើមអាចនឹងបាត់បង់ពេល function នេះจบ
+				scheduledData := fullOrderData
+				scheduledTeam := team
+				scheduledOrderId := orderId
+
+				// time.AfterFunc នឹងរត់ function ខាងក្រោម បន្ទាប់ពី durationToWait បានកន្លងផុតទៅ
+				// វានឹងរត់នៅក្នុង Goroutine ថ្មីដោយស្វ័យប្រវត្តិ
+				time.AfterFunc(durationToWait, func() {
+					// ដល់ពេលកំណត់แล้ว! ចាប់ផ្តើមផ្ញើ
+					log.Printf("EXECUTING SCHEDULED JOB for Order %s", scheduledOrderId)
+					sendTelegramNotification(scheduledTeam, scheduledData)
+					generateAndSendPDF(scheduledTeam, scheduledOrderId, scheduledData)
+				})
+			}
+		}
+
+	} else {
+		// Send notifications immediately (ដូចដើម)
+		go sendTelegramNotification(team, fullOrderData)
+		go generateAndSendPDF(team, orderId, fullOrderData)
+	}
+	
+	// ... (Code ខាងក្រោម handleSubmitOrder នឹងបន្តដំណើរការ ហើយ Respond "success" ទៅ User ភ្លាម) ...
 	// Invalidate relevant caches
 	invalidateSheetCache(AllOrdersSheet)
 	invalidateSheetCache(RevenueSheet)
