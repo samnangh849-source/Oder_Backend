@@ -312,7 +312,7 @@ func NewHub() *Hub {
 		broadcast:  make(chan []byte),
 		register:   make(chan *Client),
 		unregister: make(chan *Client),
-		clients:    make(map[string]bool),
+		clients:    make(map[*Client]bool), // *** FIX 1: Changed from map[string]bool ***
 	}
 }
 
@@ -671,7 +671,8 @@ func updateTelegramMessageIDInSheet(team, orderId string, messageId int64) {
 		return
 	}
 
-	orderIdColIndex, okO := headerMap["Order ID"]
+	// *** FIX 2: Changed orderIdColIndex to _ ***
+	_, okO := headerMap["Order ID"]
 	messageIdColIndex, okM := headerMap["Telegram Message ID"]
 
 	if !okO || !okM {
@@ -1574,7 +1575,7 @@ func handleUpdateFormulaReport(c *gin.Context) {
 				dailyData[yearMonthDayKey] = &ReportSummary{}
 			}
 			dailyData[yearMonthDayKey].TotalSales += order.GrandTotal
-			dailyData[yearMonthKey].TotalExpense += order.InternalCost
+			dailyData[yearMonthDayKey].TotalExpense += order.InternalCost
 			dailyData[yearMonthDayKey].TotalProductCost += order.TotalProductCost // *** NEW ***
 		}
 	}
@@ -2489,3 +2490,4 @@ func main() {
 		log.Fatalf("Failed to start server: %v", err)
 	}
 }
+
