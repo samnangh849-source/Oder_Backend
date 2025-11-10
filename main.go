@@ -57,8 +57,7 @@ var (
 var sheetRanges = map[string]string{
 	"Users":           "Users!A:G",
 	"Settings":        "Settings!A:F",
-	// *** UPDATED: TeamsPages range ***
-	"TeamsPages":      "TeamsPages!A:D", // A:C -> A:D
+	"TeamsPages":      "TeamsPages!A:D",
 	"Products":        "Products!A:E",
 	"Locations":       "Locations!A:C",
 	"ShippingMethods": "ShippingMethods!A:D",
@@ -80,13 +79,12 @@ const (
 	FormulaReportSheet   = "FormulaReport"
 	RevenueSheet         = "RevenueDashboard"
 	UserActivitySheet    = "UserActivityLogs"
-	// *** FIX: Re-added the missing constant ***
 	ChatMessagesSheet    = "ChatMessages"
 	UsersSheet           = "Users"
 )
 
 // --- Cache ---
-// ... (Cache functions setCache, getCache, clearCache, invalidateSheetCache remain the same) ...
+// ... (CacheItem, cache, cacheMutex, cacheTTL remain the same) ...
 type CacheItem struct {
 	Data      interface{}
 	ExpiresAt time.Time
@@ -118,25 +116,36 @@ func getCache(key string) (interface{}, bool) {
 	log.Printf("Cache HIT for key: %s", key)
 	return item.Data, true
 }
+
+// ... (clearCache remains the same, it correctly clears both) ...
 func clearCache() {
 	cacheMutex.Lock()
 	defer cacheMutex.Unlock()
 	cache = make(map[string]CacheItem)
 	log.Println("Cache CLEARED")
 	sheetIdCacheMutex.Lock()
+	defer sheetIdCacheMutex.Unlock()
 	sheetIdCache = make(map[string]int64)
-	sheetIdCacheMutex.Unlock()
 	log.Println("Sheet ID Cache CLEARED")
 }
+
+// --- *** UPDATED: invalidateSheetCache now clears BOTH caches for that sheet *** ---
 func invalidateSheetCache(sheetName string) {
+	// Invalidate data cache
 	cacheMutex.Lock()
-	defer cacheMutex.Unlock()
 	delete(cache, "sheet_"+sheetName)
+	cacheMutex.Unlock()
 	log.Printf("Cache INVALIDATED for key: sheet_%s", sheetName)
+
+	// Invalidate Sheet ID cache
+	sheetIdCacheMutex.Lock()
+	delete(sheetIdCache, sheetName)
+	sheetIdCacheMutex.Unlock()
+	log.Printf("Sheet ID Cache INVALIDATED for key: %s", sheetName)
 }
 
 // --- Models ---
-// ... (User, Product, Location, ShippingMethod structs remain the same) ...
+// ... (All structs: User, Product, Location, ShippingMethod, TeamPage, Color, Driver, BankAccount, PhoneCarrier, Order, RevenueEntry, ChatMessage, ReportSummary, RevenueAggregate remain the same) ...
 type User struct {
 	UserName          string `json:"UserName"`
 	Password          string `json:"Password"` 
@@ -164,16 +173,12 @@ type ShippingMethod struct {
 	AllowManualDriver      bool   `json:"AllowManualDriver"`
 	RequireDriverSelection bool   `json:"RequireDriverSelection"`
 }
-
-// *** UPDATED: TeamPage struct ***
 type TeamPage struct {
 	Team          string `json:"Team"`
 	PageName      string `json:"PageName"`
 	TelegramValue string `json:"TelegramValue"`
-	PageLogoURL   string `json:"PageLogoURL"` // *** NEW ***
+	PageLogoURL   string `json:"PageLogoURL"`
 }
-
-// ... (Color, Driver, BankAccount, PhoneCarrier, Order, RevenueEntry, ChatMessage, ReportSummary, RevenueAggregate structs remain the same) ...
 type Color struct {
 	ColorName string `json:"ColorName"`
 }
@@ -461,25 +466,40 @@ func overwriteSheetDataInAPI(sheetName string, data [][]interface{}) error {
 }
 // ... (getSheetIdByName remains the same) ...
 func getSheetIdByName(sheetName string) (int64, error) {
+	// *** This cache is the source of the problem if it gets stale ***
 	sheetIdCacheMutex.RLock()
 	sheetId, found := sheetIdCache[sheetName]
 	sheetIdCacheMutex.RUnlock()
 	if found {
+		log.Printf("Cache HIT for Sheet ID: %s", sheetName)
 		return sheetId, nil
 	}
+
+	log.Printf("Cache MISS for Sheet ID: %s. Fetching from API...", sheetName)
+	// Fetch from API
 	resp, err := sheetsService.Spreadsheets.Get(spreadsheetID).Fields("sheets(properties(title,sheetId))").Do()
 	if err != nil {
 		log.Printf("Error fetching spreadsheet properties: %v", err)
 		return 0, fmt.Errorf("failed to get spreadsheet info")
 	}
+
 	for _, sheet := range resp.Sheets {
+		// Cache all IDs we find
+		sheetIdCacheMutex.Lock()
+		sheetIdCache[sheet.Properties.Title] = sheet.Properties.SheetId
+		sheetIdCacheMutex.Unlock()
+		
 		if sheet.Properties.Title == sheetName {
-			sheetIdCacheMutex.Lock()
-			sheetIdCache[sheetName] = sheet.Properties.SheetId
-			sheetIdCacheMutex.Unlock()
-			return sheet.Properties.SheetId, nil
+			log.Printf("Found Sheet ID for %s: %d", sheetName, sheet.Properties.SheetId)
+			sheetId = sheet.Properties.SheetId
+			found = true
 		}
 	}
+
+	if found {
+		return sheetId, nil
+	}
+
 	return 0, fmt.Errorf("sheet '%s' not found in spreadsheet", sheetName)
 }
 // ... (findHeaderMap remains the same) ...
@@ -644,12 +664,11 @@ func handleGetUsers(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{"status": "success", "data": users})
 }
 
-// ... (handleGetStaticData remains the same, but now fetches new TeamPage struct) ...
+// ... (handleGetStaticData remains the same) ...
 func handleGetStaticData(c *gin.Context) {
 	result := make(map[string]interface{})
 	var err error
-
-	var pages []TeamPage // *** This struct now has PageLogoURL ***
+	var pages []TeamPage
 	var products []Product
 	var locations []Location
 	var shippingMethods []ShippingMethod
@@ -661,7 +680,7 @@ func handleGetStaticData(c *gin.Context) {
 
 	err = getCachedSheetData("TeamsPages", &pages, cacheTTL)
 	if err != nil { goto handleError }
-	result["pages"] = pages // *** This now includes the logo URL ***
+	result["pages"] = pages
 
 	err = getCachedSheetData("Products", &products, cacheTTL)
 	if err != nil { goto handleError }
@@ -716,7 +735,7 @@ handleError:
 
 
 // --- handleSubmitOrder (Delegates to Apps Script) ---
-// ... (handleSubmitOrder remains the same as previous update) ...
+// ... (handleSubmitOrder remains the same) ...
 func handleSubmitOrder(c *gin.Context) {
 	var orderRequest struct {
 		CurrentUser   User                     `json:"currentUser"`
@@ -1215,7 +1234,7 @@ func handleSendChatMessage(c *gin.Context) {
 	}
 	c.JSON(http.StatusOK, gin.H{"status": "success", "message": broadcastMsg})
 }
-// ... (handleDeleteChatMessage remains the same) ...
+// ... (handleDeleteChatMessage remains the same, but will now work because invalidateSheetCache is fixed) ...
 func handleDeleteChatMessage(c *gin.Context) {
 	var request struct {
 		Timestamp string `json:"timestamp"`
@@ -1245,12 +1264,29 @@ func handleDeleteChatMessage(c *gin.Context) {
 	sheetName := ChatMessagesSheet
 	pkHeader := "Timestamp"
 	pkValue := request.Timestamp
+
+	// This call will now use a cached ID if available, or fetch a new one if not.
 	rowIndex, sheetId, err := findRowIndexByPK(sheetName, pkHeader, pkValue)
 	if err != nil {
 		log.Printf("Error finding chat message row to delete: %v", err)
-		c.JSON(http.StatusNotFound, gin.H{"status": "error", "message": "Message not found in sheet: " + err.Error()})
-		return
+		
+		// *** ADDED: If row not found, maybe cache is stale? Clear it and try one more time. ***
+		// This is a safety net.
+		if strings.Contains(err.Error(), "sheet") {
+			log.Printf("Clearing Sheet ID cache for %s and retrying...", sheetName)
+			invalidateSheetCache(sheetName) // Clear the potentially bad ID
+			rowIndex, sheetId, err = findRowIndexByPK(sheetName, pkHeader, pkValue) // Try again
+			if err != nil {
+				log.Printf("Error finding row on second attempt: %v", err)
+				c.JSON(http.StatusNotFound, gin.H{"status": "error", "message": "Message not found in sheet: " + err.Error()})
+				return
+			}
+		} else {
+			c.JSON(http.StatusNotFound, gin.H{"status": "error", "message": "Message not found in sheet: " + err.Error()})
+			return
+		}
 	}
+
 	batchUpdateReq := &sheets.BatchUpdateSpreadsheetRequest{
 		Requests: []*sheets.Request{
 			{
@@ -1268,10 +1304,19 @@ func handleDeleteChatMessage(c *gin.Context) {
 	_, err = sheetsService.Spreadsheets.BatchUpdate(spreadsheetID, batchUpdateReq).Do()
 	if err != nil {
 		log.Printf("Error deleting row %d from sheet %s: %v", rowIndex, sheetName, err)
+		// *** THIS IS WHERE YOUR ERROR HAPPENED ***
+		// If the error is "No grid with id", it's a stale cache.
+		if strings.Contains(err.Error(), "No grid with id") {
+			log.Printf("Stale Sheet ID detected. Clearing Sheet ID cache for %s.", sheetName)
+			invalidateSheetCache(sheetName) // Clear the bad ID for next time
+		}
 		c.JSON(http.StatusInternalServerError, gin.H{"status": "error", "message": "Failed to delete message row: " + err.Error()})
 		return
 	}
-	invalidateSheetCache(sheetName)
+
+	// *** This call is now fixed and will clear the sheetIdCache ***
+	invalidateSheetCache(sheetName) 
+
 	wsMsg := WebSocketMessage{
 		Action:  "delete_message",
 		Payload: gin.H{"timestamp": request.Timestamp},
@@ -1355,6 +1400,10 @@ func handleAdminUpdateSheet(c *gin.Context) {
 	batchUpdateReq := &sheets.BatchUpdateSpreadsheetRequest{ Requests: updateRequests }
 	_, err = sheetsService.Spreadsheets.BatchUpdate(spreadsheetID, batchUpdateReq).Do()
 	if err != nil {
+		if strings.Contains(err.Error(), "No grid with id") {
+			log.Printf("Stale Sheet ID detected during update. Clearing Sheet ID cache for %s.", request.SheetName)
+			invalidateSheetCache(request.SheetName)
+		}
 		log.Printf("Error performing batch update on sheet %s: %v", request.SheetName, err)
 		c.JSON(http.StatusInternalServerError, gin.H{"status": "error", "message": "Failed to update sheet: " + err.Error()})
 		return
@@ -1390,7 +1439,7 @@ func handleAdminAddRow(c *gin.Context) {
 			rowData[colIndex] = ""
 		}
 	}
-	err = appendRowToSheet(request.SheetName, rowData)
+	err = appendRowToSheet(request.SheetName, rowData) // This already calls invalidateSheetCache
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"status": "error", "message": "Failed to add row: " + err.Error()})
 		return
@@ -1436,6 +1485,10 @@ func handleAdminDeleteRow(c *gin.Context) {
 	}
 	_, err = sheetsService.Spreadsheets.BatchUpdate(spreadsheetID, batchUpdateReq).Do()
 	if err != nil {
+		if strings.Contains(err.Error(), "No grid with id") {
+			log.Printf("Stale Sheet ID detected during delete. Clearing Sheet ID cache for %s.", request.SheetName)
+			invalidateSheetCache(request.SheetName)
+		}
 		log.Printf("Error deleting row %d from sheet %s: %v", rowIndex, request.SheetName, err)
 		c.JSON(http.StatusInternalServerError, gin.H{"status": "error", "message": "Failed to delete row: " + err.Error()})
 		return
@@ -1498,6 +1551,10 @@ func handleUpdateProfile(c *gin.Context) {
 	batchUpdateReq := &sheets.BatchUpdateSpreadsheetRequest{Requests: updateRequests}
 	_, err = sheetsService.Spreadsheets.BatchUpdate(spreadsheetID, batchUpdateReq).Do()
 	if err != nil {
+		if strings.Contains(err.Error(), "No grid with id") {
+			log.Printf("Stale Sheet ID detected during profile update. Clearing Sheet ID cache for %s.", sheetName)
+			invalidateSheetCache(sheetName)
+		}
 		log.Printf("Error performing batch update on Users sheet: %v", err)
 		c.JSON(http.StatusInternalServerError, gin.H{"status": "error", "message": "Failed to update profile: " + err.Error()})
 		return
@@ -1505,6 +1562,13 @@ func handleUpdateProfile(c *gin.Context) {
 	invalidateSheetCache(sheetName)
 	log.Printf("Successfully updated profile for user %s", request.UserName)
 	c.JSON(http.StatusOK, gin.H{"status": "success", "message": "Profile updated successfully"})
+}
+
+// --- *** NEW: Handler to clear all server caches *** ---
+func handleClearCache(c *gin.Context) {
+	clearCache() // This function already clears both data and sheetId caches
+	log.Println("All server caches (data and Sheet IDs) have been cleared via API request.")
+	c.JSON(http.StatusOK, gin.H{"status": "success", "message": "All server caches cleared"})
 }
 
 
@@ -1581,6 +1645,8 @@ func main() {
 			admin.POST("/update-sheet", handleAdminUpdateSheet)
 			admin.POST("/add-row", handleAdminAddRow)
 			admin.POST("/delete-row", handleAdminDeleteRow)
+			// *** ADDED NEW ENDPOINT ***
+			admin.POST("/clear-cache", handleClearCache)
 		}
 
 		// --- Profile Endpoint ---
