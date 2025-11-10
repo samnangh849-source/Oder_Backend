@@ -1146,7 +1146,7 @@ func sendTelegramNotification(team string, fullOrderData map[string]interface{})
 		msg.ParseMode = tgbotapi.ModeMarkdown // Use Markdown
 		if topicID != 0 {
 			// CORRECT way to send to a Topic in v5
-			msg.MessageThreadID = int(topicID)
+			msg.ReplyToMessageID = int(topicID)
 		}
 
 		// Attach Label Button to Part 2 (index 1)
