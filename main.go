@@ -907,6 +907,57 @@ func handleImageUploadProxy(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{"status": "success", "url": fileUrl, "fileID": resp.FileID})
 }
 
+// --- *** NEW: Audio Proxy Handler *** ---
+func handleGetAudioProxy(c *gin.Context) {
+	fileID := c.Param("fileID")
+	if fileID == "" {
+		c.String(http.StatusBadRequest, "File ID is required")
+		return
+	}
+
+	// Construct the Google Drive download URL
+	// Using export=download is sometimes more reliable
+	googleURL := fmt.Sprintf("https://drive.google.com/uc?id=%s&export=download", fileID)
+
+	// Create a new request (to handle potential redirects safely)
+	// Use a client that follows redirects (default client does)
+	resp, err := http.Get(googleURL)
+	if err != nil {
+		log.Printf("Failed to fetch audio from Google Drive (FileID: %s): %v", fileID, err)
+		c.String(http.StatusInternalServerError, "Failed to retrieve audio file")
+		return
+	}
+	defer resp.Body.Close()
+
+	// Check if Google returned an error (e.g., file not found, or a virus warning page)
+	if resp.StatusCode != http.StatusOK {
+		// It might be a redirect to a consent page (like large files/virus scan)
+		// Or just a 404
+		log.Printf("Google Drive returned non-OK status %d for FileID: %s", resp.StatusCode, fileID)
+
+		// If it's HTML, it's definitely an error/consent page we can't handle
+		if strings.HasPrefix(resp.Header.Get("Content-Type"), "text/html") {
+			log.Printf("Google returned an HTML page, probably a consent/error screen.")
+			c.String(http.StatusForbidden, "Cannot proxy file. It may require manual download from Google.")
+			return
+		}
+
+		c.String(resp.StatusCode, "Error from Google Drive")
+		return
+	}
+
+	// Success! Stream the file.
+	// Copy headers from Google's response to our response
+	// This tells the browser what kind of file it is.
+	c.Writer.Header().Set("Content-Type", resp.Header.Get("Content-Type"))
+	c.Writer.Header().Set("Content-Length", resp.Header.Get("Content-Length"))
+	// This might help force playback
+	c.Writer.Header().Set("Content-Disposition", fmt.Sprintf("inline; filename=\"%s\"", fileID))
+
+	// Stream the audio data
+	io.Copy(c.Writer, resp.Body)
+}
+
 // --- Report/Admin Handlers ---
 // ... (handleUpdateFormulaReport remains the same) ...
 func handleUpdateFormulaReport(c *gin.Context) {
@@ -1234,7 +1285,7 @@ func handleSendChatMessage(c *gin.Context) {
 	}
 	c.JSON(http.StatusOK, gin.H{"status": "success", "message": broadcastMsg})
 }
-// ... (handleDeleteChatMessage remains the same, but will now work because invalidateSheetCache is fixed) ...
+// ... (handleDeleteChatMessage remains the same) ...
 func handleDeleteChatMessage(c *gin.Context) {
 	var request struct {
 		Timestamp string `json:"timestamp"`
@@ -1634,6 +1685,8 @@ func main() {
 			chat.POST("/send", handleSendChatMessage)
 			chat.POST("/delete", handleDeleteChatMessage)
 			chat.GET("/ws", serveWs)
+			// *** ADDED NEW ENDPOINT FOR AUDIO PROXY ***
+			chat.GET("/audio/:fileID", handleGetAudioProxy)
 		}
 		
 		// --- Admin Endpoints ---
