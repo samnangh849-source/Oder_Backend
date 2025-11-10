@@ -10,7 +10,7 @@ import (
 	"io"
 	"log"
 	"net/http"
-	// "net/url" // REMOVED (Telegram logic moved)
+	// "net/url" // REMOVED (No longer used)
 	"os"
 	"sort"
 	"strconv"
@@ -22,13 +22,11 @@ import (
 	"github.com/gin-gonic/gin"
 
 	// --- REMOVED: Telegram Bot API ---
-	// tgbotapi "github.com/go-telegram-bot-api/telegram-bot-api/v5"
 
 	// --- NEW: WebSocket Library ---
 	"github.com/gorilla/websocket"
 
 	// --- Google API Imports ---
-	// "google.golang.org/api/drive/v3"
 	"google.golang.org/api/option"
 	"google.golang.org/api/sheets/v4"
 )
@@ -40,15 +38,13 @@ var (
 	// ---
 	spreadsheetID   string
 	uploadFolderID  string
-	labelPrinterURL string // Kept, in case frontend needs it? Or maybe label button moves to GAS.
+	// labelPrinterURL string // REMOVED (Moved to GAS)
 	// ---
 	// *** Apps Script API Config (for Uploads AND Orders) ***
 	appsScriptURL    string
 	appsScriptSecret string
 	// ---
 	renderBaseURL string // URL of this Render service itself
-
-	// --- REMOVED: Telegram Bot Management ---
 
 	// --- NEW: WebSocket Hub ---
 	hub *Hub
@@ -62,7 +58,7 @@ var (
 var sheetRanges = map[string]string{
 	"Users":           "Users!A:G",
 	// *** UPDATED: Settings range ***
-	"Settings":        "Settings!A:E", // Team, FolderID, Token, GroupID, TopicID
+	"Settings":        "Settings!A:F", // Team, FolderID, Token, GroupID, TopicID, LabelURL
 	"TeamsPages":      "TeamsPages!A:C",
 	"Products":        "Products!A:E",
 	"Locations":       "Locations!A:C",
@@ -71,10 +67,9 @@ var sheetRanges = map[string]string{
 	"Drivers":         "Drivers!A:B",
 	"BankAccounts":    "BankAccounts!A:B",
 	"PhoneCarriers":   "PhoneCarriers!A:C",
-	// "TelegramTemplates": "TelegramTemplates!A:C", // REMOVED (GAS handles this)
-	"AllOrders":    "AllOrders!A:Y",
+	"AllOrders":       "AllOrders!A:Y",
 	"RevenueDashboard": "RevenueDashboard!A:D",
-	"ChatMessages": "ChatMessages!A:E",
+	"ChatMessages":    "ChatMessages!A:E",
 
 	"FormulaReportSheet": "FormulaReport!A:Z",
 	"UserActivityLogs":   "UserActivityLogs!A:Z",
@@ -82,14 +77,12 @@ var sheetRanges = map[string]string{
 }
 
 const (
-	AllOrdersSheet = "AllOrders"
-	FormulaReportSheet = "FormulaReport"
-	RevenueSheet = "RevenueDashboard"
-	UserActivitySheet = "UserActivityLogs" // Still used by handleAdminAddRow
-	EditLogsSheet = "EditLogs"
-	// TelegramTemplatesSheet = "TelegramTemplates" // REMOVED
-	ChatMessagesSheet = "ChatMessages"
-	UsersSheet = "Users"
+	AllOrdersSheet       = "AllOrders"
+	FormulaReportSheet   = "FormulaReport"
+	RevenueSheet         = "RevenueDashboard"
+	UserActivitySheet    = "UserActivityLogs"
+pro	ChatMessagesSheet    = "ChatMessages"
+	UsersSheet           = "Users"
 )
 
 // --- Cache ---
@@ -98,13 +91,11 @@ type CacheItem struct {
 	Data      interface{}
 	ExpiresAt time.Time
 }
-
 var (
 	cache      = make(map[string]CacheItem)
 	cacheMutex sync.RWMutex
 	cacheTTL   = 5 * time.Minute // Default cache duration
 )
-
 func setCache(key string, data interface{}, duration time.Duration) {
 	cacheMutex.Lock()
 	defer cacheMutex.Unlock()
@@ -114,7 +105,6 @@ func setCache(key string, data interface{}, duration time.Duration) {
 	}
 	log.Printf("Cache SET for key: %s", key)
 }
-
 func getCache(key string) (interface{}, bool) {
 	cacheMutex.RLock()
 	defer cacheMutex.RUnlock()
@@ -128,19 +118,16 @@ func getCache(key string) (interface{}, bool) {
 	log.Printf("Cache HIT for key: %s", key)
 	return item.Data, true
 }
-
 func clearCache() {
 	cacheMutex.Lock()
 	defer cacheMutex.Unlock()
 	cache = make(map[string]CacheItem)
 	log.Println("Cache CLEARED")
-
 	sheetIdCacheMutex.Lock()
 	sheetIdCache = make(map[string]int64)
 	sheetIdCacheMutex.Unlock()
 	log.Println("Sheet ID Cache CLEARED")
 }
-
 func invalidateSheetCache(sheetName string) {
 	cacheMutex.Lock()
 	defer cacheMutex.Unlock()
@@ -148,7 +135,7 @@ func invalidateSheetCache(sheetName string) {
 	log.Printf("Cache INVALIDATED for key: sheet_%s", sheetName)
 }
 
-// --- Models (Adjust based on your actual Sheet headers) ---
+// --- Models ---
 // ... (All struct definitions remain the same) ...
 type User struct {
 	UserName          string `json:"UserName"`
@@ -159,7 +146,6 @@ type User struct {
 	Role              string `json:"Role"`
 	IsSystemAdmin     bool   `json:"IsSystemAdmin"`
 }
-
 type Product struct {
 	ProductName string  `json:"ProductName"`
 	Barcode     string  `json:"Barcode"`
@@ -167,26 +153,22 @@ type Product struct {
 	Cost        float64 `json:"Cost"`
 	ImageURL    string  `json:"ImageURL"`
 }
-
 type Location struct {
 	Province string `json:"Province"`
 	District string `json:"District"`
 	Sangkat  string `json:"Sangkat"`
 }
-
 type ShippingMethod struct {
 	MethodName             string `json:"MethodName"`
 	LogoURL                string `json:"LogosURL"`
 	AllowManualDriver      bool   `json:"AllowManualDriver"`
 	RequireDriverSelection bool   `json:"RequireDriverSelection"`
 }
-
 type TeamPage struct {
 	Team          string `json:"Team"`
 	PageName      string `json:"PageName"`
 	TelegramValue string `json:"TelegramValue"`
 }
-
 type Color struct {
 	ColorName string `json:"ColorName"`
 }
@@ -203,8 +185,6 @@ type PhoneCarrier struct {
 	Prefixes       string `json:"Prefixes"`
 	CarrierLogoURL string `json:"CarrierLogoURL"`
 }
-// REMOVED: TelegramTemplate struct
-
 type Order struct {
 	Timestamp               string  `json:"Timestamp"`
 	OrderID                 string  `json:"Order ID"`
@@ -232,14 +212,12 @@ type Order struct {
 	DeliveryPaid     float64 `json:"Delivery Paid"`
 	TotalProductCost float64 `json:"Total Product Cost ($)"`
 }
-
 type RevenueEntry struct {
 	Timestamp string  `json:"Timestamp"`
 	Team      string  `json:"Team"`
 	Page      string  `json:"Page"`
 	Revenue   float64 `json:"Revenue"`
 }
-
 type ChatMessage struct {
 	Timestamp   string `json:"Timestamp"`
 	UserName    string `json:"UserName"`
@@ -247,13 +225,11 @@ type ChatMessage struct {
 	Content     string `json:"Content"`
 	FileID      string `json:"FileID,omitempty"`
 }
-
 type ReportSummary struct {
 	TotalSales       float64
 	TotalExpense     float64
 	TotalProductCost float64
 }
-
 type RevenueAggregate struct {
 	YearlyByTeam  map[int]map[string]float64    `json:"yearlyByTeam"`
 	YearlyByPage  map[int]map[string]float64    `json:"yearlyByPage"`
@@ -266,12 +242,12 @@ type RevenueAggregate struct {
 // --- WebSocket Structs ---
 // ... (WebSocketMessage, upgrader, Client, Hub, NewHub, run, writePump, serveWs structs and functions remain the same) ...
 type WebSocketMessage struct {
-	Action  string      `json:"action"` // "new_message", "delete_message"
+	Action  string      `json:"action"`
 	Payload interface{} `json:"payload"`
 }
 var upgrader = websocket.Upgrader{
 	CheckOrigin: func(r *http.Request) bool {
-		return true // Allow all origins for simplicity
+		return true
 	},
 }
 type Client struct {
@@ -545,8 +521,6 @@ func findRowIndexByPK(sheetName string, pkHeader string, pkValue string) (int64,
 	return -1, sheetId, fmt.Errorf("row not found with %s = %s in sheet %s", pkHeader, pkValue, sheetName)
 }
 
-// --- REMOVED: generateAndSendPDF (Moved to GAS) ---
-// --- REMOVED: updateTelegramMessageIDInSheet (Moved to GAS) ---
 
 // --- Fetch & Cache Sheet Data (Rewritten) ---
 // ... (getCachedSheetData remains the same) ...
@@ -585,7 +559,8 @@ func getCachedSheetData(sheetName string, target interface{}, duration time.Dura
 }
 
 
-// --- *** UPDATED: Apps Script Communication (For Uploads, Deletes, AND Orders) *** ---
+// --- Apps Script Communication ---
+// ... (AppsScriptRequest, AppsScriptResponse, callAppsScriptPOST structs and function remain the same) ...
 type AppsScriptRequest struct {
 	Action         string      `json:"action"`
 	Secret         string      `json:"secret"`
@@ -595,19 +570,15 @@ type AppsScriptRequest struct {
 	MimeType       string      `json:"mimeType,omitempty"`
 	UserName       string      `json:"userName,omitempty"`
 	FileID         string      `json:"fileID,omitempty"`
-	// *** NEW: For Order Submission ***
 	OrderData      interface{} `json:"orderData,omitempty"`
 }
-
 type AppsScriptResponse struct {
 	Status  string `json:"status"`
 	Message string `json:"message,omitempty"`
-	URL     string `json:"url,omitempty"`    // For image upload response
-	FileID  string `json:"fileID,omitempty"` // For image upload response
-	OrderID string `json:"orderId,omitempty"` // For order submit response
+	URL     string `json:"url,omitempty"`
+	FileID  string `json:"fileID,omitempty"`
+	OrderID string `json:"orderId,omitempty"`
 }
-
-// ... (callAppsScriptPOST remains the same) ...
 func callAppsScriptPOST(requestData AppsScriptRequest) (AppsScriptResponse, error) {
 	requestData.Secret = appsScriptSecret
 	jsonData, err := json.Marshal(requestData)
@@ -739,15 +710,9 @@ handleError:
 }
 
 
-// --- REMOVED: formatTelegramMessage (Moved to GAS) ---
-// --- REMOVED: filterEmpty (No longer needed) ---
-// --- REMOVED: createLabelButtonInline (Moved to GAS) ---
-// --- REMOVED: sendTelegramNotification (Moved to GAS) ---
-
-
-// --- *** UPDATED: handleSubmitOrder (Delegates to Apps Script) *** ---
+// --- handleSubmitOrder (Delegates to Apps Script) ---
+// ... (handleSubmitOrder remains the same as previous update) ...
 func handleSubmitOrder(c *gin.Context) {
-	// 1. Bind the incoming JSON request
 	var orderRequest struct {
 		CurrentUser   User                     `json:"currentUser"`
 		SelectedTeam  string                   `json:"selectedTeam"`
@@ -757,51 +722,33 @@ func handleSubmitOrder(c *gin.Context) {
 		Products      []map[string]interface{} `json:"products"`
 		Shipping      map[string]interface{}   `json:"shipping"`
 		Payment       map[string]interface{}   `json:"payment"`
-		Telegram      map[string]interface{}   `json:"telegram"` // Kept for scheduling logic
+		Telegram      map[string]interface{}   `json:"telegram"`
 		Subtotal      float64                  `json:"subtotal"`
 		GrandTotal    float64                  `json:"grandTotal"`
 		Note          string                   `json:"note"`
 	}
-
 	if err := c.ShouldBindJSON(&orderRequest); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"status": "error", "message": "Invalid order data format: " + err.Error()})
 		return
 	}
-
 	team := orderRequest.SelectedTeam
 	if team == "" {
 		c.JSON(http.StatusBadRequest, gin.H{"status": "error", "message": "Team not selected"})
 		return
 	}
-
-	// 2. Prepare data that main.go is responsible for
-	// We still generate timestamp and orderId in Go to ensure uniqueness
-	// and pass it to GAS.
 	timestamp := time.Now().UTC().Format(time.RFC3339)
 	orderId := fmt.Sprintf("GO-%s-%d", team, time.Now().UnixNano())
-
 	productsJSON, err := json.Marshal(orderRequest.Products)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"status": "error", "message": "Failed to serialize products"})
 		return
 	}
-
-	// Construct location string
 	var locationParts []string
-	if p, ok := orderRequest.Customer["province"].(string); ok && p != "" {
-		locationParts = append(locationParts, p)
-	}
-	if d, ok := orderRequest.Customer["district"].(string); ok && d != "" {
-		locationParts = append(locationParts, d)
-	}
-	if s, ok := orderRequest.Customer["sangkat"].(string); ok && s != "" {
-		locationParts = append(locationParts, s)
-	}
+	if p, ok := orderRequest.Customer["province"].(string); ok && p != "" { locationParts = append(locationParts, p) }
+	if d, ok := orderRequest.Customer["district"].(string); ok && d != "" { locationParts = append(locationParts, d) }
+	if s, ok := orderRequest.Customer["sangkat"].(string); ok && s != "" { locationParts = append(locationParts, s) }
 	fullLocation := strings.Join(locationParts, ", ")
-
 	shippingCost, _ := orderRequest.Shipping["cost"].(float64)
-
-	// Calculate Total Discount & Total Product Cost
 	var totalDiscount float64 = 0
 	var totalProductCost float64 = 0
 	for _, p := range orderRequest.Products {
@@ -809,7 +756,6 @@ func handleSubmitOrder(c *gin.Context) {
 		finalPrice, fpOK := p["finalPrice"].(float64)
 		quantity, qOK := p["quantity"].(float64)
 		cost, cOK := p["cost"].(float64)
-
 		if opOK && fpOK && qOK && originalPrice > 0 && quantity > 0 {
 			totalDiscount += (originalPrice - finalPrice) * quantity
 		}
@@ -817,25 +763,7 @@ func handleSubmitOrder(c *gin.Context) {
 			totalProductCost += (cost * quantity)
 		}
 	}
-
-	// 3. REMOVED: All appendRowToSheet calls
-	// err = appendRowToSheet(orderSheetName, rowData) ...
-	// err = appendRowToSheet(AllOrdersSheet, rowDataWithTeam) ...
-	// err = appendRowToSheet(RevenueSheet, ...) ...
-	// err = appendRowToSheet(UserActivitySheet, ...) ...
-
-	// 4. REMOVED: All Telegram/PDF Goroutines
-	// go sendTelegramNotification(team, fullOrderData) ...
-	// go generateAndSendPDF(team, orderId, fullOrderData) ...
-	// REMOVED: Scheduling logic (time.AfterFunc)
-	// This logic must be re-implemented in Apps Script if still needed.
-	// For now, we assume GAS processes immediately.
-
-	// 5. *** NEW: Delegate to Apps Script ***
-	// Create the payload for Apps Script
-	// This map contains BOTH the original request and the data generated by Go
 	fullOrderData := map[string]interface{}{
-		// Data generated in Go
 		"orderId":          orderId,
 		"timestamp":        timestamp,
 		"totalDiscount":    totalDiscount,
@@ -843,30 +771,21 @@ func handleSubmitOrder(c *gin.Context) {
 		"fullLocation":     fullLocation,
 		"productsJSON":     string(productsJSON),
 		"shippingCost":     shippingCost,
-		
-		// The original request from frontend
 		"originalRequest":  orderRequest, 
 	}
-
-	// Call Apps Script with the new 'submitOrder' action
 	_, err = callAppsScriptPOST(AppsScriptRequest{
 		Action:    "submitOrder",
 		OrderData: fullOrderData,
 	})
-
 	if err != nil {
-		// If Apps Script fails, report the error
 		c.JSON(http.StatusInternalServerError, gin.H{"status": "error", "message": "Failed to submit order to Apps Script: " + err.Error()})
 		return
 	}
-
-	// 6. Return "success" to frontend immediately
-	// This fulfills the requirement that the frontend does not wait for Telegram.
 	c.JSON(http.StatusOK, gin.H{"status": "success", "orderId": orderId})
 }
 
 
-// --- handleImageUploadProxy (Remains mostly the same) ---
+// --- handleImageUploadProxy ---
 // ... (handleImageUploadProxy remains the same) ...
 func handleImageUploadProxy(c *gin.Context) {
 	var uploadRequest struct {
@@ -1584,13 +1503,11 @@ func handleUpdateProfile(c *gin.Context) {
 }
 
 
-// --- REMOVED: loadTelegramConfig ---
-
 // --- Main Function ---
 func main() {
 	// --- Load configuration from environment variables ---
 	spreadsheetID = os.Getenv("GOOGLE_SHEET_ID")
-	labelPrinterURL = os.Getenv("LABEL_PRINTER_URL")
+	// labelPrinterURL = os.Getenv("LABEL_PRINTER_URL") // REMOVED
 	port := os.Getenv("PORT")
 	if port == "" {
 		port = "8080"
@@ -1607,8 +1524,6 @@ func main() {
 	if appsScriptURL == "" || appsScriptSecret == "" {
 		log.Fatal("APPS_SCRIPT_URL and APPS_SCRIPT_SECRET environment variables are required.")
 	}
-
-	// --- REMOVED: loadTelegramConfig() ---
 
 	// --- NEW: Start WebSocket Hub ---
 	hub = NewHub()
@@ -1640,7 +1555,6 @@ func main() {
 		api.GET("/users", handleGetUsers)
 		api.GET("/static-data", handleGetStaticData)
 
-		// *** UPDATED: handleSubmitOrder now delegates to GAS ***
 		api.POST("/submit-order", handleSubmitOrder)
 		api.POST("/upload-image", handleImageUploadProxy)
 
