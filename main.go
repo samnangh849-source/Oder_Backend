@@ -38,7 +38,6 @@ var (
 	// ---
 	spreadsheetID   string
 	uploadFolderID  string
-	// labelPrinterURL string // REMOVED (Moved to GAS)
 	// ---
 	// *** Apps Script API Config (for Uploads AND Orders) ***
 	appsScriptURL    string
@@ -57,9 +56,9 @@ var (
 // --- Constants from Apps Script Config (Keep consistent) ---
 var sheetRanges = map[string]string{
 	"Users":           "Users!A:G",
-	// *** UPDATED: Settings range ***
-	"Settings":        "Settings!A:F", // Team, FolderID, Token, GroupID, TopicID, LabelURL
-	"TeamsPages":      "TeamsPages!A:C",
+	"Settings":        "Settings!A:F",
+	// *** UPDATED: TeamsPages range ***
+	"TeamsPages":      "TeamsPages!A:D", // A:C -> A:D
 	"Products":        "Products!A:E",
 	"Locations":       "Locations!A:C",
 	"ShippingMethods": "ShippingMethods!A:D",
@@ -81,7 +80,8 @@ const (
 	FormulaReportSheet   = "FormulaReport"
 	RevenueSheet         = "RevenueDashboard"
 	UserActivitySheet    = "UserActivityLogs"
-pro	ChatMessagesSheet    = "ChatMessages"
+	// *** FIX: Re-added the missing constant ***
+	ChatMessagesSheet    = "ChatMessages"
 	UsersSheet           = "Users"
 )
 
@@ -136,7 +136,7 @@ func invalidateSheetCache(sheetName string) {
 }
 
 // --- Models ---
-// ... (All struct definitions remain the same) ...
+// ... (User, Product, Location, ShippingMethod structs remain the same) ...
 type User struct {
 	UserName          string `json:"UserName"`
 	Password          string `json:"Password"` 
@@ -164,11 +164,16 @@ type ShippingMethod struct {
 	AllowManualDriver      bool   `json:"AllowManualDriver"`
 	RequireDriverSelection bool   `json:"RequireDriverSelection"`
 }
+
+// *** UPDATED: TeamPage struct ***
 type TeamPage struct {
 	Team          string `json:"Team"`
 	PageName      string `json:"PageName"`
 	TelegramValue string `json:"TelegramValue"`
+	PageLogoURL   string `json:"PageLogoURL"` // *** NEW ***
 }
+
+// ... (Color, Driver, BankAccount, PhoneCarrier, Order, RevenueEntry, ChatMessage, ReportSummary, RevenueAggregate structs remain the same) ...
 type Color struct {
 	ColorName string `json:"ColorName"`
 }
@@ -639,12 +644,12 @@ func handleGetUsers(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{"status": "success", "data": users})
 }
 
-// ... (handleGetStaticData remains the same, but no longer fetches TelegramTemplates) ...
+// ... (handleGetStaticData remains the same, but now fetches new TeamPage struct) ...
 func handleGetStaticData(c *gin.Context) {
 	result := make(map[string]interface{})
 	var err error
 
-	var pages []TeamPage
+	var pages []TeamPage // *** This struct now has PageLogoURL ***
 	var products []Product
 	var locations []Location
 	var shippingMethods []ShippingMethod
@@ -656,7 +661,7 @@ func handleGetStaticData(c *gin.Context) {
 
 	err = getCachedSheetData("TeamsPages", &pages, cacheTTL)
 	if err != nil { goto handleError }
-	result["pages"] = pages
+	result["pages"] = pages // *** This now includes the logo URL ***
 
 	err = getCachedSheetData("Products", &products, cacheTTL)
 	if err != nil { goto handleError }
@@ -1451,7 +1456,7 @@ func handleUpdateProfile(c *gin.Context) {
 		return
 	}
 	if request.UserName == "" {
-		c.JSON(http.StatusBadRequest, gin.H{"status": "error", "message": "UserName is required"})
+		c.JSON(http.StatusBadRequest, gin.H{"status": "error","message": "UserName is required"})
 		return
 	}
 	sheetName := UsersSheet
