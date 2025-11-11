@@ -10,6 +10,7 @@ import (
 	"io"
 	"log"
 	"net/http"
+
 	// "net/url" // REMOVED (No longer used)
 	"os"
 	"sort"
@@ -36,8 +37,8 @@ var (
 	// --- Google API Services ---
 	sheetsService *sheets.Service
 	// ---
-	spreadsheetID   string
-	uploadFolderID  string
+	spreadsheetID  string
+	uploadFolderID string
 	// ---
 	// *** Apps Script API Config (for Uploads AND Orders) ***
 	appsScriptURL    string
@@ -55,19 +56,19 @@ var (
 
 // --- Constants from Apps Script Config (Keep consistent) ---
 var sheetRanges = map[string]string{
-	"Users":           "Users!A:G",
-	"Settings":        "Settings!A:F",
-	"TeamsPages":      "TeamsPages!A:D",
-	"Products":        "Products!A:E",
-	"Locations":       "Locations!A:C",
-	"ShippingMethods": "ShippingMethods!A:D",
-	"Colors":          "Colors!A:A",
-	"Drivers":         "Drivers!A:B",
-	"BankAccounts":    "BankAccounts!A:B",
-	"PhoneCarriers":   "PhoneCarriers!A:C",
-	"AllOrders":       "AllOrders!A:Y",
+	"Users":            "Users!A:G",
+	"Settings":         "Settings!A:F",
+	"TeamsPages":       "TeamsPages!A:D",
+	"Products":         "Products!A:E",
+	"Locations":        "Locations!A:C",
+	"ShippingMethods":  "ShippingMethods!A:D",
+	"Colors":           "Colors!A:A",
+	"Drivers":          "Drivers!A:B",
+	"BankAccounts":     "BankAccounts!A:B",
+	"PhoneCarriers":    "PhoneCarriers!A:C",
+	"AllOrders":        "AllOrders!A:Y",
 	"RevenueDashboard": "RevenueDashboard!A:D",
-	"ChatMessages":    "ChatMessages!A:E",
+	"ChatMessages":     "ChatMessages!A:E",
 
 	"FormulaReportSheet": "FormulaReport!A:Z",
 	"UserActivityLogs":   "UserActivityLogs!A:Z",
@@ -75,12 +76,13 @@ var sheetRanges = map[string]string{
 }
 
 const (
-	AllOrdersSheet       = "AllOrders"
-	FormulaReportSheet   = "FormulaReport"
-	RevenueSheet         = "RevenueDashboard"
-	UserActivitySheet    = "UserActivityLogs"
-	ChatMessagesSheet    = "ChatMessages"
-	UsersSheet           = "Users"
+	AllOrdersSheet     = "AllOrders"
+	FormulaReportSheet = "FormulaReport"
+	RevenueSheet       = "RevenueDashboard"
+	UserActivitySheet  = "UserActivityLogs"
+	ChatMessagesSheet  = "ChatMessages"
+	UsersSheet         = "Users"
+	EditLogsSheet      = "EditLogs" // NEW: Constant for log sheet
 )
 
 // --- Cache ---
@@ -89,11 +91,13 @@ type CacheItem struct {
 	Data      interface{}
 	ExpiresAt time.Time
 }
+
 var (
 	cache      = make(map[string]CacheItem)
 	cacheMutex sync.RWMutex
 	cacheTTL   = 5 * time.Minute // Default cache duration
 )
+
 func setCache(key string, data interface{}, duration time.Duration) {
 	cacheMutex.Lock()
 	defer cacheMutex.Unlock()
@@ -129,7 +133,7 @@ func clearCache() {
 	log.Println("Sheet ID Cache CLEARED")
 }
 
-// --- *** UPDATED: invalidateSheetCache now clears BOTH caches for that sheet *** ---
+// ... (invalidateSheetCache remains the same) ...
 func invalidateSheetCache(sheetName string) {
 	// Invalidate data cache
 	cacheMutex.Lock()
@@ -148,7 +152,7 @@ func invalidateSheetCache(sheetName string) {
 // ... (All structs: User, Product, Location, ShippingMethod, TeamPage, Color, Driver, BankAccount, PhoneCarrier, Order, RevenueEntry, ChatMessage, ReportSummary, RevenueAggregate remain the same) ...
 type User struct {
 	UserName          string `json:"UserName"`
-	Password          string `json:"Password"` 
+	Password          string `json:"Password"`
 	Team              string `json:"Team"`
 	FullName          string `json:"FullName"`
 	ProfilePictureURL string `json:"ProfilePictureURL"`
@@ -217,10 +221,10 @@ type Order struct {
 	PaymentInfo             string  `json:"Payment Info"`
 	TelegramMessageID       string  `json:"Telegram Message ID"`
 	Team                    string  `json:"Team"`
-	DiscountUSD      float64 `json:"Discount ($)"`
-	DeliveryUnpaid   float64 `json:"Delivery Unpaid"`
-	DeliveryPaid     float64 `json:"Delivery Paid"`
-	TotalProductCost float64 `json:"Total Product Cost ($)"`
+	DiscountUSD             float64 `json:"Discount ($)"`
+	DeliveryUnpaid          float64 `json:"Delivery Unpaid"`
+	DeliveryPaid            float64 `json:"Delivery Paid"`
+	TotalProductCost        float64 `json:"Total Product Cost ($)"`
 }
 type RevenueEntry struct {
 	Timestamp string  `json:"Timestamp"`
@@ -249,17 +253,27 @@ type RevenueAggregate struct {
 	DailyByPage   map[string]map[string]float64 `json:"dailyByPage"`
 }
 
+// --- NEW: Struct for Update Order Request ---
+type UpdateOrderRequest struct {
+	OrderID  string                 `json:"orderId"`
+	Team     string                 `json:"team"`
+	UserName string                 `json:"userName"` // For logging
+	NewData  map[string]interface{} `json:"newData"`
+}
+
 // --- WebSocket Structs ---
 // ... (WebSocketMessage, upgrader, Client, Hub, NewHub, run, writePump, serveWs structs and functions remain the same) ...
 type WebSocketMessage struct {
 	Action  string      `json:"action"`
 	Payload interface{} `json:"payload"`
 }
+
 var upgrader = websocket.Upgrader{
 	CheckOrigin: func(r *http.Request) bool {
 		return true
 	},
 }
+
 type Client struct {
 	hub  *Hub
 	conn *websocket.Conn
@@ -271,6 +285,7 @@ type Hub struct {
 	register   chan *Client
 	unregister chan *Client
 }
+
 func NewHub() *Hub {
 	return &Hub{
 		broadcast:  make(chan []byte),
@@ -341,7 +356,6 @@ func serveWs(c *gin.Context) {
 	}()
 }
 
-
 // --- Google API Client Setup ---
 // ... (createGoogleAPIClient remains the same) ...
 func createGoogleAPIClient(ctx context.Context) error {
@@ -358,7 +372,6 @@ func createGoogleAPIClient(ctx context.Context) error {
 	log.Println("Google Sheets API client created successfully.")
 	return nil
 }
-
 
 // --- Google Sheets API Helper Functions ---
 // ... (convertSheetValuesToMaps remains the same) ...
@@ -405,6 +418,7 @@ func convertSheetValuesToMaps(values *sheets.ValueRange) ([]map[string]interface
 	}
 	return result, nil
 }
+
 // ... (fetchSheetDataFromAPI remains the same) ...
 func fetchSheetDataFromAPI(sheetName string) ([]map[string]interface{}, error) {
 	readRange, ok := sheetRanges[sheetName]
@@ -423,6 +437,7 @@ func fetchSheetDataFromAPI(sheetName string) ([]map[string]interface{}, error) {
 	}
 	return mappedData, nil
 }
+
 // ... (appendRowToSheet remains the same) ...
 func appendRowToSheet(sheetName string, rowData []interface{}) error {
 	writeRange := sheetName
@@ -437,6 +452,7 @@ func appendRowToSheet(sheetName string, rowData []interface{}) error {
 	invalidateSheetCache(sheetName)
 	return nil
 }
+
 // ... (overwriteSheetDataInAPI remains the same) ...
 func overwriteSheetDataInAPI(sheetName string, data [][]interface{}) error {
 	clearRange, ok := sheetRanges[sheetName]
@@ -464,6 +480,7 @@ func overwriteSheetDataInAPI(sheetName string, data [][]interface{}) error {
 	invalidateSheetCache(sheetName)
 	return nil
 }
+
 // ... (getSheetIdByName remains the same) ...
 func getSheetIdByName(sheetName string) (int64, error) {
 	// *** This cache is the source of the problem if it gets stale ***
@@ -488,7 +505,7 @@ func getSheetIdByName(sheetName string) (int64, error) {
 		sheetIdCacheMutex.Lock()
 		sheetIdCache[sheet.Properties.Title] = sheet.Properties.SheetId
 		sheetIdCacheMutex.Unlock()
-		
+
 		if sheet.Properties.Title == sheetName {
 			log.Printf("Found Sheet ID for %s: %d", sheetName, sheet.Properties.SheetId)
 			sheetId = sheet.Properties.SheetId
@@ -502,6 +519,7 @@ func getSheetIdByName(sheetName string) (int64, error) {
 
 	return 0, fmt.Errorf("sheet '%s' not found in spreadsheet", sheetName)
 }
+
 // ... (findHeaderMap remains the same) ...
 func findHeaderMap(sheetName string) (map[string]int, error) {
 	headersResp, err := sheetsService.Spreadsheets.Values.Get(spreadsheetID, fmt.Sprintf("%s!1:1", sheetName)).Do()
@@ -516,6 +534,7 @@ func findHeaderMap(sheetName string) (map[string]int, error) {
 	}
 	return headerMap, nil
 }
+
 // ... (findRowIndexByPK remains the same) ...
 func findRowIndexByPK(sheetName string, pkHeader string, pkValue string) (int64, int64, error) {
 	sheetId, err := getSheetIdByName(sheetName)
@@ -545,7 +564,6 @@ func findRowIndexByPK(sheetName string, pkHeader string, pkValue string) (int64,
 	}
 	return -1, sheetId, fmt.Errorf("row not found with %s = %s in sheet %s", pkHeader, pkValue, sheetName)
 }
-
 
 // --- Fetch & Cache Sheet Data (Rewritten) ---
 // ... (getCachedSheetData remains the same) ...
@@ -583,7 +601,6 @@ func getCachedSheetData(sheetName string, target interface{}, duration time.Dura
 	return nil
 }
 
-
 // --- Apps Script Communication ---
 // ... (AppsScriptRequest, AppsScriptResponse, callAppsScriptPOST structs and function remain the same) ...
 type AppsScriptRequest struct {
@@ -604,6 +621,7 @@ type AppsScriptResponse struct {
 	FileID  string `json:"fileID,omitempty"`
 	OrderID string `json:"orderId,omitempty"`
 }
+
 func callAppsScriptPOST(requestData AppsScriptRequest) (AppsScriptResponse, error) {
 	requestData.Secret = appsScriptSecret
 	jsonData, err := json.Marshal(requestData)
@@ -646,13 +664,13 @@ func callAppsScriptPOST(requestData AppsScriptRequest) (AppsScriptResponse, erro
 	return scriptResponse, nil
 }
 
-
 // --- API Handlers ---
 
 // ... (handlePing remains the same) ...
 func handlePing(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{"status": "success", "message": "Go backend pong"})
 }
+
 // ... (handleGetUsers remains the same) ...
 func handleGetUsers(c *gin.Context) {
 	var users []User
@@ -679,25 +697,35 @@ func handleGetStaticData(c *gin.Context) {
 	var phoneCarriers []PhoneCarrier
 
 	err = getCachedSheetData("TeamsPages", &pages, cacheTTL)
-	if err != nil { goto handleError }
+	if err != nil {
+		goto handleError
+	}
 	result["pages"] = pages
 
 	err = getCachedSheetData("Products", &products, cacheTTL)
-	if err != nil { goto handleError }
+	if err != nil {
+		goto handleError
+	}
 	result["products"] = products
 
 	err = getCachedSheetData("Locations", &locations, cacheTTL)
-	if err != nil { goto handleError }
+	if err != nil {
+		goto handleError
+	}
 	result["locations"] = locations
 
 	err = getCachedSheetData("ShippingMethods", &shippingMethods, cacheTTL)
-	if err != nil { goto handleError }
+	if err != nil {
+		goto handleError
+	}
 	result["shippingMethods"] = shippingMethods
 
 	err = getCachedSheetData("Settings", &settingsMaps, cacheTTL)
-	if err != nil { goto handleError }
+	if err != nil {
+		goto handleError
+	}
 	result["settings"] = settingsMaps
-	
+
 	if len(settingsMaps) > 0 && len(settingsMaps[0]) > 0 {
 		if id, ok := settingsMaps[0]["UploadFolderID"].(string); ok {
 			uploadFolderID = id
@@ -711,19 +739,27 @@ func handleGetStaticData(c *gin.Context) {
 	}
 
 	err = getCachedSheetData("Colors", &colors, cacheTTL)
-	if err != nil { goto handleError }
+	if err != nil {
+		goto handleError
+	}
 	result["colors"] = colors
 
 	err = getCachedSheetData("Drivers", &drivers, cacheTTL)
-	if err != nil { goto handleError }
+	if err != nil {
+		goto handleError
+	}
 	result["drivers"] = drivers
 
 	err = getCachedSheetData("BankAccounts", &bankAccounts, cacheTTL)
-	if err != nil { goto handleError }
+	if err != nil {
+		goto handleError
+	}
 	result["bankAccounts"] = bankAccounts
 
 	err = getCachedSheetData("PhoneCarriers", &phoneCarriers, cacheTTL)
-	if err != nil { goto handleError }
+	if err != nil {
+		goto handleError
+	}
 	result["phoneCarriers"] = phoneCarriers
 
 	c.JSON(http.StatusOK, gin.H{"status": "success", "data": result})
@@ -732,7 +768,6 @@ func handleGetStaticData(c *gin.Context) {
 handleError:
 	c.JSON(http.StatusInternalServerError, gin.H{"status": "error", "message": err.Error()})
 }
-
 
 // --- handleSubmitOrder (Delegates to Apps Script) ---
 // ... (handleSubmitOrder remains the same) ...
@@ -768,9 +803,15 @@ func handleSubmitOrder(c *gin.Context) {
 		return
 	}
 	var locationParts []string
-	if p, ok := orderRequest.Customer["province"].(string); ok && p != "" { locationParts = append(locationParts, p) }
-	if d, ok := orderRequest.Customer["district"].(string); ok && d != "" { locationParts = append(locationParts, d) }
-	if s, ok := orderRequest.Customer["sangkat"].(string); ok && s != "" { locationParts = append(locationParts, s) }
+	if p, ok := orderRequest.Customer["province"].(string); ok && p != "" {
+		locationParts = append(locationParts, p)
+	}
+	if d, ok := orderRequest.Customer["district"].(string); ok && d != "" {
+		locationParts = append(locationParts, d)
+	}
+	if s, ok := orderRequest.Customer["sangkat"].(string); ok && s != "" {
+		locationParts = append(locationParts, s)
+	}
 	fullLocation := strings.Join(locationParts, ", ")
 	shippingCost, _ := orderRequest.Shipping["cost"].(float64)
 	var totalDiscount float64 = 0
@@ -795,7 +836,7 @@ func handleSubmitOrder(c *gin.Context) {
 		"fullLocation":     fullLocation,
 		"productsJSON":     string(productsJSON),
 		"shippingCost":     shippingCost,
-		"originalRequest":  orderRequest, 
+		"originalRequest":  orderRequest,
 	}
 	_, err = callAppsScriptPOST(AppsScriptRequest{
 		Action:    "submitOrder",
@@ -808,14 +849,13 @@ func handleSubmitOrder(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{"status": "success", "orderId": orderId})
 }
 
-
 // --- handleImageUploadProxy ---
 // ... (handleImageUploadProxy remains the same) ...
 func handleImageUploadProxy(c *gin.Context) {
 	var uploadRequest struct {
-		FileData string `json:"fileData"`
-		FileName string `json:"fileName"`
-		MimeType string `json:"mimeType"`
+		FileData   string            `json:"fileData"`
+		FileName   string            `json:"fileName"`
+		MimeType   string            `json:"mimeType"`
 		SheetName  string            `json:"sheetName"`
 		PrimaryKey map[string]string `json:"primaryKey"`
 		ColumnName string            `json:"columnName"`
@@ -1087,6 +1127,7 @@ func handleUpdateFormulaReport(c *gin.Context) {
 	}
 	c.JSON(http.StatusOK, gin.H{"status": "success", "message": "Formula Report updated successfully."})
 }
+
 // ... (handleGetRevenueSummary remains the same) ...
 func handleGetRevenueSummary(c *gin.Context) {
 	var revenueEntries []RevenueEntry
@@ -1132,24 +1173,40 @@ func handleGetRevenueSummary(c *gin.Context) {
 		yearMonthKey := fmt.Sprintf("%d-%02d", year, month)
 		yearMonthDayKey := ts.Format("2006-01-02")
 		team := entry.Team
-		if team == "" { team = "Unknown" }
+		if team == "" {
+			team = "Unknown"
+		}
 		page := entry.Page
-		if page == "" { page = "Unknown" }
+		if page == "" {
+			page = "Unknown"
+		}
 		revenue := entry.Revenue
-		if _, ok := yearlyByTeam[year]; !ok { yearlyByTeam[year] = make(map[string]float64) }
+		if _, ok := yearlyByTeam[year]; !ok {
+			yearlyByTeam[year] = make(map[string]float64)
+		}
 		yearlyByTeam[year][team] += revenue
-		if _, ok := yearlyByPage[year]; !ok { yearlyByPage[year] = make(map[string]float64) }
+		if _, ok := yearlyByPage[year]; !ok {
+			yearlyByPage[year] = make(map[string]float64)
+		}
 		yearlyByPage[year][page] += revenue
 		if year == currentYear {
-			if _, ok := monthlyByTeam[yearMonthKey]; !ok { monthlyByTeam[yearMonthKey] = make(map[string]float64) }
+			if _, ok := monthlyByTeam[yearMonthKey]; !ok {
+				monthlyByTeam[yearMonthKey] = make(map[string]float64)
+			}
 			monthlyByTeam[yearMonthKey][team] += revenue
-			if _, ok := monthlyByPage[yearMonthKey]; !ok { monthlyByPage[yearMonthKey] = make(map[string]float64) }
+			if _, ok := monthlyByPage[yearMonthKey]; !ok {
+				monthlyByPage[yearMonthKey] = make(map[string]float64)
+			}
 			monthlyByPage[yearMonthKey][page] += revenue
 		}
 		if year == currentYear && month == currentMonth {
-			if _, ok := dailyByTeam[yearMonthDayKey]; !ok { dailyByTeam[yearMonthDayKey] = make(map[string]float64) }
+			if _, ok := dailyByTeam[yearMonthDayKey]; !ok {
+				dailyByTeam[yearMonthDayKey] = make(map[string]float64)
+			}
 			dailyByTeam[yearMonthDayKey][team] += revenue
-			if _, ok := dailyByPage[yearMonthDayKey]; !ok { dailyByPage[yearMonthDayKey] = make(map[string]float64) }
+			if _, ok := dailyByPage[yearMonthDayKey]; !ok {
+				dailyByPage[yearMonthDayKey] = make(map[string]float64)
+			}
 			dailyByPage[yearMonthDayKey][page] += revenue
 		}
 	}
@@ -1163,6 +1220,7 @@ func handleGetRevenueSummary(c *gin.Context) {
 	}
 	c.JSON(http.StatusOK, gin.H{"status": "success", "data": response})
 }
+
 // ... (handleGetAllOrders remains the same) ...
 func handleGetAllOrders(c *gin.Context) {
 	var allOrders []Order
@@ -1173,12 +1231,17 @@ func handleGetAllOrders(c *gin.Context) {
 		return
 	}
 	sort.Slice(allOrders, func(i, j int) bool {
-		if allOrders[i].Timestamp == "" { return false }
-		if allOrders[j].Timestamp == "" { return true }
+		if allOrders[i].Timestamp == "" {
+			return false
+		}
+		if allOrders[j].Timestamp == "" {
+			return true
+		}
 		return allOrders[i].Timestamp > allOrders[j].Timestamp
 	})
 	c.JSON(http.StatusOK, gin.H{"status": "success", "data": allOrders})
 }
+
 // ... (handleGetChatMessages remains the same) ...
 func handleGetChatMessages(c *gin.Context) {
 	var chatMessages []ChatMessage
@@ -1192,6 +1255,7 @@ func handleGetChatMessages(c *gin.Context) {
 	})
 	c.JSON(http.StatusOK, gin.H{"status": "success", "data": chatMessages})
 }
+
 // ... (uploadChatMediaToDrive remains the same) ...
 func uploadChatMediaToDrive(base64Data, fileName, mimeType, userName string) (string, string, error) {
 	if uploadFolderID == "" {
@@ -1210,6 +1274,7 @@ func uploadChatMediaToDrive(base64Data, fileName, mimeType, userName string) (st
 	}
 	return resp.URL, resp.FileID, nil
 }
+
 // ... (handleSendChatMessage remains the same) ...
 func handleSendChatMessage(c *gin.Context) {
 	var request struct {
@@ -1285,6 +1350,7 @@ func handleSendChatMessage(c *gin.Context) {
 	}
 	c.JSON(http.StatusOK, gin.H{"status": "success", "message": broadcastMsg})
 }
+
 // ... (handleDeleteChatMessage remains the same) ...
 func handleDeleteChatMessage(c *gin.Context) {
 	var request struct {
@@ -1320,12 +1386,12 @@ func handleDeleteChatMessage(c *gin.Context) {
 	rowIndex, sheetId, err := findRowIndexByPK(sheetName, pkHeader, pkValue)
 	if err != nil {
 		log.Printf("Error finding chat message row to delete: %v", err)
-		
+
 		// *** ADDED: If row not found, maybe cache is stale? Clear it and try one more time. ***
 		// This is a safety net.
 		if strings.Contains(err.Error(), "sheet") {
 			log.Printf("Clearing Sheet ID cache for %s and retrying...", sheetName)
-			invalidateSheetCache(sheetName) // Clear the potentially bad ID
+			invalidateSheetCache(sheetName)                                         // Clear the potentially bad ID
 			rowIndex, sheetId, err = findRowIndexByPK(sheetName, pkHeader, pkValue) // Try again
 			if err != nil {
 				log.Printf("Error finding row on second attempt: %v", err)
@@ -1366,7 +1432,7 @@ func handleDeleteChatMessage(c *gin.Context) {
 	}
 
 	// *** This call is now fixed and will clear the sheetIdCache ***
-	invalidateSheetCache(sheetName) 
+	invalidateSheetCache(sheetName)
 
 	wsMsg := WebSocketMessage{
 		Action:  "delete_message",
@@ -1381,49 +1447,58 @@ func handleDeleteChatMessage(c *gin.Context) {
 	log.Printf("Successfully deleted chat message: %s", request.Timestamp)
 	c.JSON(http.StatusOK, gin.H{"status": "success", "message": "Message deleted"})
 }
-// ... (handleAdminUpdateSheet remains the same) ...
-func handleAdminUpdateSheet(c *gin.Context) {
-	var request struct {
-		SheetName  string                 `json:"sheetName"`
-		PrimaryKey map[string]string      `json:"primaryKey"`
-		NewData    map[string]interface{} `json:"newData"`
+
+// --- *** NEW: Refactored Helper Function for Updating Rows *** ---
+// This function contains the core logic previously in handleAdminUpdateSheet
+func updateSheetRow(sheetName string, primaryKey map[string]string, newData map[string]interface{}) error {
+	if sheetName == "" || len(primaryKey) != 1 || len(newData) == 0 {
+		return fmt.Errorf("sheetName, a single primaryKey, and newData are required")
 	}
-	if err := c.ShouldBindJSON(&request); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"status": "error", "message": "Invalid update request: " + err.Error()})
-		return
-	}
-	if request.SheetName == "" || len(request.PrimaryKey) != 1 || len(request.NewData) == 0 {
-		c.JSON(http.StatusBadRequest, gin.H{"status": "error", "message": "sheetName, a single primaryKey, and newData are required"})
-		return
-	}
+
 	pkHeader := ""
 	pkValue := ""
-	for k, v := range request.PrimaryKey { pkHeader, pkValue = k, v }
-	headerMap, err := findHeaderMap(request.SheetName)
-	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"status": "error", "message": "Failed to read sheet headers: " + err.Error()})
-		return
+	for k, v := range primaryKey {
+		pkHeader, pkValue = k, v
 	}
-	rowIndex, sheetId, err := findRowIndexByPK(request.SheetName, pkHeader, pkValue)
+
+	headerMap, err := findHeaderMap(sheetName)
 	if err != nil {
-		c.JSON(http.StatusNotFound, gin.H{"status": "error", "message": "Row not found: " + err.Error()})
-		return
+		return fmt.Errorf("failed to read sheet headers for %s: %v", sheetName, err)
 	}
+
+	rowIndex, sheetId, err := findRowIndexByPK(sheetName, pkHeader, pkValue)
+	if err != nil {
+		return fmt.Errorf("row not found (%s=%s) in %s: %v", pkHeader, pkValue, sheetName, err)
+	}
+
 	var updateRequests []*sheets.Request
-	for colName, newValue := range request.NewData {
+	for colName, newValue := range newData {
 		colIndex, ok := headerMap[colName]
 		if !ok {
-			log.Printf("Warning: Column '%s' not found in sheet '%s'. Skipping update for this column.", colName, request.SheetName)
+			log.Printf("Warning: Column '%s' not found in sheet '%s'. Skipping update for this column.", colName, sheetName)
 			continue
 		}
 		extValue := &sheets.ExtendedValue{}
 		switch v := newValue.(type) {
-		case string: extValue.StringValue = &v
-		case float64: extValue.NumberValue = &v
-		case bool: extValue.BoolValue = &v
-		case int: f := float64(v); extValue.NumberValue = &f
-		case nil: extValue.StringValue = new(string)
-		default: str := fmt.Sprintf("%v", v); extValue.StringValue = &str
+		case string:
+			extValue.StringValue = &v
+		case float64:
+			extValue.NumberValue = &v
+		case bool:
+			extValue.BoolValue = &v
+		case int:
+			f := float64(v)
+			extValue.NumberValue = &f
+		case int64:
+			f := float64(v)
+			extValue.NumberValue = &f
+		case nil:
+			// Set as empty string
+			extValue.StringValue = new(string)
+		default:
+			// Convert other types to string as a fallback
+			str := fmt.Sprintf("%v", v)
+			extValue.StringValue = &str
 		}
 		updateReq := &sheets.Request{
 			UpdateCells: &sheets.UpdateCellsRequest{
@@ -1435,7 +1510,7 @@ func handleAdminUpdateSheet(c *gin.Context) {
 				Rows: []*sheets.RowData{
 					{
 						Values: []*sheets.CellData{
-							{ UserEnteredValue: extValue },
+							{UserEnteredValue: extValue},
 						},
 					},
 				},
@@ -1444,25 +1519,118 @@ func handleAdminUpdateSheet(c *gin.Context) {
 		}
 		updateRequests = append(updateRequests, updateReq)
 	}
+
 	if len(updateRequests) == 0 {
-		c.JSON(http.StatusBadRequest, gin.H{"status": "error", "message": "No valid columns found to update"})
-		return
+		return fmt.Errorf("no valid columns found to update")
 	}
-	batchUpdateReq := &sheets.BatchUpdateSpreadsheetRequest{ Requests: updateRequests }
+
+	batchUpdateReq := &sheets.BatchUpdateSpreadsheetRequest{Requests: updateRequests}
 	_, err = sheetsService.Spreadsheets.BatchUpdate(spreadsheetID, batchUpdateReq).Do()
+
 	if err != nil {
 		if strings.Contains(err.Error(), "No grid with id") {
-			log.Printf("Stale Sheet ID detected during update. Clearing Sheet ID cache for %s.", request.SheetName)
-			invalidateSheetCache(request.SheetName)
+			log.Printf("Stale Sheet ID detected during update. Clearing Sheet ID cache for %s.", sheetName)
+			invalidateSheetCache(sheetName)
 		}
-		log.Printf("Error performing batch update on sheet %s: %v", request.SheetName, err)
-		c.JSON(http.StatusInternalServerError, gin.H{"status": "error", "message": "Failed to update sheet: " + err.Error()})
+		return fmt.Errorf("failed to update sheet %s: %v", sheetName, err)
+	}
+
+	invalidateSheetCache(sheetName)
+	log.Printf("Successfully updated row %s=%s in sheet %s", pkHeader, pkValue, sheetName)
+	return nil
+}
+
+// --- *** REFACTORED: handleAdminUpdateSheet *** ---
+// This handler now uses the helper function
+func handleAdminUpdateSheet(c *gin.Context) {
+	var request struct {
+		SheetName  string                 `json:"sheetName"`
+		PrimaryKey map[string]string      `json:"primaryKey"`
+		NewData    map[string]interface{} `json:"newData"`
+	}
+	if err := c.ShouldBindJSON(&request); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"status": "error", "message": "Invalid update request: " + err.Error()})
 		return
 	}
-	invalidateSheetCache(request.SheetName)
-	log.Printf("Successfully updated row %s=%s in sheet %s", pkHeader, pkValue, request.SheetName)
+
+	err := updateSheetRow(request.SheetName, request.PrimaryKey, request.NewData)
+	if err != nil {
+		// Return specific error codes based on error message
+		if strings.Contains(err.Error(), "not found") {
+			c.JSON(http.StatusNotFound, gin.H{"status": "error", "message": err.Error()})
+		} else if strings.Contains(err.Error(), "required") || strings.Contains(err.Error(), "columns") {
+			c.JSON(http.StatusBadRequest, gin.H{"status": "error", "message": err.Error()})
+		} else {
+			c.JSON(http.StatusInternalServerError, gin.H{"status": "error", "message": err.Error()})
+		}
+		return
+	}
+
 	c.JSON(http.StatusOK, gin.H{"status": "success", "message": "Row updated successfully"})
 }
+
+// --- *** NEW: handleAdminUpdateOrder *** ---
+// This is the new endpoint handler you requested
+func handleAdminUpdateOrder(c *gin.Context) {
+	var request UpdateOrderRequest
+	if err := c.ShouldBindJSON(&request); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"status": "error", "message": "Invalid update request: " + err.Error()})
+		return
+	}
+
+	if request.OrderID == "" || request.Team == "" || request.UserName == "" || len(request.NewData) == 0 {
+		c.JSON(http.StatusBadRequest, gin.H{"status": "error", "message": "orderId, team, userName, and newData are required"})
+		return
+	}
+
+	teamSheetName := "Orders_" + request.Team
+	pk := map[string]string{"Order ID": request.OrderID}
+
+	// 1. Update the Team-specific sheet
+	err := updateSheetRow(teamSheetName, pk, request.NewData)
+	if err != nil {
+		log.Printf("Failed to update team sheet (%s) for order %s: %v", teamSheetName, request.OrderID, err)
+		if strings.Contains(err.Error(), "not found") {
+			c.JSON(http.StatusNotFound, gin.H{"status": "error", "message": "Order not found in team sheet " + teamSheetName + ": " + err.Error()})
+		} else {
+			c.JSON(http.StatusInternalServerError, gin.H{"status": "error", "message": "Failed to update team sheet: " + err.Error()})
+		}
+		return
+	}
+
+	// 2. Update the AllOrders sheet
+	err = updateSheetRow(AllOrdersSheet, pk, request.NewData)
+	if err != nil {
+		log.Printf("CRITICAL: Team sheet %s updated, but AllOrders failed for order %s: %v", teamSheetName, request.OrderID, err)
+		// Even if this fails, we return success because the primary sheet (team) was updated
+		// But we log this as a critical error.
+		// We still proceed to log the edit.
+	}
+
+	// 3. Log the edit asynchronously
+	go func() {
+		timestamp := time.Now().UTC().Format(time.RFC3339)
+		// Log each changed field as a separate row
+		for field, value := range request.NewData {
+			logRow := []interface{}{
+				timestamp,
+				request.OrderID,
+				request.UserName,
+				"N/A (Auto-Approved)", // Placeholder for approver
+				field,
+				"N/A", // We don't fetch the old value for performance
+				fmt.Sprintf("%v", value),
+			}
+			if err := appendRowToSheet(EditLogsSheet, logRow); err != nil {
+				log.Printf("Failed to append edit log for order %s: %v", request.OrderID, err)
+			}
+			// Invalidate log sheet cache (already handled by appendRowToSheet)
+		}
+	}()
+
+	c.JSON(http.StatusOK, gin.H{"status": "success", "message": "Order updated successfully"})
+}
+
 // ... (handleAdminAddRow remains the same) ...
 func handleAdminAddRow(c *gin.Context) {
 	var request struct {
@@ -1498,6 +1666,7 @@ func handleAdminAddRow(c *gin.Context) {
 	log.Printf("Successfully added new row to sheet %s", request.SheetName)
 	c.JSON(http.StatusOK, gin.H{"status": "success", "message": "Row added successfully"})
 }
+
 // ... (handleAdminDeleteRow remains the same) ...
 func handleAdminDeleteRow(c *gin.Context) {
 	var request struct {
@@ -1514,7 +1683,9 @@ func handleAdminDeleteRow(c *gin.Context) {
 	}
 	pkHeader := ""
 	pkValue := ""
-	for k, v := range request.PrimaryKey { pkHeader, pkValue = k, v }
+	for k, v := range request.PrimaryKey {
+		pkHeader, pkValue = k, v
+	}
 	rowIndex, sheetId, err := findRowIndexByPK(request.SheetName, pkHeader, pkValue)
 	if err != nil {
 		c.JSON(http.StatusNotFound, gin.H{"status": "error", "message": "Row not found: " + err.Error()})
@@ -1548,6 +1719,7 @@ func handleAdminDeleteRow(c *gin.Context) {
 	log.Printf("Successfully deleted row %s=%s from sheet %s", pkHeader, pkValue, request.SheetName)
 	c.JSON(http.StatusOK, gin.H{"status": "success", "message": "Row deleted successfully"})
 }
+
 // ... (handleUpdateProfile remains the same) ...
 func handleUpdateProfile(c *gin.Context) {
 	var request struct {
@@ -1560,7 +1732,7 @@ func handleUpdateProfile(c *gin.Context) {
 		return
 	}
 	if request.UserName == "" {
-		c.JSON(http.StatusBadRequest, gin.H{"status": "error","message": "UserName is required"})
+		c.JSON(http.StatusBadRequest, gin.H{"status": "error", "message": "UserName is required"})
 		return
 	}
 	sheetName := UsersSheet
@@ -1621,7 +1793,6 @@ func handleClearCache(c *gin.Context) {
 	log.Println("All server caches (data and Sheet IDs) have been cleared via API request.")
 	c.JSON(http.StatusOK, gin.H{"status": "success", "message": "All server caches cleared"})
 }
-
 
 // --- Main Function ---
 func main() {
@@ -1688,7 +1859,7 @@ func main() {
 			// *** ADDED NEW ENDPOINT FOR AUDIO PROXY ***
 			chat.GET("/audio/:fileID", handleGetAudioProxy)
 		}
-		
+
 		// --- Admin Endpoints ---
 		admin := api.Group("/admin")
 		{
@@ -1698,8 +1869,10 @@ func main() {
 			admin.POST("/update-sheet", handleAdminUpdateSheet)
 			admin.POST("/add-row", handleAdminAddRow)
 			admin.POST("/delete-row", handleAdminDeleteRow)
-			// *** ADDED NEW ENDPOINT ***
 			admin.POST("/clear-cache", handleClearCache)
+
+			// --- *** THIS IS THE NEW LINE YOU NEEDED *** ---
+			admin.POST("/update-order", handleAdminUpdateOrder)
 		}
 
 		// --- Profile Endpoint ---
