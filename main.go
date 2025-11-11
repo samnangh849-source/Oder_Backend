@@ -1582,6 +1582,60 @@ func handleAdminUpdateSheet(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{"status": "success", "message": "Row updated successfully"})
 }
 
+// --- *** NEW: Handler to update a specific order (THIS WAS MISSING) *** ---
+func handleAdminUpdateOrder(c *gin.Context) {
+	var request UpdateOrderRequest
+	if err := c.ShouldBindJSON(&request); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"status": "error", "message": "Invalid update request: " + err.Error()})
+		return
+	}
+
+	if request.OrderID == "" || request.Team == "" || request.UserName == "" || len(request.NewData) == 0 {
+		c.JSON(http.StatusBadRequest, gin.H{"status": "error", "message": "orderId, team, userName, and newData are required"})
+		return
+	}
+
+	// --- 1. Update the specific team's order sheet ---
+	orderSheetName := fmt.Sprintf("Orders_%s", request.Team)
+	orderPK := map[string]string{"Order ID": request.OrderID}
+
+	err := updateSheetRow(orderSheetName, orderPK, request.NewData)
+	if err != nil {
+		log.Printf("Failed to update team order sheet (%s): %v", orderSheetName, err)
+		// Continue anyway to update AllOrders, but log this
+	}
+
+	// --- 2. Update the AllOrders sheet ---
+	allOrdersPK := map[string]string{"Order ID": request.OrderID}
+	err = updateSheetRow(AllOrdersSheet, allOrdersPK, request.NewData)
+	if err != nil {
+		log.Printf("Failed to update AllOrders sheet: %v", err)
+		c.JSON(http.StatusInternalServerError, gin.H{"status": "error", "message": "Failed to update AllOrders sheet: " + err.Error()})
+		return
+	}
+
+	// --- 3. Log the edit ---
+	timestamp := time.Now().UTC().Format(time.RFC3339)
+	// Log each changed field as a separate row
+	for field, newValue := range request.NewData {
+		// Note: We don't have the "Old Value" here easily.
+		// For a simple log, we'll just log the new value.
+		// A more complex system might fetch the old value first.
+		logRow := []interface{}{
+			timestamp,
+			request.OrderID,
+			request.UserName,
+			"", // Approver (can be added later)
+			field,
+			"N/A", // Old Value (Skipped for simplicity)
+			fmt.Sprintf("%v", newValue),
+		}
+		go appendRowToSheet(EditLogsSheet, logRow) // Run in background
+	}
+
+	c.JSON(http.StatusOK, gin.H{"status": "success", "message": "Order updated successfully"})
+}
+
 // --- *** NEW: handleAdminUpdateProductTags *** ---
 // This handler merges and updates product tags
 func handleAdminUpdateProductTags(c *gin.Context) {
