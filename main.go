@@ -59,7 +59,7 @@ var sheetRanges = map[string]string{
 	"Users":            "Users!A:G",
 	"Settings":         "Settings!A:F",
 	"TeamsPages":       "TeamsPages!A:D",
-	"Products":         "Products!A:E",
+	"Products":         "Products!A:F", // បានប្តូរពី A:E ទៅ A:F
 	"Locations":        "Locations!A:C",
 	"ShippingMethods":  "ShippingMethods!A:D",
 	"Colors":           "Colors!A:A",
@@ -165,6 +165,7 @@ type Product struct {
 	Price       float64 `json:"Price"`
 	Cost        float64 `json:"Cost"`
 	ImageURL    string  `json:"ImageURL"`
+	Tags        string  `json:"Tags"` // បានបន្ថែម Field ថ្មីសម្រាប់ Tags
 }
 type Location struct {
 	Province string `json:"Province"`
@@ -265,6 +266,12 @@ type ChangePasswordRequest struct {
 	UserName    string `json:"userName"`
 	OldPassword string `json:"oldPassword"`
 	NewPassword string `json:"newPassword"`
+}
+
+// --- NEW: Struct for Update Tags Request ---
+type UpdateTagsRequest struct {
+	ProductName string   `json:"productName"`
+	NewTags     []string `json:"newTags"`
 }
 
 // --- WebSocket Structs ---
@@ -1575,66 +1582,93 @@ func handleAdminUpdateSheet(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{"status": "success", "message": "Row updated successfully"})
 }
 
-// --- *** NEW: handleAdminUpdateOrder *** ---
-// This is the new endpoint handler you requested
-func handleAdminUpdateOrder(c *gin.Context) {
-	var request UpdateOrderRequest
+// --- *** NEW: handleAdminUpdateProductTags *** ---
+// This handler merges and updates product tags
+func handleAdminUpdateProductTags(c *gin.Context) {
+	var request UpdateTagsRequest
 	if err := c.ShouldBindJSON(&request); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"status": "error", "message": "Invalid update request: " + err.Error()})
+		c.JSON(http.StatusBadRequest, gin.H{"status": "error", "message": "Invalid request: " + err.Error()})
 		return
 	}
 
-	if request.OrderID == "" || request.Team == "" || request.UserName == "" || len(request.NewData) == 0 {
-		c.JSON(http.StatusBadRequest, gin.H{"status": "error", "message": "orderId, team, userName, and newData are required"})
+	if request.ProductName == "" || len(request.NewTags) == 0 {
+		c.JSON(http.StatusBadRequest, gin.H{"status": "error", "message": "productName and newTags are required"})
 		return
 	}
 
-	teamSheetName := "Orders_" + request.Team
-	pk := map[string]string{"Order ID": request.OrderID}
+	sheetName := "Products"
 
-	// 1. Update the Team-specific sheet
-	err := updateSheetRow(teamSheetName, pk, request.NewData)
+	// 1. Get all products (invalidate cache to get fresh data)
+	var products []Product
+	invalidateSheetCache(sheetName)
+	err := getCachedSheetData(sheetName, &products, 1*time.Minute) // Short cache
 	if err != nil {
-		log.Printf("Failed to update team sheet (%s) for order %s: %v", teamSheetName, request.OrderID, err)
-		if strings.Contains(err.Error(), "not found") {
-			c.JSON(http.StatusNotFound, gin.H{"status": "error", "message": "Order not found in team sheet " + teamSheetName + ": " + err.Error()})
-		} else {
-			c.JSON(http.StatusInternalServerError, gin.H{"status": "error", "message": "Failed to update team sheet: " + err.Error()})
-		}
+		c.JSON(http.StatusInternalServerError, gin.H{"status": "error", "message": "Failed to fetch product data: " + err.Error()})
 		return
 	}
 
-	// 2. Update the AllOrders sheet
-	err = updateSheetRow(AllOrdersSheet, pk, request.NewData)
-	if err != nil {
-		log.Printf("CRITICAL: Team sheet %s updated, but AllOrders failed for order %s: %v", teamSheetName, request.OrderID, err)
-		// Even if this fails, we return success because the primary sheet (team) was updated
-		// But we log this as a critical error.
-		// We still proceed to log the edit.
+	// 2. Find the specific product
+	var currentProduct *Product
+	for i, p := range products {
+		if p.ProductName == request.ProductName {
+			currentProduct = &products[i]
+			break
+		}
 	}
 
-	// 3. Log the edit asynchronously
-	go func() {
-		timestamp := time.Now().UTC().Format(time.RFC3339)
-		// Log each changed field as a separate row
-		for field, value := range request.NewData {
-			logRow := []interface{}{
-				timestamp,
-				request.OrderID,
-				request.UserName,
-				"N/A (Auto-Approved)", // Placeholder for approver
-				field,
-				"N/A", // We don't fetch the old value for performance
-				fmt.Sprintf("%v", value),
-			}
-			if err := appendRowToSheet(EditLogsSheet, logRow); err != nil {
-				log.Printf("Failed to append edit log for order %s: %v", request.OrderID, err)
-			}
-			// Invalidate log sheet cache (already handled by appendRowToSheet)
-		}
-	}()
+	if currentProduct == nil {
+		c.JSON(http.StatusNotFound, gin.H{"status": "error", "message": "Product not found"})
+		return
+	}
 
-	c.JSON(http.StatusOK, gin.H{"status": "success", "message": "Order updated successfully"})
+	// 3. Merge tags (handle duplicates)
+	tagMap := make(map[string]bool)
+	currentTags := strings.Split(currentProduct.Tags, ",")
+	for _, tag := range currentTags {
+		cleanTag := strings.ToLower(strings.TrimSpace(tag))
+		if cleanTag != "" {
+			tagMap[cleanTag] = true
+		}
+	}
+
+	newTagsAdded := false
+	for _, tag := range request.NewTags {
+		cleanTag := strings.ToLower(strings.TrimSpace(tag))
+		if cleanTag != "" && !tagMap[cleanTag] {
+			tagMap[cleanTag] = true
+			newTagsAdded = true
+		}
+	}
+
+	// 4. If no new tags were actually added, just return success
+	if !newTagsAdded {
+		c.JSON(http.StatusOK, gin.H{"status": "success", "message": "Tags already up-to-date"})
+		return
+	}
+
+	// 5. Convert map keys back to slice and join
+	finalTagList := make([]string, 0, len(tagMap))
+	for tag := range tagMap {
+		finalTagList = append(finalTagList, tag)
+	}
+	sort.Strings(finalTagList) // Sort for consistency
+	finalTagString := strings.Join(finalTagList, ",")
+
+	// 6. Update the sheet
+	pk := map[string]string{"ProductName": request.ProductName}
+	newData := map[string]interface{}{
+		"Tags": finalTagString,
+	}
+
+	err = updateSheetRow(sheetName, pk, newData) // Use our refactored helper
+	if err != nil {
+		log.Printf("Failed to update tags for %s: %v", request.ProductName, err)
+		c.JSON(http.StatusInternalServerError, gin.H{"status": "error", "message": "Failed to update tags: " + err.Error()})
+		return
+	}
+
+	log.Printf("Tags updated successfully for product: %s", request.ProductName)
+	c.JSON(http.StatusOK, gin.H{"status": "success", "message": "Tags updated successfully"})
 }
 
 // ... (handleAdminAddRow remains the same) ...
@@ -1941,6 +1975,8 @@ func main() {
 
 			// --- *** THIS IS THE NEW LINE YOU NEEDED *** ---
 			admin.POST("/update-order", handleAdminUpdateOrder)
+			// --- *** ADDED NEW ENDPOINT FOR TAGS *** ---
+			admin.POST("/update-product-tags", handleAdminUpdateProductTags)
 		}
 
 		// --- Profile Endpoint ---
