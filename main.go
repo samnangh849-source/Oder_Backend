@@ -82,7 +82,7 @@ const (
 	UserActivitySheet  = "UserActivityLogs"
 	ChatMessagesSheet  = "ChatMessages"
 	UsersSheet         = "Users"
-	EditLogsSheet      = "EditLogs" // NEW: Constant for log sheet
+	EditLogsSheet      = "EditLogs"
 )
 
 // --- Cache ---
@@ -253,12 +253,18 @@ type RevenueAggregate struct {
 	DailyByPage   map[string]map[string]float64 `json:"dailyByPage"`
 }
 
-// --- NEW: Struct for Update Order Request ---
 type UpdateOrderRequest struct {
 	OrderID  string                 `json:"orderId"`
 	Team     string                 `json:"team"`
 	UserName string                 `json:"userName"` // For logging
 	NewData  map[string]interface{} `json:"newData"`
+}
+
+// --- NEW: Struct for Change Password Request ---
+type ChangePasswordRequest struct {
+	UserName    string `json:"userName"`
+	OldPassword string `json:"oldPassword"`
+	NewPassword string `json:"newPassword"`
 }
 
 // --- WebSocket Structs ---
@@ -1787,6 +1793,68 @@ func handleUpdateProfile(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{"status": "success", "message": "Profile updated successfully"})
 }
 
+// --- *** NEW: Handler to change password *** ---
+func handleChangePassword(c *gin.Context) {
+	var request ChangePasswordRequest
+	if err := c.ShouldBindJSON(&request); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"status": "error", "message": "Invalid request: " + err.Error()})
+		return
+	}
+
+	if request.UserName == "" || request.OldPassword == "" || request.NewPassword == "" {
+		c.JSON(http.StatusBadRequest, gin.H{"status": "error", "message": "UserName, oldPassword, and newPassword are required"})
+		return
+	}
+
+	// 1. Get all users to verify old password
+	var users []User
+	// Invalidate cache first to get the most recent password for verification
+	invalidateSheetCache(UsersSheet)
+	err := getCachedSheetData(UsersSheet, &users, 1*time.Minute) // Use a short cache duration
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"status": "error", "message": "Failed to fetch user data: " + err.Error()})
+		return
+	}
+
+	// 2. Find user and verify old password
+	var foundUser *User
+	for i, user := range users {
+		if user.UserName == request.UserName {
+			foundUser = &users[i]
+			break
+		}
+	}
+
+	if foundUser == nil {
+		c.JSON(http.StatusNotFound, gin.H{"status": "error", "message": "User not found"})
+		return
+	}
+
+	// 3. Check old password
+	if foundUser.Password != request.OldPassword {
+		c.JSON(http.StatusUnauthorized, gin.H{"status": "error", "message": "Incorrect old password"})
+		return
+	}
+
+	// 4. Old password is correct. Update to new password.
+	sheetName := UsersSheet
+	pk := map[string]string{"UserName": request.UserName}
+	newData := map[string]interface{}{
+		"Password": request.NewPassword,
+	}
+
+	err = updateSheetRow(sheetName, pk, newData) // Use our refactored helper
+	if err != nil {
+		log.Printf("Failed to update password for %s: %v", request.UserName, err)
+		c.JSON(http.StatusInternalServerError, gin.H{"status": "error", "message": "Failed to update password: " + err.Error()})
+		return
+	}
+
+	// 5. Success
+	log.Printf("Password changed successfully for user: %s", request.UserName)
+	c.JSON(http.StatusOK, gin.H{"status": "success", "message": "Password updated successfully"})
+}
+
 // --- *** NEW: Handler to clear all server caches *** ---
 func handleClearCache(c *gin.Context) {
 	clearCache() // This function already clears both data and sheetId caches
@@ -1879,6 +1947,8 @@ func main() {
 		profile := api.Group("/profile")
 		{
 			profile.POST("/update", handleUpdateProfile)
+			// --- *** ADDED NEW ENDPOINT FOR PASSWORD *** ---
+			profile.POST("/change-password", handleChangePassword)
 		}
 	}
 
