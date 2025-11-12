@@ -421,7 +421,7 @@ func convertSheetValuesToMaps(values *sheets.ValueRange) ([]map[string]interface
 					} else {
 						rowData[header] = cell
 					}
-					if header == "Password" || header == "Customer Phone" || header == "Barcode" || header == "Customer Name" || header == "Note" || header == "Content" {
+					if header == "Password" || header == "Customer Phone" || header == "Barcode" || header == "Customer Name" || header == "Note" || header == "Content" || header == "Tags" {
 						rowData[header] = fmt.Sprintf("%v", cell)
 					}
 				}
