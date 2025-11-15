@@ -1204,7 +1204,7 @@ func handleGetRevenueSummary(c *gin.Context) {
 		yearlyByPage[year][page] += revenue
 		if year == currentYear {
 			if _, ok := monthlyByTeam[yearMonthKey]; !ok {
-				monthlyByTeam[yearMonthKey] = make(map[string]float6ٹوںgo
+				monthlyByTeam[yearMonthKey] = make(map[string]float64)
 			}
 			monthlyByTeam[yearMonthKey][team] += revenue
 			if _, ok := monthlyByPage[yearMonthKey]; !ok {
@@ -2123,12 +2123,14 @@ func main() {
 			admin.POST("/delete-row", handleAdminDeleteRow)
 			admin.POST("/clear-cache", handleClearCache)
 
-			// --- *** THIS IS THE NEW LINE YOU NEEDED (already existed, but now handles Telegram update) *** ---
+			// --- *** ORDER ENDPOINTS *** ---
 			admin.POST("/update-order", handleAdminUpdateOrder)
-			// --- *** ADDED: New route from previous fix *** ---
 			admin.POST("/delete-order", handleAdminDeleteOrder)
-			// --- *** ADDED NEW ENDPOINT FOR TAGS *** ---
+			// --- *** END OF ORDER ENDPOINTS *** ---
+			
+			// --- *** TAG ENDPOINT *** ---
 			admin.POST("/update-product-tags", handleAdminUpdateProductTags)
+			// --- *** END OF TAG ENDPOINT *** ---
 		}
 
 		// --- Profile Endpoint ---
