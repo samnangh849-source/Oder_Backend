@@ -261,6 +261,14 @@ type UpdateOrderRequest struct {
 	NewData  map[string]interface{} `json:"newData"`
 }
 
+// --- *** NEW: Struct for Telegram Update Request *** ---
+// This request should contain the *full reconstructed order data* from the frontend
+type UpdateTelegramRequest struct {
+	// Note: This 'FullOrderData' must be in the *exact same format*
+	// as the 'fullOrderData' object created in 'handleSubmitOrder'
+	FullOrderData interface{} `json:"fullOrderData"`
+}
+
 // --- NEW: Struct for Change Password Request ---
 type ChangePasswordRequest struct {
 	UserName    string `json:"userName"`
@@ -862,6 +870,35 @@ func handleSubmitOrder(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{"status": "success", "orderId": orderId})
 }
 
+// --- *** NEW: handleUpdateOrderTelegram *** ---
+// This endpoint is called by the frontend *after* a successful sheet update.
+// It receives the *full reconstructed order data* and passes it to Apps Script.
+func handleUpdateOrderTelegram(c *gin.Context) {
+	var request UpdateTelegramRequest
+	if err := c.ShouldBindJSON(&request); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"status": "error", "message": "Invalid update data format: " + err.Error()})
+		return
+	}
+
+	if request.FullOrderData == nil {
+		c.JSON(http.StatusBadRequest, gin.H{"status": "error", "message": "fullOrderData is required"})
+		return
+	}
+
+	// Pass the full data object directly to Apps Script
+	_, err := callAppsScriptPOST(AppsScriptRequest{
+		Action:    "updateOrderTelegram", // New action
+		OrderData: request.FullOrderData,
+	})
+
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"status": "error", "message": "Failed to trigger Telegram update via Apps Script: " + err.Error()})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{"status": "success", "message": "Telegram update triggered successfully"})
+}
+
 // --- handleImageUploadProxy ---
 // ... (handleImageUploadProxy remains the same) ...
 func handleImageUploadProxy(c *gin.Context) {
@@ -1073,8 +1110,8 @@ func handleUpdateFormulaReport(c *gin.Context) {
 				dailyData[yearMonthDayKey] = &ReportSummary{}
 			}
 			dailyData[yearMonthDayKey].TotalSales += order.GrandTotal
-			dailyData[yearMonthDayKey].TotalExpense += order.InternalCost
-			dailyData[yearMonthDayKey].TotalProductCost += order.TotalProductCost
+			dailyData[yearMonthKey].TotalExpense += order.InternalCost
+			dailyData[yearMonthKey].TotalProductCost += order.TotalProductCost
 		}
 	}
 	reportData = append(reportData, []interface{}{"YEARLY REPORT", "", "", "", "", ""})
@@ -1582,9 +1619,7 @@ func handleAdminUpdateSheet(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{"status": "success", "message": "Row updated successfully"})
 }
 
-// --- *** REVISED: handleAdminUpdateOrder *** ---
-// This handler now delegates the entire update, log, and Telegram edit process
-// to Google Apps Script to ensure all logic (like template generation) is in one place.
+// --- *** NEW: Handler to update a specific order (THIS WAS MISSING) *** ---
 func handleAdminUpdateOrder(c *gin.Context) {
 	var request UpdateOrderRequest
 	if err := c.ShouldBindJSON(&request); err != nil {
@@ -1597,31 +1632,49 @@ func handleAdminUpdateOrder(c *gin.Context) {
 		return
 	}
 
-	// --- 1. Delegate to Apps Script ---
-	// Apps Script will handle:
-	// 1. Updating the Orders_TeamName sheet
-	// 2. Updating the AllOrders sheet
-	// 3. Logging the edit to EditLogsSheet
-	// 4. Re-generating the message text
-	// 5. Calling the Telegram editMessageText API
-	_, err := callAppsScriptPOST(AppsScriptRequest{
-		Action:    "updateOrderAndTelegram",
-		OrderData: request, // Pass the entire request object
-	})
+	// --- 1. Update the specific team's order sheet ---
+	orderSheetName := fmt.Sprintf("Orders_%s", request.Team)
+	orderPK := map[string]string{"Order ID": request.OrderID}
 
+	err := updateSheetRow(orderSheetName, orderPK, request.NewData)
 	if err != nil {
-		log.Printf("Failed to update order via Apps Script: %v", err)
-		c.JSON(http.StatusInternalServerError, gin.H{"status": "error", "message": "Failed to update order via Apps Script: " + err.Error()})
+		log.Printf("Failed to update team order sheet (%s): %v", orderSheetName, err)
+		// Continue anyway to update AllOrders, but log this
+	}
+
+	// --- 2. Update the AllOrders sheet ---
+	allOrdersPK := map[string]string{"Order ID": request.OrderID}
+	err = updateSheetRow(AllOrdersSheet, allOrdersPK, request.NewData)
+	if err != nil {
+		log.Printf("Failed to update AllOrders sheet: %v", err)
+		c.JSON(http.StatusInternalServerError, gin.H{"status": "error", "message": "Failed to update AllOrders sheet: " + err.Error()})
 		return
 	}
 
-	// --- 2. Invalidate cache ---
-	// We still invalidate the cache in Go so the next /all-orders read is fresh.
-	invalidateSheetCache(AllOrdersSheet)
-	invalidateSheetCache(fmt.Sprintf("Orders_%s", request.Team))
-	invalidateSheetCache(EditLogsSheet)
+	// --- 3. Log the edit ---
+	timestamp := time.Now().UTC().Format(time.RFC3339)
+	// Log each changed field as a separate row
+	for field, newValue := range request.NewData {
+		// Note: We don't have the "Old Value" here easily.
+		// For a simple log, we'll just log the new value.
+		// A more complex system might fetch the old value first.
+		logRow := []interface{}{
+			timestamp,
+			request.OrderID,
+			request.UserName,
+			"", // Approver (can be added later)
+			field,
+			"N/A", // Old Value (Skipped for simplicity)
+			fmt.Sprintf("%v", newValue),
+		}
+		go appendRowToSheet(EditLogsSheet, logRow) // Run in background
+	}
 
-	c.JSON(http.StatusOK, gin.H{"status": "success", "message": "Order updated successfully and Telegram edit initiated."})
+	// --- 4. *** NO LONGER TRIGGER TELEGRAM UPDATE FROM HERE *** ---
+	// The frontend must now call /api/update-order-telegram *separately*
+	// after this function returns success.
+
+	c.JSON(http.StatusOK, gin.H{"status": "success", "message": "Order updated successfully"})
 }
 
 // --- *** NEW: handleAdminUpdateProductTags *** ---
@@ -2071,6 +2124,11 @@ func main() {
 		api.POST("/submit-order", handleSubmitOrder)
 		api.POST("/upload-image", handleImageUploadProxy)
 
+		// --- *** NEW: Telegram Update Endpoint *** ---
+		// Frontend must call this *after* /api/admin/update-order
+		// and send the *full reconstructed order object*
+		api.POST("/update-order-telegram", handleUpdateOrderTelegram)
+
 		// --- Chat Endpoints ---
 		chat := api.Group("/chat")
 		{
@@ -2093,7 +2151,7 @@ func main() {
 			admin.POST("/delete-row", handleAdminDeleteRow)
 			admin.POST("/clear-cache", handleClearCache)
 
-			// --- *** THIS IS THE REVISED LINE *** ---
+			// --- *** THIS IS THE NEW LINE YOU NEEDED *** ---
 			admin.POST("/update-order", handleAdminUpdateOrder)
 			// --- *** ADDED: New route from previous fix *** ---
 			admin.POST("/delete-order", handleAdminDeleteOrder)
