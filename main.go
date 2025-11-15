@@ -351,7 +351,8 @@ func serveWs(c *gin.Context) {
 		log.Printf("Failed to upgrade websocket: %v", err)
 		return
 	}
-	client := &Client{hub: hub, conn: conn, send: make([]byte, 256)}
+	// FIX: Must use make(chan []byte, 256) instead of make([]byte, 256)
+	client := &Client{hub: hub, conn: conn, send: make(chan []byte, 256)} 
 	client.hub.register <- client
 	go client.writePump()
 	go func() {
