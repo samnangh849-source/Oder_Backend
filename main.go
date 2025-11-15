@@ -66,7 +66,7 @@ var sheetRanges = map[string]string{
 	"Drivers":          "Drivers!A:B",
 	"BankAccounts":     "BankAccounts!A:B",
 	"PhoneCarriers":    "PhoneCarriers!A:C",
-	"AllOrders":        "AllOrders!A:Y",
+	"AllOrders":        "AllOrders!A:Z", // UPDATED: ត្រូវបន្ថែម Column សម្រាប់ Message ID 2
 	"RevenueDashboard": "RevenueDashboard!A:D",
 	"ChatMessages":     "ChatMessages!A:E",
 
@@ -149,7 +149,7 @@ func invalidateSheetCache(sheetName string) {
 }
 
 // --- Models ---
-// ... (All structs: User, Product, Location, ShippingMethod, TeamPage, Color, Driver, BankAccount, PhoneCarrier, Order, RevenueEntry, ChatMessage, ReportSummary, RevenueAggregate remain the same) ...
+// ... (User, Product, Location, ShippingMethod, TeamPage, Color, Driver, BankAccount, PhoneCarrier, RevenueEntry, ChatMessage, ReportSummary, RevenueAggregate remain the same) ...
 type User struct {
 	UserName          string `json:"UserName"`
 	Password          string `json:"Password"`
@@ -220,7 +220,8 @@ type Order struct {
 	InternalCost            float64 `json:"Internal Cost"`
 	PaymentStatus           string  `json:"Payment Status"`
 	PaymentInfo             string  `json:"Payment Info"`
-	TelegramMessageID       string  `json:"Telegram Message ID"`
+	TelegramMessageID1      string  `json:"Telegram Message ID 1"` // UPDATED
+	TelegramMessageID2      string  `json:"Telegram Message ID 2"` // ADDED
 	Team                    string  `json:"Team"`
 	DiscountUSD             float64 `json:"Discount ($)"`
 	DeliveryUnpaid          float64 `json:"Delivery Unpaid"`
@@ -350,7 +351,7 @@ func serveWs(c *gin.Context) {
 		log.Printf("Failed to upgrade websocket: %v", err)
 		return
 	}
-	client := &Client{hub: hub, conn: conn, send: make(chan []byte, 256)}
+	client := &Client{hub: hub, conn: conn, send: make([]byte, 256)}
 	client.hub.register <- client
 	go client.writePump()
 	go func() {
@@ -387,7 +388,7 @@ func createGoogleAPIClient(ctx context.Context) error {
 }
 
 // --- Google Sheets API Helper Functions ---
-// ... (convertSheetValuesToMaps remains the same) ...
+// ... (convertSheetValuesToMaps remains the same, updated to handle new Message ID columns) ...
 func convertSheetValuesToMaps(values *sheets.ValueRange) ([]map[string]interface{}, error) {
 	if values == nil || len(values.Values) < 2 {
 		return []map[string]interface{}{}, nil
@@ -421,7 +422,8 @@ func convertSheetValuesToMaps(values *sheets.ValueRange) ([]map[string]interface
 					} else {
 						rowData[header] = cell
 					}
-					if header == "Password" || header == "Customer Phone" || header == "Barcode" || header == "Customer Name" || header == "Note" || header == "Content" || header == "Tags" {
+					// Ensure that all ID/String fields (including new Telegram Message ID fields) are treated as strings
+					if header == "Password" || header == "Customer Phone" || header == "Barcode" || header == "Customer Name" || header == "Note" || header == "Content" || header == "Tags" || header == "Telegram Message ID 1" || header == "Telegram Message ID 2" {
 						rowData[header] = fmt.Sprintf("%v", cell)
 					}
 				}
@@ -990,7 +992,7 @@ func handleGetAudioProxy(c *gin.Context) {
 
 		// If it's HTML, it's definitely an error/consent page we can't handle
 		if strings.HasPrefix(resp.Header.Get("Content-Type"), "text/html") {
-			log.Printf("Google returned an HTML page, probably a consent/error screen.")
+			log.Printf("Google returned an HTML page, probably a consent/consent screen.")
 			c.String(http.StatusForbidden, "Cannot proxy file. It may require manual download from Google.")
 			return
 		}
