@@ -1761,30 +1761,30 @@ func handleAdminAddRow(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{"status": "success", "message": "Row added successfully"})
 }
 
-// ... (handleAdminDeleteRow remains the same) ...
-func handleAdminDeleteRow(c *gin.Context) {
-	var request struct {
-		SheetName  string            `json:"sheetName"`
-		PrimaryKey map[string]string `json:"primaryKey"`
-	}
-	if err := c.ShouldBindJSON(&request); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"status": "error", "message": "Invalid delete request: " + err.Error()})
-		return
-	}
-	if request.SheetName == "" || len(request.PrimaryKey) != 1 {
-		c.JSON(http.StatusBadRequest, gin.H{"status": "error", "message": "sheetName and a single primaryKey are required"})
-		return
+// --- *** NEW: Struct for Delete Order Request *** ---
+type DeleteOrderRequest struct {
+	OrderID  string `json:"orderId"`
+	Team     string `json:"team"`
+	UserName string `json:"userName"` // For logging
+}
+
+// --- *** NEW: Helper Function to encapsulate delete logic *** ---
+// This contains the logic from the old handleAdminDeleteRow
+func deleteSheetRow(sheetName string, primaryKey map[string]string) error {
+	if sheetName == "" || len(primaryKey) != 1 {
+		return fmt.Errorf("sheetName and a single primaryKey are required")
 	}
 	pkHeader := ""
 	pkValue := ""
-	for k, v := range request.PrimaryKey {
+	for k, v := range primaryKey {
 		pkHeader, pkValue = k, v
 	}
-	rowIndex, sheetId, err := findRowIndexByPK(request.SheetName, pkHeader, pkValue)
+
+	rowIndex, sheetId, err := findRowIndexByPK(sheetName, pkHeader, pkValue)
 	if err != nil {
-		c.JSON(http.StatusNotFound, gin.H{"status": "error", "message": "Row not found: " + err.Error()})
-		return
+		return fmt.Errorf("row not found (%s=%s) in %s: %v", pkHeader, pkValue, sheetName, err)
 	}
+
 	batchUpdateReq := &sheets.BatchUpdateSpreadsheetRequest{
 		Requests: []*sheets.Request{
 			{
@@ -1802,16 +1802,94 @@ func handleAdminDeleteRow(c *gin.Context) {
 	_, err = sheetsService.Spreadsheets.BatchUpdate(spreadsheetID, batchUpdateReq).Do()
 	if err != nil {
 		if strings.Contains(err.Error(), "No grid with id") {
-			log.Printf("Stale Sheet ID detected during delete. Clearing Sheet ID cache for %s.", request.SheetName)
-			invalidateSheetCache(request.SheetName)
+			log.Printf("Stale Sheet ID detected during delete. Clearing Sheet ID cache for %s.", sheetName)
+			invalidateSheetCache(sheetName)
 		}
-		log.Printf("Error deleting row %d from sheet %s: %v", rowIndex, request.SheetName, err)
-		c.JSON(http.StatusInternalServerError, gin.H{"status": "error", "message": "Failed to delete row: " + err.Error()})
+		log.Printf("Error deleting row %d from sheet %s: %v", rowIndex, sheetName, err)
+		return fmt.Errorf("failed to delete row: %v", err)
+	}
+
+	invalidateSheetCache(sheetName)
+	log.Printf("Successfully deleted row %s=%s from sheet %s", pkHeader, pkValue, sheetName)
+	return nil
+}
+
+// --- *** REFACTORED: handleAdminDeleteRow *** ---
+// This handler now uses the helper function
+func handleAdminDeleteRow(c *gin.Context) {
+	var request struct {
+		SheetName  string            `json:"sheetName"`
+		PrimaryKey map[string]string `json:"primaryKey"`
+	}
+	if err := c.ShouldBindJSON(&request); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"status": "error", "message": "Invalid delete request: " + err.Error()})
 		return
 	}
-	invalidateSheetCache(request.SheetName)
-	log.Printf("Successfully deleted row %s=%s from sheet %s", pkHeader, pkValue, request.SheetName)
+	if request.SheetName == "" || len(request.PrimaryKey) != 1 {
+		c.JSON(http.StatusBadRequest, gin.H{"status": "error", "message": "sheetName and a single primaryKey are required"})
+		return
+	}
+
+	// Call the new helper function
+	err := deleteSheetRow(request.SheetName, request.PrimaryKey)
+	if err != nil {
+		if strings.Contains(err.Error(), "not found") {
+			c.JSON(http.StatusNotFound, gin.H{"status": "error", "message": err.Error()})
+		} else {
+			c.JSON(http.StatusInternalServerError, gin.H{"status": "error", "message": err.Error()})
+		}
+		return
+	}
+
 	c.JSON(http.StatusOK, gin.H{"status": "success", "message": "Row deleted successfully"})
+}
+
+// --- *** NEW: Handler to delete a specific order from ALL relevant sheets *** ---
+func handleAdminDeleteOrder(c *gin.Context) {
+	var request DeleteOrderRequest
+	if err := c.ShouldBindJSON(&request); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"status": "error", "message": "Invalid delete request: " + err.Error()})
+		return
+	}
+
+	if request.OrderID == "" || request.Team == "" || request.UserName == "" {
+		c.JSON(http.StatusBadRequest, gin.H{"status": "error", "message": "orderId, team, and userName are required"})
+		return
+	}
+
+	// 1. Delete from the specific team's order sheet
+	teamOrderSheetName := fmt.Sprintf("Orders_%s", request.Team)
+	teamOrderPK := map[string]string{"Order ID": request.OrderID}
+
+	err := deleteSheetRow(teamOrderSheetName, teamOrderPK)
+	if err != nil {
+		log.Printf("Warning: Failed to delete from team order sheet (%s): %v. Proceeding to delete from AllOrders.", teamOrderSheetName, err)
+		// We don't return here; we still want to try deleting from AllOrders
+	}
+
+	// 2. Delete from the AllOrders sheet
+	allOrdersPK := map[string]string{"Order ID": request.OrderID}
+	err = deleteSheetRow(AllOrdersSheet, allOrdersPK)
+	if err != nil {
+		log.Printf("Failed to delete from AllOrders sheet: %v", err)
+		c.JSON(http.StatusInternalServerError, gin.H{"status": "error", "message": "Failed to delete order from AllOrders sheet: " + err.Error()})
+		return
+	}
+
+	// 3. Log the deletion
+	timestamp := time.Now().UTC().Format(time.RFC3339)
+	logRow := []interface{}{
+		timestamp,
+		request.OrderID,
+		request.UserName,
+		"N/A", // Approver
+		"ORDER DELETED",
+		"N/A", // Old Value
+		"N/A", // New Value
+	}
+	go appendRowToSheet(EditLogsSheet, logRow) // Run in background
+
+	c.JSON(http.StatusOK, gin.H{"status": "success", "message": "Order deleted successfully from all sheets"})
 }
 
 // ... (handleUpdateProfile remains the same) ...
@@ -2029,6 +2107,8 @@ func main() {
 
 			// --- *** THIS IS THE NEW LINE YOU NEEDED *** ---
 			admin.POST("/update-order", handleAdminUpdateOrder)
+			// --- *** ADDED: New route from previous fix *** ---
+			admin.POST("/delete-order", handleAdminDeleteOrder)
 			// --- *** ADDED NEW ENDPOINT FOR TAGS *** ---
 			admin.POST("/update-product-tags", handleAdminUpdateProductTags)
 		}
