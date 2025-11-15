@@ -1877,8 +1877,25 @@ func handleAdminDeleteOrder(c *gin.Context) {
 		c.JSON(http.StatusBadRequest, gin.H{"status": "error", "message": "orderId, team, and userName are required"})
 		return
 	}
+    
+    // --- 1. Call Apps Script to delete Telegram message (MUST BE FIRST) ---
+	// Run this in a goroutine to prevent blocking, but ensure this is called before sheet deletion.
+	go func() {
+		_, err := callAppsScriptPOST(AppsScriptRequest{
+			Action: "deleteOrderTelegram", 
+			OrderData: map[string]interface{}{
+				"orderId": request.OrderID,
+				"team":    request.Team,
+			},
+		})
+		if err != nil {
+			log.Printf("Warning: Failed to call Apps Script to delete Telegram for Order %s: %v", request.OrderID, err)
+		} else {
+			log.Printf("Successfully triggered Telegram deletion for Order %s", request.OrderID)
+		}
+	}()
 
-	// 1. Delete from the specific team's order sheet
+	// --- 2. Delete from the specific team's order sheet ---
 	teamOrderSheetName := fmt.Sprintf("Orders_%s", request.Team)
 	teamOrderPK := map[string]string{"Order ID": request.OrderID}
 
@@ -1888,7 +1905,7 @@ func handleAdminDeleteOrder(c *gin.Context) {
 		// We don't return here; we still want to try deleting from AllOrders
 	}
 
-	// 2. Delete from the AllOrders sheet
+	// --- 3. Delete from the AllOrders sheet ---
 	allOrdersPK := map[string]string{"Order ID": request.OrderID}
 	err = deleteSheetRow(AllOrdersSheet, allOrdersPK)
 	if err != nil {
@@ -1897,7 +1914,7 @@ func handleAdminDeleteOrder(c *gin.Context) {
 		return
 	}
 
-	// 3. Log the deletion
+	// 4. Log the deletion
 	timestamp := time.Now().UTC().Format(time.RFC3339)
 	logRow := []interface{}{
 		timestamp,
