@@ -2142,7 +2142,7 @@ func main() {
 			admin.POST("/add-row", handleAdminAddRow)
 			admin.POST("/delete-row", handleAdminDeleteRow)
 			admin.POST("/clear-cache", handleClearCache)
-            admin.GET("/users", handleGetUsers)
+            
 			// --- *** ORDER ENDPOINTS *** ---
 			admin.POST("/update-order", handleAdminUpdateOrder)
 			admin.POST("/delete-order", handleAdminDeleteOrder)
