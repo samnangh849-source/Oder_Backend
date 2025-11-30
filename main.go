@@ -157,7 +157,7 @@ type User struct {
 	FullName          string `json:"FullName"`
 	ProfilePictureURL string `json:"ProfilePictureURL"`
 	Role              string `json:"Role"`
-	IsSystemAdmin     bool   `json:"IsSystemAdmin"`
+	IsSystemAdmin     string `json:"IsSystemAdmin"` // FIX: Changed to string to handle "TRUE", "FALSE", or empty safely
 }
 type Product struct {
 	ProductName string  `json:"ProductName"`
@@ -352,7 +352,7 @@ func serveWs(c *gin.Context) {
 		return
 	}
 	// FIX: Must use make(chan []byte, 256) instead of make([]byte, 256)
-	client := &Client{hub: hub, conn: conn, send: make(chan []byte, 256)} 
+	client := &Client{hub: hub, conn: conn, send: make(chan []byte, 256)}
 	client.hub.register <- client
 	go client.writePump()
 	go func() {
@@ -424,7 +424,8 @@ func convertSheetValuesToMaps(values *sheets.ValueRange) ([]map[string]interface
 						rowData[header] = cell
 					}
 					// Ensure that all ID/String fields (including new Telegram Message ID fields) are treated as strings
-					if header == "Password" || header == "Customer Phone" || header == "Barcode" || header == "Customer Name" || header == "Note" || header == "Content" || header == "Tags" || header == "Telegram Message ID 1" || header == "Telegram Message ID 2" {
+					// FIX: Added "IsSystemAdmin" to this list to force it as string
+					if header == "Password" || header == "Customer Phone" || header == "Barcode" || header == "Customer Name" || header == "Note" || header == "Content" || header == "Tags" || header == "Telegram Message ID 1" || header == "Telegram Message ID 2" || header == "IsSystemAdmin" {
 						rowData[header] = fmt.Sprintf("%v", cell)
 					}
 				}
@@ -1877,12 +1878,12 @@ func handleAdminDeleteOrder(c *gin.Context) {
 		c.JSON(http.StatusBadRequest, gin.H{"status": "error", "message": "orderId, team, and userName are required"})
 		return
 	}
-    
-    // --- 1. Call Apps Script to delete Telegram message (MUST BE FIRST) ---
+
+	// --- 1. Call Apps Script to delete Telegram message (MUST BE FIRST) ---
 	// Run this in a goroutine to prevent blocking, but ensure this is called before sheet deletion.
 	go func() {
 		_, err := callAppsScriptPOST(AppsScriptRequest{
-			Action: "deleteOrderTelegram", 
+			Action: "deleteOrderTelegram",
 			OrderData: map[string]interface{}{
 				"orderId": request.OrderID,
 				"team":    request.Team,
@@ -2143,11 +2144,14 @@ func main() {
 			admin.POST("/delete-row", handleAdminDeleteRow)
 			admin.POST("/clear-cache", handleClearCache)
 
+			// FIX: Added missing route for admin users
+			admin.GET("/users", handleGetUsers)
+
 			// --- *** ORDER ENDPOINTS *** ---
 			admin.POST("/update-order", handleAdminUpdateOrder)
 			admin.POST("/delete-order", handleAdminDeleteOrder)
 			// --- *** END OF ORDER ENDPOINTS *** ---
-			
+
 			// --- *** TAG ENDPOINT *** ---
 			admin.POST("/update-product-tags", handleAdminUpdateProductTags)
 			// --- *** END OF TAG ENDPOINT *** ---
