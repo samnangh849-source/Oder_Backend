@@ -118,7 +118,7 @@ func clearCache() {
 	defer cacheMutex.Unlock()
 	cache = make(map[string]CacheItem)
 	log.Println("Cache CLEARED")
-	
+
 	sheetIdCacheMutex.Lock()
 	defer sheetIdCacheMutex.Unlock()
 	sheetIdCache = make(map[string]int64)
@@ -126,18 +126,26 @@ func clearCache() {
 }
 
 // Function to invalidate specific sheet cache
+// OPTIMIZED: Uses "Soft Invalidation" to prevent Cold Starts
 func invalidateSheetCache(sheetName string) {
-	// Invalidate data cache
-	cacheMutex.Lock()
-	delete(cache, "sheet_"+sheetName)
-	cacheMutex.Unlock()
-	log.Printf("Cache INVALIDATED for key: sheet_%s", sheetName)
+	cacheKey := "sheet_" + sheetName
 
-	// Invalidate Sheet ID cache
-	sheetIdCacheMutex.Lock()
-	delete(sheetIdCache, sheetName)
-	sheetIdCacheMutex.Unlock()
-	log.Printf("Sheet ID Cache INVALIDATED for key: %s", sheetName)
+	cacheMutex.Lock()
+	if item, found := cache[cacheKey]; found {
+		// ជំនួសឱ្យការលុប (Delete) យើងគ្រាន់តែកំណត់ម៉ោងឱ្យផុតកំណត់ (Expire) ភ្លាមៗ
+		// ធ្វើបែបនេះ User នឹងទទួលបានទិន្នន័យចាស់មកប្រើភ្លាមៗ (Stale data)
+		// ខណៈពេលដែល Server នឹងធ្វើការ Refresh ទិន្នន័យថ្មីនៅ Background
+		item.ExpiresAt = time.Time{} // Set zero time (expired immediately)
+		cache[cacheKey] = item
+		log.Printf("Cache MARKED STALE for key: %s (will refresh in background)", cacheKey)
+	}
+	cacheMutex.Unlock()
+
+	// Trigger a background refresh immediately so new data is ready ASAP
+	go fetchAndRefreshCache(sheetName, cacheTTL)
+
+	// Note: We DO NOT invalidate Sheet ID cache anymore.
+	// Sheet IDs (gid) rarely change, so keeping them speeds up updates.
 }
 
 // --- OPTIMIZED Fetch & Cache Sheet Data ---
