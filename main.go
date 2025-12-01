@@ -3,15 +3,11 @@ package main
 import (
 	"bytes"
 	"context"
-
-	// "encoding/base64"
 	"encoding/json"
 	"fmt"
 	"io"
 	"log"
 	"net/http"
-
-	// "net/url" // REMOVED (No longer used)
 	"os"
 	"sort"
 	"strconv"
@@ -21,13 +17,7 @@ import (
 
 	"github.com/gin-contrib/cors"
 	"github.com/gin-gonic/gin"
-
-	// --- REMOVED: Telegram Bot API ---
-
-	// --- NEW: WebSocket Library ---
 	"github.com/gorilla/websocket"
-
-	// --- Google API Imports ---
 	"google.golang.org/api/option"
 	"google.golang.org/api/sheets/v4"
 )
@@ -87,7 +77,6 @@ const (
 )
 
 // --- Cache ---
-// ... (CacheItem, cache, cacheMutex, cacheTTL remain the same) ...
 type CacheItem struct {
 	Data      interface{}
 	ExpiresAt time.Time
@@ -122,7 +111,6 @@ func getCache(key string) (interface{}, bool) {
 	return item.Data, true
 }
 
-// ... (clearCache remains the same, it correctly clears both) ...
 func clearCache() {
 	cacheMutex.Lock()
 	defer cacheMutex.Unlock()
@@ -134,7 +122,6 @@ func clearCache() {
 	log.Println("Sheet ID Cache CLEARED")
 }
 
-// ... (invalidateSheetCache remains the same) ...
 func invalidateSheetCache(sheetName string) {
 	// Invalidate data cache
 	cacheMutex.Lock()
@@ -150,7 +137,6 @@ func invalidateSheetCache(sheetName string) {
 }
 
 // --- Models ---
-// ... (All structs: User, Product, Location, ShippingMethod, TeamPage, Color, Driver, BankAccount, PhoneCarrier, Order, RevenueEntry, ChatMessage, ReportSummary, RevenueAggregate remain the same) ...
 type User struct {
 	UserName          string `json:"UserName"`
 	Password          string `json:"Password"`
@@ -167,7 +153,7 @@ type Product struct {
 	Price       float64 `json:"Price"`
 	Cost        float64 `json:"Cost"`
 	ImageURL    string  `json:"ImageURL"`
-	Tags        string  `json:"Tags"` // បានបន្ថែម Field ថ្មីសម្រាប់ Tags
+	Tags        string  `json:"Tags"`
 }
 type Location struct {
 	Province string `json:"Province"`
@@ -259,28 +245,25 @@ type RevenueAggregate struct {
 type UpdateOrderRequest struct {
 	OrderID  string                 `json:"orderId"`
 	Team     string                 `json:"team"`
-	UserName string                 `json:"userName"` // For logging
+	UserName string                 `json:"userName"`
 	NewData  map[string]interface{} `json:"newData"`
 }
 
-// --- NEW: Struct for Change Password Request ---
 type ChangePasswordRequest struct {
 	UserName    string `json:"userName"`
 	OldPassword string `json:"oldPassword"`
 	NewPassword string `json:"newPassword"`
 }
 
-// --- NEW: Struct for Update Tags Request ---
 type UpdateTagsRequest struct {
 	ProductName string   `json:"productName"`
 	NewTags     []string `json:"newTags"`
 }
 
-// --- NEW: Struct for Delete Order Request ---
 type DeleteOrderRequest struct {
 	OrderID  string `json:"orderId"`
 	Team     string `json:"team"`
-	UserName string `json:"userName"` // For logging
+	UserName string `json:"userName"`
 }
 
 // --- NEW: Telegram Webhook Structs ---
@@ -316,7 +299,6 @@ type ButtonPayload struct {
 }
 
 // --- WebSocket Structs ---
-// ... (WebSocketMessage, upgrader, Client, Hub, NewHub, run, writePump, serveWs structs and functions remain the same) ...
 type WebSocketMessage struct {
 	Action  string      `json:"action"`
 	Payload interface{} `json:"payload"`
@@ -411,7 +393,6 @@ func serveWs(c *gin.Context) {
 }
 
 // --- Google API Client Setup ---
-// ... (createGoogleAPIClient remains the same) ...
 func createGoogleAPIClient(ctx context.Context) error {
 	credentialsJSON := os.Getenv("GCP_CREDENTIALS")
 	if credentialsJSON == "" {
@@ -428,7 +409,6 @@ func createGoogleAPIClient(ctx context.Context) error {
 }
 
 // --- Google Sheets API Helper Functions ---
-// ... (convertSheetValuesToMaps remains the same) ...
 func convertSheetValuesToMaps(values *sheets.ValueRange) ([]map[string]interface{}, error) {
 	if values == nil || len(values.Values) < 2 {
 		return []map[string]interface{}{}, nil
@@ -474,7 +454,6 @@ func convertSheetValuesToMaps(values *sheets.ValueRange) ([]map[string]interface
 	return result, nil
 }
 
-// ... (fetchSheetDataFromAPI remains the same) ...
 func fetchSheetDataFromAPI(sheetName string) ([]map[string]interface{}, error) {
 	readRange, ok := sheetRanges[sheetName]
 	if !ok {
@@ -493,7 +472,6 @@ func fetchSheetDataFromAPI(sheetName string) ([]map[string]interface{}, error) {
 	return mappedData, nil
 }
 
-// ... (appendRowToSheet remains the same) ...
 func appendRowToSheet(sheetName string, rowData []interface{}) error {
 	writeRange := sheetName
 	valueRange := &sheets.ValueRange{
@@ -508,7 +486,6 @@ func appendRowToSheet(sheetName string, rowData []interface{}) error {
 	return nil
 }
 
-// ... (overwriteSheetDataInAPI remains the same) ...
 func overwriteSheetDataInAPI(sheetName string, data [][]interface{}) error {
 	clearRange, ok := sheetRanges[sheetName]
 	if !ok {
@@ -536,7 +513,6 @@ func overwriteSheetDataInAPI(sheetName string, data [][]interface{}) error {
 	return nil
 }
 
-// ... (getSheetIdByName remains the same) ...
 func getSheetIdByName(sheetName string) (int64, error) {
 	// *** This cache is the source of the problem if it gets stale ***
 	sheetIdCacheMutex.RLock()
@@ -575,7 +551,6 @@ func getSheetIdByName(sheetName string) (int64, error) {
 	return 0, fmt.Errorf("sheet '%s' not found in spreadsheet", sheetName)
 }
 
-// ... (findHeaderMap remains the same) ...
 func findHeaderMap(sheetName string) (map[string]int, error) {
 	headersResp, err := sheetsService.Spreadsheets.Values.Get(spreadsheetID, fmt.Sprintf("%s!1:1", sheetName)).Do()
 	if err != nil || len(headersResp.Values) == 0 {
@@ -590,7 +565,6 @@ func findHeaderMap(sheetName string) (map[string]int, error) {
 	return headerMap, nil
 }
 
-// ... (findRowIndexByPK remains the same) ...
 func findRowIndexByPK(sheetName string, pkHeader string, pkValue string) (int64, int64, error) {
 	sheetId, err := getSheetIdByName(sheetName)
 	if err != nil {
@@ -613,17 +587,12 @@ func findRowIndexByPK(sheetName string, pkHeader string, pkValue string) (int64,
 	}
 	for i, row := range resp.Values {
 		if len(row) > 0 && fmt.Sprintf("%v", row[0]) == pkValue {
-			rowIndex := i + 1 // +1 because rows are 1-indexed, but this logic depends on if header is included.
-			// Actually, if we read 2:end, index 0 is row 2.
-			// Let's stick to the reliable logic:
 			return int64(i + 2), sheetId, nil // Assumes reading started from Row 2
 		}
 	}
 	return -1, sheetId, fmt.Errorf("row not found with %s = %s in sheet %s", pkHeader, pkValue, sheetName)
 }
 
-// --- Fetch & Cache Sheet Data (Rewritten) ---
-// ... (getCachedSheetData remains the same) ...
 func getCachedSheetData(sheetName string, target interface{}, duration time.Duration) error {
 	cacheKey := "sheet_" + sheetName
 	cachedData, found := getCache(cacheKey)
@@ -647,7 +616,6 @@ func getCachedSheetData(sheetName string, target interface{}, duration time.Dura
 	}
 	err = json.Unmarshal(jsonData, target)
 	if err != nil {
-		log.Printf("Error unmarshalling data for %s: %v. JSON: %s", sheetName, err, string(jsonData))
 		return fmt.Errorf("mismatched data structure for %s", sheetName)
 	}
 	setCache(cacheKey, mappedData, duration)
@@ -655,7 +623,6 @@ func getCachedSheetData(sheetName string, target interface{}, duration time.Dura
 }
 
 // --- Apps Script Communication ---
-// ... (AppsScriptRequest, AppsScriptResponse, callAppsScriptPOST structs and function remain the same) ...
 type AppsScriptRequest struct {
 	Action         string      `json:"action"`
 	Secret         string      `json:"secret"`
@@ -1274,7 +1241,7 @@ func handleGetAudioProxy(c *gin.Context) {
 	// Check if Google returned an error (e.g., file not found, or a virus warning page)
 	if resp.StatusCode != http.StatusOK {
 		// It might be a redirect to a consent page (like large files/virus scan)
-		// Or just a 404
+		// Or just a404
 		log.Printf("Google Drive returned non-OK status %d for FileID: %s", resp.StatusCode, fileID)
 
 		// If it's HTML, it's definitely an error/consent page we can't handle
@@ -1754,7 +1721,7 @@ func handleDeleteChatMessage(c *gin.Context) {
 // This function contains the core logic previously in handleAdminUpdateSheet
 func updateSheetRow(sheetName string, primaryKey map[string]string, newData map[string]interface{}) error {
 	if sheetName == "" || len(primaryKey) != 1 || len(newData) == 0 {
-		return fmt.Errorf("sheetName, a single primaryKey, and newData are required")
+		return fmt.Errorf("invalid parameters")
 	}
 
 	pkHeader := ""
