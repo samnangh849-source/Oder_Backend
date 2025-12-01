@@ -587,7 +587,11 @@ func findRowIndexByPK(sheetName string, pkHeader string, pkValue string) (int64,
 	}
 	for i, row := range resp.Values {
 		if len(row) > 0 && fmt.Sprintf("%v", row[0]) == pkValue {
-			return int64(i + 2), sheetId, nil // Assumes reading started from Row 2
+			// FIXED: Return i+1 for 0-based index of the row (since reading started from Row 2)
+			// Row 1 (Header) skipped. i=0 corresponds to Row 2.
+			// Google Sheets GridCoordinate RowIndex for Row 2 is 1.
+			// So if i=0, we want to return 1.
+			return int64(i + 1), sheetId, nil 
 		}
 	}
 	return -1, sheetId, fmt.Errorf("row not found with %s = %s in sheet %s", pkHeader, pkValue, sheetName)
@@ -888,7 +892,11 @@ func updateSheetRow(sheetName string, primaryKey map[string]string, newData map[
 		}
 		updateRequests = append(updateRequests, &sheets.Request{
 			UpdateCells: &sheets.UpdateCellsRequest{
-				Start: &sheets.GridCoordinate{SheetId: sheetId, RowIndex: rowIndex, ColumnIndex: int64(colIndex)},
+				Start: &sheets.GridCoordinate{
+					SheetId:     sheetId,
+					RowIndex:    rowIndex,
+					ColumnIndex: int64(colIndex),
+				},
 				Rows:  []*sheets.RowData{{Values: []*sheets.CellData{{UserEnteredValue: extValue}}}},
 				Fields: "userEnteredValue",
 			},
@@ -919,7 +927,12 @@ func deleteSheetRow(sheetName string, primaryKey map[string]string) error {
 	}
 	req := &sheets.Request{
 		DeleteDimension: &sheets.DeleteDimensionRequest{
-			Range: &sheets.DimensionRange{SheetId: sheetId, Dimension: "ROWS", StartIndex: rowIndex, EndIndex: rowIndex + 1},
+			Range: &sheets.DimensionRange{
+				SheetId:    sheetId,
+				Dimension:  "ROWS",
+				StartIndex: rowIndex,
+				EndIndex:   rowIndex + 1,
+			},
 		},
 	}
 	_, err = sheetsService.Spreadsheets.BatchUpdate(spreadsheetID, &sheets.BatchUpdateSpreadsheetRequest{Requests: []*sheets.Request{req}}).Do()
@@ -1744,7 +1757,6 @@ func updateSheetRow(sheetName string, primaryKey map[string]string, newData map[
 	for colName, newValue := range newData {
 		colIndex, ok := headerMap[colName]
 		if !ok {
-			log.Printf("Warning: Column '%s' not found in sheet '%s'. Skipping update for this column.", colName, sheetName)
 			continue
 		}
 		extValue := &sheets.ExtendedValue{}
@@ -1761,51 +1773,33 @@ func updateSheetRow(sheetName string, primaryKey map[string]string, newData map[
 		case int64:
 			f := float64(v)
 			extValue.NumberValue = &f
-		case nil:
-			// Set as empty string
-			extValue.StringValue = new(string)
 		default:
-			// Convert other types to string as a fallback
 			str := fmt.Sprintf("%v", v)
 			extValue.StringValue = &str
 		}
-		updateReq := &sheets.Request{
+		updateRequests = append(updateRequests, &sheets.Request{
 			UpdateCells: &sheets.UpdateCellsRequest{
 				Start: &sheets.GridCoordinate{
 					SheetId:     sheetId,
 					RowIndex:    rowIndex,
 					ColumnIndex: int64(colIndex),
 				},
-				Rows: []*sheets.RowData{
-					{
-						Values: []*sheets.CellData{
-							{UserEnteredValue: extValue},
-						},
-					},
-				},
+				Rows:  []*sheets.RowData{{Values: []*sheets.CellData{{UserEnteredValue: extValue}}}},
 				Fields: "userEnteredValue",
 			},
-		}
-		updateRequests = append(updateRequests, updateReq)
+		})
 	}
-
 	if len(updateRequests) == 0 {
-		return fmt.Errorf("no valid columns found to update")
+		return fmt.Errorf("no columns to update")
 	}
-
-	batchUpdateReq := &sheets.BatchUpdateSpreadsheetRequest{Requests: updateRequests}
-	_, err = sheetsService.Spreadsheets.BatchUpdate(spreadsheetID, batchUpdateReq).Do()
-
+	_, err = sheetsService.Spreadsheets.BatchUpdate(spreadsheetID, &sheets.BatchUpdateSpreadsheetRequest{Requests: updateRequests}).Do()
 	if err != nil {
 		if strings.Contains(err.Error(), "No grid with id") {
-			log.Printf("Stale Sheet ID detected during update. Clearing Sheet ID cache for %s.", sheetName)
 			invalidateSheetCache(sheetName)
 		}
-		return fmt.Errorf("failed to update sheet %s: %v", sheetName, err)
+		return err
 	}
-
 	invalidateSheetCache(sheetName)
-	log.Printf("Successfully updated row %s=%s in sheet %s", pkHeader, pkValue, sheetName)
 	return nil
 }
 
