@@ -1679,91 +1679,133 @@ func handleAdminUpdateOrder(c *gin.Context) {
 
 // --- *** NEW: handleAdminUpdateProductTags *** ---
 // This handler merges and updates product tags
-func handleAdminUpdateProductTags(c *gin.Context) {
-	var request UpdateTagsRequest
+// --- *** NEW: Handler to delete a specific order from ALL relevant sheets AND Telegram *** ---
+// --- *** NEW: Handler to update a specific order (UPDATED WITH TELEGRAM SYNC) *** ---
+func handleAdminUpdateOrder(c *gin.Context) {
+	var request UpdateOrderRequest
 	if err := c.ShouldBindJSON(&request); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"status": "error", "message": "Invalid request: " + err.Error()})
+		c.JSON(http.StatusBadRequest, gin.H{"status": "error", "message": "Invalid update request: " + err.Error()})
 		return
 	}
 
-	if request.ProductName == "" || len(request.NewTags) == 0 {
-		c.JSON(http.StatusBadRequest, gin.H{"status": "error", "message": "productName and newTags are required"})
+	if request.OrderID == "" || request.Team == "" || request.UserName == "" || len(request.NewData) == 0 {
+		c.JSON(http.StatusBadRequest, gin.H{"status": "error", "message": "orderId, team, userName, and newData are required"})
 		return
 	}
 
-	sheetName := "Products"
+	// --- 1. Update the specific team's order sheet ---
+	orderSheetName := fmt.Sprintf("Orders_%s", request.Team)
+	orderPK := map[string]string{"Order ID": request.OrderID}
 
-	// 1. Get all products (invalidate cache to get fresh data)
-	var products []Product
-	invalidateSheetCache(sheetName)
-	err := getCachedSheetData(sheetName, &products, 1*time.Minute) // Short cache
+	err := updateSheetRow(orderSheetName, orderPK, request.NewData)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"status": "error", "message": "Failed to fetch product data: " + err.Error()})
-		return
+		log.Printf("Failed to update team order sheet (%s): %v", orderSheetName, err)
+		// Continue anyway to update AllOrders, but log this
 	}
 
-	// 2. Find the specific product
-	var currentProduct *Product
-	for i, p := range products {
-		if p.ProductName == request.ProductName {
-			currentProduct = &products[i]
-			break
-		}
-	}
-
-	if currentProduct == nil {
-		c.JSON(http.StatusNotFound, gin.H{"status": "error", "message": "Product not found"})
-		return
-	}
-
-	// 3. Merge tags (handle duplicates)
-	tagMap := make(map[string]bool)
-	currentTags := strings.Split(currentProduct.Tags, ",")
-	for _, tag := range currentTags {
-		cleanTag := strings.ToLower(strings.TrimSpace(tag))
-		if cleanTag != "" {
-			tagMap[cleanTag] = true
-		}
-	}
-
-	newTagsAdded := false
-	for _, tag := range request.NewTags {
-		cleanTag := strings.ToLower(strings.TrimSpace(tag))
-		if cleanTag != "" && !tagMap[cleanTag] {
-			tagMap[cleanTag] = true
-			newTagsAdded = true
-		}
-	}
-
-	// 4. If no new tags were actually added, just return success
-	if !newTagsAdded {
-		c.JSON(http.StatusOK, gin.H{"status": "success", "message": "Tags already up-to-date"})
-		return
-	}
-
-	// 5. Convert map keys back to slice and join
-	finalTagList := make([]string, 0, len(tagMap))
-	for tag := range tagMap {
-		finalTagList = append(finalTagList, tag)
-	}
-	sort.Strings(finalTagList) // Sort for consistency
-	finalTagString := strings.Join(finalTagList, ",")
-
-	// 6. Update the sheet
-	pk := map[string]string{"ProductName": request.ProductName}
-	newData := map[string]interface{}{
-		"Tags": finalTagString,
-	}
-
-	err = updateSheetRow(sheetName, pk, newData) // Use our refactored helper
+	// --- 2. Update the AllOrders sheet ---
+	// សំខាន់៖ ត្រូវ Update Sheet ឱ្យជោគជ័យសិន មុននឹងហៅទៅ Telegram
+	allOrdersPK := map[string]string{"Order ID": request.OrderID}
+	err = updateSheetRow(AllOrdersSheet, allOrdersPK, request.NewData)
 	if err != nil {
-		log.Printf("Failed to update tags for %s: %v", request.ProductName, err)
-		c.JSON(http.StatusInternalServerError, gin.H{"status": "error", "message": "Failed to update tags: " + err.Error()})
+		log.Printf("Failed to update AllOrders sheet: %v", err)
+		c.JSON(http.StatusInternalServerError, gin.H{"status": "error", "message": "Failed to update AllOrders sheet: " + err.Error()})
 		return
 	}
 
-	log.Printf("Tags updated successfully for product: %s", request.ProductName)
-	c.JSON(http.StatusOK, gin.H{"status": "success", "message": "Tags updated successfully"})
+	// --- 3. Log the edit ---
+	timestamp := time.Now().UTC().Format(time.RFC3339)
+	for field, newValue := range request.NewData {
+		logRow := []interface{}{
+			timestamp,
+			request.OrderID,
+			request.UserName,
+			"", // Approver (can be added later)
+			field,
+			"N/A", // Old Value
+			fmt.Sprintf("%v", newValue),
+		}
+		go appendRowToSheet(EditLogsSheet, logRow) // Run in background
+	}
+
+	// --- 4. NEW: Trigger Telegram Update (Apps Script) ---
+	// ហៅទៅ Apps Script *បន្ទាប់ពី* Update Sheet រួចរាល់
+	// Apps Script នឹងអានទិន្នន័យថ្មីពី AllOrders ដើម្បីបង្កើតសារ Telegram ថ្មី
+	go func() {
+		log.Printf("Triggering Telegram update for order %s...", request.OrderID)
+		_, err := callAppsScriptPOST(AppsScriptRequest{
+			Action: "updateOrderTelegram",
+			OrderData: map[string]interface{}{
+				"orderId": request.OrderID,
+				"team":    request.Team,
+			},
+		})
+		if err != nil {
+			log.Printf("Warning: Failed to update Telegram message via Apps Script: %v", err)
+		} else {
+			log.Printf("Successfully triggered Telegram update for order %s", request.OrderID)
+		}
+	}()
+
+	c.JSON(http.StatusOK, gin.H{"status": "success", "message": "Order updated successfully in Sheets and Telegram"})
+}
+
+	if request.OrderID == "" || request.Team == "" || request.UserName == "" {
+		c.JSON(http.StatusBadRequest, gin.H{"status": "error", "message": "orderId, team, and userName are required"})
+		return
+	}
+
+	// --- 1. NEW: Call Apps Script to delete Telegram messages (MUST BE DONE BEFORE DELETING SHEET ROW) ---
+	// យើងត្រូវហៅទៅ Apps Script ដើម្បីលុបសារក្នុង Telegram ជាមុនសិន
+	// ព្រោះ Apps Script ត្រូវការអាន Message ID ដែលមាននៅក្នុង Sheet។ បើលុប Sheet មុន វានឹងរក Message ID មិនឃើញ។
+	go func() {
+		_, err := callAppsScriptPOST(AppsScriptRequest{
+			Action: "deleteOrderTelegram",
+			OrderData: map[string]interface{}{
+				"orderId": request.OrderID,
+				"team":    request.Team,
+			},
+		})
+		if err != nil {
+			log.Printf("Warning: Failed to trigger Telegram message deletion for order %s: %v", request.OrderID, err)
+		} else {
+			log.Printf("Successfully triggered Telegram message deletion for order %s", request.OrderID)
+		}
+	}()
+
+	// --- 2. Delete from the specific team's order sheet ---
+	teamOrderSheetName := fmt.Sprintf("Orders_%s", request.Team)
+	teamOrderPK := map[string]string{"Order ID": request.OrderID}
+
+	err := deleteSheetRow(teamOrderSheetName, teamOrderPK)
+	if err != nil {
+		log.Printf("Warning: Failed to delete from team order sheet (%s): %v. Proceeding to delete from AllOrders.", teamOrderSheetName, err)
+		// We don't return here; we still want to try deleting from AllOrders
+	}
+
+	// --- 3. Delete from the AllOrders sheet ---
+	allOrdersPK := map[string]string{"Order ID": request.OrderID}
+	err = deleteSheetRow(AllOrdersSheet, allOrdersPK)
+	if err != nil {
+		log.Printf("Failed to delete from AllOrders sheet: %v", err)
+		c.JSON(http.StatusInternalServerError, gin.H{"status": "error", "message": "Failed to delete order from AllOrders sheet: " + err.Error()})
+		return
+	}
+
+	// --- 4. Log the deletion ---
+	timestamp := time.Now().UTC().Format(time.RFC3339)
+	logRow := []interface{}{
+		timestamp,
+		request.OrderID,
+		request.UserName,
+		"N/A", // Approver
+		"ORDER DELETED",
+		"N/A", // Old Value
+		"N/A", // New Value
+	}
+	go appendRowToSheet(EditLogsSheet, logRow) // Run in background
+
+	c.JSON(http.StatusOK, gin.H{"status": "success", "message": "Order and Telegram messages deleted successfully"})
 }
 
 // ... (handleAdminAddRow remains the same) ...
