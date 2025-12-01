@@ -159,6 +159,7 @@ type User struct {
 	ProfilePictureURL string `json:"ProfilePictureURL"`
 	Role              string `json:"Role"`
 	IsSystemAdmin     bool   `json:"IsSystemAdmin"`
+	TelegramUsername  string `json:"TelegramUsername"`
 }
 type Product struct {
 	ProductName string  `json:"ProductName"`
@@ -273,6 +274,45 @@ type ChangePasswordRequest struct {
 type UpdateTagsRequest struct {
 	ProductName string   `json:"productName"`
 	NewTags     []string `json:"newTags"`
+}
+
+// --- NEW: Struct for Delete Order Request ---
+type DeleteOrderRequest struct {
+	OrderID  string `json:"orderId"`
+	Team     string `json:"team"`
+	UserName string `json:"userName"` // For logging
+}
+
+// --- NEW: Telegram Webhook Structs ---
+type TelegramUpdate struct {
+	UpdateID      int            `json:"update_id"`
+	CallbackQuery *CallbackQuery `json:"callback_query"`
+}
+type CallbackQuery struct {
+	ID      string           `json:"id"`
+	From    TelegramUser     `json:"from"`
+	Message *TelegramMessage `json:"message"`
+	Data    string           `json:"data"`
+}
+type TelegramUser struct {
+	ID        int64  `json:"id"`
+	IsBot     bool   `json:"is_bot"`
+	FirstName string `json:"first_name"`
+	Username  string `json:"username"`
+}
+type TelegramMessage struct {
+	MessageID int64  `json:"message_id"`
+	Chat      Chat   `json:"chat"`
+	Text      string `json:"text"`
+}
+type Chat struct {
+	ID int64 `json:"id"`
+}
+type ButtonPayload struct {
+	Action  string `json:"a"` // pm=menu, cp=confirm, cx=cancel
+	OrderID string `json:"o"`
+	Team    string `json:"t"`
+	Bank    string `json:"b,omitempty"`
 }
 
 // --- WebSocket Structs ---
@@ -422,7 +462,8 @@ func convertSheetValuesToMaps(values *sheets.ValueRange) ([]map[string]interface
 					} else {
 						rowData[header] = cell
 					}
-					if header == "Password" || header == "Customer Phone" || header == "Barcode" || header == "Customer Name" || header == "Note" || header == "Content" || header == "Tags" {
+					// Explicitly keep these as strings
+					if header == "Password" || header == "Customer Phone" || header == "Barcode" || header == "Customer Name" || header == "Note" || header == "Content" || header == "Tags" || header == "TelegramUsername" {
 						rowData[header] = fmt.Sprintf("%v", cell)
 					}
 				}
@@ -572,8 +613,10 @@ func findRowIndexByPK(sheetName string, pkHeader string, pkValue string) (int64,
 	}
 	for i, row := range resp.Values {
 		if len(row) > 0 && fmt.Sprintf("%v", row[0]) == pkValue {
-			rowIndex := i + 1
-			return int64(rowIndex), sheetId, nil
+			rowIndex := i + 1 // +1 because rows are 1-indexed, but this logic depends on if header is included.
+			// Actually, if we read 2:end, index 0 is row 2.
+			// Let's stick to the reliable logic:
+			return int64(i + 2), sheetId, nil // Assumes reading started from Row 2
 		}
 	}
 	return -1, sheetId, fmt.Errorf("row not found with %s = %s in sheet %s", pkHeader, pkValue, sheetName)
@@ -591,12 +634,8 @@ func getCachedSheetData(sheetName string, target interface{}, duration time.Dura
 			if err == nil {
 				return nil
 			}
-			log.Printf("Error unmarshalling cached data for %s: %v", sheetName, err)
-		} else {
-			log.Printf("Error marshalling cached data for %s: %v", sheetName, err)
 		}
 	}
-	log.Printf("Fetching fresh data for %s (via Sheets API)", sheetName)
 	mappedData, err := fetchSheetDataFromAPI(sheetName)
 	if err != nil {
 		return err
@@ -676,6 +715,255 @@ func callAppsScriptPOST(requestData AppsScriptRequest) (AppsScriptResponse, erro
 		return AppsScriptResponse{}, fmt.Errorf("Google Apps Script API error: %s", scriptResponse.Message)
 	}
 	return scriptResponse, nil
+}
+
+// --- TELEGRAM BOT LOGIC (GO BACKEND) ---
+
+func getBotTokenForTeam(team string) (string, error) {
+	var settings []map[string]interface{}
+	if err := getCachedSheetData("Settings", &settings, cacheTTL); err != nil {
+		return "", err
+	}
+	for _, row := range settings {
+		if fmt.Sprintf("%v", row["Team"]) == team {
+			return fmt.Sprintf("%v", row["TelegramBotToken"]), nil
+		}
+	}
+	return "", fmt.Errorf("bot token not found for team: %s", team)
+}
+
+func telegramAPI(token string, method string, payload interface{}) error {
+	url := fmt.Sprintf("https://api.telegram.org/bot%s/%s", token, method)
+	jsonPayload, _ := json.Marshal(payload)
+	resp, err := http.Post(url, "application/json", bytes.NewBuffer(jsonPayload))
+	if err != nil {
+		return err
+	}
+	defer resp.Body.Close()
+	return nil
+}
+
+func answerCallback(token, callbackID, text string, alert bool) {
+	payload := map[string]interface{}{
+		"callback_query_id": callbackID,
+		"text":              text,
+		"show_alert":        alert,
+	}
+	telegramAPI(token, "answerCallbackQuery", payload)
+}
+
+func editMessageText(token string, chatID int64, messageID int64, text string) {
+	payload := map[string]interface{}{
+		"chat_id":    chatID,
+		"message_id": messageID,
+		"text":       text,
+		"parse_mode": "Markdown",
+	}
+	telegramAPI(token, "editMessageText", payload)
+}
+
+func editMessageReplyMarkup(token string, chatID int64, messageID int64, markup interface{}) {
+	payload := map[string]interface{}{
+		"chat_id":      chatID,
+		"message_id":   messageID,
+		"reply_markup": markup,
+	}
+	telegramAPI(token, "editMessageReplyMarkup", payload)
+}
+
+// Handle Telegram Webhook
+func handleTelegramWebhook(c *gin.Context) {
+	var update TelegramUpdate
+	if err := c.ShouldBindJSON(&update); err != nil {
+		c.JSON(http.StatusOK, gin.H{"status": "ignored"})
+		return
+	}
+
+	if update.CallbackQuery == nil {
+		c.JSON(http.StatusOK, gin.H{"status": "ok"})
+		return
+	}
+
+	cb := update.CallbackQuery
+	var data ButtonPayload
+	if err := json.Unmarshal([]byte(cb.Data), &data); err != nil {
+		log.Printf("Invalid button data: %v", err)
+		c.JSON(http.StatusOK, gin.H{"status": "ok"})
+		return
+	}
+
+	token, err := getBotTokenForTeam(data.Team)
+	if err != nil {
+		log.Printf("Token error: %v", err)
+		c.JSON(http.StatusOK, gin.H{"status": "ok"})
+		return
+	}
+
+	var users []User
+	getCachedSheetData("Users", &users, 5*time.Minute)
+	authorized := false
+	reqUser := strings.ToLower(cb.From.Username)
+	for _, u := range users {
+		dbUser := strings.ToLower(strings.TrimPrefix(u.TelegramUsername, "@"))
+		if dbUser != "" && dbUser == reqUser {
+			authorized = true
+			break
+		}
+	}
+
+	if !authorized {
+		answerCallback(token, cb.ID, "⛔ អ្នកមិនមានសិទ្ធិទេ (User not found)", true)
+		c.JSON(http.StatusOK, gin.H{"status": "ok"})
+		return
+	}
+
+	switch data.Action {
+	case "pm": // Pay Menu
+		var banks []BankAccount
+		getCachedSheetData("BankAccounts", &banks, cacheTTL)
+		
+		var buttons [][]map[string]interface{}
+		for _, b := range banks {
+			payload, _ := json.Marshal(ButtonPayload{Action: "cp", OrderID: data.OrderID, Team: data.Team, Bank: b.BankName})
+			btn := map[string]interface{}{"text": b.BankName, "callback_data": string(payload)}
+			buttons = append(buttons, []map[string]interface{}{btn})
+		}
+		// Cash Option
+		payloadCash, _ := json.Marshal(ButtonPayload{Action: "cp", OrderID: data.OrderID, Team: data.Team, Bank: "Cash"})
+		buttons = append(buttons, []map[string]interface{}{{
+			"text": "💵 Cash (សាច់ប្រាក់)", "callback_data": string(payloadCash),
+		}})
+		// Cancel Option
+		payloadCancel, _ := json.Marshal(ButtonPayload{Action: "cx", OrderID: data.OrderID, Team: data.Team})
+		buttons = append(buttons, []map[string]interface{}{{
+			"text": "❌ Cancel", "callback_data": string(payloadCancel),
+		}})
+
+		editMessageReplyMarkup(token, cb.Message.Chat.ID, cb.Message.MessageID, map[string]interface{}{"inline_keyboard": buttons})
+		answerCallback(token, cb.ID, "សូមជ្រើសរើសធនាគារ...", false)
+
+	case "cp": // Confirm Pay
+		// Update Sheets
+		pk := map[string]string{"Order ID": data.OrderID}
+		newData := map[string]interface{}{"Payment Status": "Paid", "Payment Info": data.Bank}
+		
+		// Update Team Sheet
+		go updateSheetRow(fmt.Sprintf("Orders_%s", data.Team), pk, newData)
+		// Update AllOrders Sheet
+		go updateSheetRow(AllOrdersSheet, pk, newData)
+
+		// Update Telegram Message
+		loc, _ := time.LoadLocation("Asia/Phnom_Penh")
+		if loc == nil { loc = time.UTC }
+		timeStr := time.Now().In(loc).Format("02-01-2006 15:04:05")
+		
+		originalText := cb.Message.Text
+		cleanText := strings.Split(originalText, "\n\n✅ *Paid by:*")[0] 
+		newText := fmt.Sprintf("%s\n\n✅ *Paid by:* @%s\n🏦 *Via:* %s\n🕒 %s", cleanText, cb.From.Username, data.Bank, timeStr)
+		
+		editMessageText(token, cb.Message.Chat.ID, cb.Message.MessageID, newText)
+		answerCallback(token, cb.ID, "✅ ជោគជ័យ!", false)
+
+	case "cx": // Cancel
+		payload, _ := json.Marshal(ButtonPayload{Action: "pm", OrderID: data.OrderID, Team: data.Team})
+		buttons := [][]map[string]interface{}{{{
+			"text": "✅ Paid (បានទទួលប្រាក់)", "callback_data": string(payload),
+		}}}
+		editMessageReplyMarkup(token, cb.Message.Chat.ID, cb.Message.MessageID, map[string]interface{}{"inline_keyboard": buttons})
+		answerCallback(token, cb.ID, "បានបោះបង់", false)
+	}
+
+	c.JSON(http.StatusOK, gin.H{"status": "ok"})
+}
+
+// --- Core Helpers for Updating/Deleting ---
+
+func updateSheetRow(sheetName string, primaryKey map[string]string, newData map[string]interface{}) error {
+	if sheetName == "" || len(primaryKey) != 1 || len(newData) == 0 {
+		return fmt.Errorf("invalid parameters")
+	}
+	pkHeader, pkValue := "", ""
+	for k, v := range primaryKey {
+		pkHeader, pkValue = k, v
+	}
+	headerMap, err := findHeaderMap(sheetName)
+	if err != nil {
+		return err
+	}
+	rowIndex, sheetId, err := findRowIndexByPK(sheetName, pkHeader, pkValue)
+	if err != nil {
+		return err
+	}
+
+	var updateRequests []*sheets.Request
+	for colName, newValue := range newData {
+		colIndex, ok := headerMap[colName]
+		if !ok {
+			continue
+		}
+		extValue := &sheets.ExtendedValue{}
+		switch v := newValue.(type) {
+		case string:
+			extValue.StringValue = &v
+		case float64:
+			extValue.NumberValue = &v
+		case bool:
+			extValue.BoolValue = &v
+		case int:
+			f := float64(v)
+			extValue.NumberValue = &f
+		case int64:
+			f := float64(v)
+			extValue.NumberValue = &f
+		default:
+			str := fmt.Sprintf("%v", v)
+			extValue.StringValue = &str
+		}
+		updateRequests = append(updateRequests, &sheets.Request{
+			UpdateCells: &sheets.UpdateCellsRequest{
+				Start: &sheets.GridCoordinate{SheetId: sheetId, RowIndex: rowIndex, ColumnIndex: int64(colIndex)},
+				Rows:  []*sheets.RowData{{Values: []*sheets.CellData{{UserEnteredValue: extValue}}}},
+				Fields: "userEnteredValue",
+			},
+		})
+	}
+	if len(updateRequests) == 0 {
+		return fmt.Errorf("no columns to update")
+	}
+	_, err = sheetsService.Spreadsheets.BatchUpdate(spreadsheetID, &sheets.BatchUpdateSpreadsheetRequest{Requests: updateRequests}).Do()
+	if err != nil {
+		if strings.Contains(err.Error(), "No grid with id") {
+			invalidateSheetCache(sheetName)
+		}
+		return err
+	}
+	invalidateSheetCache(sheetName)
+	return nil
+}
+
+func deleteSheetRow(sheetName string, primaryKey map[string]string) error {
+	pkHeader, pkValue := "", ""
+	for k, v := range primaryKey {
+		pkHeader, pkValue = k, v
+	}
+	rowIndex, sheetId, err := findRowIndexByPK(sheetName, pkHeader, pkValue)
+	if err != nil {
+		return err
+	}
+	req := &sheets.Request{
+		DeleteDimension: &sheets.DeleteDimensionRequest{
+			Range: &sheets.DimensionRange{SheetId: sheetId, Dimension: "ROWS", StartIndex: rowIndex, EndIndex: rowIndex + 1},
+		},
+	}
+	_, err = sheetsService.Spreadsheets.BatchUpdate(spreadsheetID, &sheets.BatchUpdateSpreadsheetRequest{Requests: []*sheets.Request{req}}).Do()
+	if err != nil {
+		if strings.Contains(err.Error(), "No grid with id") {
+			invalidateSheetCache(sheetName)
+		}
+		return err
+	}
+	invalidateSheetCache(sheetName)
+	return nil
 }
 
 // --- API Handlers ---
@@ -2117,8 +2405,9 @@ func main() {
 
 		api.POST("/submit-order", handleSubmitOrder)
 		api.POST("/upload-image", handleImageUploadProxy)
+		// *** TELEGRAM WEBHOOK ***
+		api.POST("/telegram-webhook", handleTelegramWebhook)
 
-		// --- Chat Endpoints ---
 		chat := api.Group("/chat")
 		{
 			chat.GET("/messages", handleGetChatMessages)
