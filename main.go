@@ -844,105 +844,6 @@ func handleTelegramWebhook(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{"status": "ok"})
 }
 
-// --- Core Helpers for Updating/Deleting ---
-
-func updateSheetRow(sheetName string, primaryKey map[string]string, newData map[string]interface{}) error {
-	if sheetName == "" || len(primaryKey) != 1 || len(newData) == 0 {
-		return fmt.Errorf("invalid parameters")
-	}
-	pkHeader, pkValue := "", ""
-	for k, v := range primaryKey {
-		pkHeader, pkValue = k, v
-	}
-	headerMap, err := findHeaderMap(sheetName)
-	if err != nil {
-		return err
-	}
-	rowIndex, sheetId, err := findRowIndexByPK(sheetName, pkHeader, pkValue)
-	if err != nil {
-		return err
-	}
-
-	var updateRequests []*sheets.Request
-	for colName, newValue := range newData {
-		colIndex, ok := headerMap[colName]
-		if !ok {
-			continue
-		}
-		extValue := &sheets.ExtendedValue{}
-		switch v := newValue.(type) {
-		case string:
-			extValue.StringValue = &v
-		case float64:
-			extValue.NumberValue = &v
-		case bool:
-			extValue.BoolValue = &v
-		case int:
-			f := float64(v)
-			extValue.NumberValue = &f
-		case int64:
-			f := float64(v)
-			extValue.NumberValue = &f
-		default:
-			str := fmt.Sprintf("%v", v)
-			extValue.StringValue = &str
-		}
-		updateRequests = append(updateRequests, &sheets.Request{
-			UpdateCells: &sheets.UpdateCellsRequest{
-				Start: &sheets.GridCoordinate{
-					SheetId:     sheetId,
-					RowIndex:    rowIndex,
-					ColumnIndex: int64(colIndex),
-				},
-				Rows:  []*sheets.RowData{{Values: []*sheets.CellData{{UserEnteredValue: extValue}}}},
-				Fields: "userEnteredValue",
-			},
-		})
-	}
-	if len(updateRequests) == 0 {
-		return fmt.Errorf("no columns to update")
-	}
-	_, err = sheetsService.Spreadsheets.BatchUpdate(spreadsheetID, &sheets.BatchUpdateSpreadsheetRequest{Requests: updateRequests}).Do()
-	if err != nil {
-		if strings.Contains(err.Error(), "No grid with id") {
-			invalidateSheetCache(sheetName)
-		}
-		return err
-	}
-	invalidateSheetCache(sheetName)
-	return nil
-}
-
-func deleteSheetRow(sheetName string, primaryKey map[string]string) error {
-	pkHeader, pkValue := "", ""
-	for k, v := range primaryKey {
-		pkHeader, pkValue = k, v
-	}
-	rowIndex, sheetId, err := findRowIndexByPK(sheetName, pkHeader, pkValue)
-	if err != nil {
-		return err
-	}
-	req := &sheets.Request{
-		DeleteDimension: &sheets.DeleteDimensionRequest{
-			Range: &sheets.DimensionRange{
-				SheetId:    sheetId,
-				Dimension:  "ROWS",
-				StartIndex: rowIndex,
-				EndIndex:   rowIndex + 1,
-			},
-		},
-	}
-	_, err = sheetsService.Spreadsheets.BatchUpdate(spreadsheetID, &sheets.BatchUpdateSpreadsheetRequest{Requests: []*sheets.Request{req}}).Do()
-	if err != nil {
-		if strings.Contains(err.Error(), "No grid with id") {
-			invalidateSheetCache(sheetName)
-		}
-		return err
-	}
-	invalidateSheetCache(sheetName)
-	return nil
-}
-
 // --- API Handlers ---
 
 // ... (handlePing remains the same) ...
@@ -2022,13 +1923,6 @@ func handleAdminAddRow(c *gin.Context) {
 	}
 	log.Printf("Successfully added new row to sheet %s", request.SheetName)
 	c.JSON(http.StatusOK, gin.H{"status": "success", "message": "Row added successfully"})
-}
-
-// --- *** NEW: Struct for Delete Order Request *** ---
-type DeleteOrderRequest struct {
-	OrderID  string `json:"orderId"`
-	Team     string `json:"team"`
-	UserName string `json:"userName"` // For logging
 }
 
 // --- *** NEW: Helper Function to encapsulate delete logic *** ---
