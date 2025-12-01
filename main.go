@@ -726,7 +726,7 @@ func handlePing(c *gin.Context) {
 
 // ... (handleGetUsers remains the same) ...
 func handleGetUsers(c *gin.Context) {
-	var users []User
+	users := []User{} // Changed from var users []User to ensure empty slice instead of nil
 	err := getCachedSheetData("Users", &users, 15*time.Minute)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"status": "error", "message": err.Error()})
@@ -739,15 +739,16 @@ func handleGetUsers(c *gin.Context) {
 func handleGetStaticData(c *gin.Context) {
 	result := make(map[string]interface{})
 	var err error
-	var pages []TeamPage
-	var products []Product
-	var locations []Location
-	var shippingMethods []ShippingMethod
-	var settingsMaps []map[string]interface{}
-	var colors []Color
-	var drivers []Driver
-	var bankAccounts []BankAccount
-	var phoneCarriers []PhoneCarrier
+	// Initialize all slices as empty to ensure JSON returns [] instead of null
+	pages := []TeamPage{}
+	products := []Product{}
+	locations := []Location{}
+	shippingMethods := []ShippingMethod{}
+	settingsMaps := []map[string]interface{}{}
+	colors := []Color{}
+	drivers := []Driver{}
+	bankAccounts := []BankAccount{}
+	phoneCarriers := []PhoneCarrier{}
 
 	err = getCachedSheetData("TeamsPages", &pages, cacheTTL)
 	if err != nil {
@@ -1183,7 +1184,7 @@ func handleUpdateFormulaReport(c *gin.Context) {
 
 // ... (handleGetRevenueSummary remains the same) ...
 func handleGetRevenueSummary(c *gin.Context) {
-	var revenueEntries []RevenueEntry
+	revenueEntries := []RevenueEntry{} // Ensure empty slice
 	invalidateSheetCache(RevenueSheet)
 	err := getCachedSheetData(RevenueSheet, &revenueEntries, cacheTTL)
 	if err != nil {
@@ -1276,7 +1277,7 @@ func handleGetRevenueSummary(c *gin.Context) {
 
 // ... (handleGetAllOrders remains the same) ...
 func handleGetAllOrders(c *gin.Context) {
-	var allOrders []Order
+	allOrders := []Order{} // Changed from var allOrders []Order to ensure empty slice
 	invalidateSheetCache(AllOrdersSheet)
 	err := getCachedSheetData(AllOrdersSheet, &allOrders, cacheTTL)
 	if err != nil {
@@ -1297,7 +1298,7 @@ func handleGetAllOrders(c *gin.Context) {
 
 // ... (handleGetChatMessages remains the same) ...
 func handleGetChatMessages(c *gin.Context) {
-	var chatMessages []ChatMessage
+	chatMessages := []ChatMessage{} // Changed from var chatMessages []ChatMessage to ensure empty slice
 	err := getCachedSheetData(ChatMessagesSheet, &chatMessages, 10*time.Second)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"status": "error", "message": "Failed to fetch chat history: " + err.Error()})
