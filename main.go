@@ -587,7 +587,7 @@ func findRowIndexByPK(sheetName string, pkHeader string, pkValue string) (int64,
 	}
 	for i, row := range resp.Values {
 		if len(row) > 0 && fmt.Sprintf("%v", row[0]) == pkValue {
-			// FIXED: No more unused 'rowIndex' variable. Directly return i+2 (Row 2 is index 0 of response)
+			// FIXED: Return i+2 for correct Row Index (Row 1 is Header, Row 2 is first data)
 			return int64(i + 2), sheetId, nil 
 		}
 	}
