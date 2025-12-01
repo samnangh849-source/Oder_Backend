@@ -3,11 +3,15 @@ package main
 import (
 	"bytes"
 	"context"
+
+	// "encoding/base64"
 	"encoding/json"
 	"fmt"
 	"io"
 	"log"
 	"net/http"
+
+	// "net/url" // REMOVED (No longer used)
 	"os"
 	"sort"
 	"strconv"
@@ -17,7 +21,13 @@ import (
 
 	"github.com/gin-contrib/cors"
 	"github.com/gin-gonic/gin"
+
+	// --- REMOVED: Telegram Bot API ---
+
+	// --- NEW: WebSocket Library ---
 	"github.com/gorilla/websocket"
+
+	// --- Google API Imports ---
 	"google.golang.org/api/option"
 	"google.golang.org/api/sheets/v4"
 )
@@ -77,6 +87,7 @@ const (
 )
 
 // --- Cache ---
+// ... (CacheItem, cache, cacheMutex, cacheTTL remain the same) ...
 type CacheItem struct {
 	Data      interface{}
 	ExpiresAt time.Time
@@ -111,6 +122,7 @@ func getCache(key string) (interface{}, bool) {
 	return item.Data, true
 }
 
+// ... (clearCache remains the same, it correctly clears both) ...
 func clearCache() {
 	cacheMutex.Lock()
 	defer cacheMutex.Unlock()
@@ -122,6 +134,7 @@ func clearCache() {
 	log.Println("Sheet ID Cache CLEARED")
 }
 
+// ... (invalidateSheetCache remains the same) ...
 func invalidateSheetCache(sheetName string) {
 	// Invalidate data cache
 	cacheMutex.Lock()
@@ -137,6 +150,7 @@ func invalidateSheetCache(sheetName string) {
 }
 
 // --- Models ---
+// ... (All structs: User, Product, Location, ShippingMethod, TeamPage, Color, Driver, BankAccount, PhoneCarrier, Order, RevenueEntry, ChatMessage, ReportSummary, RevenueAggregate remain the same) ...
 type User struct {
 	UserName          string `json:"UserName"`
 	Password          string `json:"Password"`
@@ -145,7 +159,6 @@ type User struct {
 	ProfilePictureURL string `json:"ProfilePictureURL"`
 	Role              string `json:"Role"`
 	IsSystemAdmin     bool   `json:"IsSystemAdmin"`
-	TelegramUsername  string `json:"TelegramUsername"`
 }
 type Product struct {
 	ProductName string  `json:"ProductName"`
@@ -153,7 +166,7 @@ type Product struct {
 	Price       float64 `json:"Price"`
 	Cost        float64 `json:"Cost"`
 	ImageURL    string  `json:"ImageURL"`
-	Tags        string  `json:"Tags"`
+	Tags        string  `json:"Tags"` // បានបន្ថែម Field ថ្មីសម្រាប់ Tags
 }
 type Location struct {
 	Province string `json:"Province"`
@@ -245,60 +258,25 @@ type RevenueAggregate struct {
 type UpdateOrderRequest struct {
 	OrderID  string                 `json:"orderId"`
 	Team     string                 `json:"team"`
-	UserName string                 `json:"userName"`
+	UserName string                 `json:"userName"` // For logging
 	NewData  map[string]interface{} `json:"newData"`
 }
 
+// --- NEW: Struct for Change Password Request ---
 type ChangePasswordRequest struct {
 	UserName    string `json:"userName"`
 	OldPassword string `json:"oldPassword"`
 	NewPassword string `json:"newPassword"`
 }
 
+// --- NEW: Struct for Update Tags Request ---
 type UpdateTagsRequest struct {
 	ProductName string   `json:"productName"`
 	NewTags     []string `json:"newTags"`
 }
 
-type DeleteOrderRequest struct {
-	OrderID  string `json:"orderId"`
-	Team     string `json:"team"`
-	UserName string `json:"userName"`
-}
-
-// --- NEW: Telegram Webhook Structs ---
-type TelegramUpdate struct {
-	UpdateID      int            `json:"update_id"`
-	CallbackQuery *CallbackQuery `json:"callback_query"`
-}
-type CallbackQuery struct {
-	ID      string           `json:"id"`
-	From    TelegramUser     `json:"from"`
-	Message *TelegramMessage `json:"message"`
-	Data    string           `json:"data"`
-}
-type TelegramUser struct {
-	ID        int64  `json:"id"`
-	IsBot     bool   `json:"is_bot"`
-	FirstName string `json:"first_name"`
-	Username  string `json:"username"`
-}
-type TelegramMessage struct {
-	MessageID int64  `json:"message_id"`
-	Chat      Chat   `json:"chat"`
-	Text      string `json:"text"`
-}
-type Chat struct {
-	ID int64 `json:"id"`
-}
-type ButtonPayload struct {
-	Action  string `json:"a"` // pm=menu, cp=confirm, cx=cancel
-	OrderID string `json:"o"`
-	Team    string `json:"t"`
-	Bank    string `json:"b,omitempty"`
-}
-
 // --- WebSocket Structs ---
+// ... (WebSocketMessage, upgrader, Client, Hub, NewHub, run, writePump, serveWs structs and functions remain the same) ...
 type WebSocketMessage struct {
 	Action  string      `json:"action"`
 	Payload interface{} `json:"payload"`
@@ -393,6 +371,7 @@ func serveWs(c *gin.Context) {
 }
 
 // --- Google API Client Setup ---
+// ... (createGoogleAPIClient remains the same) ...
 func createGoogleAPIClient(ctx context.Context) error {
 	credentialsJSON := os.Getenv("GCP_CREDENTIALS")
 	if credentialsJSON == "" {
@@ -409,6 +388,7 @@ func createGoogleAPIClient(ctx context.Context) error {
 }
 
 // --- Google Sheets API Helper Functions ---
+// ... (convertSheetValuesToMaps remains the same) ...
 func convertSheetValuesToMaps(values *sheets.ValueRange) ([]map[string]interface{}, error) {
 	if values == nil || len(values.Values) < 2 {
 		return []map[string]interface{}{}, nil
@@ -442,8 +422,7 @@ func convertSheetValuesToMaps(values *sheets.ValueRange) ([]map[string]interface
 					} else {
 						rowData[header] = cell
 					}
-					// Explicitly keep these as strings
-					if header == "Password" || header == "Customer Phone" || header == "Barcode" || header == "Customer Name" || header == "Note" || header == "Content" || header == "Tags" || header == "TelegramUsername" {
+					if header == "Password" || header == "Customer Phone" || header == "Barcode" || header == "Customer Name" || header == "Note" || header == "Content" || header == "Tags" {
 						rowData[header] = fmt.Sprintf("%v", cell)
 					}
 				}
@@ -454,6 +433,7 @@ func convertSheetValuesToMaps(values *sheets.ValueRange) ([]map[string]interface
 	return result, nil
 }
 
+// ... (fetchSheetDataFromAPI remains the same) ...
 func fetchSheetDataFromAPI(sheetName string) ([]map[string]interface{}, error) {
 	readRange, ok := sheetRanges[sheetName]
 	if !ok {
@@ -472,6 +452,7 @@ func fetchSheetDataFromAPI(sheetName string) ([]map[string]interface{}, error) {
 	return mappedData, nil
 }
 
+// ... (appendRowToSheet remains the same) ...
 func appendRowToSheet(sheetName string, rowData []interface{}) error {
 	writeRange := sheetName
 	valueRange := &sheets.ValueRange{
@@ -486,6 +467,7 @@ func appendRowToSheet(sheetName string, rowData []interface{}) error {
 	return nil
 }
 
+// ... (overwriteSheetDataInAPI remains the same) ...
 func overwriteSheetDataInAPI(sheetName string, data [][]interface{}) error {
 	clearRange, ok := sheetRanges[sheetName]
 	if !ok {
@@ -513,6 +495,7 @@ func overwriteSheetDataInAPI(sheetName string, data [][]interface{}) error {
 	return nil
 }
 
+// ... (getSheetIdByName remains the same) ...
 func getSheetIdByName(sheetName string) (int64, error) {
 	// *** This cache is the source of the problem if it gets stale ***
 	sheetIdCacheMutex.RLock()
@@ -551,6 +534,7 @@ func getSheetIdByName(sheetName string) (int64, error) {
 	return 0, fmt.Errorf("sheet '%s' not found in spreadsheet", sheetName)
 }
 
+// ... (findHeaderMap remains the same) ...
 func findHeaderMap(sheetName string) (map[string]int, error) {
 	headersResp, err := sheetsService.Spreadsheets.Values.Get(spreadsheetID, fmt.Sprintf("%s!1:1", sheetName)).Do()
 	if err != nil || len(headersResp.Values) == 0 {
@@ -565,6 +549,7 @@ func findHeaderMap(sheetName string) (map[string]int, error) {
 	return headerMap, nil
 }
 
+// ... (findRowIndexByPK remains the same) ...
 func findRowIndexByPK(sheetName string, pkHeader string, pkValue string) (int64, int64, error) {
 	sheetId, err := getSheetIdByName(sheetName)
 	if err != nil {
@@ -587,13 +572,15 @@ func findRowIndexByPK(sheetName string, pkHeader string, pkValue string) (int64,
 	}
 	for i, row := range resp.Values {
 		if len(row) > 0 && fmt.Sprintf("%v", row[0]) == pkValue {
-			// FIXED: Return i+2 for correct Row Index (Row 1 is Header, Row 2 is first data)
-			return int64(i + 2), sheetId, nil 
+			rowIndex := i + 1
+			return int64(rowIndex), sheetId, nil
 		}
 	}
 	return -1, sheetId, fmt.Errorf("row not found with %s = %s in sheet %s", pkHeader, pkValue, sheetName)
 }
 
+// --- Fetch & Cache Sheet Data (Rewritten) ---
+// ... (getCachedSheetData remains the same) ...
 func getCachedSheetData(sheetName string, target interface{}, duration time.Duration) error {
 	cacheKey := "sheet_" + sheetName
 	cachedData, found := getCache(cacheKey)
@@ -604,8 +591,12 @@ func getCachedSheetData(sheetName string, target interface{}, duration time.Dura
 			if err == nil {
 				return nil
 			}
+			log.Printf("Error unmarshalling cached data for %s: %v", sheetName, err)
+		} else {
+			log.Printf("Error marshalling cached data for %s: %v", sheetName, err)
 		}
 	}
+	log.Printf("Fetching fresh data for %s (via Sheets API)", sheetName)
 	mappedData, err := fetchSheetDataFromAPI(sheetName)
 	if err != nil {
 		return err
@@ -617,6 +608,7 @@ func getCachedSheetData(sheetName string, target interface{}, duration time.Dura
 	}
 	err = json.Unmarshal(jsonData, target)
 	if err != nil {
+		log.Printf("Error unmarshalling data for %s: %v. JSON: %s", sheetName, err, string(jsonData))
 		return fmt.Errorf("mismatched data structure for %s", sheetName)
 	}
 	setCache(cacheKey, mappedData, duration)
@@ -624,6 +616,7 @@ func getCachedSheetData(sheetName string, target interface{}, duration time.Dura
 }
 
 // --- Apps Script Communication ---
+// ... (AppsScriptRequest, AppsScriptResponse, callAppsScriptPOST structs and function remain the same) ...
 type AppsScriptRequest struct {
 	Action         string      `json:"action"`
 	Secret         string      `json:"secret"`
@@ -683,171 +676,6 @@ func callAppsScriptPOST(requestData AppsScriptRequest) (AppsScriptResponse, erro
 		return AppsScriptResponse{}, fmt.Errorf("Google Apps Script API error: %s", scriptResponse.Message)
 	}
 	return scriptResponse, nil
-}
-
-// --- TELEGRAM BOT LOGIC (GO BACKEND) ---
-
-func getBotTokenForTeam(team string) (string, error) {
-	var settings []map[string]interface{}
-	if err := getCachedSheetData("Settings", &settings, cacheTTL); err != nil {
-		return "", err
-	}
-	for _, row := range settings {
-		if fmt.Sprintf("%v", row["Team"]) == team {
-			return fmt.Sprintf("%v", row["TelegramBotToken"]), nil
-		}
-	}
-	return "", fmt.Errorf("bot token not found for team: %s", team)
-}
-
-func telegramAPI(token string, method string, payload interface{}) error {
-	url := fmt.Sprintf("https://api.telegram.org/bot%s/%s", token, method)
-	jsonPayload, _ := json.Marshal(payload)
-	resp, err := http.Post(url, "application/json", bytes.NewBuffer(jsonPayload))
-	if err != nil {
-		return err
-	}
-	defer resp.Body.Close()
-	return nil
-}
-
-func answerCallback(token, callbackID, text string, alert bool) {
-	payload := map[string]interface{}{
-		"callback_query_id": callbackID,
-		"text":              text,
-		"show_alert":        alert,
-	}
-	telegramAPI(token, "answerCallbackQuery", payload)
-}
-
-func editMessageText(token string, chatID int64, messageID int64, text string, markup interface{}) {
-	payload := map[string]interface{}{
-		"chat_id":    chatID,
-		"message_id": messageID,
-		"text":       text,
-		"parse_mode": "Markdown",
-	}
-	// *** MODIFIED: Support clearing/changing markup during text edit ***
-	if markup != nil {
-		payload["reply_markup"] = markup
-	}
-	telegramAPI(token, "editMessageText", payload)
-}
-
-func editMessageReplyMarkup(token string, chatID int64, messageID int64, markup interface{}) {
-	payload := map[string]interface{}{
-		"chat_id":      chatID,
-		"message_id":   messageID,
-		"reply_markup": markup,
-	}
-	telegramAPI(token, "editMessageReplyMarkup", payload)
-}
-
-// Handle Telegram Webhook
-func handleTelegramWebhook(c *gin.Context) {
-	var update TelegramUpdate
-	if err := c.ShouldBindJSON(&update); err != nil {
-		c.JSON(http.StatusOK, gin.H{"status": "ignored"})
-		return
-	}
-
-	if update.CallbackQuery == nil {
-		c.JSON(http.StatusOK, gin.H{"status": "ok"})
-		return
-	}
-
-	cb := update.CallbackQuery
-	var data ButtonPayload
-	if err := json.Unmarshal([]byte(cb.Data), &data); err != nil {
-		log.Printf("Invalid button data: %v", err)
-		c.JSON(http.StatusOK, gin.H{"status": "ok"})
-		return
-	}
-
-	token, err := getBotTokenForTeam(data.Team)
-	if err != nil {
-		log.Printf("Token error: %v", err)
-		c.JSON(http.StatusOK, gin.H{"status": "ok"})
-		return
-	}
-
-	var users []User
-	getCachedSheetData("Users", &users, 5*time.Minute)
-	authorized := false
-	reqUser := strings.ToLower(cb.From.Username)
-	for _, u := range users {
-		dbUser := strings.ToLower(strings.TrimPrefix(u.TelegramUsername, "@"))
-		if dbUser != "" && dbUser == reqUser {
-			authorized = true
-			break
-		}
-	}
-
-	if !authorized {
-		answerCallback(token, cb.ID, "⛔ អ្នកមិនមានសិទ្ធិទេ (User not found)", true)
-		c.JSON(http.StatusOK, gin.H{"status": "ok"})
-		return
-	}
-
-	switch data.Action {
-	case "pm": // Pay Menu
-		var banks []BankAccount
-		getCachedSheetData("BankAccounts", &banks, cacheTTL)
-		
-		var buttons [][]map[string]interface{}
-		for _, b := range banks {
-			payload, _ := json.Marshal(ButtonPayload{Action: "cp", OrderID: data.OrderID, Team: data.Team, Bank: b.BankName})
-			btn := map[string]interface{}{"text": b.BankName, "callback_data": string(payload)}
-			buttons = append(buttons, []map[string]interface{}{btn})
-		}
-		// Cash Option
-		payloadCash, _ := json.Marshal(ButtonPayload{Action: "cp", OrderID: data.OrderID, Team: data.Team, Bank: "Cash"})
-		buttons = append(buttons, []map[string]interface{}{{
-			"text": "💵 Cash (សាច់ប្រាក់)", "callback_data": string(payloadCash),
-		}})
-		// Cancel Option
-		payloadCancel, _ := json.Marshal(ButtonPayload{Action: "cx", OrderID: data.OrderID, Team: data.Team})
-		buttons = append(buttons, []map[string]interface{}{{
-			"text": "❌ Cancel", "callback_data": string(payloadCancel),
-		}})
-
-		editMessageReplyMarkup(token, cb.Message.Chat.ID, cb.Message.MessageID, map[string]interface{}{"inline_keyboard": buttons})
-		answerCallback(token, cb.ID, "សូមជ្រើសរើសធនាគារ...", false)
-
-	case "cp": // Confirm Pay
-		// Update Sheets
-		pk := map[string]string{"Order ID": data.OrderID}
-		newData := map[string]interface{}{"Payment Status": "Paid", "Payment Info": data.Bank}
-		
-		// Update Team Sheet (Async)
-		go updateSheetRow(fmt.Sprintf("Orders_%s", data.Team), pk, newData)
-		// Update AllOrders Sheet (Async)
-		go updateSheetRow(AllOrdersSheet, pk, newData)
-
-		// Update Telegram Message
-		loc, _ := time.LoadLocation("Asia/Phnom_Penh")
-		if loc == nil { loc = time.UTC }
-		timeStr := time.Now().In(loc).Format("02-01-2006 15:04:05")
-		
-		originalText := cb.Message.Text
-		cleanText := strings.Split(originalText, "\n\n✅ *Paid by:*")[0] 
-		newText := fmt.Sprintf("%s\n\n✅ *Paid by:* @%s\n🏦 *Via:* %s\n🕒 %s", cleanText, cb.From.Username, data.Bank, timeStr)
-		
-		// *** UPDATED: REMOVE BUTTONS (Send empty inline_keyboard) ***
-		emptyMarkup := map[string]interface{}{"inline_keyboard": [][]interface{}{}}
-		editMessageText(token, cb.Message.Chat.ID, cb.Message.MessageID, newText, emptyMarkup)
-		answerCallback(token, cb.ID, "✅ ជោគជ័យ!", false)
-
-	case "cx": // Cancel
-		payload, _ := json.Marshal(ButtonPayload{Action: "pm", OrderID: data.OrderID, Team: data.Team})
-		buttons := [][]map[string]interface{}{{{
-			"text": "✅ Paid (បានទទួលប្រាក់)", "callback_data": string(payload),
-		}}}
-		editMessageReplyMarkup(token, cb.Message.Chat.ID, cb.Message.MessageID, map[string]interface{}{"inline_keyboard": buttons})
-		answerCallback(token, cb.ID, "បានបោះបង់", false)
-	}
-
-	c.JSON(http.StatusOK, gin.H{"status": "ok"})
 }
 
 // --- API Handlers ---
@@ -1158,7 +986,7 @@ func handleGetAudioProxy(c *gin.Context) {
 	// Check if Google returned an error (e.g., file not found, or a virus warning page)
 	if resp.StatusCode != http.StatusOK {
 		// It might be a redirect to a consent page (like large files/virus scan)
-		// Or just a404
+		// Or just a 404
 		log.Printf("Google Drive returned non-OK status %d for FileID: %s", resp.StatusCode, fileID)
 
 		// If it's HTML, it's definitely an error/consent page we can't handle
@@ -1638,7 +1466,7 @@ func handleDeleteChatMessage(c *gin.Context) {
 // This function contains the core logic previously in handleAdminUpdateSheet
 func updateSheetRow(sheetName string, primaryKey map[string]string, newData map[string]interface{}) error {
 	if sheetName == "" || len(primaryKey) != 1 || len(newData) == 0 {
-		return fmt.Errorf("invalid parameters")
+		return fmt.Errorf("sheetName, a single primaryKey, and newData are required")
 	}
 
 	pkHeader := ""
@@ -1661,6 +1489,7 @@ func updateSheetRow(sheetName string, primaryKey map[string]string, newData map[
 	for colName, newValue := range newData {
 		colIndex, ok := headerMap[colName]
 		if !ok {
+			log.Printf("Warning: Column '%s' not found in sheet '%s'. Skipping update for this column.", colName, sheetName)
 			continue
 		}
 		extValue := &sheets.ExtendedValue{}
@@ -1677,33 +1506,51 @@ func updateSheetRow(sheetName string, primaryKey map[string]string, newData map[
 		case int64:
 			f := float64(v)
 			extValue.NumberValue = &f
+		case nil:
+			// Set as empty string
+			extValue.StringValue = new(string)
 		default:
+			// Convert other types to string as a fallback
 			str := fmt.Sprintf("%v", v)
 			extValue.StringValue = &str
 		}
-		updateRequests = append(updateRequests, &sheets.Request{
+		updateReq := &sheets.Request{
 			UpdateCells: &sheets.UpdateCellsRequest{
 				Start: &sheets.GridCoordinate{
 					SheetId:     sheetId,
 					RowIndex:    rowIndex,
 					ColumnIndex: int64(colIndex),
 				},
-				Rows:  []*sheets.RowData{{Values: []*sheets.CellData{{UserEnteredValue: extValue}}}},
+				Rows: []*sheets.RowData{
+					{
+						Values: []*sheets.CellData{
+							{UserEnteredValue: extValue},
+						},
+					},
+				},
 				Fields: "userEnteredValue",
 			},
-		})
+		}
+		updateRequests = append(updateRequests, updateReq)
 	}
+
 	if len(updateRequests) == 0 {
-		return fmt.Errorf("no columns to update")
+		return fmt.Errorf("no valid columns found to update")
 	}
-	_, err = sheetsService.Spreadsheets.BatchUpdate(spreadsheetID, &sheets.BatchUpdateSpreadsheetRequest{Requests: updateRequests}).Do()
+
+	batchUpdateReq := &sheets.BatchUpdateSpreadsheetRequest{Requests: updateRequests}
+	_, err = sheetsService.Spreadsheets.BatchUpdate(spreadsheetID, batchUpdateReq).Do()
+
 	if err != nil {
 		if strings.Contains(err.Error(), "No grid with id") {
+			log.Printf("Stale Sheet ID detected during update. Clearing Sheet ID cache for %s.", sheetName)
 			invalidateSheetCache(sheetName)
 		}
-		return err
+		return fmt.Errorf("failed to update sheet %s: %v", sheetName, err)
 	}
+
 	invalidateSheetCache(sheetName)
+	log.Printf("Successfully updated row %s=%s in sheet %s", pkHeader, pkValue, sheetName)
 	return nil
 }
 
@@ -1895,7 +1742,7 @@ func handleAdminUpdateProductTags(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{"status": "success", "message": "Tags updated successfully"})
 }
 
-// --- ... (handleAdminAddRow remains the same) ... ---
+// ... (handleAdminAddRow remains the same) ...
 func handleAdminAddRow(c *gin.Context) {
 	var request struct {
 		SheetName string                 `json:"sheetName"`
@@ -1929,6 +1776,13 @@ func handleAdminAddRow(c *gin.Context) {
 	}
 	log.Printf("Successfully added new row to sheet %s", request.SheetName)
 	c.JSON(http.StatusOK, gin.H{"status": "success", "message": "Row added successfully"})
+}
+
+// --- *** NEW: Struct for Delete Order Request *** ---
+type DeleteOrderRequest struct {
+	OrderID  string `json:"orderId"`
+	Team     string `json:"team"`
+	UserName string `json:"userName"` // For logging
 }
 
 // --- *** NEW: Helper Function to encapsulate delete logic *** ---
@@ -2263,9 +2117,8 @@ func main() {
 
 		api.POST("/submit-order", handleSubmitOrder)
 		api.POST("/upload-image", handleImageUploadProxy)
-		// *** TELEGRAM WEBHOOK ***
-		api.POST("/telegram-webhook", handleTelegramWebhook)
 
+		// --- Chat Endpoints ---
 		chat := api.Group("/chat")
 		{
 			chat.GET("/messages", handleGetChatMessages)
