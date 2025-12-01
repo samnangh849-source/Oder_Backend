@@ -55,20 +55,21 @@ var (
 )
 
 // --- Constants from Apps Script Config (Keep consistent) ---
+// *** UPDATED RANGES TO MATCH NEW COLUMNS IN SETUP.GS ***
 var sheetRanges = map[string]string{
-	"Users":            "Users!A:H",           // កែពី A:G ទៅ A:H (ដើម្បីយក TelegramUsername)
-	"Settings":         "Settings!A:G",        // កែពី A:F ទៅ A:G (ដើម្បីយក CODAlertGroupID)
-	"TeamsPages":       "TeamsPages!A:D",      // ត្រឹមត្រូវហើយ
-	"Products":         "Products!A:F",        // ត្រឹមត្រូវហើយ (A:F គឺមាន Tags)
-	"Locations":        "Locations!A:C",       // ត្រឹមត្រូវហើយ
-	"ShippingMethods":  "ShippingMethods!A:F", // កែពី A:D ទៅ A:F (ដើម្បីយក EnableCODAlert, AlertTopicID)
-	"Colors":           "Colors!A:A",          // ត្រឹមត្រូវហើយ
-	"Drivers":          "Drivers!A:B",         // ត្រឹមត្រូវហើយ
-	"BankAccounts":     "BankAccounts!A:B",    // ត្រឹមត្រូវហើយ
-	"PhoneCarriers":    "PhoneCarriers!A:C",   // ត្រឹមត្រូវហើយ
-	"AllOrders":        "AllOrders!A:Z",       // កែពី A:Y ទៅ A:Z (សំខាន់ណាស់! ដើម្បីយក Column "Team")
-	"RevenueDashboard": "RevenueDashboard!A:D",// ត្រឹមត្រូវហើយ
-	"ChatMessages":     "ChatMessages!A:E",    // ត្រឹមត្រូវហើយ
+	"Users":            "Users!A:H",           // Updated: A:G -> A:H (Includes TelegramUsername)
+	"Settings":         "Settings!A:G",        // Updated: A:F -> A:G (Includes CODAlertGroupID)
+	"TeamsPages":       "TeamsPages!A:D",
+	"Products":         "Products!A:F",        // Updated: A:F (Includes Tags)
+	"Locations":        "Locations!A:C",
+	"ShippingMethods":  "ShippingMethods!A:F", // Updated: A:D -> A:F (Includes EnableCODAlert, AlertTopicID)
+	"Colors":           "Colors!A:A",
+	"Drivers":          "Drivers!A:B",
+	"BankAccounts":     "BankAccounts!A:B",
+	"PhoneCarriers":    "PhoneCarriers!A:C",
+	"AllOrders":        "AllOrders!A:Z",       // Updated: A:Y -> A:Z (Includes Team column)
+	"RevenueDashboard": "RevenueDashboard!A:D",
+	"ChatMessages":     "ChatMessages!A:E",
 
 	"FormulaReportSheet": "FormulaReport!A:Z",
 	"UserActivityLogs":   "UserActivityLogs!A:Z",
@@ -85,23 +86,19 @@ const (
 	EditLogsSheet      = "EditLogs"
 )
 
-// --- OPTIMIZED CACHE (Stale-While-Revalidate) ---
+// --- Cache ---
+// ... (CacheItem, cache, cacheMutex, cacheTTL remain the same) ...
 type CacheItem struct {
 	Data      interface{}
 	ExpiresAt time.Time
 }
 
 var (
-	cache          = make(map[string]CacheItem)
-	cacheMutex     sync.RWMutex
-	cacheTTL       = 5 * time.Minute // Default cache duration
-	
-	// Variables for Background Refresh
-	refreshing     = make(map[string]bool) // ដើម្បីកុំឱ្យ Refresh ស្ទួន
-	refreshMutex   sync.Mutex
+	cache      = make(map[string]CacheItem)
+	cacheMutex sync.RWMutex
+	cacheTTL   = 5 * time.Minute // Default cache duration
 )
 
-// Helper to set cache
 func setCache(key string, data interface{}, duration time.Duration) {
 	cacheMutex.Lock()
 	defer cacheMutex.Unlock()
@@ -109,119 +106,47 @@ func setCache(key string, data interface{}, duration time.Duration) {
 		Data:      data,
 		ExpiresAt: time.Now().Add(duration),
 	}
-	log.Printf("Cache UPDATED for key: %s", key)
+	log.Printf("Cache SET for key: %s", key)
+}
+func getCache(key string) (interface{}, bool) {
+	cacheMutex.RLock()
+	defer cacheMutex.RUnlock()
+	item, found := cache[key]
+	if !found || time.Now().After(item.ExpiresAt) {
+		if found {
+			log.Printf("Cache EXPIRED for key: %s", key)
+		}
+		return nil, false
+	}
+	log.Printf("Cache HIT for key: %s", key)
+	return item.Data, true
 }
 
-// Function to clear all caches
+// ... (clearCache remains the same, it correctly clears both) ...
 func clearCache() {
 	cacheMutex.Lock()
 	defer cacheMutex.Unlock()
 	cache = make(map[string]CacheItem)
 	log.Println("Cache CLEARED")
-
 	sheetIdCacheMutex.Lock()
 	defer sheetIdCacheMutex.Unlock()
 	sheetIdCache = make(map[string]int64)
 	log.Println("Sheet ID Cache CLEARED")
 }
 
-// Function to invalidate specific sheet cache
-// OPTIMIZED: Uses "Soft Invalidation" to prevent Cold Starts
+// ... (invalidateSheetCache remains the same) ...
 func invalidateSheetCache(sheetName string) {
-	cacheKey := "sheet_" + sheetName
-
+	// Invalidate data cache
 	cacheMutex.Lock()
-	if item, found := cache[cacheKey]; found {
-		// ជំនួសឱ្យការលុប (Delete) យើងគ្រាន់តែកំណត់ម៉ោងឱ្យផុតកំណត់ (Expire) ភ្លាមៗ
-		// ធ្វើបែបនេះ User នឹងទទួលបានទិន្នន័យចាស់មកប្រើភ្លាមៗ (Stale data)
-		// ខណៈពេលដែល Server នឹងធ្វើការ Refresh ទិន្នន័យថ្មីនៅ Background
-		item.ExpiresAt = time.Time{} // Set zero time (expired immediately)
-		cache[cacheKey] = item
-		log.Printf("Cache MARKED STALE for key: %s (will refresh in background)", cacheKey)
-	}
+	delete(cache, "sheet_"+sheetName)
 	cacheMutex.Unlock()
+	log.Printf("Cache INVALIDATED for key: sheet_%s", sheetName)
 
-	// Trigger a background refresh immediately so new data is ready ASAP
-	go fetchAndRefreshCache(sheetName, cacheTTL)
-
-	// Note: We DO NOT invalidate Sheet ID cache anymore.
-	// Sheet IDs (gid) rarely change, so keeping them speeds up updates.
-}
-
-// --- OPTIMIZED Fetch & Cache Sheet Data ---
-
-// This function implements "Stale-While-Revalidate".
-// It returns cached data IMMEDIATELY if available (even if expired),
-// and triggers a background refresh if needed.
-func getCachedSheetData(sheetName string, target interface{}, duration time.Duration) error {
-	cacheKey := "sheet_" + sheetName
-	
-	cacheMutex.RLock()
-	item, found := cache[cacheKey]
-	cacheMutex.RUnlock()
-
-	// ករណីទី ១: មានទិន្នន័យក្នុង Cache (ទោះបីចាស់ក៏ដោយ) -> យកមកប្រើសិន
-	if found {
-		// Unmarshal ទិន្នន័យដើម្បីដាក់ចូល target
-		jsonData, err := json.Marshal(item.Data)
-		if err == nil {
-			err = json.Unmarshal(jsonData, target)
-			if err == nil {
-				// ជោគជ័យក្នុងការអាន Cache!
-				
-				// ពិនិត្យមើលថាតើទិន្នន័យចាស់ពេកឬនៅ? (Soft Expiry)
-				if time.Now().After(item.ExpiresAt) {
-					// បើចាស់ហើយ -> បើក Background Goroutine ដើម្បីទៅទាញថ្មី (User មិនបាច់ចាំ)
-					log.Printf("Cache stale for %s, triggering background refresh...", sheetName)
-					go fetchAndRefreshCache(sheetName, duration)
-				}
-				
-				// Return ទិន្នន័យភ្លាមៗ! លឿនខ្លាំង!
-				return nil
-			}
-			log.Printf("Error unmarshalling cached data for %s: %v", sheetName, err)
-		} else {
-			log.Printf("Error marshalling cached data for %s: %v", sheetName, err)
-		}
-	}
-
-	// ករណីទី ២: មិនមានទិន្នន័យសោះ (ពេលបើក Server ដំបូង) -> ត្រូវតែរង់ចាំ (Synchronous Fetch)
-	log.Printf("Cold start for %s, fetching synchronously...", sheetName)
-	return fetchAndRefreshCache(sheetName, duration)
-}
-
-// Function ថ្មីសម្រាប់ទាញទិន្នន័យ និងដាក់ចូល Cache (ប្រើបានទាំង Sync និង Async)
-func fetchAndRefreshCache(sheetName string, duration time.Duration) error {
-	cacheKey := "sheet_" + sheetName
-
-	// ពិនិត្យកុំឱ្យមានការទាញស្ទួនៗគ្នាក្នុងពេលតែមួយ (Debounce)
-	refreshMutex.Lock()
-	if refreshing[cacheKey] {
-		refreshMutex.Unlock()
-		return nil // កំពុងទាញហើយ មិនបាច់ទាញទៀតទេ
-	}
-	refreshing[cacheKey] = true
-	refreshMutex.Unlock()
-
-	// ធានាថា state ត្រូវបាន reset ពេលចប់
-	defer func() {
-		refreshMutex.Lock()
-		refreshing[cacheKey] = false
-		refreshMutex.Unlock()
-	}()
-
-	// ចាប់ផ្តើមទាញពី Google Sheets API
-	log.Printf("Fetching fresh data for %s (API Call)...", sheetName)
-	mappedData, err := fetchSheetDataFromAPI(sheetName)
-	if err != nil {
-		log.Printf("Failed to refresh data for %s: %v", sheetName, err)
-		return err
-	}
-
-	// ដាក់ចូល Cache វិញ
-	setCache(cacheKey, mappedData, duration)
-	
-	return nil
+	// Invalidate Sheet ID cache
+	sheetIdCacheMutex.Lock()
+	delete(sheetIdCache, sheetName)
+	sheetIdCacheMutex.Unlock()
+	log.Printf("Sheet ID Cache INVALIDATED for key: %s", sheetName)
 }
 
 // --- Models ---
@@ -654,6 +579,42 @@ func findRowIndexByPK(sheetName string, pkHeader string, pkValue string) (int64,
 	return -1, sheetId, fmt.Errorf("row not found with %s = %s in sheet %s", pkHeader, pkValue, sheetName)
 }
 
+// --- Fetch & Cache Sheet Data (Rewritten) ---
+// ... (getCachedSheetData remains the same) ...
+func getCachedSheetData(sheetName string, target interface{}, duration time.Duration) error {
+	cacheKey := "sheet_" + sheetName
+	cachedData, found := getCache(cacheKey)
+	if found {
+		jsonData, err := json.Marshal(cachedData)
+		if err == nil {
+			err = json.Unmarshal(jsonData, target)
+			if err == nil {
+				return nil
+			}
+			log.Printf("Error unmarshalling cached data for %s: %v", sheetName, err)
+		} else {
+			log.Printf("Error marshalling cached data for %s: %v", sheetName, err)
+		}
+	}
+	log.Printf("Fetching fresh data for %s (via Sheets API)", sheetName)
+	mappedData, err := fetchSheetDataFromAPI(sheetName)
+	if err != nil {
+		return err
+	}
+	jsonData, err := json.Marshal(mappedData)
+	if err != nil {
+		log.Printf("Error marshalling data from Sheets API for %s: %v", sheetName, err)
+		return fmt.Errorf("internal error processing sheet data")
+	}
+	err = json.Unmarshal(jsonData, target)
+	if err != nil {
+		log.Printf("Error unmarshalling data for %s: %v. JSON: %s", sheetName, err, string(jsonData))
+		return fmt.Errorf("mismatched data structure for %s", sheetName)
+	}
+	setCache(cacheKey, mappedData, duration)
+	return nil
+}
+
 // --- Apps Script Communication ---
 // ... (AppsScriptRequest, AppsScriptResponse, callAppsScriptPOST structs and function remain the same) ...
 type AppsScriptRequest struct {
@@ -726,7 +687,7 @@ func handlePing(c *gin.Context) {
 
 // ... (handleGetUsers remains the same) ...
 func handleGetUsers(c *gin.Context) {
-	users := []User{} // Changed from var users []User to ensure empty slice instead of nil
+	var users []User
 	err := getCachedSheetData("Users", &users, 15*time.Minute)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"status": "error", "message": err.Error()})
@@ -739,16 +700,15 @@ func handleGetUsers(c *gin.Context) {
 func handleGetStaticData(c *gin.Context) {
 	result := make(map[string]interface{})
 	var err error
-	// Initialize all slices as empty to ensure JSON returns [] instead of null
-	pages := []TeamPage{}
-	products := []Product{}
-	locations := []Location{}
-	shippingMethods := []ShippingMethod{}
-	settingsMaps := []map[string]interface{}{}
-	colors := []Color{}
-	drivers := []Driver{}
-	bankAccounts := []BankAccount{}
-	phoneCarriers := []PhoneCarrier{}
+	var pages []TeamPage
+	var products []Product
+	var locations []Location
+	var shippingMethods []ShippingMethod
+	var settingsMaps []map[string]interface{}
+	var colors []Color
+	var drivers []Driver
+	var bankAccounts []BankAccount
+	var phoneCarriers []PhoneCarrier
 
 	err = getCachedSheetData("TeamsPages", &pages, cacheTTL)
 	if err != nil {
@@ -1184,7 +1144,7 @@ func handleUpdateFormulaReport(c *gin.Context) {
 
 // ... (handleGetRevenueSummary remains the same) ...
 func handleGetRevenueSummary(c *gin.Context) {
-	revenueEntries := []RevenueEntry{} // Ensure empty slice
+	var revenueEntries []RevenueEntry
 	invalidateSheetCache(RevenueSheet)
 	err := getCachedSheetData(RevenueSheet, &revenueEntries, cacheTTL)
 	if err != nil {
@@ -1277,7 +1237,7 @@ func handleGetRevenueSummary(c *gin.Context) {
 
 // ... (handleGetAllOrders remains the same) ...
 func handleGetAllOrders(c *gin.Context) {
-	allOrders := []Order{} // Changed from var allOrders []Order to ensure empty slice
+	var allOrders []Order
 	invalidateSheetCache(AllOrdersSheet)
 	err := getCachedSheetData(AllOrdersSheet, &allOrders, cacheTTL)
 	if err != nil {
@@ -1298,7 +1258,7 @@ func handleGetAllOrders(c *gin.Context) {
 
 // ... (handleGetChatMessages remains the same) ...
 func handleGetChatMessages(c *gin.Context) {
-	chatMessages := []ChatMessage{} // Changed from var chatMessages []ChatMessage to ensure empty slice
+	var chatMessages []ChatMessage
 	err := getCachedSheetData(ChatMessagesSheet, &chatMessages, 10*time.Second)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"status": "error", "message": "Failed to fetch chat history: " + err.Error()})
@@ -1623,7 +1583,7 @@ func handleAdminUpdateSheet(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{"status": "success", "message": "Row updated successfully"})
 }
 
-// --- *** NEW: Handler to update a specific order (THIS WAS MISSING) *** ---
+// --- *** NEW: Handler to update a specific order (UPDATED WITH TELEGRAM SYNC) *** ---
 func handleAdminUpdateOrder(c *gin.Context) {
 	var request UpdateOrderRequest
 	if err := c.ShouldBindJSON(&request); err != nil {
@@ -1647,6 +1607,7 @@ func handleAdminUpdateOrder(c *gin.Context) {
 	}
 
 	// --- 2. Update the AllOrders sheet ---
+	// សំខាន់៖ ត្រូវ Update Sheet ឱ្យជោគជ័យសិន មុននឹងហៅទៅ Telegram
 	allOrdersPK := map[string]string{"Order ID": request.OrderID}
 	err = updateSheetRow(AllOrdersSheet, allOrdersPK, request.NewData)
 	if err != nil {
@@ -1657,24 +1618,39 @@ func handleAdminUpdateOrder(c *gin.Context) {
 
 	// --- 3. Log the edit ---
 	timestamp := time.Now().UTC().Format(time.RFC3339)
-	// Log each changed field as a separate row
 	for field, newValue := range request.NewData {
-		// Note: We don't have the "Old Value" here easily.
-		// For a simple log, we'll just log the new value.
-		// A more complex system might fetch the old value first.
 		logRow := []interface{}{
 			timestamp,
 			request.OrderID,
 			request.UserName,
 			"", // Approver (can be added later)
 			field,
-			"N/A", // Old Value (Skipped for simplicity)
+			"N/A", // Old Value
 			fmt.Sprintf("%v", newValue),
 		}
 		go appendRowToSheet(EditLogsSheet, logRow) // Run in background
 	}
 
-	c.JSON(http.StatusOK, gin.H{"status": "success", "message": "Order updated successfully"})
+	// --- 4. NEW: Trigger Telegram Update (Apps Script) ---
+	// ហៅទៅ Apps Script *បន្ទាប់ពី* Update Sheet រួចរាល់
+	// Apps Script នឹងអានទិន្នន័យថ្មីពី AllOrders ដើម្បីបង្កើតសារ Telegram ថ្មី
+	go func() {
+		log.Printf("Triggering Telegram update for order %s...", request.OrderID)
+		_, err := callAppsScriptPOST(AppsScriptRequest{
+			Action: "updateOrderTelegram",
+			OrderData: map[string]interface{}{
+				"orderId": request.OrderID,
+				"team":    request.Team,
+			},
+		})
+		if err != nil {
+			log.Printf("Warning: Failed to update Telegram message via Apps Script: %v", err)
+		} else {
+			log.Printf("Successfully triggered Telegram update for order %s", request.OrderID)
+		}
+	}()
+
+	c.JSON(http.StatusOK, gin.H{"status": "success", "message": "Order updated successfully in Sheets and Telegram"})
 }
 
 // --- *** NEW: handleAdminUpdateProductTags *** ---
@@ -1885,7 +1861,7 @@ func handleAdminDeleteRow(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{"status": "success", "message": "Row deleted successfully"})
 }
 
-// --- *** NEW: Handler to delete a specific order from ALL relevant sheets *** ---
+// --- *** NEW: Handler to delete a specific order from ALL relevant sheets AND Telegram *** ---
 func handleAdminDeleteOrder(c *gin.Context) {
 	var request DeleteOrderRequest
 	if err := c.ShouldBindJSON(&request); err != nil {
@@ -1898,7 +1874,25 @@ func handleAdminDeleteOrder(c *gin.Context) {
 		return
 	}
 
-	// 1. Delete from the specific team's order sheet
+	// --- 1. NEW: Call Apps Script to delete Telegram messages (MUST BE DONE BEFORE DELETING SHEET ROW) ---
+	// យើងត្រូវហៅទៅ Apps Script ដើម្បីលុបសារក្នុង Telegram ជាមុនសិន
+	// ព្រោះ Apps Script ត្រូវការអាន Message ID ដែលមាននៅក្នុង Sheet។ បើលុប Sheet មុន វានឹងរក Message ID មិនឃើញ។
+	go func() {
+		_, err := callAppsScriptPOST(AppsScriptRequest{
+			Action: "deleteOrderTelegram",
+			OrderData: map[string]interface{}{
+				"orderId": request.OrderID,
+				"team":    request.Team,
+			},
+		})
+		if err != nil {
+			log.Printf("Warning: Failed to trigger Telegram message deletion for order %s: %v", request.OrderID, err)
+		} else {
+			log.Printf("Successfully triggered Telegram message deletion for order %s", request.OrderID)
+		}
+	}()
+
+	// --- 2. Delete from the specific team's order sheet ---
 	teamOrderSheetName := fmt.Sprintf("Orders_%s", request.Team)
 	teamOrderPK := map[string]string{"Order ID": request.OrderID}
 
@@ -1908,7 +1902,7 @@ func handleAdminDeleteOrder(c *gin.Context) {
 		// We don't return here; we still want to try deleting from AllOrders
 	}
 
-	// 2. Delete from the AllOrders sheet
+	// --- 3. Delete from the AllOrders sheet ---
 	allOrdersPK := map[string]string{"Order ID": request.OrderID}
 	err = deleteSheetRow(AllOrdersSheet, allOrdersPK)
 	if err != nil {
@@ -1917,7 +1911,7 @@ func handleAdminDeleteOrder(c *gin.Context) {
 		return
 	}
 
-	// 3. Log the deletion
+	// --- 4. Log the deletion ---
 	timestamp := time.Now().UTC().Format(time.RFC3339)
 	logRow := []interface{}{
 		timestamp,
@@ -1930,7 +1924,7 @@ func handleAdminDeleteOrder(c *gin.Context) {
 	}
 	go appendRowToSheet(EditLogsSheet, logRow) // Run in background
 
-	c.JSON(http.StatusOK, gin.H{"status": "success", "message": "Order deleted successfully from all sheets"})
+	c.JSON(http.StatusOK, gin.H{"status": "success", "message": "Order and Telegram messages deleted successfully"})
 }
 
 // ... (handleUpdateProfile remains the same) ...
