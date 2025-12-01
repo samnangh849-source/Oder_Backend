@@ -587,11 +587,8 @@ func findRowIndexByPK(sheetName string, pkHeader string, pkValue string) (int64,
 	}
 	for i, row := range resp.Values {
 		if len(row) > 0 && fmt.Sprintf("%v", row[0]) == pkValue {
-			// FIXED: Return i+1 for 0-based index of the row (since reading started from Row 2)
-			// Row 1 (Header) skipped. i=0 corresponds to Row 2.
-			// Google Sheets GridCoordinate RowIndex for Row 2 is 1.
-			// So if i=0, we want to return 1.
-			return int64(i + 1), sheetId, nil 
+			// FIXED: No more unused 'rowIndex' variable. Directly return i+2 (Row 2 is index 0 of response)
+			return int64(i + 2), sheetId, nil 
 		}
 	}
 	return -1, sheetId, fmt.Errorf("row not found with %s = %s in sheet %s", pkHeader, pkValue, sheetName)
