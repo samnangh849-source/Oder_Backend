@@ -56,19 +56,19 @@ var (
 
 // --- Constants from Apps Script Config (Keep consistent) ---
 var sheetRanges = map[string]string{
-	"Users":            "Users!A:G",
-	"Settings":         "Settings!A:F",
-	"TeamsPages":       "TeamsPages!A:D",
-	"Products":         "Products!A:F", // បានប្តូរពី A:E ទៅ A:F
-	"Locations":        "Locations!A:C",
-	"ShippingMethods":  "ShippingMethods!A:D",
-	"Colors":           "Colors!A:A",
-	"Drivers":          "Drivers!A:B",
-	"BankAccounts":     "BankAccounts!A:B",
-	"PhoneCarriers":    "PhoneCarriers!A:C",
-	"AllOrders":        "AllOrders!A:Y",
-	"RevenueDashboard": "RevenueDashboard!A:D",
-	"ChatMessages":     "ChatMessages!A:E",
+	"Users":            "Users!A:H",           // កែពី A:G ទៅ A:H (ដើម្បីយក TelegramUsername)
+	"Settings":         "Settings!A:G",        // កែពី A:F ទៅ A:G (ដើម្បីយក CODAlertGroupID)
+	"TeamsPages":       "TeamsPages!A:D",      // ត្រឹមត្រូវហើយ
+	"Products":         "Products!A:F",        // ត្រឹមត្រូវហើយ (A:F គឺមាន Tags)
+	"Locations":        "Locations!A:C",       // ត្រឹមត្រូវហើយ
+	"ShippingMethods":  "ShippingMethods!A:F", // កែពី A:D ទៅ A:F (ដើម្បីយក EnableCODAlert, AlertTopicID)
+	"Colors":           "Colors!A:A",          // ត្រឹមត្រូវហើយ
+	"Drivers":          "Drivers!A:B",         // ត្រឹមត្រូវហើយ
+	"BankAccounts":     "BankAccounts!A:B",    // ត្រឹមត្រូវហើយ
+	"PhoneCarriers":    "PhoneCarriers!A:C",   // ត្រឹមត្រូវហើយ
+	"AllOrders":        "AllOrders!A:Z",       // កែពី A:Y ទៅ A:Z (សំខាន់ណាស់! ដើម្បីយក Column "Team")
+	"RevenueDashboard": "RevenueDashboard!A:D",// ត្រឹមត្រូវហើយ
+	"ChatMessages":     "ChatMessages!A:E",    // ត្រឹមត្រូវហើយ
 
 	"FormulaReportSheet": "FormulaReport!A:Z",
 	"UserActivityLogs":   "UserActivityLogs!A:Z",
