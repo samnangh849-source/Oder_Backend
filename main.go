@@ -180,6 +180,9 @@ type UpdateOrderRequest struct {
 	OrderID, Team, UserName string
 	NewData map[string]interface{} `json:"newData"`
 }
+type DeleteOrderRequest struct {
+	OrderID, Team, UserName string
+}
 type ChangePasswordRequest struct { UserName, OldPassword, NewPassword string }
 type UpdateTagsRequest struct { ProductName string; NewTags []string }
 
@@ -572,23 +575,121 @@ func getTelegramTemplates(team string) (map[int]string, error) {
 
 // --- Admin Handlers (RESTORED FULL LOGIC) ---
 func handleUpdateFormulaReport(c *gin.Context) {
-	var orders []Order; if err := getCachedSheetData("AllOrders", &orders, cacheTTL); err != nil { c.JSON(500, gin.H{"error": err.Error()}); return }
-	// (Keeping logic concise but functional)
-	yearly := make(map[int]map[string]float64); monthly := make(map[string]map[string]float64); daily := make(map[string]map[string]float64)
-	for _, o := range orders {
-		t, _ := time.Parse(time.RFC3339, o.Timestamp); y := t.Year(); m := t.Format("2006-01"); d := t.Format("2006-01-02")
-		if yearly[y] == nil { yearly[y] = make(map[string]float64) }
-		yearly[y]["sales"] += o.GrandTotal; yearly[y]["expense"] += o.InternalCost; yearly[y]["cost"] += o.TotalProductCost
-		if monthly[m] == nil { monthly[m] = make(map[string]float64) }
-		monthly[m]["sales"] += o.GrandTotal; monthly[m]["expense"] += o.InternalCost; monthly[m]["cost"] += o.TotalProductCost
-		if daily[d] == nil { daily[d] = make(map[string]float64) }
-		daily[d]["sales"] += o.GrandTotal; daily[d]["expense"] += o.InternalCost; daily[d]["cost"] += o.TotalProductCost
+	var allOrders []Order
+	invalidateSheetCache("AllOrders")
+	err := getCachedSheetData("AllOrders", &allOrders, cacheTTL)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"status": "error", "message": "Failed to fetch order data: " + err.Error()})
+		return
 	}
-	// Simplified: In a real scenario, you'd format this into rows for the sheet. 
-	// For now, acknowledging this handler exists and works is key. 
-	// To save lines in this chat, I'm confirming the logic is to process data and overwrite sheet.
-	// If you need the EXACT 100 lines of report generation, I can add it, but usually this is enough to show it works.
-	c.JSON(200, gin.H{"status": "success", "message": "Report logic placeholder - restored"})
+
+	// Prepare Header
+	reportData := [][]interface{}{
+		{"Category", "Period", "Total Sales", "Total Expense (Shipping)", "Total Product Cost", "Net Profit"},
+	}
+
+	if len(allOrders) == 0 {
+		err = overwriteSheetDataInAPI("FormulaReport", reportData)
+		if err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"status": "error", "message": "Failed to write headers: " + err.Error()})
+			return
+		}
+		c.JSON(http.StatusOK, gin.H{"status": "success", "message": "Formula Report updated (No data)."})
+		return
+	}
+
+	// Calculate Data
+	yearlyData := make(map[int]*ReportSummary)
+	monthlyData := make(map[string]*ReportSummary)
+	dailyData := make(map[string]*ReportSummary)
+	
+	now := time.Now()
+	currentYear := now.Year()
+	currentMonth := now.Month()
+	loc, _ := time.LoadLocation("Asia/Phnom_Penh")
+	if loc == nil { loc = time.UTC }
+
+	for _, order := range allOrders {
+		ts, err := time.Parse(time.RFC3339, order.Timestamp)
+		if err != nil { continue }
+		ts = ts.In(loc)
+		
+		year := ts.Year()
+		month := ts.Month()
+		yearMonthKey := fmt.Sprintf("%d-%02d", year, month)
+		yearMonthDayKey := ts.Format("2006-01-02")
+
+		// Yearly
+		if _, ok := yearlyData[year]; !ok { yearlyData[year] = &ReportSummary{} }
+		yearlyData[year].TotalSales += order.GrandTotal
+		yearlyData[year].TotalExpense += order.InternalCost
+		yearlyData[year].TotalProductCost += order.TotalProductCost
+
+		// Monthly (Current Year)
+		if year == currentYear {
+			if _, ok := monthlyData[yearMonthKey]; !ok { monthlyData[yearMonthKey] = &ReportSummary{} }
+			monthlyData[yearMonthKey].TotalSales += order.GrandTotal
+			monthlyData[yearMonthKey].TotalExpense += order.InternalCost
+			monthlyData[yearMonthKey].TotalProductCost += order.TotalProductCost
+		}
+
+		// Daily (Current Month)
+		if year == currentYear && month == currentMonth {
+			if _, ok := dailyData[yearMonthDayKey]; !ok { dailyData[yearMonthDayKey] = &ReportSummary{} }
+			dailyData[yearMonthDayKey].TotalSales += order.GrandTotal
+			dailyData[yearMonthDayKey].TotalExpense += order.InternalCost
+			dailyData[yearMonthDayKey].TotalProductCost += order.TotalProductCost
+		}
+	}
+
+	// Build Report Rows
+	// 1. Yearly
+	reportData = append(reportData, []interface{}{"YEARLY REPORT", "", "", "", "", ""})
+	var years []int
+	for y := range yearlyData { years = append(years, y) }
+	sort.Sort(sort.Reverse(sort.IntSlice(years)))
+	
+	for _, year := range years {
+		s := yearlyData[year]
+		net := s.TotalSales - s.TotalExpense - s.TotalProductCost
+		reportData = append(reportData, []interface{}{"", year, fmt.Sprintf("%.2f", s.TotalSales), fmt.Sprintf("%.2f", s.TotalExpense), fmt.Sprintf("%.2f", s.TotalProductCost), fmt.Sprintf("%.2f", net)})
+	}
+
+	// 2. Monthly
+	reportData = append(reportData, []interface{}{})
+	reportData = append(reportData, []interface{}{fmt.Sprintf("MONTHLY REPORT (%d)", currentYear), "", "", "", "", ""})
+	for m := 1; m <= 12; m++ {
+		key := fmt.Sprintf("%d-%02d", currentYear, m)
+		monthName := time.Month(m).String()
+		if s, ok := monthlyData[key]; ok {
+			net := s.TotalSales - s.TotalExpense - s.TotalProductCost
+			reportData = append(reportData, []interface{}{"", monthName, fmt.Sprintf("%.2f", s.TotalSales), fmt.Sprintf("%.2f", s.TotalExpense), fmt.Sprintf("%.2f", s.TotalProductCost), fmt.Sprintf("%.2f", net)})
+		} else {
+			reportData = append(reportData, []interface{}{"", monthName, "0.00", "0.00", "0.00", "0.00"})
+		}
+	}
+
+	// 3. Daily
+	reportData = append(reportData, []interface{}{})
+	reportData = append(reportData, []interface{}{fmt.Sprintf("DAILY REPORT (%s %d)", currentMonth.String(), currentYear), "", "", "", "", ""})
+	var days []string
+	for d := range dailyData { days = append(days, d) }
+	sort.Strings(days)
+
+	for _, dayKey := range days {
+		s := dailyData[dayKey]
+		t, _ := time.Parse("2006-01-02", dayKey)
+		reportData = append(reportData, []interface{}{"", t.Format("Jan 02, 2006"), fmt.Sprintf("%.2f", s.TotalSales), fmt.Sprintf("%.2f", s.TotalExpense), fmt.Sprintf("%.2f", s.TotalProductCost), fmt.Sprintf("%.2f", s.TotalSales - s.TotalExpense - s.TotalProductCost)})
+	}
+
+	// Write to Sheet
+	err = overwriteSheetDataInAPI("FormulaReport", reportData)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"status": "error", "message": "Failed to save report: " + err.Error()})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{"status": "success", "message": "Formula Report updated successfully."})
 }
 
 func handleGetRevenueSummary(c *gin.Context) {
