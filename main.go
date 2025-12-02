@@ -50,7 +50,7 @@ var sheetRanges = map[string]string{
 	"AllOrders":         "AllOrders!A:Z",
 	"RevenueDashboard":  "RevenueDashboard!A:D",
 	"ChatMessages":      "ChatMessages!A:E",
-	"TelegramTemplates": "TelegramTemplates!A:C", // Added for Native Telegram
+	"TelegramTemplates": "TelegramTemplates!A:C",
 	"FormulaReportSheet": "FormulaReport!A:Z",
 	"UserActivityLogs":   "UserActivityLogs!A:Z",
 	"EditLogs":           "EditLogs!A:Z",
@@ -200,7 +200,15 @@ type CallbackQuery struct {
 	ID string `json:"id"`; From TelegramUser `json:"from"`; Message TelegramMsg `json:"message"`; Data string `json:"data"`
 }
 type TelegramUser struct { ID int64 `json:"id"`; Username string `json:"username"` }
-type CallbackData struct { Action, OrderID, Team, Bank string `json:"a,omitempty"` } // Adjusted tags
+
+// *** FIXED: CallbackData tags must be unique ***
+type CallbackData struct {
+	Action  string `json:"a"`
+	OrderID string `json:"o"`
+	Team    string `json:"t"`
+	Bank    string `json:"b,omitempty"`
+}
+
 type TelegramSettings struct { Token, GroupID, TopicID, LabelPrinterURL, CODAlertGroupID string }
 
 // --- WebSocket ---
