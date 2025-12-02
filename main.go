@@ -22,7 +22,7 @@ import (
 	"github.com/gin-contrib/cors"
 	"github.com/gin-gonic/gin"
 
-	// --- REMOVED: Telegram Bot API ---
+	// --- REMOVED: Telegram Bot API (We use direct HTTP calls now) ---
 
 	// --- NEW: WebSocket Library ---
 	"github.com/gorilla/websocket"
@@ -159,6 +159,7 @@ type User struct {
 	ProfilePictureURL string `json:"ProfilePictureURL"`
 	Role              string `json:"Role"`
 	IsSystemAdmin     bool   `json:"IsSystemAdmin"`
+	TelegramUsername  string `json:"TelegramUsername"` // *** ADDED: For verification ***
 }
 type Product struct {
 	ProductName string  `json:"ProductName"`
@@ -273,6 +274,42 @@ type ChangePasswordRequest struct {
 type UpdateTagsRequest struct {
 	ProductName string   `json:"productName"`
 	NewTags     []string `json:"newTags"`
+}
+
+// --- NEW: Telegram Structs ---
+type TelegramUpdate struct {
+	UpdateID      int            `json:"update_id"`
+	Message       *TelegramMsg   `json:"message"`
+	CallbackQuery *CallbackQuery `json:"callback_query"`
+}
+
+type TelegramMsg struct {
+	MessageID int    `json:"message_id"`
+	Chat      Chat   `json:"chat"`
+	Text      string `json:"text"`
+}
+
+type Chat struct {
+	ID int64 `json:"id"`
+}
+
+type CallbackQuery struct {
+	ID      string       `json:"id"`
+	From    TelegramUser `json:"from"`
+	Message TelegramMsg  `json:"message"`
+	Data    string       `json:"data"` // JSON String: {"a": "pay_menu", ...}
+}
+
+type TelegramUser struct {
+	ID       int64  `json:"id"`
+	Username string `json:"username"`
+}
+
+type CallbackData struct {
+	Action  string `json:"a"`           // Action: pay_menu, confirm_pay, cancel
+	OrderID string `json:"o"`           // Order ID
+	Team    string `json:"t"`           // Team
+	Bank    string `json:"b,omitempty"` // Bank Name
 }
 
 // --- WebSocket Structs ---
@@ -422,7 +459,7 @@ func convertSheetValuesToMaps(values *sheets.ValueRange) ([]map[string]interface
 					} else {
 						rowData[header] = cell
 					}
-					if header == "Password" || header == "Customer Phone" || header == "Barcode" || header == "Customer Name" || header == "Note" || header == "Content" || header == "Tags" {
+					if header == "Password" || header == "Customer Phone" || header == "Barcode" || header == "Customer Name" || header == "Note" || header == "Content" || header == "Tags" || header == "TelegramUsername" {
 						rowData[header] = fmt.Sprintf("%v", cell)
 					}
 				}
@@ -2063,6 +2100,288 @@ func handleClearCache(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{"status": "success", "message": "All server caches cleared"})
 }
 
+// --- NEW: Telegram Helper Functions (Added here) ---
+
+// 1. Get Bot Token from Cached Settings
+func getBotTokenForTeam(team string) (string, error) {
+	var settings []map[string]interface{}
+	err := getCachedSheetData("Settings", &settings, cacheTTL)
+	if err != nil {
+		return "", err
+	}
+
+	for _, row := range settings {
+		if rowTeam, ok := row["Team"].(string); ok && rowTeam == team {
+			if token, ok := row["TelegramBotToken"].(string); ok {
+				return token, nil
+			}
+		}
+	}
+	return "", fmt.Errorf("bot token not found for team %s", team)
+}
+
+// 2. Verify Telegram User from Cached Users
+func verifyTelegramUser(username string) bool {
+	if username == "" {
+		return false
+	}
+	
+	// We use the raw map data to ensure we catch the column even if struct is outdated (though we updated struct above)
+	var rawUsers []map[string]interface{}
+	// Use a short cache duration to ensure we have latest users
+	getCachedSheetData("Users", &rawUsers, 15*time.Minute)
+	
+	cleanUsername := strings.ToLower(strings.TrimPrefix(username, "@"))
+	
+	for _, row := range rawUsers {
+		// Try to find the username in the column "TelegramUsername"
+		if val, ok := row["TelegramUsername"].(string); ok {
+			sheetUser := strings.ToLower(strings.TrimPrefix(val, "@"))
+			if sheetUser == cleanUsername {
+				return true
+			}
+		}
+	}
+	return false
+}
+
+// 3. Send Request to Telegram API
+func callTelegramAPI(token string, method string, payload map[string]interface{}) error {
+	url := fmt.Sprintf("https://api.telegram.org/bot%s/%s", token, method)
+	
+	jsonData, err := json.Marshal(payload)
+	if err != nil {
+		return err
+	}
+
+	resp, err := http.Post(url, "application/json", bytes.NewBuffer(jsonData))
+	if err != nil {
+		return err
+	}
+	defer resp.Body.Close()
+	
+	if resp.StatusCode != 200 {
+		body, _ := io.ReadAll(resp.Body)
+		log.Printf("Telegram API Error (%s): %s", method, string(body))
+		return fmt.Errorf("telegram API returned status: %d", resp.StatusCode)
+	}
+	return nil
+}
+
+// 4. Answer Callback Query (to stop the loading spinner)
+func answerCallbackQuery(token, callbackID, text string, showAlert bool) {
+	payload := map[string]interface{}{
+		"callback_query_id": callbackID,
+		"text":              text,
+		"show_alert":        showAlert,
+	}
+	// Run in background so it doesn't block
+	go callTelegramAPI(token, "answerCallbackQuery", payload)
+}
+
+// --- NEW Helper: Get Value by PK ---
+func getSheetValueByPK(sheetName, pkHeader, pkValue, targetHeader string) (string, error) {
+	rowIndex, _, err := findRowIndexByPK(sheetName, pkHeader, pkValue)
+	if err != nil {
+		return "", err
+	}
+
+	headerMap, err := findHeaderMap(sheetName)
+	if err != nil {
+		return "", err
+	}
+
+	colIndex, ok := headerMap[targetHeader]
+	if !ok {
+		return "", fmt.Errorf("column %s not found", targetHeader)
+	}
+
+	// Calculate A1 notation for column letter
+	div := colIndex + 1
+	colLetter := ""
+	for div > 0 {
+		mod := (div - 1) % 26
+		colLetter = string(rune('A'+mod)) + colLetter
+		div = (div - 1) / 26
+	}
+
+	readRange := fmt.Sprintf("%s!%s%d", sheetName, colLetter, rowIndex)
+	resp, err := sheetsService.Spreadsheets.Values.Get(spreadsheetID, readRange).Do()
+	if err != nil {
+		return "", err
+	}
+
+	if len(resp.Values) > 0 && len(resp.Values[0]) > 0 {
+		return fmt.Sprintf("%v", resp.Values[0][0]), nil
+	}
+	return "", nil
+}
+
+// --- Main Telegram Webhook Handler ---
+func handleTelegramWebhook(c *gin.Context) {
+	var update TelegramUpdate
+	if err := c.ShouldBindJSON(&update); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid JSON"})
+		return
+	}
+
+	// យើងចាប់អារម្មណ៍តែ CallbackQuery ប៉ុណ្ណោះសម្រាប់ COD Logic
+	if update.CallbackQuery == nil {
+		c.JSON(http.StatusOK, gin.H{"status": "ignored"})
+		return
+	}
+
+	cb := update.CallbackQuery
+	var data CallbackData
+	// data is stored as a JSON string inside the callback query
+	if err := json.Unmarshal([]byte(cb.Data), &data); err != nil {
+		log.Printf("Error parsing callback data: %v", err)
+		c.JSON(http.StatusOK, gin.H{"status": "error_parsing_data"})
+		return
+	}
+
+	// 1. Get Bot Token using the Team ID from callback data
+	token, err := getBotTokenForTeam(data.Team)
+	if err != nil {
+		log.Printf("Bot token not found for team %s: %v", data.Team, err)
+		c.JSON(http.StatusOK, gin.H{"status": "team_not_found"})
+		return
+	}
+
+	// 2. Verify User
+	if !verifyTelegramUser(cb.From.Username) {
+		answerCallbackQuery(token, cb.ID, "⛔ អ្នកមិនមានសិទ្ធិប្រើប្រាស់ប៊ូតុងនេះទេ។", true)
+		c.JSON(http.StatusOK, gin.H{"status": "unauthorized"})
+		return
+	}
+
+	// 3. Handle Actions
+	switch data.Action {
+	case "pay_menu":
+		// *** Validation: Check Current Status in Sheet ***
+		// Prevent opening menu if already paid
+		teamSheet := fmt.Sprintf("Orders_%s", data.Team)
+		currentStatus, err := getSheetValueByPK(teamSheet, "Order ID", data.OrderID, "Payment Status")
+		if err == nil {
+			// Check against allowed unpaid statuses
+			isUnpaid := false
+			validStatuses := []string{"COD", "Unpaid", "Unpaid (COD)"}
+			for _, s := range validStatuses {
+				if strings.EqualFold(strings.TrimSpace(currentStatus), s) {
+					isUnpaid = true
+					break
+				}
+			}
+
+			if !isUnpaid {
+				// If status is not in our allowed "Unpaid" list (e.g. it is "Paid" or something else)
+				answerCallbackQuery(token, cb.ID, fmt.Sprintf("⚠️ មិនអាចបន្តបាន៖ ស្ថានភាពបច្ចុប្បន្នគឺ '%s'", currentStatus), true)
+				return
+			}
+		} else {
+			// Log error but maybe allow proceed if read fails? Or block?
+			// Let's log and proceed cautiously, or block for safety.
+			log.Printf("Error verifying status for %s: %v", data.OrderID, err)
+		}
+		// *************************************************
+
+		// Fetch Banks
+		var banks []BankAccount
+		getCachedSheetData("BankAccounts", &banks, cacheTTL)
+		
+		var buttons [][]map[string]interface{}
+		for _, b := range banks {
+			// Create JSON for next action
+			nextData := CallbackData{
+				Action:  "confirm_pay",
+				OrderID: data.OrderID,
+				Team:    data.Team,
+				Bank:    b.BankName,
+			}
+			jsonBytes, _ := json.Marshal(nextData)
+
+			btn := map[string]interface{}{
+				"text":          b.BankName,
+				"callback_data": string(jsonBytes),
+			}
+			buttons = append(buttons, []map[string]interface{}{btn})
+		}
+		// Add Cancel Button
+		cancelData, _ := json.Marshal(CallbackData{Action: "cancel"})
+		buttons = append(buttons, []map[string]interface{}{{
+			"text": "❌ Cancel", 
+			"callback_data": string(cancelData),
+		}})
+
+		// Edit Message to show buttons
+		payload := map[string]interface{}{
+			"chat_id":    cb.Message.Chat.ID,
+			"message_id": cb.Message.MessageID,
+			"reply_markup": map[string]interface{}{
+				"inline_keyboard": buttons,
+			},
+		}
+		go callTelegramAPI(token, "editMessageReplyMarkup", payload)
+		answerCallbackQuery(token, cb.ID, "សូមជ្រើសរើសធនាគារ...", false)
+
+	case "confirm_pay":
+		// A. Update Sheets (Orders_Team & AllOrders)
+		pk := map[string]string{"Order ID": data.OrderID}
+		updates := map[string]interface{}{
+			"Payment Status": "Paid",
+			"Payment Info":   data.Bank,
+		}
+
+		// Update Team Sheet
+		teamSheet := fmt.Sprintf("Orders_%s", data.Team)
+		go func() {
+			err := updateSheetRow(teamSheet, pk, updates)
+			if err != nil { log.Printf("Failed to update team sheet: %v", err) }
+		}()
+
+		// Update AllOrders Sheet
+		go func() {
+			err := updateSheetRow("AllOrders", pk, updates)
+			if err != nil { log.Printf("Failed to update AllOrders sheet: %v", err) }
+		}()
+
+		// B. Update Telegram Message Text
+		newText := fmt.Sprintf("%s\n\n✅ *Paid by:* @%s\n🏦 *Via:* %s\n🕒 %s", 
+			cb.Message.Text, 
+			cb.From.Username, 
+			data.Bank, 
+			time.Now().Format("2006-01-02 15:04:05"),
+		)
+
+		payload := map[string]interface{}{
+			"chat_id":    cb.Message.Chat.ID,
+			"message_id": cb.Message.MessageID,
+			"text":       newText,
+			"parse_mode": "Markdown",
+			"reply_markup": map[string]interface{}{
+				"inline_keyboard": [][]interface{}{}, // Remove buttons
+			},
+		}
+		
+		go callTelegramAPI(token, "editMessageText", payload)
+		answerCallbackQuery(token, cb.ID, "បាន Update ជោគជ័យ!", false)
+
+	case "cancel":
+		// Remove buttons (hide menu)
+		payload := map[string]interface{}{
+			"chat_id":    cb.Message.Chat.ID,
+			"message_id": cb.Message.MessageID,
+			"reply_markup": map[string]interface{}{
+				"inline_keyboard": [][]interface{}{}, // Empty
+			},
+		}
+		go callTelegramAPI(token, "editMessageReplyMarkup", payload)
+		answerCallbackQuery(token, cb.ID, "បានបោះបង់", false)
+	}
+
+	c.JSON(http.StatusOK, gin.H{"status": "ok"})
+}
+
 // --- Main Function ---
 func main() {
 	// --- Load configuration from environment variables ---
@@ -2117,6 +2436,9 @@ func main() {
 
 		api.POST("/submit-order", handleSubmitOrder)
 		api.POST("/upload-image", handleImageUploadProxy)
+
+		// --- NEW: Telegram Webhook Route ---
+		api.POST("/telegram-webhook", handleTelegramWebhook) 
 
 		// --- Chat Endpoints ---
 		chat := api.Group("/chat")
