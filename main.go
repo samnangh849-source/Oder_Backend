@@ -57,17 +57,17 @@ var (
 // --- Constants from Apps Script Config (Keep consistent) ---
 // *** UPDATED RANGES TO MATCH NEW COLUMNS IN SETUP.GS ***
 var sheetRanges = map[string]string{
-	"Users":            "Users!A:H",           // Updated: A:G -> A:H (Includes TelegramUsername)
-	"Settings":         "Settings!A:G",        // Updated: A:F -> A:G (Includes CODAlertGroupID)
+	"Users":            "Users!A:H",    // Updated: A:G -> A:H (Includes TelegramUsername)
+	"Settings":         "Settings!A:G", // Updated: A:F -> A:G (Includes CODAlertGroupID)
 	"TeamsPages":       "TeamsPages!A:D",
-	"Products":         "Products!A:F",        // Updated: A:F (Includes Tags)
+	"Products":         "Products!A:F", // Updated: A:F (Includes Tags)
 	"Locations":        "Locations!A:C",
 	"ShippingMethods":  "ShippingMethods!A:F", // Updated: A:D -> A:F (Includes EnableCODAlert, AlertTopicID)
 	"Colors":           "Colors!A:A",
 	"Drivers":          "Drivers!A:B",
 	"BankAccounts":     "BankAccounts!A:B",
 	"PhoneCarriers":    "PhoneCarriers!A:C",
-	"AllOrders":        "AllOrders!A:Z",       // Updated: A:Y -> A:Z (Includes Team column)
+	"AllOrders":        "AllOrders!A:Z", // Updated: A:Y -> A:Z (Includes Team column)
 	"RevenueDashboard": "RevenueDashboard!A:D",
 	"ChatMessages":     "ChatMessages!A:E",
 
@@ -87,7 +87,6 @@ const (
 )
 
 // --- Cache ---
-// ... (CacheItem, cache, cacheMutex, cacheTTL remain the same) ...
 type CacheItem struct {
 	Data      interface{}
 	ExpiresAt time.Time
@@ -122,7 +121,6 @@ func getCache(key string) (interface{}, bool) {
 	return item.Data, true
 }
 
-// ... (clearCache remains the same, it correctly clears both) ...
 func clearCache() {
 	cacheMutex.Lock()
 	defer cacheMutex.Unlock()
@@ -134,7 +132,6 @@ func clearCache() {
 	log.Println("Sheet ID Cache CLEARED")
 }
 
-// ... (invalidateSheetCache remains the same) ...
 func invalidateSheetCache(sheetName string) {
 	// Invalidate data cache
 	cacheMutex.Lock()
@@ -150,7 +147,6 @@ func invalidateSheetCache(sheetName string) {
 }
 
 // --- Models ---
-// ... (All structs: User, Product, Location, ShippingMethod, TeamPage, Color, Driver, BankAccount, PhoneCarrier, Order, RevenueEntry, ChatMessage, ReportSummary, RevenueAggregate remain the same) ...
 type User struct {
 	UserName          string `json:"UserName"`
 	Password          string `json:"Password"`
@@ -275,8 +271,14 @@ type UpdateTagsRequest struct {
 	NewTags     []string `json:"newTags"`
 }
 
+// --- NEW: Struct for Delete Order Request ---
+type DeleteOrderRequest struct {
+	OrderID  string `json:"orderId"`
+	Team     string `json:"team"`
+	UserName string `json:"userName"` // For logging
+}
+
 // --- WebSocket Structs ---
-// ... (WebSocketMessage, upgrader, Client, Hub, NewHub, run, writePump, serveWs structs and functions remain the same) ...
 type WebSocketMessage struct {
 	Action  string      `json:"action"`
 	Payload interface{} `json:"payload"`
@@ -371,7 +373,6 @@ func serveWs(c *gin.Context) {
 }
 
 // --- Google API Client Setup ---
-// ... (createGoogleAPIClient remains the same) ...
 func createGoogleAPIClient(ctx context.Context) error {
 	credentialsJSON := os.Getenv("GCP_CREDENTIALS")
 	if credentialsJSON == "" {
@@ -388,7 +389,8 @@ func createGoogleAPIClient(ctx context.Context) error {
 }
 
 // --- Google Sheets API Helper Functions ---
-// ... (convertSheetValuesToMaps remains the same) ...
+
+// UPDATED: More robust parsing for strings/booleans
 func convertSheetValuesToMaps(values *sheets.ValueRange) ([]map[string]interface{}, error) {
 	if values == nil || len(values.Values) < 2 {
 		return []map[string]interface{}{}, nil
@@ -396,6 +398,7 @@ func convertSheetValuesToMaps(values *sheets.ValueRange) ([]map[string]interface
 	headers := values.Values[0]
 	dataRows := values.Values[1:]
 	result := make([]map[string]interface{}, 0, len(dataRows))
+	
 	for _, row := range dataRows {
 		if len(row) == 0 || (len(row) == 1 && row[0] == "") {
 			continue
@@ -406,22 +409,30 @@ func convertSheetValuesToMaps(values *sheets.ValueRange) ([]map[string]interface
 				header := fmt.Sprintf("%v", headers[i])
 				if header != "" {
 					if cellStr, ok := cell.(string); ok {
-						cleanedStr := cellStr
+						// Clean up string first
+						cleanedStr := strings.TrimSpace(cellStr)
+						
+						// Handle Numbers/Currency
+						cleanedNum := strings.ReplaceAll(cleanedStr, "$", "")
+						cleanedNum = strings.ReplaceAll(cleanedNum, ",", "")
+
 						if header == "Cost" || header == "Price" || header == "Grand Total" || header == "Subtotal" || header == "Shipping Fee (Customer)" || header == "Internal Cost" || header == "Discount ($)" || header == "Delivery Unpaid" || header == "Delivery Paid" || header == "Total Product Cost ($)" {
-							cleanedStr = strings.ReplaceAll(cleanedStr, "$", "")
-							cleanedStr = strings.ReplaceAll(cleanedStr, ",", "")
-							cleanedStr = strings.TrimSpace(cleanedStr)
-						}
-						if f, err := strconv.ParseFloat(cleanedStr, 64); err == nil {
-							rowData[header] = f
-						} else if b, err := strconv.ParseBool(cellStr); err == nil {
-							rowData[header] = b
+							if f, err := strconv.ParseFloat(cleanedNum, 64); err == nil {
+								rowData[header] = f
+							} else {
+								rowData[header] = cleanedStr
+							}
+						} else if b, err := strconv.ParseBool(cleanedStr); err == nil {
+							// FIX: Using cleanedStr to handle "TRUE " cases
+							rowData[header] = b 
 						} else {
-							rowData[header] = cellStr
+							rowData[header] = cellStr // Keep original for non-numeric/boolean
 						}
 					} else {
 						rowData[header] = cell
 					}
+					
+					// Force String for specific IDs/Notes
 					if header == "Password" || header == "Customer Phone" || header == "Barcode" || header == "Customer Name" || header == "Note" || header == "Content" || header == "Tags" {
 						rowData[header] = fmt.Sprintf("%v", cell)
 					}
@@ -433,7 +444,6 @@ func convertSheetValuesToMaps(values *sheets.ValueRange) ([]map[string]interface
 	return result, nil
 }
 
-// ... (fetchSheetDataFromAPI remains the same) ...
 func fetchSheetDataFromAPI(sheetName string) ([]map[string]interface{}, error) {
 	readRange, ok := sheetRanges[sheetName]
 	if !ok {
@@ -452,7 +462,6 @@ func fetchSheetDataFromAPI(sheetName string) ([]map[string]interface{}, error) {
 	return mappedData, nil
 }
 
-// ... (appendRowToSheet remains the same) ...
 func appendRowToSheet(sheetName string, rowData []interface{}) error {
 	writeRange := sheetName
 	valueRange := &sheets.ValueRange{
@@ -467,7 +476,6 @@ func appendRowToSheet(sheetName string, rowData []interface{}) error {
 	return nil
 }
 
-// ... (overwriteSheetDataInAPI remains the same) ...
 func overwriteSheetDataInAPI(sheetName string, data [][]interface{}) error {
 	clearRange, ok := sheetRanges[sheetName]
 	if !ok {
@@ -495,9 +503,7 @@ func overwriteSheetDataInAPI(sheetName string, data [][]interface{}) error {
 	return nil
 }
 
-// ... (getSheetIdByName remains the same) ...
 func getSheetIdByName(sheetName string) (int64, error) {
-	// *** This cache is the source of the problem if it gets stale ***
 	sheetIdCacheMutex.RLock()
 	sheetId, found := sheetIdCache[sheetName]
 	sheetIdCacheMutex.RUnlock()
@@ -507,7 +513,6 @@ func getSheetIdByName(sheetName string) (int64, error) {
 	}
 
 	log.Printf("Cache MISS for Sheet ID: %s. Fetching from API...", sheetName)
-	// Fetch from API
 	resp, err := sheetsService.Spreadsheets.Get(spreadsheetID).Fields("sheets(properties(title,sheetId))").Do()
 	if err != nil {
 		log.Printf("Error fetching spreadsheet properties: %v", err)
@@ -515,7 +520,6 @@ func getSheetIdByName(sheetName string) (int64, error) {
 	}
 
 	for _, sheet := range resp.Sheets {
-		// Cache all IDs we find
 		sheetIdCacheMutex.Lock()
 		sheetIdCache[sheet.Properties.Title] = sheet.Properties.SheetId
 		sheetIdCacheMutex.Unlock()
@@ -534,7 +538,6 @@ func getSheetIdByName(sheetName string) (int64, error) {
 	return 0, fmt.Errorf("sheet '%s' not found in spreadsheet", sheetName)
 }
 
-// ... (findHeaderMap remains the same) ...
 func findHeaderMap(sheetName string) (map[string]int, error) {
 	headersResp, err := sheetsService.Spreadsheets.Values.Get(spreadsheetID, fmt.Sprintf("%s!1:1", sheetName)).Do()
 	if err != nil || len(headersResp.Values) == 0 {
@@ -549,7 +552,6 @@ func findHeaderMap(sheetName string) (map[string]int, error) {
 	return headerMap, nil
 }
 
-// ... (findRowIndexByPK remains the same) ...
 func findRowIndexByPK(sheetName string, pkHeader string, pkValue string) (int64, int64, error) {
 	sheetId, err := getSheetIdByName(sheetName)
 	if err != nil {
@@ -579,8 +581,7 @@ func findRowIndexByPK(sheetName string, pkHeader string, pkValue string) (int64,
 	return -1, sheetId, fmt.Errorf("row not found with %s = %s in sheet %s", pkHeader, pkValue, sheetName)
 }
 
-// --- Fetch & Cache Sheet Data (Rewritten) ---
-// ... (getCachedSheetData remains the same) ...
+// --- Fetch & Cache Sheet Data ---
 func getCachedSheetData(sheetName string, target interface{}, duration time.Duration) error {
 	cacheKey := "sheet_" + sheetName
 	cachedData, found := getCache(cacheKey)
@@ -616,7 +617,6 @@ func getCachedSheetData(sheetName string, target interface{}, duration time.Dura
 }
 
 // --- Apps Script Communication ---
-// ... (AppsScriptRequest, AppsScriptResponse, callAppsScriptPOST structs and function remain the same) ...
 type AppsScriptRequest struct {
 	Action         string      `json:"action"`
 	Secret         string      `json:"secret"`
@@ -680,12 +680,10 @@ func callAppsScriptPOST(requestData AppsScriptRequest) (AppsScriptResponse, erro
 
 // --- API Handlers ---
 
-// ... (handlePing remains the same) ...
 func handlePing(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{"status": "success", "message": "Go backend pong"})
 }
 
-// ... (handleGetUsers remains the same) ...
 func handleGetUsers(c *gin.Context) {
 	var users []User
 	err := getCachedSheetData("Users", &users, 15*time.Minute)
@@ -696,7 +694,6 @@ func handleGetUsers(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{"status": "success", "data": users})
 }
 
-// ... (handleGetStaticData remains the same) ...
 func handleGetStaticData(c *gin.Context) {
 	result := make(map[string]interface{})
 	var err error
@@ -783,8 +780,6 @@ handleError:
 	c.JSON(http.StatusInternalServerError, gin.H{"status": "error", "message": err.Error()})
 }
 
-// --- handleSubmitOrder (Delegates to Apps Script) ---
-// ... (handleSubmitOrder remains the same) ...
 func handleSubmitOrder(c *gin.Context) {
 	var orderRequest struct {
 		CurrentUser   User                     `json:"currentUser"`
@@ -863,8 +858,6 @@ func handleSubmitOrder(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{"status": "success", "orderId": orderId})
 }
 
-// --- handleImageUploadProxy ---
-// ... (handleImageUploadProxy remains the same) ...
 func handleImageUploadProxy(c *gin.Context) {
 	var uploadRequest struct {
 		FileData   string            `json:"fileData"`
@@ -961,7 +954,7 @@ func handleImageUploadProxy(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{"status": "success", "url": fileUrl, "fileID": resp.FileID})
 }
 
-// --- *** NEW: Audio Proxy Handler *** ---
+// --- Audio Proxy Handler ---
 func handleGetAudioProxy(c *gin.Context) {
 	fileID := c.Param("fileID")
 	if fileID == "" {
@@ -969,12 +962,7 @@ func handleGetAudioProxy(c *gin.Context) {
 		return
 	}
 
-	// Construct the Google Drive download URL
-	// Using export=download is sometimes more reliable
 	googleURL := fmt.Sprintf("https://drive.google.com/uc?id=%s&export=download", fileID)
-
-	// Create a new request (to handle potential redirects safely)
-	// Use a client that follows redirects (default client does)
 	resp, err := http.Get(googleURL)
 	if err != nil {
 		log.Printf("Failed to fetch audio from Google Drive (FileID: %s): %v", fileID, err)
@@ -983,37 +971,25 @@ func handleGetAudioProxy(c *gin.Context) {
 	}
 	defer resp.Body.Close()
 
-	// Check if Google returned an error (e.g., file not found, or a virus warning page)
 	if resp.StatusCode != http.StatusOK {
-		// It might be a redirect to a consent page (like large files/virus scan)
-		// Or just a 404
 		log.Printf("Google Drive returned non-OK status %d for FileID: %s", resp.StatusCode, fileID)
-
-		// If it's HTML, it's definitely an error/consent page we can't handle
 		if strings.HasPrefix(resp.Header.Get("Content-Type"), "text/html") {
-			log.Printf("Google returned an HTML page, probably a consent/error screen.")
 			c.String(http.StatusForbidden, "Cannot proxy file. It may require manual download from Google.")
 			return
 		}
-
 		c.String(resp.StatusCode, "Error from Google Drive")
 		return
 	}
 
-	// Success! Stream the file.
-	// Copy headers from Google's response to our response
-	// This tells the browser what kind of file it is.
 	c.Writer.Header().Set("Content-Type", resp.Header.Get("Content-Type"))
 	c.Writer.Header().Set("Content-Length", resp.Header.Get("Content-Length"))
-	// This might help force playback
 	c.Writer.Header().Set("Content-Disposition", fmt.Sprintf("inline; filename=\"%s\"", fileID))
 
-	// Stream the audio data
 	io.Copy(c.Writer, resp.Body)
 }
 
 // --- Report/Admin Handlers ---
-// ... (handleUpdateFormulaReport remains the same) ...
+
 func handleUpdateFormulaReport(c *gin.Context) {
 	var allOrders []Order
 	invalidateSheetCache(AllOrdersSheet)
@@ -1142,7 +1118,6 @@ func handleUpdateFormulaReport(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{"status": "success", "message": "Formula Report updated successfully."})
 }
 
-// ... (handleGetRevenueSummary remains the same) ...
 func handleGetRevenueSummary(c *gin.Context) {
 	var revenueEntries []RevenueEntry
 	invalidateSheetCache(RevenueSheet)
@@ -1235,7 +1210,6 @@ func handleGetRevenueSummary(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{"status": "success", "data": response})
 }
 
-// ... (handleGetAllOrders remains the same) ...
 func handleGetAllOrders(c *gin.Context) {
 	var allOrders []Order
 	invalidateSheetCache(AllOrdersSheet)
@@ -1256,7 +1230,6 @@ func handleGetAllOrders(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{"status": "success", "data": allOrders})
 }
 
-// ... (handleGetChatMessages remains the same) ...
 func handleGetChatMessages(c *gin.Context) {
 	var chatMessages []ChatMessage
 	err := getCachedSheetData(ChatMessagesSheet, &chatMessages, 10*time.Second)
@@ -1270,7 +1243,6 @@ func handleGetChatMessages(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{"status": "success", "data": chatMessages})
 }
 
-// ... (uploadChatMediaToDrive remains the same) ...
 func uploadChatMediaToDrive(base64Data, fileName, mimeType, userName string) (string, string, error) {
 	if uploadFolderID == "" {
 		return "", "", fmt.Errorf("upload Folder ID is not configured on the server")
@@ -1289,7 +1261,6 @@ func uploadChatMediaToDrive(base64Data, fileName, mimeType, userName string) (st
 	return resp.URL, resp.FileID, nil
 }
 
-// ... (handleSendChatMessage remains the same) ...
 func handleSendChatMessage(c *gin.Context) {
 	var request struct {
 		UserName    string `json:"userName"`
@@ -1365,7 +1336,6 @@ func handleSendChatMessage(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{"status": "success", "message": broadcastMsg})
 }
 
-// ... (handleDeleteChatMessage remains the same) ...
 func handleDeleteChatMessage(c *gin.Context) {
 	var request struct {
 		Timestamp string `json:"timestamp"`
@@ -1396,17 +1366,14 @@ func handleDeleteChatMessage(c *gin.Context) {
 	pkHeader := "Timestamp"
 	pkValue := request.Timestamp
 
-	// This call will now use a cached ID if available, or fetch a new one if not.
 	rowIndex, sheetId, err := findRowIndexByPK(sheetName, pkHeader, pkValue)
 	if err != nil {
 		log.Printf("Error finding chat message row to delete: %v", err)
 
-		// *** ADDED: If row not found, maybe cache is stale? Clear it and try one more time. ***
-		// This is a safety net.
 		if strings.Contains(err.Error(), "sheet") {
 			log.Printf("Clearing Sheet ID cache for %s and retrying...", sheetName)
-			invalidateSheetCache(sheetName)                                         // Clear the potentially bad ID
-			rowIndex, sheetId, err = findRowIndexByPK(sheetName, pkHeader, pkValue) // Try again
+			invalidateSheetCache(sheetName)                                         
+			rowIndex, sheetId, err = findRowIndexByPK(sheetName, pkHeader, pkValue) 
 			if err != nil {
 				log.Printf("Error finding row on second attempt: %v", err)
 				c.JSON(http.StatusNotFound, gin.H{"status": "error", "message": "Message not found in sheet: " + err.Error()})
@@ -1435,17 +1402,14 @@ func handleDeleteChatMessage(c *gin.Context) {
 	_, err = sheetsService.Spreadsheets.BatchUpdate(spreadsheetID, batchUpdateReq).Do()
 	if err != nil {
 		log.Printf("Error deleting row %d from sheet %s: %v", rowIndex, sheetName, err)
-		// *** THIS IS WHERE YOUR ERROR HAPPENED ***
-		// If the error is "No grid with id", it's a stale cache.
 		if strings.Contains(err.Error(), "No grid with id") {
 			log.Printf("Stale Sheet ID detected. Clearing Sheet ID cache for %s.", sheetName)
-			invalidateSheetCache(sheetName) // Clear the bad ID for next time
+			invalidateSheetCache(sheetName)
 		}
 		c.JSON(http.StatusInternalServerError, gin.H{"status": "error", "message": "Failed to delete message row: " + err.Error()})
 		return
 	}
 
-	// *** This call is now fixed and will clear the sheetIdCache ***
 	invalidateSheetCache(sheetName)
 
 	wsMsg := WebSocketMessage{
@@ -1462,8 +1426,7 @@ func handleDeleteChatMessage(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{"status": "success", "message": "Message deleted"})
 }
 
-// --- *** NEW: Refactored Helper Function for Updating Rows *** ---
-// This function contains the core logic previously in handleAdminUpdateSheet
+// --- Helper Function for Updating Rows ---
 func updateSheetRow(sheetName string, primaryKey map[string]string, newData map[string]interface{}) error {
 	if sheetName == "" || len(primaryKey) != 1 || len(newData) == 0 {
 		return fmt.Errorf("sheetName, a single primaryKey, and newData are required")
@@ -1507,10 +1470,8 @@ func updateSheetRow(sheetName string, primaryKey map[string]string, newData map[
 			f := float64(v)
 			extValue.NumberValue = &f
 		case nil:
-			// Set as empty string
 			extValue.StringValue = new(string)
 		default:
-			// Convert other types to string as a fallback
 			str := fmt.Sprintf("%v", v)
 			extValue.StringValue = &str
 		}
@@ -1554,8 +1515,7 @@ func updateSheetRow(sheetName string, primaryKey map[string]string, newData map[
 	return nil
 }
 
-// --- *** REFACTORED: handleAdminUpdateSheet *** ---
-// This handler now uses the helper function
+// --- Admin Update Sheet Handler ---
 func handleAdminUpdateSheet(c *gin.Context) {
 	var request struct {
 		SheetName  string                 `json:"sheetName"`
@@ -1569,7 +1529,6 @@ func handleAdminUpdateSheet(c *gin.Context) {
 
 	err := updateSheetRow(request.SheetName, request.PrimaryKey, request.NewData)
 	if err != nil {
-		// Return specific error codes based on error message
 		if strings.Contains(err.Error(), "not found") {
 			c.JSON(http.StatusNotFound, gin.H{"status": "error", "message": err.Error()})
 		} else if strings.Contains(err.Error(), "required") || strings.Contains(err.Error(), "columns") {
@@ -1583,7 +1542,7 @@ func handleAdminUpdateSheet(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{"status": "success", "message": "Row updated successfully"})
 }
 
-// --- *** NEW: Handler to update a specific order (UPDATED WITH TELEGRAM SYNC) *** ---
+// --- Handler to update a specific order ---
 func handleAdminUpdateOrder(c *gin.Context) {
 	var request UpdateOrderRequest
 	if err := c.ShouldBindJSON(&request); err != nil {
@@ -1596,18 +1555,14 @@ func handleAdminUpdateOrder(c *gin.Context) {
 		return
 	}
 
-	// --- 1. Update the specific team's order sheet ---
 	orderSheetName := fmt.Sprintf("Orders_%s", request.Team)
 	orderPK := map[string]string{"Order ID": request.OrderID}
 
 	err := updateSheetRow(orderSheetName, orderPK, request.NewData)
 	if err != nil {
 		log.Printf("Failed to update team order sheet (%s): %v", orderSheetName, err)
-		// Continue anyway to update AllOrders, but log this
 	}
 
-	// --- 2. Update the AllOrders sheet ---
-	// សំខាន់៖ ត្រូវ Update Sheet ឱ្យជោគជ័យសិន មុននឹងហៅទៅ Telegram
 	allOrdersPK := map[string]string{"Order ID": request.OrderID}
 	err = updateSheetRow(AllOrdersSheet, allOrdersPK, request.NewData)
 	if err != nil {
@@ -1616,24 +1571,20 @@ func handleAdminUpdateOrder(c *gin.Context) {
 		return
 	}
 
-	// --- 3. Log the edit ---
 	timestamp := time.Now().UTC().Format(time.RFC3339)
 	for field, newValue := range request.NewData {
 		logRow := []interface{}{
 			timestamp,
 			request.OrderID,
 			request.UserName,
-			"", // Approver (can be added later)
+			"", // Approver
 			field,
 			"N/A", // Old Value
 			fmt.Sprintf("%v", newValue),
 		}
-		go appendRowToSheet(EditLogsSheet, logRow) // Run in background
+		go appendRowToSheet(EditLogsSheet, logRow)
 	}
 
-	// --- 4. NEW: Trigger Telegram Update (Apps Script) ---
-	// ហៅទៅ Apps Script *បន្ទាប់ពី* Update Sheet រួចរាល់
-	// Apps Script នឹងអានទិន្នន័យថ្មីពី AllOrders ដើម្បីបង្កើតសារ Telegram ថ្មី
 	go func() {
 		log.Printf("Triggering Telegram update for order %s...", request.OrderID)
 		_, err := callAppsScriptPOST(AppsScriptRequest{
@@ -1653,8 +1604,7 @@ func handleAdminUpdateOrder(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{"status": "success", "message": "Order updated successfully in Sheets and Telegram"})
 }
 
-// --- *** NEW: handleAdminUpdateProductTags *** ---
-// This handler merges and updates product tags
+// --- Handler for Tags ---
 func handleAdminUpdateProductTags(c *gin.Context) {
 	var request UpdateTagsRequest
 	if err := c.ShouldBindJSON(&request); err != nil {
@@ -1669,16 +1619,14 @@ func handleAdminUpdateProductTags(c *gin.Context) {
 
 	sheetName := "Products"
 
-	// 1. Get all products (invalidate cache to get fresh data)
 	var products []Product
 	invalidateSheetCache(sheetName)
-	err := getCachedSheetData(sheetName, &products, 1*time.Minute) // Short cache
+	err := getCachedSheetData(sheetName, &products, 1*time.Minute) 
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"status": "error", "message": "Failed to fetch product data: " + err.Error()})
 		return
 	}
 
-	// 2. Find the specific product
 	var currentProduct *Product
 	for i, p := range products {
 		if p.ProductName == request.ProductName {
@@ -1692,7 +1640,6 @@ func handleAdminUpdateProductTags(c *gin.Context) {
 		return
 	}
 
-	// 3. Merge tags (handle duplicates)
 	tagMap := make(map[string]bool)
 	currentTags := strings.Split(currentProduct.Tags, ",")
 	for _, tag := range currentTags {
@@ -1711,27 +1658,24 @@ func handleAdminUpdateProductTags(c *gin.Context) {
 		}
 	}
 
-	// 4. If no new tags were actually added, just return success
 	if !newTagsAdded {
 		c.JSON(http.StatusOK, gin.H{"status": "success", "message": "Tags already up-to-date"})
 		return
 	}
 
-	// 5. Convert map keys back to slice and join
 	finalTagList := make([]string, 0, len(tagMap))
 	for tag := range tagMap {
 		finalTagList = append(finalTagList, tag)
 	}
-	sort.Strings(finalTagList) // Sort for consistency
+	sort.Strings(finalTagList)
 	finalTagString := strings.Join(finalTagList, ",")
 
-	// 6. Update the sheet
 	pk := map[string]string{"ProductName": request.ProductName}
 	newData := map[string]interface{}{
 		"Tags": finalTagString,
 	}
 
-	err = updateSheetRow(sheetName, pk, newData) // Use our refactored helper
+	err = updateSheetRow(sheetName, pk, newData) 
 	if err != nil {
 		log.Printf("Failed to update tags for %s: %v", request.ProductName, err)
 		c.JSON(http.StatusInternalServerError, gin.H{"status": "error", "message": "Failed to update tags: " + err.Error()})
@@ -1742,7 +1686,6 @@ func handleAdminUpdateProductTags(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{"status": "success", "message": "Tags updated successfully"})
 }
 
-// ... (handleAdminAddRow remains the same) ...
 func handleAdminAddRow(c *gin.Context) {
 	var request struct {
 		SheetName string                 `json:"sheetName"`
@@ -1769,7 +1712,7 @@ func handleAdminAddRow(c *gin.Context) {
 			rowData[colIndex] = ""
 		}
 	}
-	err = appendRowToSheet(request.SheetName, rowData) // This already calls invalidateSheetCache
+	err = appendRowToSheet(request.SheetName, rowData) 
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"status": "error", "message": "Failed to add row: " + err.Error()})
 		return
@@ -1778,15 +1721,7 @@ func handleAdminAddRow(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{"status": "success", "message": "Row added successfully"})
 }
 
-// --- *** NEW: Struct for Delete Order Request *** ---
-type DeleteOrderRequest struct {
-	OrderID  string `json:"orderId"`
-	Team     string `json:"team"`
-	UserName string `json:"userName"` // For logging
-}
-
-// --- *** NEW: Helper Function to encapsulate delete logic *** ---
-// This contains the logic from the old handleAdminDeleteRow
+// --- Helper Function for Deleting Rows ---
 func deleteSheetRow(sheetName string, primaryKey map[string]string) error {
 	if sheetName == "" || len(primaryKey) != 1 {
 		return fmt.Errorf("sheetName and a single primaryKey are required")
@@ -1831,8 +1766,6 @@ func deleteSheetRow(sheetName string, primaryKey map[string]string) error {
 	return nil
 }
 
-// --- *** REFACTORED: handleAdminDeleteRow *** ---
-// This handler now uses the helper function
 func handleAdminDeleteRow(c *gin.Context) {
 	var request struct {
 		SheetName  string            `json:"sheetName"`
@@ -1847,7 +1780,6 @@ func handleAdminDeleteRow(c *gin.Context) {
 		return
 	}
 
-	// Call the new helper function
 	err := deleteSheetRow(request.SheetName, request.PrimaryKey)
 	if err != nil {
 		if strings.Contains(err.Error(), "not found") {
@@ -1861,7 +1793,6 @@ func handleAdminDeleteRow(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{"status": "success", "message": "Row deleted successfully"})
 }
 
-// --- *** NEW: Handler to delete a specific order from ALL relevant sheets AND Telegram *** ---
 func handleAdminDeleteOrder(c *gin.Context) {
 	var request DeleteOrderRequest
 	if err := c.ShouldBindJSON(&request); err != nil {
@@ -1874,9 +1805,6 @@ func handleAdminDeleteOrder(c *gin.Context) {
 		return
 	}
 
-	// --- 1. NEW: Call Apps Script to delete Telegram messages (MUST BE DONE BEFORE DELETING SHEET ROW) ---
-	// យើងត្រូវហៅទៅ Apps Script ដើម្បីលុបសារក្នុង Telegram ជាមុនសិន
-	// ព្រោះ Apps Script ត្រូវការអាន Message ID ដែលមាននៅក្នុង Sheet។ បើលុប Sheet មុន វានឹងរក Message ID មិនឃើញ។
 	go func() {
 		_, err := callAppsScriptPOST(AppsScriptRequest{
 			Action: "deleteOrderTelegram",
@@ -1892,17 +1820,14 @@ func handleAdminDeleteOrder(c *gin.Context) {
 		}
 	}()
 
-	// --- 2. Delete from the specific team's order sheet ---
 	teamOrderSheetName := fmt.Sprintf("Orders_%s", request.Team)
 	teamOrderPK := map[string]string{"Order ID": request.OrderID}
 
 	err := deleteSheetRow(teamOrderSheetName, teamOrderPK)
 	if err != nil {
 		log.Printf("Warning: Failed to delete from team order sheet (%s): %v. Proceeding to delete from AllOrders.", teamOrderSheetName, err)
-		// We don't return here; we still want to try deleting from AllOrders
 	}
 
-	// --- 3. Delete from the AllOrders sheet ---
 	allOrdersPK := map[string]string{"Order ID": request.OrderID}
 	err = deleteSheetRow(AllOrdersSheet, allOrdersPK)
 	if err != nil {
@@ -1911,7 +1836,6 @@ func handleAdminDeleteOrder(c *gin.Context) {
 		return
 	}
 
-	// --- 4. Log the deletion ---
 	timestamp := time.Now().UTC().Format(time.RFC3339)
 	logRow := []interface{}{
 		timestamp,
@@ -1922,12 +1846,11 @@ func handleAdminDeleteOrder(c *gin.Context) {
 		"N/A", // Old Value
 		"N/A", // New Value
 	}
-	go appendRowToSheet(EditLogsSheet, logRow) // Run in background
+	go appendRowToSheet(EditLogsSheet, logRow) 
 
 	c.JSON(http.StatusOK, gin.H{"status": "success", "message": "Order and Telegram messages deleted successfully"})
 }
 
-// ... (handleUpdateProfile remains the same) ...
 func handleUpdateProfile(c *gin.Context) {
 	var request struct {
 		UserName          string `json:"userName"`
@@ -1994,7 +1917,6 @@ func handleUpdateProfile(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{"status": "success", "message": "Profile updated successfully"})
 }
 
-// --- *** NEW: Handler to change password *** ---
 func handleChangePassword(c *gin.Context) {
 	var request ChangePasswordRequest
 	if err := c.ShouldBindJSON(&request); err != nil {
@@ -2007,17 +1929,14 @@ func handleChangePassword(c *gin.Context) {
 		return
 	}
 
-	// 1. Get all users to verify old password
 	var users []User
-	// Invalidate cache first to get the most recent password for verification
 	invalidateSheetCache(UsersSheet)
-	err := getCachedSheetData(UsersSheet, &users, 1*time.Minute) // Use a short cache duration
+	err := getCachedSheetData(UsersSheet, &users, 1*time.Minute) 
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"status": "error", "message": "Failed to fetch user data: " + err.Error()})
 		return
 	}
 
-	// 2. Find user and verify old password
 	var foundUser *User
 	for i, user := range users {
 		if user.UserName == request.UserName {
@@ -2031,50 +1950,43 @@ func handleChangePassword(c *gin.Context) {
 		return
 	}
 
-	// 3. Check old password
 	if foundUser.Password != request.OldPassword {
 		c.JSON(http.StatusUnauthorized, gin.H{"status": "error", "message": "Incorrect old password"})
 		return
 	}
 
-	// 4. Old password is correct. Update to new password.
 	sheetName := UsersSheet
 	pk := map[string]string{"UserName": request.UserName}
 	newData := map[string]interface{}{
 		"Password": request.NewPassword,
 	}
 
-	err = updateSheetRow(sheetName, pk, newData) // Use our refactored helper
+	err = updateSheetRow(sheetName, pk, newData)
 	if err != nil {
 		log.Printf("Failed to update password for %s: %v", request.UserName, err)
 		c.JSON(http.StatusInternalServerError, gin.H{"status": "error", "message": "Failed to update password: " + err.Error()})
 		return
 	}
 
-	// 5. Success
 	log.Printf("Password changed successfully for user: %s", request.UserName)
 	c.JSON(http.StatusOK, gin.H{"status": "success", "message": "Password updated successfully"})
 }
 
-// --- *** NEW: Handler to clear all server caches *** ---
 func handleClearCache(c *gin.Context) {
-	clearCache() // This function already clears both data and sheetId caches
+	clearCache() 
 	log.Println("All server caches (data and Sheet IDs) have been cleared via API request.")
 	c.JSON(http.StatusOK, gin.H{"status": "success", "message": "All server caches cleared"})
 }
 
 // --- Main Function ---
 func main() {
-	// --- Load configuration from environment variables ---
 	spreadsheetID = os.Getenv("GOOGLE_SHEET_ID")
-	// labelPrinterURL = os.Getenv("LABEL_PRINTER_URL") // REMOVED
 	port := os.Getenv("PORT")
 	if port == "" {
 		port = "8080"
 	}
 	renderBaseURL = os.Getenv("RENDER_EXTERNAL_URL")
 
-	// *** Load Apps Script API Config ***
 	appsScriptURL = os.Getenv("APPS_SCRIPT_URL")
 	appsScriptSecret = os.Getenv("APPS_SCRIPT_SECRET")
 
@@ -2085,11 +1997,9 @@ func main() {
 		log.Fatal("APPS_SCRIPT_URL and APPS_SCRIPT_SECRET environment variables are required.")
 	}
 
-	// --- NEW: Start WebSocket Hub ---
 	hub = NewHub()
 	go hub.run()
 
-	// --- Create Google API Clients ---
 	ctx := context.Background()
 	err := createGoogleAPIClient(ctx)
 	if err != nil {
@@ -2100,7 +2010,6 @@ func main() {
 	log.Printf("Using Apps Script API at: %s", appsScriptURL)
 	log.Printf("Render Base URL: %s", renderBaseURL)
 
-	// --- Setup Gin Router ---
 	router := gin.Default()
 	config := cors.DefaultConfig()
 	config.AllowOrigins = []string{"*"}
@@ -2108,7 +2017,6 @@ func main() {
 	config.AllowHeaders = []string{"Origin", "Content-Type", "Accept"}
 	router.Use(cors.New(config))
 
-	// --- Define API Routes ---
 	api := router.Group("/api")
 	{
 		api.GET("/ping", handlePing)
@@ -2118,18 +2026,15 @@ func main() {
 		api.POST("/submit-order", handleSubmitOrder)
 		api.POST("/upload-image", handleImageUploadProxy)
 
-		// --- Chat Endpoints ---
 		chat := api.Group("/chat")
 		{
 			chat.GET("/messages", handleGetChatMessages)
 			chat.POST("/send", handleSendChatMessage)
 			chat.POST("/delete", handleDeleteChatMessage)
 			chat.GET("/ws", serveWs)
-			// *** ADDED NEW ENDPOINT FOR AUDIO PROXY ***
 			chat.GET("/audio/:fileID", handleGetAudioProxy)
 		}
 
-		// --- Admin Endpoints ---
 		admin := api.Group("/admin")
 		{
 			admin.POST("/update-formula-report", handleUpdateFormulaReport)
@@ -2140,24 +2045,18 @@ func main() {
 			admin.POST("/delete-row", handleAdminDeleteRow)
 			admin.POST("/clear-cache", handleClearCache)
 
-			// --- *** THIS IS THE NEW LINE YOU NEEDED *** ---
 			admin.POST("/update-order", handleAdminUpdateOrder)
-			// --- *** ADDED: New route from previous fix *** ---
 			admin.POST("/delete-order", handleAdminDeleteOrder)
-			// --- *** ADDED NEW ENDPOINT FOR TAGS *** ---
 			admin.POST("/update-product-tags", handleAdminUpdateProductTags)
 		}
 
-		// --- Profile Endpoint ---
 		profile := api.Group("/profile")
 		{
 			profile.POST("/update", handleUpdateProfile)
-			// --- *** ADDED NEW ENDPOINT FOR PASSWORD *** ---
 			profile.POST("/change-password", handleChangePassword)
 		}
 	}
 
-	// --- Start Server ---
 	log.Printf("Starting Go backend server on port %s", port)
 	err = router.Run(":" + port)
 	if err != nil {
