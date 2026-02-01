@@ -1577,7 +1577,7 @@ func handleAdminUpdateOrder(c *gin.Context) {
 			timestamp,
 			request.OrderID,
 			request.UserName,
-			"", // Approver
+			// "", // Approver REMOVED
 			field,
 			"N/A", // Old Value
 			fmt.Sprintf("%v", newValue),
@@ -1841,7 +1841,7 @@ func handleAdminDeleteOrder(c *gin.Context) {
 		timestamp,
 		request.OrderID,
 		request.UserName,
-		"N/A", // Approver
+		// "N/A", // Approver REMOVED
 		"ORDER DELETED",
 		"N/A", // Old Value
 		"N/A", // New Value
