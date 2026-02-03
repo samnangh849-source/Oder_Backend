@@ -67,7 +67,7 @@ var sheetRanges = map[string]string{
 	"Drivers":          "Drivers!A:B",
 	"BankAccounts":     "BankAccounts!A:B",
 	"PhoneCarriers":    "PhoneCarriers!A:C",
-	"AllOrders":        "AllOrders!A:Z", // Updated: A:Y -> A:Z (Includes Team column)
+	"AllOrders":        "AllOrders!A:AC", // Updated: A:Z -> A:AC (Includes Team, IsVerified)
 	"RevenueDashboard": "RevenueDashboard!A:D",
 	"ChatMessages":     "ChatMessages!A:E",
 
@@ -223,6 +223,7 @@ type Order struct {
 	DeliveryUnpaid          float64 `json:"Delivery Unpaid"`
 	DeliveryPaid            float64 `json:"Delivery Paid"`
 	TotalProductCost        float64 `json:"Total Product Cost ($)"`
+	IsVerified              bool    `json:"IsVerified"` // ✅ ADDED: IsVerified Field
 }
 type RevenueEntry struct {
 	Timestamp string  `json:"Timestamp"`
@@ -421,6 +422,12 @@ func convertSheetValuesToMaps(values *sheets.ValueRange) ([]map[string]interface
 								rowData[header] = f
 							} else {
 								rowData[header] = cleanedStr
+							}
+						} else if header == "IsVerified" { // ✅ Handle Boolean for IsVerified
+							if strings.ToLower(cleanedStr) == "true" {
+								rowData[header] = true
+							} else {
+								rowData[header] = false
 							}
 						} else if b, err := strconv.ParseBool(cleanedStr); err == nil {
 							// FIX: Using cleanedStr to handle "TRUE " cases
@@ -1590,8 +1597,9 @@ func handleAdminUpdateOrder(c *gin.Context) {
 		_, err := callAppsScriptPOST(AppsScriptRequest{
 			Action: "updateOrderTelegram",
 			OrderData: map[string]interface{}{
-				"orderId": request.OrderID,
-				"team":    request.Team,
+				"orderId":       request.OrderID,
+				"team":          request.Team,
+				"updatedFields": request.NewData, // ✅ SEND CHANGES TO APPS SCRIPT
 			},
 		})
 		if err != nil {
