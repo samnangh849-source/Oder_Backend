@@ -162,7 +162,7 @@ type Product struct {
 	Price       float64 `json:"Price"`
 	Cost        float64 `json:"Cost"`
 	ImageURL    string  `json:"ImageURL"`
-	Tags        string  `json:"Tags"` // បានបន្ថែម Field ថ្មីសម្រាប់ Tags
+	Tags        string  `json:"Tags"` 
 }
 type Location struct {
 	Province string `json:"Province"`
@@ -223,7 +223,7 @@ type Order struct {
 	DeliveryUnpaid          float64 `json:"Delivery Unpaid"`
 	DeliveryPaid            float64 `json:"Delivery Paid"`
 	TotalProductCost        float64 `json:"Total Product Cost ($)"`
-	IsVerified              bool    `json:"IsVerified"` // ✅ ADDED: IsVerified Field
+	IsVerified              string  `json:"IsVerified"` // ✅ CHANGED: Bool -> String
 }
 type RevenueEntry struct {
 	Timestamp string  `json:"Timestamp"`
@@ -423,12 +423,9 @@ func convertSheetValuesToMaps(values *sheets.ValueRange) ([]map[string]interface
 							} else {
 								rowData[header] = cleanedStr
 							}
-						} else if header == "IsVerified" { // ✅ Handle Boolean for IsVerified
-							if strings.ToLower(cleanedStr) == "true" {
-								rowData[header] = true
-							} else {
-								rowData[header] = false
-							}
+						} else if header == "IsVerified" {
+							// ✅ CHANGED: Keep IsVerified as String ("A" or "")
+							rowData[header] = cleanedStr
 						} else if b, err := strconv.ParseBool(cleanedStr); err == nil {
 							// FIX: Using cleanedStr to handle "TRUE " cases
 							rowData[header] = b
