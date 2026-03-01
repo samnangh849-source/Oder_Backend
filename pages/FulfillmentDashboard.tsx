@@ -8,6 +8,9 @@ import { ParsedOrder, FulfillmentStatus } from '@/types';
 import BulkActionBarDesktop from '@/components/admin/BulkActionBarDesktop'; // Assume this exists or we can create a generic one
 import SearchableShippingMethodDropdown from '@/components/common/SearchableShippingMethodDropdown';
 import SearchableProductDropdown from '@/components/common/SearchableProductDropdown'; // Using as a proxy for payment method if needed, or we make one
+import OrderFilters, { FilterState } from '@/components/orders/OrderFilters';
+import { FilterPanel } from '@/components/orders/FilterPanel';
+import Modal from '@/components/common/Modal';
 
 // We will need a new Confirm Delivery Modal Component
 const ConfirmDeliveryModal: React.FC<{
@@ -108,7 +111,7 @@ const FulfillmentCard: React.FC<{
     isSelected: boolean;
     onSelect: (id: string) => void;
 }> = ({ order, onStatusChange, onConfirmDelivery, isLoading, isSelected, onSelect }) => {
-    const { previewImage } = useContext(AppContext);
+    const { previewImage, appData } = useContext(AppContext);
     const currentStatus = order.FulfillmentStatus || 'Pending';
     
     const getStatusColor = (status: string) => {
@@ -121,6 +124,18 @@ const FulfillmentCard: React.FC<{
             default: return 'bg-gray-500/10 text-gray-400 border-gray-500/20';
         }
     };
+
+    // Logos finding logic
+    const shippingMethod = appData.shippingMethods?.find(m => m.MethodName === order['Internal Shipping Method']);
+    const driver = appData.drivers?.find(d => d.DriverName === (order['Driver Name'] || order['Internal Shipping Details']));
+    const bank = appData.bankAccounts?.find(b => b.BankName === order['Payment Info']);
+    
+    // Simple phone carrier logic based on prefixes
+    const phone = order['Customer Phone'] || '';
+    const phoneCarrier = appData.phoneCarriers?.find(c => {
+        const prefixes = (c.Prefixes || '').split(',').map(p => p.trim());
+        return prefixes.some(p => phone.startsWith(p));
+    });
 
     return (
         <div className={`bg-[#0f172a] border ${isSelected ? 'border-emerald-500/50 shadow-[0_0_15px_rgba(16,185,129,0.2)]' : 'border-white/5'} rounded-[2rem] overflow-hidden shadow-2xl flex flex-col h-full group transition-all duration-300 relative`}>
@@ -159,28 +174,50 @@ const FulfillmentCard: React.FC<{
             <div className="p-5 flex-grow space-y-4">
                 {/* Customer Info */}
                 <div className="flex justify-between items-center">
-                    <div>
-                        <p className="text-white font-black text-sm">{order['Customer Name']}</p>
-                        <p className="text-blue-400 font-mono text-[11px] font-bold">{order['Customer Phone']}</p>
+                    <div className="flex items-center gap-3">
+                        {phoneCarrier && (
+                            <div className="w-8 h-8 rounded-lg overflow-hidden bg-white/5 p-1 border border-white/10">
+                                <img src={convertGoogleDriveUrl(phoneCarrier.CarrierLogoURL)} className="w-full h-full object-contain" alt="" />
+                            </div>
+                        )}
+                        <div>
+                            <p className="text-white font-black text-sm">{order['Customer Name']}</p>
+                            <p className="text-blue-400 font-mono text-[11px] font-bold">{order['Customer Phone']}</p>
+                        </div>
                     </div>
                 </div>
 
                 {/* Logistics Details */}
                 <div className="bg-black/20 rounded-xl p-3 border border-white/5 space-y-2 shadow-inner">
                     <div className="flex justify-between items-center text-[10px] font-black">
-                        <span className="text-gray-500 uppercase tracking-widest">Shipping</span>
+                        <div className="flex items-center gap-2">
+                            <span className="text-gray-500 uppercase tracking-widest">Shipping</span>
+                            {shippingMethod && (
+                                <img src={convertGoogleDriveUrl(shippingMethod.LogosURL)} className="w-4 h-4 object-contain" alt="" />
+                            )}
+                        </div>
                         <span className="text-indigo-400">{order['Internal Shipping Method']}</span>
                     </div>
-                    {order['Driver Name'] && (
+                    {(order['Driver Name'] || order['Internal Shipping Details']) && (
                         <div className="flex justify-between items-center text-[10px] font-black">
-                            <span className="text-gray-500 uppercase tracking-widest">Driver</span>
-                            <span className="text-emerald-400">{order['Driver Name']}</span>
+                            <div className="flex items-center gap-2">
+                                <span className="text-gray-500 uppercase tracking-widest">Driver</span>
+                                {driver && (
+                                    <img src={convertGoogleDriveUrl(driver.ImageURL)} className="w-4 h-4 rounded-full object-cover" alt="" />
+                                )}
+                            </div>
+                            <span className="text-emerald-400">{order['Driver Name'] || order['Internal Shipping Details']}</span>
                         </div>
                     )}
-                    {order['Payment Method'] && (
+                    {(order['Payment Method'] || order['Payment Info']) && (
                         <div className="flex justify-between items-center text-[10px] font-black">
-                            <span className="text-gray-500 uppercase tracking-widest">Payment</span>
-                            <span className="text-amber-400">{order['Payment Method']}</span>
+                            <div className="flex items-center gap-2">
+                                <span className="text-gray-500 uppercase tracking-widest">Payment</span>
+                                {bank && (
+                                    <img src={convertGoogleDriveUrl(bank.LogoURL)} className="w-4 h-4 object-contain" alt="" />
+                                )}
+                            </div>
+                            <span className="text-amber-400">{order['Payment Method'] || order['Payment Info']}</span>
                         </div>
                     )}
                 </div>
@@ -218,14 +255,33 @@ const FulfillmentDashboard: React.FC<{ orders: ParsedOrder[] }> = ({ orders }) =
     const { refreshData, setMobilePageTitle, appData } = useContext(AppContext);
     const { ordersByStatus, updateStatus, loadingId } = useFulfillment(orders, refreshData);
     
-    // We only need 4 tabs for Fulfillment Tracking
-    const [activeTab, setActiveTab] = useState<FulfillmentStatus>('Pending');
-    const [storeFilter, setStoreFilter] = useState('All');
-    
     // Selection state for Bulk Actions
     const [selectedOrderIds, setSelectedOrderIds] = useState<Set<string>>(new Set());
     const [confirmModalOrder, setConfirmModalOrder] = useState<ParsedOrder | null>(null);
     const [isUpdatingBulk, setIsUpdatingBulk] = useState(false);
+
+    // Comprehensive Filters
+    const [activeTab, setActiveTab] = useState<FulfillmentStatus>('Pending');
+    const [isFilterModalOpen, setIsFilterModalOpen] = useState(false);
+    const [searchTerm, setSearchTerm] = useState('');
+    const [filters, setFilters] = useState<FilterState>({
+        datePreset: 'today', // Default to Today
+        startDate: '',
+        endDate: '',
+        team: '',
+        user: '',
+        paymentStatus: '',
+        shippingService: '',
+        driver: '',
+        product: '',
+        bank: '',
+        fulfillmentStore: '',
+        store: '',
+        page: '',
+        location: '',
+        internalCost: '',
+        customerName: '',
+    });
 
     const statusTabs: { id: FulfillmentStatus, label: string, color: string, icon: string }[] = [
         { id: 'Pending', label: 'មិនទាន់វេចខ្ចប់', color: 'blue', icon: '📥' },
@@ -244,16 +300,102 @@ const FulfillmentDashboard: React.FC<{ orders: ParsedOrder[] }> = ({ orders }) =
         setSelectedOrderIds(new Set());
     }, [activeTab]);
 
+    const calculatedRange = useMemo(() => {
+        if (filters.datePreset === 'all') return 'All time data stream';
+        const now = new Date();
+        const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+        let start: Date | null = null;
+        let end: Date | null = new Date();
+        switch (filters.datePreset) {
+            case 'today': start = today; break;
+            case 'yesterday': start = new Date(today); start.setDate(today.getDate() - 1); end = new Date(today); end.setMilliseconds(-1); break;
+            case 'this_week': const day = now.getDay(); start = new Date(today); start.setDate(today.getDate() - (day === 0 ? 6 : day - 1)); break;
+            case 'last_week': start = new Date(today); start.setDate(today.getDate() - now.getDay() - 6); end = new Date(start); end.setDate(start.getDate() + 6); end.setHours(23, 59, 59); break;
+            case 'this_month': start = new Date(now.getFullYear(), now.getMonth(), 1); break;
+            case 'last_month': start = new Date(now.getFullYear(), now.getMonth() - 1, 1); end = new Date(now.getFullYear(), now.getMonth(), 0, 23, 59, 59); break;
+            case 'this_year': start = new Date(now.getFullYear(), 0, 1); break;
+            case 'custom': return `${filters.startDate || '...'} to ${filters.endDate || '...'}`;
+        }
+        const formatDate = (d: Date) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+        return start ? `${formatDate(start)} to ${formatDate(end)}` : 'All time data stream';
+    }, [filters.datePreset, filters.startDate, filters.endDate]);
+
+    // Robust Date Parsing helper
+    const getOrderTimestamp = (order: any) => {
+        const ts = order.Timestamp;
+        if (!ts) return 0;
+        const match = ts.match(/^(\d{4})-(\d{1,2})-(\d{1,2})\s(\d{1,2}):(\d{2})/);
+        if (match) return new Date(parseInt(match[1]), parseInt(match[2]) - 1, parseInt(match[3]), parseInt(match[4]), parseInt(match[5])).getTime();
+        return new Date(ts).getTime();
+    };
+
     const filteredList = useMemo(() => {
         let list = ordersByStatus[activeTab] || [];
-        // Processing might be rolled into Pending or Ready depending on how you use it. 
-        // For now, if activeTab is Pending, we might want to include Processing if they are mid-pack, 
-        // but sticking to exact matches is safer unless specified.
-        if (storeFilter !== 'All') {
-            list = list.filter(o => o['Fulfillment Store'] === storeFilter);
-        }
-        return list;
-    }, [activeTab, ordersByStatus, storeFilter]);
+        
+        // Apply Filters
+        list = list.filter(order => {
+            // 1. Date Filter
+            if (filters.datePreset !== 'all') {
+                const ts = getOrderTimestamp(order);
+                const orderDate = new Date(ts);
+                const now = new Date();
+                const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+                let start: Date | null = null;
+                let end: Date | null = null;
+                switch (filters.datePreset) {
+                    case 'today': start = today; break;
+                    case 'yesterday': start = new Date(today); start.setDate(today.getDate() - 1); end = new Date(today); end.setMilliseconds(-1); break;
+                    case 'this_week': const day = now.getDay(); start = new Date(today); start.setDate(today.getDate() - (day === 0 ? 6 : day - 1)); break;
+                    case 'last_week': start = new Date(today); start.setDate(today.getDate() - now.getDay() - 6); end = new Date(start); end.setDate(start.getDate() + 6); end.setHours(23, 59, 59); break;
+                    case 'this_month': start = new Date(now.getFullYear(), now.getMonth(), 1); break;
+                    case 'last_month': start = new Date(now.getFullYear(), now.getMonth() - 1, 1); end = new Date(now.getFullYear(), now.getMonth(), 0, 23, 59, 59); break;
+                    case 'this_year': start = new Date(now.getFullYear(), 0, 1); break;
+                    case 'custom':
+                        if (filters.startDate) start = new Date(filters.startDate + 'T00:00:00');
+                        if (filters.endDate) end = new Date(filters.endDate + 'T23:59:59');
+                        break;
+                }
+                if (start && orderDate < start) return false;
+                if (end && orderDate > end) return false;
+            }
+
+            // Helper for multi-select
+            const isMatch = (filterValue: string, orderValue: string) => {
+                if (!filterValue) return true;
+                const selectedValues = filterValue.split(',').map(v => v.trim().toLowerCase());
+                const val = (orderValue || '').trim().toLowerCase();
+                return selectedValues.includes(val);
+            };
+
+            if (!isMatch(filters.fulfillmentStore, order['Fulfillment Store'] || 'Unassigned')) return false;
+            if (filters.store) {
+                const pageConfig = appData.pages?.find(p => p.PageName === order.Page);
+                const orderStore = pageConfig ? pageConfig.DefaultStore : null;
+                const selectedStores = filters.store.split(',');
+                if (!orderStore || !selectedStores.includes(orderStore)) return false;
+            }
+            if (!isMatch(filters.team, order.Team)) return false;
+            if (!isMatch(filters.user, order.User || '')) return false;
+            if (!isMatch(filters.paymentStatus, order['Payment Status'])) return false;
+            if (!isMatch(filters.shippingService, order['Internal Shipping Method'])) return false;
+            if (!isMatch(filters.driver, order['Internal Shipping Details'])) return false;
+            if (!isMatch(filters.bank, order['Payment Info'])) return false;
+            if (!isMatch(filters.page, order.Page)) return false;
+            if (!isMatch(filters.location, order.Location)) return false;
+            if (!isMatch(filters.customerName, order['Customer Name'])) return false;
+            if (filters.product && !order.Products.some(p => p.name === filters.product)) return false;
+
+            if (searchTerm.trim()) {
+                const q = searchTerm.toLowerCase();
+                return order['Order ID'].toLowerCase().includes(q) ||
+                       (order['Customer Name'] || '').toLowerCase().includes(q) ||
+                       (order['Customer Phone'] || '').includes(q);
+            }
+            return true;
+        });
+
+        return list.sort((a, b) => b['Order ID'].localeCompare(a['Order ID']));
+    }, [activeTab, ordersByStatus, searchTerm, filters, appData.pages]);
 
     const handleSelectOrder = (id: string) => {
         const newSet = new Set(selectedOrderIds);
@@ -336,19 +478,6 @@ const FulfillmentDashboard: React.FC<{ orders: ParsedOrder[] }> = ({ orders }) =
                 </div>
 
                 <div className="flex flex-col sm:flex-row items-center gap-4 w-full lg:w-auto">
-                    {/* Store Filter */}
-                    <div className="relative w-full sm:w-64">
-                        <select 
-                            value={storeFilter}
-                            onChange={(e) => setStoreFilter(e.target.value)}
-                            className="w-full bg-black/40 border border-white/10 rounded-xl px-5 py-3 text-xs font-black text-white uppercase tracking-widest focus:border-indigo-500 outline-none transition-all appearance-none cursor-pointer"
-                        >
-                            <option value="All">គ្រប់សាខាទាំងអស់</option>
-                            {appData.stores?.map(s => <option key={s.StoreName} value={s.StoreName}>{s.StoreName}</option>)}
-                        </select>
-                        <svg className="absolute right-4 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-500 pointer-events-none" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M19 9l-7 7-7-7" /></svg>
-                    </div>
-
                     <button 
                         onClick={refreshData}
                         className="bg-gray-800 hover:bg-gray-700 text-white p-3 rounded-xl border border-white/5 active:scale-90 transition-all shadow-xl group"
@@ -358,12 +487,118 @@ const FulfillmentDashboard: React.FC<{ orders: ParsedOrder[] }> = ({ orders }) =
                 </div>
             </div>
 
+            {/* Filter Section */}
+            <div className="bg-gray-800/20 backdrop-blur-3xl border border-white/5 rounded-[2.5rem] p-5 sm:p-6 mb-8 shadow-2xl relative z-20 group transition-all hover:bg-gray-800/30 max-w-6xl mx-auto">
+                <div className="flex flex-col lg:flex-row justify-between items-center gap-4">
+                    <div className="relative w-full lg:max-w-2xl group">
+                        <input 
+                            type="text" 
+                            placeholder="ស្វែងរក ID, ឈ្មោះ, ឬលេខទូរស័ព្ទ..." 
+                            value={searchTerm} 
+                            onChange={e => setSearchTerm(e.target.value)} 
+                            className="form-input !pl-16 !py-5 bg-black/40 border-gray-800 rounded-[1.8rem] text-[15px] font-bold text-white placeholder:text-gray-700 focus:border-blue-500/50 focus:bg-black/60 transition-all shadow-inner" 
+                        />
+                        <div className="absolute left-6 top-1/2 -translate-y-1/2 flex items-center gap-4 text-gray-700 group-focus-within:text-blue-500 transition-colors">
+                            <svg className="h-6 w-6" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={3}><path d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" /></svg>
+                            <div className="h-6 w-px bg-gray-800"></div>
+                        </div>
+                    </div>
+                    <div className="flex items-stretch gap-3 w-full lg:w-auto h-16 sm:h-[68px]">
+                        <button 
+                            onClick={() => setIsFilterModalOpen(true)} 
+                            className="flex-1 lg:flex-none flex items-center justify-center gap-3 px-8 py-5 bg-gray-900 border border-gray-800 text-gray-400 hover:text-white hover:border-blue-500/30 rounded-2xl text-[12px] font-black uppercase tracking-widest transition-all active:scale-95"
+                        >
+                            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2.5}><path d="M3 4a1 1 0 011-1h16a1 1 0 011 1v2.586a1 1 0 01-.293.707l-6.414 6.414a1 1 0 00-.293.707V17l-4 4v-6.586a1 1 0 00-.293-.707L3.293 7.293A1 1 0 013 6.586V4z" /></svg>
+                            Filters
+                        </button>
+                    </div>
+                </div>
+            </div>
+
+            {/* Filter Modal/Panel */}
+            <div className="md:hidden">
+                <FilterPanel isOpen={isFilterModalOpen} onClose={() => setIsFilterModalOpen(false)}>
+                    <OrderFilters filters={filters} setFilters={setFilters} orders={orders} usersList={appData.users} appData={appData} calculatedRange={calculatedRange} />
+                </FilterPanel>
+            </div>
+            <div className="hidden md:block">
+                <Modal isOpen={isFilterModalOpen} onClose={() => setIsFilterModalOpen(false)} maxWidth="max-w-4xl">
+                    <div className="p-8 bg-[#0f172a] rounded-[3rem] border border-white/10 shadow-3xl overflow-hidden relative">
+                        <div className="flex justify-between items-center mb-10 relative z-10">
+                            <div className="flex items-center gap-4">
+                                <div className="w-1.5 h-8 bg-blue-600 rounded-full"></div>
+                                <h2 className="text-2xl font-black text-white uppercase tracking-tighter italic leading-none">Filter Tracking Subsystem</h2>
+                            </div>
+                            <button onClick={() => setIsFilterModalOpen(false)} className="w-12 h-12 bg-white/5 rounded-2xl flex items-center justify-center text-gray-500 hover:text-white transition-all active:scale-90 border border-white/5">&times;</button>
+                        </div>
+                        <div className="max-h-[60vh] overflow-y-auto custom-scrollbar pr-2 relative z-10">
+                            <OrderFilters filters={filters} setFilters={setFilters} orders={orders} usersList={appData.users} appData={appData} calculatedRange={calculatedRange} />
+                        </div>
+                        <div className="mt-12 flex justify-center relative z-10"><button onClick={() => setIsFilterModalOpen(false)} className="btn btn-primary w-full py-5 text-[13px] font-black uppercase tracking-[0.25em] shadow-[0_20px_50px_rgba(37,99,235,0.3)] rounded-2xl active:scale-[0.98] transition-all">Apply Filter Configuration</button></div>
+                        <div className="absolute -bottom-20 -right-20 w-80 h-80 bg-blue-600/10 rounded-full blur-[100px] pointer-events-none"></div>
+                    </div>
+                </Modal>
+            </div>
+
             {/* Status Tabs Navigation */}
             <div className="flex justify-center px-2">
                 <div className="flex bg-black/40 p-1.5 rounded-[2rem] border border-white/5 overflow-x-auto no-scrollbar max-w-full shadow-inner gap-1">
                     {statusTabs.map(tab => {
                         const isActive = activeTab === tab.id;
-                        const count = ordersByStatus[tab.id]?.length || 0;
+                        // For count, we filter the orders by status and filters
+                        const count = orders.filter(o => 
+                            (o.FulfillmentStatus || 'Pending') === tab.id &&
+                            // Applying standard filters logic for counting
+                            (() => {
+                                // Date check
+                                if (filters.datePreset !== 'all') {
+                                    const ts = getOrderTimestamp(o);
+                                    const orderDate = new Date(ts);
+                                    const now = new Date();
+                                    const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+                                    let start: Date | null = null;
+                                    let end: Date | null = null;
+                                    switch (filters.datePreset) {
+                                        case 'today': start = today; break;
+                                        case 'yesterday': start = new Date(today); start.setDate(today.getDate() - 1); end = new Date(today); end.setMilliseconds(-1); break;
+                                        case 'this_week': const day = now.getDay(); start = new Date(today); start.setDate(today.getDate() - (day === 0 ? 6 : day - 1)); break;
+                                        case 'last_week': start = new Date(today); start.setDate(today.getDate() - now.getDay() - 6); end = new Date(start); end.setDate(start.getDate() + 6); end.setHours(23, 59, 59); break;
+                                        case 'this_month': start = new Date(now.getFullYear(), now.getMonth(), 1); break;
+                                        case 'last_month': start = new Date(now.getFullYear(), now.getMonth() - 1, 1); end = new Date(now.getFullYear(), now.getMonth(), 0, 23, 59, 59); break;
+                                        case 'this_year': start = new Date(now.getFullYear(), 0, 1); break;
+                                        case 'custom':
+                                            if (filters.startDate) start = new Date(filters.startDate + 'T00:00:00');
+                                            if (filters.endDate) end = new Date(filters.endDate + 'T23:59:59');
+                                            break;
+                                    }
+                                    if (start && orderDate < start) return false;
+                                    if (end && orderDate > end) return false;
+                                }
+                                
+                                // Multi-select helpers
+                                const isMatch = (filterValue: string, orderValue: string) => {
+                                    if (!filterValue) return true;
+                                    const selectedValues = filterValue.split(',').map(v => v.trim().toLowerCase());
+                                    const val = (orderValue || '').trim().toLowerCase();
+                                    return selectedValues.includes(val);
+                                };
+
+                                if (!isMatch(filters.fulfillmentStore, o['Fulfillment Store'] || 'Unassigned')) return false;
+                                if (!isMatch(filters.team, o.Team)) return false;
+                                if (!isMatch(filters.paymentStatus, o['Payment Status'])) return false;
+                                if (!isMatch(filters.shippingService, o['Internal Shipping Method'])) return false;
+                                if (!isMatch(filters.customerName, o['Customer Name'])) return false;
+                                
+                                if (searchTerm.trim()) {
+                                    const q = searchTerm.toLowerCase();
+                                    return o['Order ID'].toLowerCase().includes(q) ||
+                                           (o['Customer Name'] || '').toLowerCase().includes(q) ||
+                                           (o['Customer Phone'] || '').includes(q);
+                                }
+                                return true;
+                            })()
+                        ).length;
+
                         return (
                             <button 
                                 key={tab.id}
@@ -390,7 +625,7 @@ const FulfillmentDashboard: React.FC<{ orders: ParsedOrder[] }> = ({ orders }) =
 
             {/* Bulk Actions Bar for 'Shipped' tab */}
             {activeTab === 'Shipped' && filteredList.length > 0 && (
-                <div className="flex justify-between items-center bg-[#1e293b]/50 p-3 rounded-2xl border border-white/5">
+                <div className="flex justify-between items-center bg-[#1e293b]/50 p-3 rounded-2xl border border-white/5 max-w-6xl mx-auto">
                     <div className="flex items-center gap-3 pl-2">
                         <input 
                             type="checkbox" 
