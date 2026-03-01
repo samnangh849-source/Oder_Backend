@@ -16,6 +16,7 @@ const ConfirmDeliveryModal: React.FC<{
     onConfirm: (orderId: string, updates: any) => void;
     isLoading: boolean;
 }> = ({ order, onClose, onConfirm, isLoading }) => {
+    const { appData } = useContext(AppContext);
     const [driver, setDriver] = useState('');
     const [shippingMethod, setShippingMethod] = useState('');
     const [paymentMethod, setPaymentMethod] = useState('');
@@ -58,8 +59,9 @@ const ConfirmDeliveryModal: React.FC<{
                     <div>
                         <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-1 block">Shipping Method</label>
                         <SearchableShippingMethodDropdown 
-                            value={shippingMethod}
-                            onChange={(val) => setShippingMethod(val)}
+                            methods={appData.shippingMethods}
+                            selectedMethodName={shippingMethod}
+                            onSelect={(val) => setShippingMethod(val.MethodName)}
                         />
                     </div>
                     <div>
