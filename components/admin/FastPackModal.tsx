@@ -153,7 +153,16 @@ const FastPackModal: React.FC<FastPackModalProps> = ({ order, onClose, onSuccess
                 <div className="p-6 border-b border-white/5 flex justify-between items-center relative bg-gradient-to-r from-blue-600/20 to-transparent">
                     <div>
                         <h3 className="text-xl font-black text-white uppercase tracking-tight">Step 2: ព័ត៌មានលម្អិត និងវេចខ្ចប់</h3>
-                        <p className="text-blue-400 font-mono text-xs mt-1 font-bold">#{order['Order ID'].substring(0, 15)}</p>
+                        <button 
+                            onClick={() => {
+                                navigator.clipboard.writeText(order['Order ID']).then(() => alert('ចម្លង ID បានជោគជ័យ: ' + order['Order ID']));
+                            }}
+                            className="text-blue-400 font-mono text-xs mt-1 font-bold hover:text-white transition-colors flex items-center gap-1 group/id"
+                            title="ចុចដើម្បីចម្លង ID"
+                        >
+                            #{order['Order ID'].substring(0, 15)}
+                            <svg className="w-3 h-3 opacity-0 group-hover/id:opacity-100 transition-opacity" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 5H6a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2v-1M8 5a2 2 0 002 2h2a2 2 0 002-2M8 5a2 2 0 012-2h2a2 2 0 012 2" /></svg>
+                        </button>
                     </div>
                     <button onClick={onClose} disabled={uploading} className="w-10 h-10 bg-black/40 hover:bg-red-500/20 text-gray-400 hover:text-red-500 rounded-full flex items-center justify-center transition-all disabled:opacity-50 border border-white/5">
                         <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M6 18L18 6M6 6l12 12" /></svg>

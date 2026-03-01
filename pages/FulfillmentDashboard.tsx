@@ -160,7 +160,17 @@ const FulfillmentCard: React.FC<{
             {/* Header: Status & ID */}
             <div className={`p-5 pb-3 border-b border-white/5 flex justify-between items-start bg-white/[0.02] ${currentStatus === 'Shipped' ? 'pl-12' : ''}`}>
                 <div className="flex flex-col">
-                    <h4 className="text-sm font-black text-white tracking-tighter">#{order['Order ID'].substring(0, 10)}</h4>
+                    <button 
+                        onClick={(e) => {
+                            e.stopPropagation();
+                            navigator.clipboard.writeText(order['Order ID']).then(() => alert('ចម្លង ID បានជោគជ័យ: ' + order['Order ID']));
+                        }}
+                        className="text-sm font-black text-white tracking-tighter hover:text-blue-400 transition-colors flex items-center gap-1 group/id text-left"
+                        title="ចុចដើម្បីចម្លង ID"
+                    >
+                        #{order['Order ID'].substring(0, 10)}
+                        <svg className="w-3 h-3 opacity-0 group-hover/id:opacity-100 transition-opacity" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 5H6a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2v-1M8 5a2 2 0 002 2h2a2 2 0 002-2M8 5a2 2 0 012-2h2a2 2 0 012 2" /></svg>
+                    </button>
                     <p className="text-gray-500 text-[10px] mt-1 font-bold italic line-clamp-1">{order.Location}</p>
                 </div>
                 <div className={`px-2 py-1 rounded-full text-[8px] font-black uppercase border ${getStatusColor(currentStatus)}`}>

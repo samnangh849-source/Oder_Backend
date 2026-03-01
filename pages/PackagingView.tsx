@@ -249,7 +249,17 @@ const PackagingView: React.FC<{ orders?: ParsedOrder[] }> = ({ orders: propOrder
                             <h3 className="text-white font-black text-lg truncate">{order['Customer Name']}</h3>
                         </div>
                         <p className="text-blue-400 font-mono text-xs font-bold">{order['Customer Phone']}</p>
-                        <p className="text-gray-500 text-[10px] mt-1 italic font-bold">#{order['Order ID'].substring(0,8)}</p>
+                        <button 
+                            onClick={(e) => {
+                                e.stopPropagation();
+                                navigator.clipboard.writeText(order['Order ID']).then(() => alert('ចម្លង ID បានជោគជ័យ: ' + order['Order ID']));
+                            }}
+                            className="text-gray-500 text-[10px] mt-1 italic font-bold hover:text-blue-400 transition-colors flex items-center gap-1 group/id"
+                            title="ចុចដើម្បីចម្លង ID"
+                        >
+                            #{order['Order ID'].substring(0,8)}
+                            <svg className="w-3 h-3 opacity-0 group-hover/id:opacity-100 transition-opacity" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 5H6a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2v-1M8 5a2 2 0 002 2h2a2 2 0 002-2M8 5a2 2 0 012-2h2a2 2 0 012 2" /></svg>
+                        </button>
                     </div>
                     <div className="flex flex-col items-end gap-1 flex-shrink-0">
                         <span className="bg-white/5 px-2 py-1 rounded-lg text-[9px] font-black uppercase text-gray-400 border border-white/10">
