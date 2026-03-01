@@ -202,12 +202,9 @@ const PackagingView: React.FC<{ orders?: ParsedOrder[] }> = ({ orders: propOrder
             const result = await updateRes.json();
             if (!updateRes.ok || result.status !== 'success') throw new Error(result.message || "Status update failed");
             
-            // Auto switch tab if moving forward
-            if (newStatus === 'Shipped' && activeTab === 'Ready to Ship') {
-                setActiveTab('Shipped');
-            } else if (newStatus === 'Ready to Ship' && activeTab === 'Pending') {
-                setActiveTab('Ready to Ship');
-            }
+            // Auto switch tab
+            if (newStatus === 'Shipped' && activeTab === 'Ready to Ship') setActiveTab('Shipped');
+            else if (newStatus === 'Ready to Ship' && activeTab === 'Pending') setActiveTab('Ready to Ship');
 
             refreshData(); 
         } catch (error: any) {
@@ -229,7 +226,6 @@ const PackagingView: React.FC<{ orders?: ParsedOrder[] }> = ({ orders: propOrder
     };
 
     const renderOrderCard = (order: ParsedOrder) => {
-        // Logos finding logic
         const shippingMethod = appData.shippingMethods?.find(m => m.MethodName === order['Internal Shipping Method']);
         const driver = appData.drivers?.find(d => d.DriverName === (order['Driver Name'] || order['Internal Shipping Details']));
         const bank = appData.bankAccounts?.find(b => b.BankName === order['Payment Info']);
@@ -311,7 +307,6 @@ const PackagingView: React.FC<{ orders?: ParsedOrder[] }> = ({ orders: propOrder
                     ))}
                 </div>
 
-                {/* Show Package Photo if it's already packed (Step 3 or 4) */}
                 {(activeTab === 'Ready to Ship' || activeTab === 'Shipped') && order['Package Photo URL'] && (
                     <div className="space-y-2 mt-2">
                         <div 
@@ -386,6 +381,70 @@ const PackagingView: React.FC<{ orders?: ParsedOrder[] }> = ({ orders: propOrder
         );
     };
 
+    const renderOrderListRow = (order: ParsedOrder) => {
+        const shippingMethod = appData.shippingMethods?.find(m => m.MethodName === order['Internal Shipping Method']);
+        const driver = appData.drivers?.find(d => d.DriverName === (order['Driver Name'] || order['Internal Shipping Details']));
+        const bank = appData.bankAccounts?.find(b => b.BankName === order['Payment Info']);
+        
+        return (
+            <div key={order['Order ID']} className="bg-[#1e293b]/40 backdrop-blur-md border border-white/5 rounded-2xl p-4 flex items-center gap-4 group hover:border-blue-500/30 transition-all relative overflow-hidden">
+                {loadingActionId === order['Order ID'] && (
+                    <div className="absolute inset-0 bg-black/60 z-50 flex items-center justify-center rounded-2xl">
+                        <Spinner size="sm" />
+                    </div>
+                )}
+                
+                <div className="flex-grow min-w-0 grid grid-cols-1 md:grid-cols-4 gap-4 items-center">
+                    <div className="min-w-0">
+                        <h3 className="text-white font-black text-sm truncate">{order['Customer Name']}</h3>
+                        <button 
+                            onClick={(e) => {
+                                e.stopPropagation();
+                                navigator.clipboard.writeText(order['Order ID']).then(() => alert('ចម្លង ID បានជោគជ័យ: ' + order['Order ID']));
+                            }}
+                            className="text-blue-400 font-mono text-[10px] font-bold hover:text-white transition-colors"
+                        >
+                            #{order['Order ID'].substring(0,8)}
+                        </button>
+                    </div>
+
+                    <div className="hidden md:block text-center">
+                        <p className="text-gray-400 text-xs font-bold">{order['Customer Phone']}</p>
+                        <p className="text-gray-500 text-[9px] uppercase tracking-widest">{order.Page}</p>
+                    </div>
+
+                    <div className="flex items-center justify-center gap-2">
+                        {shippingMethod && <img src={convertGoogleDriveUrl(shippingMethod.LogosURL)} className="w-5 h-5 object-contain" alt="" />}
+                        {bank && <img src={convertGoogleDriveUrl(bank.LogoURL)} className="w-5 h-5 object-contain" alt="" />}
+                        {driver && <img src={convertGoogleDriveUrl(driver.ImageURL)} className="w-5 h-5 rounded-full object-cover" alt="" />}
+                    </div>
+
+                    <div className="flex justify-end gap-2">
+                        {activeTab === 'Pending' && (
+                            <button onClick={() => setPackingOrder(order)} className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg text-[10px] font-black uppercase transition-all">ខ្ចប់ឥវ៉ាន់</button>
+                        )}
+                        {activeTab === 'Ready to Ship' && (
+                            <div className="flex gap-1">
+                                <button onClick={() => handleAction(order, 'Shipped', { 'Dispatched Time': new Date().toLocaleString('km-KH') })} className="bg-amber-600 hover:bg-amber-700 text-white px-4 py-2 rounded-lg text-[10px] font-black uppercase transition-all">បញ្ចេញ</button>
+                                <button onClick={() => handleUndo(order, 'Pending', { 'Packed By': '', 'Packed Time': '', 'Package Photo URL': '' })} className="bg-red-600/20 text-red-400 p-2 rounded-lg border border-red-500/20 hover:bg-red-600 hover:text-white transition-all">
+                                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 10h10a8 8 0 018 8v2M3 10l6 6m-6-6l6-6" /></svg>
+                                </button>
+                            </div>
+                        )}
+                        {activeTab === 'Shipped' && (
+                            <button onClick={() => handleUndo(order, 'Ready to Ship', { 'Dispatched Time': '' })} className="bg-red-600/20 text-red-400 px-4 py-2 rounded-lg border border-red-500/20 hover:bg-red-600 hover:text-white transition-all text-[10px] font-black uppercase">UNDO</button>
+                        )}
+                        {(activeTab === 'Ready to Ship' || activeTab === 'Shipped') && order['Package Photo URL'] && (
+                            <button onClick={() => showFullImage(convertGoogleDriveUrl(order['Package Photo URL'] as string))} className="bg-gray-800 text-gray-300 p-2 rounded-lg border border-white/10 hover:bg-gray-700">
+                                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" /></svg>
+                            </button>
+                        )}
+                    </div>
+                </div>
+            </div>
+        );
+    };
+
     const hasOrders = (Object.values(groupedOrders) as ParsedOrder[][]).some(list => list.length > 0);
 
     return (
@@ -429,17 +488,26 @@ const PackagingView: React.FC<{ orders?: ParsedOrder[] }> = ({ orders: propOrder
                         <div className="flex bg-black/40 p-1.5 rounded-2xl border border-white/5">
                             <button 
                                 onClick={() => setViewMode('card')}
-                                className={`px-4 flex items-center justify-center rounded-xl transition-all ${viewMode === 'card' ? 'bg-blue-600 text-white shadow-lg' : 'text-gray-500 hover:text-gray-300'}`}
+                                className={`px-5 flex items-center justify-center rounded-xl transition-all duration-300 ${viewMode === 'card' ? 'bg-blue-600 text-white shadow-[0_0_20px_rgba(37,99,235,0.4)] scale-105' : 'text-gray-600 hover:text-gray-400'}`}
                                 title="Card View"
                             >
-                                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2 2V6zM14 6a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2V6zM4 16a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2 2v-2zM14 16a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2v-2z" /></svg>
+                                <svg className="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                                    <rect x="3" y="3" width="7" height="7" rx="1.5" />
+                                    <rect x="14" y="3" width="7" height="7" rx="1.5" />
+                                    <rect x="14" y="14" width="7" height="7" rx="1.5" />
+                                    <rect x="3" y="14" width="7" height="7" rx="1.5" />
+                                </svg>
                             </button>
                             <button 
                                 onClick={() => setViewMode('list')}
-                                className={`px-4 flex items-center justify-center rounded-xl transition-all ${viewMode === 'list' ? 'bg-blue-600 text-white shadow-lg' : 'text-gray-500 hover:text-gray-300'}`}
+                                className={`px-5 flex items-center justify-center rounded-xl transition-all duration-300 ${viewMode === 'list' ? 'bg-blue-600 text-white shadow-[0_0_20px_rgba(37,99,235,0.4)] scale-105' : 'text-gray-600 hover:text-gray-400'}`}
                                 title="List View"
                             >
-                                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 12h16M4 18h16" /></svg>
+                                <svg className="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                                    <line x1="3" y1="6" x2="21" y2="6" />
+                                    <line x1="3" y1="12" x2="21" y2="12" />
+                                    <line x1="3" y1="18" x2="21" y2="18" />
+                                </svg>
                             </button>
                         </div>
                         <button 
@@ -506,8 +574,8 @@ const PackagingView: React.FC<{ orders?: ParsedOrder[] }> = ({ orders: propOrder
                                         <div className="h-px flex-grow bg-gradient-to-l from-transparent to-white/10"></div>
                                     </div>
                                 )}
-                                <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4 gap-4">
-                                    {orders.map(renderOrderCard)}
+                                <div className={viewMode === 'card' ? "grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4 gap-4" : "flex flex-col gap-2"}>
+                                    {orders.map(order => viewMode === 'card' ? renderOrderCard(order) : renderOrderListRow(order))}
                                 </div>
                             </div>
                         )
