@@ -16,9 +16,70 @@ const FastPackModal: React.FC<FastPackModalProps> = ({ order, onClose, onSuccess
     const { currentUser, appData, previewImage: showFullImage } = useContext(AppContext);
     const [uploading, setUploading] = useState(false);
     const [previewImage, setPreviewImage] = useState<string | null>(null);
+    const [isCameraActive, setIsCameraActive] = useState(false);
+    const videoRef = useRef<HTMLVideoElement>(null);
+    const canvasRef = useRef<HTMLCanvasElement>(null);
     const fileInputRef = useRef<HTMLInputElement>(null);
 
     const [rawFile, setRawFile] = useState<File | null>(null);
+
+    // Camera Logic
+    const startCamera = async () => {
+        setIsCameraActive(true);
+        setPreviewImage(null);
+        try {
+            const stream = await navigator.mediaDevices.getUserMedia({ 
+                video: { facingMode: 'environment' }, 
+                audio: false 
+            });
+            if (videoRef.current) {
+                videoRef.current.srcObject = stream;
+            }
+        } catch (err) {
+            console.error("Camera access error:", err);
+            alert("មិនអាចបើកកាមេរ៉ាបានទេ។ សូមពិនិត្យ Permission របស់អ្នក។");
+            setIsCameraActive(false);
+        }
+    };
+
+    const stopCamera = () => {
+        if (videoRef.current && videoRef.current.srcObject) {
+            const stream = videoRef.current.srcObject as MediaStream;
+            stream.getTracks().forEach(track => track.stop());
+            videoRef.current.srcObject = null;
+        }
+        setIsCameraActive(false);
+    };
+
+    const capturePhoto = async () => {
+        if (!videoRef.current || !canvasRef.current) return;
+        
+        const video = videoRef.current;
+        const canvas = canvasRef.current;
+        const context = canvas.getContext('2d');
+        
+        if (context) {
+            canvas.width = video.videoWidth;
+            canvas.height = video.videoHeight;
+            context.drawImage(video, 0, 0, canvas.width, canvas.height);
+            
+            const imageData = canvas.toDataURL('image/jpeg', 0.7);
+            
+            // Compress the captured image to < 50KB
+            const response = await fetch(imageData);
+            const blob = await response.blob();
+            const file = new File([blob], "capture.jpg", { type: "image/jpeg" });
+            
+            const compressedBlob = await compressImage(file, 0.4, 640);
+            const reader = new FileReader();
+            reader.onloadend = () => {
+                setPreviewImage(reader.result as string);
+                setRawFile(file);
+                stopCamera();
+            };
+            reader.readAsDataURL(compressedBlob);
+        }
+    };
 
     // Look up the label printer URL from the store configuration
     const fulfillmentStore = appData.stores?.find(s => s.StoreName === order?.['Fulfillment Store']);
@@ -70,6 +131,12 @@ const FastPackModal: React.FC<FastPackModalProps> = ({ order, onClose, onSuccess
             alert('ចម្លងលេខទូរស័ព្ទបានជោគជ័យ: ' + text);
         });
     };
+
+    useEffect(() => {
+        return () => {
+            stopCamera();
+        };
+    }, []);
 
     if (!order) return null;
 
@@ -277,10 +344,12 @@ const FastPackModal: React.FC<FastPackModalProps> = ({ order, onClose, onSuccess
                             <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest ml-1 text-center md:text-left">រូបភាពបញ្ជាក់ការវេចខ្ចប់</p>
                             
                             <input 
-                                type="file" accept="image/*" capture="environment"
+                                type="file" accept="image/*" 
                                 ref={fileInputRef} onChange={handleFileChange} className="hidden"
                             />
                             
+                            <canvas ref={canvasRef} className="hidden" />
+
                             {previewImage ? (
                                 <div className="relative group rounded-[2rem] overflow-hidden border-2 border-emerald-500/30 shadow-2xl bg-black/40 aspect-[4/3] md:aspect-square cursor-pointer" onClick={() => showFullImage(previewImage)}>
                                     <img src={previewImage} className="w-full h-full object-cover" alt="Preview" />
@@ -294,19 +363,54 @@ const FastPackModal: React.FC<FastPackModalProps> = ({ order, onClose, onSuccess
                                     )}
                                     <div className="absolute bottom-4 left-1/2 -translate-x-1/2 bg-emerald-600 text-white px-4 py-1.5 rounded-full text-[9px] font-black uppercase tracking-widest border border-white/20 shadow-xl z-10">រូបភាពបានបញ្ចូល - ចុចដើម្បីពង្រីក</div>
                                 </div>
+                            ) : isCameraActive ? (
+                                <div className="relative rounded-[2rem] overflow-hidden border-2 border-blue-500 shadow-2xl bg-black aspect-[4/3] md:aspect-square">
+                                    <video 
+                                        ref={videoRef} 
+                                        autoPlay 
+                                        playsInline 
+                                        className="w-full h-full object-cover"
+                                    />
+                                    <div className="absolute bottom-6 left-0 right-0 flex justify-center items-center gap-6 z-20">
+                                        <button 
+                                            onClick={stopCamera}
+                                            className="w-12 h-12 bg-gray-900/80 text-white rounded-full flex items-center justify-center border border-white/10"
+                                        >
+                                            <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" /></svg>
+                                        </button>
+                                        <button 
+                                            onClick={capturePhoto}
+                                            className="w-20 h-20 bg-white rounded-full flex items-center justify-center border-8 border-white/20 shadow-2xl active:scale-90 transition-all"
+                                        >
+                                            <div className="w-12 h-12 bg-blue-600 rounded-full" />
+                                        </button>
+                                        <div className="w-12 h-12" /> {/* Spacer */}
+                                    </div>
+                                    <div className="absolute top-4 left-1/2 -translate-x-1/2 bg-blue-600/80 text-white px-3 py-1 rounded-full text-[8px] font-black uppercase tracking-widest">Live Camera</div>
+                                </div>
                             ) : (
-                                <button 
-                                    onClick={() => fileInputRef.current?.click()}
-                                    className="w-full py-16 md:py-24 border-2 border-dashed border-gray-700 rounded-[2.5rem] flex flex-col items-center justify-center gap-6 hover:border-blue-500 hover:bg-blue-500/5 transition-all active:scale-[0.98] group"
-                                >
-                                    <div className="w-20 h-20 bg-blue-600 rounded-3xl flex items-center justify-center text-white shadow-[0_0_30px_rgba(37,99,235,0.4)] border border-white/10 scale-110 group-hover:scale-110 transition-all">
-                                        <svg className="w-10 h-10" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 9a2 2 0 012-2h.93a2 2 0 001.664-.89l.812-1.22A2 2 0 0110.07 4h3.86a2 2 0 011.664.89l.812 1.22A2 2 0 0018.07 7H19a2 2 0 012 2v9a2 2 0 01-2 2H5a2 2 0 01-2-2V9z" /><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 13a3 3 0 11-6 0 3 3 0 016 0z" /></svg>
-                                    </div>
-                                    <div className="text-center space-y-1">
-                                        <p className="text-sm font-black text-gray-300 uppercase tracking-widest">ចុចដើម្បីថតរូបកញ្ចប់</p>
-                                        <p className="text-[10px] text-gray-500 uppercase font-bold tracking-wider">Accessing Camera Directly</p>
-                                    </div>
-                                </button>
+                                <div className="space-y-3">
+                                    <button 
+                                        onClick={startCamera}
+                                        className="w-full py-16 border-2 border-dashed border-blue-500/30 rounded-[2.5rem] flex flex-col items-center justify-center gap-4 hover:border-blue-500 hover:bg-blue-500/5 transition-all active:scale-[0.98] group"
+                                    >
+                                        <div className="w-20 h-20 bg-blue-600 rounded-3xl flex items-center justify-center text-white shadow-[0_0_30px_rgba(37,99,235,0.4)] border border-white/10 scale-110 group-hover:scale-110 transition-all">
+                                            <svg className="w-10 h-10" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 9a2 2 0 012-2h.93a2 2 0 001.664-.89l.812-1.22A2 2 0 0110.07 4h3.86a2 2 0 011.664.89l.812 1.22A2 2 0 0018.07 7H19a2 2 0 012 2v9a2 2 0 01-2 2H5a2 2 0 01-2-2V9z" /><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 13a3 3 0 11-6 0 3 3 0 016 0z" /></svg>
+                                        </div>
+                                        <div className="text-center space-y-1">
+                                            <p className="text-sm font-black text-gray-300 uppercase tracking-widest">បើកកាមេរ៉ាថតរូប</p>
+                                            <p className="text-[10px] text-gray-500 uppercase font-bold tracking-wider">Open Live Camera</p>
+                                        </div>
+                                    </button>
+
+                                    <button 
+                                        onClick={() => fileInputRef.current?.click()}
+                                        className="w-full py-4 bg-gray-800/40 hover:bg-gray-800 text-gray-400 rounded-2xl border border-white/5 font-black uppercase text-[10px] tracking-widest flex items-center justify-center gap-2 transition-all"
+                                    >
+                                        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" /></svg>
+                                        ជ្រើសរើសរូបភាពពីម៉ាស៊ីន (Upload File)
+                                    </button>
+                                </div>
                             )}
                         </div>
                     </div>
