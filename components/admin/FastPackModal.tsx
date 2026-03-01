@@ -78,7 +78,8 @@ const FastPackModal: React.FC<FastPackModalProps> = ({ order, onClose, onSuccess
         if (file) {
             setRawFile(file);
             try {
-                const compressedBlob = await compressImage(file, 0.7, 800);
+                // Target < 50KB: low quality (0.4) and moderate dimensions (640px)
+                const compressedBlob = await compressImage(file, 0.4, 640);
                 const reader = new FileReader();
                 reader.onloadend = () => setPreviewImage(reader.result as string);
                 reader.readAsDataURL(compressedBlob);

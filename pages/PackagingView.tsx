@@ -48,6 +48,7 @@ const PackagingView: React.FC<{ orders?: ParsedOrder[] }> = ({ orders: propOrder
     const [activeTab, setActiveTab] = useState<'Pending' | 'Ready to Ship' | 'Shipped'>('Pending');
     const [packingOrder, setPackingOrder] = useState<ParsedOrder | null>(null);
     const [loadingActionId, setLoadingActionId] = useState<string | null>(null);
+    const [viewMode, setViewMode] = useState<'card' | 'list'>('card');
     
     // Comprehensive Filters
     const [isFilterModalOpen, setIsFilterModalOpen] = useState(false);
@@ -425,6 +426,22 @@ const PackagingView: React.FC<{ orders?: ParsedOrder[] }> = ({ orders: propOrder
                         </div>
                     </div>
                     <div className="flex items-stretch gap-3 w-full lg:w-auto h-16 sm:h-[68px]">
+                        <div className="flex bg-black/40 p-1.5 rounded-2xl border border-white/5">
+                            <button 
+                                onClick={() => setViewMode('card')}
+                                className={`px-4 flex items-center justify-center rounded-xl transition-all ${viewMode === 'card' ? 'bg-blue-600 text-white shadow-lg' : 'text-gray-500 hover:text-gray-300'}`}
+                                title="Card View"
+                            >
+                                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2 2V6zM14 6a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2V6zM4 16a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2 2v-2zM14 16a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2v-2z" /></svg>
+                            </button>
+                            <button 
+                                onClick={() => setViewMode('list')}
+                                className={`px-4 flex items-center justify-center rounded-xl transition-all ${viewMode === 'list' ? 'bg-blue-600 text-white shadow-lg' : 'text-gray-500 hover:text-gray-300'}`}
+                                title="List View"
+                            >
+                                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 12h16M4 18h16" /></svg>
+                            </button>
+                        </div>
                         <button 
                             onClick={() => setIsFilterModalOpen(true)} 
                             className="flex-1 lg:flex-none flex items-center justify-center gap-3 px-8 py-5 bg-gray-900 border border-gray-800 text-gray-400 hover:text-white hover:border-blue-500/30 rounded-2xl text-[12px] font-black uppercase tracking-widest transition-all active:scale-95"
