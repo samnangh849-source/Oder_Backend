@@ -52,7 +52,7 @@ const FulfillmentPage: React.FC = () => {
             {/* Content Area */}
             <div className="flex-grow pb-28 animate-fade-in px-1">
                 {activeSubView === 'dashboard' && <FulfillmentDashboard orders={orders} />}
-                {activeSubView === 'packaging' && <PackagingView />}
+                {activeSubView === 'packaging' && <PackagingView orders={orders} />}
                 {activeSubView === 'delivery' && <DriverDeliveryView />}
                 {activeSubView === 'inventory' && <InventoryManagement />}
             </div>

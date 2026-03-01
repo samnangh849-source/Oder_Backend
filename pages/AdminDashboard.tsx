@@ -360,7 +360,7 @@ const AdminDashboard: React.FC = () => {
                 );
             case 'settings': return <SettingsDashboard onBack={() => setActiveDashboard('admin')} />;
             case 'fulfillment': return <FulfillmentDashboard orders={parsedOrders} />;
-            case 'packaging': return <PackagingView />;
+            case 'packaging': return <PackagingView orders={parsedOrders} />;
             case 'delivery': return <DriverDeliveryView />;
             case 'inventory': return <InventoryManagement />;
             default: return null;

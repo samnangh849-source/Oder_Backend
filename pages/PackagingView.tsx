@@ -6,15 +6,18 @@ import { ParsedOrder } from '@/types';
 import FastPackModal from '@/components/admin/FastPackModal';
 import { convertGoogleDriveUrl } from '@/utils/fileUtils';
 
-const PackagingView: React.FC = () => {
+const PackagingView: React.FC<{ orders?: ParsedOrder[] }> = ({ orders: propOrders }) => {
     const { appData, refreshData, setMobilePageTitle, previewImage: showFullImage } = useContext(AppContext);
     
     // Derived raw list
     const allOrders = useMemo(() => {
-        const rawData = Array.isArray(appData.orders) ? appData.orders : [];
+        // If propOrders are passed (which are already parsed), use them directly
+        if (propOrders) return propOrders;
+        
+        const rawData = Array.isArray((appData as any).orders) ? (appData as any).orders : [];
         return rawData
             .filter((o: any) => o !== null && o['Order ID'] !== 'Opening_Balance')
-            .map(o => {
+            .map((o: any) => {
                 let products = [];
                 try { if (o['Products (JSON)']) products = JSON.parse(o['Products (JSON)']); } catch(e) {}
                 return { 
@@ -24,7 +27,7 @@ const PackagingView: React.FC = () => {
                     FulfillmentStatus: (o['Fulfillment Status'] || o.FulfillmentStatus || 'Pending') as any
                 };
             }) as ParsedOrder[];
-    }, [appData.orders]);
+    }, [appData, propOrders]);
 
     const [activeTab, setActiveTab] = useState<'Pending' | 'Ready to Ship' | 'Shipped'>('Pending');
     const [packingOrder, setPackingOrder] = useState<ParsedOrder | null>(null);
