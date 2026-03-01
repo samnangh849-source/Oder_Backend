@@ -302,11 +302,18 @@ const FastPackModal: React.FC<FastPackModalProps> = ({ order, onClose, onSuccess
                 </div>
 
                 {/* Footer Actions */}
-                <div className="p-6 pt-0 mt-auto bg-[#0f172a] border-t border-white/5 pt-4">
+                <div className="p-6 pt-0 mt-auto bg-[#0f172a] border-t border-white/5 pt-4 flex gap-3">
+                    <button 
+                        onClick={onClose}
+                        disabled={uploading}
+                        className="flex-1 py-4 bg-gray-800 hover:bg-gray-700 text-gray-400 rounded-2xl font-black uppercase text-xs tracking-[0.2em] transition-all active:scale-[0.98] border border-white/5"
+                    >
+                        បោះបង់ (Cancel)
+                    </button>
                     <button 
                         onClick={handleSubmit}
                         disabled={!previewImage || uploading}
-                        className={`w-full py-4 rounded-2xl font-black uppercase text-xs tracking-[0.2em] transition-all shadow-xl flex items-center justify-center gap-3 relative overflow-hidden group
+                        className={`flex-[2] py-4 rounded-2xl font-black uppercase text-xs tracking-[0.2em] transition-all shadow-xl flex items-center justify-center gap-3 relative overflow-hidden group
                             ${!previewImage || uploading ? 'bg-gray-800 text-gray-500 cursor-not-allowed' : 'bg-blue-600 hover:bg-blue-500 text-white shadow-blue-900/40'}`}
                     >
                         {uploading ? <Spinner size="sm" /> : (

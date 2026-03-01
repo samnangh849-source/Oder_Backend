@@ -173,18 +173,19 @@ const PackagingView: React.FC<{ orders?: ParsedOrder[] }> = ({ orders: propOrder
         return { 'All': filtered };
     }, [allOrders, activeTab, searchTerm, filters, appData.pages]);
 
-    const handleAction = async (order: ParsedOrder, newStatus: string) => {
+    const handleAction = async (order: ParsedOrder, newStatus: string, extraData: any = {}) => {
         setLoadingActionId(order['Order ID']);
         try {
-            const updateRes = await fetch(`${WEB_APP_URL}/api/admin/update-sheet`, {
+            const updateRes = await fetch(`${WEB_APP_URL}/api/admin/update-order`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
-                    sheetName: 'AllOrders',
-                    primaryKey: { 'Order ID': order['Order ID'] },
+                    orderId: order['Order ID'],
+                    team: order.Team,
+                    userName: currentUser?.FullName || 'System',
                     newData: { 
                         'Fulfillment Status': newStatus,
-                        ...(newStatus === 'Shipped' ? { 'Dispatched Time': new Date().toLocaleString('km-KH') } : {})
+                        ...extraData
                     }
                 })
             });
@@ -250,7 +251,7 @@ const PackagingView: React.FC<{ orders?: ParsedOrder[] }> = ({ orders: propOrder
                 </div>
             )}
 
-            <div className="mt-auto pt-2">
+            <div className="mt-auto pt-2 space-y-2">
                 {activeTab === 'Pending' && (
                     <button 
                         onClick={() => setPackingOrder(order)}
@@ -261,19 +262,43 @@ const PackagingView: React.FC<{ orders?: ParsedOrder[] }> = ({ orders: propOrder
                     </button>
                 )}
                 {activeTab === 'Ready to Ship' && (
-                    <button 
-                        onClick={() => handleAction(order, 'Shipped')}
-                        className="w-full py-3.5 bg-amber-600 hover:bg-amber-700 text-white rounded-xl font-black uppercase text-[11px] tracking-widest shadow-xl shadow-amber-900/20 transition-all active:scale-[0.98] flex justify-center items-center gap-2"
-                    >
-                        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M13 10V3L4 14h7v7l9-11h-7z" /></svg>
-                        ប្រគល់អោយអ្នកដឹករួចរាល់
-                    </button>
+                    <>
+                        <button 
+                            onClick={() => handleAction(order, 'Shipped', { 'Dispatched Time': new Date().toLocaleString('km-KH') })}
+                            className="w-full py-3.5 bg-amber-600 hover:bg-amber-700 text-white rounded-xl font-black uppercase text-[11px] tracking-widest shadow-xl shadow-amber-900/20 transition-all active:scale-[0.98] flex justify-center items-center gap-2"
+                        >
+                            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M13 10V3L4 14h7v7l9-11h-7z" /></svg>
+                            ប្រគល់អោយអ្នកដឹករួចរាល់
+                        </button>
+                        <button 
+                            onClick={() => handleAction(order, 'Pending', { 
+                                'Packed By': '', 
+                                'Packed Time': '', 
+                                'Package Photo URL': '' 
+                            })}
+                            className="w-full py-2 bg-gray-800/50 hover:bg-red-600/20 text-gray-500 hover:text-red-400 rounded-lg font-black uppercase text-[9px] tracking-[0.2em] transition-all flex justify-center items-center gap-2 border border-white/5"
+                        >
+                            <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M3 10h10a8 8 0 018 8v2M3 10l6 6m-6-6l6-6" /></svg>
+                            UNDO (ត្រឡប់ទៅរង់ចាំខ្ចប់)
+                        </button>
+                    </>
                 )}
                 {activeTab === 'Shipped' && (
-                    <div className="w-full py-3 bg-gray-800/50 text-emerald-500 border border-emerald-500/20 rounded-xl font-black uppercase text-[10px] tracking-widest flex justify-center items-center gap-2 cursor-not-allowed">
-                        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" /></svg>
-                        បានបញ្ចេញរួចរាល់
-                    </div>
+                    <>
+                        <div className="w-full py-3 bg-gray-800/50 text-emerald-500 border border-emerald-500/20 rounded-xl font-black uppercase text-[10px] tracking-widest flex justify-center items-center gap-2 cursor-not-allowed">
+                            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" /></svg>
+                            បានបញ្ចេញរួចរាល់
+                        </div>
+                        <button 
+                            onClick={() => handleAction(order, 'Ready to Ship', { 
+                                'Dispatched Time': '' 
+                            })}
+                            className="w-full py-2 bg-gray-800/50 hover:bg-red-600/20 text-gray-500 hover:text-red-400 rounded-lg font-black uppercase text-[9px] tracking-[0.2em] transition-all flex justify-center items-center gap-2 border border-white/5"
+                        >
+                            <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M3 10h10a8 8 0 018 8v2M3 10l6 6m-6-6l6-6" /></svg>
+                            UNDO (ត្រឡប់ទៅខ្ចប់រួច)
+                        </button>
+                    </>
                 )}
             </div>
         </div>
