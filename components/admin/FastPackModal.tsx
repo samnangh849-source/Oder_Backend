@@ -22,7 +22,38 @@ const FastPackModal: React.FC<FastPackModalProps> = ({ order, onClose, onSuccess
 
     // Look up the label printer URL from the store configuration
     const fulfillmentStore = appData.stores?.find(s => s.StoreName === order?.['Fulfillment Store']);
-    const labelPrinterURL = fulfillmentStore?.LabelPrinterURL;
+    const basePrinterURL = fulfillmentStore?.LabelPrinterURL;
+
+    // Construct the full printer URL with parameters like in the backend script
+    const getFullPrinterURL = () => {
+        if (!basePrinterURL || !order) return '';
+        
+        // Extract map link using regex if not present
+        const fullText = `${order['Address Details'] || ''} ${order.Location || ''} ${order.Note || ''}`;
+        const urlRegex = /(https?:\/\/[^\s]+)/g;
+        const matches = fullText.match(urlRegex);
+        const mapLink = matches && matches.length > 0 ? matches[0] : '';
+
+        const params = new URLSearchParams({
+            id: order['Order ID'],
+            name: order['Customer Name'],
+            phone: order['Customer Phone'],
+            location: order.Location,
+            address: order['Address Details'] || '',
+            total: String(order['Grand Total']),
+            payment: order['Payment Status'] || '',
+            shipping: order['Internal Shipping Method'] || '',
+            user: order.User,
+            page: order.Page,
+            store: order['Fulfillment Store'],
+            map: mapLink,
+            note: order.Note || ''
+        });
+
+        return `${basePrinterURL}?${params.toString()}`;
+    };
+
+    const fullPrinterURL = getFullPrinterURL();
 
     const handleCopyName = () => {
         if (!order) return;
@@ -136,9 +167,9 @@ const FastPackModal: React.FC<FastPackModalProps> = ({ order, onClose, onSuccess
                         {/* Left Side: Order Details */}
                         <div className="space-y-6">
                             {/* Actions */}
-                            {labelPrinterURL && (
+                            {fullPrinterURL && (
                                 <button 
-                                    onClick={() => window.open(labelPrinterURL, '_blank')}
+                                    onClick={() => window.open(fullPrinterURL, '_blank')}
                                     className="w-full py-3 bg-indigo-600 hover:bg-indigo-700 text-white rounded-2xl font-black uppercase text-[10px] tracking-widest shadow-xl shadow-indigo-900/20 transition-all active:scale-[0.98] flex justify-center items-center gap-2 border border-white/10"
                                 >
                                     <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 17h2a2 2 0 002-2v-4a2 2 0 00-2-2H5a2 2 0 00-2 2v4a2 2 0 002 2h2m2 4h6a2 2 0 002-2v-4a2 2 0 00-2-2H9a2 2 0 00-2 2v4a2 2 0 002 2zm8-12V5a2 2 0 00-2-2H9a2 2 0 00-2 2v4h10z" /></svg>
