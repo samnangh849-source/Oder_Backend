@@ -20,11 +20,19 @@ const FastPackModal: React.FC<FastPackModalProps> = ({ order, onClose, onSuccess
 
     const [rawFile, setRawFile] = useState<File | null>(null);
 
-    const handleCopyInfo = () => {
+    const handleCopyName = () => {
         if (!order) return;
-        const text = `${order['Customer Name']} - ${order['Customer Phone']}`;
+        const text = order['Customer Name'];
         navigator.clipboard.writeText(text).then(() => {
-            alert('ចម្លងបានជោគជ័យ: ' + text);
+            alert('ចម្លងឈ្មោះបានជោគជ័យ: ' + text);
+        });
+    };
+
+    const handleCopyPhone = () => {
+        if (!order) return;
+        const text = order['Customer Phone'];
+        navigator.clipboard.writeText(text).then(() => {
+            alert('ចម្លងលេខទូរស័ព្ទបានជោគជ័យ: ' + text);
         });
     };
 
@@ -136,23 +144,32 @@ const FastPackModal: React.FC<FastPackModalProps> = ({ order, onClose, onSuccess
 
                             {/* Customer Info */}
                             <div className="bg-white/[0.02] rounded-2xl p-4 border border-white/5 space-y-3 relative group/info">
-                                <div className="flex items-center justify-between">
-                                    <div className="flex items-center gap-3">
-                                        <div className="w-10 h-10 bg-blue-600/20 rounded-xl flex items-center justify-center text-blue-500 border border-blue-500/20">
-                                            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" /></svg>
+                                <div className="flex items-start gap-3">
+                                    <div className="w-10 h-10 bg-blue-600/20 rounded-xl flex items-center justify-center text-blue-500 border border-blue-500/20 flex-shrink-0">
+                                        <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" /></svg>
+                                    </div>
+                                    <div className="min-w-0 flex-grow">
+                                        <div className="flex items-center justify-between gap-2">
+                                            <p className="text-white font-black text-sm truncate">{order['Customer Name']}</p>
+                                            <button 
+                                                onClick={handleCopyName}
+                                                className="p-1.5 bg-white/5 hover:bg-blue-600 text-gray-500 hover:text-white rounded-md transition-all border border-white/5 flex-shrink-0"
+                                                title="ចម្លងឈ្មោះ"
+                                            >
+                                                <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 5H6a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2v-1M8 5a2 2 0 002 2h2a2 2 0 002-2M8 5a2 2 0 012-2h2a2 2 0 012 2" /></svg>
+                                            </button>
                                         </div>
-                                        <div>
-                                            <p className="text-white font-black text-sm">{order['Customer Name']}</p>
-                                            <p className="text-blue-400 font-mono text-[11px] font-bold">{order['Customer Phone']}</p>
+                                        <div className="flex items-center justify-between gap-2 mt-1">
+                                            <p className="text-blue-400 font-mono text-[11px] font-bold truncate">{order['Customer Phone']}</p>
+                                            <button 
+                                                onClick={handleCopyPhone}
+                                                className="p-1.5 bg-white/5 hover:bg-blue-600 text-gray-500 hover:text-white rounded-md transition-all border border-white/5 flex-shrink-0"
+                                                title="ចម្លងលេខទូរស័ព្ទ"
+                                            >
+                                                <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 5H6a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2v-1M8 5a2 2 0 002 2h2a2 2 0 002-2M8 5a2 2 0 012-2h2a2 2 0 012 2" /></svg>
+                                            </button>
                                         </div>
                                     </div>
-                                    <button 
-                                        onClick={handleCopyInfo}
-                                        className="p-2 bg-white/5 hover:bg-blue-600 text-gray-400 hover:text-white rounded-lg transition-all border border-white/5"
-                                        title="ចម្លងឈ្មោះ និងលេខទូរស័ព្ទ"
-                                    >
-                                        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 5H6a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2v-1M8 5a2 2 0 002 2h2a2 2 0 002-2M8 5a2 2 0 012-2h2a2 2 0 012 2m0 0h2a2 2 0 012 2v3m2 4H10m0 0l3-3m-3 3l3 3" /></svg>
-                                    </button>
                                 </div>
                                 <div className="pt-2 border-t border-white/5">
                                     <p className="text-[10px] font-black text-gray-500 uppercase tracking-widest mb-1">ទីតាំងដឹកជញ្ជូន</p>
