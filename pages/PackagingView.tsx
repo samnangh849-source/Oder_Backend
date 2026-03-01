@@ -201,6 +201,13 @@ const PackagingView: React.FC<{ orders?: ParsedOrder[] }> = ({ orders: propOrder
             const result = await updateRes.json();
             if (!updateRes.ok || result.status !== 'success') throw new Error(result.message || "Status update failed");
             
+            // Auto switch tab if moving forward
+            if (newStatus === 'Shipped' && activeTab === 'Ready to Ship') {
+                setActiveTab('Shipped');
+            } else if (newStatus === 'Ready to Ship' && activeTab === 'Pending') {
+                setActiveTab('Ready to Ship');
+            }
+
             refreshData(); 
         } catch (error: any) {
             console.error("Action error:", error);
@@ -498,7 +505,8 @@ const PackagingView: React.FC<{ orders?: ParsedOrder[] }> = ({ orders: propOrder
                     onClose={() => setPackingOrder(null)} 
                     onSuccess={() => {
                         setPackingOrder(null);
-                        refreshData(); // Triggers a re-fetch/update in Context
+                        setActiveTab('Ready to Ship'); // Auto switch to Step 3
+                        refreshData(); 
                     }} 
                 />
             )}
