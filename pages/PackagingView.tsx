@@ -279,7 +279,7 @@ const PackagingView: React.FC<{ orders?: ParsedOrder[] }> = ({ orders: propOrder
         </div>
     );
 
-    const hasOrders = Object.values(groupedOrders).some(list => list.length > 0);
+    const hasOrders = (Object.values(groupedOrders) as ParsedOrder[][]).some(list => list.length > 0);
 
     return (
         <div className="space-y-6 pb-24 animate-fade-in px-4 lg:px-8">
@@ -373,7 +373,7 @@ const PackagingView: React.FC<{ orders?: ParsedOrder[] }> = ({ orders: propOrder
                 </div>
             ) : (
                 <div className="space-y-8">
-                    {Object.entries(groupedOrders).map(([date, orders]) => (
+                    {(Object.entries(groupedOrders) as [string, ParsedOrder[]][]).map(([date, orders]) => (
                         orders.length > 0 && (
                             <div key={date} className="space-y-4">
                                 {activeTab === 'Pending' && (

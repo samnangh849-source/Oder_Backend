@@ -115,13 +115,12 @@ const FastPackModal: React.FC<FastPackModalProps> = ({ order, onClose, onSuccess
             const imageUrl = uploadData.url;
 
             // STEP 2: Update Order
-            // Use update-order endpoint as suggested by user
             const updateRes = await fetch(`${WEB_APP_URL}/api/admin/update-order`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
                     orderId: order['Order ID'],
-                    team: order.Team, // Passing Team is important for update-order
+                    team: order.Team, 
                     userName: currentUser?.FullName || 'Station Packer',
                     newData: { 
                         'Fulfillment Status': 'Ready to Ship',
