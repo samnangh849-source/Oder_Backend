@@ -140,8 +140,8 @@ const FastPackModal: React.FC<FastPackModalProps> = ({ order, onClose, onSuccess
                                 <div className="pt-2 border-t border-white/5">
                                     <p className="text-[10px] font-black text-gray-500 uppercase tracking-widest mb-1">ទីតាំងដឹកជញ្ជូន</p>
                                     <p className="text-gray-300 text-xs italic leading-relaxed">{order.Location}</p>
-                                    {order.Address && (
-                                        <p className="text-gray-400 text-[10px] mt-1 leading-relaxed bg-black/30 p-2 rounded-lg border border-white/5">{order.Address}</p>
+                                    {order['Address Details'] && (
+                                        <p className="text-gray-400 text-[10px] mt-1 leading-relaxed bg-black/30 p-2 rounded-lg border border-white/5">{order['Address Details']}</p>
                                     )}
                                 </div>
                                 {order.Note && (
@@ -156,7 +156,7 @@ const FastPackModal: React.FC<FastPackModalProps> = ({ order, onClose, onSuccess
                             <div className="bg-black/20 rounded-2xl p-4 border border-white/5 space-y-3 shadow-inner">
                                 <div className="flex justify-between items-center text-[10px] font-black">
                                     <span className="text-gray-500 uppercase tracking-widest">វិធីសាស្រ្តបង់ប្រាក់</span>
-                                    <span className="text-pink-400">{order['Payment Method'] || 'N/A'}</span>
+                                    <span className="text-pink-400">{order['Payment Info'] || order['Payment Status'] || 'N/A'}</span>
                                 </div>
                                 <div className="flex justify-between items-center text-[10px] font-black">
                                     <span className="text-gray-500 uppercase tracking-widest">សេវាដឹកជញ្ជូន</span>
@@ -164,7 +164,7 @@ const FastPackModal: React.FC<FastPackModalProps> = ({ order, onClose, onSuccess
                                 </div>
                                 <div className="flex justify-between items-center text-[10px] font-black">
                                     <span className="text-gray-500 uppercase tracking-widest">អ្នកដឹក (Driver)</span>
-                                    <span className="text-blue-400">{order['Driver Name'] || 'N/A'}</span>
+                                    <span className="text-blue-400">{order['Driver Name'] || order['Internal Shipping Details'] || 'N/A'}</span>
                                 </div>
                                 <div className="flex justify-between items-center text-[10px] font-black border-t border-white/5 pt-2">
                                     <span className="text-gray-500 uppercase tracking-widest">សាខាបញ្ចេញឥវ៉ាន់</span>
