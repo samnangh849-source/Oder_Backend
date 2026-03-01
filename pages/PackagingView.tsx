@@ -385,9 +385,9 @@ const PackagingView: React.FC<{ orders?: ParsedOrder[] }> = ({ orders: propOrder
             {/* 4 Steps Navigation (Visualizing 4 steps, Step 2 is modal) */}
             <div className="flex bg-black/40 p-1.5 rounded-[2rem] border border-white/5 overflow-x-auto no-scrollbar max-w-2xl mx-auto shadow-inner gap-1">
                 {[
-                    { id: 'Pending', label: '1. រង់ចាំខ្ចប់', icon: '📥' },
-                    { id: 'Ready to Ship', label: '3. ខ្ចប់រួច', icon: '📦' },
-                    { id: 'Shipped', label: '4. បានបញ្ចេញ', icon: '🚚' }
+                    { id: 'Pending', label: 'រង់ចាំខ្ចប់', icon: '📥' },
+                    { id: 'Ready to Ship', label: 'ខ្ចប់រួច', icon: '📦' },
+                    { id: 'Shipped', label: 'បានបញ្ចេញ', icon: '🚚' }
                 ].map(tab => (
                     <button 
                         key={tab.id}
@@ -396,7 +396,7 @@ const PackagingView: React.FC<{ orders?: ParsedOrder[] }> = ({ orders: propOrder
                     >
                         <span className="text-lg">{tab.icon}</span>
                         <span>{tab.label}</span>
-                        {activeTab === tab.id && <div className="absolute -bottom-1.5 left-1/2 -translate-x-1/2 w-1.5 h-1.5 bg-blue-500 rounded-full shadow-[0_0_10px_#3b82f6]"></div>}
+                        {activeTab === tab.id && <div className="absolute -bottom-0.5 left-1/2 -translate-x-1/2 w-12 h-1 bg-blue-500 rounded-full shadow-[0_0_15px_#3b82f6] animate-pulse"></div>}
                     </button>
                 ))}
             </div>
