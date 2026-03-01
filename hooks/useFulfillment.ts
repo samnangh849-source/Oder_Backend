@@ -17,10 +17,10 @@ export const useFulfillment = (allOrders: ParsedOrder[], onUpdate?: () => void) 
 
         allOrders.forEach(order => {
             const status = (order.FulfillmentStatus || 'Pending') as FulfillmentStatus;
-            if (status === 'Cancelled') return;
+            if (status === ('Cancelled' as any)) return;
             if (groups[status as keyof typeof groups]) {
                 groups[status as keyof typeof groups].push(order);
-            } else if (status !== 'Cancelled') {
+            } else if (status !== ('Cancelled' as any)) {
                 groups.Pending.push(order);
             }
         });
