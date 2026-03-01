@@ -32,6 +32,10 @@ const PackagingView: React.FC<{ orders?: ParsedOrder[] }> = ({ orders: propOrder
     const [activeTab, setActiveTab] = useState<'Pending' | 'Ready to Ship' | 'Shipped'>('Pending');
     const [packingOrder, setPackingOrder] = useState<ParsedOrder | null>(null);
     const [loadingActionId, setLoadingActionId] = useState<string | null>(null);
+    
+    // Filter states
+    const [searchTerm, setSearchTerm] = useState('');
+    const [storeFilter, setStoreFilter] = useState('All');
 
     useEffect(() => {
         setMobilePageTitle('PACKING STATION');
@@ -40,7 +44,24 @@ const PackagingView: React.FC<{ orders?: ParsedOrder[] }> = ({ orders: propOrder
 
     // Grouping pending orders by date created
     const groupedOrders = useMemo(() => {
-        const filtered = allOrders.filter(o => o.FulfillmentStatus === activeTab && o.FulfillmentStatus !== 'Cancelled').sort((a, b) => {
+        let filtered = allOrders.filter(o => o.FulfillmentStatus === activeTab && o.FulfillmentStatus !== 'Cancelled');
+
+        // Apply Search Filter
+        if (searchTerm.trim()) {
+            const q = searchTerm.toLowerCase();
+            filtered = filtered.filter(o => 
+                o['Order ID'].toLowerCase().includes(q) ||
+                o['Customer Name'].toLowerCase().includes(q) ||
+                o['Customer Phone'].toLowerCase().includes(q)
+            );
+        }
+
+        // Apply Store Filter
+        if (storeFilter !== 'All') {
+            filtered = filtered.filter(o => o['Fulfillment Store'] === storeFilter);
+        }
+
+        filtered = filtered.sort((a, b) => {
             return b['Order ID'].localeCompare(a['Order ID']);
         });
 
@@ -56,7 +77,7 @@ const PackagingView: React.FC<{ orders?: ParsedOrder[] }> = ({ orders: propOrder
         }
         
         return { 'All': filtered };
-    }, [allOrders, activeTab]);
+    }, [allOrders, activeTab, searchTerm, storeFilter]);
 
     const handleAction = async (order: ParsedOrder, newStatus: string) => {
         setLoadingActionId(order['Order ID']);
@@ -185,6 +206,39 @@ const PackagingView: React.FC<{ orders?: ParsedOrder[] }> = ({ orders: propOrder
                         {activeTab === tab.id && <div className="absolute -bottom-1.5 left-1/2 -translate-x-1/2 w-1.5 h-1.5 bg-blue-500 rounded-full shadow-[0_0_10px_#3b82f6]"></div>}
                     </button>
                 ))}
+            </div>
+
+            {/* Filter Section */}
+            <div className="max-w-4xl mx-auto grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div className="relative">
+                    <input 
+                        type="text" 
+                        value={searchTerm}
+                        onChange={(e) => setSearchTerm(e.target.value)}
+                        placeholder="ស្វែងរក ID, ឈ្មោះ, ឬលេខទូរស័ព្ទ..."
+                        className="w-full bg-black/40 border border-white/10 rounded-2xl px-10 py-3 text-xs text-white placeholder:text-gray-600 focus:border-blue-500 outline-none transition-all"
+                    />
+                    <svg className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" /></svg>
+                    {searchTerm && (
+                        <button onClick={() => setSearchTerm('')} className="absolute right-3.5 top-1/2 -translate-y-1/2 text-gray-600 hover:text-white">
+                            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M6 18L18 6M6 6l12 12" /></svg>
+                        </button>
+                    )}
+                </div>
+
+                <div className="relative">
+                    <select 
+                        value={storeFilter}
+                        onChange={(e) => setStoreFilter(e.target.value)}
+                        className="w-full bg-black/40 border border-white/10 rounded-2xl px-5 py-3 text-xs text-white appearance-none focus:border-blue-500 outline-none transition-all cursor-pointer font-bold"
+                    >
+                        <option value="All">គ្រប់សាខាទាំងអស់</option>
+                        {appData.stores?.map(s => <option key={s.StoreName} value={s.StoreName}>{s.StoreName}</option>)}
+                    </select>
+                    <div className="absolute right-4 top-1/2 -translate-y-1/2 pointer-events-none text-gray-600">
+                        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M19 9l-7 7-7-7" /></svg>
+                    </div>
+                </div>
             </div>
 
             {/* Live Update Indicator */}
