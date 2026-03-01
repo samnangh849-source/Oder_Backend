@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect, useCallback, Suspense, useMemo } from 'react';
 import { User, AppData } from './types';
 import { WEB_APP_URL } from './constants';
@@ -38,19 +37,21 @@ const lazyRetry = <T extends React.ComponentType<any>>(
   });
 };
 
-const LoginPage = lazyRetry(() => import('./pages/LoginPage'), 'LoginPage');
-const RoleSelectionPage = lazyRetry(() => import('./pages/RoleSelectionPage'), 'RoleSelectionPage');
-const AdminDashboard = lazyRetry(() => import('./pages/AdminDashboard'), 'AdminDashboard');
-const UserJourney = lazyRetry(() => import('./pages/UserJourney'), 'UserJourney');
-const DeliveryAgentView = lazyRetry(() => import('./components/orders/DeliveryAgentView'), 'DeliveryAgentView');
-const Header = lazyRetry(() => import('./components/common/Header'), 'Header');
-const ImpersonationBanner = lazyRetry(() => import('./components/common/ImpersonationBanner'), 'ImpersonationBanner');
-const ChatWidget = lazyRetry(() => import('./components/chat/ChatWidget'), 'ChatWidget');
+const LoginPage = lazyRetry(() => import('@/pages/LoginPage'), 'LoginPage');
+const RoleSelectionPage = lazyRetry(() => import('@/pages/RoleSelectionPage'), 'RoleSelectionPage');
+const AdminDashboard = lazyRetry(() => import('@/pages/AdminDashboard'), 'AdminDashboard');
+const UserJourney = lazyRetry(() => import('@/pages/UserJourney'), 'UserJourney');
+const DeliveryAgentView = lazyRetry(() => import('@/components/orders/DeliveryAgentView'), 'DeliveryAgentView');
+const FulfillmentPage = lazyRetry(() => import('@/pages/FulfillmentPage'), 'FulfillmentPage');
+const Header = lazyRetry(() => import('@/components/common/Header'), 'Header');
+const ImpersonationBanner = lazyRetry(() => import('@/components/common/ImpersonationBanner'), 'ImpersonationBanner');
+const ChatWidget = lazyRetry(() => import('@/components/chat/ChatWidget'), 'ChatWidget');
 
 const initialAppData: AppData = {
     users: [], products: [], pages: [], locations: [],
     shippingMethods: [], drivers: [], bankAccounts: [],
-    phoneCarriers: [], colors: [], stores: [], settings: [], targets: []
+    phoneCarriers: [], colors: [], stores: [], settings: [], targets: [],
+    inventory: [], stockTransfers: [], returns: []
 };
 
 const App: React.FC = () => {
@@ -62,7 +63,7 @@ const App: React.FC = () => {
     const [isMobile, setIsMobile] = useState(window.innerWidth < 768);
     const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
     const [language, setLanguage] = useState<Language>(() => (localStorage.getItem('appLanguage') as Language) || 'en');
-    const [appState, setAppState] = useUrlState<'login' | 'role_selection' | 'admin_dashboard' | 'user_journey' | 'confirm_delivery'>('view', 'login');
+    const [appState, setAppState] = useUrlState<'login' | 'role_selection' | 'admin_dashboard' | 'user_journey' | 'confirm_delivery' | 'fulfillment'>('view', 'login');
     const [previewImageUrl, setPreviewImageUrl] = useState<string | null>(null);
     
     // URL Params for Delivery Confirmation
@@ -176,6 +177,9 @@ const App: React.FC = () => {
                         users: rawData.users || rawData.Users || [],
                         products: rawData.products || rawData.Products || [],
                         settings: rawData.settings || rawData.Settings || [],
+                        inventory: rawData.inventory || [],
+                        stockTransfers: rawData.stockTransfers || [],
+                        returns: rawData.returns || [],
                     };
                     
                     setAppData(processedData);
@@ -194,13 +198,9 @@ const App: React.FC = () => {
     }, []);
 
     const determineAppState = useCallback((user: User) => {
-        const teams = (user.Team || '').split(',').map(t => t.trim()).filter(Boolean);
-        if (user.IsSystemAdmin) {
-            if (teams.length > 0) setAppState('role_selection');
-            else setAppState('admin_dashboard');
-        } else {
-            setAppState('user_journey');
-        }
+        // All users now go through role selection to choose between Sales or Fulfillment
+        // Only System Admins will see the "Admin Dashboard" option inside RoleSelectionPage
+        setAppState('role_selection');
     }, [setAppState]);
 
     useEffect(() => {
@@ -387,6 +387,7 @@ const App: React.FC = () => {
                             <main className={`${containerClass} ${paddingClass} transition-all duration-300`}>
                                 {appState === 'admin_dashboard' && <AdminDashboard />}
                                 {appState === 'user_journey' && <UserJourney onBackToRoleSelect={() => setAppState('role_selection')} />}
+                                {appState === 'fulfillment' && <FulfillmentPage />}
                                 {appState === 'role_selection' && <RoleSelectionPage onSelect={(s) => setAppState(s as any)} />}
                             </main>
                             <ChatWidget isOpen={isChatOpen} onClose={() => setIsChatOpen(false)} />

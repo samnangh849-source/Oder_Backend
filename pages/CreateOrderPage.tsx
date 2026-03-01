@@ -472,7 +472,8 @@ const CreateOrderPage: React.FC<CreateOrderPageProps> = ({ team, onSaveSuccess, 
                 total: Number(p.total) || 0, 
                 colorInfo: p.colorInfo, 
                 cost: Number(p.cost) || 0,
-                tags: p.tags
+                tags: p.tags,
+                image: p.image
             })), 
             shipping: { 
                 ...order.shipping, 

@@ -9,8 +9,10 @@ export const useFulfillment = (allOrders: ParsedOrder[], onUpdate?: () => void) 
     const ordersByStatus = useMemo(() => {
         const groups = {
             Pending: [] as ParsedOrder[],
-            Packing: [] as ParsedOrder[],
-            Shipped: [] as ParsedOrder[]
+            Processing: [] as ParsedOrder[],
+            'Ready to Ship': [] as ParsedOrder[],
+            Shipped: [] as ParsedOrder[],
+            Delivered: [] as ParsedOrder[]
         };
 
         allOrders.forEach(order => {
@@ -18,7 +20,7 @@ export const useFulfillment = (allOrders: ParsedOrder[], onUpdate?: () => void) 
             if (status === 'Cancelled') return;
             if (groups[status as keyof typeof groups]) {
                 groups[status as keyof typeof groups].push(order);
-            } else {
+            } else if (status !== 'Cancelled') {
                 groups.Pending.push(order);
             }
         });
@@ -26,7 +28,7 @@ export const useFulfillment = (allOrders: ParsedOrder[], onUpdate?: () => void) 
         return groups;
     }, [allOrders]);
 
-    const updateStatus = useCallback(async (orderId: string, newStatus: FulfillmentStatus) => {
+    const updateStatus = useCallback(async (orderId: string, newStatus: FulfillmentStatus, extraData: any = {}) => {
         setLoadingId(orderId);
         try {
             const response = await fetch(`${WEB_APP_URL}/api/admin/update-sheet`, {
@@ -35,7 +37,10 @@ export const useFulfillment = (allOrders: ParsedOrder[], onUpdate?: () => void) 
                 body: JSON.stringify({
                     sheetName: 'AllOrders',
                     primaryKey: { 'Order ID': orderId },
-                    newData: { 'FulfillmentStatus': newStatus }
+                    newData: { 
+                        'Fulfillment Status': newStatus,
+                        ...extraData
+                    }
                 })
             });
 

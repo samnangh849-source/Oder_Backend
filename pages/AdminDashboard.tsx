@@ -6,17 +6,20 @@ import DesktopAdminLayout from '../components/admin/DesktopAdminLayout';
 import MobileAdminLayout from '../components/admin/MobileAdminLayout';
 import TabletAdminLayout from '../components/admin/TabletAdminLayout';
 import DashboardOverview from '../components/admin/DashboardOverview';
-import PerformanceTrackingPage from './PerformanceTrackingPage';
-import ReportDashboard from './ReportDashboard';
-import SettingsDashboard from './SettingsDashboard';
-import OrdersDashboard from './OrdersDashboard';
-import FulfillmentDashboard from './FulfillmentDashboard';
+import PerformanceTrackingPage from '@/pages/PerformanceTrackingPage';
+import ReportDashboard from '@/pages/ReportDashboard';
+import SettingsDashboard from '@/pages/SettingsDashboard';
+import OrdersDashboard from '@/pages/OrdersDashboard';
+import FulfillmentDashboard from '@/pages/FulfillmentDashboard';
+import PackagingView from '@/pages/PackagingView';
+import DriverDeliveryView from '@/pages/DriverDeliveryView';
+import InventoryManagement from '@/components/admin/InventoryManagement';
 import EditProfileModal from '../components/common/EditProfileModal';
 import { useUrlState } from '../hooks/useUrlState';
 import { WEB_APP_URL } from '../constants';
 import { FullOrder, ParsedOrder } from '../types';
  
-type ActiveDashboard = 'admin' | 'orders' | 'reports' | 'settings' | 'fulfillment';
+type ActiveDashboard = 'admin' | 'orders' | 'reports' | 'settings' | 'fulfillment' | 'packaging' | 'delivery' | 'inventory';
 type AdminView = 'dashboard' | 'performance';
 type ReportType = 'overview' | 'performance' | 'profitability' | 'forecasting' | 'shipping' | 'sales_team' | 'sales_page';
 
@@ -112,8 +115,8 @@ const AdminDashboard: React.FC = () => {
                             return { 
                                 ...o, 
                                 Products: products, 
-                                IsVerified: String(o.IsVerified).toUpperCase() === 'TRUE',
-                                FulfillmentStatus: o.FulfillmentStatus as any
+                                IsVerified: String(o.IsVerified).toUpperCase() === 'TRUE' || o.IsVerified === 'A',
+                                FulfillmentStatus: (o['Fulfillment Status'] || o.FulfillmentStatus || 'Pending') as any
                             };
                         });
                     setParsedOrders(parsed);
@@ -357,6 +360,9 @@ const AdminDashboard: React.FC = () => {
                 );
             case 'settings': return <SettingsDashboard onBack={() => setActiveDashboard('admin')} />;
             case 'fulfillment': return <FulfillmentDashboard orders={parsedOrders} />;
+            case 'packaging': return <PackagingView />;
+            case 'delivery': return <DriverDeliveryView />;
+            case 'inventory': return <InventoryManagement />;
             default: return null;
         }
     };

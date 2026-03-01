@@ -32,7 +32,7 @@ export interface Product {
     tags?: string;
 }
 
-export type FulfillmentStatus = 'Pending' | 'Packing' | 'Shipped' | 'Cancelled';
+export type FulfillmentStatus = 'Pending' | 'Processing' | 'Ready to Ship' | 'Shipped' | 'Delivered' | 'Cancelled';
 
 // *** CRITICAL: Exact match with Go struct JSON tags ***
 export interface FullOrder {
@@ -66,6 +66,44 @@ export interface FullOrder {
     Team: string;
     IsVerified?: boolean;
     FulfillmentStatus?: FulfillmentStatus;
+    "Packed By"?: string;
+    "Package Photo URL"?: string;
+    "Driver Name"?: string;
+    "Tracking Number"?: string;
+    "Delivery Photo URL"?: string;
+}
+
+export interface InventoryItem {
+    StoreName: string;
+    Barcode: string;
+    Quantity: number;
+    LastUpdated?: string;
+    UpdatedBy?: string;
+}
+
+export interface StockTransfer {
+    TransferID: string;
+    Timestamp: string;
+    FromStore: string;
+    ToStore: string;
+    Barcode: string;
+    Quantity: number;
+    Status: 'Pending' | 'Approved' | 'Rejected' | 'Completed';
+    RequestedBy: string;
+    ApprovedBy?: string;
+    ReceivedBy?: string;
+}
+
+export interface ReturnOrder {
+    ReturnID: string;
+    Timestamp: string;
+    OrderID: string;
+    StoreName: string;
+    Barcode: string;
+    Quantity: number;
+    Reason: string;
+    IsRestocked: boolean;
+    HandledBy: string;
 }
 
 export interface ParsedOrder extends Omit<FullOrder, "Products (JSON)"> {
@@ -161,6 +199,9 @@ export interface AppData {
     stores: Store[];
     settings?: any;
     targets?: Target[];
+    inventory?: InventoryItem[];
+    stockTransfers?: StockTransfer[];
+    returns?: ReturnOrder[];
 }
 
 export interface LocationInfo {

@@ -1,4 +1,3 @@
-
 import React, { useContext, useEffect, useState } from 'react';
 import { AppContext } from '../context/AppContext';
 import UserAvatar from '../components/common/UserAvatar';
@@ -6,7 +5,7 @@ import { convertGoogleDriveUrl } from '../utils/fileUtils';
 import { APP_LOGO_URL } from '../constants';
 
 interface RoleSelectionPageProps {
-    onSelect: (role: 'admin_dashboard' | 'user_journey') => void;
+    onSelect: (role: 'admin_dashboard' | 'user_journey' | 'fulfillment') => void;
 }
 
 const RoleSelectionPage: React.FC<RoleSelectionPageProps> = ({ onSelect }) => {
@@ -56,6 +55,7 @@ const RoleSelectionPage: React.FC<RoleSelectionPageProps> = ({ onSelect }) => {
                 .reveal-0 { animation: reveal 0.6s cubic-bezier(0.2, 0.8, 0.2, 1) 0.3s forwards; opacity: 0; }
                 .reveal-1 { animation: reveal 0.6s cubic-bezier(0.2, 0.8, 0.2, 1) 0.5s forwards; opacity: 0; }
                 .reveal-2 { animation: reveal 0.6s cubic-bezier(0.2, 0.8, 0.2, 1) 0.6s forwards; opacity: 0; }
+                .reveal-3 { animation: reveal 0.6s cubic-bezier(0.2, 0.8, 0.2, 1) 0.7s forwards; opacity: 0; }
                 
                 .premium-glass-mobile {
                     background: rgba(15, 23, 42, 0.4);
@@ -98,7 +98,7 @@ const RoleSelectionPage: React.FC<RoleSelectionPageProps> = ({ onSelect }) => {
                 }
             `}</style>
 
-            <div className="w-full max-w-lg sm:max-w-4xl z-10 space-y-10 sm:space-y-16">
+            <div className="w-full max-w-lg sm:max-w-6xl z-10 space-y-10 sm:space-y-16">
                 {/* Header Welcome Section */}
                 <div className="text-center px-2">
                     <div className="inline-block relative mb-8 sm:mb-12 profile-entrance">
@@ -134,68 +134,84 @@ const RoleSelectionPage: React.FC<RoleSelectionPageProps> = ({ onSelect }) => {
                     </div>
                 </div>
 
-                {/* Role Selection - Specialized Mobile Layout */}
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4 sm:gap-8 w-full">
-                    {/* ADMIN ROLE */}
+                {/* Role Selection - Specialized Grid */}
+                <div className={`grid grid-cols-1 ${currentUser.IsSystemAdmin ? 'md:grid-cols-3' : 'md:grid-cols-2'} gap-4 sm:gap-8 w-full px-2`}>
+                    {/* ADMIN ROLE - Only for System Admins */}
+                    {currentUser.IsSystemAdmin && (
+                        <button 
+                            onClick={() => onSelect('admin_dashboard')}
+                            className="role-btn premium-glass-mobile p-5 sm:p-8 rounded-[2rem] text-left transition-all duration-300 reveal-1 flex md:flex-col items-center md:items-start gap-5 sm:gap-0 border hover:border-blue-500/50 group"
+                        >
+                            <div className="w-14 h-14 sm:w-16 sm:h-16 bg-gradient-to-br from-blue-600 to-indigo-700 rounded-2xl flex items-center justify-center text-white sm:mb-6 transition-all shadow-xl flex-shrink-0 group-hover:scale-110">
+                                <svg className="w-7 h-7 sm:w-8 sm:h-8" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2.5}>
+                                    <path d="M11 3.055A9.001 9.001 0 1020.945 13H11V3.055z" />
+                                    <path d="M20.488 9H15V3.512A9.025 9.025 0 0120.488 9z" />
+                                </svg>
+                            </div>
+                            <div className="flex-grow min-w-0">
+                                <h3 className="text-lg sm:text-xl font-black text-white uppercase tracking-tight mb-1">គ្រប់គ្រងប្រព័ន្ធ</h3>
+                                <p className="text-[11px] sm:text-[12px] text-gray-500 font-bold leading-snug opacity-70">
+                                    ផ្ទាំងបញ្ជាលក់ របាយការណ៍ និងការកំណត់។
+                                </p>
+                            </div>
+                            <div className="md:mt-6 hidden sm:flex items-center gap-2 text-blue-500 font-black text-[10px] uppercase tracking-widest">
+                                <span>Admin Console</span>
+                                <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={3}><path d="M13 7l5 5-5 5" /></svg>
+                            </div>
+                        </button>
+                    )}
+
+                    {/* FULFILLMENT ROLE */}
                     <button 
-                        onClick={() => onSelect('admin_dashboard')}
-                        className="role-btn premium-glass-mobile p-5 sm:p-10 rounded-[2rem] sm:rounded-[3rem] text-left transition-all duration-300 reveal-1 flex md:flex-col items-center md:items-start gap-5 sm:gap-0"
+                        onClick={() => onSelect('fulfillment')}
+                        className="role-btn premium-glass-mobile p-5 sm:p-8 rounded-[2rem] text-left transition-all duration-300 reveal-2 flex md:flex-col items-center md:items-start gap-5 sm:gap-0 border hover:border-amber-500/50 group"
                     >
-                        <div className="w-14 h-14 sm:w-20 sm:h-20 bg-gradient-to-br from-blue-600 to-indigo-700 rounded-2xl sm:rounded-[1.8rem] flex items-center justify-center text-white sm:mb-8 transition-all shadow-xl flex-shrink-0">
-                            <svg className="w-7 h-7 sm:w-10 sm:h-10" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2.5}>
-                                <path d="M11 3.055A9.001 9.001 0 1020.945 13H11V3.055z" />
-                                <path d="M20.488 9H15V3.512A9.025 9.025 0 0120.488 9z" />
+                        <div className="w-14 h-14 sm:w-16 sm:h-16 bg-gradient-to-br from-amber-500 to-orange-600 rounded-2xl flex items-center justify-center text-white sm:mb-6 transition-all shadow-xl flex-shrink-0 group-hover:scale-110">
+                            <svg className="w-7 h-7 sm:w-8 sm:h-8" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2.5}>
+                                <path d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4" />
                             </svg>
                         </div>
                         <div className="flex-grow min-w-0">
-                            <h3 className="text-lg sm:text-3xl font-black text-white uppercase tracking-tight mb-1 sm:mb-3">គ្រប់គ្រងប្រព័ន្ធ</h3>
-                            <p className="text-[11px] sm:text-sm text-gray-500 font-bold leading-snug opacity-70 line-clamp-2">
-                                ផ្ទាំងបញ្ជាលក់ របាយការណ៍សង្ខេប និងបច្ចេកទេស។
+                            <h3 className="text-lg sm:text-xl font-black text-white uppercase tracking-tight mb-1">វេចខ្ចប់ & ដឹកជញ្ជូន</h3>
+                            <p className="text-[11px] sm:text-[12px] text-gray-500 font-bold leading-snug opacity-70">
+                                រៀបឥវ៉ាន់ ស្កេនកញ្ចប់ និងបញ្ជូនទៅកាន់អ្នកដឹក។
                             </p>
                         </div>
-                        <div className="md:mt-10 hidden sm:flex items-center gap-3 text-blue-500 font-black text-xs uppercase tracking-widest">
-                            <span>Admin Console</span>
-                            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={3}><path d="M13 7l5 5-5 5M6 7l5 5-5 5" /></svg>
-                        </div>
-                        {/* Mobile chevron */}
-                        <div className="sm:hidden text-gray-600">
-                             <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path d="M9 5l7 7-7 7" strokeWidth={3} strokeLinecap="round" strokeLinejoin="round"/></svg>
+                        <div className="md:mt-6 hidden sm:flex items-center gap-2 text-amber-500 font-black text-[10px] uppercase tracking-widest">
+                            <span>Fulfillment Ops</span>
+                            <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={3}><path d="M13 7l5 5-5 5" /></svg>
                         </div>
                     </button>
 
                     {/* USER/SALES ROLE */}
                     <button 
                         onClick={() => onSelect('user_journey')}
-                        className="role-btn premium-glass-mobile p-5 sm:p-10 rounded-[2rem] sm:rounded-[3rem] text-left transition-all duration-300 reveal-2 flex md:flex-col items-center md:items-start gap-5 sm:gap-0"
+                        className="role-btn premium-glass-mobile p-5 sm:p-8 rounded-[2rem] text-left transition-all duration-300 reveal-3 flex md:flex-col items-center md:items-start gap-5 sm:gap-0 border hover:border-emerald-500/50 group"
                     >
-                        <div className="w-14 h-14 sm:w-20 sm:h-20 bg-gradient-to-br from-emerald-500 to-cyan-600 rounded-2xl sm:rounded-[1.8rem] flex items-center justify-center text-white sm:mb-8 transition-all shadow-xl flex-shrink-0">
-                            <svg className="w-7 h-7 sm:w-10 sm:h-10" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2.5}>
+                        <div className="w-14 h-14 sm:w-16 sm:h-16 bg-gradient-to-br from-emerald-500 to-cyan-600 rounded-2xl flex items-center justify-center text-white sm:mb-6 transition-all shadow-xl flex-shrink-0 group-hover:scale-110">
+                            <svg className="w-7 h-7 sm:w-8 sm:h-8" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2.5}>
                                 <path d="M16 11V7a4 4 0 00-8 0v4M5 9h14l1 12H4L5 9z" />
                             </svg>
                         </div>
                         <div className="flex-grow min-w-0">
-                            <h3 className="text-lg sm:text-3xl font-black text-white uppercase tracking-tight mb-1 sm:mb-3">ប្រតិបត្តិការលក់</h3>
-                            <p className="text-[11px] sm:text-sm text-gray-500 font-bold leading-snug opacity-70 line-clamp-2">
-                                បង្កើតកម្មង់ ពិនិត្យប្រវត្តិលក់ និងតាមដានទិន្នន័យ។
+                            <h3 className="text-lg sm:text-xl font-black text-white uppercase tracking-tight mb-1">ប្រតិបត្តិការលក់</h3>
+                            <p className="text-[11px] sm:text-[12px] text-gray-500 font-bold leading-snug opacity-70">
+                                បង្កើតកម្មង់ ពិនិត្យប្រវត្តិលក់ និងទិន្នន័យ។
                             </p>
                         </div>
-                        <div className="md:mt-10 hidden sm:flex items-center gap-3 text-emerald-500 font-black text-xs uppercase tracking-widest">
+                        <div className="md:mt-6 hidden sm:flex items-center gap-2 text-emerald-500 font-black text-[10px] uppercase tracking-widest">
                             <span>Sales Portal</span>
-                            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={3}><path d="M13 7l5 5-5 5M6 7l5 5-5 5" /></svg>
-                        </div>
-                        {/* Mobile chevron */}
-                        <div className="sm:hidden text-gray-600">
-                             <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path d="M9 5l7 7-7 7" strokeWidth={3} strokeLinecap="round" strokeLinejoin="round"/></svg>
+                            <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={3}><path d="M13 7l5 5-5 5" /></svg>
                         </div>
                     </button>
                 </div>
 
                 {/* Brand Footer */}
-                <div className="mt-10 sm:mt-20 text-center reveal-2" style={{ animationDelay: '0.8s' }}>
+                <div className="mt-10 sm:mt-20 text-center reveal-3" style={{ animationDelay: '0.8s' }}>
                     <div className="inline-flex items-center gap-3 bg-white/5 px-4 py-2 rounded-full border border-white/5 opacity-40 hover:opacity-100 transition-opacity duration-500">
                         <img src={convertGoogleDriveUrl(APP_LOGO_URL)} alt="Logo" className="w-5 h-5 object-contain" />
                         <div className="h-3 w-px bg-white/20"></div>
-                        <p className="text-[8px] sm:text-[10px] text-white font-black uppercase tracking-[0.3em]">O-System V2.0.1</p>
+                        <p className="text-[8px] sm:text-[10px] text-white font-black uppercase tracking-[0.3em]">O-System V2.0.2</p>
                     </div>
                 </div>
             </div>
