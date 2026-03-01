@@ -12,7 +12,7 @@ import Modal from '@/components/common/Modal';
 const PackagingView: React.FC<{ orders?: ParsedOrder[] }> = ({ orders: propOrders }) => {
     const { appData, refreshData, currentUser, setMobilePageTitle, previewImage: showFullImage } = useContext(AppContext);
     
-    // Derived raw list with Team enrichment to ensure UNDO works
+    // Derived raw list with Team enrichment to ensure UNDO and updates work
     const allOrders = useMemo(() => {
         const rawData = propOrders || (Array.isArray((appData as any).orders) ? (appData as any).orders : []);
         
@@ -220,109 +220,153 @@ const PackagingView: React.FC<{ orders?: ParsedOrder[] }> = ({ orders: propOrder
         }
     };
 
-    const renderOrderCard = (order: ParsedOrder) => (
-        <div key={order['Order ID']} className="bg-[#1e293b]/60 backdrop-blur-md border border-white/5 rounded-[2rem] p-5 shadow-2xl flex flex-col gap-4 relative overflow-hidden group hover:border-blue-500/30 transition-all">
-            {loadingActionId === order['Order ID'] && (
-                <div className="absolute inset-0 bg-black/60 z-50 flex items-center justify-center backdrop-blur-sm rounded-[2rem]">
-                    <Spinner />
-                </div>
-            )}
-            
-            <div className="flex justify-between items-start">
-                <div className="min-w-0">
-                    <h3 className="text-white font-black text-lg truncate">{order['Customer Name']}</h3>
-                    <p className="text-blue-400 font-mono text-xs font-bold">{order['Customer Phone']}</p>
-                    <p className="text-gray-500 text-[10px] mt-1 italic font-bold">#{order['Order ID'].substring(0,8)}</p>
-                </div>
-                <div className="flex flex-col items-end gap-1">
-                    <span className="bg-white/5 px-2 py-1 rounded-lg text-[9px] font-black uppercase text-gray-400 border border-white/10">
-                        {order.Products.length} Items
-                    </span>
-                    <span className="text-[10px] text-gray-500 font-bold">{order['Internal Shipping Method']}</span>
-                </div>
-            </div>
+    const renderOrderCard = (order: ParsedOrder) => {
+        // Logos finding logic
+        const shippingMethod = appData.shippingMethods?.find(m => m.MethodName === order['Internal Shipping Method']);
+        const driver = appData.drivers?.find(d => d.DriverName === (order['Driver Name'] || order['Internal Shipping Details']));
+        const bank = appData.bankAccounts?.find(b => b.BankName === order['Payment Info']);
+        
+        const phone = order['Customer Phone'] || '';
+        const phoneCarrier = appData.phoneCarriers?.find(c => {
+            const prefixes = (c.Prefixes || '').split(',').map(p => p.trim());
+            return prefixes.some(p => phone.startsWith(p));
+        });
 
-            <div className="bg-black/30 rounded-2xl p-3 border border-white/5 flex gap-2 overflow-x-auto custom-scrollbar">
-                {order.Products.map((p, idx) => (
-                    <div key={idx} className="flex-shrink-0 w-12 h-12 rounded-xl overflow-hidden bg-gray-900 border border-gray-800 cursor-pointer hover:border-blue-500/50" onClick={() => showFullImage(convertGoogleDriveUrl(p.image))}>
-                        <img src={convertGoogleDriveUrl(p.image)} alt={p.name} className="w-full h-full object-cover" />
+        return (
+            <div key={order['Order ID']} className="bg-[#1e293b]/60 backdrop-blur-md border border-white/5 rounded-[2rem] p-5 shadow-2xl flex flex-col gap-4 relative overflow-hidden group hover:border-blue-500/30 transition-all">
+                {loadingActionId === order['Order ID'] && (
+                    <div className="absolute inset-0 bg-black/60 z-50 flex items-center justify-center backdrop-blur-sm rounded-[2rem]">
+                        <Spinner />
                     </div>
-                ))}
-            </div>
-
-            {/* Show Package Photo if it's already packed (Step 3 or 4) */}
-            {(activeTab === 'Ready to Ship' || activeTab === 'Shipped') && order['Package Photo URL'] && (
-                <div className="space-y-2 mt-2">
-                    <div 
-                        className="w-full h-24 rounded-xl overflow-hidden border border-white/10 cursor-pointer hover:border-blue-500/50 transition-all relative group/photo"
-                        onClick={() => showFullImage(convertGoogleDriveUrl(order['Package Photo URL'] as string))}
-                    >
-                        <img src={convertGoogleDriveUrl(order['Package Photo URL'] as string)} className="w-full h-full object-cover opacity-60 group-hover/photo:opacity-100 transition-opacity" alt="Package" />
-                        <div className="absolute inset-0 flex items-center justify-center bg-black/20 group-hover/photo:bg-transparent transition-all">
-                            <svg className="w-6 h-6 text-white shadow-xl" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" /><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" /></svg>
+                )}
+                
+                <div className="flex justify-between items-start">
+                    <div className="min-w-0 flex-grow">
+                        <div className="flex items-center gap-2">
+                            {phoneCarrier && (
+                                <img src={convertGoogleDriveUrl(phoneCarrier.CarrierLogoURL)} className="w-4 h-4 object-contain" alt="" />
+                            )}
+                            <h3 className="text-white font-black text-lg truncate">{order['Customer Name']}</h3>
+                        </div>
+                        <p className="text-blue-400 font-mono text-xs font-bold">{order['Customer Phone']}</p>
+                        <p className="text-gray-500 text-[10px] mt-1 italic font-bold">#{order['Order ID'].substring(0,8)}</p>
+                    </div>
+                    <div className="flex flex-col items-end gap-1 flex-shrink-0">
+                        <span className="bg-white/5 px-2 py-1 rounded-lg text-[9px] font-black uppercase text-gray-400 border border-white/10">
+                            {order.Products.length} Items
+                        </span>
+                        <div className="flex items-center gap-1.5 mt-1">
+                            {shippingMethod && (
+                                <img src={convertGoogleDriveUrl(shippingMethod.LogosURL)} className="w-4 h-4 object-contain opacity-70" alt="" />
+                            )}
+                            <span className="text-[10px] text-gray-500 font-bold">{order['Internal Shipping Method']}</span>
                         </div>
                     </div>
-                    <button 
-                        onClick={() => showFullImage(convertGoogleDriveUrl(order['Package Photo URL'] as string))}
-                        className="w-full py-2 bg-gray-800/80 hover:bg-gray-700 text-gray-300 rounded-xl font-black uppercase text-[9px] tracking-widest border border-white/10 transition-all flex justify-center items-center gap-2"
-                    >
-                        មើលរូបធំ
-                    </button>
                 </div>
-            )}
 
-            <div className="mt-auto pt-2 space-y-2">
-                {activeTab === 'Pending' && (
-                    <button 
-                        onClick={() => setPackingOrder(order)}
-                        className="w-full py-3.5 bg-blue-600 hover:bg-blue-700 text-white rounded-xl font-black uppercase text-[11px] tracking-widest shadow-xl shadow-blue-900/20 transition-all active:scale-[0.98] flex justify-center items-center gap-2"
-                    >
-                        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 13l4 4L19 7" /></svg>
-                        ចាប់ផ្ដើមវេចខ្ចប់
-                    </button>
-                )}
-                {activeTab === 'Ready to Ship' && (
-                    <>
-                        <button 
-                            onClick={() => handleAction(order, 'Shipped', { 'Dispatched Time': new Date().toLocaleString('km-KH') })}
-                            className="w-full py-3.5 bg-amber-600 hover:bg-amber-700 text-white rounded-xl font-black uppercase text-[11px] tracking-widest shadow-xl shadow-amber-900/20 transition-all active:scale-[0.98] flex justify-center items-center gap-2"
+                <div className="bg-black/20 rounded-xl p-3 border border-white/5 space-y-2 shadow-inner">
+                    <div className="flex justify-between items-center text-[10px] font-black">
+                        <div className="flex items-center gap-2">
+                            <span className="text-gray-500 uppercase tracking-widest">Driver</span>
+                            {driver && (
+                                <img src={convertGoogleDriveUrl(driver.ImageURL)} className="w-4 h-4 rounded-full object-cover" alt="" />
+                            )}
+                        </div>
+                        <span className="text-emerald-400 truncate max-w-[100px]">{order['Driver Name'] || order['Internal Shipping Details'] || 'N/A'}</span>
+                    </div>
+                    <div className="flex justify-between items-center text-[10px] font-black">
+                        <div className="flex items-center gap-2">
+                            <span className="text-gray-500 uppercase tracking-widest">Payment</span>
+                            {bank && (
+                                <img src={convertGoogleDriveUrl(bank.LogoURL)} className="w-4 h-4 object-contain" alt="" />
+                            )}
+                        </div>
+                        <span className="text-pink-400 truncate max-w-[100px]">{order['Payment Info'] || order['Payment Status'] || 'N/A'}</span>
+                    </div>
+                </div>
+
+                <div className="bg-black/30 rounded-2xl p-3 border border-white/5 flex gap-2 overflow-x-auto custom-scrollbar">
+                    {order.Products.map((p, idx) => (
+                        <div key={idx} className="flex-shrink-0 w-12 h-12 rounded-xl overflow-hidden bg-gray-900 border border-gray-800 cursor-pointer hover:border-blue-500/50" onClick={() => showFullImage(convertGoogleDriveUrl(p.image))}>
+                            <img src={convertGoogleDriveUrl(p.image)} alt={p.name} className="w-full h-full object-cover" />
+                        </div>
+                    ))}
+                </div>
+
+                {/* Show Package Photo if it's already packed (Step 3 or 4) */}
+                {(activeTab === 'Ready to Ship' || activeTab === 'Shipped') && order['Package Photo URL'] && (
+                    <div className="space-y-2 mt-2">
+                        <div 
+                            className="w-full h-24 rounded-xl overflow-hidden border border-white/10 cursor-pointer hover:border-blue-500/50 transition-all relative group/photo"
+                            onClick={() => showFullImage(convertGoogleDriveUrl(order['Package Photo URL'] as string))}
                         >
-                            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M13 10V3L4 14h7v7l9-11h-7z" /></svg>
-                            ប្រគល់អោយអ្នកដឹករួចរាល់
-                        </button>
-                        <button 
-                            onClick={() => handleUndo(order, 'Pending', { 
-                                'Packed By': '', 
-                                'Packed Time': '', 
-                                'Package Photo URL': '' 
-                            })}
-                            className="w-full py-2 bg-gray-800/50 hover:bg-red-600/20 text-gray-500 hover:text-red-400 rounded-lg font-black uppercase text-[9px] tracking-[0.2em] transition-all flex justify-center items-center gap-2 border border-white/5"
-                        >
-                            <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M3 10h10a8 8 0 018 8v2M3 10l6 6m-6-6l6-6" /></svg>
-                            UNDO (ត្រឡប់ទៅរង់ចាំខ្ចប់)
-                        </button>
-                    </>
-                )}
-                {activeTab === 'Shipped' && (
-                    <>
-                        <div className="w-full py-3 bg-gray-800/50 text-emerald-500 border border-emerald-500/20 rounded-xl font-black uppercase text-[10px] tracking-widest flex justify-center items-center gap-2 cursor-not-allowed">
-                            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" /></svg>
-                            បានបញ្ចេញរួចរាល់
+                            <img src={convertGoogleDriveUrl(order['Package Photo URL'] as string)} className="w-full h-full object-cover opacity-60 group-hover/photo:opacity-100 transition-opacity" alt="Package" />
+                            <div className="absolute inset-0 flex items-center justify-center bg-black/20 group-hover/photo:bg-transparent transition-all">
+                                <svg className="w-6 h-6 text-white shadow-xl" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" /><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" /></svg>
+                            </div>
                         </div>
                         <button 
-                            onClick={() => handleUndo(order, 'Ready to Ship', { 
-                                'Dispatched Time': '' 
-                            })}
-                            className="w-full py-2 bg-gray-800/50 hover:bg-red-600/20 text-gray-500 hover:text-red-400 rounded-lg font-black uppercase text-[9px] tracking-[0.2em] transition-all flex justify-center items-center gap-2 border border-white/5"
+                            onClick={() => showFullImage(convertGoogleDriveUrl(order['Package Photo URL'] as string))}
+                            className="w-full py-2 bg-gray-800/80 hover:bg-gray-700 text-gray-300 rounded-xl font-black uppercase text-[9px] tracking-widest border border-white/10 transition-all flex justify-center items-center gap-2"
                         >
-                            <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M3 10h10a8 8 0 018 8v2M3 10l6 6m-6-6l6-6" /></svg>
-                            UNDO (ត្រឡប់ទៅខ្ចប់រួច)
+                            មើលរូបធំ
                         </button>
-                    </>
+                    </div>
                 )}
+
+                <div className="mt-auto pt-2 space-y-2">
+                    {activeTab === 'Pending' && (
+                        <button 
+                            onClick={() => setPackingOrder(order)}
+                            className="w-full py-3.5 bg-blue-600 hover:bg-blue-700 text-white rounded-xl font-black uppercase text-[11px] tracking-widest shadow-xl shadow-blue-900/20 transition-all active:scale-[0.98] flex justify-center items-center gap-2"
+                        >
+                            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 13l4 4L19 7" /></svg>
+                            ចាប់ផ្ដើមវេចខ្ចប់
+                        </button>
+                    )}
+                    {activeTab === 'Ready to Ship' && (
+                        <>
+                            <button 
+                                onClick={() => handleAction(order, 'Shipped', { 'Dispatched Time': new Date().toLocaleString('km-KH') })}
+                                className="w-full py-3.5 bg-amber-600 hover:bg-amber-700 text-white rounded-xl font-black uppercase text-[11px] tracking-widest shadow-xl shadow-amber-900/20 transition-all active:scale-[0.98] flex justify-center items-center gap-2"
+                            >
+                                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M13 10V3L4 14h7v7l9-11h-7z" /></svg>
+                                ប្រគល់អោយអ្នកដឹករួចរាល់
+                            </button>
+                            <button 
+                                onClick={() => handleUndo(order, 'Pending', { 
+                                    'Packed By': '', 
+                                    'Packed Time': '', 
+                                    'Package Photo URL': '' 
+                                })}
+                                className="w-full py-2 bg-gray-800/50 hover:bg-red-600/20 text-gray-500 hover:text-red-400 rounded-lg font-black uppercase text-[9px] tracking-[0.2em] transition-all flex justify-center items-center gap-2 border border-white/5"
+                            >
+                                <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M3 10h10a8 8 0 018 8v2M3 10l6 6m-6-6l6-6" /></svg>
+                                UNDO (ត្រឡប់ទៅរង់ចាំខ្ចប់)
+                            </button>
+                        </>
+                    )}
+                    {activeTab === 'Shipped' && (
+                        <>
+                            <div className="w-full py-3 bg-gray-800/50 text-emerald-500 border border-emerald-500/20 rounded-xl font-black uppercase text-[10px] tracking-widest flex justify-center items-center gap-2 cursor-not-allowed">
+                                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" /></svg>
+                                បានបញ្ចេញរួចរាល់
+                            </div>
+                            <button 
+                                onClick={() => handleUndo(order, 'Ready to Ship', { 
+                                    'Dispatched Time': '' 
+                                })}
+                                className="w-full py-2 bg-gray-800/50 hover:bg-red-600/20 text-gray-500 hover:text-red-400 rounded-lg font-black uppercase text-[9px] tracking-[0.2em] transition-all flex justify-center items-center gap-2 border border-white/5"
+                            >
+                                <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M3 10h10a8 8 0 018 8v2M3 10l6 6m-6-6l6-6" /></svg>
+                                UNDO (ត្រឡប់ទៅខ្ចប់រួច)
+                            </button>
+                        </>
+                    )}
+                </div>
             </div>
-        </div>
-    );
+        );
+    };
 
     const hasOrders = (Object.values(groupedOrders) as ParsedOrder[][]).some(list => list.length > 0);
 
