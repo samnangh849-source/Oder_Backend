@@ -16,8 +16,7 @@ const FastPackModal: React.FC<FastPackModalProps> = ({ order, onClose, onSuccess
     const { currentUser, appData, previewImage: showFullImage } = useContext(AppContext);
     const [uploading, setUploading] = useState(false);
     const [previewImage, setPreviewImage] = useState<string | null>(null);
-    const fileInputCameraRef = useRef<HTMLInputElement>(null);
-    const fileInputGalleryRef = useRef<HTMLInputElement>(null);
+    const fileInputRef = useRef<HTMLInputElement>(null);
 
     const [rawFile, setRawFile] = useState<File | null>(null);
 
@@ -277,14 +276,9 @@ const FastPackModal: React.FC<FastPackModalProps> = ({ order, onClose, onSuccess
                         <div className="space-y-4">
                             <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest ml-1 text-center md:text-left">រូបភាពបញ្ជាក់ការវេចខ្ចប់</p>
                             
-                            {/* Hidden Inputs */}
-                            <input 
-                                type="file" accept="image/*" capture="environment" 
-                                ref={fileInputCameraRef} onChange={handleFileChange} className="hidden"
-                            />
                             <input 
                                 type="file" accept="image/*" 
-                                ref={fileInputGalleryRef} onChange={handleFileChange} className="hidden"
+                                ref={fileInputRef} onChange={handleFileChange} className="hidden"
                             />
                             
                             {previewImage ? (
@@ -298,36 +292,26 @@ const FastPackModal: React.FC<FastPackModalProps> = ({ order, onClose, onSuccess
                                             <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M6 18L18 6M6 6l12 12" /></svg>
                                         </button>
                                     )}
-                                    <div className="absolute bottom-4 left-1/2 -translate-x-1/2 bg-emerald-600 text-white px-4 py-1.5 rounded-full text-[9px] font-black uppercase tracking-widest border border-white/20 shadow-xl z-10">Proof Loaded - Tap to Zoom</div>
+                                    <div className="absolute bottom-4 left-1/2 -translate-x-1/2 bg-emerald-600 text-white px-4 py-1.5 rounded-full text-[9px] font-black uppercase tracking-widest border border-white/20 shadow-xl z-10">រូបភាពបានបញ្ចូល - ចុចដើម្បីពង្រីក</div>
                                 </div>
                             ) : (
-                                <div className="grid grid-cols-1 gap-3 h-full">
-                                    <button 
-                                        onClick={() => fileInputCameraRef.current?.click()}
-                                        className="w-full py-10 border-2 border-dashed border-blue-500/30 rounded-[2rem] flex flex-col items-center justify-center gap-3 hover:border-blue-500 hover:bg-blue-500/5 transition-all active:scale-[0.98] group"
-                                    >
-                                        <div className="w-14 h-14 bg-blue-600 rounded-2xl flex items-center justify-center text-white shadow-xl shadow-blue-900/30 group-hover:scale-110 transition-transform">
-                                            <svg className="w-7 h-7" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 9a2 2 0 012-2h.93a2 2 0 001.664-.89l.812-1.22A2 2 0 0110.07 4h3.86a2 2 0 011.664.89l.812 1.22A2 2 0 0018.07 7H19a2 2 0 012 2v9a2 2 0 01-2 2H5a2 2 0 01-2-2V9z" /><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 13a3 3 0 11-6 0 3 3 0 016 0z" /></svg>
+                                <button 
+                                    onClick={() => fileInputRef.current?.click()}
+                                    className="w-full py-16 md:py-24 border-2 border-dashed border-gray-700 rounded-[2.5rem] flex flex-col items-center justify-center gap-6 hover:border-blue-500 hover:bg-blue-500/5 transition-all active:scale-[0.98] group"
+                                >
+                                    <div className="flex items-center -space-x-4">
+                                        <div className="w-16 h-16 bg-gray-800 rounded-2xl flex items-center justify-center text-gray-400 shadow-xl border border-white/5 transform -rotate-12 group-hover:-translate-x-2 transition-all">
+                                            <svg className="w-8 h-8" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" /></svg>
                                         </div>
-                                        <div className="text-center">
-                                            <p className="text-xs font-black text-gray-300 uppercase tracking-widest">ថតរូបកញ្ចប់</p>
-                                            <p className="text-[9px] text-gray-500 uppercase mt-1 font-bold">Open Camera</p>
+                                        <div className="w-20 h-20 bg-blue-600 rounded-3xl flex items-center justify-center text-white shadow-[0_0_30px_rgba(37,99,235,0.4)] border border-white/10 z-10 scale-110 group-hover:scale-110 transition-all">
+                                            <svg className="w-10 h-10" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 9a2 2 0 012-2h.93a2 2 0 001.664-.89l.812-1.22A2 2 0 0110.07 4h3.86a2 2 0 011.664.89l.812 1.22A2 2 0 0018.07 7H19a2 2 0 012 2v9a2 2 0 01-2 2H5a2 2 0 01-2-2V9z" /><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 13a3 3 0 11-6 0 3 3 0 016 0z" /></svg>
                                         </div>
-                                    </button>
-
-                                    <button 
-                                        onClick={() => fileInputGalleryRef.current?.click()}
-                                        className="w-full py-10 border-2 border-dashed border-gray-700 rounded-[2rem] flex flex-col items-center justify-center gap-3 hover:border-indigo-500 hover:bg-indigo-500/5 transition-all active:scale-[0.98] group"
-                                    >
-                                        <div className="w-14 h-14 bg-gray-800 group-hover:bg-indigo-600 rounded-2xl flex items-center justify-center text-gray-400 group-hover:text-white shadow-xl transition-all">
-                                            <svg className="w-7 h-7" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" /></svg>
-                                        </div>
-                                        <div className="text-center">
-                                            <p className="text-xs font-black text-gray-300 uppercase tracking-widest">រុករូបភាព</p>
-                                            <p className="text-[9px] text-gray-500 uppercase mt-1 font-bold">From Gallery</p>
-                                        </div>
-                                    </button>
-                                </div>
+                                    </div>
+                                    <div className="text-center space-y-1">
+                                        <p className="text-sm font-black text-gray-300 uppercase tracking-widest">ថតរូប ឬ ជ្រើសរើសរូបភាព</p>
+                                        <p className="text-[10px] text-gray-500 uppercase font-bold tracking-wider">Take Photo or From Gallery</p>
+                                    </div>
+                                </button>
                             )}
                         </div>
                     </div>
