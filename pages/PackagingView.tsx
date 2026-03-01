@@ -5,6 +5,9 @@ import Spinner from '@/components/common/Spinner';
 import { ParsedOrder } from '@/types';
 import FastPackModal from '@/components/admin/FastPackModal';
 import { convertGoogleDriveUrl } from '@/utils/fileUtils';
+import OrderFilters, { FilterState } from '@/components/orders/OrderFilters';
+import { FilterPanel } from '@/components/orders/FilterPanel';
+import Modal from '@/components/common/Modal';
 
 const PackagingView: React.FC<{ orders?: ParsedOrder[] }> = ({ orders: propOrders }) => {
     const { appData, refreshData, setMobilePageTitle, previewImage: showFullImage } = useContext(AppContext);
@@ -33,42 +36,133 @@ const PackagingView: React.FC<{ orders?: ParsedOrder[] }> = ({ orders: propOrder
     const [packingOrder, setPackingOrder] = useState<ParsedOrder | null>(null);
     const [loadingActionId, setLoadingActionId] = useState<string | null>(null);
     
-    // Filter states
+    // Comprehensive Filters
+    const [isFilterModalOpen, setIsFilterModalOpen] = useState(false);
     const [searchTerm, setSearchTerm] = useState('');
-    const [storeFilter, setStoreFilter] = useState('All');
+    const [filters, setFilters] = useState<FilterState>({
+        datePreset: 'all',
+        startDate: '',
+        endDate: '',
+        team: '',
+        user: '',
+        paymentStatus: '',
+        shippingService: '',
+        driver: '',
+        product: '',
+        bank: '',
+        fulfillmentStore: '',
+        store: '',
+        page: '',
+        location: '',
+        internalCost: '',
+        customerName: '',
+    });
 
     useEffect(() => {
         setMobilePageTitle('PACKING STATION');
         return () => setMobilePageTitle(null);
     }, [setMobilePageTitle]);
 
-    // Grouping pending orders by date created
+    const calculatedRange = useMemo(() => {
+        if (filters.datePreset === 'all') return 'All time data stream';
+        const now = new Date();
+        const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+        let start: Date | null = null;
+        let end: Date | null = new Date();
+        switch (filters.datePreset) {
+            case 'today': start = today; break;
+            case 'yesterday': start = new Date(today); start.setDate(today.getDate() - 1); end = new Date(today); end.setMilliseconds(-1); break;
+            case 'this_week': const day = now.getDay(); start = new Date(today); start.setDate(today.getDate() - (day === 0 ? 6 : day - 1)); break;
+            case 'last_week': start = new Date(today); start.setDate(today.getDate() - now.getDay() - 6); end = new Date(start); end.setDate(start.getDate() + 6); end.setHours(23, 59, 59); break;
+            case 'this_month': start = new Date(now.getFullYear(), now.getMonth(), 1); break;
+            case 'last_month': start = new Date(now.getFullYear(), now.getMonth() - 1, 1); end = new Date(now.getFullYear(), now.getMonth(), 0, 23, 59, 59); break;
+            case 'this_year': start = new Date(now.getFullYear(), 0, 1); break;
+            case 'custom': return `${filters.startDate || '...'} to ${filters.endDate || '...'}`;
+        }
+        const formatDate = (d: Date) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+        return start ? `${formatDate(start)} to ${formatDate(end)}` : 'All time data stream';
+    }, [filters.datePreset, filters.startDate, filters.endDate]);
+
+    // Robust Date Parsing helper
+    const getOrderTimestamp = (order: any) => {
+        const ts = order.Timestamp;
+        if (!ts) return 0;
+        const match = ts.match(/^(\d{4})-(\d{1,2})-(\d{1,2})\s(\d{1,2}):(\d{2})/);
+        if (match) return new Date(parseInt(match[1]), parseInt(match[2]) - 1, parseInt(match[3]), parseInt(match[4]), parseInt(match[5])).getTime();
+        return new Date(ts).getTime();
+    };
+
+    // Grouping and filtering logic
     const groupedOrders = useMemo(() => {
         let filtered = allOrders.filter(o => o.FulfillmentStatus === activeTab && o.FulfillmentStatus !== 'Cancelled');
 
-        // Apply Search Filter
-        if (searchTerm.trim()) {
-            const q = searchTerm.toLowerCase();
-            filtered = filtered.filter(o => 
-                o['Order ID'].toLowerCase().includes(q) ||
-                o['Customer Name'].toLowerCase().includes(q) ||
-                o['Customer Phone'].toLowerCase().includes(q)
-            );
-        }
+        // Apply Comprehensive Filters
+        filtered = filtered.filter(order => {
+            // 1. Date Filter
+            if (filters.datePreset !== 'all') {
+                const ts = getOrderTimestamp(order);
+                const orderDate = new Date(ts);
+                const now = new Date();
+                const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+                let start: Date | null = null;
+                let end: Date | null = null;
+                switch (filters.datePreset) {
+                    case 'today': start = today; break;
+                    case 'yesterday': start = new Date(today); start.setDate(today.getDate() - 1); end = new Date(today); end.setMilliseconds(-1); break;
+                    case 'this_week': const day = now.getDay(); start = new Date(today); start.setDate(today.getDate() - (day === 0 ? 6 : day - 1)); break;
+                    case 'last_week': start = new Date(today); start.setDate(today.getDate() - now.getDay() - 6); end = new Date(start); end.setDate(start.getDate() + 6); end.setHours(23, 59, 59); break;
+                    case 'this_month': start = new Date(now.getFullYear(), now.getMonth(), 1); break;
+                    case 'last_month': start = new Date(now.getFullYear(), now.getMonth() - 1, 1); end = new Date(now.getFullYear(), now.getMonth(), 0, 23, 59, 59); break;
+                    case 'this_year': start = new Date(now.getFullYear(), 0, 1); break;
+                    case 'custom':
+                        if (filters.startDate) start = new Date(filters.startDate + 'T00:00:00');
+                        if (filters.endDate) end = new Date(filters.endDate + 'T23:59:59');
+                        break;
+                }
+                if (start && orderDate < start) return false;
+                if (end && orderDate > end) return false;
+            }
 
-        // Apply Store Filter
-        if (storeFilter !== 'All') {
-            filtered = filtered.filter(o => o['Fulfillment Store'] === storeFilter);
-        }
+            // Helper for multi-select
+            const isMatch = (filterValue: string, orderValue: string) => {
+                if (!filterValue) return true;
+                const selectedValues = filterValue.split(',').map(v => v.trim().toLowerCase());
+                const val = (orderValue || '').trim().toLowerCase();
+                return selectedValues.includes(val);
+            };
 
-        filtered = filtered.sort((a, b) => {
-            return b['Order ID'].localeCompare(a['Order ID']);
+            if (!isMatch(filters.fulfillmentStore, order['Fulfillment Store'] || 'Unassigned')) return false;
+            if (filters.store) {
+                const pageConfig = appData.pages?.find(p => p.PageName === order.Page);
+                const orderStore = pageConfig ? pageConfig.DefaultStore : null;
+                const selectedStores = filters.store.split(',');
+                if (!orderStore || !selectedStores.includes(orderStore)) return false;
+            }
+            if (!isMatch(filters.team, order.Team)) return false;
+            if (!isMatch(filters.user, order.User || '')) return false;
+            if (!isMatch(filters.paymentStatus, order['Payment Status'])) return false;
+            if (!isMatch(filters.shippingService, order['Internal Shipping Method'])) return false;
+            if (!isMatch(filters.driver, order['Internal Shipping Details'])) return false;
+            if (!isMatch(filters.bank, order['Payment Info'])) return false;
+            if (!isMatch(filters.page, order.Page)) return false;
+            if (!isMatch(filters.location, order.Location)) return false;
+            if (!isMatch(filters.customerName, order['Customer Name'])) return false;
+            if (filters.product && !order.Products.some(p => p.name === filters.product)) return false;
+
+            if (searchTerm.trim()) {
+                const q = searchTerm.toLowerCase();
+                return order['Order ID'].toLowerCase().includes(q) ||
+                       (order['Customer Name'] || '').toLowerCase().includes(q) ||
+                       (order['Customer Phone'] || '').includes(q);
+            }
+            return true;
         });
+
+        filtered = filtered.sort((a, b) => b['Order ID'].localeCompare(a['Order ID']));
 
         if (activeTab === 'Pending') {
             const groups: { [date: string]: ParsedOrder[] } = {};
             filtered.forEach(order => {
-                // Extracting date assuming 'Timestamp' or 'Date' exists, fallback to 'Unknown Date'
                 const dateStr = order.Timestamp ? new Date(order.Timestamp).toLocaleDateString('km-KH') : 'ថ្ងៃនេះ';
                 if (!groups[dateStr]) groups[dateStr] = [];
                 groups[dateStr].push(order);
@@ -77,7 +171,7 @@ const PackagingView: React.FC<{ orders?: ParsedOrder[] }> = ({ orders: propOrder
         }
         
         return { 'All': filtered };
-    }, [allOrders, activeTab, searchTerm, storeFilter]);
+    }, [allOrders, activeTab, searchTerm, filters, appData.pages]);
 
     const handleAction = async (order: ParsedOrder, newStatus: string) => {
         setLoadingActionId(order['Order ID']);
@@ -209,36 +303,56 @@ const PackagingView: React.FC<{ orders?: ParsedOrder[] }> = ({ orders: propOrder
             </div>
 
             {/* Filter Section */}
-            <div className="max-w-4xl mx-auto grid grid-cols-1 sm:grid-cols-2 gap-4">
-                <div className="relative">
-                    <input 
-                        type="text" 
-                        value={searchTerm}
-                        onChange={(e) => setSearchTerm(e.target.value)}
-                        placeholder="ស្វែងរក ID, ឈ្មោះ, ឬលេខទូរស័ព្ទ..."
-                        className="w-full bg-black/40 border border-white/10 rounded-2xl px-10 py-3 text-xs text-white placeholder:text-gray-600 focus:border-blue-500 outline-none transition-all"
-                    />
-                    <svg className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" /></svg>
-                    {searchTerm && (
-                        <button onClick={() => setSearchTerm('')} className="absolute right-3.5 top-1/2 -translate-y-1/2 text-gray-600 hover:text-white">
-                            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M6 18L18 6M6 6l12 12" /></svg>
+            <div className="bg-gray-800/20 backdrop-blur-3xl border border-white/5 rounded-[2.5rem] p-5 sm:p-6 mb-8 shadow-2xl relative z-20 group transition-all hover:bg-gray-800/30 max-w-6xl mx-auto">
+                <div className="flex flex-col lg:flex-row justify-between items-center gap-4">
+                    <div className="relative w-full lg:max-w-2xl group">
+                        <input 
+                            type="text" 
+                            placeholder="ស្វែងរក ID, ឈ្មោះ, ឬលេខទូរស័ព្ទ..." 
+                            value={searchTerm} 
+                            onChange={e => setSearchTerm(e.target.value)} 
+                            className="form-input !pl-16 !py-5 bg-black/40 border-gray-800 rounded-[1.8rem] text-[15px] font-bold text-white placeholder:text-gray-700 focus:border-blue-500/50 focus:bg-black/60 transition-all shadow-inner" 
+                        />
+                        <div className="absolute left-6 top-1/2 -translate-y-1/2 flex items-center gap-4 text-gray-700 group-focus-within:text-blue-500 transition-colors">
+                            <svg className="h-6 w-6" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={3}><path d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" /></svg>
+                            <div className="h-6 w-px bg-gray-800"></div>
+                        </div>
+                    </div>
+                    <div className="flex items-stretch gap-3 w-full lg:w-auto h-16 sm:h-[68px]">
+                        <button 
+                            onClick={() => setIsFilterModalOpen(true)} 
+                            className="flex-1 lg:flex-none flex items-center justify-center gap-3 px-8 py-5 bg-gray-900 border border-gray-800 text-gray-400 hover:text-white hover:border-blue-500/30 rounded-2xl text-[12px] font-black uppercase tracking-widest transition-all active:scale-95"
+                        >
+                            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2.5}><path d="M3 4a1 1 0 011-1h16a1 1 0 011 1v2.586a1 1 0 01-.293.707l-6.414 6.414a1 1 0 00-.293.707V17l-4 4v-6.586a1 1 0 00-.293-.707L3.293 7.293A1 1 0 013 6.586V4z" /></svg>
+                            Filters
                         </button>
-                    )}
-                </div>
-
-                <div className="relative">
-                    <select 
-                        value={storeFilter}
-                        onChange={(e) => setStoreFilter(e.target.value)}
-                        className="w-full bg-black/40 border border-white/10 rounded-2xl px-5 py-3 text-xs text-white appearance-none focus:border-blue-500 outline-none transition-all cursor-pointer font-bold"
-                    >
-                        <option value="All">គ្រប់សាខាទាំងអស់</option>
-                        {appData.stores?.map(s => <option key={s.StoreName} value={s.StoreName}>{s.StoreName}</option>)}
-                    </select>
-                    <div className="absolute right-4 top-1/2 -translate-y-1/2 pointer-events-none text-gray-600">
-                        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M19 9l-7 7-7-7" /></svg>
                     </div>
                 </div>
+            </div>
+
+            {/* Filter Modal/Panel */}
+            <div className="md:hidden">
+                <FilterPanel isOpen={isFilterModalOpen} onClose={() => setIsFilterModalOpen(false)}>
+                    <OrderFilters filters={filters} setFilters={setFilters} orders={allOrders} usersList={appData.users} appData={appData} calculatedRange={calculatedRange} />
+                </FilterPanel>
+            </div>
+            <div className="hidden md:block">
+                <Modal isOpen={isFilterModalOpen} onClose={() => setIsFilterModalOpen(false)} maxWidth="max-w-4xl">
+                    <div className="p-8 bg-[#0f172a] rounded-[3rem] border border-white/10 shadow-3xl overflow-hidden relative">
+                        <div className="flex justify-between items-center mb-10 relative z-10">
+                            <div className="flex items-center gap-4">
+                                <div className="w-1.5 h-8 bg-blue-600 rounded-full"></div>
+                                <h2 className="text-2xl font-black text-white uppercase tracking-tighter italic leading-none">Filter Subsystem</h2>
+                            </div>
+                            <button onClick={() => setIsFilterModalOpen(false)} className="w-12 h-12 bg-white/5 rounded-2xl flex items-center justify-center text-gray-500 hover:text-white transition-all active:scale-90 border border-white/5">&times;</button>
+                        </div>
+                        <div className="max-h-[60vh] overflow-y-auto custom-scrollbar pr-2 relative z-10">
+                            <OrderFilters filters={filters} setFilters={setFilters} orders={allOrders} usersList={appData.users} appData={appData} calculatedRange={calculatedRange} />
+                        </div>
+                        <div className="mt-12 flex justify-center relative z-10"><button onClick={() => setIsFilterModalOpen(false)} className="btn btn-primary w-full py-5 text-[13px] font-black uppercase tracking-[0.25em] shadow-[0_20px_50px_rgba(37,99,235,0.3)] rounded-2xl active:scale-[0.98] transition-all">Apply Filter Configuration</button></div>
+                        <div className="absolute -bottom-20 -right-20 w-80 h-80 bg-blue-600/10 rounded-full blur-[100px] pointer-events-none"></div>
+                    </div>
+                </Modal>
             </div>
 
             {/* Live Update Indicator */}
