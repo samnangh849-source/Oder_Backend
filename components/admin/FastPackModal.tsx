@@ -115,6 +115,17 @@ const FastPackModal: React.FC<FastPackModalProps> = ({ order, onClose, onSuccess
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                         {/* Left Side: Order Details */}
                         <div className="space-y-6">
+                            {/* Actions */}
+                            {order.LabelPrinterURL && (
+                                <button 
+                                    onClick={() => window.open(order.LabelPrinterURL, '_blank')}
+                                    className="w-full py-3 bg-indigo-600 hover:bg-indigo-700 text-white rounded-2xl font-black uppercase text-[10px] tracking-widest shadow-xl shadow-indigo-900/20 transition-all active:scale-[0.98] flex justify-center items-center gap-2 border border-white/10"
+                                >
+                                    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 17h2a2 2 0 002-2v-4a2 2 0 00-2-2H5a2 2 0 00-2 2v4a2 2 0 002 2h2m2 4h6a2 2 0 002-2v-4a2 2 0 00-2-2H9a2 2 0 00-2 2v4a2 2 0 002 2zm8-12V5a2 2 0 00-2-2H9a2 2 0 00-2 2v4h10z" /></svg>
+                                    បោះពុម្ភវិក្កយបត្រ (Print Label)
+                                </button>
+                            )}
+
                             {/* Customer Info */}
                             <div className="bg-white/[0.02] rounded-2xl p-4 border border-white/5 space-y-3">
                                 <div className="flex items-center gap-3">
@@ -129,22 +140,35 @@ const FastPackModal: React.FC<FastPackModalProps> = ({ order, onClose, onSuccess
                                 <div className="pt-2 border-t border-white/5">
                                     <p className="text-[10px] font-black text-gray-500 uppercase tracking-widest mb-1">ទីតាំងដឹកជញ្ជូន</p>
                                     <p className="text-gray-300 text-xs italic leading-relaxed">{order.Location}</p>
+                                    {order.Address && (
+                                        <p className="text-gray-400 text-[10px] mt-1 leading-relaxed bg-black/30 p-2 rounded-lg border border-white/5">{order.Address}</p>
+                                    )}
                                 </div>
+                                {order.Note && (
+                                    <div className="pt-2 border-t border-white/5">
+                                        <p className="text-[10px] font-black text-amber-500 uppercase tracking-widest mb-1">ចំណាំ (Note)</p>
+                                        <p className="text-amber-400 text-xs italic leading-relaxed bg-amber-500/10 p-2 rounded-lg border border-amber-500/20">{order.Note}</p>
+                                    </div>
+                                )}
                             </div>
 
                             {/* Logistics info */}
                             <div className="bg-black/20 rounded-2xl p-4 border border-white/5 space-y-3 shadow-inner">
                                 <div className="flex justify-between items-center text-[10px] font-black">
-                                    <span className="text-gray-500 uppercase tracking-widest">សាខាបញ្ចេញឥវ៉ាន់</span>
-                                    <span className="text-orange-400">{order['Fulfillment Store']}</span>
+                                    <span className="text-gray-500 uppercase tracking-widest">វិធីសាស្រ្តបង់ប្រាក់</span>
+                                    <span className="text-pink-400">{order['Payment Method'] || 'N/A'}</span>
                                 </div>
                                 <div className="flex justify-between items-center text-[10px] font-black">
                                     <span className="text-gray-500 uppercase tracking-widest">សេវាដឹកជញ្ជូន</span>
                                     <span className="text-indigo-400">{order['Internal Shipping Method']}</span>
                                 </div>
                                 <div className="flex justify-between items-center text-[10px] font-black">
-                                    <span className="text-gray-500 uppercase tracking-widest">អ្នកលក់/ផេក</span>
-                                    <span className="text-emerald-400">{order.Page}</span>
+                                    <span className="text-gray-500 uppercase tracking-widest">អ្នកដឹក (Driver)</span>
+                                    <span className="text-blue-400">{order['Driver Name'] || 'N/A'}</span>
+                                </div>
+                                <div className="flex justify-between items-center text-[10px] font-black border-t border-white/5 pt-2">
+                                    <span className="text-gray-500 uppercase tracking-widest">សាខាបញ្ចេញឥវ៉ាន់</span>
+                                    <span className="text-orange-400">{order['Fulfillment Store']}</span>
                                 </div>
                             </div>
 
