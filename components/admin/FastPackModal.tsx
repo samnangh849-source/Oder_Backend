@@ -13,12 +13,16 @@ interface FastPackModalProps {
 }
 
 const FastPackModal: React.FC<FastPackModalProps> = ({ order, onClose, onSuccess }) => {
-    const { currentUser, previewImage: showFullImage } = useContext(AppContext);
+    const { currentUser, appData, previewImage: showFullImage } = useContext(AppContext);
     const [uploading, setUploading] = useState(false);
     const [previewImage, setPreviewImage] = useState<string | null>(null);
     const fileInputRef = useRef<HTMLInputElement>(null);
 
     const [rawFile, setRawFile] = useState<File | null>(null);
+
+    // Look up the label printer URL from the store configuration
+    const fulfillmentStore = appData.stores?.find(s => s.StoreName === order?.['Fulfillment Store']);
+    const labelPrinterURL = fulfillmentStore?.LabelPrinterURL;
 
     const handleCopyName = () => {
         if (!order) return;
@@ -132,9 +136,9 @@ const FastPackModal: React.FC<FastPackModalProps> = ({ order, onClose, onSuccess
                         {/* Left Side: Order Details */}
                         <div className="space-y-6">
                             {/* Actions */}
-                            {order.LabelPrinterURL && (
+                            {labelPrinterURL && (
                                 <button 
-                                    onClick={() => window.open(order.LabelPrinterURL, '_blank')}
+                                    onClick={() => window.open(labelPrinterURL, '_blank')}
                                     className="w-full py-3 bg-indigo-600 hover:bg-indigo-700 text-white rounded-2xl font-black uppercase text-[10px] tracking-widest shadow-xl shadow-indigo-900/20 transition-all active:scale-[0.98] flex justify-center items-center gap-2 border border-white/10"
                                 >
                                     <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 17h2a2 2 0 002-2v-4a2 2 0 00-2-2H5a2 2 0 00-2 2v4a2 2 0 002 2h2m2 4h6a2 2 0 002-2v-4a2 2 0 00-2-2H9a2 2 0 00-2 2v4a2 2 0 002 2zm8-12V5a2 2 0 00-2-2H9a2 2 0 00-2 2v4h10z" /></svg>

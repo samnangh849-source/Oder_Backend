@@ -112,6 +112,13 @@ export interface ParsedOrder extends Omit<FullOrder, "Products (JSON)"> {
 
 export interface Store {
   StoreName: string;
+  StoreType?: string;
+  Address?: string;
+  TelegramBotToken?: string;
+  TelegramGroupID?: string;
+  TelegramTopicID?: string;
+  LabelPrinterURL?: string;
+  CODAlertGroupID?: string;
   Location?: string;
 }
 
