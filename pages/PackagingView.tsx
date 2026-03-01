@@ -119,15 +119,15 @@ const PackagingView: React.FC<{ orders?: ParsedOrder[] }> = ({ orders: propOrder
                 <div className="space-y-2 mt-2">
                     <div 
                         className="w-full h-24 rounded-xl overflow-hidden border border-white/10 cursor-pointer hover:border-blue-500/50 transition-all relative group/photo"
-                        onClick={() => showFullImage(order['Package Photo URL'] as string)}
+                        onClick={() => showFullImage(convertGoogleDriveUrl(order['Package Photo URL'] as string))}
                     >
-                        <img src={order['Package Photo URL'] as string} className="w-full h-full object-cover opacity-60 group-hover/photo:opacity-100 transition-opacity" alt="Package" />
+                        <img src={convertGoogleDriveUrl(order['Package Photo URL'] as string)} className="w-full h-full object-cover opacity-60 group-hover/photo:opacity-100 transition-opacity" alt="Package" />
                         <div className="absolute inset-0 flex items-center justify-center bg-black/20 group-hover/photo:bg-transparent transition-all">
                             <svg className="w-6 h-6 text-white shadow-xl" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" /><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" /></svg>
                         </div>
                     </div>
                     <button 
-                        onClick={() => showFullImage(order['Package Photo URL'] as string)}
+                        onClick={() => showFullImage(convertGoogleDriveUrl(order['Package Photo URL'] as string))}
                         className="w-full py-2 bg-gray-800/80 hover:bg-gray-700 text-gray-300 rounded-xl font-black uppercase text-[9px] tracking-widest border border-white/10 transition-all flex justify-center items-center gap-2"
                     >
                         មើលរូបធំ
