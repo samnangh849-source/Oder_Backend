@@ -10,22 +10,35 @@ import { FilterPanel } from '@/components/orders/FilterPanel';
 import Modal from '@/components/common/Modal';
 
 const PackagingView: React.FC<{ orders?: ParsedOrder[] }> = ({ orders: propOrders }) => {
-    const { appData, refreshData, setMobilePageTitle, previewImage: showFullImage } = useContext(AppContext);
+    const { appData, refreshData, currentUser, setMobilePageTitle, previewImage: showFullImage } = useContext(AppContext);
     
-    // Derived raw list
+    // Derived raw list with Team enrichment to ensure UNDO works
     const allOrders = useMemo(() => {
-        // If propOrders are passed (which are already parsed), use them directly
-        if (propOrders) return propOrders;
+        const rawData = propOrders || (Array.isArray((appData as any).orders) ? (appData as any).orders : []);
         
-        const rawData = Array.isArray((appData as any).orders) ? (appData as any).orders : [];
         return rawData
             .filter((o: any) => o !== null && o['Order ID'] !== 'Opening_Balance')
             .map((o: any) => {
-                let products = [];
-                try { if (o['Products (JSON)']) products = JSON.parse(o['Products (JSON)']); } catch(e) {}
+                let products = o.Products || [];
+                if (typeof o['Products (JSON)'] === 'string' && products.length === 0) {
+                    try { products = JSON.parse(o['Products (JSON)']); } catch(e) {}
+                }
+
+                // Robust Team Enrichment
+                let team = (o.Team || '').trim();
+                if (!team) {
+                    const userMatch = appData.users?.find(u => u.UserName === o.User);
+                    if (userMatch?.Team) team = userMatch.Team.split(',')[0].trim();
+                    else {
+                        const pageMatch = appData.pages?.find(p => p.PageName === o.Page);
+                        if (pageMatch?.Team) team = pageMatch.Team;
+                    }
+                }
+
                 return { 
                     ...o, 
                     Products: products, 
+                    Team: team || 'A', // Fallback to avoid API error 400
                     IsVerified: String(o.IsVerified).toUpperCase() === 'TRUE' || o.IsVerified === 'A',
                     FulfillmentStatus: (o['Fulfillment Status'] || o.FulfillmentStatus || 'Pending') as any
                 };
@@ -83,7 +96,6 @@ const PackagingView: React.FC<{ orders?: ParsedOrder[] }> = ({ orders: propOrder
         return start ? `${formatDate(start)} to ${formatDate(end)}` : 'All time data stream';
     }, [filters.datePreset, filters.startDate, filters.endDate]);
 
-    // Robust Date Parsing helper
     const getOrderTimestamp = (order: any) => {
         const ts = order.Timestamp;
         if (!ts) return 0;
@@ -92,13 +104,10 @@ const PackagingView: React.FC<{ orders?: ParsedOrder[] }> = ({ orders: propOrder
         return new Date(ts).getTime();
     };
 
-    // Grouping and filtering logic
     const groupedOrders = useMemo(() => {
         let filtered = allOrders.filter(o => o.FulfillmentStatus === activeTab && o.FulfillmentStatus !== 'Cancelled');
 
-        // Apply Comprehensive Filters
         filtered = filtered.filter(order => {
-            // 1. Date Filter
             if (filters.datePreset !== 'all') {
                 const ts = getOrderTimestamp(order);
                 const orderDate = new Date(ts);
@@ -123,7 +132,6 @@ const PackagingView: React.FC<{ orders?: ParsedOrder[] }> = ({ orders: propOrder
                 if (end && orderDate > end) return false;
             }
 
-            // Helper for multi-select
             const isMatch = (filterValue: string, orderValue: string) => {
                 if (!filterValue) return true;
                 const selectedValues = filterValue.split(',').map(v => v.trim().toLowerCase());
@@ -190,13 +198,25 @@ const PackagingView: React.FC<{ orders?: ParsedOrder[] }> = ({ orders: propOrder
                 })
             });
 
-            if (!updateRes.ok) throw new Error("Status update failed");
+            const result = await updateRes.json();
+            if (!updateRes.ok || result.status !== 'success') throw new Error(result.message || "Status update failed");
+            
             refreshData(); 
-        } catch (error) {
+        } catch (error: any) {
             console.error("Action error:", error);
-            alert("បរាជ័យក្នុងការធ្វើបច្ចុប្បន្នភាព។ សូមព្យាយាមម្ដងទៀត។");
+            alert("បរាជ័យក្នុងការធ្វើបច្ចុប្បន្នភាព: " + error.message);
         } finally {
             setLoadingActionId(null);
+        }
+    };
+
+    const handleUndo = (order: ParsedOrder, targetStatus: string, extra: any) => {
+        const msg = targetStatus === 'Pending' 
+            ? "តើអ្នកពិតជាចង់លុបទិន្នន័យវេចខ្ចប់ និងត្រឡប់ទៅ 'រង់ចាំខ្ចប់' វិញមែនទេ?" 
+            : "តើអ្នកពិតជាចង់លុបពេលវេលាបញ្ចេញឥវ៉ាន់ និងត្រឡប់ទៅ 'ខ្ចប់រួចរាល់' វិញមែនទេ?";
+        
+        if (window.confirm(msg)) {
+            handleAction(order, targetStatus, extra);
         }
     };
 
@@ -265,7 +285,7 @@ const PackagingView: React.FC<{ orders?: ParsedOrder[] }> = ({ orders: propOrder
                     <>
                         <button 
                             onClick={() => handleAction(order, 'Shipped', { 'Dispatched Time': new Date().toLocaleString('km-KH') })}
-                            className="w-full py-3.5 bg-amber-600 hover:bg-amber-700 text-white rounded-xl font-black uppercase text-[11px] tracking-widest shadow-xl shadow-blue-900/20 transition-all active:scale-[0.98] flex justify-center items-center gap-2"
+                            className="w-full py-3.5 bg-amber-600 hover:bg-amber-700 text-white rounded-xl font-black uppercase text-[11px] tracking-widest shadow-xl shadow-amber-900/20 transition-all active:scale-[0.98] flex justify-center items-center gap-2"
                         >
                             <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M13 10V3L4 14h7v7l9-11h-7z" /></svg>
                             ប្រគល់អោយអ្នកដឹករួចរាល់
