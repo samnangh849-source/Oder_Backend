@@ -14,8 +14,8 @@ export const useOrderNotifications = () => {
 
         const checkUpdates = async () => {
             try {
-                // Fetch recent orders to minimize payload
-                const response = await fetch(`${WEB_APP_URL}/api/admin/all-orders?days=2`);
+                // Fetch recent orders with cache busting
+                const response = await fetch(`${WEB_APP_URL}/api/admin/all-orders?days=2&_t=${Date.now()}`);
                 if (!response.ok) return;
                 const result = await response.json();
                 if (result.status !== 'success') return;
@@ -29,6 +29,8 @@ export const useOrderNotifications = () => {
                 currentOrders.forEach(order => {
                     if (!order || !order['Order ID']) return;
                     const id = order['Order ID'];
+                    
+                    // Canonical status detection (handle both space and CamelCase)
                     const status = order['Fulfillment Status'] || order.FulfillmentStatus || 'Pending';
                     newStatusMap[id] = status;
 
@@ -44,6 +46,7 @@ export const useOrderNotifications = () => {
 
                     // 2. Detect Status Changes
                     if (!isFirstLoad && prevStatus && prevStatus !== status) {
+                        console.log(`Notification: Order ${id} changed from ${prevStatus} to ${status}`);
                         let title = '';
                         let body = '';
                         
@@ -101,8 +104,8 @@ export const useOrderNotifications = () => {
         // Initial check immediately on mount
         checkUpdates();
 
-        // Polling every 1 minute
-        const intervalId = setInterval(checkUpdates, 60000);
+        // Polling every 20 seconds for better responsiveness
+        const intervalId = setInterval(checkUpdates, 20000);
         return () => clearInterval(intervalId);
 
     }, [currentUser]);

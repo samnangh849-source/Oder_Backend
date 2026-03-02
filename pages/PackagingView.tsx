@@ -50,6 +50,8 @@ const PackagingView: React.FC<{ orders?: ParsedOrder[] }> = ({ orders: propOrder
     const [packingOrder, setPackingOrder] = useState<ParsedOrder | null>(null);
     const [loadingActionId, setLoadingActionId] = useState<string | null>(null);
     const [viewMode, setViewMode] = useState<'card' | 'list'>('card');
+    const [selectedOrderIds, setSelectedOrderIds] = useState<Set<string>>(new Set());
+    const [isUpdatingBulk, setIsUpdatingBulk] = useState(false);
     
     // Comprehensive Filters
     const [isFilterModalOpen, setIsFilterModalOpen] = useState(false);
@@ -78,9 +80,71 @@ const PackagingView: React.FC<{ orders?: ParsedOrder[] }> = ({ orders: propOrder
         return () => setMobilePageTitle(null);
     }, [setMobilePageTitle, selectedStore]);
 
+    // Reset selection when changing tabs or store
+    useEffect(() => {
+        setSelectedOrderIds(new Set());
+    }, [activeTab, selectedStore]);
+
     const availableStores = useMemo(() => {
         return appData.stores ? appData.stores.map((s: any) => s.StoreName) : [];
     }, [appData.stores]);
+
+    const handleSelectOrder = (id: string) => {
+        setSelectedOrderIds(prev => {
+            const next = new Set(prev);
+            if (next.has(id)) next.delete(id);
+            else next.add(id);
+            return next;
+        });
+    };
+
+    const handleSelectAll = () => {
+        const currentFlatList = (Object.values(groupedOrders) as ParsedOrder[][]).flat();
+        if (selectedOrderIds.size === currentFlatList.length) {
+            setSelectedOrderIds(new Set());
+        } else {
+            setSelectedOrderIds(new Set(currentFlatList.map(o => o['Order ID'])));
+        }
+    };
+
+    const handleBulkAction = async (targetStatus: string, extraData: any = {}) => {
+        if (selectedOrderIds.size === 0) return;
+        
+        const confirmMsg = targetStatus === 'Shipped' 
+            ? `តើអ្នកពិតជាចង់បញ្ជាក់ថាប្រគល់ឱ្យអ្នកដឹក ចំនួន ${selectedOrderIds.size} កញ្ចប់មែនទេ?`
+            : `តើអ្នកពិតជាចង់ប្តូរស្ថានភាពជា '${targetStatus}' សម្រាប់ ${selectedOrderIds.size} កញ្ចប់មែនទេ?`;
+
+        if (!window.confirm(confirmMsg)) return;
+
+        setIsUpdatingBulk(true);
+        try {
+            const idArray = Array.from(selectedOrderIds);
+            for (const id of idArray) {
+                const order = storeOrders.find(o => o['Order ID'] === id);
+                if (!order) continue;
+
+                await fetch(`${WEB_APP_URL}/api/admin/update-order`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        orderId: id,
+                        team: order.Team,
+                        userName: currentUser?.FullName || 'System',
+                        newData: { 
+                            'Fulfillment Status': targetStatus,
+                            ...extraData
+                        }
+                    })
+                });
+            }
+            setSelectedOrderIds(new Set());
+            refreshData();
+        } catch (error) {
+            alert('មានបញ្ហាក្នុងការធ្វើបច្ចុប្បន្នភាពជាក្រុម។');
+        } finally {
+            setIsUpdatingBulk(false);
+        }
+    };
 
     const calculatedRange = useMemo(() => {
         if (filters.datePreset === 'all') return 'All time data stream';
@@ -251,14 +315,24 @@ const PackagingView: React.FC<{ orders?: ParsedOrder[] }> = ({ orders: propOrder
         });
 
         return (
-            <div key={order['Order ID']} className="bg-[#1e293b]/60 backdrop-blur-md border border-white/5 rounded-[2rem] p-5 shadow-2xl flex flex-col gap-4 relative overflow-hidden group hover:border-blue-500/30 transition-all">
+            <div key={order['Order ID']} className={`bg-[#1e293b]/60 backdrop-blur-md border ${selectedOrderIds.has(order['Order ID']) ? 'border-blue-500 shadow-[0_0_15px_rgba(59,130,246,0.2)]' : 'border-white/5'} rounded-[2rem] p-5 shadow-2xl flex flex-col gap-4 relative overflow-hidden group hover:border-blue-500/30 transition-all`}>
                 {loadingActionId === order['Order ID'] && (
                     <div className="absolute inset-0 bg-black/60 z-50 flex items-center justify-center backdrop-blur-sm rounded-[2rem]">
                         <Spinner />
                     </div>
                 )}
+
+                {/* Checkbox for Bulk Actions */}
+                <div className="absolute top-4 left-4 z-10">
+                    <input 
+                        type="checkbox" 
+                        checked={selectedOrderIds.has(order['Order ID'])}
+                        onChange={() => handleSelectOrder(order['Order ID'])}
+                        className={`w-5 h-5 rounded border-gray-600 focus:ring-opacity-50 bg-black/50 cursor-pointer ${activeTab === 'Ready to Ship' ? 'text-amber-500 focus:ring-amber-500' : 'text-blue-500 focus:ring-blue-500'}`}
+                    />
+                </div>
                 
-                <div className="flex justify-between items-start">
+                <div className="flex justify-between items-start pl-10">
                     <div className="min-w-0 flex-grow">
                         <div className="flex items-center gap-2">
                             {phoneCarrier && (
@@ -414,12 +488,21 @@ const PackagingView: React.FC<{ orders?: ParsedOrder[] }> = ({ orders: propOrder
         const bank = appData.bankAccounts?.find(b => b.BankName === order['Payment Info']);
         
         return (
-            <div key={order['Order ID']} className="bg-[#1e293b]/40 backdrop-blur-md border border-white/5 rounded-2xl p-4 flex items-center gap-4 group hover:border-blue-500/30 transition-all relative overflow-hidden">
+            <div key={order['Order ID']} className={`bg-[#1e293b]/40 backdrop-blur-md border ${selectedOrderIds.has(order['Order ID']) ? 'border-blue-500 shadow-[0_0_10px_rgba(59,130,246,0.1)]' : 'border-white/5'} rounded-2xl p-4 flex items-center gap-4 group hover:border-blue-500/30 transition-all relative overflow-hidden`}>
                 {loadingActionId === order['Order ID'] && (
                     <div className="absolute inset-0 bg-black/60 z-50 flex items-center justify-center rounded-2xl">
                         <Spinner size="sm" />
                     </div>
                 )}
+
+                <div className="flex-shrink-0">
+                    <input 
+                        type="checkbox" 
+                        checked={selectedOrderIds.has(order['Order ID'])}
+                        onChange={() => handleSelectOrder(order['Order ID'])}
+                        className={`w-5 h-5 rounded border-gray-600 focus:ring-opacity-50 bg-black/50 cursor-pointer ${activeTab === 'Ready to Ship' ? 'text-amber-500 focus:ring-amber-500' : 'text-blue-500 focus:ring-blue-500'}`}
+                    />
+                </div>
                 
                 <div className="flex-grow min-w-0 grid grid-cols-1 md:grid-cols-4 gap-4 items-center">
                     <div className="min-w-0">
@@ -632,6 +715,48 @@ const PackagingView: React.FC<{ orders?: ParsedOrder[] }> = ({ orders: propOrder
                     <div className="inline-flex items-center gap-2 bg-emerald-500/10 border border-emerald-500/20 px-3 py-1.5 rounded-full">
                         <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span>
                         <span className="text-[9px] font-black text-emerald-400 uppercase tracking-widest">Live Auto-Update</span>
+                    </div>
+                </div>
+            )}
+
+            {/* Bulk Actions Bar */}
+            {selectedOrderIds.size > 0 && (
+                <div className="sticky top-24 z-30 flex justify-between items-center bg-[#1e293b]/90 backdrop-blur-xl p-4 rounded-3xl border-2 border-blue-500/30 shadow-[0_20px_50px_rgba(0,0,0,0.5)] max-w-4xl mx-auto animate-fade-in-down">
+                    <div className="flex items-center gap-4 pl-2">
+                        <input 
+                            type="checkbox" 
+                            checked={selectedOrderIds.size === (Object.values(groupedOrders) as ParsedOrder[][]).flat().length}
+                            onChange={handleSelectAll}
+                            className="w-6 h-6 rounded border-gray-600 text-blue-500 focus:ring-blue-500 bg-black/50 cursor-pointer"
+                        />
+                        <div className="flex flex-col">
+                            <span className="text-[13px] font-black text-white uppercase tracking-wider">
+                                បានជ្រើសរើស: <span className="text-blue-400">{selectedOrderIds.size}</span>
+                            </span>
+                            <span className="text-[9px] text-gray-500 font-bold uppercase">ប្តូរស្ថានភាពជាក្រុម</span>
+                        </div>
+                    </div>
+                    <div className="flex gap-3">
+                        {activeTab === 'Ready to Ship' && (
+                            <button 
+                                onClick={() => handleBulkAction('Shipped', { 'Dispatched Time': new Date().toLocaleString('km-KH'), 'Dispatched By': currentUser?.FullName || 'Station Packer' })}
+                                disabled={isUpdatingBulk}
+                                className="bg-amber-600 hover:bg-amber-700 text-white px-6 py-3 rounded-2xl text-[11px] font-black uppercase tracking-widest transition-all shadow-xl shadow-amber-900/30 flex items-center gap-2 active:scale-95"
+                            >
+                                {isUpdatingBulk ? <Spinner size="sm" /> : (
+                                    <>
+                                        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M13 10V3L4 14h7v7l9-11h-7z" /></svg>
+                                        បញ្ជាក់ការបញ្ចេញ
+                                    </>
+                                )}
+                            </button>
+                        )}
+                        <button 
+                            onClick={() => setSelectedOrderIds(new Set())}
+                            className="px-4 py-3 rounded-2xl bg-gray-800 text-gray-400 font-black uppercase text-[10px] tracking-widest border border-white/5 active:scale-95 transition-all"
+                        >
+                            បោះបង់
+                        </button>
                     </div>
                 </div>
             )}

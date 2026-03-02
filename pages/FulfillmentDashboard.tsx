@@ -220,19 +220,19 @@ const FulfillmentCard: React.FC<{
             )}
 
             {/* Checkbox for Bulk Actions (Only visible on relevant tabs) */}
-            {currentStatus === 'Shipped' && (
+            {(currentStatus === 'Shipped' || currentStatus === 'Ready to Ship') && (
                 <div className="absolute top-4 left-4 z-10">
                     <input 
                         type="checkbox" 
                         checked={isSelected}
                         onChange={() => onSelect(order['Order ID'])}
-                        className="w-5 h-5 rounded border-gray-600 text-emerald-500 focus:ring-emerald-500 bg-black/50 cursor-pointer"
+                        className={`w-5 h-5 rounded border-gray-600 focus:ring-opacity-50 bg-black/50 cursor-pointer ${currentStatus === 'Ready to Ship' ? 'text-amber-500 focus:ring-amber-500' : 'text-emerald-500 focus:ring-emerald-500'}`}
                     />
                 </div>
             )}
 
             {/* Header: Status & ID */}
-            <div className={`p-5 pb-3 border-b border-white/5 flex justify-between items-start bg-white/[0.02] ${currentStatus === 'Shipped' ? 'pl-12' : ''}`}>
+            <div className={`p-5 pb-3 border-b border-white/5 flex justify-between items-start bg-white/[0.02] ${(currentStatus === 'Shipped' || currentStatus === 'Ready to Ship') ? 'pl-12' : ''}`}>
                 <div className="flex flex-col">
                     <button 
                         onClick={(e) => {
@@ -404,10 +404,10 @@ const FulfillmentDashboard: React.FC<{ orders: ParsedOrder[] }> = ({ orders }) =
         return () => setMobilePageTitle(null);
     }, [setMobilePageTitle, selectedStore]);
 
-    // Reset selection when changing tabs
+    // Reset selection when changing tabs or store
     useEffect(() => {
         setSelectedOrderIds(new Set());
-    }, [activeTab]);
+    }, [activeTab, selectedStore]);
 
     const availableStores = useMemo(() => {
         const stores = appData.stores ? appData.stores.map((s: any) => s.StoreName) : [];
@@ -573,6 +573,38 @@ const FulfillmentDashboard: React.FC<{ orders: ParsedOrder[] }> = ({ orders }) =
             refreshData();
         } catch (error) {
             alert('មានបញ្ហាក្នុងការធ្វើបច្ចុប្បន្នភាពជាក្រុម។');
+        } finally {
+            setIsUpdatingBulk(false);
+        }
+    };
+
+    const handleBulkDispatchToDriver = async () => {
+        if (selectedOrderIds.size === 0) return;
+
+        const confirm = window.confirm(`តើអ្នកពិតជាចង់បញ្ជាក់ថាប្រគល់ឱ្យអ្នកដឹក ចំនួន ${selectedOrderIds.size} កញ្ចប់មែនទេ?`);
+        if (!confirm) return;
+
+        setIsUpdatingBulk(true);
+        try {
+            for (const id of selectedOrderIds) {
+                await fetch(`${WEB_APP_URL}/api/admin/update-sheet`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        sheetName: 'AllOrders',
+                        primaryKey: { 'Order ID': id },
+                        newData: { 
+                            'Fulfillment Status': 'Shipped',
+                            'Dispatched Time': new Date().toLocaleString('km-KH'),
+                            'Dispatched By': currentUser?.FullName || 'System'
+                        }
+                    })
+                });
+            }
+            setSelectedOrderIds(new Set());
+            refreshData();
+        } catch (error) {
+            alert('មានបញ្ហាក្នុងការបញ្ចេញឥវ៉ាន់ជាក្រុម។');
         } finally {
             setIsUpdatingBulk(false);
         }
@@ -780,30 +812,30 @@ const FulfillmentDashboard: React.FC<{ orders: ParsedOrder[] }> = ({ orders }) =
                 </div>
             </div>
 
-            {/* Bulk Actions Bar for 'Shipped' tab */}
-            {activeTab === 'Shipped' && filteredList.length > 0 && (
+            {/* Bulk Actions Bar for 'Ready to Ship' and 'Shipped' tabs */}
+            {(activeTab === 'Shipped' || activeTab === 'Ready to Ship') && filteredList.length > 0 && (
                 <div className="flex justify-between items-center bg-[#1e293b]/50 p-3 rounded-2xl border border-white/5 max-w-6xl mx-auto">
                     <div className="flex items-center gap-3 pl-2">
                         <input 
                             type="checkbox" 
                             checked={selectedOrderIds.size === filteredList.length && filteredList.length > 0}
                             onChange={handleSelectAll}
-                            className="w-5 h-5 rounded border-gray-600 text-emerald-500 focus:ring-emerald-500 bg-black/50 cursor-pointer"
+                            className={`w-5 h-5 rounded border-gray-600 focus:ring-opacity-50 bg-black/50 cursor-pointer ${activeTab === 'Ready to Ship' ? 'text-amber-500 focus:ring-amber-500' : 'text-emerald-500 focus:ring-emerald-500'}`}
                         />
                         <span className="text-[11px] font-black text-white tracking-widest uppercase">
-                            បានជ្រើសរើស: <span className="text-emerald-500">{selectedOrderIds.size}</span>
+                            បានជ្រើសរើស: <span className={activeTab === 'Ready to Ship' ? 'text-amber-500' : 'text-emerald-500'}>{selectedOrderIds.size}</span>
                         </span>
                     </div>
                     {selectedOrderIds.size > 0 && (
                         <button 
-                            onClick={handleBulkConfirmDelivery}
+                            onClick={activeTab === 'Ready to Ship' ? handleBulkDispatchToDriver : handleBulkConfirmDelivery}
                             disabled={isUpdatingBulk}
-                            className="bg-emerald-600 hover:bg-emerald-700 text-white px-4 py-2 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all shadow-xl shadow-emerald-900/30 flex items-center gap-2"
+                            className={`px-4 py-2 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all shadow-xl flex items-center gap-2 text-white ${activeTab === 'Ready to Ship' ? 'bg-amber-600 hover:bg-amber-700 shadow-amber-900/30' : 'bg-emerald-600 hover:bg-emerald-700 shadow-emerald-900/30'}`}
                         >
                             {isUpdatingBulk ? <Spinner size="sm" /> : (
                                 <>
                                     <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" /></svg>
-                                    បញ្ជាក់ជោគជ័យ
+                                    {activeTab === 'Ready to Ship' ? 'បញ្ជាក់ការបញ្ចេញឥវ៉ាន់' : 'បញ្ជាក់ជោគជ័យ'}
                                 </>
                             )}
                         </button>
