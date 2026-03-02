@@ -7,20 +7,37 @@ interface BankSelectorProps {
     bankAccounts: BankAccount[];
     selectedBankName: string;
     onSelect: (bankName: string) => void;
+    fulfillmentStore?: string;
 }
 
-const BankSelector: React.FC<BankSelectorProps> = ({ bankAccounts, selectedBankName, onSelect }) => {
-    if (!bankAccounts || bankAccounts.length === 0) {
+const BankSelector: React.FC<BankSelectorProps> = ({ bankAccounts, selectedBankName, onSelect, fulfillmentStore }) => {
+    const filteredBanks = React.useMemo(() => {
+        if (!bankAccounts) return [];
+        if (!fulfillmentStore) return bankAccounts;
+
+        return bankAccounts.filter((bank) => {
+            const assignedStores = bank.AssignedStores || '';
+            // If empty or undefined, show to all
+            if (!assignedStores || assignedStores.trim() === '') return true;
+            
+            const storesList = assignedStores.split(',').map((s) => s.trim().toLowerCase());
+            const currentStore = fulfillmentStore.trim().toLowerCase();
+            
+            return storesList.includes(currentStore) || storesList.includes('all');
+        });
+    }, [bankAccounts, fulfillmentStore]);
+
+    if (!filteredBanks || filteredBanks.length === 0) {
         return (
             <div className="p-4 text-center border-2 border-dashed border-gray-700 rounded-xl bg-gray-800/30">
-                <p className="text-xs text-gray-500 font-bold uppercase tracking-widest">No Bank Accounts Configured</p>
+                <p className="text-xs text-gray-500 font-bold uppercase tracking-widest">No Bank Accounts Available for {fulfillmentStore || 'this store'}</p>
             </div>
         );
     }
 
     return (
         <div className="grid grid-cols-3 gap-2 sm:gap-3 animate-fade-in-down">
-            {bankAccounts.map((bank) => {
+            {filteredBanks.map((bank) => {
                 const isSelected = selectedBankName === bank.BankName;
                 
                 return (

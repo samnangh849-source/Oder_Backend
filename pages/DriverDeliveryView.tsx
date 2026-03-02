@@ -6,7 +6,11 @@ import { ParsedOrder } from '@/types';
 import { convertGoogleDriveUrl } from '@/utils/fileUtils';
 
 const DriverDeliveryView: React.FC = () => {
-    const { setMobilePageTitle, refreshData, previewImage: showFullImage } = useContext(AppContext);
+    const { setMobilePageTitle, refreshData, previewImage: showFullImage, appData } = useContext(AppContext);
+    
+    // Store Selection State
+    const [selectedStore, setSelectedStore] = useState<string>('');
+
     const [orderIdInput, setOrderIdInput] = useState('');
     const [foundOrder, setFoundOrder] = useState<ParsedOrder | null>(null);
     const [loading, setLoading] = useState(false);
@@ -15,9 +19,14 @@ const DriverDeliveryView: React.FC = () => {
     const fileInputRef = useRef<HTMLInputElement>(null);
 
     useEffect(() => {
-        setMobilePageTitle('DELIVERY PROOF');
+        setMobilePageTitle(selectedStore ? `ដឹកជញ្ជូន: ${selectedStore}` : 'ជ្រើសរើសឃ្លាំងដឹកជញ្ជូន');
         return () => setMobilePageTitle(null);
-    }, [setMobilePageTitle]);
+    }, [setMobilePageTitle, selectedStore]);
+
+    const availableStores = useMemo(() => {
+        if (!appData.stores) return [];
+        return appData.stores.map((s: any) => s.StoreName);
+    }, [appData.stores]);
 
     const handleSearchOrder = async (e?: React.FormEvent) => {
         if (e) e.preventDefault();
@@ -33,8 +42,9 @@ const DriverDeliveryView: React.FC = () => {
             const result = await res.json();
             if (result.status === 'success') {
                 const order = result.data.find((o: any) => 
-                    o['Order ID'].toLowerCase() === input.toLowerCase() ||
-                    o['Order ID'].toLowerCase().endsWith(input.toLowerCase())
+                    (o['Order ID'].toLowerCase() === input.toLowerCase() ||
+                    o['Order ID'].toLowerCase().endsWith(input.toLowerCase())) &&
+                    (o['Fulfillment Store'] || 'Unassigned').toLowerCase() === selectedStore.toLowerCase()
                 );
                 
                 if (order) {
@@ -42,7 +52,7 @@ const DriverDeliveryView: React.FC = () => {
                     try { if (order['Products (JSON)']) products = JSON.parse(order['Products (JSON)']); } catch(e) {}
                     setFoundOrder({ ...order, Products: products });
                 } else {
-                    alert("Order ID not found.");
+                    alert("រកមិនឃើញកញ្ចប់ឥវ៉ាន់នេះនៅក្នុងឃ្លាំង " + selectedStore + " ទេ។");
                 }
             }
         } catch (err) {
@@ -102,8 +112,57 @@ const DriverDeliveryView: React.FC = () => {
         }
     };
 
+    if (!selectedStore) {
+        return (
+            <div className="flex flex-col items-center justify-center min-h-[70vh] p-4 animate-fade-in">
+                <div className="w-full max-w-md bg-[#0f172a]/60 backdrop-blur-3xl border border-white/10 rounded-[3rem] p-8 sm:p-10 shadow-3xl text-center space-y-8 relative overflow-hidden">
+                    <div className="absolute -top-32 -right-32 w-64 h-64 bg-purple-600/10 rounded-full blur-[80px] pointer-events-none"></div>
+                    <div className="absolute -bottom-32 -left-32 w-64 h-64 bg-indigo-600/10 rounded-full blur-[80px] pointer-events-none"></div>
+                    
+                    <div className="relative z-10 space-y-4">
+                        <div className="w-20 h-20 bg-purple-600/20 rounded-3xl mx-auto flex items-center justify-center border-2 border-purple-500/30 shadow-xl shadow-purple-900/20">
+                            <span className="text-4xl">🏬</span>
+                        </div>
+                        <h2 className="text-2xl sm:text-3xl font-black text-white uppercase tracking-tighter">ជ្រើសរើសឃ្លាំង</h2>
+                        <p className="text-xs text-gray-400 font-bold uppercase tracking-widest">Select Delivery Store</p>
+                    </div>
+
+                    <div className="relative z-10 space-y-3">
+                        {availableStores.map(store => (
+                            <button
+                                key={store}
+                                onClick={() => setSelectedStore(store)}
+                                className="w-full py-4 px-6 bg-gray-900/50 hover:bg-purple-600/20 border border-white/5 hover:border-purple-500/50 rounded-2xl text-white font-black text-sm uppercase tracking-widest transition-all active:scale-[0.98] flex items-center justify-between group"
+                            >
+                                <span>{store}</span>
+                                <svg className="w-5 h-5 text-gray-500 group-hover:text-purple-400 transition-colors transform group-hover:translate-x-1" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M9 5l7 7-7 7" /></svg>
+                            </button>
+                        ))}
+                    </div>
+                </div>
+            </div>
+        );
+    }
+
     return (
         <div className="max-w-md mx-auto p-4 space-y-6 pb-24 animate-fade-in">
+            {/* Header / Change Store */}
+            <div className="flex justify-between items-center bg-[#0f172a]/60 backdrop-blur-md border border-white/5 rounded-[2rem] p-4 sm:p-6 mb-6 shadow-xl">
+                <div>
+                    <h2 className="text-xl font-black text-white uppercase tracking-tight flex items-center gap-2">
+                        <span>ដឹកជញ្ជូន</span>
+                        <span className="text-[9px] bg-purple-500/20 text-purple-400 px-2 py-1 rounded-lg border border-purple-500/30">{selectedStore}</span>
+                    </h2>
+                </div>
+                <button 
+                    onClick={() => { setSelectedStore(''); setFoundOrder(null); setOrderIdInput(''); }}
+                    className="px-4 py-2.5 bg-gray-800/50 hover:bg-gray-800 text-gray-400 hover:text-white rounded-xl border border-white/5 active:scale-95 transition-all text-[10px] font-black uppercase tracking-widest flex items-center gap-2"
+                >
+                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7h12m0 0l-4-4m4 4l-4 4m0 6H4m0 0l4 4m-4-4l4-4" /></svg>
+                    ប្ដូរឃ្លាំង
+                </button>
+            </div>
+
             <div className="bg-[#0f172a] border border-white/10 rounded-[2rem] p-6 shadow-2xl">
                 <form onSubmit={handleSearchOrder} className="space-y-4">
                     <label className="text-[10px] font-black text-purple-400 uppercase tracking-[0.2em] ml-1">Drop-off Validation</label>

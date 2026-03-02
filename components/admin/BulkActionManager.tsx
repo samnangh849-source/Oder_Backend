@@ -40,6 +40,25 @@ const BulkActionManager: React.FC<BulkActionManagerProps> = ({ orders, selectedI
     
     const [deletePassword, setDeletePassword] = useState('');
 
+    const filteredBanks = React.useMemo(() => {
+        if (!appData.bankAccounts) return [];
+        
+        const selectedOrders = orders.filter(o => selectedIds.has(o['Order ID']));
+        const stores = new Set(selectedOrders.map(o => o['Fulfillment Store']).filter(Boolean));
+        
+        if (stores.size === 1) {
+            const store = Array.from(stores)[0] as string;
+            return appData.bankAccounts.filter((bank: any) => {
+                const assignedStores = bank.AssignedStores || '';
+                if (!assignedStores || assignedStores.trim() === '') return true;
+                const storesList = assignedStores.split(',').map((s: string) => s.trim().toLowerCase());
+                return storesList.includes(store.toLowerCase()) || storesList.includes('all');
+            });
+        }
+        
+        return appData.bankAccounts;
+    }, [appData.bankAccounts, orders, selectedIds]);
+
     const handleBulkUpdate = async (partialUpdate: any, confirmMsg?: string) => {
         if (selectedIds.size === 0) return;
         if (confirmMsg && !window.confirm(confirmMsg)) return;
@@ -348,7 +367,7 @@ const BulkActionManager: React.FC<BulkActionManagerProps> = ({ orders, selectedI
                                     ជ្រើសរើសគណនីធនាគារ
                                 </p>
                                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                                    {appData.bankAccounts?.map((b: any) => {
+                                    {filteredBanks.map((b: any) => {
                                         const isSelected = paymentInfo === b.BankName;
                                         return (
                                             <button 

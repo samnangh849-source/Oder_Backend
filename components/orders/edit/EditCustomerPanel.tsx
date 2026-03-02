@@ -37,6 +37,19 @@ const EditCustomerPanel: React.FC<EditCustomerPanelProps> = ({
     const currentShippingMethod = appData.shippingMethods?.find(m => m.MethodName === formData['Internal Shipping Method']);
     const selectedDriver = appData.drivers?.find(d => d.DriverName === formData['Internal Shipping Details']);
 
+    const filteredBanks = React.useMemo(() => {
+        if (!appData.bankAccounts) return [];
+        const store = formData['Fulfillment Store'];
+        if (!store) return appData.bankAccounts;
+        
+        return appData.bankAccounts.filter((bank: any) => {
+            const assignedStores = bank.AssignedStores || '';
+            if (!assignedStores || assignedStores.trim() === '') return true;
+            const storesList = assignedStores.split(',').map((s: string) => s.trim().toLowerCase());
+            return storesList.includes(store.toLowerCase()) || storesList.includes('all');
+        });
+    }, [appData.bankAccounts, formData['Fulfillment Store']]);
+
     return (
         <div className="flex flex-col gap-4 h-full overflow-y-auto custom-scrollbar pr-2 pb-20 lg:pb-2">
             {/* Customer Info Card */}
@@ -144,7 +157,7 @@ const EditCustomerPanel: React.FC<EditCustomerPanelProps> = ({
                         <div className="flex items-center gap-3 animate-fade-in bg-black/30 p-2 rounded-2xl border border-white/5">
                             <select value={formData['Payment Info']} onChange={onBankChange} className="form-select bg-transparent border-none text-xs font-bold flex-grow text-white focus:ring-0">
                                 <option value="">Select Bank...</option>
-                                {appData.bankAccounts?.map((b: any) => <option key={b.BankName} value={b.BankName}>{b.BankName}</option>)}
+                                {filteredBanks.map((b: any) => <option key={b.BankName} value={b.BankName}>{b.BankName}</option>)}
                             </select>
                             {bankLogo && <img src={bankLogo} className="w-10 h-10 object-contain bg-white/10 p-1 rounded-xl border border-white/10" alt="" />}
                         </div>

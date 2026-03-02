@@ -798,7 +798,12 @@ const DeliveryListGeneratorModal: React.FC<DeliveryListGeneratorModalProps> = ({
                                     {pendingOrders.some(o => verifiedIds.has(o['Order ID']) && o['Payment Status'] !== 'Paid') && (
                                         <div className="space-y-1.5">
                                             <label className="text-[9px] font-black text-blue-400 uppercase tracking-widest ml-3">ជ្រើសរើសធនាគារ (Bank)</label>
-                                            <BankSelector bankAccounts={appData.bankAccounts || []} selectedBankName={selectedBank} onSelect={setSelectedBank} />
+                                            <BankSelector 
+                                                bankAccounts={appData.bankAccounts || []} 
+                                                selectedBankName={selectedBank} 
+                                                onSelect={setSelectedBank} 
+                                                fulfillmentStore={pendingOrders.find(o => verifiedIds.has(o['Order ID']))?.['Fulfillment Store']}
+                                            />
                                         </div>
                                     )}
                                     

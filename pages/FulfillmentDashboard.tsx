@@ -230,6 +230,18 @@ const FulfillmentCard: React.FC<{
                             <span className="text-amber-400">{order['Payment Method'] || order['Payment Info']}</span>
                         </div>
                     )}
+                    {order['Packed By'] && (
+                        <div className="flex justify-between items-center text-[10px] font-black pt-1 border-t border-white/5">
+                            <span className="text-gray-500 uppercase tracking-widest">Packed By</span>
+                            <span className="text-indigo-400">{order['Packed By']}</span>
+                        </div>
+                    )}
+                    {order['Dispatched By'] && (
+                        <div className="flex justify-between items-center text-[10px] font-black">
+                            <span className="text-gray-500 uppercase tracking-widest">Dispatched By</span>
+                            <span className="text-orange-400">{order['Dispatched By']}</span>
+                        </div>
+                    )}
                 </div>
 
                 {/* Products Thumbnails */}
@@ -262,8 +274,21 @@ const FulfillmentCard: React.FC<{
 };
 
 const FulfillmentDashboard: React.FC<{ orders: ParsedOrder[] }> = ({ orders }) => {
-    const { refreshData, setMobilePageTitle, appData } = useContext(AppContext);
-    const { ordersByStatus, updateStatus, loadingId } = useFulfillment(orders, refreshData);
+    const { refreshData, setMobilePageTitle, appData, currentUser } = useContext(AppContext);
+    
+    // Store Selection State
+    const [selectedStore, setSelectedStore] = useState<string>('');
+
+    // Filter orders by selected store
+    const storeOrders = useMemo(() => {
+        if (!selectedStore) return [];
+        return orders.filter(o => {
+            const store = o['Fulfillment Store'] || 'Unassigned';
+            return store.trim().toLowerCase() === selectedStore.trim().toLowerCase();
+        });
+    }, [orders, selectedStore]);
+
+    const { ordersByStatus, updateStatus, loadingId } = useFulfillment(storeOrders, refreshData);
     
     // Selection state for Bulk Actions
     const [selectedOrderIds, setSelectedOrderIds] = useState<Set<string>>(new Set());
@@ -301,14 +326,19 @@ const FulfillmentDashboard: React.FC<{ orders: ParsedOrder[] }> = ({ orders }) =
     ];
 
     useEffect(() => {
-        setMobilePageTitle('ការតាមដានកញ្ចប់ឥវ៉ាន់');
+        setMobilePageTitle(selectedStore ? `ឃ្លាំង: ${selectedStore}` : 'ជ្រើសរើសឃ្លាំង');
         return () => setMobilePageTitle(null);
-    }, [setMobilePageTitle]);
+    }, [setMobilePageTitle, selectedStore]);
 
     // Reset selection when changing tabs
     useEffect(() => {
         setSelectedOrderIds(new Set());
     }, [activeTab]);
+
+    const availableStores = useMemo(() => {
+        if (!appData.stores) return [];
+        return appData.stores.map((s: any) => s.StoreName);
+    }, [appData.stores]);
 
     const calculatedRange = useMemo(() => {
         if (filters.datePreset === 'all') return 'All time data stream';
@@ -473,6 +503,38 @@ const FulfillmentDashboard: React.FC<{ orders: ParsedOrder[] }> = ({ orders }) =
         }
     };
 
+    if (!selectedStore) {
+        return (
+            <div className="flex flex-col items-center justify-center min-h-[70vh] p-4 animate-fade-in">
+                <div className="w-full max-w-md bg-[#0f172a]/60 backdrop-blur-3xl border border-white/10 rounded-[3rem] p-8 sm:p-10 shadow-3xl text-center space-y-8 relative overflow-hidden">
+                    <div className="absolute -top-32 -right-32 w-64 h-64 bg-blue-600/10 rounded-full blur-[80px] pointer-events-none"></div>
+                    <div className="absolute -bottom-32 -left-32 w-64 h-64 bg-indigo-600/10 rounded-full blur-[80px] pointer-events-none"></div>
+                    
+                    <div className="relative z-10 space-y-4">
+                        <div className="w-20 h-20 bg-blue-600/20 rounded-3xl mx-auto flex items-center justify-center border-2 border-blue-500/30 shadow-xl shadow-blue-900/20">
+                            <span className="text-4xl">🏬</span>
+                        </div>
+                        <h2 className="text-2xl sm:text-3xl font-black text-white uppercase tracking-tighter">ជ្រើសរើសឃ្លាំង</h2>
+                        <p className="text-xs text-gray-400 font-bold uppercase tracking-widest">Select Fulfillment Store</p>
+                    </div>
+
+                    <div className="relative z-10 space-y-3">
+                        {availableStores.map(store => (
+                            <button
+                                key={store}
+                                onClick={() => setSelectedStore(store)}
+                                className="w-full py-4 px-6 bg-gray-900/50 hover:bg-blue-600/20 border border-white/5 hover:border-blue-500/50 rounded-2xl text-white font-black text-sm uppercase tracking-widest transition-all active:scale-[0.98] flex items-center justify-between group"
+                            >
+                                <span>{store}</span>
+                                <svg className="w-5 h-5 text-gray-500 group-hover:text-blue-400 transition-colors transform group-hover:translate-x-1" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M9 5l7 7-7 7" /></svg>
+                            </button>
+                        ))}
+                    </div>
+                </div>
+            </div>
+        );
+    }
+
     return (
         <div className="space-y-6 pb-24 animate-fade-in relative">
             {/* Header Section */}
@@ -482,15 +544,25 @@ const FulfillmentDashboard: React.FC<{ orders: ParsedOrder[] }> = ({ orders }) =
                         <svg className="w-7 h-7" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M9 20l-5.447-2.724A1 1 0 013 16.382V5.618a1 1 0 011.447-.894L9 7m0 13l6-3m-6 3V7m6 10l4.553 2.276A1 1 0 0021 18.382V7.618a1 1 0 00-.553-.894L15 4m0 13V4m0 0L9 7" /></svg>
                     </div>
                     <div>
-                        <h1 className="text-2xl font-black text-white uppercase tracking-tight">តាមដានកញ្ចប់ឥវ៉ាន់</h1>
+                        <h1 className="text-2xl font-black text-white uppercase tracking-tight flex items-center gap-3">
+                            <span>កញ្ចប់ឥវ៉ាន់</span>
+                            <span className="text-xs bg-indigo-500/20 text-indigo-400 px-3 py-1 rounded-lg border border-indigo-500/30">{selectedStore}</span>
+                        </h1>
                         <p className="text-[10px] font-black text-gray-500 uppercase tracking-widest mt-1">Fulfillment Tracking</p>
                     </div>
                 </div>
 
                 <div className="flex flex-col sm:flex-row items-center gap-4 w-full lg:w-auto">
                     <button 
+                        onClick={() => setSelectedStore('')}
+                        className="w-full sm:w-auto px-6 py-3 bg-gray-800/50 hover:bg-gray-800 text-gray-400 hover:text-white rounded-xl border border-white/5 active:scale-95 transition-all text-xs font-black uppercase tracking-widest flex items-center justify-center gap-2"
+                    >
+                        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7h12m0 0l-4-4m4 4l-4 4m0 6H4m0 0l4 4m-4-4l4-4" /></svg>
+                        ប្ដូរឃ្លាំង
+                    </button>
+                    <button 
                         onClick={refreshData}
-                        className="bg-gray-800 hover:bg-gray-700 text-white p-3 rounded-xl border border-white/5 active:scale-90 transition-all shadow-xl group"
+                        className="w-full sm:w-auto bg-gray-800 hover:bg-gray-700 text-white p-3 rounded-xl border border-white/5 active:scale-90 transition-all shadow-xl group flex justify-center"
                     >
                         <svg className="w-5 h-5 group-hover:rotate-180 transition-transform duration-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" /></svg>
                     </button>

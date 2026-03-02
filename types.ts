@@ -67,6 +67,7 @@ export interface FullOrder {
     IsVerified?: boolean;
     FulfillmentStatus?: FulfillmentStatus;
     "Packed By"?: string;
+    "Dispatched By"?: string;
     "Package Photo URL"?: string;
     "Driver Name"?: string;
     "Tracking Number"?: string;
@@ -145,6 +146,7 @@ export interface BankAccount {
   BankName: string;
   AccountName?: string;
   LogoURL: string;
+  AssignedStores?: string;
 }
 
 // Added Target interface to fix missing member error in performance hooks/pages

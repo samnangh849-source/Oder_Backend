@@ -45,6 +45,7 @@ const PackagingView: React.FC<{ orders?: ParsedOrder[] }> = ({ orders: propOrder
             }) as ParsedOrder[];
     }, [appData, propOrders]);
 
+    const [selectedStore, setSelectedStore] = useState<string>('');
     const [activeTab, setActiveTab] = useState<'Pending' | 'Ready to Ship' | 'Shipped'>('Pending');
     const [packingOrder, setPackingOrder] = useState<ParsedOrder | null>(null);
     const [loadingActionId, setLoadingActionId] = useState<string | null>(null);
@@ -73,9 +74,14 @@ const PackagingView: React.FC<{ orders?: ParsedOrder[] }> = ({ orders: propOrder
     });
 
     useEffect(() => {
-        setMobilePageTitle('PACKING STATION');
+        setMobilePageTitle(selectedStore ? `វេចខ្ចប់: ${selectedStore}` : 'ជ្រើសរើសឃ្លាំងវេចខ្ចប់');
         return () => setMobilePageTitle(null);
-    }, [setMobilePageTitle]);
+    }, [setMobilePageTitle, selectedStore]);
+
+    const availableStores = useMemo(() => {
+        if (!appData.stores) return [];
+        return appData.stores.map((s: any) => s.StoreName);
+    }, [appData.stores]);
 
     const calculatedRange = useMemo(() => {
         if (filters.datePreset === 'all') return 'All time data stream';
@@ -105,8 +111,16 @@ const PackagingView: React.FC<{ orders?: ParsedOrder[] }> = ({ orders: propOrder
         return new Date(ts).getTime();
     };
 
+    const storeOrders = useMemo(() => {
+        if (!selectedStore) return [];
+        return allOrders.filter(o => {
+            const store = o['Fulfillment Store'] || 'Unassigned';
+            return store.trim().toLowerCase() === selectedStore.trim().toLowerCase();
+        });
+    }, [allOrders, selectedStore]);
+
     const groupedOrders = useMemo(() => {
-        let filtered = allOrders.filter(o => o.FulfillmentStatus === activeTab && o.FulfillmentStatus !== 'Cancelled');
+        let filtered = storeOrders.filter(o => o.FulfillmentStatus === activeTab && o.FulfillmentStatus !== 'Cancelled');
 
         filtered = filtered.filter(order => {
             if (filters.datePreset !== 'all') {
@@ -297,6 +311,18 @@ const PackagingView: React.FC<{ orders?: ParsedOrder[] }> = ({ orders: propOrder
                         </div>
                         <span className="text-pink-400 truncate max-w-[100px]">{order['Payment Info'] || order['Payment Status'] || 'N/A'}</span>
                     </div>
+                    {order['Packed By'] && (
+                        <div className="flex justify-between items-center text-[10px] font-black pt-1 border-t border-white/5">
+                            <span className="text-gray-500 uppercase tracking-widest">Packed By</span>
+                            <span className="text-indigo-400 truncate max-w-[100px]">{order['Packed By']}</span>
+                        </div>
+                    )}
+                    {order['Dispatched By'] && (
+                        <div className="flex justify-between items-center text-[10px] font-black">
+                            <span className="text-gray-500 uppercase tracking-widest">Dispatched By</span>
+                            <span className="text-orange-400 truncate max-w-[100px]">{order['Dispatched By']}</span>
+                        </div>
+                    )}
                 </div>
 
                 <div className="bg-black/30 rounded-2xl p-3 border border-white/5 flex gap-2 overflow-x-auto custom-scrollbar">
@@ -340,7 +366,7 @@ const PackagingView: React.FC<{ orders?: ParsedOrder[] }> = ({ orders: propOrder
                     {activeTab === 'Ready to Ship' && (
                         <>
                             <button 
-                                onClick={() => handleAction(order, 'Shipped', { 'Dispatched Time': new Date().toLocaleString('km-KH') })}
+                                onClick={() => handleAction(order, 'Shipped', { 'Dispatched Time': new Date().toLocaleString('km-KH'), 'Dispatched By': currentUser?.FullName || 'Station Packer' })}
                                 className="w-full py-3.5 bg-amber-600 hover:bg-amber-700 text-white rounded-xl font-black uppercase text-[11px] tracking-widest shadow-xl shadow-amber-900/20 transition-all active:scale-[0.98] flex justify-center items-center gap-2"
                             >
                                 <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M13 10V3L4 14h7v7l9-11h-7z" /></svg>
@@ -367,7 +393,8 @@ const PackagingView: React.FC<{ orders?: ParsedOrder[] }> = ({ orders: propOrder
                             </div>
                             <button 
                                 onClick={() => handleUndo(order, 'Ready to Ship', { 
-                                    'Dispatched Time': '' 
+                                    'Dispatched Time': '',
+                                    'Dispatched By': ''
                                 })}
                                 className="w-full py-2 bg-gray-800/50 hover:bg-red-600/20 text-gray-500 hover:text-red-400 rounded-lg font-black uppercase text-[9px] tracking-[0.2em] transition-all flex justify-center items-center gap-2 border border-white/5"
                             >
@@ -413,10 +440,14 @@ const PackagingView: React.FC<{ orders?: ParsedOrder[] }> = ({ orders: propOrder
                         <p className="text-gray-500 text-[9px] uppercase tracking-widest">{order.Page}</p>
                     </div>
 
-                    <div className="flex items-center justify-center gap-2">
-                        {shippingMethod && <img src={convertGoogleDriveUrl(shippingMethod.LogosURL)} className="w-5 h-5 object-contain" alt="" />}
-                        {bank && <img src={convertGoogleDriveUrl(bank.LogoURL)} className="w-5 h-5 object-contain" alt="" />}
-                        {driver && <img src={convertGoogleDriveUrl(driver.ImageURL)} className="w-5 h-5 rounded-full object-cover" alt="" />}
+                    <div className="flex flex-col items-center justify-center gap-1">
+                        <div className="flex items-center gap-2">
+                            {shippingMethod && <img src={convertGoogleDriveUrl(shippingMethod.LogosURL)} className="w-5 h-5 object-contain" alt="Shipping" />}
+                            {bank && <img src={convertGoogleDriveUrl(bank.LogoURL)} className="w-5 h-5 object-contain" alt="Bank" />}
+                            {driver && <img src={convertGoogleDriveUrl(driver.ImageURL)} className="w-5 h-5 rounded-full object-cover" alt="Driver" />}
+                        </div>
+                        {order['Packed By'] && <span className="text-[8px] text-indigo-400 font-bold uppercase truncate max-w-[80px]">📦 {order['Packed By']}</span>}
+                        {order['Dispatched By'] && <span className="text-[8px] text-orange-400 font-bold uppercase truncate max-w-[80px]">🚚 {order['Dispatched By']}</span>}
                     </div>
 
                     <div className="flex justify-end gap-2">
@@ -425,14 +456,14 @@ const PackagingView: React.FC<{ orders?: ParsedOrder[] }> = ({ orders: propOrder
                         )}
                         {activeTab === 'Ready to Ship' && (
                             <div className="flex gap-1">
-                                <button onClick={() => handleAction(order, 'Shipped', { 'Dispatched Time': new Date().toLocaleString('km-KH') })} className="bg-amber-600 hover:bg-amber-700 text-white px-4 py-2 rounded-lg text-[10px] font-black uppercase transition-all">បញ្ចេញ</button>
+                                <button onClick={() => handleAction(order, 'Shipped', { 'Dispatched Time': new Date().toLocaleString('km-KH'), 'Dispatched By': currentUser?.FullName || 'Station Packer' })} className="bg-amber-600 hover:bg-amber-700 text-white px-4 py-2 rounded-lg text-[10px] font-black uppercase transition-all">បញ្ចេញ</button>
                                 <button onClick={() => handleUndo(order, 'Pending', { 'Packed By': '', 'Packed Time': '', 'Package Photo URL': '' })} className="bg-red-600/20 text-red-400 p-2 rounded-lg border border-red-500/20 hover:bg-red-600 hover:text-white transition-all">
                                     <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 10h10a8 8 0 018 8v2M3 10l6 6m-6-6l6-6" /></svg>
                                 </button>
                             </div>
                         )}
                         {activeTab === 'Shipped' && (
-                            <button onClick={() => handleUndo(order, 'Ready to Ship', { 'Dispatched Time': '' })} className="bg-red-600/20 text-red-400 px-4 py-2 rounded-lg border border-red-500/20 hover:bg-red-600 hover:text-white transition-all text-[10px] font-black uppercase">UNDO</button>
+                            <button onClick={() => handleUndo(order, 'Ready to Ship', { 'Dispatched Time': '', 'Dispatched By': '' })} className="bg-red-600/20 text-red-400 px-4 py-2 rounded-lg border border-red-500/20 hover:bg-red-600 hover:text-white transition-all text-[10px] font-black uppercase">UNDO</button>
                         )}
                         {(activeTab === 'Ready to Ship' || activeTab === 'Shipped') && order['Package Photo URL'] && (
                             <button onClick={() => showFullImage(convertGoogleDriveUrl(order['Package Photo URL'] as string))} className="bg-gray-800 text-gray-300 p-2 rounded-lg border border-white/10 hover:bg-gray-700">
@@ -447,8 +478,57 @@ const PackagingView: React.FC<{ orders?: ParsedOrder[] }> = ({ orders: propOrder
 
     const hasOrders = (Object.values(groupedOrders) as ParsedOrder[][]).some(list => list.length > 0);
 
+    if (!selectedStore) {
+        return (
+            <div className="flex flex-col items-center justify-center min-h-[70vh] p-4 animate-fade-in">
+                <div className="w-full max-w-md bg-[#0f172a]/60 backdrop-blur-3xl border border-white/10 rounded-[3rem] p-8 sm:p-10 shadow-3xl text-center space-y-8 relative overflow-hidden">
+                    <div className="absolute -top-32 -right-32 w-64 h-64 bg-blue-600/10 rounded-full blur-[80px] pointer-events-none"></div>
+                    <div className="absolute -bottom-32 -left-32 w-64 h-64 bg-indigo-600/10 rounded-full blur-[80px] pointer-events-none"></div>
+                    
+                    <div className="relative z-10 space-y-4">
+                        <div className="w-20 h-20 bg-blue-600/20 rounded-3xl mx-auto flex items-center justify-center border-2 border-blue-500/30 shadow-xl shadow-blue-900/20">
+                            <span className="text-4xl">🏬</span>
+                        </div>
+                        <h2 className="text-2xl sm:text-3xl font-black text-white uppercase tracking-tighter">ជ្រើសរើសឃ្លាំង</h2>
+                        <p className="text-xs text-gray-400 font-bold uppercase tracking-widest">Select Packaging Store</p>
+                    </div>
+
+                    <div className="relative z-10 space-y-3">
+                        {availableStores.map(store => (
+                            <button
+                                key={store}
+                                onClick={() => setSelectedStore(store)}
+                                className="w-full py-4 px-6 bg-gray-900/50 hover:bg-blue-600/20 border border-white/5 hover:border-blue-500/50 rounded-2xl text-white font-black text-sm uppercase tracking-widest transition-all active:scale-[0.98] flex items-center justify-between group"
+                            >
+                                <span>{store}</span>
+                                <svg className="w-5 h-5 text-gray-500 group-hover:text-blue-400 transition-colors transform group-hover:translate-x-1" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M9 5l7 7-7 7" /></svg>
+                            </button>
+                        ))}
+                    </div>
+                </div>
+            </div>
+        );
+    }
+
     return (
         <div className="space-y-6 pb-24 animate-fade-in px-4 lg:px-8">
+            {/* Header / Change Store */}
+            <div className="flex justify-between items-center bg-[#0f172a]/60 backdrop-blur-md border border-white/5 rounded-[2rem] p-4 sm:p-6 mb-6">
+                <div>
+                    <h2 className="text-xl sm:text-2xl font-black text-white uppercase tracking-tight flex items-center gap-3">
+                        <span>ផ្នែកវេចខ្ចប់</span>
+                        <span className="text-[10px] bg-blue-500/20 text-blue-400 px-3 py-1 rounded-lg border border-blue-500/30">{selectedStore}</span>
+                    </h2>
+                </div>
+                <button 
+                    onClick={() => setSelectedStore('')}
+                    className="px-4 py-2.5 bg-gray-800/50 hover:bg-gray-800 text-gray-400 hover:text-white rounded-xl border border-white/5 active:scale-95 transition-all text-[10px] font-black uppercase tracking-widest flex items-center gap-2"
+                >
+                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7h12m0 0l-4-4m4 4l-4 4m0 6H4m0 0l4 4m-4-4l4-4" /></svg>
+                    ប្ដូរឃ្លាំង
+                </button>
+            </div>
+
             {/* 4 Steps Navigation (Visualizing 4 steps, Step 2 is modal) */}
             <div className="flex bg-black/40 p-1.5 rounded-[2rem] border border-white/5 overflow-x-auto no-scrollbar max-w-2xl mx-auto shadow-inner gap-1">
                 {[
