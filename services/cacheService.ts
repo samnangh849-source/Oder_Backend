@@ -5,8 +5,8 @@ export const CACHE_KEYS = {
     CHAT_HISTORY: 'chatHistoryCache'
 };
 
-// Default expiration set to 48 hours
-const DEFAULT_EXPIRY = 48 * 60 * 60 * 1000; 
+// Default expiration set to 15 days (15 * 24 * 60 * 60 * 1000)
+const DEFAULT_EXPIRY = 15 * 24 * 60 * 60 * 1000; 
 
 // IndexedDB Configuration
 const DB_NAME = 'OrderSystemDB';

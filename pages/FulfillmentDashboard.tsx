@@ -5,9 +5,10 @@ import { useFulfillment } from '@/hooks/useFulfillment';
 import Spinner from '@/components/common/Spinner';
 import { convertGoogleDriveUrl } from '@/utils/fileUtils';
 import { ParsedOrder, FulfillmentStatus } from '@/types';
-import BulkActionBarDesktop from '@/components/admin/BulkActionBarDesktop'; // Assume this exists or we can create a generic one
+import BulkActionBarDesktop from '@/components/admin/BulkActionBarDesktop';
 import SearchableShippingMethodDropdown from '@/components/common/SearchableShippingMethodDropdown';
-import SearchableProductDropdown from '@/components/common/SearchableProductDropdown'; // Using as a proxy for payment method if needed, or we make one
+import DriverSelector from '@/components/orders/DriverSelector';
+import BankSelector from '@/components/orders/BankSelector';
 import OrderFilters, { FilterState } from '@/components/orders/OrderFilters';
 import { FilterPanel } from '@/components/orders/FilterPanel';
 import Modal from '@/components/common/Modal';
@@ -22,27 +23,41 @@ const ConfirmDeliveryModal: React.FC<{
     const { appData } = useContext(AppContext);
     const [driver, setDriver] = useState('');
     const [shippingMethod, setShippingMethod] = useState('');
-    const [paymentMethod, setPaymentMethod] = useState('');
+    const [paymentStatus, setPaymentStatus] = useState<'Unpaid' | 'Paid'>('Unpaid');
+    const [paymentInfo, setPaymentInfo] = useState('');
 
     useEffect(() => {
         if (order) {
-            setDriver(order['Driver Name'] || '');
+            setDriver(order['Driver Name'] || order['Internal Shipping Details'] || '');
             setShippingMethod(order['Internal Shipping Method'] || '');
-            setPaymentMethod(order['Payment Method'] || '');
+            setPaymentStatus((order['Payment Status'] as any) === 'Paid' ? 'Paid' : 'Unpaid');
+            setPaymentInfo(order['Payment Info'] || '');
         }
     }, [order]);
 
     if (!order) return null;
 
+    const selectedMethodObj = useMemo(() => {
+        return appData.shippingMethods?.find((m: any) => m.MethodName === shippingMethod);
+    }, [shippingMethod, appData.shippingMethods]);
+
     const handleConfirm = () => {
-        if (!paymentMethod) {
-            alert('សូមជ្រើសរើសវិធីសាស្ត្របង់ប្រាក់');
+        if (selectedMethodObj?.RequireDriverSelection && !driver) {
+            alert('សូមជ្រើសរើសអ្នកដឹក (Driver) ជាមុនសិន');
             return;
         }
+
+        if (paymentStatus === 'Paid' && !paymentInfo) {
+            alert('សូមជ្រើសរើសគណនីធនាគារ');
+            return;
+        }
+        
         onConfirm(order['Order ID'], {
             'Driver Name': driver,
+            'Internal Shipping Details': driver, // Ensuring both fields are kept in sync
             'Internal Shipping Method': shippingMethod,
-            'Payment Method': paymentMethod,
+            'Payment Status': paymentStatus,
+            'Payment Info': paymentStatus === 'Paid' ? paymentInfo : '',
             'Delivered Time': new Date().toLocaleString('km-KH'),
             'Fulfillment Status': 'Delivered'
         });
@@ -50,52 +65,111 @@ const ConfirmDeliveryModal: React.FC<{
 
     return (
         <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/80 backdrop-blur-md animate-fade-in">
-            <div className="bg-[#0f172a] border border-white/10 rounded-[2.5rem] w-full max-w-md shadow-2xl p-6 flex flex-col gap-6">
-                <div className="flex justify-between items-center border-b border-white/5 pb-4">
-                    <h3 className="text-xl font-black text-white uppercase tracking-tight">បញ្ជាក់ការដឹកជោគជ័យ</h3>
-                    <button onClick={onClose} disabled={isLoading} className="text-gray-500 hover:text-red-500 transition-colors">
-                        <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M6 18L18 6M6 6l12 12" /></svg>
+            <div className="bg-[#0f172a] border border-white/10 rounded-[2.5rem] w-full max-w-lg shadow-2xl overflow-hidden flex flex-col max-h-[90vh]">
+                <div className="p-6 border-b border-white/5 flex justify-between items-center bg-white/[0.02]">
+                    <div className="flex items-center gap-3">
+                        <div className="w-10 h-10 rounded-xl bg-emerald-500/20 text-emerald-400 flex items-center justify-center border border-emerald-500/30">
+                            <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M5 13l4 4L19 7" /></svg>
+                        </div>
+                        <div>
+                            <h3 className="text-xl font-black text-white uppercase tracking-tight">បញ្ជាក់ការដឹកជោគជ័យ</h3>
+                            <p className="text-[10px] text-gray-500 font-bold uppercase tracking-widest mt-0.5">#{order['Order ID'].substring(0, 10)}</p>
+                        </div>
+                    </div>
+                    <button onClick={onClose} disabled={isLoading} className="text-gray-500 hover:text-red-500 transition-colors w-10 h-10 rounded-full flex items-center justify-center bg-gray-800/50 hover:bg-gray-800">
+                        <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M6 18L18 6M6 6l12 12" /></svg>
                     </button>
                 </div>
                 
-                <div className="space-y-4">
-                    <div>
-                        <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-1 block">Shipping Method</label>
+                <div className="p-6 space-y-6 overflow-y-auto custom-scrollbar">
+                    {/* Shipping Method */}
+                    <div className="space-y-2">
+                        <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest flex items-center gap-2">
+                            <span className="w-1.5 h-1.5 rounded-full bg-indigo-500"></span>
+                            Shipping Method
+                        </label>
                         <SearchableShippingMethodDropdown 
                             methods={appData.shippingMethods}
                             selectedMethodName={shippingMethod}
-                            onSelect={(val) => setShippingMethod(val.MethodName)}
+                            onSelect={(val) => {
+                                setShippingMethod(val.MethodName);
+                                if (!val.RequireDriverSelection) {
+                                    setDriver(val.MethodName);
+                                } else {
+                                    setDriver('');
+                                }
+                            }}
                         />
                     </div>
-                    <div>
-                        <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-1 block">Driver Name</label>
-                        <input 
-                            type="text" 
-                            value={driver}
-                            onChange={(e) => setDriver(e.target.value)}
-                            className="w-full bg-black/40 border border-gray-700 rounded-xl px-4 py-3 text-white text-sm focus:border-blue-500 outline-none"
-                            placeholder="ឈ្មោះអ្នកដឹក"
-                        />
-                    </div>
-                    <div>
-                        <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-1 block">Payment Method <span className="text-red-500">*</span></label>
-                        <select 
-                            value={paymentMethod}
-                            onChange={(e) => setPaymentMethod(e.target.value)}
-                            className="w-full bg-black/40 border border-gray-700 rounded-xl px-4 py-3 text-white text-sm focus:border-blue-500 outline-none appearance-none"
-                        >
-                            <option value="">-- រើសវិធីសាស្ត្របង់ប្រាក់ --</option>
-                            <option value="Cash on Delivery">Cash on Delivery</option>
-                            <option value="Bank Transfer">Bank Transfer</option>
-                            <option value="Prepaid">Prepaid</option>
-                        </select>
-                    </div>
+                    
+                    {/* Driver Selector */}
+                    {selectedMethodObj?.RequireDriverSelection && (
+                        <div className="space-y-2 animate-fade-in-down">
+                            <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest flex items-center gap-2">
+                                <span className="w-1.5 h-1.5 rounded-full bg-blue-500"></span>
+                                ជ្រើសរើសអ្នកដឹក (Driver)
+                            </label>
+                            <div className="bg-black/20 p-2 rounded-2xl border border-white/5">
+                                <DriverSelector 
+                                    drivers={appData.drivers || []}
+                                    selectedDriverName={driver}
+                                    onSelect={setDriver}
+                                />
+                            </div>
+                        </div>
+                    )}
+                    
+                    
+                    {/* Payment Control */}
+                    <fieldset className="border border-white/10 p-5 rounded-[2rem] bg-white/[0.02]">
+                        <legend className="px-3 text-[10px] font-black text-amber-400 uppercase tracking-[0.2em]">ស្ថានភាពទូទាត់</legend>
+                        <div className="space-y-5">
+                            {/* Segmented Control */}
+                            <div className="flex bg-black/40 p-1.5 rounded-2xl border border-white/5">
+                                <button 
+                                    type="button"
+                                    onClick={() => setPaymentStatus('Unpaid')}
+                                    className={`flex-1 py-3.5 px-4 rounded-[1.2rem] text-xs font-black uppercase transition-all flex flex-col items-center gap-1 ${paymentStatus === 'Unpaid' ? 'bg-red-600 text-white shadow-lg shadow-red-900/40' : 'text-gray-500 hover:text-gray-300'}`}
+                                >
+                                    <span>Unpaid</span>
+                                    <span className="text-[8px] opacity-70 tracking-wider">COD</span>
+                                </button>
+                                <button 
+                                    type="button"
+                                    onClick={() => setPaymentStatus('Paid')}
+                                    className={`flex-1 py-3.5 px-4 rounded-[1.2rem] text-xs font-black uppercase transition-all flex flex-col items-center gap-1 ${paymentStatus === 'Paid' ? 'bg-emerald-600 text-white shadow-lg shadow-emerald-900/40' : 'text-gray-500 hover:text-gray-300'}`}
+                                >
+                                    <span>Paid</span>
+                                    <span className="text-[8px] opacity-70 tracking-wider">Transfer</span>
+                                </button>
+                            </div>
+
+                            {/* Bank Selector (conditionally rendered) */}
+                            {paymentStatus === 'Paid' && (
+                                <div className="animate-fade-in-down space-y-2 pt-2 border-t border-white/5">
+                                    <p className="text-[10px] font-black text-gray-500 uppercase tracking-widest ml-1">ជ្រើសរើសគណនីធនាគារ</p>
+                                    <div className="bg-black/20 p-2 rounded-[1.5rem] border border-white/5 max-h-48 overflow-y-auto custom-scrollbar">
+                                        <BankSelector 
+                                            bankAccounts={appData.bankAccounts || []}
+                                            selectedBankName={paymentInfo}
+                                            onSelect={setPaymentInfo}
+                                            fulfillmentStore={order['Fulfillment Store']}
+                                        />
+                                    </div>
+                                </div>
+                            )}
+                        </div>
+                    </fieldset>
                 </div>
 
-                <div className="pt-4 flex gap-3">
-                    <button onClick={onClose} disabled={isLoading} className="flex-1 py-3 rounded-xl bg-gray-800 text-white font-black text-xs uppercase tracking-widest hover:bg-gray-700 transition-all">បោះបង់</button>
-                    <button onClick={handleConfirm} disabled={isLoading || !paymentMethod} className="flex-1 py-3 rounded-xl bg-emerald-600 text-white font-black text-xs uppercase tracking-widest hover:bg-emerald-700 transition-all disabled:opacity-50 disabled:cursor-not-allowed flex justify-center items-center gap-2">
-                        {isLoading ? <Spinner size="sm" /> : 'បញ្ជាក់'}
+                <div className="p-6 border-t border-white/5 bg-black/20 flex gap-3">
+                    <button onClick={onClose} disabled={isLoading} className="flex-1 py-4 rounded-2xl bg-gray-800 text-white font-black text-xs uppercase tracking-widest hover:bg-gray-700 transition-all border border-white/5 active:scale-95">បោះបង់</button>
+                    <button 
+                        onClick={handleConfirm} 
+                        disabled={isLoading || (paymentStatus === 'Paid' && !paymentInfo)} 
+                        className="flex-1 py-4 rounded-2xl bg-gradient-to-r from-emerald-600 to-teal-600 text-white font-black text-xs uppercase tracking-widest hover:from-emerald-500 hover:to-teal-500 transition-all disabled:opacity-50 disabled:cursor-not-allowed flex justify-center items-center gap-2 shadow-xl shadow-emerald-900/30 active:scale-95"
+                    >
+                        {isLoading ? <Spinner size="sm" /> : 'បញ្ជាក់ការដឹកជោគជ័យ'}
                     </button>
                 </div>
             </div>
@@ -232,13 +306,13 @@ const FulfillmentCard: React.FC<{
                     )}
                     {order['Packed By'] && (
                         <div className="flex justify-between items-center text-[10px] font-black pt-1 border-t border-white/5">
-                            <span className="text-gray-500 uppercase tracking-widest">Packed By</span>
+                            <span className="text-gray-500 uppercase tracking-widest">អ្នកវេចខ្ចប់</span>
                             <span className="text-indigo-400">{order['Packed By']}</span>
                         </div>
                     )}
                     {order['Dispatched By'] && (
                         <div className="flex justify-between items-center text-[10px] font-black">
-                            <span className="text-gray-500 uppercase tracking-widest">Dispatched By</span>
+                            <span className="text-gray-500 uppercase tracking-widest">អ្នកប្រគល់ឱ្យអ្នកដឹក</span>
                             <span className="text-orange-400">{order['Dispatched By']}</span>
                         </div>
                     )}
@@ -336,11 +410,12 @@ const FulfillmentDashboard: React.FC<{ orders: ParsedOrder[] }> = ({ orders }) =
     }, [activeTab]);
 
     const availableStores = useMemo(() => {
-        if (!appData.stores) return [];
-        return appData.stores.map((s: any) => s.StoreName);
+        const stores = appData.stores ? appData.stores.map((s: any) => s.StoreName) : [];
+        return stores;
     }, [appData.stores]);
 
     const calculatedRange = useMemo(() => {
+        // ... (existing calculatedRange code)
         if (filters.datePreset === 'all') return 'All time data stream';
         const now = new Date();
         const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
@@ -627,8 +702,8 @@ const FulfillmentDashboard: React.FC<{ orders: ParsedOrder[] }> = ({ orders }) =
                 <div className="flex bg-black/40 p-1.5 rounded-[2rem] border border-white/5 overflow-x-auto no-scrollbar max-w-full shadow-inner gap-1">
                     {statusTabs.map(tab => {
                         const isActive = activeTab === tab.id;
-                        // For count, we filter the orders by status and filters
-                        const count = orders.filter(o => 
+                        // For count, we filter the storeOrders by status and filters
+                        const count = storeOrders.filter(o => 
                             (o.FulfillmentStatus || 'Pending') === tab.id &&
                             // Applying standard filters logic for counting
                             (() => {

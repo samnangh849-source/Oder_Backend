@@ -24,8 +24,8 @@ const DriverDeliveryView: React.FC = () => {
     }, [setMobilePageTitle, selectedStore]);
 
     const availableStores = useMemo(() => {
-        if (!appData.stores) return [];
-        return appData.stores.map((s: any) => s.StoreName);
+        const stores = appData.stores ? appData.stores.map((s: any) => s.StoreName) : [];
+        return stores;
     }, [appData.stores]);
 
     const handleSearchOrder = async (e?: React.FormEvent) => {
@@ -41,11 +41,13 @@ const DriverDeliveryView: React.FC = () => {
             const res = await fetch(`${WEB_APP_URL}/api/admin/all-orders`);
             const result = await res.json();
             if (result.status === 'success') {
-                const order = result.data.find((o: any) => 
-                    (o['Order ID'].toLowerCase() === input.toLowerCase() ||
-                    o['Order ID'].toLowerCase().endsWith(input.toLowerCase())) &&
-                    (o['Fulfillment Store'] || 'Unassigned').toLowerCase() === selectedStore.toLowerCase()
-                );
+                const order = result.data.find((o: any) => {
+                    const idMatch = o['Order ID'].toLowerCase() === input.toLowerCase() || o['Order ID'].toLowerCase().endsWith(input.toLowerCase());
+                    if (!idMatch) return false;
+                    
+                    const orderStore = (o['Fulfillment Store'] || 'Unassigned').toLowerCase();
+                    return orderStore === selectedStore.toLowerCase();
+                });
                 
                 if (order) {
                     let products = [];
@@ -128,6 +130,14 @@ const DriverDeliveryView: React.FC = () => {
                     </div>
 
                     <div className="relative z-10 space-y-3">
+                        <button
+                            onClick={() => setSelectedStore('ALL_STORES')}
+                            className="w-full py-4 px-6 bg-purple-600/20 hover:bg-purple-600/30 border border-purple-500/30 rounded-2xl text-white font-black text-sm uppercase tracking-widest transition-all active:scale-[0.98] flex items-center justify-between group"
+                        >
+                            <span>គ្រប់ឃ្លាំងទាំងអស់ (ALL STORES)</span>
+                            <svg className="w-5 h-5 text-purple-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M9 5l7 7-7 7" /></svg>
+                        </button>
+
                         {availableStores.map(store => (
                             <button
                                 key={store}
@@ -138,6 +148,14 @@ const DriverDeliveryView: React.FC = () => {
                                 <svg className="w-5 h-5 text-gray-500 group-hover:text-purple-400 transition-colors transform group-hover:translate-x-1" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M9 5l7 7-7 7" /></svg>
                             </button>
                         ))}
+
+                        <button
+                            onClick={() => setSelectedStore('Unassigned')}
+                            className="w-full py-4 px-6 bg-gray-800/30 hover:bg-gray-800/50 border border-white/5 rounded-2xl text-gray-400 font-black text-sm uppercase tracking-widest transition-all active:scale-[0.98] flex items-center justify-between group"
+                        >
+                            <span>មិនទាន់កំណត់ឃ្លាំង (UNASSIGNED)</span>
+                            <svg className="w-5 h-5 text-gray-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M9 5l7 7-7 7" /></svg>
+                        </button>
                     </div>
                 </div>
             </div>

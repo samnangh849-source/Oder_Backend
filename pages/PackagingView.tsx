@@ -79,8 +79,7 @@ const PackagingView: React.FC<{ orders?: ParsedOrder[] }> = ({ orders: propOrder
     }, [setMobilePageTitle, selectedStore]);
 
     const availableStores = useMemo(() => {
-        if (!appData.stores) return [];
-        return appData.stores.map((s: any) => s.StoreName);
+        return appData.stores ? appData.stores.map((s: any) => s.StoreName) : [];
     }, [appData.stores]);
 
     const calculatedRange = useMemo(() => {
@@ -120,6 +119,7 @@ const PackagingView: React.FC<{ orders?: ParsedOrder[] }> = ({ orders: propOrder
     }, [allOrders, selectedStore]);
 
     const groupedOrders = useMemo(() => {
+        // Explicitly use storeOrders here to ensure refresh when store changes
         let filtered = storeOrders.filter(o => o.FulfillmentStatus === activeTab && o.FulfillmentStatus !== 'Cancelled');
 
         filtered = filtered.filter(order => {
@@ -194,7 +194,7 @@ const PackagingView: React.FC<{ orders?: ParsedOrder[] }> = ({ orders: propOrder
         }
         
         return { 'All': filtered };
-    }, [allOrders, activeTab, searchTerm, filters, appData.pages]);
+    }, [storeOrders, activeTab, searchTerm, filters, appData.pages]);
 
     const handleAction = async (order: ParsedOrder, newStatus: string, extraData: any = {}) => {
         setLoadingActionId(order['Order ID']);
@@ -313,13 +313,13 @@ const PackagingView: React.FC<{ orders?: ParsedOrder[] }> = ({ orders: propOrder
                     </div>
                     {order['Packed By'] && (
                         <div className="flex justify-between items-center text-[10px] font-black pt-1 border-t border-white/5">
-                            <span className="text-gray-500 uppercase tracking-widest">Packed By</span>
+                            <span className="text-gray-500 uppercase tracking-widest">អ្នកវេចខ្ចប់</span>
                             <span className="text-indigo-400 truncate max-w-[100px]">{order['Packed By']}</span>
                         </div>
                     )}
                     {order['Dispatched By'] && (
                         <div className="flex justify-between items-center text-[10px] font-black">
-                            <span className="text-gray-500 uppercase tracking-widest">Dispatched By</span>
+                            <span className="text-gray-500 uppercase tracking-widest">អ្នកប្រគល់ឱ្យអ្នកដឹក</span>
                             <span className="text-orange-400 truncate max-w-[100px]">{order['Dispatched By']}</span>
                         </div>
                     )}

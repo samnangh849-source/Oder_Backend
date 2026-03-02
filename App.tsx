@@ -2,6 +2,7 @@ import React, { useState, useEffect, useCallback, Suspense, useMemo } from 'reac
 import { User, AppData } from './types';
 import { WEB_APP_URL } from './constants';
 import { useUrlState } from './hooks/useUrlState';
+import { useOrderNotifications } from './hooks/useOrderNotifications';
 import Spinner from './components/common/Spinner';
 import Modal from './components/common/Modal';
 import { AppContext, Language, AdvancedSettings } from './context/AppContext';
@@ -83,6 +84,9 @@ const App: React.FC = () => {
     const confirmStore = urlParams.get('s') || urlParams.get('store') || '';
     const confirmExpires = urlParams.get('e') || urlParams.get('expires');
     const isConfirmExpired = confirmExpires ? Date.now() > parseInt(confirmExpires) : false;
+
+    // Invoke global order notifications system
+    useOrderNotifications();
     
     // Notification State
     const [notification, setNotification] = useState<{ message: string; type: 'success' | 'info' | 'error' } | null>(null);
@@ -228,9 +232,27 @@ const App: React.FC = () => {
 
     const login = async (user: User) => {
         setCurrentUser(user);
-        // Save session using CacheService (48h default)
+        // Save session using CacheService (15 days default)
         await CacheService.set(CACHE_KEYS.SESSION, { user, timestamp: Date.now() });
         fetchData(true); // Force fetch on login
+        
+        // Broadcast Login Event to all users via Chat System
+        try {
+            await fetch(`${WEB_APP_URL}/api/chat/send`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    userName: 'System',
+                    type: 'text',
+                    MessageType: 'text',
+                    content: `🟢 **${user.FullName}** ទើបតែបានចូលប្រើប្រាស់ប្រព័ន្ធ (Logged In).`,
+                    Content: `🟢 **${user.FullName}** ទើបតែបានចូលប្រើប្រាស់ប្រព័ន្ធ (Logged In).`
+                })
+            });
+        } catch (e) {
+            console.warn("Failed to broadcast login event", e);
+        }
+
         determineAppState(user);
     };
 
@@ -356,7 +378,7 @@ const App: React.FC = () => {
 
     const paddingClass = useMemo(() => {
         if (appState === 'role_selection' || appState === 'login') return 'pt-0 pb-0';
-        const basePadding = isMobile ? 'pt-14' : 'pt-20';
+        const basePadding = isMobile ? 'pt-20' : 'pt-24';
         return `${shouldShowHeader ? basePadding : 'pt-0'} pb-24 md:pb-8`;
     }, [appState, shouldShowHeader, isMobile]);
 
