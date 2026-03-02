@@ -341,7 +341,7 @@ const FastPackModal: React.FC<FastPackModalProps> = ({ order, onClose, onSuccess
                             </div>
 
                             <div className="space-y-3">
-                                <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest ml-1">Products List ({order.Products.length})</p>
+                                <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest ml-1">បញ្ជីផលិតផល ({order.Products.length})</p>
                                 <div className="space-y-2 max-h-40 overflow-y-auto custom-scrollbar pr-2">
                                     {order.Products.map((p, i) => (
                                         <div key={i} className="flex items-center gap-4 p-3 bg-white/[0.03] rounded-2xl border border-white/5 hover:border-blue-500/20 transition-all">
@@ -350,13 +350,43 @@ const FastPackModal: React.FC<FastPackModalProps> = ({ order, onClose, onSuccess
                                             </div>
                                             <div className="min-w-0 flex-grow">
                                                 <p className="text-sm font-black text-gray-200 truncate leading-tight">{p.name}</p>
-                                                <div className="flex justify-between mt-1.5">
-                                                    <span className="text-xs text-blue-500 font-black">x{p.quantity}</span>
-                                                    {p.colorInfo && <span className="text-[10px] text-purple-500 italic font-bold">{p.colorInfo}</span>}
+                                                <div className="flex justify-between items-end mt-1.5">
+                                                    <div className="flex flex-col">
+                                                        <span className="text-xs text-blue-500 font-black">x{p.quantity}</span>
+                                                        {p.colorInfo && <span className="text-[9px] text-purple-500 italic font-bold">{p.colorInfo}</span>}
+                                                    </div>
+                                                    <div className="text-right">
+                                                        <p className="text-[10px] text-gray-500 line-through">${(p.originalPrice || p.price || 0).toFixed(2)}</p>
+                                                        <p className="text-emerald-400 font-mono font-black text-sm">${(p.finalPrice || p.price || 0).toFixed(2)}</p>
+                                                    </div>
                                                 </div>
                                             </div>
                                         </div>
                                     ))}
+                                </div>
+                            </div>
+
+                            {/* Financial Summary */}
+                            <div className="bg-blue-600/5 rounded-2xl p-5 border border-blue-500/10 space-y-3">
+                                <div className="flex justify-between items-center text-[11px]">
+                                    <span className="text-gray-500 font-bold uppercase">តម្លៃពេញសរុប (Total Full)</span>
+                                    <span className="text-gray-300 font-mono font-black">${(order.Subtotal + (order['Discount ($)'] || 0)).toFixed(2)}</span>
+                                </div>
+                                <div className="flex justify-between items-center text-[11px]">
+                                    <span className="text-gray-500 font-bold uppercase">បញ្ចុះតម្លៃសរុប (Total Discount)</span>
+                                    <span className="text-red-400 font-mono font-black">-${(order['Discount ($)'] || 0).toFixed(2)}</span>
+                                </div>
+                                <div className="flex justify-between items-center text-[11px] border-t border-white/5 pt-2">
+                                    <span className="text-gray-500 font-bold uppercase">តម្លៃទំនិញសុទ្ធ (Subtotal)</span>
+                                    <span className="text-blue-400 font-mono font-black">${order.Subtotal.toFixed(2)}</span>
+                                </div>
+                                <div className="flex justify-between items-center text-[11px]">
+                                    <span className="text-gray-500 font-bold uppercase">សេវាដឹកពីភ្ញៀវ (Shipping Fee)</span>
+                                    <span className="text-indigo-400 font-mono font-black">+${order['Shipping Fee (Customer)'].toFixed(2)}</span>
+                                </div>
+                                <div className="flex justify-between items-center pt-2 border-t-2 border-dashed border-white/10">
+                                    <span className="text-xs font-black text-white uppercase tracking-tighter">សរុបចុងក្រោយ (Grand Total)</span>
+                                    <span className="text-xl font-black text-emerald-400 font-mono tracking-tighter">${order['Grand Total'].toFixed(2)}</span>
                                 </div>
                             </div>
                         </div>
