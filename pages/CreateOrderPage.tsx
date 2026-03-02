@@ -687,7 +687,7 @@ const CreateOrderPage: React.FC<CreateOrderPageProps> = ({ team, onSaveSuccess, 
                                                 <div className="w-20 h-20 sm:w-28 sm:h-28 bg-gray-900 rounded-xl sm:rounded-2xl overflow-hidden border-2 border-gray-700 shadow-inner group-hover:border-blue-500/50 transition-colors"><img src={convertGoogleDriveUrl(p.image)} className="w-full h-full object-cover" alt="" /></div>
                                             </div>
                                             <div className="md:col-span-10 grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4">
-                                                <div className="space-y-1.5"><label className="text-[10px] font-black text-gray-500 uppercase tracking-widest ml-1">ឈ្មោះផលិតផល*</label><SearchableProductDropdown products={appData.products || []} selectedProductName={p.name} onSelect={(val, tags) => handleProductUpdate(index, 'name', val, tags)} /></div>
+                                                <div className="space-y-1.5"><label className="text-[10px] font-black text-gray-500 uppercase tracking-widest ml-1">ឈ្មោះផលិតផល*</label><SearchableProductDropdown products={appData.products || []} selectedProductName={p.name} onSelect={(val, tags) => handleProductUpdate(index, 'name', val, tags)} allowAddNew={false} /></div>
                                                 <div className="grid grid-cols-2 gap-3 sm:gap-4">
                                                     <SetQuantity 
                                                         value={p.quantity} 

@@ -350,17 +350,19 @@ const PackagingView: React.FC<{ orders?: ParsedOrder[] }> = ({ orders: propOrder
                     </div>
                 )}
 
-                {/* Checkbox for Bulk Actions */}
-                <div className="absolute top-4 left-4 z-10">
-                    <input 
-                        type="checkbox" 
-                        checked={selectedOrderIds.has(order['Order ID'])}
-                        onChange={() => handleSelectOrder(order['Order ID'])}
-                        className={`w-5 h-5 rounded border-gray-600 focus:ring-opacity-50 bg-black/50 cursor-pointer ${activeTab === 'Ready to Ship' ? 'text-amber-500 focus:ring-amber-500' : 'text-blue-500 focus:ring-blue-500'}`}
-                    />
-                </div>
+                {/* Checkbox for Bulk Actions (Only visible on relevant tabs) */}
+                {activeTab !== 'Pending' && (
+                    <div className="absolute top-4 left-4 z-10">
+                        <input 
+                            type="checkbox" 
+                            checked={selectedOrderIds.has(order['Order ID'])}
+                            onChange={() => handleSelectOrder(order['Order ID'])}
+                            className={`w-5 h-5 rounded border-gray-600 focus:ring-opacity-50 bg-black/50 cursor-pointer ${activeTab === 'Ready to Ship' ? 'text-amber-500 focus:ring-amber-500' : 'text-blue-500 focus:ring-blue-500'}`}
+                        />
+                    </div>
+                )}
                 
-                <div className="flex justify-between items-start pl-10">
+                <div className={`flex justify-between items-start ${activeTab !== 'Pending' ? 'pl-10' : ''}`}>
                     <div className="min-w-0 flex-grow">
                         <div className="flex items-center gap-2">
                             {phoneCarrier && (
@@ -537,14 +539,16 @@ const PackagingView: React.FC<{ orders?: ParsedOrder[] }> = ({ orders: propOrder
                     </div>
                 )}
 
-                <div className="flex-shrink-0">
-                    <input 
-                        type="checkbox" 
-                        checked={selectedOrderIds.has(order['Order ID'])}
-                        onChange={() => handleSelectOrder(order['Order ID'])}
-                        className={`w-5 h-5 rounded border-gray-600 focus:ring-opacity-50 bg-black/50 cursor-pointer ${activeTab === 'Ready to Ship' ? 'text-amber-500 focus:ring-amber-500' : 'text-blue-500 focus:ring-blue-500'}`}
-                    />
-                </div>
+                {activeTab !== 'Pending' && (
+                    <div className="flex-shrink-0">
+                        <input 
+                            type="checkbox" 
+                            checked={selectedOrderIds.has(order['Order ID'])}
+                            onChange={() => handleSelectOrder(order['Order ID'])}
+                            className={`w-5 h-5 rounded border-gray-600 focus:ring-opacity-50 bg-black/50 cursor-pointer ${activeTab === 'Ready to Ship' ? 'text-amber-500 focus:ring-amber-500' : 'text-blue-500 focus:ring-blue-500'}`}
+                        />
+                    </div>
+                )}
                 
                 <div className="flex-grow min-w-0 grid grid-cols-1 md:grid-cols-5 gap-4 items-center">
                     <div className="min-w-0">
@@ -772,7 +776,7 @@ const PackagingView: React.FC<{ orders?: ParsedOrder[] }> = ({ orders: propOrder
             )}
 
             {/* Bulk Actions Bar */}
-            {selectedOrderIds.size > 0 && (
+            {selectedOrderIds.size > 0 && activeTab !== 'Pending' && (
                 <div className="sticky top-24 z-30 flex justify-between items-center bg-[#1e293b]/90 backdrop-blur-xl p-4 rounded-3xl border-2 border-blue-500/30 shadow-[0_20px_50px_rgba(0,0,0,0.5)] max-w-4xl mx-auto animate-fade-in-down">
                     <div className="flex items-center gap-4 pl-2">
                         <input 
@@ -888,7 +892,7 @@ const PackagingView: React.FC<{ orders?: ParsedOrder[] }> = ({ orders: propOrder
                                 </div>
                             </div>
                             <button onClick={() => setViewingOrder(null)} className="w-12 h-12 rounded-2xl bg-gray-800 text-gray-400 hover:text-white flex items-center justify-center transition-all hover:bg-red-600/20 hover:text-red-400 border border-white/5">
-                                <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2.5} d="M6 18L18 6M6 6l12 12" /></svg>
+                                <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2.5}><path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" /></svg>
                             </button>
                         </div>
 

@@ -102,6 +102,17 @@ const DriverDeliveryView: React.FC = () => {
 
             if (!updateRes.ok) throw new Error("Update failed");
 
+            // Broadcast to Chat
+            try {
+                const id = foundOrder['Order ID'].substring(0,8);
+                const chatMsg = `✅ **[DELIVERED]** កញ្ចប់ #${id} (${foundOrder['Customer Name']}) ដឹកជូនអតិថិជនជោគជ័យ!`;
+                await fetch(`${WEB_APP_URL}/api/chat/send`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ userName: 'System', type: 'text', content: chatMsg, MessageType: 'text', Content: chatMsg })
+                });
+            } catch (e) { console.warn("Chat broadcast failed", e); }
+
             alert("Delivery confirmed for #" + foundOrder['Order ID'].substring(0,8));
             setFoundOrder(null);
             setOrderIdInput('');

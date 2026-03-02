@@ -221,7 +221,7 @@ const FulfillmentCard: React.FC<{
             )}
 
             {/* Checkbox for Bulk Actions (Only visible on relevant tabs) */}
-            {(currentStatus === 'Shipped' || currentStatus === 'Ready to Ship') && (
+            {currentStatus !== 'Pending' && (currentStatus === 'Shipped' || currentStatus === 'Ready to Ship') && (
                 <div className="absolute top-4 left-4 z-10">
                     <input 
                         type="checkbox" 
@@ -233,7 +233,7 @@ const FulfillmentCard: React.FC<{
             )}
 
             {/* Header: Status & ID */}
-            <div className={`p-5 pb-3 border-b border-white/5 flex justify-between items-start bg-white/[0.02] ${(currentStatus === 'Shipped' || currentStatus === 'Ready to Ship') ? 'pl-12' : ''}`}>
+            <div className={`p-5 pb-3 border-b border-white/5 flex justify-between items-start bg-white/[0.02] ${currentStatus !== 'Pending' && (currentStatus === 'Shipped' || currentStatus === 'Ready to Ship') ? 'pl-12' : ''}`}>
                 <div className="flex flex-col">
                     <button 
                         onClick={(e) => {
@@ -371,7 +371,7 @@ const FulfillmentCard: React.FC<{
 };
 
 const FulfillmentDashboard: React.FC<{ orders: ParsedOrder[] }> = ({ orders }) => {
-    const { refreshData, setMobilePageTitle, appData, currentUser } = useContext(AppContext);
+    const { refreshData, setMobilePageTitle, appData, currentUser, previewImage } = useContext(AppContext);
     
     // Store Selection State
     const [selectedStore, setSelectedStore] = useState<string>('');
@@ -1004,7 +1004,7 @@ const FulfillmentDashboard: React.FC<{ orders: ParsedOrder[] }> = ({ orders }) =
                                 </div>
                             </div>
                             <button onClick={() => setViewingOrder(null)} className="w-12 h-12 rounded-2xl bg-gray-800 text-gray-400 hover:text-white flex items-center justify-center transition-all hover:bg-red-600/20 hover:text-red-400 border border-white/5">
-                                <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2.5} d="M6 18L18 6M6 6l12 12" /></svg>
+                                <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2.5}><path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" /></svg>
                             </button>
                         </div>
 

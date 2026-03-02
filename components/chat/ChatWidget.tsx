@@ -361,19 +361,30 @@ const ChatWidget: React.FC<ChatWidgetProps> = ({ isOpen, onClose }) => {
             // Global Notification Trigger
             const isNewOrder = msg.content && msg.content.includes('📢 NEW ORDER:');
             const isSystemAlert = msg.content && msg.content.includes('📢 SYSTEM_ALERT:');
+            const isStatusUpdate = msg.content && (
+                msg.content.includes('[PACKED]') || 
+                msg.content.includes('[DISPATCHED]') || 
+                msg.content.includes('[DELIVERED]') ||
+                msg.content.includes('[BULK DISPATCH]') ||
+                msg.content.includes('[BULK DELIVERED]')
+            );
 
-            if (isNewOrder || isSystemAlert) {
+            if (isNewOrder || isSystemAlert || isStatusUpdate) {
                 let alertMsg = msg.content;
                 if (isNewOrder) alertMsg = msg.content.replace('📢 NEW ORDER:', '').trim();
                 else if (isSystemAlert) alertMsg = msg.content.replace('📢 SYSTEM_ALERT:', '').trim();
+                // For status updates, we keep the content as is but can clean markdown if needed
+                alertMsg = alertMsg.replace(/\*\*/g, ''); 
                 
-                showNotification(alertMsg, 'success');
+                showNotification(alertMsg, isStatusUpdate ? 'info' : 'success');
                 
                 if (!isMutedRef.current && soundNotification.current) {
                     soundNotification.current.currentTime = 0;
                     soundNotification.current.play().catch(e => console.warn("Audio play failed", e));
                 }
-                sendSystemNotification("ការកម្មង់ថ្មី 📦", alertMsg);
+                
+                const title = isStatusUpdate ? "បច្ចុប្បន្នភាពកញ្ចប់ឥវ៉ាន់ 📦" : "ការកម្មង់ថ្មី 📦";
+                sendSystemNotification(title, alertMsg);
             } else {
                 // Standard User Message
                 const senderName = msg.fullName || msg.user;

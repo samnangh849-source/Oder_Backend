@@ -41,9 +41,16 @@ interface SearchableProductDropdownProps {
     selectedProductName: string;
     onSelect: (productName: string, tags?: string) => void;
     showTagEditor?: boolean;
+    allowAddNew?: boolean;
 }
 
-const SearchableProductDropdown: React.FC<SearchableProductDropdownProps> = ({ products, selectedProductName, onSelect, showTagEditor = true }) => {
+const SearchableProductDropdown: React.FC<SearchableProductDropdownProps> = ({ 
+    products, 
+    selectedProductName, 
+    onSelect, 
+    showTagEditor = true,
+    allowAddNew = true
+}) => {
     const [isOpen, setIsOpen] = useState(false);
     const [searchTerm, setSearchTerm] = useState('');
     const [activeIndex, setActiveIndex] = useState(0);
@@ -78,10 +85,11 @@ const SearchableProductDropdown: React.FC<SearchableProductDropdownProps> = ({ p
     }, [products, searchTerm]);
     
     const canAddNewProduct = useMemo(() => {
+        if (!allowAddNew) return false;
         const trimmedSearch = searchTerm.trim();
         if (!trimmedSearch) return false;
         return !products.some(p => p.ProductName.trim().toLowerCase() === trimmedSearch.toLowerCase());
-    }, [searchTerm, products]);
+    }, [searchTerm, products, allowAddNew]);
 
     const itemsForNavigation = useMemo(() => {
         const items = [...filteredProducts];

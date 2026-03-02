@@ -239,6 +239,17 @@ const FastPackModal: React.FC<FastPackModalProps> = ({ order, onClose, onSuccess
             const updateData = await updateRes.json();
             if (updateData.status !== 'success') throw new Error("Order update failed!");
             
+            // Broadcast to Chat
+            try {
+                const id = order!['Order ID'].substring(0,8);
+                const chatMsg = `📦 **[PACKED]** កញ្ចប់ #${id} (${order!['Customer Name']}) វេចខ្ចប់រួចរាល់ដោយ **${currentUser?.FullName || 'Station Packer'}**`;
+                await fetch(`${WEB_APP_URL}/api/chat/send`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ userName: 'System', type: 'text', content: chatMsg, MessageType: 'text', Content: chatMsg })
+                });
+            } catch (e) { console.warn("Chat broadcast failed", e); }
+
             alert(`✅ វេចខ្ចប់ជោគជ័យ និងបានរក្សាទុករូបភាព!`);
             onSuccess();
         } catch (err: any) {
