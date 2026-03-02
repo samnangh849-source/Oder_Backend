@@ -184,7 +184,8 @@ const FulfillmentCard: React.FC<{
     isLoading: boolean;
     isSelected: boolean;
     onSelect: (id: string) => void;
-}> = ({ order, onStatusChange, onConfirmDelivery, isLoading, isSelected, onSelect }) => {
+    onViewDetails: (order: ParsedOrder) => void;
+}> = ({ order, onStatusChange, onConfirmDelivery, isLoading, isSelected, onSelect, onViewDetails }) => {
     const { previewImage, appData } = useContext(AppContext);
     const currentStatus = order.FulfillmentStatus || 'Pending';
     
@@ -247,11 +248,20 @@ const FulfillmentCard: React.FC<{
                     </button>
                     <p className="text-gray-500 text-[10px] mt-1 font-bold italic line-clamp-1">{order.Location}</p>
                 </div>
-                <div className={`px-2 py-1 rounded-full text-[8px] font-black uppercase border ${getStatusColor(currentStatus)}`}>
-                    {currentStatus === 'Pending' ? 'មិនទាន់វេចខ្ចប់' : 
-                     currentStatus === 'Ready to Ship' ? 'វេចខ្ចប់រួច' :
-                     currentStatus === 'Shipped' ? 'កំពុងដឹកជញ្ជូន' :
-                     currentStatus === 'Delivered' ? 'ដឹកជោគជ័យ' : currentStatus}
+                <div className="flex flex-col items-end gap-2">
+                    <div className={`px-2 py-1 rounded-full text-[8px] font-black uppercase border ${getStatusColor(currentStatus)}`}>
+                        {currentStatus === 'Pending' ? 'មិនទាន់វេចខ្ចប់' : 
+                        currentStatus === 'Ready to Ship' ? 'វេចខ្ចប់រួច' :
+                        currentStatus === 'Shipped' ? 'កំពុងដឹកជញ្ជូន' :
+                        currentStatus === 'Delivered' ? 'ដឹកជោគជ័យ' : currentStatus}
+                    </div>
+                    <button 
+                        onClick={() => onViewDetails(order)}
+                        className="p-1.5 bg-white/5 hover:bg-white/10 text-gray-400 hover:text-white rounded-lg transition-all border border-white/5"
+                        title="View Details"
+                    >
+                        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" /><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" /></svg>
+                    </button>
                 </div>
             </div>
 
@@ -269,6 +279,19 @@ const FulfillmentCard: React.FC<{
                             <p className="text-blue-400 font-mono text-[11px] font-bold">{order['Customer Phone']}</p>
                         </div>
                     </div>
+                </div>
+
+                {/* Team, Page, User Badge Section */}
+                <div className="flex flex-wrap gap-2 pt-1">
+                    <span className="px-2 py-0.5 bg-blue-500/10 text-blue-400 text-[8px] font-black uppercase rounded-md border border-blue-500/20 tracking-wider">
+                        Team: {order.Team}
+                    </span>
+                    <span className="px-2 py-0.5 bg-purple-500/10 text-purple-400 text-[8px] font-black uppercase rounded-md border border-purple-500/20 tracking-wider">
+                        Page: {order.Page}
+                    </span>
+                    <span className="px-2 py-0.5 bg-emerald-500/10 text-emerald-400 text-[8px] font-black uppercase rounded-md border border-emerald-500/20 tracking-wider">
+                        User: {order.User}
+                    </span>
                 </div>
 
                 {/* Logistics Details */}
@@ -569,6 +592,15 @@ const FulfillmentDashboard: React.FC<{ orders: ParsedOrder[] }> = ({ orders }) =
                     })
                 });
             }
+
+            // Bulk Broadcast
+            const bulkMsg = `✅ **[BULK DELIVERED]** កញ្ចប់ឥវ៉ាន់ចំនួន **${selectedOrderIds.size}** ត្រូវបានបញ្ជាក់ថាដឹកជោគជ័យដោយ **${currentUser?.FullName}**`;
+            await fetch(`${WEB_APP_URL}/api/chat/send`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ userName: 'System', type: 'text', content: bulkMsg, MessageType: 'text', Content: bulkMsg })
+            });
+
             setSelectedOrderIds(new Set());
             refreshData();
         } catch (error) {
@@ -601,6 +633,15 @@ const FulfillmentDashboard: React.FC<{ orders: ParsedOrder[] }> = ({ orders }) =
                     })
                 });
             }
+
+            // Bulk Broadcast
+            const bulkMsg = `🚚 **[BULK DISPATCH]** កញ្ចប់ឥវ៉ាន់ចំនួន **${selectedOrderIds.size}** ត្រូវបានប្រគល់ឱ្យអ្នកដឹកដោយ **${currentUser?.FullName}**`;
+            await fetch(`${WEB_APP_URL}/api/chat/send`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ userName: 'System', type: 'text', content: bulkMsg, MessageType: 'text', Content: bulkMsg })
+            });
+
             setSelectedOrderIds(new Set());
             refreshData();
         } catch (error) {
@@ -609,6 +650,59 @@ const FulfillmentDashboard: React.FC<{ orders: ParsedOrder[] }> = ({ orders }) =
             setIsUpdatingBulk(false);
         }
     };
+
+    const handleBulkUndo = async () => {
+        if (selectedOrderIds.size === 0) return;
+        
+        let targetStatus: FulfillmentStatus = 'Pending';
+        let extraFields: any = {};
+        
+        if (activeTab === 'Ready to Ship') {
+            targetStatus = 'Pending';
+            extraFields = { 'Packed By': '', 'Packed Time': '', 'Package Photo URL': '' };
+        } else if (activeTab === 'Shipped') {
+            targetStatus = 'Ready to Ship';
+            extraFields = { 'Dispatched Time': '', 'Dispatched By': '' };
+        }
+
+        const confirm = window.confirm(`តើអ្នកពិតជាចង់ UNDO ចំនួន ${selectedOrderIds.size} កញ្ចប់ ត្រឡប់ទៅ '${targetStatus}' វិញមែនទេ?`);
+        if (!confirm) return;
+
+        setIsUpdatingBulk(true);
+        try {
+            for (const id of selectedOrderIds) {
+                await fetch(`${WEB_APP_URL}/api/admin/update-sheet`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        sheetName: 'AllOrders',
+                        primaryKey: { 'Order ID': id },
+                        newData: { 
+                            'Fulfillment Status': targetStatus,
+                            ...extraFields
+                        }
+                    })
+                });
+            }
+
+            // Bulk Broadcast
+            const bulkMsg = `↩️ **[BULK UNDO]** កញ្ចប់ឥវ៉ាន់ចំនួន **${selectedOrderIds.size}** ត្រូវបាន UNDO ត្រឡប់ទៅ **${targetStatus}** វិញដោយ **${currentUser?.FullName}**`;
+            await fetch(`${WEB_APP_URL}/api/chat/send`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ userName: 'System', type: 'text', content: bulkMsg, MessageType: 'text', Content: bulkMsg })
+            });
+
+            setSelectedOrderIds(new Set());
+            refreshData();
+        } catch (error) {
+            alert('មានបញ្ហាក្នុងការ Undo ជាក្រុម។');
+        } finally {
+            setIsUpdatingBulk(false);
+        }
+    };
+
+    const [viewingOrder, setViewingOrder] = useState<ParsedOrder | null>(null);
 
     if (!selectedStore) {
         return (
@@ -814,32 +908,53 @@ const FulfillmentDashboard: React.FC<{ orders: ParsedOrder[] }> = ({ orders }) =
 
             {/* Bulk Actions Bar for 'Ready to Ship' and 'Shipped' tabs */}
             {(activeTab === 'Shipped' || activeTab === 'Ready to Ship') && filteredList.length > 0 && (
-                <div className="flex justify-between items-center bg-[#1e293b]/50 p-3 rounded-2xl border border-white/5 max-w-6xl mx-auto">
+                <div className="flex flex-col sm:flex-row gap-4 justify-between items-center bg-[#1e293b]/50 p-4 rounded-3xl border border-white/5 max-w-6xl mx-auto shadow-2xl">
                     <div className="flex items-center gap-3 pl-2">
                         <input 
                             type="checkbox" 
                             checked={selectedOrderIds.size === filteredList.length && filteredList.length > 0}
                             onChange={handleSelectAll}
-                            className={`w-5 h-5 rounded border-gray-600 focus:ring-opacity-50 bg-black/50 cursor-pointer ${activeTab === 'Ready to Ship' ? 'text-amber-500 focus:ring-amber-500' : 'text-emerald-500 focus:ring-emerald-500'}`}
+                            className={`w-6 h-6 rounded border-gray-600 focus:ring-opacity-50 bg-black/50 cursor-pointer ${activeTab === 'Ready to Ship' ? 'text-amber-500 focus:ring-amber-500' : 'text-emerald-500 focus:ring-emerald-500'}`}
                         />
-                        <span className="text-[11px] font-black text-white tracking-widest uppercase">
-                            បានជ្រើសរើស: <span className={activeTab === 'Ready to Ship' ? 'text-amber-500' : 'text-emerald-500'}>{selectedOrderIds.size}</span>
-                        </span>
+                        <div className="flex flex-col">
+                            <span className="text-[13px] font-black text-white uppercase tracking-wider">
+                                បានជ្រើសរើស: <span className={activeTab === 'Ready to Ship' ? 'text-amber-500' : 'text-emerald-500'}>{selectedOrderIds.size}</span>
+                            </span>
+                            <span className="text-[9px] text-gray-500 font-bold uppercase">ប្តូរស្ថានភាពជាក្រុម</span>
+                        </div>
                     </div>
-                    {selectedOrderIds.size > 0 && (
+                    <div className="flex flex-wrap justify-center gap-3">
+                        {selectedOrderIds.size > 0 && (
+                            <>
+                                <button 
+                                    onClick={handleBulkUndo}
+                                    disabled={isUpdatingBulk}
+                                    className="px-6 py-3 rounded-2xl bg-gray-800 text-red-400 font-black uppercase text-[11px] tracking-widest border border-red-500/20 hover:bg-red-500/10 transition-all active:scale-95 flex items-center gap-2"
+                                >
+                                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M3 10h10a8 8 0 018 8v2M3 10l6 6m-6-6l6-6" /></svg>
+                                    UNDO ទាំងអស់
+                                </button>
+                                <button 
+                                    onClick={activeTab === 'Ready to Ship' ? handleBulkDispatchToDriver : handleBulkConfirmDelivery}
+                                    disabled={isUpdatingBulk}
+                                    className={`px-8 py-3 rounded-2xl text-[11px] font-black uppercase tracking-widest transition-all shadow-xl flex items-center gap-2 text-white ${activeTab === 'Ready to Ship' ? 'bg-amber-600 hover:bg-amber-700 shadow-amber-900/30' : 'bg-emerald-600 hover:bg-emerald-700 shadow-emerald-900/30'}`}
+                                >
+                                    {isUpdatingBulk ? <Spinner size="sm" /> : (
+                                        <>
+                                            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 13l4 4L19 7" /></svg>
+                                            {activeTab === 'Ready to Ship' ? 'បញ្ជាក់ការបញ្ចេញ' : 'បញ្ជាក់ជោគជ័យ'}
+                                        </>
+                                    )}
+                                </button>
+                            </>
+                        )}
                         <button 
-                            onClick={activeTab === 'Ready to Ship' ? handleBulkDispatchToDriver : handleBulkConfirmDelivery}
-                            disabled={isUpdatingBulk}
-                            className={`px-4 py-2 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all shadow-xl flex items-center gap-2 text-white ${activeTab === 'Ready to Ship' ? 'bg-amber-600 hover:bg-amber-700 shadow-amber-900/30' : 'bg-emerald-600 hover:bg-emerald-700 shadow-emerald-900/30'}`}
+                            onClick={() => setSelectedOrderIds(new Set())}
+                            className="px-4 py-3 rounded-2xl bg-gray-900 text-gray-500 font-black uppercase text-[10px] tracking-widest border border-white/5 active:scale-95 transition-all"
                         >
-                            {isUpdatingBulk ? <Spinner size="sm" /> : (
-                                <>
-                                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" /></svg>
-                                    {activeTab === 'Ready to Ship' ? 'បញ្ជាក់ការបញ្ចេញឥវ៉ាន់' : 'បញ្ជាក់ជោគជ័យ'}
-                                </>
-                            )}
+                            បោះបង់
                         </button>
-                    )}
+                    </div>
                 </div>
             )}
 
@@ -860,6 +975,7 @@ const FulfillmentDashboard: React.FC<{ orders: ParsedOrder[] }> = ({ orders }) =
                             isLoading={loadingId === order['Order ID'] || isUpdatingBulk}
                             isSelected={selectedOrderIds.has(order['Order ID'])}
                             onSelect={handleSelectOrder}
+                            onViewDetails={(o) => setViewingOrder(o)}
                         />
                     ))}
                 </div>
@@ -872,6 +988,94 @@ const FulfillmentDashboard: React.FC<{ orders: ParsedOrder[] }> = ({ orders }) =
                 onConfirm={handleConfirmDeliverySubmit}
                 isLoading={loadingId === confirmModalOrder?.['Order ID']}
             />
+
+            {/* Detailed View Modal */}
+            {viewingOrder && (
+                <Modal isOpen={true} onClose={() => setViewingOrder(null)} maxWidth="max-w-3xl">
+                    <div className="p-6 sm:p-10 bg-[#0f172a] rounded-[2.5rem] border border-white/10 shadow-3xl overflow-hidden flex flex-col max-h-[90vh]">
+                        <div className="flex justify-between items-start mb-8 border-b border-white/5 pb-6">
+                            <div className="flex items-center gap-4">
+                                <div className="w-14 h-14 bg-blue-600/20 rounded-2xl flex items-center justify-center border border-blue-500/30 text-blue-400">
+                                    <svg className="w-8 h-8" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" /></svg>
+                                </div>
+                                <div>
+                                    <h3 className="text-2xl font-black text-white uppercase tracking-tighter italic">ព័ត៌មានលម្អិតនៃកញ្ចប់</h3>
+                                    <p className="text-blue-400 font-mono text-sm font-bold mt-1">ID: #{viewingOrder['Order ID']}</p>
+                                </div>
+                            </div>
+                            <button onClick={() => setViewingOrder(null)} className="w-12 h-12 rounded-2xl bg-gray-800 text-gray-400 hover:text-white flex items-center justify-center transition-all hover:bg-red-600/20 hover:text-red-400 border border-white/5">
+                                <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2.5} d="M6 18L18 6M6 6l12 12" /></svg>
+                            </button>
+                        </div>
+
+                        <div className="flex-grow overflow-y-auto custom-scrollbar pr-2 space-y-8">
+                            {/* Summary Grid */}
+                            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                                <div className="space-y-4">
+                                    <div className="bg-black/20 p-5 rounded-3xl border border-white/5">
+                                        <p className="text-[10px] font-black text-gray-500 uppercase tracking-widest mb-3">ព័ត៌មានអតិថិជន</p>
+                                        <div className="space-y-2">
+                                            <p className="text-white font-black text-lg">{viewingOrder['Customer Name']}</p>
+                                            <p className="text-blue-400 font-mono font-bold text-base">{viewingOrder['Customer Phone']}</p>
+                                            <p className="text-gray-400 text-sm leading-relaxed mt-2">{viewingOrder.Location} - {viewingOrder['Address Details']}</p>
+                                        </div>
+                                    </div>
+                                    <div className="bg-blue-600/5 p-5 rounded-3xl border border-blue-500/10">
+                                        <p className="text-[10px] font-black text-blue-400 uppercase tracking-widest mb-3">System Context</p>
+                                        <div className="grid grid-cols-2 gap-4">
+                                            <div><span className="text-[9px] text-gray-500 font-bold uppercase block">Team</span><span className="text-white font-black text-xs">{viewingOrder.Team}</span></div>
+                                            <div><span className="text-[9px] text-gray-500 font-bold uppercase block">Page</span><span className="text-white font-black text-xs">{viewingOrder.Page}</span></div>
+                                            <div><span className="text-[9px] text-gray-500 font-bold uppercase block">Creator</span><span className="text-white font-black text-xs">{viewingOrder.User}</span></div>
+                                            <div><span className="text-[9px] text-gray-500 font-bold uppercase block">Store</span><span className="text-orange-400 font-black text-xs">{viewingOrder['Fulfillment Store']}</span></div>
+                                        </div>
+                                    </div>
+                                </div>
+
+                                <div className="space-y-4">
+                                    <div className="bg-black/20 p-5 rounded-3xl border border-white/5">
+                                        <p className="text-[10px] font-black text-gray-500 uppercase tracking-widest mb-3">Logistics Status</p>
+                                        <div className="space-y-3">
+                                            <div className="flex justify-between items-center"><span className="text-[10px] text-gray-500 font-bold uppercase">Shipping</span><span className="text-indigo-400 font-black text-xs">{viewingOrder['Internal Shipping Method']}</span></div>
+                                            <div className="flex justify-between items-center"><span className="text-[10px] text-gray-500 font-bold uppercase">Payment Info</span><span className="text-amber-400 font-black text-xs">{viewingOrder['Payment Info'] || viewingOrder['Payment Status']}</span></div>
+                                            <div className="flex justify-between items-center"><span className="text-[10px] text-gray-500 font-bold uppercase">Packed By</span><span className="text-indigo-400 font-black text-xs">{viewingOrder['Packed By'] || 'N/A'}</span></div>
+                                            <div className="flex justify-between items-center"><span className="text-[10px] text-gray-500 font-bold uppercase">Dispatched By</span><span className="text-orange-400 font-black text-xs">{viewingOrder['Dispatched By'] || 'N/A'}</span></div>
+                                        </div>
+                                    </div>
+                                    {viewingOrder['Package Photo URL'] && (
+                                        <div className="bg-black/40 p-2 rounded-3xl border border-white/5 overflow-hidden group/img cursor-pointer" onClick={() => previewImage(convertGoogleDriveUrl(viewingOrder['Package Photo URL']!))}>
+                                            <img src={convertGoogleDriveUrl(viewingOrder['Package Photo URL']!)} className="w-full h-40 object-cover rounded-2xl group-hover/img:scale-105 transition-transform duration-500" alt="Package" />
+                                        </div>
+                                    )}
+                                </div>
+                            </div>
+
+                            {/* Products Table */}
+                            <div className="space-y-4">
+                                <div className="flex items-center gap-3"><div className="h-px flex-grow bg-gray-800"></div><span className="text-[10px] font-black text-gray-500 uppercase tracking-widest">បញ្ជីផលិតផល (Products)</span><div className="h-px flex-grow bg-gray-800"></div></div>
+                                <div className="space-y-3">
+                                    {viewingOrder.Products.map((p, i) => (
+                                        <div key={i} className="flex items-center gap-4 bg-white/[0.02] p-3 rounded-2xl border border-white/5">
+                                            <img src={convertGoogleDriveUrl(p.image)} className="w-14 h-14 rounded-xl object-cover border border-white/10" alt="" />
+                                            <div className="flex-grow min-w-0">
+                                                <p className="text-white font-black text-sm truncate">{p.name}</p>
+                                                <p className="text-[10px] text-purple-400 font-bold">{p.colorInfo}</p>
+                                            </div>
+                                            <div className="text-right">
+                                                <p className="text-blue-400 font-black text-sm">x{p.quantity}</p>
+                                                <p className="text-gray-500 font-bold text-[10px]">${(p.finalPrice || 0).toFixed(2)}</p>
+                                            </div>
+                                        </div>
+                                    ))}
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <div className="mt-8 pt-6 border-t border-white/5 flex justify-end">
+                            <button onClick={() => setViewingOrder(null)} className="px-10 py-4 bg-gray-800 text-white rounded-2xl font-black uppercase text-xs tracking-widest hover:bg-gray-700 active:scale-95 transition-all">បិទ</button>
+                        </div>
+                    </div>
+                </Modal>
+            )}
         </div>
     );
 };

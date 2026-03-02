@@ -137,6 +137,18 @@ const PackagingView: React.FC<{ orders?: ParsedOrder[] }> = ({ orders: propOrder
                     })
                 });
             }
+
+            // Bulk Broadcast
+            const bulkMsg = targetStatus === 'Shipped' 
+                ? `🚚 **[BULK DISPATCH]** កញ្ចប់ឥវ៉ាន់ចំនួន **${selectedOrderIds.size}** ត្រូវបានប្រគល់ឱ្យអ្នកដឹកដោយ **${currentUser?.FullName}**`
+                : `📦 **[BULK STATUS]** កញ្ចប់ឥវ៉ាន់ចំនួន **${selectedOrderIds.size}** ត្រូវបានប្តូរស្ថានភាពទៅជា **${targetStatus}** ដោយ **${currentUser?.FullName}**`;
+            
+            await fetch(`${WEB_APP_URL}/api/chat/send`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ userName: 'System', type: 'text', content: bulkMsg, MessageType: 'text', Content: bulkMsg })
+            });
+
             setSelectedOrderIds(new Set());
             refreshData();
         } catch (error) {
@@ -280,6 +292,20 @@ const PackagingView: React.FC<{ orders?: ParsedOrder[] }> = ({ orders: propOrder
             const result = await updateRes.json();
             if (!updateRes.ok || result.status !== 'success') throw new Error(result.message || "Status update failed");
             
+            // Broadcast to Chat
+            let chatMsg = '';
+            const id = order['Order ID'].substring(0,8);
+            if (newStatus === 'Shipped') chatMsg = `🚚 **[DISPATCHED]** កញ្ចប់ #${id} (${order['Customer Name']}) ប្រគល់ឱ្យអ្នកដឹករួចរាល់ដោយ **${currentUser?.FullName}**`;
+            else if (newStatus === 'Ready to Ship') chatMsg = `📦 **[PACKED]** កញ្ចប់ #${id} (${order['Customer Name']}) វេចខ្ចប់រួចរាល់ដោយ **${currentUser?.FullName}**`;
+            
+            if (chatMsg) {
+                await fetch(`${WEB_APP_URL}/api/chat/send`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ userName: 'System', type: 'text', content: chatMsg, MessageType: 'text', Content: chatMsg })
+                });
+            }
+
             // Auto switch tab
             if (newStatus === 'Shipped' && activeTab === 'Ready to Ship') setActiveTab('Shipped');
             else if (newStatus === 'Ready to Ship' && activeTab === 'Pending') setActiveTab('Ready to Ship');
@@ -302,6 +328,8 @@ const PackagingView: React.FC<{ orders?: ParsedOrder[] }> = ({ orders: propOrder
             handleAction(order, targetStatus, extra);
         }
     };
+
+    const [viewingOrder, setViewingOrder] = useState<ParsedOrder | null>(null);
 
     const renderOrderCard = (order: ParsedOrder) => {
         const shippingMethod = appData.shippingMethods?.find(m => m.MethodName === order['Internal Shipping Method']);
@@ -353,17 +381,31 @@ const PackagingView: React.FC<{ orders?: ParsedOrder[] }> = ({ orders: propOrder
                             <svg className="w-3 h-3 opacity-0 group-hover/id:opacity-100 transition-opacity" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 5H6a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2v-1M8 5a2 2 0 002 2h2a2 2 0 002-2M8 5a2 2 0 012-2h2a2 2 0 012 2" /></svg>
                         </button>
                     </div>
-                    <div className="flex flex-col items-end gap-1 flex-shrink-0">
+                    <div className="flex flex-col items-end gap-2 flex-shrink-0">
                         <span className="bg-white/5 px-2 py-1 rounded-lg text-[9px] font-black uppercase text-gray-400 border border-white/10">
                             {order.Products.length} Items
                         </span>
-                        <div className="flex items-center gap-1.5 mt-1">
-                            {shippingMethod && (
-                                <img src={convertGoogleDriveUrl(shippingMethod.LogosURL)} className="w-4 h-4 object-contain opacity-70" alt="" />
-                            )}
-                            <span className="text-[10px] text-gray-500 font-bold">{order['Internal Shipping Method']}</span>
-                        </div>
+                        <button 
+                            onClick={() => setViewingOrder(order)}
+                            className="p-1.5 bg-white/5 hover:bg-white/10 text-gray-400 hover:text-white rounded-lg transition-all border border-white/5"
+                            title="View Details"
+                        >
+                            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" /><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" /></svg>
+                        </button>
                     </div>
+                </div>
+
+                {/* Team, Page, User Badge Section */}
+                <div className="flex flex-wrap gap-2">
+                    <span className="px-2 py-0.5 bg-blue-500/10 text-blue-400 text-[8px] font-black uppercase rounded-md border border-blue-500/20">
+                        T: {order.Team}
+                    </span>
+                    <span className="px-2 py-0.5 bg-purple-500/10 text-purple-400 text-[8px] font-black uppercase rounded-md border border-purple-500/20">
+                        P: {order.Page}
+                    </span>
+                    <span className="px-2 py-0.5 bg-emerald-500/10 text-emerald-400 text-[8px] font-black uppercase rounded-md border border-emerald-500/20">
+                        U: {order.User}
+                    </span>
                 </div>
 
                 <div className="bg-black/20 rounded-xl p-3 border border-white/5 space-y-2 shadow-inner">
@@ -504,7 +546,7 @@ const PackagingView: React.FC<{ orders?: ParsedOrder[] }> = ({ orders: propOrder
                     />
                 </div>
                 
-                <div className="flex-grow min-w-0 grid grid-cols-1 md:grid-cols-4 gap-4 items-center">
+                <div className="flex-grow min-w-0 grid grid-cols-1 md:grid-cols-5 gap-4 items-center">
                     <div className="min-w-0">
                         <h3 className="text-white font-black text-sm truncate">{order['Customer Name']}</h3>
                         <button 
@@ -518,9 +560,16 @@ const PackagingView: React.FC<{ orders?: ParsedOrder[] }> = ({ orders: propOrder
                         </button>
                     </div>
 
-                    <div className="hidden md:block text-center">
+                    <div className="hidden md:block text-center space-y-1">
                         <p className="text-gray-400 text-xs font-bold">{order['Customer Phone']}</p>
-                        <p className="text-gray-500 text-[9px] uppercase tracking-widest">{order.Page}</p>
+                        <div className="flex justify-center gap-1">
+                            <span className="px-1.5 py-0.5 bg-blue-500/10 text-blue-400 text-[7px] font-black uppercase rounded border border-blue-500/20">{order.Team}</span>
+                            <span className="px-1.5 py-0.5 bg-purple-500/10 text-purple-400 text-[7px] font-black uppercase rounded border border-purple-500/20">{order.Page}</span>
+                        </div>
+                    </div>
+
+                    <div className="hidden md:block text-center">
+                        <span className="text-gray-500 text-[9px] uppercase font-bold">User: {order.User}</span>
                     </div>
 
                     <div className="flex flex-col items-center justify-center gap-1">
@@ -533,7 +582,15 @@ const PackagingView: React.FC<{ orders?: ParsedOrder[] }> = ({ orders: propOrder
                         {order['Dispatched By'] && <span className="text-[8px] text-orange-400 font-bold uppercase truncate max-w-[80px]">🚚 {order['Dispatched By']}</span>}
                     </div>
 
-                    <div className="flex justify-end gap-2">
+                    <div className="flex justify-end items-center gap-3">
+                        <button 
+                            onClick={() => setViewingOrder(order)}
+                            className="p-2 bg-white/5 hover:bg-white/10 text-gray-400 hover:text-white rounded-lg transition-all border border-white/5"
+                            title="View Details"
+                        >
+                            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" /><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" /></svg>
+                        </button>
+                        
                         {activeTab === 'Pending' && (
                             <button onClick={() => setPackingOrder(order)} className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg text-[10px] font-black uppercase transition-all">ខ្ចប់ឥវ៉ាន់</button>
                         )}
@@ -547,11 +604,6 @@ const PackagingView: React.FC<{ orders?: ParsedOrder[] }> = ({ orders: propOrder
                         )}
                         {activeTab === 'Shipped' && (
                             <button onClick={() => handleUndo(order, 'Ready to Ship', { 'Dispatched Time': '', 'Dispatched By': '' })} className="bg-red-600/20 text-red-400 px-4 py-2 rounded-lg border border-red-500/20 hover:bg-red-600 hover:text-white transition-all text-[10px] font-black uppercase">UNDO</button>
-                        )}
-                        {(activeTab === 'Ready to Ship' || activeTab === 'Shipped') && order['Package Photo URL'] && (
-                            <button onClick={() => showFullImage(convertGoogleDriveUrl(order['Package Photo URL'] as string))} className="bg-gray-800 text-gray-300 p-2 rounded-lg border border-white/10 hover:bg-gray-700">
-                                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" /></svg>
-                            </button>
                         )}
                     </div>
                 </div>
@@ -738,22 +790,42 @@ const PackagingView: React.FC<{ orders?: ParsedOrder[] }> = ({ orders: propOrder
                     </div>
                     <div className="flex gap-3">
                         {activeTab === 'Ready to Ship' && (
+                            <>
+                                <button 
+                                    onClick={() => handleBulkAction('Pending', { 'Packed By': '', 'Packed Time': '', 'Package Photo URL': '' })}
+                                    disabled={isUpdatingBulk}
+                                    className="px-6 py-3 rounded-2xl bg-gray-800 text-red-400 font-black uppercase text-[11px] tracking-widest border border-red-500/20 hover:bg-red-500/10 transition-all active:scale-95 flex items-center gap-2"
+                                >
+                                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M3 10h10a8 8 0 018 8v2M3 10l6 6m-6-6l6-6" /></svg>
+                                    UNDO ទាំងអស់
+                                </button>
+                                <button 
+                                    onClick={() => handleBulkAction('Shipped', { 'Dispatched Time': new Date().toLocaleString('km-KH'), 'Dispatched By': currentUser?.FullName || 'Station Packer' })}
+                                    disabled={isUpdatingBulk}
+                                    className="bg-amber-600 hover:bg-amber-700 text-white px-6 py-3 rounded-2xl text-[11px] font-black uppercase tracking-widest transition-all shadow-xl shadow-amber-900/30 flex items-center gap-2 active:scale-95"
+                                >
+                                    {isUpdatingBulk ? <Spinner size="sm" /> : (
+                                        <>
+                                            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M13 10V3L4 14h7v7l9-11h-7z" /></svg>
+                                            បញ្ជាក់ការបញ្ចេញ
+                                        </>
+                                    )}
+                                </button>
+                            </>
+                        )}
+                        {activeTab === 'Shipped' && (
                             <button 
-                                onClick={() => handleBulkAction('Shipped', { 'Dispatched Time': new Date().toLocaleString('km-KH'), 'Dispatched By': currentUser?.FullName || 'Station Packer' })}
+                                onClick={() => handleBulkAction('Ready to Ship', { 'Dispatched Time': '', 'Dispatched By': '' })}
                                 disabled={isUpdatingBulk}
-                                className="bg-amber-600 hover:bg-amber-700 text-white px-6 py-3 rounded-2xl text-[11px] font-black uppercase tracking-widest transition-all shadow-xl shadow-amber-900/30 flex items-center gap-2 active:scale-95"
+                                className="px-6 py-3 rounded-2xl bg-gray-800 text-red-400 font-black uppercase text-[11px] tracking-widest border border-red-500/20 hover:bg-red-500/10 transition-all active:scale-95 flex items-center gap-2"
                             >
-                                {isUpdatingBulk ? <Spinner size="sm" /> : (
-                                    <>
-                                        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M13 10V3L4 14h7v7l9-11h-7z" /></svg>
-                                        បញ្ជាក់ការបញ្ចេញ
-                                    </>
-                                )}
+                                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M3 10h10a8 8 0 018 8v2M3 10l6 6m-6-6l6-6" /></svg>
+                                UNDO ការបញ្ចេញ
                             </button>
                         )}
                         <button 
                             onClick={() => setSelectedOrderIds(new Set())}
-                            className="px-4 py-3 rounded-2xl bg-gray-800 text-gray-400 font-black uppercase text-[10px] tracking-widest border border-white/5 active:scale-95 transition-all"
+                            className="px-4 py-3 rounded-2xl bg-gray-900 text-gray-500 font-black uppercase text-[10px] tracking-widest border border-white/5 active:scale-95 transition-all"
                         >
                             បោះបង់
                         </button>
@@ -799,6 +871,94 @@ const PackagingView: React.FC<{ orders?: ParsedOrder[] }> = ({ orders: propOrder
                         refreshData(); 
                     }} 
                 />
+            )}
+
+            {/* Detailed View Modal */}
+            {viewingOrder && (
+                <Modal isOpen={true} onClose={() => setViewingOrder(null)} maxWidth="max-w-3xl">
+                    <div className="p-6 sm:p-10 bg-[#0f172a] rounded-[2.5rem] border border-white/10 shadow-3xl overflow-hidden flex flex-col max-h-[90vh]">
+                        <div className="flex justify-between items-start mb-8 border-b border-white/5 pb-6">
+                            <div className="flex items-center gap-4">
+                                <div className="w-14 h-14 bg-blue-600/20 rounded-2xl flex items-center justify-center border border-blue-500/30 text-blue-400">
+                                    <svg className="w-8 h-8" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" /></svg>
+                                </div>
+                                <div>
+                                    <h3 className="text-2xl font-black text-white uppercase tracking-tighter italic">ព័ត៌មានលម្អិតនៃកញ្ចប់</h3>
+                                    <p className="text-blue-400 font-mono text-sm font-bold mt-1">ID: #{viewingOrder['Order ID']}</p>
+                                </div>
+                            </div>
+                            <button onClick={() => setViewingOrder(null)} className="w-12 h-12 rounded-2xl bg-gray-800 text-gray-400 hover:text-white flex items-center justify-center transition-all hover:bg-red-600/20 hover:text-red-400 border border-white/5">
+                                <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2.5} d="M6 18L18 6M6 6l12 12" /></svg>
+                            </button>
+                        </div>
+
+                        <div className="flex-grow overflow-y-auto custom-scrollbar pr-2 space-y-8">
+                            {/* Summary Grid */}
+                            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                                <div className="space-y-4">
+                                    <div className="bg-black/20 p-5 rounded-3xl border border-white/5">
+                                        <p className="text-[10px] font-black text-gray-500 uppercase tracking-widest mb-3">ព័ត៌មានអតិថិជន</p>
+                                        <div className="space-y-2">
+                                            <p className="text-white font-black text-lg">{viewingOrder['Customer Name']}</p>
+                                            <p className="text-blue-400 font-mono font-bold text-base">{viewingOrder['Customer Phone']}</p>
+                                            <p className="text-gray-400 text-sm leading-relaxed mt-2">{viewingOrder.Location} - {viewingOrder['Address Details']}</p>
+                                        </div>
+                                    </div>
+                                    <div className="bg-blue-600/5 p-5 rounded-3xl border border-blue-500/10">
+                                        <p className="text-[10px] font-black text-blue-400 uppercase tracking-widest mb-3">System Context</p>
+                                        <div className="grid grid-cols-2 gap-4">
+                                            <div><span className="text-[9px] text-gray-500 font-bold uppercase block">Team</span><span className="text-white font-black text-xs">{viewingOrder.Team}</span></div>
+                                            <div><span className="text-[9px] text-gray-500 font-bold uppercase block">Page</span><span className="text-white font-black text-xs">{viewingOrder.Page}</span></div>
+                                            <div><span className="text-[9px] text-gray-500 font-bold uppercase block">Creator</span><span className="text-white font-black text-xs">{viewingOrder.User}</span></div>
+                                            <div><span className="text-[9px] text-gray-500 font-bold uppercase block">Store</span><span className="text-orange-400 font-black text-xs">{viewingOrder['Fulfillment Store']}</span></div>
+                                        </div>
+                                    </div>
+                                </div>
+
+                                <div className="space-y-4">
+                                    <div className="bg-black/20 p-5 rounded-3xl border border-white/5">
+                                        <p className="text-[10px] font-black text-gray-500 uppercase tracking-widest mb-3">Logistics Status</p>
+                                        <div className="space-y-3">
+                                            <div className="flex justify-between items-center"><span className="text-[10px] text-gray-500 font-bold uppercase">Shipping</span><span className="text-indigo-400 font-black text-xs">{viewingOrder['Internal Shipping Method']}</span></div>
+                                            <div className="flex justify-between items-center"><span className="text-[10px] text-gray-500 font-bold uppercase">Payment Info</span><span className="text-amber-400 font-black text-xs">{viewingOrder['Payment Info'] || viewingOrder['Payment Status']}</span></div>
+                                            <div className="flex justify-between items-center"><span className="text-[10px] text-gray-500 font-bold uppercase">Packed By</span><span className="text-indigo-400 font-black text-xs">{viewingOrder['Packed By'] || 'N/A'}</span></div>
+                                            <div className="flex justify-between items-center"><span className="text-[10px] text-gray-500 font-bold uppercase">Dispatched By</span><span className="text-orange-400 font-black text-xs">{viewingOrder['Dispatched By'] || 'N/A'}</span></div>
+                                        </div>
+                                    </div>
+                                    {viewingOrder['Package Photo URL'] && (
+                                        <div className="bg-black/40 p-2 rounded-3xl border border-white/5 overflow-hidden group/img cursor-pointer" onClick={() => showFullImage(convertGoogleDriveUrl(viewingOrder['Package Photo URL']!))}>
+                                            <img src={convertGoogleDriveUrl(viewingOrder['Package Photo URL']!)} className="w-full h-40 object-cover rounded-2xl group-hover/img:scale-105 transition-transform duration-500" alt="Package" />
+                                        </div>
+                                    )}
+                                </div>
+                            </div>
+
+                            {/* Products Table */}
+                            <div className="space-y-4">
+                                <div className="flex items-center gap-3"><div className="h-px flex-grow bg-gray-800"></div><span className="text-[10px] font-black text-gray-500 uppercase tracking-widest">បញ្ជីផលិតផល (Products)</span><div className="h-px flex-grow bg-gray-800"></div></div>
+                                <div className="space-y-3">
+                                    {viewingOrder.Products.map((p, i) => (
+                                        <div key={i} className="flex items-center gap-4 bg-white/[0.02] p-3 rounded-2xl border border-white/5">
+                                            <img src={convertGoogleDriveUrl(p.image)} className="w-14 h-14 rounded-xl object-cover border border-white/10" alt="" />
+                                            <div className="flex-grow min-w-0">
+                                                <p className="text-white font-black text-sm truncate">{p.name}</p>
+                                                <p className="text-[10px] text-purple-400 font-bold">{p.colorInfo}</p>
+                                            </div>
+                                            <div className="text-right">
+                                                <p className="text-blue-400 font-black text-sm">x{p.quantity}</p>
+                                                <p className="text-gray-500 font-bold text-[10px]">${(p.finalPrice || 0).toFixed(2)}</p>
+                                            </div>
+                                        </div>
+                                    ))}
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <div className="mt-8 pt-6 border-t border-white/5 flex justify-end">
+                            <button onClick={() => setViewingOrder(null)} className="px-10 py-4 bg-gray-800 text-white rounded-2xl font-black uppercase text-xs tracking-widest hover:bg-gray-700 active:scale-95 transition-all">បិទ</button>
+                        </div>
+                    </div>
+                </Modal>
             )}
         </div>
     );

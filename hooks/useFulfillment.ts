@@ -1,12 +1,15 @@
 
-import { useState, useCallback, useMemo } from 'react';
+import { useState, useCallback, useMemo, useContext } from 'react';
 import { ParsedOrder, FulfillmentStatus } from '../types';
 import { WEB_APP_URL } from '../constants';
+import { AppContext } from '../context/AppContext';
 
 export const useFulfillment = (allOrders: ParsedOrder[], onUpdate?: () => void) => {
+    const { currentUser } = useContext(AppContext);
     const [loadingId, setLoadingId] = useState<string | null>(null);
 
     const ordersByStatus = useMemo(() => {
+        // ... (existing logic)
         const groups = {
             Pending: [] as ParsedOrder[],
             Processing: [] as ParsedOrder[],
@@ -45,6 +48,28 @@ export const useFulfillment = (allOrders: ParsedOrder[], onUpdate?: () => void) 
             });
 
             if (!response.ok) throw new Error("Failed to update status");
+
+            // Broadcast to Chat
+            try {
+                const order = allOrders.find(o => o['Order ID'] === orderId);
+                if (order) {
+                    const id = orderId.substring(0,8);
+                    let chatMsg = '';
+                    if (newStatus === 'Ready to Ship') chatMsg = `📦 **[PACKED]** កញ្ចប់ #${id} (${order['Customer Name']}) វេចខ្ចប់រួចរាល់ដោយ **${currentUser?.FullName || 'System'}**`;
+                    else if (newStatus === 'Shipped') chatMsg = `🚚 **[DISPATCHED]** កញ្ចប់ #${id} (${order['Customer Name']}) ប្រគល់ឱ្យអ្នកដឹករួចរាល់ដោយ **${currentUser?.FullName || 'System'}**`;
+                    else if (newStatus === 'Delivered') chatMsg = `✅ **[DELIVERED]** កញ្ចប់ #${id} (${order['Customer Name']}) ដឹកជញ្ជូនជោគជ័យ!`;
+                    else if (newStatus === 'Pending') chatMsg = `↩️ **[UNDO]** កញ្ចប់ #${id} ត្រូវបានត្រឡប់ទៅសភាពដើមវិញដោយ **${currentUser?.FullName || 'System'}**`;
+
+                    if (chatMsg) {
+                        await fetch(`${WEB_APP_URL}/api/chat/send`, {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify({ userName: 'System', type: 'text', content: chatMsg, MessageType: 'text', Content: chatMsg })
+                        });
+                    }
+                }
+            } catch (e) { console.warn("Chat broadcast failed", e); }
+
             if (onUpdate) onUpdate();
         } catch (error) {
             console.error("Fulfillment update error:", error);
@@ -52,7 +77,7 @@ export const useFulfillment = (allOrders: ParsedOrder[], onUpdate?: () => void) 
         } finally {
             setLoadingId(null);
         }
-    }, [onUpdate]);
+    }, [onUpdate, allOrders, currentUser]);
 
     return {
         ordersByStatus,
