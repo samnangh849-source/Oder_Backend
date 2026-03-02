@@ -654,7 +654,7 @@ const PackagingView: React.FC<{ orders?: ParsedOrder[] }> = ({ orders: propOrder
                                         <div className="h-px flex-grow bg-gradient-to-l from-transparent to-white/10"></div>
                                     </div>
                                 )}
-                                <div className={viewMode === 'card' ? "grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4 gap-4" : "flex flex-col gap-2"}>
+                                <div className={viewMode === 'card' ? "grid grid-cols-1 md:grid-cols-2 min-[1280px]:grid-cols-3 min-[1440px]:grid-cols-4 min-[1600px]:grid-cols-4 min-[1920px]:grid-cols-5 gap-4 min-[1366px]:gap-5 min-[1600px]:gap-6" : "flex flex-col gap-2 min-[1366px]:gap-3"}>
                                     {orders.map(order => viewMode === 'card' ? renderOrderCard(order) : renderOrderListRow(order))}
                                 </div>
                             </div>

@@ -743,7 +743,7 @@ const FulfillmentDashboard: React.FC<{ orders: ParsedOrder[] }> = ({ orders }) =
                     <p className="text-[10px] text-gray-500 font-bold uppercase tracking-[0.2em]">មិនមានទិន្នន័យទេ</p>
                 </div>
             ) : (
-                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
+                <div className="grid grid-cols-1 md:grid-cols-2 min-[1280px]:grid-cols-3 min-[1440px]:grid-cols-4 min-[1600px]:grid-cols-4 min-[1920px]:grid-cols-5 gap-4 min-[1366px]:gap-5 min-[1600px]:gap-6">
                     {filteredList.map(order => (
                         <FulfillmentCard 
                             key={order['Order ID']} 

@@ -1,4 +1,4 @@
-import React, { useState, useContext, useRef, useEffect } from 'react';
+import React, { useState, useContext, useRef, useEffect, useMemo } from 'react';
 import { AppContext } from '@/context/AppContext';
 import { WEB_APP_URL } from '@/constants';
 import Spinner from '@/components/common/Spinner';
@@ -145,7 +145,7 @@ const DriverDeliveryView: React.FC = () => {
     }
 
     return (
-        <div className="max-w-md mx-auto p-4 space-y-6 pb-24 animate-fade-in">
+        <div className="w-full max-w-md md:max-w-xl min-[1280px]:max-w-2xl min-[1440px]:max-w-3xl min-[1600px]:max-w-4xl min-[1920px]:max-w-5xl mx-auto p-4 space-y-6 pb-24 animate-fade-in">
             {/* Header / Change Store */}
             <div className="flex justify-between items-center bg-[#0f172a]/60 backdrop-blur-md border border-white/5 rounded-[2rem] p-4 sm:p-6 mb-6 shadow-xl">
                 <div>
