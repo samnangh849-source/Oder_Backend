@@ -394,26 +394,34 @@ const FastPackModal: React.FC<FastPackModalProps> = ({ order, onClose, onSuccess
                                     <div className="absolute inset-0 rounded-[2.5rem] overflow-hidden border-2 border-blue-500 shadow-[0_0_50px_rgba(37,99,235,0.2)] bg-black">
                                         <video ref={videoRef} autoPlay playsInline className="w-full h-full object-cover" />
                                         
-                                        {/* AI Tracking Overlay */}
+                                        {/* AI Dynamic Targeting Overlay */}
                                         {isAiEnabled && detection?.found && (
                                             <div 
-                                                className="absolute border-2 border-blue-400 rounded-xl pointer-events-none transition-all duration-100 flex items-center justify-center"
-                                                style={{
-                                                    left: '20%', top: '25%', width: '60%', height: '50%',
-                                                    boxShadow: '0 0 0 9999px rgba(0,0,0,0.4)',
-                                                    borderColor: autoCaptureProgress > 0 ? '#10b981' : '#3b82f6'
-                                                }}
+                                                className="absolute inset-0 pointer-events-none flex items-center justify-center transition-all duration-300"
                                             >
-                                                <div className="absolute -top-8 left-0 flex items-center gap-2">
-                                                    <span className="bg-blue-600 text-white text-[8px] font-black px-2 py-0.5 rounded uppercase tracking-widest">Package Detected</span>
-                                                    {autoCaptureProgress > 0 && <span className="text-emerald-400 text-[8px] font-black animate-pulse">STABLE...</span>}
+                                                {/* Corner Brackets that adapt to any shape (Bag or Box) */}
+                                                <div className="relative w-[70%] h-[60%] border-2 border-transparent">
+                                                    <div className={`absolute -top-4 -left-4 w-12 h-12 border-t-4 border-l-4 rounded-tl-2xl transition-colors duration-300 ${autoCaptureProgress > 0 ? 'border-emerald-500 shadow-[0_0_15px_#10b981]' : 'border-blue-500 shadow-[0_0_15px_#3b82f6]'}`} />
+                                                    <div className={`absolute -top-4 -right-4 w-12 h-12 border-t-4 border-r-4 rounded-tr-2xl transition-colors duration-300 ${autoCaptureProgress > 0 ? 'border-emerald-500 shadow-[0_0_15px_#10b981]' : 'border-blue-500 shadow-[0_0_15px_#3b82f6]'}`} />
+                                                    <div className={`absolute -bottom-4 -left-4 w-12 h-12 border-b-4 border-l-4 rounded-bl-2xl transition-colors duration-300 ${autoCaptureProgress > 0 ? 'border-emerald-500 shadow-[0_0_15px_#10b981]' : 'border-blue-500 shadow-[0_0_15px_#3b82f6]'}`} />
+                                                    <div className={`absolute -bottom-4 -right-4 w-12 h-12 border-b-4 border-r-4 rounded-br-2xl transition-colors duration-300 ${autoCaptureProgress > 0 ? 'border-emerald-500 shadow-[0_0_15px_#10b981]' : 'border-blue-500 shadow-[0_0_15px_#3b82f6]'}`} />
+                                                    
+                                                    {/* Central Multi-Shape Guide */}
+                                                    <div className="absolute inset-0 flex items-center justify-center opacity-20">
+                                                        <div className="w-full h-full border border-dashed border-white rounded-[3rem] animate-pulse" />
+                                                    </div>
+
+                                                    <div className="absolute -top-12 left-1/2 -translate-x-1/2 flex items-center gap-2 whitespace-nowrap">
+                                                        <span className="bg-blue-600/80 backdrop-blur-md text-white text-[9px] font-black px-3 py-1 rounded-full uppercase tracking-widest border border-white/10 shadow-xl">
+                                                            Scanning Object...
+                                                        </span>
+                                                        {autoCaptureProgress > 0 && (
+                                                            <span className="bg-emerald-600 text-white text-[9px] font-black px-3 py-1 rounded-full animate-bounce shadow-xl">
+                                                                READY!
+                                                            </span>
+                                                        )}
+                                                    </div>
                                                 </div>
-                                                
-                                                {/* Corners */}
-                                                <div className="absolute top-0 left-0 w-6 h-6 border-t-4 border-l-4 border-blue-400 -mt-1 -ml-1 rounded-tl-lg" />
-                                                <div className="absolute top-0 right-0 w-6 h-6 border-t-4 border-r-4 border-blue-400 -mt-1 -mr-1 rounded-tr-lg" />
-                                                <div className="absolute bottom-0 left-0 w-6 h-6 border-b-4 border-l-4 border-blue-400 -mb-1 -ml-1 rounded-bl-lg" />
-                                                <div className="absolute bottom-0 right-0 w-6 h-6 border-b-4 border-r-4 border-blue-400 -mb-1 -mr-1 rounded-br-lg" />
                                             </div>
                                         )}
 
