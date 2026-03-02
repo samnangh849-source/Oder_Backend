@@ -3,6 +3,7 @@ import React, { useState, useContext, useMemo } from 'react';
 import { AppContext } from '../../context/AppContext';
 import StatCard from '../performance/StatCard';
 import Spinner from '../common/Spinner';
+import { convertGoogleDriveUrl } from '../../utils/fileUtils';
 
 const InventoryManagement: React.FC = () => {
     const { appData, refreshData, previewImage } = useContext(AppContext);

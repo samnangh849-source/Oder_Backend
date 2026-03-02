@@ -174,7 +174,14 @@ const OrdersDashboard: React.FC<OrdersDashboardProps> = ({ onBack, initialFilter
             const parsedChunk = chunk.map((o: any) => {
                 let products = [];
                 try { if (o['Products (JSON)']) products = JSON.parse(o['Products (JSON)']); } catch (e) {}
-                return { ...o, Products: products, IsVerified: String(o.IsVerified).toUpperCase() === 'TRUE' };
+                
+                // Normalize product fields (image vs ImageURL)
+                const normalizedProducts = Array.isArray(products) ? products.map((p: any) => {
+                    const img = [p.image, p.ImageURL, p.Image].find(val => val && val !== 'N/A' && val !== 'null') || '';
+                    return { ...p, image: img };
+                }) : [];
+
+                return { ...o, Products: normalizedProducts, IsVerified: String(o.IsVerified).toUpperCase() === 'TRUE' };
             });
             processedOrders = [...processedOrders, ...parsedChunk];
             setLoadingProgress(Math.round(((i + chunkSize) / rawOrders.length) * 100));

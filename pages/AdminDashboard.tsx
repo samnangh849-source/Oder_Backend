@@ -112,9 +112,16 @@ const AdminDashboard: React.FC = () => {
                         .map(o => {
                             let products = [];
                             try { if (o['Products (JSON)']) products = JSON.parse(o['Products (JSON)']); } catch(e) {}
+                            
+                            // Normalize product fields (image vs ImageURL)
+                            const normalizedProducts = Array.isArray(products) ? products.map((p: any) => {
+                                const img = [p.image, p.ImageURL, p.Image].find(val => val && val !== 'N/A' && val !== 'null') || '';
+                                return { ...p, image: img };
+                            }) : [];
+
                             return { 
                                 ...o, 
-                                Products: products, 
+                                Products: normalizedProducts, 
                                 IsVerified: String(o.IsVerified).toUpperCase() === 'TRUE' || o.IsVerified === 'A',
                                 FulfillmentStatus: (o['Fulfillment Status'] || o.FulfillmentStatus || 'Pending') as any
                             };

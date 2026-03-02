@@ -675,6 +675,31 @@ const CreateOrderPage: React.FC<CreateOrderPageProps> = ({ team, onSaveSuccess, 
                 return (
                     <fieldset className="border border-gray-600 p-3 sm:p-4 rounded-lg animate-fade-in space-y-4 sm:space-y-6">
                         <legend className="px-2 text-base sm:text-lg font-semibold text-blue-300">ផលិតផល & ការបញ្ចុះតម្លៃ</legend>
+                        
+                        {/* Team, Page, User Info Banner */}
+                        <div className="bg-white/5 border border-white/10 rounded-2xl p-4 flex flex-wrap gap-4 items-center justify-between shadow-inner">
+                            <div className="flex gap-4 flex-wrap">
+                                <div className="flex flex-col gap-1">
+                                    <span className="text-[8px] font-black text-gray-500 uppercase tracking-widest px-1">Team</span>
+                                    <span className="bg-blue-600 text-white font-black text-[10px] sm:text-xs uppercase tracking-wider px-3 py-1 rounded-lg shadow-md">{team}</span>
+                                </div>
+                                <div className="h-10 w-px bg-white/10 hidden sm:block"></div>
+                                <div className="flex flex-col gap-1">
+                                    <span className="text-[8px] font-black text-gray-500 uppercase tracking-widest px-1">Page</span>
+                                    <span className="bg-purple-600/20 text-purple-400 font-black text-[10px] sm:text-xs uppercase tracking-wider px-3 py-1 rounded-lg border border-purple-500/20 truncate max-w-[150px]">{order.page || 'Not Selected'}</span>
+                                </div>
+                                <div className="h-10 w-px bg-white/10 hidden sm:block"></div>
+                                <div className="flex flex-col gap-1">
+                                    <span className="text-[8px] font-black text-gray-500 uppercase tracking-widest px-1">User</span>
+                                    <span className="bg-emerald-600/20 text-emerald-400 font-black text-[10px] sm:text-xs uppercase tracking-wider px-3 py-1 rounded-lg border border-emerald-500/20">{currentUser?.FullName}</span>
+                                </div>
+                            </div>
+                            <div className="flex flex-col items-end">
+                                <span className="text-[8px] font-black text-gray-500 uppercase tracking-widest">Customer</span>
+                                <span className="text-gray-300 font-bold text-xs">{order.customer.name || 'N/A'}</span>
+                            </div>
+                        </div>
+
                         <div className="space-y-4 sm:space-y-6">
                              {order.products.map((p: ProductUIState, index: number) => {
                                  const originalTotal = (Number(p.quantity) || 0) * (Number(p.originalPrice) || 0);

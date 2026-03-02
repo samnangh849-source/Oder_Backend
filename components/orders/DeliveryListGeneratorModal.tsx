@@ -1,7 +1,7 @@
 
 import React, { useState, useMemo, useEffect, useContext } from 'react';
 import Modal from '../common/Modal';
-import { ParsedOrder, AppData } from '../../types';
+import { ParsedOrder, AppData, User } from '../../types';
 import { AppContext } from '../../context/AppContext';
 import { WEB_APP_URL } from '../../constants';
 import BankSelector from './BankSelector';

@@ -46,36 +46,53 @@ export const convertGoogleDriveUrl = (url?: string, type: 'image' | 'audio' = 'i
         return type === 'image' ? fallbackImage : '';
     }
 
+    const trimmedUrl = url.trim();
+
     // If it's already a direct Google content URL, return it
-    if (url.includes('lh3.googleusercontent.com') || url.includes('uc?export=')) {
-        return url;
-    }
-
-    if (url.includes('drive.google.com')) {
-        // Regex to find the file ID from various Drive URL formats like /d/ID/view or uc?id=ID
-        const idRegex = /(?:d\/|id=)([^/?&]+)/;
-        const match = url.match(idRegex);
-        if (match && match[1]) {
-            const fileId = match[1];
-            return type === 'image'
-                ? `https://lh3.googleusercontent.com/d/${fileId}`
-                : `https://drive.google.com/uc?export=download&id=${fileId}`;
+    if (trimmedUrl.includes('lh3.googleusercontent.com') || trimmedUrl.includes('googleusercontent.com/d/') || trimmedUrl.includes('uc?export=')) {
+        if (trimmedUrl.includes('lh3.googleusercontent.com') && !trimmedUrl.includes('=s')) {
+            return `${trimmedUrl}=s1000`;
         }
-        
-        // It's a GDrive link but we couldn't parse it. Return fallback immediately.
-        console.warn(`Could not extract file ID from Google Drive URL, returning fallback. URL: "${url}"`);
-        return type === 'image' ? fallbackImage : '';
+        return trimmedUrl;
     }
 
-    // If it's a standard URL that doesn't seem to be a Google Drive link, trust it
-    if (url.startsWith('http') || url.startsWith('data:')) {
-        return url;
+    // Advanced ID Extraction
+    let fileId = '';
+    
+    if (trimmedUrl.includes('drive.google.com') || trimmedUrl.includes('docs.google.com')) {
+        // 1. Standard patterns: /d/ID, id=ID, open?id=ID, file/d/ID
+        const idRegex = /(?:id=|d\/|file\/d\/|open\?id=|thumbnail\?id=)([^/?&]+)/;
+        const match = trimmedUrl.match(idRegex);
+        if (match && match[1]) {
+            fileId = match[1];
+        } else {
+            // 2. Fallback: Search for any 25-50 character alphanumeric string containing underscores or hyphens
+            // Google Drive IDs are usually exactly 33 chars but can vary
+            const genericIdRegex = /[a-zA-Z0-9_-]{25,50}/;
+            const genericMatch = trimmedUrl.match(genericIdRegex);
+            if (genericMatch) {
+                fileId = genericMatch[0];
+            }
+        }
+    } else if (/^[a-zA-Z0-9_-]{25,50}$/.test(trimmedUrl)) {
+        // 3. Handle pure ID strings
+        fileId = trimmedUrl;
     }
 
-    // If we've reached this point, the URL is not a format we can handle.
-    // Log a warning and return an appropriate empty/fallback value.
-    console.warn(`Could not process URL into a usable format, returning fallback. Original URL: "${url}"`);
-    return type === 'image' ? fallbackImage : ''; // For audio, return an empty string.
+    if (fileId) {
+        if (type === 'image') {
+            return `https://drive.google.com/thumbnail?id=${fileId}&sz=w1000`;
+        } else {
+            return `https://drive.google.com/uc?export=download&id=${fileId}`;
+        }
+    }
+
+    // Handle non-Google URLs
+    if (trimmedUrl.startsWith('http') || trimmedUrl.startsWith('data:')) {
+        return trimmedUrl;
+    }
+
+    return type === 'image' ? fallbackImage : '';
 };
 
 /**

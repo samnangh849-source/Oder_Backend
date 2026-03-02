@@ -50,7 +50,12 @@ const EditProductPanel: React.FC<EditProductPanelProps> = ({
                         <div className="flex-1 w-full grid grid-cols-1 md:grid-cols-2 lg:grid-cols-12 gap-4 items-center">
                             {/* Product Select & Details */}
                             <div className="lg:col-span-6 space-y-3">
-                                <SearchableProductDropdown products={masterProducts} selectedProductName={p.name} onSelect={(name, tags) => onProductChange(index, 'name', name, tags)} />
+                                <SearchableProductDropdown 
+                                    products={masterProducts} 
+                                    selectedProductName={p.name} 
+                                    onSelect={(name, tags) => onProductChange(index, 'name', name, tags)} 
+                                    allowAddNew={false}
+                                />
                                 <div className="flex gap-2">
                                     <input type="text" value={p.colorInfo} onChange={(e) => onProductChange(index, 'colorInfo', e.target.value)} className="bg-gray-800/50 border-none rounded-lg py-1.5 px-3 text-[10px] font-bold text-white w-full focus:ring-1 focus:ring-blue-500 placeholder-gray-600" placeholder="Color/Size..." />
                                     <input type="text" value={p.tags || ''} onChange={(e) => onProductChange(index, 'tags', e.target.value)} className="bg-gray-800/50 border-none rounded-lg py-1.5 px-3 text-[10px] font-bold text-blue-300 w-full focus:ring-1 focus:ring-blue-500 placeholder-gray-600" placeholder="Tags..." />
