@@ -1,5 +1,5 @@
 import * as handPoseDetection from '@tensorflow-models/hand-pose-detection';
-import '@tensorflow/tfjs-core';
+import * as tf from '@tensorflow/tfjs-core';
 import '@tensorflow/tfjs-backend-webgl';
 
 export interface DetectionResult {
@@ -15,21 +15,26 @@ export class PackageDetector {
     private detector: handPoseDetection.HandDetector | null = null;
     private isInitializing: boolean = false;
     
-    // Memory for Smoothing
     private lastBox: { x: number, y: number, w: number, h: number } | null = null;
-    private smoothingFactor = 0.25; // Lower = Smoother but slower
+    private smoothingFactor = 0.2; 
 
     async init() {
         if (this.detector || this.isInitializing) return;
         this.isInitializing = true;
         try {
+            console.log("AI: Initializing WebGL backend...");
+            await tf.ready();
+            await tf.setBackend('webgl');
+            
+            console.log("AI: Loading HandPose model...");
             const model = handPoseDetection.SupportedModels.MediaPipeHands;
             const detectorConfig: handPoseDetection.MediaPipeHandsMediaPipeConfig = {
                 runtime: 'mediapipe',
-                solutionPath: `https://cdn.jsdelivr.net/npm/@mediapipe/hands`,
-                modelType: 'full',
+                solutionPath: `https://cdn.jsdelivr.net/npm/@mediapipe/hands@0.4.1646424515`,
+                modelType: 'lite', // Use 'lite' for faster performance on Chrome
             };
             this.detector = await handPoseDetection.createDetector(model, detectorConfig);
+            console.log("AI: Core Ready.");
         } catch (error) {
             console.error("AI Core Error:", error);
         } finally {
@@ -44,7 +49,6 @@ export class PackageDetector {
             this.lastBox = newBox;
             return newBox;
         }
-        
         this.lastBox = {
             x: this.lastBox.x + (newBox.x - this.lastBox.x) * this.smoothingFactor,
             y: this.lastBox.y + (newBox.y - this.lastBox.y) * this.smoothingFactor,
@@ -59,21 +63,18 @@ export class PackageDetector {
             return { found: false, stability: 0, type: 'general', gesture: 'none', confidence: 0 };
         }
 
-        const vw = video.videoWidth;
-        const vh = video.videoHeight;
         let gestureDetected: 'none' | 'five_fingers' | 'thumbs_up' = 'none';
         let rawBox: { x: number, y: number, w: number, h: number } | null = null;
         let isHand = false;
         let confidence = 0;
 
-        // 1. Precise Hand Tracking
         if (this.detector) {
             try {
                 const hands = await this.detector.estimateHands(video, { flipHorizontal: false });
                 if (hands.length > 0) {
                     const hand = hands[0];
                     isHand = true;
-                    confidence = hand.score || 0.9;
+                    confidence = hand.score || 0.8;
                     
                     const xs = hand.keypoints.map(kp => kp.x);
                     const ys = hand.keypoints.map(kp => kp.y);
@@ -90,37 +91,29 @@ export class PackageDetector {
                     };
 
                     const k = hand.keypoints;
-                    const isFingersUp = k[8].y < k[5].y && k[12].y < k[9].y && k[16].y < k[13].y && k[20].y < k[17].y;
-                    const isThumbUp = k[4].y < k[2].y && k[4].y < k[5].y - 20;
+                    // Improved Five Fingers Detection (Open Palm)
+                    // Index, Middle, Ring, Pinky extended
+                    const isExtended = (tip: number, mid: number, base: number) => k[tip].y < k[mid].y && k[mid].y < k[base].y;
+                    
+                    const openPalm = isExtended(8, 7, 5) && isExtended(12, 11, 9) && isExtended(16, 15, 13) && isExtended(20, 19, 17);
+                    const thumbUp = k[4].y < k[3].y && k[4].y < k[2].y && !openPalm;
 
-                    if (isFingersUp) gestureDetected = 'five_fingers';
-                    else if (isThumbUp && !isFingersUp) gestureDetected = 'thumbs_up';
+                    if (openPalm) gestureDetected = 'five_fingers';
+                    else if (thumbUp) gestureDetected = 'thumbs_up';
                 }
-            } catch (err) { console.warn(err); }
+            } catch (err) { /* silent fail */ }
         }
 
-        // 2. Advanced Adaptive Package Logic
         if (!isHand) {
-            // Instead of static center, we simulate a "Salience" detection 
-            // focusing on where the camera's focus/contrast is likely to be.
-            // Here we look at the central area but allow it to be dynamic.
-            rawBox = {
-                x: vw * 0.25,
-                y: vh * 0.25,
-                w: vw * 0.5,
-                h: vh * 0.5
-            };
-            confidence = 0.6;
+            rawBox = { x: video.videoWidth * 0.25, y: video.videoHeight * 0.25, w: video.videoWidth * 0.5, h: video.videoHeight * 0.5 };
+            confidence = 0.5;
         }
-
-        // Apply Smoothing for "Smart" feel
-        const finalBox = rawBox ? this.smoothBox(rawBox) : undefined;
 
         return {
             found: true,
             type: isHand ? 'general' : 'box',
-            box: finalBox,
-            stability: isHand ? 0.98 : 0.8,
+            box: rawBox ? this.smoothBox(rawBox) : undefined,
+            stability: isHand ? 0.95 : 0.6,
             gesture: gestureDetected,
             confidence
         };

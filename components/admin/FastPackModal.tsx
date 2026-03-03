@@ -26,6 +26,7 @@ const FastPackModal: React.FC<FastPackModalProps> = ({ order, onClose, onSuccess
     const [detection, setDetection] = useState<DetectionResult | null>(null);
     const [autoCaptureProgress, setAutoCaptureProgress] = useState(0);
     const [countdown, setCountdown] = useState<number | null>(null);
+    const [aiFrameCount, setAiFrameCount] = useState(0);
     
     const videoRef = useRef<HTMLVideoElement>(null);
     const canvasRef = useRef<HTMLCanvasElement>(null);
@@ -160,6 +161,7 @@ const FastPackModal: React.FC<FastPackModalProps> = ({ order, onClose, onSuccess
 
         const result = await packageDetector.detect(videoRef.current);
         setDetection(result);
+        setAiFrameCount(prev => (prev + 1) % 100);
 
         if (isAiEnabled) {
             // 1. Gesture: Five Fingers (Countdown to Capture)
@@ -167,12 +169,12 @@ const FastPackModal: React.FC<FastPackModalProps> = ({ order, onClose, onSuccess
                 startCountdown();
             }
             
-            // 2. Gesture: Thumbs Up (Auto Submit - only if image is already captured)
+            // 2. Gesture: Thumbs Up (Auto Submit)
             if (result.gesture === 'thumbs_up' && previewImage && !uploading) {
                 handleSubmit();
             }
 
-            // 3. Smart Auto Zoom (Works for both Hand and Package)
+            // 3. Smart Auto Zoom
             if (result.found && result.box) {
                 const track = (videoRef.current.srcObject as MediaStream)?.getVideoTracks()[0];
                 if (track && Date.now() - lastActionTime.current > 1200) {
@@ -180,7 +182,6 @@ const FastPackModal: React.FC<FastPackModalProps> = ({ order, onClose, onSuccess
                     const objectArea = result.box.w * result.box.h;
                     const areaRatio = objectArea / videoArea;
 
-                    // If it's a package (type === 'box'), we want it to fill more of the screen
                     const minThreshold = result.type === 'box' ? 0.25 : 0.12;
                     const maxThreshold = result.type === 'box' ? 0.70 : 0.50;
 
@@ -190,24 +191,15 @@ const FastPackModal: React.FC<FastPackModalProps> = ({ order, onClose, onSuccess
                     lastActionTime.current = Date.now();
                 }
 
-                // 4. Auto Capture Progress (If NO Gesture Active and stable)
-                if (countdown === null && result.stability > 0.9 && !previewImage) {
+                // 4. Auto Capture (Stable Object)
+                if (countdown === null && result.stability > 0.95 && !previewImage && result.type === 'box') {
                     setAutoCaptureProgress(prev => {
-                        const next = prev + 1.5;
-                        if (next >= 100) {
-                            capturePhoto();
-                            return 0;
-                        }
+                        const next = prev + 2;
+                        if (next >= 100) { capturePhoto(); return 0; }
                         return next;
                     });
-                } else {
-                    setAutoCaptureProgress(0);
-                }
-            } else {
-                setAutoCaptureProgress(0);
+                } else { setAutoCaptureProgress(0); }
             }
-        } else {
-            setAutoCaptureProgress(0);
         }
 
         aiLoopRef.current = requestAnimationFrame(runAiLoop);
@@ -248,9 +240,7 @@ const FastPackModal: React.FC<FastPackModalProps> = ({ order, onClose, onSuccess
     };
 
     useEffect(() => {
-        return () => {
-            stopCamera();
-        };
+        return () => { stopCamera(); };
     }, [stopCamera]);
 
     const fulfillmentStore = appData.stores?.find(s => s.StoreName === order?.['Fulfillment Store']);
@@ -258,11 +248,6 @@ const FastPackModal: React.FC<FastPackModalProps> = ({ order, onClose, onSuccess
 
     const getFullPrinterURL = () => {
         if (!basePrinterURL || !order) return '';
-        const fullText = `${order['Address Details'] || ''} ${order.Location || ''} ${order.Note || ''}`;
-        const urlRegex = /(https?:\/\/[^\s]+)/g;
-        const matches = fullText.match(urlRegex);
-        const mapLink = matches && matches.length > 0 ? matches[0] : '';
-
         const params = new URLSearchParams({
             id: order['Order ID'],
             name: order['Customer Name'],
@@ -275,7 +260,6 @@ const FastPackModal: React.FC<FastPackModalProps> = ({ order, onClose, onSuccess
             user: order.User,
             page: order.Page,
             store: order['Fulfillment Store'],
-            map: mapLink,
             note: order.Note || ''
         });
         return `${basePrinterURL}?${params.toString()}`;
@@ -283,17 +267,8 @@ const FastPackModal: React.FC<FastPackModalProps> = ({ order, onClose, onSuccess
 
     const fullPrinterURL = getFullPrinterURL();
 
-    const handleCopyName = () => {
-        if (!order) return;
-        const text = order['Customer Name'];
-        navigator.clipboard.writeText(text).then(() => alert('ចម្លងឈ្មោះបានជោគជ័យ'));
-    };
-
-    const handleCopyPhone = () => {
-        if (!order) return;
-        const text = order['Customer Phone'];
-        navigator.clipboard.writeText(text).then(() => alert('ចម្លងលេខទូរស័ព្ទបានជោគជ័យ'));
-    };
+    const handleCopyName = () => { if (order) navigator.clipboard.writeText(order['Customer Name']).then(() => alert('Copied')); };
+    const handleCopyPhone = () => { if (order) navigator.clipboard.writeText(order['Customer Phone']).then(() => alert('Copied')); };
 
     const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
         const file = e.target.files?.[0];
@@ -317,46 +292,21 @@ const FastPackModal: React.FC<FastPackModalProps> = ({ order, onClose, onSuccess
     return (
         <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/80 backdrop-blur-md animate-fade-in">
             <style>{`
-                @keyframes scan-y {
-                    0% { top: 0; opacity: 0; }
-                    50% { opacity: 1; }
-                    100% { top: 100%; opacity: 0; }
-                }
-                .animate-scan-y {
-                    position: absolute;
-                    animation: scan-y 3s linear infinite;
-                }
-                @keyframes bounce-slow {
-                    0%, 100% { transform: translateY(0); }
-                    50% { transform: translateY(-10px); }
-                }
-                .animate-bounce-slow {
-                    animation: bounce-slow 2s infinite ease-in-out;
-                }
+                @keyframes scan-y { 0% { top: 0; opacity: 0; } 50% { opacity: 1; } 100% { top: 100%; opacity: 0; } }
+                .animate-scan-y { position: absolute; animation: scan-y 3s linear infinite; }
+                @keyframes bounce-slow { 0%, 100% { transform: translateY(0); } 50% { transform: translateY(-10px); } }
+                .animate-bounce-slow { animation: bounce-slow 2s infinite ease-in-out; }
             `}</style>
             <div className="bg-[#0f172a] border border-white/10 rounded-[2.5rem] w-full max-w-4xl shadow-2xl overflow-hidden flex flex-col max-h-[95vh]">
-                {/* Header */}
                 <div className="p-6 border-b border-white/5 flex justify-between items-center relative bg-gradient-to-r from-blue-600/20 to-transparent">
                     <div>
                         <div className="flex items-center gap-3">
                             <h3 className="text-xl font-black text-white uppercase tracking-tight italic">Smart Packaging Hub</h3>
-                            <div className="px-2 py-0.5 bg-blue-500/20 border border-blue-500/30 rounded text-[8px] font-black text-blue-400 uppercase tracking-widest">AI Core v1.0</div>
+                            <div className="px-2 py-0.5 bg-blue-500/20 border border-blue-500/30 rounded text-[8px] font-black text-blue-400 uppercase tracking-widest">AI Core v2.0</div>
                         </div>
                         <div className="flex flex-wrap items-center gap-x-4 gap-y-1 mt-1.5">
-                            <button 
-                                onClick={() => {
-                                    navigator.clipboard.writeText(order['Order ID']).then(() => alert('ចម្លង ID បានជោគជ័យ'));
-                                }}
-                                className="text-blue-400 font-mono text-xs font-bold hover:text-white transition-colors flex items-center gap-1 group/id"
-                            >
-                                #{order['Order ID'].substring(0, 15)}
-                                <svg className="w-3 h-3 opacity-0 group-hover/id:opacity-100 transition-opacity" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 5H6a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2v-1M8 5a2 2 0 002 2h2a2 2 0 002-2M8 5a2 2 0 012-2h2a2 2 0 012 2" /></svg>
-                            </button>
-                            <div className="flex items-center gap-2">
-                                <span className="px-2 py-1 bg-blue-600 text-white text-xs font-black uppercase rounded-lg shadow-md tracking-wider">Team: {order.Team}</span>
-                                <span className="px-1.5 py-0.5 bg-purple-500/10 text-purple-400 text-[10px] font-black uppercase rounded border border-purple-500/20">Page: {order.Page}</span>
-                                <span className="px-1.5 py-0.5 bg-emerald-500/10 text-emerald-400 text-[10px] font-black uppercase rounded border border-emerald-500/20">User: {order.User}</span>
-                            </div>
+                            <span className="text-blue-400 font-mono text-xs font-bold">#{order['Order ID'].substring(0, 15)}</span>
+                            <span className="px-2 py-1 bg-blue-600 text-white text-xs font-black uppercase rounded-lg shadow-md">Team: {order.Team}</span>
                         </div>
                     </div>
                     <button onClick={onClose} disabled={uploading} className="w-10 h-10 bg-black/40 hover:bg-red-500/20 text-gray-400 hover:text-red-500 rounded-full flex items-center justify-center transition-all border border-white/5">
@@ -364,15 +314,11 @@ const FastPackModal: React.FC<FastPackModalProps> = ({ order, onClose, onSuccess
                     </button>
                 </div>
 
-                {/* Content */}
                 <div className="p-6 overflow-y-auto space-y-6 flex-grow custom-scrollbar">
                     <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
                         <div className="space-y-6">
                             {fullPrinterURL && (
-                                <button 
-                                    onClick={() => window.open(fullPrinterURL, '_blank')}
-                                    className="w-full py-4 bg-indigo-600 hover:bg-indigo-700 text-white rounded-2xl font-black uppercase text-xs tracking-widest shadow-xl shadow-indigo-900/20 transition-all active:scale-[0.98] flex justify-center items-center gap-3 border border-white/10"
-                                >
+                                <button onClick={() => window.open(fullPrinterURL, '_blank')} className="w-full py-4 bg-indigo-600 hover:bg-indigo-700 text-white rounded-2xl font-black uppercase text-xs tracking-widest shadow-xl shadow-indigo-900/20 transition-all active:scale-[0.98] flex justify-center items-center gap-3 border border-white/10">
                                     <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 17h2a2 2 0 002-2v-4a2 2 0 00-2-2H5a2 2 0 00-2 2v4a2 2 0 002 2h2m2 4h6a2 2 0 002-2v-4a2 2 0 00-2-2H9a2 2 0 00-2 2v4a2 2 0 002 2zm8-12V5a2 2 0 00-2-2H9a2 2 0 00-2 2v4h10z" /></svg>
                                     បោះពុម្ភវិក្កយបត្រ (Print Label)
                                 </button>
@@ -381,96 +327,17 @@ const FastPackModal: React.FC<FastPackModalProps> = ({ order, onClose, onSuccess
                             <div className="bg-white/[0.02] rounded-2xl p-5 border border-white/5 space-y-4 relative">
                                 <div className="flex items-start gap-4">
                                     <div className="w-12 h-12 bg-blue-600/20 rounded-2xl flex items-center justify-center text-blue-500 border border-blue-500/20 flex-shrink-0">
-                                        <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" /></svg>
+                                        <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" strokeWidth={2}/></svg>
                                     </div>
                                     <div className="min-w-0 flex-grow">
-                                        <div className="flex items-center justify-between gap-2">
-                                            <p className="text-white font-black text-base truncate">{order['Customer Name']}</p>
-                                            <button onClick={handleCopyName} className="p-2 bg-white/5 hover:bg-blue-600 text-gray-500 hover:text-white rounded-lg transition-all border border-white/5"><svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path d="M8 5H6a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2v-1M8 5a2 2 0 002 2h2a2 2 0 002-2M8 5a2 2 0 012-2h2a2 2 0 012 2" strokeWidth={2}/></svg></button>
-                                        </div>
-                                        <div className="flex items-center justify-between gap-2 mt-1">
-                                            <p className="text-blue-400 font-mono text-sm font-bold truncate">{order['Customer Phone']}</p>
-                                            <button onClick={handleCopyPhone} className="p-2 bg-white/5 hover:bg-blue-600 text-gray-500 hover:text-white rounded-lg transition-all border border-white/5"><svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path d="M8 5H6a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2v-1M8 5a2 2 0 002 2h2a2 2 0 002-2M8 5a2 2 0 012-2h2a2 2 0 012 2" strokeWidth={2}/></svg></button>
-                                        </div>
+                                        <p className="text-white font-black text-base truncate">{order['Customer Name']}</p>
+                                        <p className="text-blue-400 font-mono text-sm font-bold truncate">{order['Customer Phone']}</p>
                                     </div>
                                 </div>
-                                <div className="pt-4 border-t border-white/5">
-                                    <p className="text-[10px] font-black text-gray-500 uppercase tracking-widest mb-2">ដឹកទៅកាន់ (Shipping To)</p>
-                                    <p className="text-gray-200 text-sm font-bold leading-relaxed bg-black/20 p-3 rounded-xl border border-white/5">{order.Location} - {order['Address Details'] || 'គ្មានអាសយដ្ឋានលម្អិត'}</p>
-                                </div>
-                                {order.Note && (
-                                    <div className="pt-4 border-t border-white/5">
-                                        <p className="text-[10px] font-black text-amber-500 uppercase tracking-widest mb-2">ចំណាំ (Note)</p>
-                                        <p className="text-amber-400 text-sm italic leading-relaxed bg-amber-500/5 p-3 rounded-xl border border-amber-500/10">{order.Note}</p>
-                                    </div>
-                                )}
-                            </div>
-
-                            <div className="bg-black/40 rounded-2xl p-5 border border-white/5 space-y-4 shadow-inner">
-                                <p className="text-[10px] font-black text-gray-500 uppercase tracking-widest border-b border-white/5 pb-2">Logistics Manifest</p>
-                                <div className="grid grid-cols-2 gap-4">
-                                    <div className="space-y-1">
-                                        <span className="text-[9px] font-black text-gray-600 uppercase">Payment</span>
-                                        <p className="text-pink-400 font-bold text-xs truncate">{order['Payment Info'] || order['Payment Status']}</p>
-                                    </div>
-                                    <div className="space-y-1">
-                                        <span className="text-[9px] font-black text-gray-600 uppercase">Shipping</span>
-                                        <p className="text-indigo-400 font-bold text-xs truncate">{order['Internal Shipping Method']}</p>
-                                    </div>
-                                    <div className="space-y-1">
-                                        <span className="text-[9px] font-black text-gray-600 uppercase">Driver</span>
-                                        <p className="text-blue-400 font-bold text-xs truncate">{order['Driver Name'] || order['Internal Shipping Details'] || 'N/A'}</p>
-                                    </div>
-                                    <div className="space-y-1">
-                                        <span className="text-[9px] font-black text-gray-600 uppercase">Store</span>
-                                        <p className="text-orange-400 font-bold text-xs truncate">{order['Fulfillment Store']}</p>
-                                    </div>
-                                </div>
-                            </div>
-
-                            <div className="space-y-3">
-                                <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest ml-1">បញ្ជីផលិតផល ({order.Products.length})</p>
-                                <div className="space-y-2 max-h-40 overflow-y-auto custom-scrollbar pr-2">
-                                    {order.Products.map((p, i) => (
-                                        <div key={i} className="flex items-center gap-4 p-3 bg-white/[0.03] rounded-2xl border border-white/5 hover:border-blue-500/20 transition-all">
-                                            <div className="w-14 h-14 rounded-xl overflow-hidden flex-shrink-0 bg-gray-900 border border-gray-800 cursor-pointer" onClick={() => showFullImage(convertGoogleDriveUrl(p.image))}>
-                                                <img src={convertGoogleDriveUrl(p.image)} className="w-full h-full object-cover" alt="" />
-                                            </div>
-                                            <div className="min-w-0 flex-grow">
-                                                <p className="text-sm font-black text-gray-200 truncate leading-tight">{p.name}</p>
-                                                <div className="flex justify-between items-end mt-1.5">
-                                                    <div className="flex flex-col">
-                                                        <span className="text-xs text-blue-500 font-black">x{p.quantity}</span>
-                                                        {p.colorInfo && <span className="text-[9px] text-purple-500 italic font-bold">{p.colorInfo}</span>}
-                                                    </div>
-                                                    <div className="text-right">
-                                                        <p className="text-[10px] text-gray-500 line-through">${(p.originalPrice || p.price || 0).toFixed(2)}</p>
-                                                        <p className="text-emerald-400 font-mono font-black text-sm">${(p.finalPrice || p.price || 0).toFixed(2)}</p>
-                                                    </div>
-                                                </div>
-                                            </div>
-                                        </div>
-                                    ))}
-                                </div>
+                                <p className="text-gray-200 text-sm font-bold leading-relaxed bg-black/20 p-3 rounded-xl border border-white/5">{order.Location} - {order['Address Details'] || 'គ្មានអាសយដ្ឋានលម្អិត'}</p>
                             </div>
 
                             <div className="bg-blue-600/5 rounded-2xl p-5 border border-blue-500/10 space-y-3">
-                                <div className="flex justify-between items-center text-[11px]">
-                                    <span className="text-gray-500 font-bold uppercase">តម្លៃពេញសរុប (Total Full)</span>
-                                    <span className="text-gray-300 font-mono font-black">${(order.Subtotal + (order['Discount ($)'] || 0)).toFixed(2)}</span>
-                                </div>
-                                <div className="flex justify-between items-center text-[11px]">
-                                    <span className="text-gray-500 font-bold uppercase">បញ្ចុះតម្លៃសរុប (Total Discount)</span>
-                                    <span className="text-red-400 font-mono font-black">-${(order['Discount ($)'] || 0).toFixed(2)}</span>
-                                </div>
-                                <div className="flex justify-between items-center text-[11px] border-t border-white/5 pt-2">
-                                    <span className="text-gray-500 font-bold uppercase">តម្លៃទំនិញសុទ្ធ (Subtotal)</span>
-                                    <span className="text-blue-400 font-mono font-black">${order.Subtotal.toFixed(2)}</span>
-                                </div>
-                                <div className="flex justify-between items-center text-[11px]">
-                                    <span className="text-gray-500 font-bold uppercase">សេវាដឹកពីភ្ញៀវ (Shipping Fee)</span>
-                                    <span className="text-indigo-400 font-mono font-black">+${order['Shipping Fee (Customer)'].toFixed(2)}</span>
-                                </div>
                                 <div className="flex justify-between items-center pt-2 border-t-2 border-dashed border-white/10">
                                     <span className="text-xs font-black text-white uppercase tracking-tighter">សរុបចុងក្រោយ (Grand Total)</span>
                                     <span className="text-xl font-black text-emerald-400 font-mono tracking-tighter">${order['Grand Total'].toFixed(2)}</span>
@@ -478,14 +345,12 @@ const FastPackModal: React.FC<FastPackModalProps> = ({ order, onClose, onSuccess
                             </div>
                         </div>
 
-                        {/* Right Side: AI Camera */}
                         <div className="flex flex-col h-full gap-4">
                             <div className="flex items-center justify-between px-2">
-                                <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest">AI Vision Tracking</p>
-                                <button 
-                                    onClick={() => setIsAiEnabled(!isAiEnabled)}
-                                    className={`px-3 py-1.5 rounded-full text-[8px] font-black uppercase tracking-tighter transition-all border flex items-center gap-2 ${isAiEnabled ? 'bg-emerald-500/20 text-emerald-400 border-emerald-500/30' : 'bg-gray-800 text-gray-500 border-white/5'}`}
-                                >
+                                <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest flex items-center gap-2">
+                                    AI Tracking {aiFrameCount % 2 === 0 ? '●' : ' '}
+                                </p>
+                                <button onClick={() => setIsAiEnabled(!isAiEnabled)} className={`px-3 py-1.5 rounded-full text-[8px] font-black uppercase tracking-tighter transition-all border flex items-center gap-2 ${isAiEnabled ? 'bg-emerald-500/20 text-emerald-400 border-emerald-500/30' : 'bg-gray-800 text-gray-500 border-white/5'}`}>
                                     <div className={`w-1.5 h-1.5 rounded-full ${isAiEnabled ? (isAiLoading ? 'bg-amber-500 animate-pulse' : 'bg-emerald-500') : 'bg-gray-600'}`}></div>
                                     AI {isAiLoading ? 'Initializing...' : (isAiEnabled ? 'Active' : 'Disabled')}
                                 </button>
@@ -499,10 +364,7 @@ const FastPackModal: React.FC<FastPackModalProps> = ({ order, onClose, onSuccess
                                     <div className="absolute inset-0 group rounded-[2.5rem] overflow-hidden border-4 border-emerald-500/30 shadow-2xl bg-black cursor-pointer" onClick={() => showFullImage(previewImage)}>
                                         <img src={previewImage} className="w-full h-full object-cover" alt="Preview" />
                                         {!uploading && (
-                                            <button 
-                                                onClick={(e) => { e.stopPropagation(); setPreviewImage(null); }}
-                                                className="absolute top-6 right-6 w-12 h-12 bg-red-600 text-white rounded-full flex items-center justify-center shadow-2xl active:scale-90 transition-all border-2 border-white/20 hover:bg-red-500 z-10"
-                                            >
+                                            <button onClick={(e) => { e.stopPropagation(); setPreviewImage(null); }} className="absolute top-6 right-6 w-12 h-12 bg-red-600 text-white rounded-full flex items-center justify-center shadow-2xl active:scale-90 transition-all border-2 border-white/20 hover:bg-red-500 z-10">
                                                 <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={3}><path d="M6 18L18 6M6 6l12 12" /></svg>
                                             </button>
                                         )}
@@ -510,7 +372,13 @@ const FastPackModal: React.FC<FastPackModalProps> = ({ order, onClose, onSuccess
                                     </div>
                                 ) : isCameraActive ? (
                                     <div className="absolute inset-0 rounded-[2.5rem] overflow-hidden border-2 border-blue-500 shadow-[0_0_50px_rgba(37,99,235,0.2)] bg-black">
-                                        <video ref={videoRef} autoPlay playsInline className="w-full h-full object-cover" />
+                                        <video 
+                                            ref={videoRef} 
+                                            autoPlay 
+                                            playsInline 
+                                            className="w-full h-full object-cover transition-transform duration-500 origin-center" 
+                                            style={{ transform: `scale(${zoom})` }}
+                                        />
                                         
                                         {isAiLoading && (
                                             <div className="absolute inset-0 bg-black/60 backdrop-blur-sm z-50 flex flex-col items-center justify-center gap-4">
@@ -518,17 +386,14 @@ const FastPackModal: React.FC<FastPackModalProps> = ({ order, onClose, onSuccess
                                                 <p className="text-[10px] font-black text-white uppercase tracking-[0.3em] animate-pulse">Initializing AI Neural Engine...</p>
                                             </div>
                                         )}
-                                        {/* AI Dynamic Targeting Overlay */}
+
                                         {isAiEnabled && detection?.found && detection.box && (
-                                            <div 
-                                                className="absolute transition-all duration-150 ease-out pointer-events-none"
-                                                style={{
-                                                    left: `${(detection.box.x / (videoRef.current?.videoWidth || 1)) * 100}%`,
-                                                    top: `${(detection.box.y / (videoRef.current?.videoHeight || 1)) * 100}%`,
-                                                    width: `${(detection.box.w / (videoRef.current?.videoWidth || 1)) * 100}%`,
-                                                    height: `${(detection.box.h / (videoRef.current?.videoHeight || 1)) * 100}%`,
-                                                }}
-                                            >
+                                            <div className="absolute transition-all duration-150 ease-out pointer-events-none" style={{
+                                                left: `${(detection.box.x / (videoRef.current?.videoWidth || 1)) * 100}%`,
+                                                top: `${(detection.box.y / (videoRef.current?.videoHeight || 1)) * 100}%`,
+                                                width: `${(detection.box.w / (videoRef.current?.videoWidth || 1)) * 100}%`,
+                                                height: `${(detection.box.h / (videoRef.current?.videoHeight || 1)) * 100}%`,
+                                            }}>
                                                 <div className={`absolute inset-0 border-2 rounded-[2rem] transition-colors duration-300 ${detection.gesture !== 'none' ? 'border-emerald-500 shadow-[0_0_30px_rgba(16,185,129,0.4)]' : 'border-blue-500/50 shadow-[0_0_20px_rgba(59,130,246,0.2)]'}`}>
                                                     <div className="absolute inset-x-4 top-0 h-0.5 bg-gradient-to-r from-transparent via-blue-400 to-transparent animate-scan-y opacity-50" />
                                                     <div className="absolute -top-1 -left-1 w-8 h-8 border-t-4 border-l-4 border-blue-500 rounded-tl-2xl" />
@@ -536,10 +401,8 @@ const FastPackModal: React.FC<FastPackModalProps> = ({ order, onClose, onSuccess
                                                     <div className="absolute -bottom-1 -left-1 w-8 h-8 border-b-4 border-l-4 border-blue-500 rounded-bl-2xl" />
                                                     <div className="absolute -bottom-1 -right-1 w-8 h-8 border-b-4 border-r-4 border-blue-500 rounded-bl-2xl" />
                                                 </div>
-
                                                 <div className="absolute -top-14 left-1/2 -translate-x-1/2 flex flex-col items-center gap-1 min-w-[150px]">
                                                     <div className="flex items-center gap-2 bg-black/60 backdrop-blur-md px-3 py-1 rounded-full border border-white/10 shadow-2xl">
-                                                        <div className="w-1.5 h-1.5 rounded-full bg-blue-500 animate-pulse" />
                                                         <span className="text-[9px] font-black text-white uppercase tracking-widest">
                                                             {detection.gesture === 'five_fingers' ? 'Action: Capture' : (detection.gesture === 'thumbs_up' ? 'Action: Confirm' : (detection.type === 'box' ? 'Object: Package' : 'Status: Tracking'))}
                                                         </span>
@@ -551,7 +414,6 @@ const FastPackModal: React.FC<FastPackModalProps> = ({ order, onClose, onSuccess
                                             </div>
                                         )}
 
-                                        {/* Thumbs Up Confirming Overlay */}
                                         {previewImage && detection?.gesture === 'thumbs_up' && (
                                             <div className="absolute inset-0 flex items-center justify-center z-50 bg-blue-600/20 backdrop-blur-sm animate-pulse">
                                                 <div className="bg-blue-600 text-white p-8 rounded-full shadow-[0_0_50px_rgba(59,130,246,0.6)]">
@@ -561,7 +423,6 @@ const FastPackModal: React.FC<FastPackModalProps> = ({ order, onClose, onSuccess
                                             </div>
                                         )}
 
-                                        {/* Countdown Large Text Overlay */}
                                         {countdown !== null && (
                                             <div className="absolute inset-0 flex items-center justify-center z-50 bg-black/20 backdrop-blur-[2px]">
                                                 <div className="relative">
@@ -573,14 +434,10 @@ const FastPackModal: React.FC<FastPackModalProps> = ({ order, onClose, onSuccess
                                             </div>
                                         )}
 
-                                        {/* Auto-Capture Progress Ring */}
                                         {autoCaptureProgress > 0 && countdown === null && (
                                             <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 z-30">
                                                 <div className="w-24 h-24 rounded-full border-4 border-white/10 flex items-center justify-center">
-                                                    <div 
-                                                        className="absolute inset-0 rounded-full border-4 border-emerald-500 transition-all duration-100"
-                                                        style={{ clipPath: `inset(${100 - autoCaptureProgress}% 0 0 0)` }}
-                                                    />
+                                                    <div className="absolute inset-0 rounded-full border-4 border-emerald-500 transition-all duration-100" style={{ clipPath: `inset(${100 - autoCaptureProgress}% 0 0 0)` }} />
                                                     <svg className="w-10 h-10 text-white animate-bounce" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path d="M3 9a2 2 0 012-2h.93a2 2 0 001.664-.89l.812-1.22A2 2 0 0110.07 4h3.86a2 2 0 011.664.89l.812 1.22A2 2 0 0018.07 7H19a2 2 0 012 2v9a2 2 0 01-2 2H5a2 2 0 01-2-2V9z" strokeWidth={2}/><path d="M15 13a3 3 0 11-6 0 3 3 0 016 0z" strokeWidth={2}/></svg>
                                                 </div>
                                             </div>
@@ -589,35 +446,21 @@ const FastPackModal: React.FC<FastPackModalProps> = ({ order, onClose, onSuccess
                                         <div className="absolute bottom-8 left-0 right-0 flex justify-center items-center gap-8 z-40">
                                             <button onClick={stopCamera} className="w-14 h-14 bg-black/60 text-white rounded-full flex items-center justify-center border border-white/10 hover:bg-red-600 transition-all shadow-xl"><svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={3}><path d="M6 18L18 6M6 6l12 12" /></svg></button>
                                             <button onClick={capturePhoto} className="w-24 h-24 bg-white rounded-full flex items-center justify-center border-8 border-blue-600/20 shadow-2xl active:scale-90 transition-all ring-4 ring-white/10"><div className="w-16 h-16 bg-blue-600 rounded-full" /></button>
-                                            <div className="w-14 h-14" />
-                                        </div>
-                                        
-                                        <div className="absolute top-6 left-6 flex flex-col gap-2">
-                                            <div className="bg-black/60 backdrop-blur-md px-3 py-1.5 rounded-xl border border-white/5 flex items-center gap-2">
-                                                <span className="w-1.5 h-1.5 rounded-full bg-blue-500 animate-pulse"></span>
-                                                <span className="text-[8px] font-black text-blue-400 uppercase tracking-widest">Zoom: {zoom.toFixed(1)}x</span>
-                                            </div>
+                                            <div className="w-14 h-14 bg-black/20 backdrop-blur-md rounded-xl flex items-center justify-center border border-white/5"><span className="text-[8px] font-black text-blue-400 uppercase tracking-widest">Zoom: {zoom.toFixed(1)}x</span></div>
                                         </div>
                                     </div>
                                 ) : (
                                     <div className="grid grid-cols-1 gap-4 h-full">
-                                        <button 
-                                            onClick={startCamera}
-                                            className="w-full h-full border-2 border-dashed border-blue-500/20 rounded-[2.5rem] flex flex-col items-center justify-center gap-6 hover:border-blue-500 hover:bg-blue-500/5 transition-all active:scale-[0.98] group"
-                                        >
+                                        <button onClick={startCamera} className="w-full h-full border-2 border-dashed border-blue-500/20 rounded-[2.5rem] flex flex-col items-center justify-center gap-6 hover:border-blue-500 hover:bg-blue-500/5 transition-all active:scale-[0.98] group">
                                             <div className="w-24 h-24 bg-blue-600 rounded-[2rem] flex items-center justify-center text-white shadow-[0_0_40px_rgba(37,99,235,0.4)] border border-white/10 scale-110 group-hover:scale-110 transition-all duration-500">
                                                 <svg className="w-12 h-12" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2}><path d="M3 9a2 2 0 012-2h.93a2 2 0 001.664-.89l.812-1.22A2 2 0 0110.07 4h3.86a2 2 0 011.664.89l.812 1.22A2 2 0 0018.07 7H19a2 2 0 012 2v9a2 2 0 01-2 2H5a2 2 0 01-2-2V9z" /><path d="M15 13a3 3 0 11-6 0 3 3 0 016 0z" /></svg>
                                             </div>
                                             <div className="text-center space-y-2">
                                                 <p className="text-lg font-black text-white uppercase tracking-tighter">បើកកាមេរ៉ា AI</p>
-                                                <p className="text-[10px] text-gray-500 uppercase font-bold tracking-widest">Auto-Detect • Smart Zoom • Auto-Snap</p>
+                                                <p className="text-[10px] text-gray-500 uppercase font-bold tracking-widest">Neural Vision • Digital Zoom • Auto-Snap</p>
                                             </div>
                                         </button>
-
-                                        <button 
-                                            onClick={() => fileInputRef.current?.click()}
-                                            className="w-full py-5 bg-gray-800/40 hover:bg-gray-800 text-gray-400 rounded-3xl border border-white/5 font-black uppercase text-[11px] tracking-[0.2em] flex items-center justify-center gap-3 transition-all"
-                                        >
+                                        <button onClick={() => fileInputRef.current?.click()} className="w-full py-5 bg-gray-800/40 hover:bg-gray-800 text-gray-400 rounded-3xl border border-white/5 font-black uppercase text-[11px] tracking-[0.2em] flex items-center justify-center gap-3 transition-all">
                                             <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2.5}><path d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" /></svg>
                                             Select From Device (Upload)
                                         </button>
@@ -629,25 +472,11 @@ const FastPackModal: React.FC<FastPackModalProps> = ({ order, onClose, onSuccess
                 </div>
 
                 <div className="p-8 bg-[#0f172a] border-t border-white/5 flex gap-4">
-                    <button 
-                        onClick={onClose}
-                        disabled={uploading}
-                        className="flex-1 py-5 bg-gray-800 hover:bg-gray-700 text-gray-400 rounded-3xl font-black uppercase text-xs tracking-[0.2em] transition-all active:scale-[0.98] border border-white/5 shadow-xl"
-                    >
+                    <button onClick={onClose} disabled={uploading} className="flex-1 py-5 bg-gray-800 hover:bg-gray-700 text-gray-400 rounded-3xl font-black uppercase text-xs tracking-[0.2em] transition-all active:scale-[0.98] border border-white/5 shadow-xl">
                         បោះបង់ (Cancel)
                     </button>
-                    <button 
-                        onClick={handleSubmit}
-                        disabled={!previewImage || uploading}
-                        className={`flex-[2.5] py-5 rounded-3xl font-black uppercase text-xs tracking-[0.2em] transition-all shadow-2xl flex items-center justify-center gap-3 relative overflow-hidden group
-                            ${!previewImage || uploading ? 'bg-gray-800 text-gray-500 cursor-not-allowed' : 'bg-blue-600 hover:bg-blue-500 text-white shadow-blue-900/40'}`}
-                    >
-                        {uploading ? <Spinner size="sm" /> : (
-                            <>
-                                <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={3}><path d="M5 13l4 4L19 7" /></svg>
-                                ខ្ចប់រួចរាល់ & រក្សាទុក (Ready)
-                            </>
-                        )}
+                    <button onClick={handleSubmit} disabled={!previewImage || uploading} className={`flex-[2.5] py-5 rounded-3xl font-black uppercase text-xs tracking-[0.2em] transition-all shadow-2xl flex items-center justify-center gap-3 relative overflow-hidden group ${!previewImage || uploading ? 'bg-gray-800 text-gray-500 cursor-not-allowed' : 'bg-blue-600 hover:bg-blue-500 text-white shadow-blue-900/40'}`}>
+                        {uploading ? <Spinner size="sm" /> : <><svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={3}><path d="M5 13l4 4L19 7" /></svg>ខ្ចប់រួចរាល់ & រក្សាទុក (Ready)</>}
                     </button>
                 </div>
             </div>
