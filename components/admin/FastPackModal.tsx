@@ -6,7 +6,7 @@ import { ParsedOrder } from '@/types';
 import { compressImage } from '@/utils/imageCompressor';
 import { convertGoogleDriveUrl } from '@/utils/fileUtils';
 import { useSmartZoom } from '@/hooks/useSmartZoom';
-import { PackageDetector, DetectionResult } from '@/utils/visionAlgorithm';
+import { packageDetector, DetectionResult } from '@/utils/visionAlgorithm';
 
 interface FastPackModalProps {
     order: ParsedOrder | null;
@@ -22,21 +22,24 @@ const FastPackModal: React.FC<FastPackModalProps> = ({ order, onClose, onSuccess
     
     // AI & Smart Features State
     const [isAiEnabled, setIsAiEnabled] = useState(true);
+    const [isAiLoading, setIsAiLoading] = useState(false);
     const [detection, setDetection] = useState<DetectionResult | null>(null);
     const [autoCaptureProgress, setAutoCaptureProgress] = useState(0);
+    const [countdown, setCountdown] = useState<number | null>(null);
     
     const videoRef = useRef<HTMLVideoElement>(null);
     const canvasRef = useRef<HTMLCanvasElement>(null);
     const fileInputRef = useRef<HTMLInputElement>(null);
-    const detectorRef = useRef(new PackageDetector());
     const aiLoopRef = useRef<number | null>(null);
     const lastActionTime = useRef<number>(0);
+    const countdownIntervalRef = useRef<NodeJS.Timeout | null>(null);
 
     const { zoom, applyZoom } = useSmartZoom();
     const [rawFile, setRawFile] = useState<File | null>(null);
 
     const stopCamera = useCallback(() => {
         if (aiLoopRef.current) cancelAnimationFrame(aiLoopRef.current);
+        if (countdownIntervalRef.current) clearInterval(countdownIntervalRef.current);
         if (videoRef.current && videoRef.current.srcObject) {
             const stream = videoRef.current.srcObject as MediaStream;
             stream.getTracks().forEach(track => track.stop());
@@ -45,6 +48,7 @@ const FastPackModal: React.FC<FastPackModalProps> = ({ order, onClose, onSuccess
         setIsCameraActive(false);
         setDetection(null);
         setAutoCaptureProgress(0);
+        setCountdown(null);
     }, []);
 
     const capturePhoto = useCallback(async () => {
@@ -76,33 +80,121 @@ const FastPackModal: React.FC<FastPackModalProps> = ({ order, onClose, onSuccess
         }
     }, [stopCamera, uploading]);
 
+    const handleSubmit = useCallback(async () => {
+        if (!previewImage || !rawFile) return;
+        setUploading(true);
+        try {
+            const uploadRes = await fetch(`${WEB_APP_URL}/api/upload-image`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ 
+                    fileData: previewImage,
+                    fileName: `Package_${order!['Order ID']}_${Date.now()}.jpg`,
+                    mimeType: rawFile.type || 'image/jpeg',
+                    userName: currentUser?.FullName || 'Station Packer'
+                })
+            });
+            const uploadData = await uploadRes.json();
+            if (uploadData.status !== 'success') throw new Error("Upload Failed!");
+
+            const updateRes = await fetch(`${WEB_APP_URL}/api/admin/update-order`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    orderId: order!['Order ID'],
+                    team: order!.Team, 
+                    userName: currentUser?.FullName || 'Station Packer',
+                    newData: { 
+                        'Fulfillment Status': 'Ready to Ship',
+                        'Packed By': currentUser?.FullName || 'Station Packer',
+                        'Package Photo URL': uploadData.url,
+                        'Packed Time': new Date().toLocaleString('km-KH')
+                    }
+                })
+            });
+
+            const updateData = await updateRes.json();
+            if (updateData.status !== 'success') throw new Error("Order update failed!");
+            
+            // Broadcast to Chat
+            try {
+                const id = order!['Order ID'].substring(0,8);
+                const chatMsg = `📦 **[PACKED]** កញ្ចប់ #${id} (${order!['Customer Name']}) វេចខ្ចប់រួចរាល់ដោយ **${currentUser?.FullName || 'Station Packer'}**`;
+                await fetch(`${WEB_APP_URL}/api/chat/send`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ userName: 'System', type: 'text', content: chatMsg, MessageType: 'text', Content: chatMsg })
+                });
+            } catch (e) { console.warn("Chat broadcast failed", e); }
+
+            alert(`✅ វេចខ្ចប់ជោគជ័យ និងបានរក្សាទុករូបភាព!`);
+            onSuccess();
+        } catch (err: any) {
+            alert("❌ មានបញ្ហា: " + err.message);
+        } finally {
+            setUploading(false);
+        }
+    }, [previewImage, rawFile, order, currentUser, onSuccess]);
+
+    const startCountdown = useCallback(() => {
+        if (countdown !== null) return;
+        setCountdown(3);
+        
+        if (countdownIntervalRef.current) clearInterval(countdownIntervalRef.current);
+        
+        let count = 3;
+        countdownIntervalRef.current = setInterval(() => {
+            count -= 1;
+            setCountdown(count);
+            if (count <= 0) {
+                if (countdownIntervalRef.current) clearInterval(countdownIntervalRef.current);
+                setCountdown(null);
+                capturePhoto();
+            }
+        }, 1000);
+    }, [countdown, capturePhoto]);
+
     // AI Processing Loop
-    const runAiLoop = useCallback(() => {
+    const runAiLoop = useCallback(async () => {
         if (!videoRef.current || !isCameraActive || previewImage) return;
 
-        const result = detectorRef.current.detect(videoRef.current);
+        const result = await packageDetector.detect(videoRef.current);
         setDetection(result);
 
-        if (isAiEnabled && result.found) {
-            // 1. Smart Auto Zoom
-            const track = (videoRef.current.srcObject as MediaStream)?.getVideoTracks()[0];
-            if (track && Date.now() - lastActionTime.current > 1000) {
-                const area = (result.box!.w * result.box!.h) / (videoRef.current.videoWidth * videoRef.current.videoHeight);
-                if (area < 0.15) applyZoom(track, zoom + 0.5);
-                else if (area > 0.6) applyZoom(track, zoom - 0.5);
-                lastActionTime.current = Date.now();
+        if (isAiEnabled) {
+            // 1. Gesture: Five Fingers (Countdown to Capture)
+            if (result.gesture === 'five_fingers' && countdown === null) {
+                startCountdown();
+            }
+            
+            // 2. Gesture: Thumbs Up (Auto Submit - only if image is already captured)
+            if (result.gesture === 'thumbs_up' && previewImage && !uploading) {
+                handleSubmit();
             }
 
-            // 2. Auto Capture Progress
-            if (result.stability > 0.7) {
-                setAutoCaptureProgress(prev => {
-                    const next = prev + 2;
-                    if (next >= 100) {
-                        capturePhoto();
-                        return 0;
-                    }
-                    return next;
-                });
+            // 3. Smart Auto Zoom
+            if (result.found && result.box) {
+                const track = (videoRef.current.srcObject as MediaStream)?.getVideoTracks()[0];
+                if (track && Date.now() - lastActionTime.current > 1500) {
+                    const area = (result.box.w * result.box.h) / (videoRef.current.videoWidth * videoRef.current.videoHeight);
+                    if (area < 0.12) applyZoom(track, zoom + 0.5);
+                    else if (area > 0.5) applyZoom(track, zoom - 0.5);
+                    lastActionTime.current = Date.now();
+                }
+
+                // 4. Auto Capture Progress (If NO Gesture Active and stable)
+                if (countdown === null && result.stability > 0.9 && !previewImage) {
+                    setAutoCaptureProgress(prev => {
+                        const next = prev + 1.5;
+                        if (next >= 100) {
+                            capturePhoto();
+                            return 0;
+                        }
+                        return next;
+                    });
+                } else {
+                    setAutoCaptureProgress(0);
+                }
             } else {
                 setAutoCaptureProgress(0);
             }
@@ -111,11 +203,18 @@ const FastPackModal: React.FC<FastPackModalProps> = ({ order, onClose, onSuccess
         }
 
         aiLoopRef.current = requestAnimationFrame(runAiLoop);
-    }, [isCameraActive, isAiEnabled, previewImage, zoom, applyZoom, capturePhoto]);
+    }, [isCameraActive, isAiEnabled, previewImage, zoom, applyZoom, capturePhoto, countdown, startCountdown, handleSubmit, uploading]);
 
     const startCamera = async () => {
         setIsCameraActive(true);
         setPreviewImage(null);
+        
+        if (!packageDetector.isReady()) {
+            setIsAiLoading(true);
+            await packageDetector.init();
+            setIsAiLoading(false);
+        }
+
         try {
             const stream = await navigator.mediaDevices.getUserMedia({ 
                 video: { 
@@ -125,6 +224,7 @@ const FastPackModal: React.FC<FastPackModalProps> = ({ order, onClose, onSuccess
                 }, 
                 audio: false 
             });
+            
             if (videoRef.current) {
                 videoRef.current.srcObject = stream;
                 videoRef.current.onloadedmetadata = () => {
@@ -135,6 +235,7 @@ const FastPackModal: React.FC<FastPackModalProps> = ({ order, onClose, onSuccess
             console.error("Camera access error:", err);
             alert("មិនអាចបើកកាមេរ៉ាបានទេ។");
             setIsCameraActive(false);
+            setIsAiLoading(false);
         }
     };
 
@@ -203,62 +304,6 @@ const FastPackModal: React.FC<FastPackModalProps> = ({ order, onClose, onSuccess
         }
     };
 
-    const handleSubmit = async () => {
-        if (!previewImage || !rawFile) return;
-        setUploading(true);
-        try {
-            const uploadRes = await fetch(`${WEB_APP_URL}/api/upload-image`, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ 
-                    fileData: previewImage,
-                    fileName: `Package_${order!['Order ID']}_${Date.now()}.jpg`,
-                    mimeType: rawFile.type || 'image/jpeg',
-                    userName: currentUser?.FullName || 'Station Packer'
-                })
-            });
-            const uploadData = await uploadRes.json();
-            if (uploadData.status !== 'success') throw new Error("Upload Failed!");
-
-            const updateRes = await fetch(`${WEB_APP_URL}/api/admin/update-order`, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({
-                    orderId: order!['Order ID'],
-                    team: order!.Team, 
-                    userName: currentUser?.FullName || 'Station Packer',
-                    newData: { 
-                        'Fulfillment Status': 'Ready to Ship',
-                        'Packed By': currentUser?.FullName || 'Station Packer',
-                        'Package Photo URL': uploadData.url,
-                        'Packed Time': new Date().toLocaleString('km-KH')
-                    }
-                })
-            });
-
-            const updateData = await updateRes.json();
-            if (updateData.status !== 'success') throw new Error("Order update failed!");
-            
-            // Broadcast to Chat
-            try {
-                const id = order!['Order ID'].substring(0,8);
-                const chatMsg = `📦 **[PACKED]** កញ្ចប់ #${id} (${order!['Customer Name']}) វេចខ្ចប់រួចរាល់ដោយ **${currentUser?.FullName || 'Station Packer'}**`;
-                await fetch(`${WEB_APP_URL}/api/chat/send`, {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ userName: 'System', type: 'text', content: chatMsg, MessageType: 'text', Content: chatMsg })
-                });
-            } catch (e) { console.warn("Chat broadcast failed", e); }
-
-            alert(`✅ វេចខ្ចប់ជោគជ័យ និងបានរក្សាទុករូបភាព!`);
-            onSuccess();
-        } catch (err: any) {
-            alert("❌ មានបញ្ហា: " + err.message);
-        } finally {
-            setUploading(false);
-        }
-    };
-
     if (!order) return null;
 
     return (
@@ -296,7 +341,6 @@ const FastPackModal: React.FC<FastPackModalProps> = ({ order, onClose, onSuccess
                 {/* Content */}
                 <div className="p-6 overflow-y-auto space-y-6 flex-grow custom-scrollbar">
                     <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
-                        {/* Left Side: Order Details */}
                         <div className="space-y-6">
                             {fullPrinterURL && (
                                 <button 
@@ -384,7 +428,6 @@ const FastPackModal: React.FC<FastPackModalProps> = ({ order, onClose, onSuccess
                                 </div>
                             </div>
 
-                            {/* Financial Summary */}
                             <div className="bg-blue-600/5 rounded-2xl p-5 border border-blue-500/10 space-y-3">
                                 <div className="flex justify-between items-center text-[11px]">
                                     <span className="text-gray-500 font-bold uppercase">តម្លៃពេញសរុប (Total Full)</span>
@@ -415,9 +458,10 @@ const FastPackModal: React.FC<FastPackModalProps> = ({ order, onClose, onSuccess
                                 <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest">AI Vision Tracking</p>
                                 <button 
                                     onClick={() => setIsAiEnabled(!isAiEnabled)}
-                                    className={`px-3 py-1 rounded-full text-[8px] font-black uppercase tracking-tighter transition-all border ${isAiEnabled ? 'bg-emerald-500/20 text-emerald-400 border-emerald-500/30' : 'bg-gray-800 text-gray-500 border-white/5'}`}
+                                    className={`px-3 py-1.5 rounded-full text-[8px] font-black uppercase tracking-tighter transition-all border flex items-center gap-2 ${isAiEnabled ? 'bg-emerald-500/20 text-emerald-400 border-emerald-500/30' : 'bg-gray-800 text-gray-500 border-white/5'}`}
                                 >
-                                    AI {isAiEnabled ? 'Active' : 'Disabled'}
+                                    <div className={`w-1.5 h-1.5 rounded-full ${isAiEnabled ? (isAiLoading ? 'bg-amber-500 animate-pulse' : 'bg-emerald-500') : 'bg-gray-600'}`}></div>
+                                    AI {isAiLoading ? 'Initializing...' : (isAiEnabled ? 'Active' : 'Disabled')}
                                 </button>
                             </div>
                             
@@ -442,39 +486,63 @@ const FastPackModal: React.FC<FastPackModalProps> = ({ order, onClose, onSuccess
                                     <div className="absolute inset-0 rounded-[2.5rem] overflow-hidden border-2 border-blue-500 shadow-[0_0_50px_rgba(37,99,235,0.2)] bg-black">
                                         <video ref={videoRef} autoPlay playsInline className="w-full h-full object-cover" />
                                         
+                                        {isAiLoading && (
+                                            <div className="absolute inset-0 bg-black/60 backdrop-blur-sm z-50 flex flex-col items-center justify-center gap-4">
+                                                <Spinner />
+                                                <p className="text-[10px] font-black text-white uppercase tracking-[0.3em] animate-pulse">Initializing AI Neural Engine...</p>
+                                            </div>
+                                        )}
                                         {/* AI Dynamic Targeting Overlay */}
-                                        {isAiEnabled && detection?.found && (
+                                        {isAiEnabled && detection?.found && detection.box && (
                                             <div 
-                                                className="absolute inset-0 pointer-events-none flex items-center justify-center transition-all duration-300"
+                                                className="absolute border-2 border-dashed transition-all duration-75 pointer-events-none"
+                                                style={{
+                                                    left: `${(detection.box.x / (videoRef.current?.videoWidth || 1)) * 100}%`,
+                                                    top: `${(detection.box.y / (videoRef.current?.videoHeight || 1)) * 100}%`,
+                                                    width: `${(detection.box.w / (videoRef.current?.videoWidth || 1)) * 100}%`,
+                                                    height: `${(detection.box.h / (videoRef.current?.videoHeight || 1)) * 100}%`,
+                                                    borderColor: detection.gesture === 'five_fingers' ? '#10b981' : (detection.gesture === 'thumbs_up' ? '#3b82f6' : '#3b82f6'),
+                                                    boxShadow: `0 0 20px ${detection.gesture === 'five_fingers' ? 'rgba(16,185,129,0.3)' : 'rgba(59,130,246,0.3)'}`,
+                                                    borderRadius: '1.5rem'
+                                                }}
                                             >
-                                                {/* Corner Brackets that adapt to any shape (Bag or Box) */}
-                                                <div className="relative w-[70%] h-[60%] border-2 border-transparent">
-                                                    <div className={`absolute -top-4 -left-4 w-12 h-12 border-t-4 border-l-4 rounded-tl-2xl transition-colors duration-300 ${autoCaptureProgress > 0 ? 'border-emerald-500 shadow-[0_0_15px_#10b981]' : 'border-blue-500 shadow-[0_0_15px_#3b82f6]'}`} />
-                                                    <div className={`absolute -top-4 -right-4 w-12 h-12 border-t-4 border-r-4 rounded-tr-2xl transition-colors duration-300 ${autoCaptureProgress > 0 ? 'border-emerald-500 shadow-[0_0_15px_#10b981]' : 'border-blue-500 shadow-[0_0_15px_#3b82f6]'}`} />
-                                                    <div className={`absolute -bottom-4 -left-4 w-12 h-12 border-b-4 border-l-4 rounded-bl-2xl transition-colors duration-300 ${autoCaptureProgress > 0 ? 'border-emerald-500 shadow-[0_0_15px_#10b981]' : 'border-blue-500 shadow-[0_0_15px_#3b82f6]'}`} />
-                                                    <div className={`absolute -bottom-4 -right-4 w-12 h-12 border-b-4 border-r-4 rounded-br-2xl transition-colors duration-300 ${autoCaptureProgress > 0 ? 'border-emerald-500 shadow-[0_0_15px_#10b981]' : 'border-blue-500 shadow-[0_0_15px_#3b82f6]'}`} />
-                                                    
-                                                    {/* Central Multi-Shape Guide */}
-                                                    <div className="absolute inset-0 flex items-center justify-center opacity-20">
-                                                        <div className="w-full h-full border border-dashed border-white rounded-[3rem] animate-pulse" />
-                                                    </div>
+                                                <div className={`absolute -top-2 -left-2 w-6 h-6 border-t-4 border-l-4 rounded-tl-lg ${detection.gesture === 'five_fingers' ? 'border-emerald-500' : 'border-blue-500'}`} />
+                                                <div className={`absolute -top-2 -right-2 w-6 h-6 border-t-4 border-r-4 rounded-tr-lg ${detection.gesture === 'five_fingers' ? 'border-emerald-500' : 'border-blue-500'}`} />
+                                                <div className={`absolute -bottom-2 -left-2 w-6 h-6 border-b-4 border-l-4 rounded-bl-lg ${detection.gesture === 'five_fingers' ? 'border-emerald-500' : 'border-blue-500'}`} />
+                                                <div className={`absolute -bottom-2 -right-2 w-6 h-6 border-b-4 border-r-4 rounded-br-lg ${detection.gesture === 'five_fingers' ? 'border-emerald-500' : 'border-blue-500'}`} />
+                                                
+                                                <div className="absolute -top-10 left-1/2 -translate-x-1/2 whitespace-nowrap">
+                                                    <span className={`px-3 py-1 rounded-full text-[9px] font-black uppercase tracking-widest shadow-xl border ${detection.gesture === 'five_fingers' ? 'bg-emerald-600 border-emerald-400 text-white' : 'bg-blue-600/80 border-blue-400 text-white'}`}>
+                                                        {detection.gesture === 'five_fingers' ? (countdown !== null ? `Capturing in ${countdown}s...` : 'Ready to Capture!') : (detection.gesture === 'thumbs_up' ? 'Confirming...' : 'Tracking Hand...')}
+                                                    </span>
+                                                </div>
+                                            </div>
+                                        )}
 
-                                                    <div className="absolute -top-12 left-1/2 -translate-x-1/2 flex items-center gap-2 whitespace-nowrap">
-                                                        <span className="bg-blue-600/80 backdrop-blur-md text-white text-[9px] font-black px-3 py-1 rounded-full uppercase tracking-widest border border-white/10 shadow-xl">
-                                                            Scanning Object...
-                                                        </span>
-                                                        {autoCaptureProgress > 0 && (
-                                                            <span className="bg-emerald-600 text-white text-[9px] font-black px-3 py-1 rounded-full animate-bounce shadow-xl">
-                                                                READY!
-                                                            </span>
-                                                        )}
+                                        {/* Thumbs Up Confirming Overlay */}
+                                        {previewImage && detection?.gesture === 'thumbs_up' && (
+                                            <div className="absolute inset-0 flex items-center justify-center z-50 bg-blue-600/20 backdrop-blur-sm animate-pulse">
+                                                <div className="bg-blue-600 text-white p-8 rounded-full shadow-[0_0_50px_rgba(59,130,246,0.6)]">
+                                                    <svg className="w-20 h-20" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={3}><path d="M5 13l4 4L19 7" /></svg>
+                                                    <p className="text-center font-black uppercase text-xs mt-4 tracking-widest">Submitting...</p>
+                                                </div>
+                                            </div>
+                                        )}
+
+                                        {/* Countdown Large Text Overlay */}
+                                        {countdown !== null && (
+                                            <div className="absolute inset-0 flex items-center justify-center z-50 bg-black/20 backdrop-blur-[2px]">
+                                                <div className="relative">
+                                                    <div className="w-32 h-32 rounded-full border-4 border-white/20 flex items-center justify-center animate-ping absolute inset-0"></div>
+                                                    <div className="w-32 h-32 rounded-full border-4 border-emerald-500 flex items-center justify-center bg-black/40 backdrop-blur-md shadow-[0_0_50px_rgba(16,185,129,0.5)]">
+                                                        <span className="text-6xl font-black text-white animate-bounce-slow">{countdown}</span>
                                                     </div>
                                                 </div>
                                             </div>
                                         )}
 
                                         {/* Auto-Capture Progress Ring */}
-                                        {autoCaptureProgress > 0 && (
+                                        {autoCaptureProgress > 0 && countdown === null && (
                                             <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 z-30">
                                                 <div className="w-24 h-24 rounded-full border-4 border-white/10 flex items-center justify-center">
                                                     <div 
@@ -492,7 +560,6 @@ const FastPackModal: React.FC<FastPackModalProps> = ({ order, onClose, onSuccess
                                             <div className="w-14 h-14" />
                                         </div>
                                         
-                                        {/* Hardware Info */}
                                         <div className="absolute top-6 left-6 flex flex-col gap-2">
                                             <div className="bg-black/60 backdrop-blur-md px-3 py-1.5 rounded-xl border border-white/5 flex items-center gap-2">
                                                 <span className="w-1.5 h-1.5 rounded-full bg-blue-500 animate-pulse"></span>
@@ -529,7 +596,6 @@ const FastPackModal: React.FC<FastPackModalProps> = ({ order, onClose, onSuccess
                     </div>
                 </div>
 
-                {/* Footer Actions */}
                 <div className="p-8 bg-[#0f172a] border-t border-white/5 flex gap-4">
                     <button 
                         onClick={onClose}

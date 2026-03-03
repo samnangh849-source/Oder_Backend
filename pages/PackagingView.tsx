@@ -8,10 +8,16 @@ import { convertGoogleDriveUrl } from '@/utils/fileUtils';
 import OrderFilters, { FilterState } from '@/components/orders/OrderFilters';
 import { FilterPanel } from '@/components/orders/FilterPanel';
 import Modal from '@/components/common/Modal';
+import { packageDetector } from '@/utils/visionAlgorithm';
 
 const PackagingView: React.FC<{ orders?: ParsedOrder[] }> = ({ orders: propOrders }) => {
     const { appData, refreshData, currentUser, setMobilePageTitle, previewImage: showFullImage } = useContext(AppContext);
     
+    // AI Pre-initialization
+    useEffect(() => {
+        // Start loading AI model in the background
+        packageDetector.init();
+    }, []);
     // 1. Core State
     const [selectedStore, setSelectedStore] = useState<string>('');
     const [activeTab, setActiveTab] = useState<'Pending' | 'Ready to Ship' | 'Shipped'>('Pending');

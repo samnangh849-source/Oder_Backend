@@ -758,6 +758,14 @@ const CreateOrderPage: React.FC<CreateOrderPageProps> = ({ team, onSaveSuccess, 
                         </div>
 
                         <div className="flex flex-col sm:flex-row gap-3 sm:gap-4 mt-6">
+                            <button 
+                                type="button" 
+                                onClick={() => setOrder({ ...order, products: [...order.products, { ...initialProductState, id: Date.now() }] })}
+                                className="w-full py-4 px-6 bg-emerald-600/10 border border-emerald-500/30 rounded-2xl text-emerald-400 font-black uppercase text-[11px] tracking-widest hover:bg-emerald-600 hover:text-white transition-all flex items-center justify-center gap-2 shadow-lg shadow-emerald-900/10 active:scale-95"
+                            >
+                                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M12 4v16m8-8H4" /></svg>
+                                បន្ថែមផលិតផល (Add Item)
+                            </button>
                             <button type="button" onClick={()=>setIsScannerVisible(true)} className="w-full py-4 px-6 bg-blue-600/10 border border-blue-500/30 rounded-2xl text-blue-400 font-black uppercase text-[11px] tracking-widest hover:bg-blue-600 hover:text-white transition-all flex items-center justify-center gap-2 shadow-lg shadow-blue-900/10 active:scale-95"><svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path d="M3 7V5a2 2 0 0 1 2-2h2M17 3h2a2 2 0 0 1 2 2v2M21 17v2a2 2 0 0 1-2 2h-2M7 21H5a2 2 0 0 1-2-2v-2M7 12h10" strokeWidth="3"/></svg>Scan Barcode</button>
                         </div>
                     </fieldset>
