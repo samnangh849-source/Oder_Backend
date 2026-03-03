@@ -5,6 +5,7 @@ import '@tensorflow/tfjs-backend-webgl';
 export interface DetectionResult {
     found: boolean;
     box?: { x: number, y: number, w: number, h: number };
+    keypoints?: handPoseDetection.Keypoint[]; // Added keypoints for finger tracking
     stability: number;
     type: 'box' | 'bag' | 'general';
     gesture?: 'none' | 'five_fingers' | 'thumbs_up';
@@ -31,7 +32,7 @@ export class PackageDetector {
             const detectorConfig: handPoseDetection.MediaPipeHandsMediaPipeConfig = {
                 runtime: 'mediapipe',
                 solutionPath: `https://cdn.jsdelivr.net/npm/@mediapipe/hands@0.4.1646424515`,
-                modelType: 'lite', // Use 'lite' for faster performance on Chrome
+                modelType: 'lite', 
             };
             this.detector = await handPoseDetection.createDetector(model, detectorConfig);
             console.log("AI: Core Ready.");
@@ -65,6 +66,7 @@ export class PackageDetector {
 
         let gestureDetected: 'none' | 'five_fingers' | 'thumbs_up' = 'none';
         let rawBox: { x: number, y: number, w: number, h: number } | null = null;
+        let keypoints: handPoseDetection.Keypoint[] | undefined = undefined;
         let isHand = false;
         let confidence = 0;
 
@@ -75,6 +77,7 @@ export class PackageDetector {
                     const hand = hands[0];
                     isHand = true;
                     confidence = hand.score || 0.8;
+                    keypoints = hand.keypoints; // Capture all 21 keypoints
                     
                     const xs = hand.keypoints.map(kp => kp.x);
                     const ys = hand.keypoints.map(kp => kp.y);
@@ -91,8 +94,6 @@ export class PackageDetector {
                     };
 
                     const k = hand.keypoints;
-                    // Improved Five Fingers Detection (Open Palm)
-                    // Index, Middle, Ring, Pinky extended
                     const isExtended = (tip: number, mid: number, base: number) => k[tip].y < k[mid].y && k[mid].y < k[base].y;
                     
                     const openPalm = isExtended(8, 7, 5) && isExtended(12, 11, 9) && isExtended(16, 15, 13) && isExtended(20, 19, 17);
@@ -113,6 +114,7 @@ export class PackageDetector {
             found: true,
             type: isHand ? 'general' : 'box',
             box: rawBox ? this.smoothBox(rawBox) : undefined,
+            keypoints, // Send keypoints back to UI
             stability: isHand ? 0.95 : 0.6,
             gesture: gestureDetected,
             confidence
