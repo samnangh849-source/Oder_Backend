@@ -172,13 +172,21 @@ const FastPackModal: React.FC<FastPackModalProps> = ({ order, onClose, onSuccess
                 handleSubmit();
             }
 
-            // 3. Smart Auto Zoom
+            // 3. Smart Auto Zoom (Works for both Hand and Package)
             if (result.found && result.box) {
                 const track = (videoRef.current.srcObject as MediaStream)?.getVideoTracks()[0];
-                if (track && Date.now() - lastActionTime.current > 1500) {
-                    const area = (result.box.w * result.box.h) / (videoRef.current.videoWidth * videoRef.current.videoHeight);
-                    if (area < 0.12) applyZoom(track, zoom + 0.5);
-                    else if (area > 0.5) applyZoom(track, zoom - 0.5);
+                if (track && Date.now() - lastActionTime.current > 1200) {
+                    const videoArea = videoRef.current.videoWidth * videoRef.current.videoHeight;
+                    const objectArea = result.box.w * result.box.h;
+                    const areaRatio = objectArea / videoArea;
+
+                    // If it's a package (type === 'box'), we want it to fill more of the screen
+                    const minThreshold = result.type === 'box' ? 0.25 : 0.12;
+                    const maxThreshold = result.type === 'box' ? 0.70 : 0.50;
+
+                    if (areaRatio < minThreshold) applyZoom(track, zoom + 0.5);
+                    else if (areaRatio > maxThreshold) applyZoom(track, zoom - 0.5);
+                    
                     lastActionTime.current = Date.now();
                 }
 
@@ -308,6 +316,24 @@ const FastPackModal: React.FC<FastPackModalProps> = ({ order, onClose, onSuccess
 
     return (
         <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/80 backdrop-blur-md animate-fade-in">
+            <style>{`
+                @keyframes scan-y {
+                    0% { top: 0; opacity: 0; }
+                    50% { opacity: 1; }
+                    100% { top: 100%; opacity: 0; }
+                }
+                .animate-scan-y {
+                    position: absolute;
+                    animation: scan-y 3s linear infinite;
+                }
+                @keyframes bounce-slow {
+                    0%, 100% { transform: translateY(0); }
+                    50% { transform: translateY(-10px); }
+                }
+                .animate-bounce-slow {
+                    animation: bounce-slow 2s infinite ease-in-out;
+                }
+            `}</style>
             <div className="bg-[#0f172a] border border-white/10 rounded-[2.5rem] w-full max-w-4xl shadow-2xl overflow-hidden flex flex-col max-h-[95vh]">
                 {/* Header */}
                 <div className="p-6 border-b border-white/5 flex justify-between items-center relative bg-gradient-to-r from-blue-600/20 to-transparent">
@@ -495,26 +521,32 @@ const FastPackModal: React.FC<FastPackModalProps> = ({ order, onClose, onSuccess
                                         {/* AI Dynamic Targeting Overlay */}
                                         {isAiEnabled && detection?.found && detection.box && (
                                             <div 
-                                                className="absolute border-2 border-dashed transition-all duration-75 pointer-events-none"
+                                                className="absolute transition-all duration-150 ease-out pointer-events-none"
                                                 style={{
                                                     left: `${(detection.box.x / (videoRef.current?.videoWidth || 1)) * 100}%`,
                                                     top: `${(detection.box.y / (videoRef.current?.videoHeight || 1)) * 100}%`,
                                                     width: `${(detection.box.w / (videoRef.current?.videoWidth || 1)) * 100}%`,
                                                     height: `${(detection.box.h / (videoRef.current?.videoHeight || 1)) * 100}%`,
-                                                    borderColor: detection.gesture === 'five_fingers' ? '#10b981' : (detection.gesture === 'thumbs_up' ? '#3b82f6' : '#3b82f6'),
-                                                    boxShadow: `0 0 20px ${detection.gesture === 'five_fingers' ? 'rgba(16,185,129,0.3)' : 'rgba(59,130,246,0.3)'}`,
-                                                    borderRadius: '1.5rem'
                                                 }}
                                             >
-                                                <div className={`absolute -top-2 -left-2 w-6 h-6 border-t-4 border-l-4 rounded-tl-lg ${detection.gesture === 'five_fingers' ? 'border-emerald-500' : 'border-blue-500'}`} />
-                                                <div className={`absolute -top-2 -right-2 w-6 h-6 border-t-4 border-r-4 rounded-tr-lg ${detection.gesture === 'five_fingers' ? 'border-emerald-500' : 'border-blue-500'}`} />
-                                                <div className={`absolute -bottom-2 -left-2 w-6 h-6 border-b-4 border-l-4 rounded-bl-lg ${detection.gesture === 'five_fingers' ? 'border-emerald-500' : 'border-blue-500'}`} />
-                                                <div className={`absolute -bottom-2 -right-2 w-6 h-6 border-b-4 border-r-4 rounded-br-lg ${detection.gesture === 'five_fingers' ? 'border-emerald-500' : 'border-blue-500'}`} />
-                                                
-                                                <div className="absolute -top-10 left-1/2 -translate-x-1/2 whitespace-nowrap">
-                                                    <span className={`px-3 py-1 rounded-full text-[9px] font-black uppercase tracking-widest shadow-xl border ${detection.gesture === 'five_fingers' ? 'bg-emerald-600 border-emerald-400 text-white' : 'bg-blue-600/80 border-blue-400 text-white'}`}>
-                                                        {detection.gesture === 'five_fingers' ? (countdown !== null ? `Capturing in ${countdown}s...` : 'Ready to Capture!') : (detection.gesture === 'thumbs_up' ? 'Confirming...' : 'Tracking Hand...')}
-                                                    </span>
+                                                <div className={`absolute inset-0 border-2 rounded-[2rem] transition-colors duration-300 ${detection.gesture !== 'none' ? 'border-emerald-500 shadow-[0_0_30px_rgba(16,185,129,0.4)]' : 'border-blue-500/50 shadow-[0_0_20px_rgba(59,130,246,0.2)]'}`}>
+                                                    <div className="absolute inset-x-4 top-0 h-0.5 bg-gradient-to-r from-transparent via-blue-400 to-transparent animate-scan-y opacity-50" />
+                                                    <div className="absolute -top-1 -left-1 w-8 h-8 border-t-4 border-l-4 border-blue-500 rounded-tl-2xl" />
+                                                    <div className="absolute -top-1 -right-1 w-8 h-8 border-t-4 border-r-4 border-blue-500 rounded-tr-2xl" />
+                                                    <div className="absolute -bottom-1 -left-1 w-8 h-8 border-b-4 border-l-4 border-blue-500 rounded-bl-2xl" />
+                                                    <div className="absolute -bottom-1 -right-1 w-8 h-8 border-b-4 border-r-4 border-blue-500 rounded-bl-2xl" />
+                                                </div>
+
+                                                <div className="absolute -top-14 left-1/2 -translate-x-1/2 flex flex-col items-center gap-1 min-w-[150px]">
+                                                    <div className="flex items-center gap-2 bg-black/60 backdrop-blur-md px-3 py-1 rounded-full border border-white/10 shadow-2xl">
+                                                        <div className="w-1.5 h-1.5 rounded-full bg-blue-500 animate-pulse" />
+                                                        <span className="text-[9px] font-black text-white uppercase tracking-widest">
+                                                            {detection.gesture === 'five_fingers' ? 'Action: Capture' : (detection.gesture === 'thumbs_up' ? 'Action: Confirm' : (detection.type === 'box' ? 'Object: Package' : 'Status: Tracking'))}
+                                                        </span>
+                                                    </div>
+                                                    <div className="w-20 h-1 bg-gray-800 rounded-full overflow-hidden border border-white/5">
+                                                        <div className="h-full bg-blue-500 transition-all duration-500" style={{ width: `${(detection.confidence || 0) * 100}%` }} />
+                                                    </div>
                                                 </div>
                                             </div>
                                         )}
