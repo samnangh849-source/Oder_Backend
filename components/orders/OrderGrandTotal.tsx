@@ -27,27 +27,34 @@ export const DesktopGrandTotalRow: React.FC<DesktopGrandTotalRowProps> = ({ tota
     if (totals.count === 0) return null;
 
     return (
-        <tr className={`bg-blue-900/30 border-b-2 border-blue-500/20 sticky top-0 z-20 backdrop-blur-md shadow-lg ${showBorders ? 'divide-x divide-white/10' : ''}`}>
+        <tr className={`bg-slate-900/95 border-b-4 border-blue-600/40 sticky top-0 z-30 backdrop-blur-2xl shadow-[0_10px_30px_rgba(0,0,0,0.5)] ${showBorders ? 'divide-x divide-white/10' : ''}`}>
             {showSelection && <td className="px-1 py-4 w-8"></td>}
             
             {isVisible('index') && (
-                <td className="px-4 py-4 text-center font-black text-blue-400 text-[clamp(13px,1vw,15px)]">
-                    {totals.count}
+                <td className="px-1 py-4 text-center">
+                    <div className="flex flex-col items-center">
+                        <span className="text-[8px] font-black text-gray-500 uppercase tracking-tighter mb-1">Volume</span>
+                        <span className="font-black text-blue-400 text-[clamp(14px,1.1vw,16px)] leading-none">
+                            {totals.count}
+                        </span>
+                    </div>
                 </td>
             )}
             
-            {/* Moved Actions Here (2nd Position) */}
             {isVisible('actions') && <td className="px-4 py-4"></td>}
             
             {isVisible('customerName') && (
                 <td className="px-6 py-4">
-                    <div className="flex flex-col">
-                        <span className="font-black text-white uppercase tracking-widest text-[clamp(11px,0.8vw,13px)] leading-tight">
-                            Grand Total
-                        </span>
-                        <span className="font-bold text-blue-300 text-[clamp(10px,0.7vw,12px)] leading-tight">
-                            (សរុបរួម)
-                        </span>
+                    <div className="flex items-center gap-3">
+                        <div className="w-1 h-8 bg-blue-600 rounded-full shadow-[0_0_10px_#2563eb]"></div>
+                        <div className="flex flex-col">
+                            <span className="font-black text-white uppercase tracking-[0.2em] text-[clamp(11px,0.8vw,13px)] leading-tight">
+                                Grand Total
+                            </span>
+                            <span className="font-bold text-blue-400/80 text-[clamp(10px,0.7vw,12px)] leading-tight">
+                                (សរុបរួមទាំងអស់)
+                            </span>
+                        </div>
                     </div>
                 </td>
             )}
@@ -59,9 +66,12 @@ export const DesktopGrandTotalRow: React.FC<DesktopGrandTotalRowProps> = ({ tota
             
             {isVisible('total') && (
                 <td className="px-6 py-4">
-                    <span className="font-black text-emerald-400 tracking-tighter shadow-emerald-500/20 drop-shadow-sm text-[clamp(17px,1.3vw,21px)]">
-                        ${totals.grandTotal.toLocaleString(undefined, { minimumFractionDigits: 2 })}
-                    </span>
+                    <div className="flex flex-col items-start">
+                        <span className="text-[8px] font-black text-gray-500 uppercase tracking-widest mb-1">Total Revenue</span>
+                        <span className="font-black text-emerald-400 tracking-tighter drop-shadow-[0_0_8px_rgba(16,185,129,0.3)] text-[clamp(18px,1.4vw,22px)] leading-none">
+                            ${totals.grandTotal.toLocaleString(undefined, { minimumFractionDigits: 2 })}
+                        </span>
+                    </div>
                 </td>
             )}
             
@@ -69,9 +79,12 @@ export const DesktopGrandTotalRow: React.FC<DesktopGrandTotalRowProps> = ({ tota
             
             {isVisible('shippingCost') && (
                 <td className="px-6 py-4">
-                    <span className="font-black text-orange-400 font-mono text-[clamp(14px,1vw,16px)]">
-                        ${totals.internalCost.toLocaleString(undefined, { minimumFractionDigits: 3, maximumFractionDigits: 3 })}
-                    </span>
+                    <div className="flex flex-col items-start">
+                        <span className="text-[8px] font-black text-gray-500 uppercase tracking-widest mb-1">Total Cost</span>
+                        <span className="font-black text-orange-400 font-mono text-[clamp(14px,1.1vw,17px)] leading-none">
+                            ${totals.internalCost.toLocaleString(undefined, { minimumFractionDigits: 3, maximumFractionDigits: 3 })}
+                        </span>
+                    </div>
                 </td>
             )}
             
@@ -79,14 +92,16 @@ export const DesktopGrandTotalRow: React.FC<DesktopGrandTotalRowProps> = ({ tota
                 <td className="px-6 py-4">
                     <div className="flex flex-col gap-1 items-center justify-center">
                         {totals.paidCount > 0 && (
-                            <span className="font-black text-emerald-400 bg-emerald-500/10 px-2 py-0.5 rounded border border-emerald-500/20 uppercase tracking-wider whitespace-nowrap text-[clamp(8px,0.6vw,10px)]">
-                                Paid: {totals.paidCount}
-                            </span>
+                            <div className="flex items-center gap-2 bg-emerald-500/10 px-2 py-1 rounded-lg border border-emerald-500/20 w-full justify-between">
+                                <span className="text-[8px] font-black text-emerald-500/70 uppercase">Paid</span>
+                                <span className="font-black text-emerald-400 text-[11px]">{totals.paidCount}</span>
+                            </div>
                         )}
                         {totals.unpaidCount > 0 && (
-                            <span className="font-black text-red-400 bg-red-500/10 px-2 py-0.5 rounded border border-red-500/20 uppercase tracking-wider whitespace-nowrap text-[clamp(8px,0.6vw,10px)]">
-                                Unpaid: {totals.unpaidCount}
-                            </span>
+                            <div className="flex items-center gap-2 bg-red-500/10 px-2 py-1 rounded-lg border border-red-500/20 w-full justify-between">
+                                <span className="text-[8px] font-black text-red-500/70 uppercase">Unpaid</span>
+                                <span className="font-black text-red-400 text-[11px]">{totals.unpaidCount}</span>
+                            </div>
                         )}
                     </div>
                 </td>

@@ -192,12 +192,12 @@ const OrdersDashboard: React.FC<OrdersDashboardProps> = ({ onBack, initialFilter
         return processedOrders;
     };
 
-    // Robust Date Parsing helper for sorting
+    // Robust Date Parsing helper for sorting and filtering
     const getOrderTimestamp = (order: any) => {
         const ts = order.Timestamp;
         if (!ts) return 0;
         
-        // Handle "YYYY-MM-DD H:mm" format explicitly
+        // Handle "YYYY-MM-DD H:mm" format (Legacy/Manual)
         const match = ts.match(/^(\d{4})-(\d{1,2})-(\d{1,2})\s(\d{1,2}):(\d{2})/);
         if (match) {
             return new Date(
@@ -208,7 +208,15 @@ const OrdersDashboard: React.FC<OrdersDashboardProps> = ({ onBack, initialFilter
                 parseInt(match[5])
             ).getTime();
         }
-        return new Date(ts).getTime();
+
+        // Handle ISO-like format with Z (e.g., "2026-01-04T06:31:21Z")
+        // Treat as local time if it has Z, to match display logic
+        if (typeof ts === 'string' && ts.endsWith('Z')) {
+            return new Date(ts.slice(0, -1)).getTime();
+        }
+
+        const d = new Date(ts);
+        return isNaN(d.getTime()) ? 0 : d.getTime();
     };
 
     const fetchAllOrders = async () => {
@@ -273,7 +281,11 @@ const OrdersDashboard: React.FC<OrdersDashboardProps> = ({ onBack, initialFilter
                 let start: Date | null = null;
                 let end: Date | null = null;
                 switch (filters.datePreset) {
-                    case 'today': start = today; break;
+                    case 'today': 
+                        start = today; 
+                        end = new Date(today); 
+                        end.setHours(23, 59, 59, 999); 
+                        break;
                     case 'yesterday': start = new Date(today); start.setDate(today.getDate() - 1); end = new Date(today); end.setMilliseconds(-1); break;
                     case 'this_week': const day = now.getDay(); start = new Date(today); start.setDate(today.getDate() - (day === 0 ? 6 : day - 1)); break;
                     case 'last_week': start = new Date(today); start.setDate(today.getDate() - now.getDay() - 6); end = new Date(start); end.setDate(start.getDate() + 6); end.setHours(23, 59, 59); break;

@@ -138,7 +138,11 @@ const ReportDashboard: React.FC<ReportDashboardProps> = ({ activeReport, onBack,
                 let start: Date | null = null, end: Date | null = new Date();
                 
                 switch (filters.datePreset) {
-                    case 'today': start = today; break;
+                    case 'today': 
+                        start = today; 
+                        end = new Date(today); 
+                        end.setHours(23, 59, 59, 999); 
+                        break;
                     case 'yesterday': start = new Date(today); start.setDate(today.getDate() - 1); end = new Date(today); end.setMilliseconds(-1); break;
                     case 'this_week': const day = now.getDay(); start = new Date(today); start.setDate(today.getDate() - (day === 0 ? 6 : day - 1)); break;
                     case 'last_week': start = new Date(today); start.setDate(today.getDate() - now.getDay() - 6); end = new Date(start); end.setDate(start.getDate() + 6); end.setHours(23, 59, 59); break;

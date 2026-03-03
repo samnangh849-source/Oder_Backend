@@ -133,6 +133,11 @@ const PackagingView: React.FC<{ orders?: ParsedOrder[] }> = ({ orders: propOrder
         if (!ts) return 0;
         const match = ts.match(/^(\d{4})-(\d{1,2})-(\d{1,2})\s(\d{1,2}):(\d{2})/);
         if (match) return new Date(parseInt(match[1]), parseInt(match[2]) - 1, parseInt(match[3]), parseInt(match[4]), parseInt(match[5])).getTime();
+        
+        if (typeof ts === 'string' && ts.endsWith('Z')) {
+            return new Date(ts.slice(0, -1)).getTime();
+        }
+        
         return new Date(ts).getTime();
     };
 
@@ -156,7 +161,11 @@ const PackagingView: React.FC<{ orders?: ParsedOrder[] }> = ({ orders: propOrder
                 let start: Date | null = null;
                 let end: Date | null = null;
                 switch (filters.datePreset) {
-                    case 'today': start = today; break;
+                    case 'today': 
+                        start = today; 
+                        end = new Date(today); 
+                        end.setHours(23, 59, 59, 999); 
+                        break;
                     case 'yesterday': start = new Date(today); start.setDate(today.getDate() - 1); end = new Date(today); end.setMilliseconds(-1); break;
                     case 'this_week': const day = now.getDay(); start = new Date(today); start.setDate(today.getDate() - (day === 0 ? 6 : day - 1)); break;
                     case 'last_week': start = new Date(today); start.setDate(today.getDate() - now.getDay() - 6); end = new Date(start); end.setDate(start.getDate() + 6); end.setHours(23, 59, 59); break;
