@@ -30,9 +30,10 @@ const BulkActionBarMobile: React.FC<BulkActionBarMobileProps> = ({
                 </div>
                 <button 
                     onClick={onClearSelection}
-                    className="text-[10px] font-black text-gray-500 uppercase tracking-widest bg-gray-800 px-3 py-1.5 rounded-lg border border-gray-700 active:scale-95"
+                    className="flex items-center gap-1.5 text-[9px] font-black text-white uppercase tracking-widest bg-gray-800 px-3 py-2 rounded-xl border border-white/10 active:scale-95 transition-all shadow-lg"
                 >
-                    Clear
+                    <svg className="w-3 h-3 text-red-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path d="M6 18L18 6M6 6l12 12" strokeWidth={3} strokeLinecap="round" strokeLinejoin="round"/></svg>
+                    Unselect All
                 </button>
             </div>
 

@@ -17,11 +17,13 @@ interface OrdersListProps {
     selectedIds?: Set<string>;
     onToggleSelect?: (id: string) => void;
     onToggleSelectAll?: (ids: string[]) => void;
+    showBorders?: boolean;
 }
 
 const OrdersList: React.FC<OrdersListProps> = ({ 
     orders, onEdit, showActions, visibleColumns,
-    selectedIds = new Set(), onToggleSelect, onToggleSelectAll
+    selectedIds = new Set(), onToggleSelect, onToggleSelectAll,
+    showBorders = false
 }) => {
     const { refreshData } = useContext(AppContext);
     const [copiedId, setCopiedId] = useState<string | null>(null);
@@ -181,7 +183,8 @@ ${dateStr}
         copiedId,
         copiedTemplateId,
         toggleOrderVerified,
-        updatingIds
+        updatingIds,
+        showBorders
     };
 
     return (

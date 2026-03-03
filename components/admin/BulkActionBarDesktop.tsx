@@ -69,6 +69,16 @@ const BulkActionBarDesktop: React.FC<BulkActionBarDesktopProps> = ({
 
                 <div className="h-10 w-px bg-white/10 relative z-10"></div>
 
+                <div className="pr-2 relative z-10">
+                    <button 
+                        onClick={onClearSelection}
+                        className="px-5 py-3.5 bg-gray-800 hover:bg-gray-700 text-gray-400 hover:text-white border border-white/5 rounded-[1.6rem] text-[11px] font-black uppercase tracking-widest transition-all active:scale-95 flex items-center gap-2"
+                    >
+                        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path d="M6 18L18 6M6 6l12 12" strokeWidth={3} strokeLinecap="round" strokeLinejoin="round"/></svg>
+                        Unselect All
+                    </button>
+                </div>
+
                 <div className="pr-5 relative z-10">
                     <button 
                         onClick={() => onOpenModal('delete')} 
@@ -77,13 +87,6 @@ const BulkActionBarDesktop: React.FC<BulkActionBarDesktopProps> = ({
                         លុបចោល
                     </button>
                 </div>
-
-                <button 
-                    onClick={onClearSelection}
-                    className="absolute -top-12 left-1/2 -translate-x-1/2 px-4 py-1.5 bg-gray-800/80 backdrop-blur-md border border-white/10 rounded-full text-[9px] font-black text-gray-400 uppercase tracking-widest hover:text-white transition-all shadow-xl"
-                >
-                    Clear Selection
-                </button>
             </div>
         </div>
     );

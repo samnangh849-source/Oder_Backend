@@ -76,6 +76,7 @@ const OrdersDashboard: React.FC<OrdersDashboardProps> = ({ onBack, initialFilter
     const [isPdfModalOpen, setIsPdfModalOpen] = useState(false);
     const [searchQuery, setSearchQuery] = useState('');
     const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+    const [showBorders, setShowBorders] = useState(true);
 
     const [filters, setFilters] = useState<FilterState>(() => {
         // Priority: Props -> URL -> Defaults
@@ -392,7 +393,7 @@ const OrdersDashboard: React.FC<OrdersDashboardProps> = ({ onBack, initialFilter
     }
 
     return (
-        <div className="w-full max-w-full mx-auto px-3 sm:px-6 lg:px-8 animate-fade-in relative pb-40 pt-6 overflow-x-hidden">
+        <div className="w-full mx-auto px-0 animate-fade-in relative pb-40 pt-6 overflow-x-hidden">
             <div className="md:hidden">
                 <FilterPanel isOpen={isFilterModalOpen} onClose={() => setIsFilterModalOpen(false)}>
                     <OrderFilters filters={filters} setFilters={setFilters} orders={enrichedOrders} usersList={usersList} appData={appData} calculatedRange={calculatedRange} />
@@ -417,41 +418,56 @@ const OrdersDashboard: React.FC<OrdersDashboardProps> = ({ onBack, initialFilter
                 </Modal>
             </div>
 
-            <div className="flex flex-col sm:flex-row justify-between items-start sm:items-end mb-10 gap-6 px-1">
-                <div>
-                    <h1 className="hidden md:block text-3xl lg:text-5xl font-black text-white italic tracking-tighter leading-relaxed mb-3 py-1">គ្រប់គ្រងប្រតិបត្តិការណ៍</h1>
-                    <div className="flex items-center gap-3">
-                        <div className="flex items-center gap-2 px-4 py-1.5 bg-blue-600/10 rounded-full border border-blue-500/20">
-                            <div className="w-2 h-2 rounded-full bg-blue-500 animate-pulse"></div>
-                            <span className="text-[11px] font-black text-blue-400 uppercase tracking-widest">{filteredOrders.length} Entries Logged</span>
+            <div className="flex flex-col xl:flex-row justify-between items-start xl:items-end mb-8 gap-6 px-1">
+                <div className="max-w-full">
+                    <h1 className="hidden md:block text-xl lg:text-2xl xl:text-4xl font-black text-white italic tracking-tighter leading-tight mb-2 py-1">គ្រប់គ្រងប្រតិបត្តិការណ៍</h1>
+                    <div className="flex flex-wrap items-center gap-3">
+                        <div className="flex items-center gap-2 px-3 py-1 bg-blue-600/10 rounded-full border border-blue-500/20">
+                            <div className="w-1.5 h-1.5 rounded-full bg-blue-500 animate-pulse"></div>
+                            <span className="text-[9px] xl:text-[11px] font-black text-blue-400 uppercase tracking-widest">{filteredOrders.length} Entries Logged</span>
                         </div>
+                        {filters.team && (
+                            <div className="px-3 py-1 bg-purple-600/10 rounded-full border border-purple-500/20">
+                                <span className="text-[9px] xl:text-[11px] font-black text-purple-400 uppercase tracking-widest">Team: {filters.team}</span>
+                            </div>
+                        )}
                     </div>
                 </div>
-                <div className="flex gap-3">
-                    <button onClick={onBack} className="hidden md:flex group items-center gap-3 px-8 py-4 bg-gray-800/40 backdrop-blur-xl border border-white/5 hover:border-blue-500/30 text-gray-500 hover:text-blue-400 font-black uppercase tracking-widest text-[12px] rounded-2xl transition-all shadow-xl active:scale-95">
-                        <svg className="w-5 h-5 transform group-hover:-translate-x-1 transition-transform" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={3}><path d="M10 19l-7-7m0 0l7-7m-7 7h18" /></svg>
-                        Back to Core
+                <div className="flex flex-wrap gap-2 w-full xl:w-auto">
+                    <button onClick={onBack} className="hidden md:flex group items-center gap-2 px-5 py-3 xl:px-8 xl:py-4 bg-gray-800/40 backdrop-blur-xl border border-white/5 hover:border-blue-500/30 text-gray-500 hover:text-blue-400 font-black uppercase tracking-widest text-[10px] xl:text-[12px] rounded-2xl transition-all shadow-xl active:scale-95">
+                        <svg className="w-4 h-4 xl:w-5 xl:h-5 transform group-hover:-translate-x-1 transition-transform" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={3}><path d="M10 19l-7-7m0 0l7-7m-7 7h18" /></svg>
+                        Back
                     </button>
                 </div>
             </div>
 
-            <div className="bg-gray-800/20 backdrop-blur-3xl border border-white/5 rounded-[2.5rem] p-5 sm:p-6 mb-8 shadow-2xl relative z-20 group transition-all hover:bg-gray-800/30">
+            <div className="bg-gray-800/20 backdrop-blur-3xl border border-white/5 rounded-[2rem] xl:rounded-[2.5rem] p-4 xl:p-6 mb-8 shadow-2xl relative z-20 group transition-all hover:bg-gray-800/30">
                 <div className="flex flex-col lg:flex-row justify-between items-center gap-4">
                     <div className="relative w-full lg:max-w-2xl group">
-                        <input type="text" placeholder="ស្វែងរក ID, ឈ្មោះ, ឬលេខទូរស័ព្ទ..." value={searchQuery} onChange={e => setSearchQuery(e.target.value)} className="form-input !pl-16 !py-5 bg-black/40 border-gray-800 rounded-[1.8rem] text-[15px] font-bold text-white placeholder:text-gray-700 focus:border-blue-500/50 focus:bg-black/60 transition-all shadow-inner" />
-                        <div className="absolute left-6 top-1/2 -translate-y-1/2 flex items-center gap-4 text-gray-700 group-focus-within:text-blue-500 transition-colors">
-                            <svg className="h-6 w-6" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={3}><path d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" /></svg>
-                            <div className="h-6 w-px bg-gray-800"></div>
+                        <input type="text" placeholder="ស្វែងរក ID, ឈ្មោះ, ឬលេខទូរស័ព្ទ..." value={searchQuery} onChange={e => setSearchQuery(e.target.value)} className="form-input !pl-14 xl:!pl-16 !py-4 xl:!py-5 bg-black/40 border-gray-800 rounded-[1.5rem] xl:rounded-[1.8rem] text-[13px] xl:text-[15px] font-bold text-white placeholder:text-gray-700 focus:border-blue-500/50 focus:bg-black/60 transition-all shadow-inner" />
+                        <div className="absolute left-5 xl:left-6 top-1/2 -translate-y-1/2 flex items-center gap-3 xl:gap-4 text-gray-700 group-focus-within:text-blue-500 transition-colors">
+                            <svg className="h-5 w-5 xl:h-6 xl:w-6" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={3}><path d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" /></svg>
+                            <div className="h-5 xl:h-6 w-px bg-gray-800"></div>
                         </div>
                     </div>
-                    <div className="flex items-stretch gap-3 w-full lg:w-auto h-16 sm:h-[68px]">
-                        <button onClick={() => setIsFilterModalOpen(true)} className="flex-1 lg:flex-none flex items-center justify-center gap-3 px-8 py-5 bg-gray-900 border border-gray-800 text-gray-400 hover:text-white hover:border-blue-500/30 rounded-2xl text-[12px] font-black uppercase tracking-widest transition-all active:scale-95">
-                            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2.5}><path d="M3 4a1 1 0 011-1h16a1 1 0 011 1v2.586a1 1 0 01-.293.707l-6.414 6.414a1 1 0 00-.293.707V17l-4 4v-6.586a1 1 0 00-.293-.707L3.293 7.293A1 1 0 013 6.586V4z" /></svg>
+                    <div className="flex items-stretch gap-2 xl:gap-3 w-full lg:w-auto h-14 xl:h-[68px]">
+                        <button onClick={() => setIsFilterModalOpen(true)} className="flex-1 lg:flex-none flex items-center justify-center gap-2 px-4 xl:px-8 bg-gray-900 border border-gray-800 text-gray-400 hover:text-white hover:border-blue-500/30 rounded-xl xl:rounded-2xl text-[10px] xl:text-[12px] font-black uppercase tracking-widest transition-all active:scale-95">
+                            <svg className="w-4 h-4 xl:w-5 xl:h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2.5}><path d="M3 4a1 1 0 011-1h16a1 1 0 011 1v2.586a1 1 0 01-.293.707l-6.414 6.414a1 1 0 00-.293.707V17l-4 4v-6.586a1 1 0 00-.293-.707L3.293 7.293A1 1 0 013 6.586V4z" /></svg>
                             Filters
                         </button>
-                        <button onClick={() => setIsPdfModalOpen(true)} className="flex-1 lg:flex-none flex items-center justify-center gap-3 px-8 py-5 bg-red-600/10 border border-red-500/20 text-red-500 hover:bg-red-600 hover:text-white rounded-2xl text-[12px] font-black uppercase tracking-widest transition-all active:scale-95 shadow-lg shadow-red-950/20">
-                            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={3}><path d="M7 21h10a2 2 0 002-2V9.414a1 1 0 00-.293-.707l-5.414-5.414A1 1 0 0012.586 3H7a2 2 0 00-2 2v14a2 2 0 002 2z" /></svg>
+                        <button onClick={() => setIsPdfModalOpen(true)} className="flex-1 lg:flex-none flex items-center justify-center gap-2 px-4 xl:px-8 bg-red-600/10 border border-red-500/20 text-red-500 hover:bg-red-600 hover:text-white rounded-xl xl:rounded-2xl text-[10px] xl:text-[12px] font-black uppercase tracking-widest transition-all active:scale-95 shadow-lg shadow-red-950/20">
+                            <svg className="w-4 h-4 xl:w-5 xl:h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={3}><path d="M7 21h10a2 2 0 002-2V9.414a1 1 0 00-.293-.707l-5.414-5.414A1 1 0 0012.586 3H7a2 2 0 00-2 2v14a2 2 0 002 2z" /></svg>
                             Export
+                        </button>
+                        <button 
+                            onClick={() => setShowBorders(!showBorders)} 
+                            className={`flex-1 lg:flex-none flex items-center justify-center gap-2 px-4 xl:px-8 rounded-xl xl:rounded-2xl text-[10px] xl:text-[12px] font-black uppercase tracking-widest transition-all active:scale-95 border ${showBorders ? 'bg-blue-600 border-blue-500 text-white shadow-lg shadow-blue-900/40' : 'bg-gray-900 border-gray-800 text-gray-400 hover:text-white'}`}
+                            title="Toggle Borders"
+                        >
+                            <svg className="w-4 h-4 xl:w-5 xl:h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2.5}>
+                                <path strokeLinecap="round" strokeLinejoin="round" d="M4 5h16M4 12h16M4 19h16" />
+                            </svg>
+                            Borders
                         </button>
                         <div className="hidden lg:block h-full"><ColumnToggler columns={availableColumns} visibleColumns={visibleColumns} onToggle={toggleColumn} /></div>
                     </div>
@@ -459,7 +475,7 @@ const OrdersDashboard: React.FC<OrdersDashboardProps> = ({ onBack, initialFilter
             </div>
 
             <div className="relative z-10">
-                <OrdersList orders={filteredOrders} onEdit={o => setEditingOrderId(o['Order ID'])} showActions={true} visibleColumns={visibleColumns} selectedIds={selectedIds} onToggleSelect={toggleSelection} onToggleSelectAll={toggleSelectAll} />
+                <OrdersList orders={filteredOrders} onEdit={o => setEditingOrderId(o['Order ID'])} showActions={true} visibleColumns={visibleColumns} selectedIds={selectedIds} onToggleSelect={toggleSelection} onToggleSelectAll={toggleSelectAll} showBorders={showBorders} />
             </div>
 
             <BulkActionManager orders={enrichedOrders} selectedIds={selectedIds} onComplete={() => { setSelectedIds(new Set()); fetchAllOrders(); }} onClearSelection={() => setSelectedIds(new Set())} />
@@ -469,4 +485,3 @@ const OrdersDashboard: React.FC<OrdersDashboardProps> = ({ onBack, initialFilter
 };
 
 export default OrdersDashboard;
-1
