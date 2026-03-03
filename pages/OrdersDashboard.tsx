@@ -61,7 +61,8 @@ const OrdersDashboard: React.FC<OrdersDashboardProps> = ({ onBack, initialFilter
                 c.key !== 'print' && 
                 c.key !== 'check' && 
                 c.key !== 'fulfillment' &&
-                c.key !== 'note'
+                c.key !== 'note' &&
+                c.key !== 'driver'
             ).map(c => c.key)
         );
     });

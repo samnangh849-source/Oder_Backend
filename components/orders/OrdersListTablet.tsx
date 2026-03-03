@@ -241,9 +241,31 @@ const OrdersListTablet: React.FC<OrdersListTabletProps> = ({
                                     </div>
                                     <div className="text-right">
                                         <p className="text-[9px] text-gray-500 font-bold uppercase tracking-wider">Shipping</p>
-                                        <div className="flex items-center justify-end gap-1.5">
-                                            {shippingLogo && <img src={shippingLogo} className="w-3.5 h-3.5 object-contain" alt="" />}
-                                            <span className="text-xs font-bold text-orange-400">{order['Internal Shipping Method']?.substring(0, 10)}</span>
+                                        <div className="flex flex-col items-end gap-1">
+                                            <div className="flex items-center justify-end gap-1.5">
+                                                {shippingLogo && <img src={shippingLogo} className="w-3.5 h-3.5 object-contain" alt="" />}
+                                                <span className="text-xs font-bold text-orange-400">{order['Internal Shipping Method']?.substring(0, 10)}</span>
+                                            </div>
+                                            {isVisible('driver') && (
+                                                <div className="flex items-center gap-1.5 mt-0.5">
+                                                    {(() => {
+                                                        const driverName = order['Driver Name'] || order['Internal Shipping Details'];
+                                                        const driverInfo = appData.drivers?.find(d => d.DriverName === driverName);
+                                                        return (
+                                                            <>
+                                                                <span className="text-[10px] font-bold text-emerald-400 opacity-80">{driverName || '-'}</span>
+                                                                {driverInfo && driverInfo.ImageURL && (
+                                                                    <img 
+                                                                        src={convertGoogleDriveUrl(driverInfo.ImageURL)} 
+                                                                        className="w-4 h-4 rounded-full border border-white/10 object-cover" 
+                                                                        alt="driver"
+                                                                    />
+                                                                )}
+                                                            </>
+                                                        );
+                                                    })()}
+                                                </div>
+                                            )}
                                         </div>
                                     </div>
                                 </div>

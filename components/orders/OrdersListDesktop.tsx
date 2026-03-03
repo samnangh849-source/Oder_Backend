@@ -130,6 +130,7 @@ const OrdersListDesktop: React.FC<OrdersListDesktopProps> = ({
                             {isVisible('fulfillment') && <th className="px-6 py-6 font-black uppercase tracking-[0.2em] text-left text-gray-500 w-32 text-[clamp(10px,0.8vw,12px)]">Fulfillment</th>}
                             {isVisible('total') && <th className="px-6 py-6 font-black uppercase tracking-[0.2em] text-left text-gray-500 w-32 text-[clamp(10px,0.8vw,12px)]">Valuation</th>}
                             {isVisible('shippingService') && <th className="px-6 py-6 font-black uppercase tracking-[0.2em] text-left text-gray-500 w-48 text-[clamp(10px,0.8vw,12px)]">Logistics</th>}
+                            {isVisible('driver') && <th className="px-6 py-6 font-black uppercase tracking-[0.2em] text-left text-gray-500 w-32 text-[clamp(10px,0.8vw,12px)]">Driver</th>}
                             {isVisible('shippingCost') && <th className="px-6 py-6 font-black uppercase tracking-[0.2em] text-left text-gray-500 w-28 text-[clamp(10px,0.8vw,12px)]">Exp. Cost</th>}
                             {isVisible('status') && <th className="px-6 py-6 font-black uppercase tracking-[0.2em] text-left text-gray-500 w-32 text-[clamp(10px,0.8vw,12px)]">Status</th>}
                             {isVisible('date') && <th className="px-4 py-6 font-black uppercase tracking-[0.2em] text-left text-gray-500 w-24 text-[clamp(10px,0.8vw,12px)]">Time</th>}
@@ -160,6 +161,7 @@ const OrdersListDesktop: React.FC<OrdersListDesktopProps> = ({
                                 {isVisible('fulfillment') && <th className="w-32"></th>}
                                 {isVisible('total') && <th className="w-32"></th>}
                                 {isVisible('shippingService') && <th className="w-48"></th>}
+                                {isVisible('driver') && <th className="w-32"></th>}
                                 {isVisible('shippingCost') && <th className="w-28"></th>}
                                 {isVisible('status') && <th className="w-32"></th>}
                                 {isVisible('date') && <th className="w-24"></th>}
@@ -228,6 +230,31 @@ const OrdersListDesktop: React.FC<OrdersListDesktopProps> = ({
                                         {isVisible('fulfillment') && <td className="px-6 py-5"><span className="font-bold text-gray-300 bg-gray-800 px-2 py-1 rounded border border-white/5 text-[clamp(11px,0.8vw,12px)]">{order['Fulfillment Store']}</span></td>}
                                         {isVisible('total') && <td className="px-6 py-5 font-black text-blue-400 tracking-tighter text-[clamp(16px,1.2vw,18px)]">${order['Grand Total'].toFixed(2)}</td>}
                                         {isVisible('shippingService') && <td className="px-6 py-5"><div className="flex items-center gap-2.5">{shippingLogo && <img src={shippingLogo} className="w-5 h-5 rounded-lg object-contain bg-gray-950 p-0.5 border border-white/5" alt="shipping" />}<span className="text-orange-400/80 font-black uppercase truncate tracking-tight text-[clamp(10px,0.8vw,12px)]">{order['Internal Shipping Method'] || '-'}</span></div></td>}
+                                        {isVisible('driver') && (
+                                            <td className="px-6 py-5">
+                                                <div className="flex items-center gap-2.5">
+                                                    {(() => {
+                                                        const driverName = order['Driver Name'] || order['Internal Shipping Details'];
+                                                        const driverInfo = appData.drivers?.find(d => d.DriverName === driverName);
+                                                        return (
+                                                            <>
+                                                                {driverInfo && driverInfo.ImageURL && (
+                                                                    <img 
+                                                                        src={convertGoogleDriveUrl(driverInfo.ImageURL)} 
+                                                                        className="w-6 h-6 rounded-full border border-white/10 object-cover bg-gray-800 cursor-pointer active:scale-95 transition-transform" 
+                                                                        alt="driver"
+                                                                        onClick={() => previewImage(convertGoogleDriveUrl(driverInfo.ImageURL))}
+                                                                    />
+                                                                )}
+                                                                <span className="text-emerald-400/80 font-bold truncate tracking-tight text-[clamp(10px,0.8vw,12px)]">
+                                                                    {driverName || '-'}
+                                                                </span>
+                                                            </>
+                                                        );
+                                                    })()}
+                                                </div>
+                                            </td>
+                                        )}
                                         {isVisible('shippingCost') && <td className="px-6 py-5 text-gray-400 font-mono font-black tracking-tighter text-[clamp(13px,0.9vw,15px)]">${(Number(order['Internal Cost']) || 0).toFixed(3)}</td>}
                                         {isVisible('status') && <td className="px-6 py-5"><span className={`px-3 py-1 rounded-full text-[9px] font-black uppercase tracking-widest border ${order['Payment Status'] === 'Paid' ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20' : 'bg-red-500/10 text-red-400 border border-red-500/20'}`}>{order['Payment Status']}</span></td>}
                                         {isVisible('date') && (

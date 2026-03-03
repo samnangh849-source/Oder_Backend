@@ -187,6 +187,9 @@ const OrdersListMobile: React.FC<OrdersListMobileProps> = ({
                                     {isFulfillmentVisible && (
                                         <th className="p-3 min-w-[100px] text-gray-400">Store</th>
                                     )}
+                                    {isVisible('driver') && (
+                                        <th className="p-3 min-w-[100px] text-gray-400">Driver</th>
+                                    )}
                                     <th className="p-3 text-right min-w-[80px]">Total</th>
                                     {isVisible('note') && <th className="p-3 text-left min-w-[120px]">Note</th>}
                                     <th className="p-3 text-center min-w-[90px]">Status</th>
@@ -212,6 +215,11 @@ const OrdersListMobile: React.FC<OrdersListMobileProps> = ({
                                             {isFulfillmentVisible && (
                                                 <td className="p-3 text-gray-300 font-bold text-[10px]">
                                                     {order['Fulfillment Store']}
+                                                </td>
+                                            )}
+                                            {isVisible('driver') && (
+                                                <td className="p-3 text-emerald-400 font-bold text-[10px]">
+                                                    {order['Driver Name'] || order['Internal Shipping Details'] || '-'}
                                                 </td>
                                             )}
                                             <td className="p-3 text-right font-black text-blue-400">
@@ -464,6 +472,11 @@ const OrdersListMobile: React.FC<OrdersListMobileProps> = ({
                                                 {shippingLogo && <img src={shippingLogo} className="w-3.5 h-3.5 object-contain" alt="" />}
                                                 <span className="text-xs font-bold text-orange-400">{order['Internal Shipping Method']?.substring(0, 10)}</span>
                                             </div>
+                                            {isVisible('driver') && (
+                                                <div className="flex items-center gap-1.5 mt-1 border-t border-white/5 pt-1">
+                                                    <span className="text-[9px] font-bold text-emerald-400 opacity-80">{order['Driver Name'] || order['Internal Shipping Details'] || '-'}</span>
+                                                </div>
+                                            )}
                                         </div>
                                         {order['Internal Cost'] > 0 && (
                                             <span className="text-[9px] font-mono text-gray-600 font-bold bg-black/20 px-1.5 py-0.5 rounded">
