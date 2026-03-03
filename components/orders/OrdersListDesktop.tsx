@@ -54,7 +54,7 @@ const OrdersListDesktop: React.FC<OrdersListDesktopProps> = ({
             driver: 'w-32',
             shippingCost: 'w-20',
             status: 'w-16',
-            date: 'w-16',
+            date: 'w-14',
             note: width < 1600 ? 'w-40' : 'w-56',
             print: 'w-32',
             check: 'w-14',
