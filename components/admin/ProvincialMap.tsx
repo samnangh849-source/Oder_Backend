@@ -350,6 +350,51 @@ const ProvincialMap: React.FC<ProvincialMapProps> = ({ data, onProvinceClick }) 
                 map.setPaintProperty('province-highlight', 'fill-extrusion-color', getMetricColor());
             }
 
+            // Helper to find largest polygon in a MultiPolygon
+            const getLargestPolygon = (geometry: any) => {
+                if (geometry.type === 'Polygon') return geometry.coordinates[0];
+                let largest = geometry.coordinates[0][0];
+                let maxLen = 0;
+                geometry.coordinates.forEach((poly: any) => {
+                    if (poly[0].length > maxLen) {
+                        maxLen = poly[0].length;
+                        largest = poly[0];
+                    }
+                });
+                return largest;
+            };
+
+            // Helper to calculate polygon centroid (Center of Mass)
+            const getPolygonCentroid = (pts: [number, number][]) => {
+                if (!pts || pts.length === 0) return [0, 0];
+                let points = [...pts];
+                let first = points[0], last = points[points.length - 1];
+                if (first[0] !== last[0] || first[1] !== last[1]) points.push(first);
+                let twicearea = 0, x = 0, y = 0, nPts = points.length, p1, p2, f;
+                for (let i = 0, j = nPts - 1; i < nPts; j = i++) {
+                    p1 = points[i]; p2 = points[j];
+                    f = p1[0] * p2[1] - p2[0] * p1[1];
+                    twicearea += f;
+                    x += (p1[0] + p2[0]) * f;
+                    y += (p1[1] + p2[1]) * f;
+                }
+                f = twicearea * 3;
+                if (f === 0 || isNaN(x/f) || isNaN(y/f)) {
+                    // Fallback to bounding box center
+                    const bounds = new maplibregl.LngLatBounds(pts[0], pts[0]);
+                    pts.forEach(coord => bounds.extend(coord as [number, number]));
+                    const c = bounds.getCenter();
+                    return [c.lng, c.lat];
+                }
+                return [x / f, y / f];
+            };
+
+            // Manual offsets for tricky provinces (e.g. Kandal wrapping around PP)
+            const PROVINCE_OFFSETS: Record<string, [number, number]> = {
+                'kandal': [0, -0.3], // Shift Kandal label South
+                'kampongthom': [-0.1, 0.1] // Shift slightly Northwest
+            };
+
             // --- FIXED LABELS (Using Markers instead of Layer for better 3D positioning) ---
             // Remove old label markers
             labelMarkersRef.current.forEach(marker => marker.remove());
@@ -358,14 +403,16 @@ const ProvincialMap: React.FC<ProvincialMapProps> = ({ data, onProvinceClick }) 
             // Add new label markers for ALL provinces
             processedFeatures.forEach((feature: any) => {
                 const { displayName } = feature.properties;
-                const coords = feature.geometry.type === 'Polygon' 
-                    ? feature.geometry.coordinates[0] 
-                    : feature.geometry.coordinates.flat(1)[0]; 
+                const coords = getLargestPolygon(feature.geometry);
                 
                 if (!coords) return;
-                const bounds = new maplibregl.LngLatBounds(coords[0], coords[0]);
-                coords.forEach((coord: any) => bounds.extend(coord));
-                const center = bounds.getCenter();
+                const centroid = getPolygonCentroid(coords);
+                
+                // Apply manual offset if needed
+                const provKey = feature.properties.shapeName ? normalizeName(feature.properties.shapeName) : '';
+                const offset = provKey && PROVINCE_OFFSETS[provKey] ? PROVINCE_OFFSETS[provKey] : [0, 0];
+                
+                const finalCenter = { lng: centroid[0] + offset[0], lat: centroid[1] + offset[1] };
 
                 const el = document.createElement('div');
                 el.className = 'province-label-marker';
@@ -376,7 +423,7 @@ const ProvincialMap: React.FC<ProvincialMapProps> = ({ data, onProvinceClick }) 
                     element: el,
                     anchor: 'center',
                 })
-                .setLngLat(center)
+                .setLngLat(finalCenter)
                 .addTo(map);
                 
                 labelMarkersRef.current.push(marker);
@@ -388,13 +435,13 @@ const ProvincialMap: React.FC<ProvincialMapProps> = ({ data, onProvinceClick }) 
             processedFeatures.forEach((feature: any) => {
                 const { rank, displayName, realRevenue, orders, shippingCost } = feature.properties;
                 if (rank && rank <= 3) {
-                     const coords = feature.geometry.type === 'Polygon' 
-                        ? feature.geometry.coordinates[0] 
-                        : feature.geometry.coordinates.flat(1)[0]; 
+                    const coords = getLargestPolygon(feature.geometry);
                     if (!coords) return;
-                    const bounds = new maplibregl.LngLatBounds(coords[0], coords[0]);
-                    coords.forEach((coord: any) => bounds.extend(coord));
-                    const center = bounds.getCenter();
+                    
+                    const centroid = getPolygonCentroid(coords);
+                    const provKey = feature.properties.shapeName ? normalizeName(feature.properties.shapeName) : '';
+                    const offset = provKey && PROVINCE_OFFSETS[provKey] ? PROVINCE_OFFSETS[provKey] : [0, 0];
+                    const finalCenter = { lng: centroid[0] + offset[0], lat: centroid[1] + offset[1] };
 
                     const el = document.createElement('div');
                     el.className = 'province-rank-marker';
@@ -413,7 +460,7 @@ const ProvincialMap: React.FC<ProvincialMapProps> = ({ data, onProvinceClick }) 
                             <div class="w-2 h-2 bg-white rounded-full"></div>
                         </div>
                     `;
-                    const marker = new maplibregl.Marker({ element: el, anchor: 'bottom', offset: [0, -10] }).setLngLat(center).addTo(map);
+                    const marker = new maplibregl.Marker({ element: el, anchor: 'bottom', offset: [0, -10] }).setLngLat(finalCenter).addTo(map);
                     markersRef.current.push(marker);
                 }
             });
