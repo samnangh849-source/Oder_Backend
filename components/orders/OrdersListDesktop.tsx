@@ -47,6 +47,7 @@ const OrdersListDesktop: React.FC<OrdersListDesktopProps> = ({
             productInfo: width < 1366 ? 'w-36' : 'w-48',
             location: width < 1440 ? 'w-24' : 'w-32',
             pageInfo: 'w-24',
+            brandSales: 'w-32',
             fulfillment: 'w-28',
             total: 'w-20',
             shippingService: width < 1440 ? 'w-10' : 'w-16',
@@ -118,6 +119,7 @@ const OrdersListDesktop: React.FC<OrdersListDesktopProps> = ({
                             {isVisible('productInfo') && <th className={`px-6 py-4 font-black uppercase tracking-[0.2em] text-left text-gray-500 text-[clamp(11px,0.9vw,13px)] ${getColWidth('productInfo')}`}>Assets</th>}
                             {isVisible('location') && <th className={`px-4 py-4 font-black uppercase tracking-[0.2em] text-left text-gray-500 text-[clamp(11px,0.9vw,13px)] ${getColWidth('location')}`}>Geography</th>}
                             {isVisible('pageInfo') && <th className={`px-4 py-4 font-black uppercase tracking-[0.2em] text-left text-gray-500 text-[clamp(11px,0.9vw,13px)] ${getColWidth('pageInfo')}`}>Source Page</th>}
+                            {isVisible('brandSales') && <th className={`px-6 py-4 font-black uppercase tracking-[0.2em] text-left text-gray-500 text-[clamp(11px,0.9vw,13px)] ${getColWidth('brandSales')}`}>Brand/Sales</th>}
                             {isVisible('fulfillment') && <th className={`px-6 py-4 font-black uppercase tracking-[0.2em] text-left text-gray-500 text-[clamp(11px,0.9vw,13px)] ${getColWidth('fulfillment')}`}>Fulfillment</th>}
                             {isVisible('total') && <th className={`px-6 py-4 font-black uppercase tracking-[0.2em] text-left text-gray-500 text-[clamp(11px,0.9vw,13px)] ${getColWidth('total')}`}>Valuation</th>}
                             {isVisible('shippingService') && <th className={`px-2 py-4 font-black uppercase tracking-[0.2em] text-left text-gray-500 text-[clamp(11px,0.9vw,13px)] ${getColWidth('shippingService')}`}>Logistics</th>}
@@ -149,6 +151,7 @@ const OrdersListDesktop: React.FC<OrdersListDesktopProps> = ({
                             {isVisible('productInfo') && <col className={getColWidth('productInfo')} />}
                             {isVisible('location') && <col className={getColWidth('location')} />}
                             {isVisible('pageInfo') && <col className={getColWidth('pageInfo')} />}
+                            {isVisible('brandSales') && <col className={getColWidth('brandSales')} />}
                             {isVisible('fulfillment') && <col className={getColWidth('fulfillment')} />}
                             {isVisible('total') && <col className={getColWidth('total')} />}
                             {isVisible('shippingService') && <col className={getColWidth('shippingService')} />}
@@ -193,6 +196,7 @@ const OrdersListDesktop: React.FC<OrdersListDesktopProps> = ({
                                                 </div>
                                             </div>
                                         </td>}
+                                        {isVisible('brandSales') && <td className="px-6 py-3"><span className="font-bold text-gray-300 line-clamp-2 text-[11px] leading-tight" title={pageInfo?.DefaultStore}>{pageInfo?.DefaultStore || '-'}</span></td>}
                                         {isVisible('fulfillment') && <td className="px-6 py-3"><span className="font-bold text-gray-300 bg-gray-800 px-2 py-1 rounded border border-white/5 text-[10px]">{order['Fulfillment Store']}</span></td>}
                                         {isVisible('total') && <td className="px-6 py-3 font-black text-blue-400 tracking-tighter text-[clamp(15px,1.1vw,17px)]">${order['Grand Total'].toFixed(2)}</td>}
                                         {isVisible('shippingService') && (

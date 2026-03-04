@@ -430,6 +430,15 @@ const EditOrderPage: React.FC<EditOrderPageProps> = ({ order, onSaveSuccess, onC
                         formData={formData}
                         appData={appData}
                         onChange={handleInputChange}
+                        onPageSelect={(val) => {
+                            const selectedPage = appData.pages?.find(p => p.PageName === val);
+                            setFormData(prev => ({ 
+                                ...prev, 
+                                Page: val, 
+                                TelegramValue: selectedPage?.TelegramValue || prev.TelegramValue,
+                                'Fulfillment Store': selectedPage?.DefaultStore || prev['Fulfillment Store']
+                            }));
+                        }}
                         onProvinceSelect={(val) => {
                             setFormData(prev => ({ ...prev, Location: val }));
                             setSelectedDistrict(''); setSelectedSangkat('');

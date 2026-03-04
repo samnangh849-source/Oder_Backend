@@ -42,7 +42,7 @@ export const generateAuditLog = (oldData: ParsedOrder, newData: ParsedOrder): Ch
         'Customer Name', 'Customer Phone', 'Location', 'Address Details', 
         'Grand Total', 'Payment Status', 'Internal Shipping Method', 
         'Internal Shipping Details', 'Internal Cost', 'Discount ($)',
-        'Shipping Fee (Customer)', 'Fulfillment Store'
+        'Shipping Fee (Customer)', 'Fulfillment Store', 'Page'
     ];
 
     fieldsToCheck.forEach(field => {

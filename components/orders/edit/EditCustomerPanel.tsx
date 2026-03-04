@@ -3,6 +3,7 @@ import React, { useState } from 'react';
 import { AppData, ParsedOrder } from '../../../types';
 import SearchableProvinceDropdown from '../SearchableProvinceDropdown';
 import ShippingMethodDropdown from '../../common/ShippingMethodDropdown';
+import SearchablePageDropdown from '../../common/SearchablePageDropdown';
 import DriverSelector from '../DriverSelector';
 import Modal from '../../common/Modal';
 import { convertGoogleDriveUrl } from '../../../utils/fileUtils';
@@ -11,6 +12,7 @@ interface EditCustomerPanelProps {
     formData: ParsedOrder;
     appData: AppData;
     onChange: (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>) => void;
+    onPageSelect: (val: string) => void;
     onProvinceSelect: (val: string) => void;
     onDistrictChange: (val: string) => void;
     onSangkatChange: (val: string) => void;
@@ -23,7 +25,7 @@ interface EditCustomerPanelProps {
 }
 
 const EditCustomerPanel: React.FC<EditCustomerPanelProps> = ({
-    formData, appData, onChange, onProvinceSelect, onDistrictChange, onSangkatChange,
+    formData, appData, onChange, onPageSelect, onProvinceSelect, onDistrictChange, onSangkatChange,
     onShippingMethodSelect, onDriverSelect, onBankChange,
     selectedDistrict, selectedSangkat, bankLogo
 }) => {
@@ -62,6 +64,13 @@ const EditCustomerPanel: React.FC<EditCustomerPanelProps> = ({
                     ព័ត៌មានអតិថិជន
                 </h3>
                 <div className="space-y-3 relative z-10">
+                    <div className="mb-3">
+                        <SearchablePageDropdown 
+                            pages={appData.pages.filter(p => p.Team === formData.Team)} 
+                            selectedPageName={formData.Page || ''} 
+                            onSelect={(page) => onPageSelect(page.PageName)} 
+                        />
+                    </div>
                     <div className="grid grid-cols-1 gap-3">
                         <input type="text" name="Customer Name" value={formData['Customer Name'] || ''} onChange={onChange} className="form-input !py-3.5 bg-gray-900/80 border-gray-700 rounded-xl font-bold text-sm text-white placeholder-gray-600 focus:border-blue-500" placeholder="ឈ្មោះអតិថិជន" required />
                         <input type="tel" name="Customer Phone" value={formData['Customer Phone'] || ''} onChange={onChange} className="form-input !py-3.5 bg-gray-900/80 border-gray-700 rounded-xl font-mono font-black text-sm text-blue-300 placeholder-gray-600 focus:border-blue-500" placeholder="លេខទូរស័ព្ទ" required />

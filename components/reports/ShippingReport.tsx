@@ -422,7 +422,7 @@ const ShippingReport: React.FC<ShippingReportProps> = ({ orders, appData, dateFi
                                                 className="px-4 py-3 text-right font-black text-white cursor-pointer hover:underline hover:text-gray-300 transition-colors"
                                                 onClick={() => handleFilterNavigation('shippingFilter', m.name)}
                                             >
-                                                $${m.cost.toLocaleString(undefined, {minimumFractionDigits: 2})}
+                                                ${m.cost.toLocaleString(undefined, {minimumFractionDigits: 2})}
                                             </td>
                                         </tr>
                                     ))}
@@ -434,7 +434,7 @@ const ShippingReport: React.FC<ShippingReportProps> = ({ orders, appData, dateFi
                                             {shippingStats.methods.reduce((sum, m) => sum + m.orders, 0)}
                                         </td>
                                         <td className="px-4 py-3 text-right font-black text-emerald-400 text-base">
-                                            $${shippingStats.methods.reduce((sum, m) => sum + m.cost, 0).toLocaleString(undefined, {minimumFractionDigits: 2})}
+                                            ${shippingStats.methods.reduce((sum, m) => sum + m.cost, 0).toLocaleString(undefined, {minimumFractionDigits: 2})}
                                         </td>
                                     </tr>
                                 </tfoot>
@@ -469,7 +469,7 @@ const ShippingReport: React.FC<ShippingReportProps> = ({ orders, appData, dateFi
                                                 className="px-4 py-3 text-right font-black text-white cursor-pointer hover:underline hover:text-gray-300 transition-colors"
                                                 onClick={() => handleFilterNavigation('driverFilter', d.name)}
                                             >
-                                                $${d.cost.toLocaleString(undefined, {minimumFractionDigits: 2})}
+                                                ${d.cost.toLocaleString(undefined, {minimumFractionDigits: 2})}
                                             </td>
                                         </tr>
                                     ))}
@@ -481,7 +481,7 @@ const ShippingReport: React.FC<ShippingReportProps> = ({ orders, appData, dateFi
                                             {shippingStats.drivers.reduce((sum, d) => sum + d.orders, 0)}
                                         </td>
                                         <td className="px-4 py-3 text-right font-black text-emerald-400 text-base">
-                                            $${shippingStats.drivers.reduce((sum, d) => sum + d.cost, 0).toLocaleString(undefined, {minimumFractionDigits: 2})}
+                                            ${shippingStats.drivers.reduce((sum, d) => sum + d.cost, 0).toLocaleString(undefined, {minimumFractionDigits: 2})}
                                         </td>
                                     </tr>
                                 </tfoot>
@@ -520,7 +520,7 @@ const ShippingReport: React.FC<ShippingReportProps> = ({ orders, appData, dateFi
                                                 className="px-4 py-3 text-right font-black text-white cursor-pointer hover:underline hover:text-gray-300 transition-colors"
                                                 onClick={() => handleFilterNavigation('fulfillmentStore', s.name)}
                                             >
-                                                $${s.cost.toLocaleString(undefined, {minimumFractionDigits: 2})}
+                                                ${s.cost.toLocaleString(undefined, {minimumFractionDigits: 2})}
                                             </td>
                                         </tr>
                                     ))}
@@ -532,7 +532,7 @@ const ShippingReport: React.FC<ShippingReportProps> = ({ orders, appData, dateFi
                                             {shippingStats.stores.reduce((sum, s) => sum + s.orders, 0)}
                                         </td>
                                         <td className="px-4 py-3 text-right font-black text-emerald-400 text-base">
-                                            $${shippingStats.stores.reduce((sum, s) => sum + s.cost, 0).toLocaleString(undefined, {minimumFractionDigits: 2})}
+                                            ${shippingStats.stores.reduce((sum, s) => sum + s.cost, 0).toLocaleString(undefined, {minimumFractionDigits: 2})}
                                         </td>
                                     </tr>
                                 </tfoot>

@@ -62,6 +62,7 @@ export const DesktopGrandTotalRow: React.FC<DesktopGrandTotalRowProps> = ({ tota
             {isVisible('productInfo') && <td className="px-6 py-4"></td>}
             {isVisible('location') && <td className="px-6 py-4"></td>}
             {isVisible('pageInfo') && <td className="px-6 py-4"></td>}
+            {isVisible('brandSales') && <td className="px-6 py-4"></td>}
             {isVisible('fulfillment') && <td className="px-6 py-4"></td>}
             
             {isVisible('total') && (

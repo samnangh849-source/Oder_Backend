@@ -74,6 +74,7 @@ const OrdersListMobile: React.FC<OrdersListMobileProps> = ({
     const isVisible = (key: string) => !visibleColumns || visibleColumns.has(key);
 
     const isFulfillmentVisible = isVisible('fulfillment');
+    const isBrandSalesVisible = isVisible('brandSales');
 
     // Helper for robust date parsing
     const getSafeDateObj = (dateStr: string) => {
@@ -187,6 +188,9 @@ const OrdersListMobile: React.FC<OrdersListMobileProps> = ({
                                     {isFulfillmentVisible && (
                                         <th className="p-3 min-w-[100px] text-gray-400">Store</th>
                                     )}
+                                    {isBrandSalesVisible && (
+                                        <th className="p-3 min-w-[100px] text-gray-400">Brand/Sales</th>
+                                    )}
                                     {isVisible('driver') && (
                                         <th className="p-3 min-w-[100px] text-gray-400">Driver</th>
                                     )}
@@ -215,6 +219,14 @@ const OrdersListMobile: React.FC<OrdersListMobileProps> = ({
                                             {isFulfillmentVisible && (
                                                 <td className="p-3 text-gray-300 font-bold text-[10px]">
                                                     {order['Fulfillment Store']}
+                                                </td>
+                                            )}
+                                            {isBrandSalesVisible && (
+                                                <td className="p-3 text-gray-300 font-bold text-[10px]">
+                                                    {(() => {
+                                                        const pInfo = appData.pages?.find((p: any) => p.PageName === order.Page);
+                                                        return pInfo?.DefaultStore || '-';
+                                                    })()}
                                                 </td>
                                             )}
                                             {isVisible('driver') && (
@@ -404,10 +416,16 @@ const OrdersListMobile: React.FC<OrdersListMobileProps> = ({
                                 <div className="flex-grow min-w-0">
                                     <h3 className="text-white font-black text-sm truncate leading-tight mb-1">{order['Customer Name']}</h3>
                                     <p className="text-blue-400 font-mono font-bold text-xs tracking-wide mb-1">{displayPhone}</p>
-                                    <div className="flex items-center gap-1.5 text-[10px] text-gray-500 font-bold truncate">
+                                    <div className="flex items-center gap-1.5 text-[10px] text-gray-500 font-bold truncate mb-1">
                                         <svg className="w-3 h-3 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z" /><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 11a3 3 0 11-6 0 3 3 0 016 0z" /></svg>
                                         <span className="truncate">{order.Location || 'N/A'}</span>
                                     </div>
+                                    {isBrandSalesVisible && pageInfo?.DefaultStore && (
+                                        <div className="text-[9px] text-gray-400 font-bold truncate flex items-center gap-1">
+                                            <span className="bg-gray-800 px-1.5 py-0.5 rounded text-[8px] uppercase">Brand</span>
+                                            {pageInfo.DefaultStore}
+                                        </div>
+                                    )}
                                 </div>
                             </div>
 

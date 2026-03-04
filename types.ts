@@ -63,6 +63,7 @@ export interface FullOrder {
     "Telegram Message ID 2": string;
     "Scheduled Time": string;
     "Fulfillment Store": string;
+    "Brand/Sales"?: string;
     Team: string;
     IsVerified?: boolean;
     FulfillmentStatus?: FulfillmentStatus;

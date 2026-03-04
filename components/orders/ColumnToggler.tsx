@@ -8,6 +8,7 @@ export const availableColumns = [
     { key: 'productInfo', label: 'ទំនិញ' },
     { key: 'location', label: 'ទីតាំង' },
     { key: 'pageInfo', label: 'Page' },
+    { key: 'brandSales', label: 'STORE (BRAND/SALES)' },
     {key: 'fulfillment', label: 'ឃ្លាំង' },
     { key: 'total', label: 'តម្លៃសរុប' },
     { key: 'shippingService', label: 'សេវាដឹក' },
