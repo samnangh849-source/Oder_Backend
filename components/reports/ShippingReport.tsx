@@ -1,4 +1,3 @@
-
 import React, { useState, useMemo } from 'react';
 import { ParsedOrder, AppData } from '../../types';
 import { analyzeReportData } from '../../services/geminiService';
@@ -8,7 +7,6 @@ import { convertGoogleDriveUrl } from '../../utils/fileUtils';
 import { FilterState } from '../orders/OrderFilters';
 import { APP_LOGO_URL } from '../../constants';
 import Spinner from '../common/Spinner';
-import ProvincialMap from '../admin/ProvincialMap';
 
 interface ShippingReportProps {
     orders: ParsedOrder[];
@@ -111,21 +109,6 @@ const ShippingReport: React.FC<ShippingReportProps> = ({ orders, appData, dateFi
             stores: Object.values(stores).sort((a, b) => b.cost - a.cost)
         };
     }, [filteredOrders, appData]);
-
-    const provinceStats = useMemo(() => {
-        const stats: Record<string, { name: string, revenue: number, orders: number }> = {};
-        filteredOrders.forEach(order => {
-            const provinceName = (order.Location || '').split(/[,|\-|/]/)[0].trim();
-            if (!provinceName || provinceName.toUpperCase() === 'N/A') return;
-            
-            if (!stats[provinceName]) stats[provinceName] = { name: provinceName, revenue: 0, orders: 0 };
-            
-            // Map Internal Cost to 'revenue' for visualization logic (showing cost distribution on map)
-            stats[provinceName].revenue += (Number(order['Internal Cost']) || 0);
-            stats[provinceName].orders += 1;
-        });
-        return Object.values(stats).sort((a, b) => b.revenue - a.revenue);
-    }, [filteredOrders]);
 
     const handleAnalyze = async () => {
         setLoadingAnalysis(true);
@@ -410,11 +393,6 @@ const ShippingReport: React.FC<ShippingReportProps> = ({ orders, appData, dateFi
                 <StatCard label="ចំនួនកញ្ចប់សរុប" value={shippingStats.totalOrders} icon="📦" colorClass="from-purple-600 to-blue-500" />
             </div>
 
-            {/* MAP VISUALIZATION */}
-            <div className="w-full">
-                <ProvincialMap data={provinceStats} valueLabel="Cost" />
-            </div>
-
             <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
                 <div className="lg:col-span-8 space-y-6">
                     {/* Table 1: Methods (Shipping Companies) */}
@@ -444,7 +422,7 @@ const ShippingReport: React.FC<ShippingReportProps> = ({ orders, appData, dateFi
                                                 className="px-4 py-3 text-right font-black text-white cursor-pointer hover:underline hover:text-gray-300 transition-colors"
                                                 onClick={() => handleFilterNavigation('shippingFilter', m.name)}
                                             >
-                                                ${m.cost.toLocaleString(undefined, {minimumFractionDigits: 2})}
+                                                $${m.cost.toLocaleString(undefined, {minimumFractionDigits: 2})}
                                             </td>
                                         </tr>
                                     ))}
@@ -456,7 +434,7 @@ const ShippingReport: React.FC<ShippingReportProps> = ({ orders, appData, dateFi
                                             {shippingStats.methods.reduce((sum, m) => sum + m.orders, 0)}
                                         </td>
                                         <td className="px-4 py-3 text-right font-black text-emerald-400 text-base">
-                                            ${shippingStats.methods.reduce((sum, m) => sum + m.cost, 0).toLocaleString(undefined, {minimumFractionDigits: 2})}
+                                            $${shippingStats.methods.reduce((sum, m) => sum + m.cost, 0).toLocaleString(undefined, {minimumFractionDigits: 2})}
                                         </td>
                                     </tr>
                                 </tfoot>
@@ -491,7 +469,7 @@ const ShippingReport: React.FC<ShippingReportProps> = ({ orders, appData, dateFi
                                                 className="px-4 py-3 text-right font-black text-white cursor-pointer hover:underline hover:text-gray-300 transition-colors"
                                                 onClick={() => handleFilterNavigation('driverFilter', d.name)}
                                             >
-                                                ${d.cost.toLocaleString(undefined, {minimumFractionDigits: 2})}
+                                                $${d.cost.toLocaleString(undefined, {minimumFractionDigits: 2})}
                                             </td>
                                         </tr>
                                     ))}
@@ -503,7 +481,7 @@ const ShippingReport: React.FC<ShippingReportProps> = ({ orders, appData, dateFi
                                             {shippingStats.drivers.reduce((sum, d) => sum + d.orders, 0)}
                                         </td>
                                         <td className="px-4 py-3 text-right font-black text-emerald-400 text-base">
-                                            ${shippingStats.drivers.reduce((sum, d) => sum + d.cost, 0).toLocaleString(undefined, {minimumFractionDigits: 2})}
+                                            $${shippingStats.drivers.reduce((sum, d) => sum + d.cost, 0).toLocaleString(undefined, {minimumFractionDigits: 2})}
                                         </td>
                                     </tr>
                                 </tfoot>
@@ -542,7 +520,7 @@ const ShippingReport: React.FC<ShippingReportProps> = ({ orders, appData, dateFi
                                                 className="px-4 py-3 text-right font-black text-white cursor-pointer hover:underline hover:text-gray-300 transition-colors"
                                                 onClick={() => handleFilterNavigation('fulfillmentStore', s.name)}
                                             >
-                                                ${s.cost.toLocaleString(undefined, {minimumFractionDigits: 2})}
+                                                $${s.cost.toLocaleString(undefined, {minimumFractionDigits: 2})}
                                             </td>
                                         </tr>
                                     ))}
@@ -554,7 +532,7 @@ const ShippingReport: React.FC<ShippingReportProps> = ({ orders, appData, dateFi
                                             {shippingStats.stores.reduce((sum, s) => sum + s.orders, 0)}
                                         </td>
                                         <td className="px-4 py-3 text-right font-black text-emerald-400 text-base">
-                                            ${shippingStats.stores.reduce((sum, s) => sum + s.cost, 0).toLocaleString(undefined, {minimumFractionDigits: 2})}
+                                            $${shippingStats.stores.reduce((sum, s) => sum + s.cost, 0).toLocaleString(undefined, {minimumFractionDigits: 2})}
                                         </td>
                                     </tr>
                                 </tfoot>
