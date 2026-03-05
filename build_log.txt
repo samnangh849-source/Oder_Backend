@@ -1,0 +1,31 @@
+
+> order-management-system@0.0.0 build
+> vite build && cp dist/index.html dist/404.html
+
+vite v6.4.1 building for production...
+transforming...
+✓ 75 modules transformed.
+✗ Build failed in 417ms
+error during build:
+[vite:esbuild] Transform failed with 1 error:
+/Users/macbookpro/Documents/ACC_Code/(Ver 2.0 Order System)/order-management-system/components/incentives/IncentiveExecutionView.tsx:280:775: ERROR: Expected "}" but found ")"
+file: /Users/macbookpro/Documents/ACC_Code/(Ver 2.0 Order System)/order-management-system/components/incentives/IncentiveExecutionView.tsx:280:775
+
+Expected "}" but found ")"
+278|              {showInputPanel && project.dataSource === 'manual' && (
+279|                  <div className="mb-12 border border-slate-800 rounded-xl bg-slate-900/50 overflow-hidden animate-fade-in shadow-2xl relative">
+280|                      {isLocked && <div className="absolute inset-0 bg-slate-900/60 backdrop-blur-[1.5px] z-50 flex items-center justify-center"><div className="bg-slate-800 border border-slate-700 p-6 rounded-2xl shadow-2xl text-center max-w-xs"><svg className="w-10 h-10 text-amber-500 mx-auto mb-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/></svg><h3 className="text-sm font-bold text-white mb-1 uppercase tracking-tight">Editor Locked</h3><p className="text-[10px] text-slate-400 font-bold uppercase tracking-widest leading-relaxed">Unlock payout to edit performance data.</p></div></div>)}
+   |                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                         ^
+281|                      <div className="px-6 py-3 bg-slate-800/50 border-b border-slate-800 flex justify-between items-center overflow-x-auto no-scrollbar gap-6">
+282|                          <div className="flex gap-2">
+
+    at failureErrorWithLog (/Users/macbookpro/Documents/ACC_Code/(Ver 2.0 Order System)/order-management-system/node_modules/esbuild/lib/main.js:1467:15)
+    at /Users/macbookpro/Documents/ACC_Code/(Ver 2.0 Order System)/order-management-system/node_modules/esbuild/lib/main.js:736:50
+    at responseCallbacks.<computed> (/Users/macbookpro/Documents/ACC_Code/(Ver 2.0 Order System)/order-management-system/node_modules/esbuild/lib/main.js:603:9)
+    at handleIncomingPacket (/Users/macbookpro/Documents/ACC_Code/(Ver 2.0 Order System)/order-management-system/node_modules/esbuild/lib/main.js:658:12)
+    at Socket.readFromStdout (/Users/macbookpro/Documents/ACC_Code/(Ver 2.0 Order System)/order-management-system/node_modules/esbuild/lib/main.js:581:7)
+    at Socket.emit (node:events:518:28)
+    at addChunk (node:internal/streams/readable:561:12)
+    at readableAddChunkPushByteMode (node:internal/streams/readable:512:3)
+    at Readable.push (node:internal/streams/readable:392:5)
+    at Pipe.onStreamRead (node:internal/stream_base_commons:189:23)

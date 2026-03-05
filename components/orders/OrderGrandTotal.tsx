@@ -26,11 +26,14 @@ interface DesktopGrandTotalRowProps {
 export const DesktopGrandTotalRow: React.FC<DesktopGrandTotalRowProps> = ({ totals, isVisible, showSelection, showBorders = false }) => {
     if (totals.count === 0) return null;
 
+    // Use prop isVisible which might be passed as checkColumnVisible from parent
+    const check = isVisible;
+
     return (
         <tr className={`bg-slate-900/95 border-b-4 border-blue-600/40 sticky top-0 z-30 backdrop-blur-2xl shadow-[0_10px_30px_rgba(0,0,0,0.5)] ${showBorders ? 'divide-x divide-white/10' : ''}`}>
             {showSelection && <td className="px-1 py-4 w-8"></td>}
             
-            {isVisible('index') && (
+            {check('index') && (
                 <td className="px-1 py-4 text-center">
                     <div className="flex flex-col items-center">
                         <span className="text-[8px] font-black text-gray-500 uppercase tracking-tighter mb-1">Volume</span>
@@ -41,9 +44,9 @@ export const DesktopGrandTotalRow: React.FC<DesktopGrandTotalRowProps> = ({ tota
                 </td>
             )}
             
-            {isVisible('actions') && <td className="px-4 py-4"></td>}
+            {check('actions') && <td className="px-4 py-4"></td>}
             
-            {isVisible('customerName') && (
+            {check('customerName') && (
                 <td className="px-6 py-4">
                     <div className="flex items-center gap-3">
                         <div className="w-1 h-8 bg-blue-600 rounded-full shadow-[0_0_10px_#2563eb]"></div>
@@ -59,13 +62,13 @@ export const DesktopGrandTotalRow: React.FC<DesktopGrandTotalRowProps> = ({ tota
                 </td>
             )}
             
-            {isVisible('productInfo') && <td className="px-6 py-4"></td>}
-            {isVisible('location') && <td className="px-6 py-4"></td>}
-            {isVisible('pageInfo') && <td className="px-6 py-4"></td>}
-            {isVisible('brandSales') && <td className="px-6 py-4"></td>}
-            {isVisible('fulfillment') && <td className="px-6 py-4"></td>}
+            {check('productInfo') && <td className="px-6 py-4"></td>}
+            {check('location') && <td className="px-6 py-4"></td>}
+            {check('pageInfo') && <td className="px-6 py-4"></td>}
+            {check('brandSales') && <td className="px-6 py-4"></td>}
+            {check('fulfillment') && <td className="px-6 py-4"></td>}
             
-            {isVisible('total') && (
+            {check('total') && (
                 <td className="px-6 py-4">
                     <div className="flex flex-col items-start">
                         <span className="text-[8px] font-black text-gray-500 uppercase tracking-widest mb-1">Total Revenue</span>
@@ -76,9 +79,9 @@ export const DesktopGrandTotalRow: React.FC<DesktopGrandTotalRowProps> = ({ tota
                 </td>
             )}
             
-            {isVisible('shippingService') && <td className="px-6 py-4"></td>}
+            {check('shippingService') && <td className="px-6 py-4"></td>}
             
-            {isVisible('shippingCost') && (
+            {check('shippingCost') && (
                 <td className="px-6 py-4">
                     <div className="flex flex-col items-start">
                         <span className="text-[8px] font-black text-gray-500 uppercase tracking-widest mb-1">Total Cost</span>
@@ -89,7 +92,7 @@ export const DesktopGrandTotalRow: React.FC<DesktopGrandTotalRowProps> = ({ tota
                 </td>
             )}
             
-            {isVisible('status') && (
+            {check('status') && (
                 <td className="px-6 py-4">
                     <div className="flex flex-col gap-1 items-center justify-center">
                         {totals.paidCount > 0 && (
@@ -108,13 +111,13 @@ export const DesktopGrandTotalRow: React.FC<DesktopGrandTotalRowProps> = ({ tota
                 </td>
             )}
 
-            {isVisible('date') && <td className="px-4 py-4"></td>}
-            {isVisible('note') && <td className="px-6 py-4"></td>}
-            {isVisible('print') && <td className="px-4 py-4"></td>}
-            {isVisible('check') && <td className="px-2 py-4"></td>}
+            {check('date') && <td className="px-4 py-4"></td>}
+            {check('note') && <td className="px-6 py-4"></td>}
+            {check('print') && <td className="px-4 py-4"></td>}
+            {check('check') && <td className="px-2 py-4"></td>}
             
             {/* Moved Order ID (Node ID) to Last Position */}
-            {isVisible('orderId') && <td className="px-2 py-4"></td>}
+            {check('orderId') && <td className="px-2 py-4"></td>}
         </tr>
     );
 };

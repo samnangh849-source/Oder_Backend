@@ -15,11 +15,15 @@ import PackagingView from '@/pages/PackagingView';
 import DriverDeliveryView from '@/pages/DriverDeliveryView';
 import InventoryManagement from '@/components/admin/InventoryManagement';
 import EditProfileModal from '../components/common/EditProfileModal';
+import IncentivesDashboard from './IncentivesDashboard';
+import IncentiveProjectDetails from './IncentiveProjectDetails';
+import IncentiveExecutionView from '../components/incentives/IncentiveExecutionView';
+import { getIncentiveProjects } from '../services/incentiveService';
 import { useUrlState } from '../hooks/useUrlState';
 import { WEB_APP_URL } from '../constants';
 import { FullOrder, ParsedOrder } from '../types';
  
-type ActiveDashboard = 'admin' | 'orders' | 'reports' | 'settings' | 'fulfillment' | 'packaging' | 'delivery' | 'inventory';
+type ActiveDashboard = 'admin' | 'orders' | 'reports' | 'settings' | 'fulfillment' | 'packaging' | 'delivery' | 'inventory' | 'incentives';
 type AdminView = 'dashboard' | 'performance';
 type ReportType = 'overview' | 'performance' | 'profitability' | 'forecasting' | 'shipping' | 'sales_team' | 'sales_page';
 
@@ -32,6 +36,18 @@ const AdminDashboard: React.FC = () => {
     const [activeDashboard, setActiveDashboard] = useUrlState<ActiveDashboard>('tab', 'admin');
     const [currentAdminView, setCurrentAdminView] = useUrlState<AdminView>('subview', 'dashboard');
     const [activeReport, setActiveReport] = useUrlState<ReportType>('reportType', 'overview');
+    const [activeIncentiveProjectId, setActiveIncentiveProjectId] = useUrlState<string>('incentiveProjectId', '');
+    const [incentiveViewMode, setIncentiveViewMode] = useUrlState<'manage' | 'execute'>('incentiveMode', 'execute');
+
+    // Load projects for helper mapping
+    const [incentiveProjects, setIncentiveProjects] = useState<any[]>([]);
+    useEffect(() => {
+        if (activeDashboard === 'incentives') {
+            setIncentiveProjects(getIncentiveProjects());
+        }
+    }, [activeDashboard, activeIncentiveProjectId, refreshTimestamp]);
+
+    const activeProject = useMemo(() => incentiveProjects.find(p => p.id === activeIncentiveProjectId), [incentiveProjects, activeIncentiveProjectId]);
     
     const [loading, setLoading] = useState(false);
     const [isReportSubMenuOpen, setIsReportSubMenuOpen] = useState(false);
@@ -370,6 +386,14 @@ const AdminDashboard: React.FC = () => {
             case 'packaging': return <PackagingView orders={parsedOrders} />;
             case 'delivery': return <DriverDeliveryView />;
             case 'inventory': return <InventoryManagement />;
+            case 'incentives':
+                if (activeIncentiveProjectId) {
+                    if (incentiveViewMode === 'execute') {
+                        return <IncentiveExecutionView projectId={activeIncentiveProjectId} orders={parsedOrders} onBack={() => setActiveIncentiveProjectId('')} />;
+                    }
+                    return <IncentiveProjectDetails projectId={activeIncentiveProjectId} onBack={() => setActiveIncentiveProjectId('')} />;
+                }
+                return <IncentivesDashboard onOpenProject={(id, mode) => { setActiveIncentiveProjectId(id); setIncentiveViewMode(mode); }} />;
             default: return null;
         }
     };

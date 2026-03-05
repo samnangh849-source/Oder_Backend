@@ -34,7 +34,7 @@ const OrdersListDesktop: React.FC<OrdersListDesktopProps> = ({
     const ROW_HEIGHT = 76;
     const OVERSCAN = 5;
 
-    const isVisible = (key: string) => !visibleColumns || visibleColumns.has(key);
+    const checkColumnVisible = (key: string) => !visibleColumns || visibleColumns.has(key);
     const isAllSelected = orders.length > 0 && orders.every(o => selectedIds.has(o['Order ID']));
 
     // Ultra-Compact Column Widths
@@ -109,32 +109,32 @@ const OrdersListDesktop: React.FC<OrdersListDesktopProps> = ({
                     <thead>
                         <tr className={`bg-gray-800/80 ${showBorders ? 'divide-x divide-white/10' : ''}`}>
                             {onToggleSelectAll && <th className="px-1 py-4 w-8 text-center"><input type="checkbox" className="h-5 w-5 rounded-md border-gray-600 bg-gray-900 text-blue-500 cursor-pointer" checked={isAllSelected} onChange={() => onToggleSelectAll(orders.map(o => o['Order ID']))} /></th>}
-                            {isVisible('index') && <th className={`px-1 py-4 font-black uppercase tracking-[0.2em] text-center text-gray-500 text-[clamp(11px,0.9vw,13px)] ${getColWidth('index')}`}>#</th>}
-                            {isVisible('actions') && <th className={`px-4 py-4 font-black uppercase tracking-[0.2em] text-center text-gray-500 text-[clamp(11px,0.9vw,13px)] ${getColWidth('actions')}`}>Command</th>}
-                            {isVisible('customerName') && (
+                            {checkColumnVisible('index') && <th className={`px-1 py-4 font-black uppercase tracking-[0.2em] text-center text-gray-500 text-[clamp(11px,0.9vw,13px)] ${getColWidth('index')}`}>#</th>}
+                            {checkColumnVisible('actions') && <th className={`px-4 py-4 font-black uppercase tracking-[0.2em] text-center text-gray-500 text-[clamp(11px,0.9vw,13px)] ${getColWidth('actions')}`}>Command</th>}
+                            {checkColumnVisible('customerName') && (
                                 <th className={`px-6 py-4 font-black uppercase tracking-[0.2em] text-left text-gray-500 text-[clamp(11px,0.9vw,13px)] ${getColWidth('customerName')}`}>
                                     <div className="flex flex-col leading-tight"><span>Merchant</span><span className="mt-0.5 opacity-70">Client</span></div>
                                 </th>
                             )}
-                            {isVisible('productInfo') && <th className={`px-6 py-4 font-black uppercase tracking-[0.2em] text-left text-gray-500 text-[clamp(11px,0.9vw,13px)] ${getColWidth('productInfo')}`}>Assets</th>}
-                            {isVisible('location') && <th className={`px-4 py-4 font-black uppercase tracking-[0.2em] text-left text-gray-500 text-[clamp(11px,0.9vw,13px)] ${getColWidth('location')}`}>Geography</th>}
-                            {isVisible('pageInfo') && <th className={`px-4 py-4 font-black uppercase tracking-[0.2em] text-left text-gray-500 text-[clamp(11px,0.9vw,13px)] ${getColWidth('pageInfo')}`}>Source Page</th>}
-                            {isVisible('brandSales') && <th className={`px-6 py-4 font-black uppercase tracking-[0.2em] text-left text-gray-500 text-[clamp(11px,0.9vw,13px)] ${getColWidth('brandSales')}`}>Brand/Sales</th>}
-                            {isVisible('fulfillment') && <th className={`px-6 py-4 font-black uppercase tracking-[0.2em] text-left text-gray-500 text-[clamp(11px,0.9vw,13px)] ${getColWidth('fulfillment')}`}>Fulfillment</th>}
-                            {isVisible('total') && <th className={`px-6 py-4 font-black uppercase tracking-[0.2em] text-left text-gray-500 text-[clamp(11px,0.9vw,13px)] ${getColWidth('total')}`}>Valuation</th>}
-                            {isVisible('shippingService') && <th className={`px-2 py-4 font-black uppercase tracking-[0.2em] text-left text-gray-500 text-[clamp(11px,0.9vw,13px)] ${getColWidth('shippingService')}`}>Logistics</th>}
-                            {isVisible('driver') && <th className={`px-6 py-4 font-black uppercase tracking-[0.2em] text-left text-gray-500 text-[clamp(11px,0.9vw,13px)] ${getColWidth('driver')}`}>Driver</th>}
-                            {isVisible('shippingCost') && <th className={`px-6 py-4 font-black uppercase tracking-[0.2em] text-left text-gray-500 text-[clamp(11px,0.9vw,13px)] ${getColWidth('shippingCost')}`}>Exp. Cost</th>}
-                            {isVisible('status') && <th className={`px-6 py-4 font-black uppercase tracking-[0.2em] text-center text-gray-500 text-[clamp(11px,0.9vw,13px)] ${getColWidth('status')}`}>Status</th>}
-                            {isVisible('date') && <th className={`px-2 py-4 font-black uppercase tracking-[0.2em] text-left text-gray-500 text-[clamp(11px,0.9vw,13px)] ${getColWidth('date')}`}>Time</th>}
-                            {isVisible('note') && <th className={`px-6 py-4 font-black uppercase tracking-[0.2em] text-left text-gray-500 text-[clamp(11px,0.9vw,13px)] ${getColWidth('note')}`}>Note</th>}
-                            {isVisible('print') && <th className={`px-4 py-4 font-black uppercase tracking-[0.2em] text-center text-gray-500 text-[clamp(11px,0.9vw,13px)] ${getColWidth('print')}`}>Output</th>}
-                            {isVisible('check') && <th className={`px-2 py-4 font-normal uppercase tracking-[0.15em] text-center text-emerald-500/80 text-[10px] ${getColWidth('check')}`}>VERIFIED</th>}
-                            {isVisible('orderId') && <th className={`px-2 py-4 font-black uppercase tracking-[0.2em] text-center text-gray-500 text-[clamp(11px,0.9vw,13px)] ${getColWidth('orderId')}`}>Node ID</th>}
+                            {checkColumnVisible('productInfo') && <th className={`px-6 py-4 font-black uppercase tracking-[0.2em] text-left text-gray-500 text-[clamp(11px,0.9vw,13px)] ${getColWidth('productInfo')}`}>Assets</th>}
+                            {checkColumnVisible('location') && <th className={`px-4 py-4 font-black uppercase tracking-[0.2em] text-left text-gray-500 text-[clamp(11px,0.9vw,13px)] ${getColWidth('location')}`}>Geography</th>}
+                            {checkColumnVisible('pageInfo') && <th className={`px-4 py-4 font-black uppercase tracking-[0.2em] text-left text-gray-500 text-[clamp(11px,0.9vw,13px)] ${getColWidth('pageInfo')}`}>Source Page</th>}
+                            {checkColumnVisible('brandSales') && <th className={`px-6 py-4 font-black uppercase tracking-[0.2em] text-left text-gray-500 text-[clamp(11px,0.9vw,13px)] ${getColWidth('brandSales')}`}>Brand/Sales</th>}
+                            {checkColumnVisible('fulfillment') && <th className={`px-6 py-4 font-black uppercase tracking-[0.2em] text-left text-gray-500 text-[clamp(11px,0.9vw,13px)] ${getColWidth('fulfillment')}`}>Fulfillment</th>}
+                            {checkColumnVisible('total') && <th className={`px-6 py-4 font-black uppercase tracking-[0.2em] text-left text-gray-500 text-[clamp(11px,0.9vw,13px)] ${getColWidth('total')}`}>Valuation</th>}
+                            {checkColumnVisible('shippingService') && <th className={`px-2 py-4 font-black uppercase tracking-[0.2em] text-left text-gray-500 text-[clamp(11px,0.9vw,13px)] ${getColWidth('shippingService')}`}>Logistics</th>}
+                            {checkColumnVisible('driver') && <th className={`px-6 py-4 font-black uppercase tracking-[0.2em] text-left text-gray-500 text-[clamp(11px,0.9vw,13px)] ${getColWidth('driver')}`}>Driver</th>}
+                            {checkColumnVisible('shippingCost') && <th className={`px-6 py-4 font-black uppercase tracking-[0.2em] text-left text-gray-500 text-[clamp(11px,0.9vw,13px)] ${getColWidth('shippingCost')}`}>Exp. Cost</th>}
+                            {checkColumnVisible('status') && <th className={`px-6 py-4 font-black uppercase tracking-[0.2em] text-center text-gray-500 text-[clamp(11px,0.9vw,13px)] ${getColWidth('status')}`}>Status</th>}
+                            {checkColumnVisible('date') && <th className={`px-2 py-4 font-black uppercase tracking-[0.2em] text-left text-gray-500 text-[clamp(11px,0.9vw,13px)] ${getColWidth('date')}`}>Time</th>}
+                            {checkColumnVisible('note') && <th className={`px-6 py-4 font-black uppercase tracking-[0.2em] text-left text-gray-500 text-[clamp(11px,0.9vw,13px)] ${getColWidth('note')}`}>Note</th>}
+                            {checkColumnVisible('print') && <th className={`px-4 py-4 font-black uppercase tracking-[0.2em] text-center text-gray-500 text-[clamp(11px,0.9vw,13px)] ${getColWidth('print')}`}>Output</th>}
+                            {checkColumnVisible('check') && <th className={`px-2 py-4 font-normal uppercase tracking-[0.15em] text-center text-emerald-500/80 text-[10px] ${getColWidth('check')}`}>VERIFIED</th>}
+                            {checkColumnVisible('orderId') && <th className={`px-2 py-4 font-black uppercase tracking-[0.2em] text-center text-gray-500 text-[clamp(11px,0.9vw,13px)] ${getColWidth('orderId')}`}>Node ID</th>}
                         </tr>
                     </thead>
                     <tbody className={`bg-[#0f172a] ${showBorders ? 'divide-x divide-white/10' : ''}`}>
-                         <DesktopGrandTotalRow totals={totals} isVisible={isVisible} showSelection={!!onToggleSelect} showBorders={showBorders} />
+                         <DesktopGrandTotalRow totals={totals} isVisible={checkColumnVisible} showSelection={!!onToggleSelect} showBorders={showBorders} />
                     </tbody>
                 </table>
             </div>
@@ -145,24 +145,24 @@ const OrdersListDesktop: React.FC<OrdersListDesktopProps> = ({
                     <table className={`admin-table w-full border-collapse ${showBorders ? 'divide-x divide-white/5 border-x border-white/10' : ''}`} style={{ tableLayout: 'fixed', transform: `translateY(${paddingTop}px)` }}>
                         <colgroup>
                             {onToggleSelectAll && <col className="w-8" />}
-                            {isVisible('index') && <col className={getColWidth('index')} />}
-                            {isVisible('actions') && <col className={getColWidth('actions')} />}
-                            {isVisible('customerName') && <col className={getColWidth('customerName')} />}
-                            {isVisible('productInfo') && <col className={getColWidth('productInfo')} />}
-                            {isVisible('location') && <col className={getColWidth('location')} />}
-                            {isVisible('pageInfo') && <col className={getColWidth('pageInfo')} />}
-                            {isVisible('brandSales') && <col className={getColWidth('brandSales')} />}
-                            {isVisible('fulfillment') && <col className={getColWidth('fulfillment')} />}
-                            {isVisible('total') && <col className={getColWidth('total')} />}
-                            {isVisible('shippingService') && <col className={getColWidth('shippingService')} />}
-                            {isVisible('driver') && <col className={getColWidth('driver')} />}
-                            {isVisible('shippingCost') && <col className={getColWidth('shippingCost')} />}
-                            {isVisible('status') && <col className={getColWidth('status')} />}
-                            {isVisible('date') && <col className={getColWidth('date')} />}
-                            {isVisible('note') && <col className={getColWidth('note')} />}
-                            {isVisible('print') && <col className={getColWidth('print')} />}
-                            {isVisible('check') && <col className={getColWidth('check')} />}
-                            {isVisible('orderId') && <col className={getColWidth('orderId')} />}
+                            {checkColumnVisible('index') && <col className={getColWidth('index')} />}
+                            {checkColumnVisible('actions') && <col className={getColWidth('actions')} />}
+                            {checkColumnVisible('customerName') && <col className={getColWidth('customerName')} />}
+                            {checkColumnVisible('productInfo') && <col className={getColWidth('productInfo')} />}
+                            {checkColumnVisible('location') && <col className={getColWidth('location')} />}
+                            {checkColumnVisible('pageInfo') && <col className={getColWidth('pageInfo')} />}
+                            {checkColumnVisible('brandSales') && <col className={getColWidth('brandSales')} />}
+                            {checkColumnVisible('fulfillment') && <col className={getColWidth('fulfillment')} />}
+                            {checkColumnVisible('total') && <col className={getColWidth('total')} />}
+                            {checkColumnVisible('shippingService') && <col className={getColWidth('shippingService')} />}
+                            {checkColumnVisible('driver') && <col className={getColWidth('driver')} />}
+                            {checkColumnVisible('shippingCost') && <col className={getColWidth('shippingCost')} />}
+                            {checkColumnVisible('status') && <col className={getColWidth('status')} />}
+                            {checkColumnVisible('date') && <col className={getColWidth('date')} />}
+                            {checkColumnVisible('note') && <col className={getColWidth('note')} />}
+                            {checkColumnVisible('print') && <col className={getColWidth('print')} />}
+                            {checkColumnVisible('check') && <col className={getColWidth('check')} />}
+                            {checkColumnVisible('orderId') && <col className={getColWidth('orderId')} />}
                         </colgroup>
                         <tbody className={`divide-y divide-white/5 ${showBorders ? 'divide-x divide-white/5' : ''}`}>
                             {virtualItems.map(({ index, data: order }) => {
@@ -178,16 +178,16 @@ const OrdersListDesktop: React.FC<OrdersListDesktopProps> = ({
                                 return (
                                     <tr key={order['Order ID']} className={`${isVerified ? 'bg-emerald-900/30 border-l-4 border-l-emerald-500 shadow-[inset_0_0_20px_rgba(16,185,129,0.1)]' : selectedIds.has(order['Order ID']) ? 'bg-blue-500/10 shadow-[inset_3px_0_0_0_#3b82f6]' : 'hover:bg-white/[0.02]'} transition-all group relative`} style={{ height: `${ROW_HEIGHT}px` }}>
                                         {onToggleSelect && (<td className="px-0.5 py-3 text-center"><input type="checkbox" className="h-4 w-4 rounded-md border-gray-700 bg-gray-950 text-blue-500 cursor-pointer" checked={selectedIds.has(order['Order ID'])} onChange={() => onToggleSelect(order['Order ID'])} /></td>)}
-                                        {isVisible('index') && <td className="px-1 py-3 text-center font-bold text-gray-600 text-[clamp(11px,0.8vw,13px)]">{index + 1}</td>}
-                                        {isVisible('actions') && (
+                                        {checkColumnVisible('index') && <td className="px-1 py-3 text-center font-bold text-gray-600 text-[clamp(11px,0.8vw,13px)]">{index + 1}</td>}
+                                        {checkColumnVisible('actions') && (
                                             <td className="px-2 py-3 text-center">
                                                 {allowEdit ? <button onClick={() => onEdit && onEdit(order)} className="text-blue-400/80 hover:text-white bg-blue-400/5 hover:bg-blue-600 px-3 py-2 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all border border-blue-400/10">Edit</button> : <span className="text-gray-600 text-[8px] font-bold uppercase cursor-not-allowed">Locked</span>}
                                             </td>
                                         )}
-                                        {isVisible('customerName') && (<td className="px-6 py-3"><div className="font-black text-gray-100 truncate mb-1 leading-tight tracking-tight text-[clamp(15px,1.2vw,17px)]">{order['Customer Name']}</div><div className="flex items-center gap-2">{carrierLogo && <img src={convertGoogleDriveUrl(carrierLogo)} className="w-3.5 h-3.5 object-contain opacity-80" alt="" />}<div className="text-blue-400/80 font-mono font-black tracking-tighter text-[clamp(11px,0.9vw,13px)]">{displayPhone}</div></div></td>)}
-                                        {isVisible('productInfo') && <td className="px-6 py-3"><div className="flex flex-col gap-1">{order.Products.slice(0, 2).map((p, i) => (<div key={i} className="bg-black/40 p-1 rounded-lg border border-white/5 flex flex-col"><span className="font-bold text-gray-300 line-clamp-1 text-[clamp(10px,0.7vw,12px)]">{p.name}</span><span className="text-blue-400/80 font-black mt-0.5 text-[9px]">x{p.quantity}</span></div>))}</div></td>}
-                                        {isVisible('location') && (<td className="px-4 py-3"><div className="font-black text-gray-200 leading-tight truncate text-[clamp(13px,0.9vw,15px)]">{order.Location}</div><div className="font-bold text-gray-600 mt-1 line-clamp-1 text-[clamp(10px,0.8vw,12px)]">{order['Address Details']}</div></td>)}
-                                        {isVisible('pageInfo') && <td className="px-2 py-3">
+                                        {checkColumnVisible('customerName') && (<td className="px-6 py-3"><div className="font-black text-gray-100 truncate mb-1 leading-tight tracking-tight text-[clamp(15px,1.2vw,17px)]">{order['Customer Name']}</div><div className="flex items-center gap-2">{carrierLogo && <img src={convertGoogleDriveUrl(carrierLogo)} className="w-3.5 h-3.5 object-contain opacity-80" alt="" />}<div className="text-blue-400/80 font-mono font-black tracking-tighter text-[clamp(11px,0.9vw,13px)]">{displayPhone}</div></div></td>)}
+                                        {checkColumnVisible('productInfo') && <td className="px-6 py-3"><div className="flex flex-col gap-1">{order.Products.slice(0, 2).map((p, i) => (<div key={i} className="bg-black/40 p-1 rounded-lg border border-white/5 flex flex-col"><span className="font-bold text-gray-300 line-clamp-1 text-[clamp(10px,0.7vw,12px)]">{p.name}</span><span className="text-blue-400/80 font-black mt-0.5 text-[9px]">x{p.quantity}</span></div>))}</div></td>}
+                                        {checkColumnVisible('location') && (<td className="px-4 py-3"><div className="font-black text-gray-200 leading-tight truncate text-[clamp(13px,0.9vw,15px)]">{order.Location}</div><div className="font-bold text-gray-600 mt-1 line-clamp-1 text-[clamp(10px,0.8vw,12px)]">{order['Address Details']}</div></td>)}
+                                        {checkColumnVisible('pageInfo') && <td className="px-2 py-3">
                                             <div className="flex items-center gap-2">
                                                 {logoUrl && <img src={logoUrl} className="w-7 h-7 rounded-full border border-white/10 object-cover shadow-lg" alt="" />}
                                                 <div className="min-w-0">
@@ -196,10 +196,10 @@ const OrdersListDesktop: React.FC<OrdersListDesktopProps> = ({
                                                 </div>
                                             </div>
                                         </td>}
-                                        {isVisible('brandSales') && <td className="px-6 py-3"><span className="font-bold text-gray-300 line-clamp-2 text-[11px] leading-tight" title={pageInfo?.DefaultStore}>{pageInfo?.DefaultStore || '-'}</span></td>}
-                                        {isVisible('fulfillment') && <td className="px-6 py-3"><span className="font-bold text-gray-300 bg-gray-800 px-2 py-1 rounded border border-white/5 text-[10px]">{order['Fulfillment Store']}</span></td>}
-                                        {isVisible('total') && <td className="px-6 py-3 font-black text-blue-400 tracking-tighter text-[clamp(15px,1.1vw,17px)]">${order['Grand Total'].toFixed(2)}</td>}
-                                        {isVisible('shippingService') && (
+                                        {checkColumnVisible('brandSales') && <td className="px-6 py-3"><span className="font-bold text-gray-300 line-clamp-2 text-[11px] leading-tight" title={pageInfo?.DefaultStore}>{pageInfo?.DefaultStore || '-'}</span></td>}
+                                        {checkColumnVisible('fulfillment') && <td className="px-6 py-3"><span className="font-bold text-gray-300 bg-gray-800 px-2 py-1 rounded border border-white/5 text-[10px]">{order['Fulfillment Store']}</span></td>}
+                                        {checkColumnVisible('total') && <td className="px-6 py-3 font-black text-blue-400 tracking-tighter text-[clamp(15px,1.1vw,17px)]">${order['Grand Total'].toFixed(2)}</td>}
+                                        {checkColumnVisible('shippingService') && (
                                             <td className="px-2 py-3">
                                                 <div className="flex flex-col items-start gap-1">
                                                     {shippingLogo && <img src={convertGoogleDriveUrl(shippingLogo)} className="w-6 h-6 rounded-lg object-contain bg-gray-950 p-1 border border-white/5" alt="" />}
@@ -207,7 +207,7 @@ const OrdersListDesktop: React.FC<OrdersListDesktopProps> = ({
                                                 </div>
                                             </td>
                                         )}
-                                        {isVisible('driver') && (
+                                        {checkColumnVisible('driver') && (
                                             <td className="px-6 py-3">
                                                 <div className="flex items-center gap-2">
                                                     {(() => {
@@ -223,9 +223,9 @@ const OrdersListDesktop: React.FC<OrdersListDesktopProps> = ({
                                                 </div>
                                             </td>
                                         )}
-                                        {isVisible('shippingCost') && <td className="px-2 py-3 text-gray-400 font-mono font-black tracking-tighter text-[clamp(12px,0.9vw,14px)]">${(Number(order['Internal Cost']) || 0).toFixed(3)}</td>}
-                                        {isVisible('status') && <td className="px-6 py-3 text-center"><span className={`px-2 py-0.5 rounded-full text-[9px] font-black uppercase tracking-widest border ${order['Payment Status'] === 'Paid' ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20' : 'bg-red-500/10 text-red-400 border border-red-500/20'}`}>{order['Payment Status']}</span></td>}
-                                        {isVisible('date') && (
+                                        {checkColumnVisible('shippingCost') && <td className="px-2 py-3 text-gray-400 font-mono font-black tracking-tighter text-[clamp(12px,0.9vw,14px)]">${(Number(order['Internal Cost']) || 0).toFixed(3)}</td>}
+                                        {checkColumnVisible('status') && <td className="px-6 py-3 text-center"><span className={`px-2 py-0.5 rounded-full text-[9px] font-black uppercase tracking-widest border ${order['Payment Status'] === 'Paid' ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20' : 'bg-red-500/10 text-red-400 border border-red-500/20'}`}>{order['Payment Status']}</span></td>}
+                                        {checkColumnVisible('date') && (
                                             <td className="px-2 py-3">
                                                 <div className="flex flex-col items-start leading-tight">
                                                     <span className="font-bold text-gray-400 text-[clamp(12px,0.9vw,14px)]">{orderDate.toLocaleDateString('km-KH')}</span>
@@ -233,8 +233,8 @@ const OrdersListDesktop: React.FC<OrdersListDesktopProps> = ({
                                                 </div>
                                             </td>
                                         )}
-                                        {isVisible('note') && <td className="px-6 py-3 overflow-hidden"><div className="text-gray-300 text-[11px] line-clamp-2 break-words overflow-hidden" title={order.Note}>{order.Note || '-'}</div></td>}
-                                        {isVisible('print') && (
+                                        {checkColumnVisible('note') && <td className="px-6 py-3 overflow-hidden"><div className="text-gray-300 text-[11px] line-clamp-2 break-words overflow-hidden" title={order.Note}>{order.Note || '-'}</div></td>}
+                                        {checkColumnVisible('print') && (
                                             <td className="px-4 py-3 text-center">
                                                 <div className="flex items-center justify-center gap-1.5">
                                                     <button onClick={() => handleCopyTemplate(order)} className={`p-2 rounded-lg transition-all border active:scale-90 ${copiedTemplateId === order['Order ID'] ? 'bg-indigo-500/20 border-indigo-500/50 text-indigo-400' : 'bg-gray-800 text-gray-400 border-white/10 hover:text-white'}`}><svg className="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}><path d="M8 5H6a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2v-1M8 5a2 2 0 002 2h2a2 2 0 002-2M8 5a2 2 0 012-2h2a2 2 0 012 2m0 0h2a2 2 0 012 2v3m2 4H10m0 0l3-3m-3 3l3 3" /></svg></button>
@@ -242,7 +242,7 @@ const OrdersListDesktop: React.FC<OrdersListDesktopProps> = ({
                                                 </div>
                                             </td>
                                         )}
-                                        {isVisible('check') && (
+                                        {checkColumnVisible('check') && (
                                             <td className="px-2 py-3 text-center">
                                                 <div className="relative flex items-center justify-center cursor-pointer group/check" onClick={() => !updatingIds.has(order['Order ID']) && toggleOrderVerified(order['Order ID'], order.IsVerified)}>
                                                     <div className={`h-7 w-7 rounded-lg border-2 flex items-center justify-center transition-all duration-300 ${isVerified ? 'bg-emerald-500 border-emerald-400 shadow-[0_0_10px_rgba(16,185,129,0.4)] scale-105' : 'bg-gray-900 border-gray-700 hover:border-emerald-500/50 hover:bg-emerald-500/10'}`}>
@@ -251,7 +251,7 @@ const OrdersListDesktop: React.FC<OrdersListDesktopProps> = ({
                                                 </div>
                                             </td>
                                         )}
-                                        {isVisible('orderId') && <td className="px-2 py-3 text-center"><button onClick={() => handleCopy(order['Order ID'])} className={`p-1.5 rounded-lg transition-all border ${copiedId === order['Order ID'] ? 'bg-green-500/20 border-green-500/40 text-green-400' : 'bg-gray-800 border-white/5 text-gray-500 hover:text-blue-400 active:scale-90'}`}><span className="text-[8px] font-black uppercase tracking-widest">{copiedId === order['Order ID'] ? '✓' : 'ID'}</span></button></td>}
+                                        {checkColumnVisible('orderId') && <td className="px-2 py-3 text-center"><button onClick={() => handleCopy(order['Order ID'])} className={`p-1.5 rounded-lg transition-all border ${copiedId === order['Order ID'] ? 'bg-green-500/20 border-green-500/40 text-green-400' : 'bg-gray-800 border-white/5 text-gray-500 hover:text-blue-400 active:scale-90'}`}><span className="text-[8px] font-black uppercase tracking-widest">{copiedId === order['Order ID'] ? '✓' : 'ID'}</span></button></td>}
                                     </tr>
                                 );
                             })}

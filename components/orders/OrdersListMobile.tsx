@@ -1,4 +1,3 @@
-
 import React, { useContext, useState, useMemo } from 'react';
 import { ParsedOrder } from '../../types';
 import { AppContext } from '../../context/AppContext';
@@ -67,14 +66,14 @@ const OrdersListMobile: React.FC<OrdersListMobileProps> = ({
     };
 
     // Visibility defaults
-    const isProductInfoVisible = !visibleColumns || visibleColumns.has('productInfo');
-    const isActionsVisible = !visibleColumns || visibleColumns.has('actions');
-    const isPrintVisible = !visibleColumns || visibleColumns.has('print');
-    const isCheckVisible = !visibleColumns || visibleColumns.has('check');
-    const isVisible = (key: string) => !visibleColumns || visibleColumns.has(key);
+    const checkColumnVisible = (key: string) => !visibleColumns || visibleColumns.has(key);
 
-    const isFulfillmentVisible = isVisible('fulfillment');
-    const isBrandSalesVisible = isVisible('brandSales');
+    const isProductInfoVisible = checkColumnVisible('productInfo');
+    const isActionsVisible = checkColumnVisible('actions');
+    const isPrintVisible = checkColumnVisible('print');
+    const isCheckVisible = checkColumnVisible('check');
+    const isFulfillmentVisible = checkColumnVisible('fulfillment');
+    const isBrandSalesVisible = checkColumnVisible('brandSales');
 
     // Helper for robust date parsing
     const getSafeDateObj = (dateStr: string) => {
@@ -191,11 +190,11 @@ const OrdersListMobile: React.FC<OrdersListMobileProps> = ({
                                     {isBrandSalesVisible && (
                                         <th className="p-3 min-w-[100px] text-gray-400">Brand/Sales</th>
                                     )}
-                                    {isVisible('driver') && (
+                                    {checkColumnVisible('driver') && (
                                         <th className="p-3 min-w-[100px] text-gray-400">Driver</th>
                                     )}
                                     <th className="p-3 text-right min-w-[80px]">Total</th>
-                                    {isVisible('note') && <th className="p-3 text-left min-w-[120px]">Note</th>}
+                                    {checkColumnVisible('note') && <th className="p-3 text-left min-w-[120px]">Note</th>}
                                     <th className="p-3 text-center min-w-[90px]">Status</th>
                                     <th className="p-3 text-center min-w-[50px]">Act</th>
                                     <th className="p-3 min-w-[100px]">Date</th>
@@ -229,7 +228,7 @@ const OrdersListMobile: React.FC<OrdersListMobileProps> = ({
                                                     })()}
                                                 </td>
                                             )}
-                                            {isVisible('driver') && (
+                                            {checkColumnVisible('driver') && (
                                                 <td className="p-3 text-emerald-400 font-bold text-[10px]">
                                                     {order['Driver Name'] || order['Internal Shipping Details'] || '-'}
                                                 </td>
@@ -237,7 +236,7 @@ const OrdersListMobile: React.FC<OrdersListMobileProps> = ({
                                             <td className="p-3 text-right font-black text-blue-400">
                                                 ${order['Grand Total'].toFixed(2)}
                                             </td>
-                                            {isVisible('note') && (
+                                            {checkColumnVisible('note') && (
                                                 <td className="p-3">
                                                     <div className="text-gray-400 line-clamp-1 truncate max-w-[100px] break-words" title={order.Note}>
                                                         {order.Note || '-'}
@@ -299,7 +298,7 @@ const OrdersListMobile: React.FC<OrdersListMobileProps> = ({
                     </div>
                 </div>
             ) : (
-                // --- CARD VIEW (Existing Logic) ---
+                // --- CARD VIEW ---
                 visibleOrders.map((order) => {
                     const pageInfo = appData.pages?.find((p: any) => p.PageName === order.Page);
                     const logoUrl = pageInfo ? convertGoogleDriveUrl(pageInfo.PageLogoURL) : '';
@@ -468,8 +467,7 @@ const OrdersListMobile: React.FC<OrdersListMobileProps> = ({
                                 </div>
                             )}
 
-                            {/* Note Section */}
-                            {isVisible('note') && order.Note && (
+                            {checkColumnVisible('note') && order.Note && (
                                 <div className="bg-black/20 rounded-2xl p-3 border border-white/5 mb-5 shadow-inner">
                                     <p className="text-[9px] text-gray-500 font-black uppercase tracking-widest mb-1">Note</p>
                                     <p className="text-[11px] text-gray-300 line-clamp-2 break-words">{order.Note}</p>
@@ -490,7 +488,7 @@ const OrdersListMobile: React.FC<OrdersListMobileProps> = ({
                                                 {shippingLogo && <img src={shippingLogo} className="w-3.5 h-3.5 object-contain" alt="" />}
                                                 <span className="text-xs font-bold text-orange-400">{order['Internal Shipping Method']?.substring(0, 10)}</span>
                                             </div>
-                                            {isVisible('driver') && (
+                                            {checkColumnVisible('driver') && (
                                                 <div className="flex items-center gap-1.5 mt-1 border-t border-white/5 pt-1">
                                                     <span className="text-[9px] font-bold text-emerald-400 opacity-80">{order['Driver Name'] || order['Internal Shipping Details'] || '-'}</span>
                                                 </div>

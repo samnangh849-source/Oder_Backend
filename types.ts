@@ -229,3 +229,83 @@ export interface PhoneCarrier {
   Prefixes: string;
   CarrierLogoURL: string;
 }
+
+// --- Incentive System Types ---
+
+export interface IncentiveProject {
+    id: string;
+    name: string;
+    colorCode: string;
+    requirePeriodSelection: boolean;
+    dataSource: 'system' | 'manual';
+    status: 'Active' | 'Disable' | 'Draft';
+    createdAt: string;
+    calculators: IncentiveCalculator[];
+}
+
+export type CalculatorType = 'Achievement' | 'Commission';
+
+export interface IncentiveTier {
+    id: string;
+    name?: string;
+    subPeriod?: string; // e.g. "W1", "W2"
+    target: number;
+    rewardAmount: number;
+    rewardType: 'Fixed Cash' | 'Percentage' | 'Point';
+}
+
+export interface CommissionTier {
+    id: string;
+    from: number;
+    to: number | null; // null means infinity
+    rate: number; // percentage
+}
+
+export interface DistributionRule {
+    method: 'Equal Split' | 'Percentage Allocation' | 'Performance-Based Split';
+    allocations?: { memberRoleOrName: string; percentage: number }[];
+}
+
+export interface IncentiveCalculator {
+    id: string;
+    name: string;
+    type: CalculatorType;
+    status: 'Draft' | 'Active' | 'Disable';
+    
+    // Common
+    departmentOrRole: string[];
+    applyTo: string[]; // Role, Dept, Team, Individual
+    
+    // Metric
+    metricType: 'Sales Amount' | 'Number of Orders' | 'Number of Videos' | 'Leads Generated' | 'Revenue' | 'Profit' | 'Custom KPI';
+    metricUnit: 'USD' | 'Count' | '%';
+    
+    // Period
+    calculationPeriod: 'Daily' | 'Weekly' | 'Monthly' | 'Per Order' | 'Custom Range';
+    resetEveryPeriod: boolean;
+    startDate?: string;
+    endDate?: string;
+
+    // Type 1: Achievement specific
+    achievementTiers?: IncentiveTier[];
+
+    // Type 2: Commission specific
+    commissionType?: 'Flat Commission' | 'Above Target Commission' | 'Tiered Commission' | 'Product-Based Commission';
+    commissionMethod?: 'Percentage' | 'Fixed Amount';
+    commissionCondition?: 'On Total Sales' | 'Above Target' | 'Per Transaction';
+    targetAmount?: number;
+    commissionRate?: number; // for flat or above target
+    commissionTiers?: CommissionTier[];
+    
+    // Advanced Rules
+    minSalesRequired?: number;
+    maxCommissionCap?: number;
+    isMarathon?: boolean; // Cumulative Achievement logic
+    subPeriodCheck?: boolean; // If true, checks milestones at sub-periods (like weekly)
+    requireApproval?: boolean;
+    excludeRefunded?: boolean;
+    includeTax?: boolean;
+
+    // Distribution
+    distributionRule?: DistributionRule;
+}

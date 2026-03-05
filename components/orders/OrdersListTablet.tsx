@@ -1,4 +1,3 @@
-
 import React, { useContext } from 'react';
 import { ParsedOrder } from '../../types';
 import { AppContext } from '../../context/AppContext';
@@ -106,8 +105,10 @@ const OrdersListTablet: React.FC<OrdersListTabletProps> = ({
         return date.toLocaleDateString('km-KH');
     };
 
-    const isFulfillmentVisible = isVisible('fulfillment');
-    const isBrandSalesVisible = isVisible('brandSales');
+    const checkColumnVisible = (key: string) => !visibleColumns || visibleColumns.has(key);
+
+    const isFulfillmentVisible = checkColumnVisible('fulfillment');
+    const isBrandSalesVisible = checkColumnVisible('brandSales');
 
     return (
         <div className="space-y-6 pb-20">
@@ -172,9 +173,9 @@ const OrdersListTablet: React.FC<OrdersListTabletProps> = ({
                                                 className={`flex items-center justify-center w-8 h-8 rounded-xl border transition-all active:scale-95 ${isThisTemplateCopied ? 'bg-indigo-500/20 border-indigo-500/50 text-indigo-400' : 'bg-black/30 border-white/5 text-gray-400 hover:text-white'}`}
                                             >
                                                 {isThisTemplateCopied ? (
-                                                    <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={3}><path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7"/></svg>
+                                                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={3}><path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7"/></svg>
                                                 ) : (
-                                                    <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M8 5H6a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2v-1M8 5a2 2 0 002 2h2a2 2 0 002-2M8 5a2 2 0 012-2h2a2 2 0 012 2m0 0h2a2 2 0 012 2v3m2 4H10m0 0l3-3m-3 3l3 3" /></svg>
+                                                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M8 5H6a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2v-1M8 5a2 2 0 002 2h2a2 2 0 002-2M8 5a2 2 0 012-2h2a2 2 0 012 2m0 0h2a2 2 0 012 2v3m2 4H10m0 0l3-3m-3 3l3 3" /></svg>
                                                 )}
                                             </button>
                                         </div>
@@ -232,7 +233,7 @@ const OrdersListTablet: React.FC<OrdersListTabletProps> = ({
                             </div>
 
                             {/* Note Section */}
-                            {isVisible('note') && order.Note && (
+                            {checkColumnVisible('note') && order.Note && (
                                 <div className="mb-4 px-3 py-2 bg-black/20 rounded-xl border border-white/5">
                                     <p className="text-[9px] text-gray-500 font-bold uppercase tracking-wider mb-1">Note</p>
                                     <p className="text-[11px] text-gray-300 line-clamp-2 break-words">{order.Note}</p>
@@ -253,7 +254,7 @@ const OrdersListTablet: React.FC<OrdersListTabletProps> = ({
                                                 {shippingLogo && <img src={shippingLogo} className="w-3.5 h-3.5 object-contain" alt="" />}
                                                 <span className="text-xs font-bold text-orange-400">{order['Internal Shipping Method']?.substring(0, 10)}</span>
                                             </div>
-                                            {isVisible('driver') && (
+                                            {checkColumnVisible('driver') && (
                                                 <div className="flex items-center gap-1.5 mt-0.5">
                                                     {(() => {
                                                         const driverName = order['Driver Name'] || order['Internal Shipping Details'];
