@@ -406,7 +406,7 @@ const UserOrdersView: React.FC<{ team: string; onAdd: () => void }> = ({ team, o
         return (
             <div className="animate-fade-in p-2">
                 <UserSalesPageReport 
-                    orders={orders} 
+                    orders={allParsedOrdersRef.current} 
                     onBack={() => setShowReport(false)} 
                     team={team}
                     onNavigate={(filters) => setDrilldownFilters(filters)}

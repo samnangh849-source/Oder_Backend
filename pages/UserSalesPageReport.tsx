@@ -8,8 +8,7 @@ import 'jspdf-autotable';
 import Spinner from '../components/common/Spinner';
 import { convertGoogleDriveUrl } from '../utils/fileUtils';
 import SimpleBarChart from '../components/admin/SimpleBarChart';
-import { WEB_APP_URL } from '../constants';
-import { CacheService } from '../services/cacheService';
+import { safeParseDate, getTimestamp } from '../utils/dateUtils';
 
 // Import separate view components
 import SalesByPageDesktop from '../components/reports/SalesByPageDesktop';
@@ -37,7 +36,7 @@ type DateRangePreset = 'today' | 'yesterday' | 'this_week' | 'this_month' | 'las
 const MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
 
 const UserSalesPageReport: React.FC<UserSalesPageReportProps> = ({ 
-    orders: initialOrders, 
+    orders: sourceOrders, 
     onBack, 
     team,
     onNavigate,
@@ -52,51 +51,6 @@ const UserSalesPageReport: React.FC<UserSalesPageReportProps> = ({
     const [isExporting, setIsExporting] = useState(false);
     const [sortConfig, setSortConfig] = useState<{ key: SortKey, direction: 'asc' | 'desc' }>({ key: 'revenue', direction: 'desc' });
 
-    // Data State
-    const [fullOrders, setFullOrders] = useState<ParsedOrder[]>([]);
-    const [isLoadingData, setIsLoadingData] = useState(false);
-
-    // --- Data Fetching Logic with Cache ---
-    const checkAndFetchData = async () => {
-        const CACHE_KEY = 'user_sales_report_full_data';
-        const CACHE_DURATION = 5 * 60 * 1000; // 5 Minutes Expiry
-
-        const cached = CacheService.get<ParsedOrder[]>(CACHE_KEY);
-        
-        if (cached) {
-            setFullOrders(cached);
-        } else {
-            setIsLoadingData(true);
-            try {
-                // Hint backend to only return last 30 days to prevent iOS memory crash
-                const response = await fetch(`${WEB_APP_URL}/api/admin/all-orders?days=30`);
-                const result = await response.json();
-                
-                if (result.status === 'success') {
-                    const rawData = Array.isArray(result.data) ? result.data : [];
-                    const parsed = rawData
-                        .filter((o: any) => o !== null)
-                        .map((o: any) => {
-                            let products = [];
-                            try { if (o['Products (JSON)']) products = JSON.parse(o['Products (JSON)']); } catch(e) {}
-                            return { ...o, Products: products };
-                        });
-                    
-                    setFullOrders(parsed);
-                    CacheService.set(CACHE_KEY, parsed, CACHE_DURATION);
-                }
-            } catch (err) {
-                console.error("Failed to fetch report data", err);
-            } finally {
-                setIsLoadingData(false);
-            }
-        }
-    };
-
-    useEffect(() => {
-        checkAndFetchData();
-    }, []);
-
     const toggleSort = (key: SortKey) => {
         setSortConfig(prev => ({
             key,
@@ -107,7 +61,6 @@ const UserSalesPageReport: React.FC<UserSalesPageReportProps> = ({
     const handlePresetChange = (preset: DateRangePreset) => {
         const newFilters = { ...initialFilters, datePreset: preset };
         onFilterChange(newFilters);
-        checkAndFetchData();
     };
 
     const handleCustomDateChange = (key: 'customStart' | 'customEnd', value: string) => {
@@ -221,8 +174,6 @@ const UserSalesPageReport: React.FC<UserSalesPageReportProps> = ({
 
     // --- Date Filtering Logic ---
     const filteredOrders = useMemo(() => {
-        const sourceData = fullOrders.length > 0 ? fullOrders : initialOrders;
-
         const now = new Date();
         const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
         let start: Date | null = null;
@@ -269,25 +220,26 @@ const UserSalesPageReport: React.FC<UserSalesPageReportProps> = ({
                 end = null; 
                 break;
             case 'custom': 
-                start = new Date(initialFilters.customStart + 'T00:00:00');
-                end = new Date(initialFilters.customEnd + 'T23:59:59');
+                start = safeParseDate(initialFilters.customStart + 'T00:00:00');
+                end = safeParseDate(initialFilters.customEnd + 'T23:59:59');
                 break;
         }
 
-        return sourceData.filter(o => {
+        return sourceOrders.filter(o => {
             // Strict Team Check (Case Insensitive)
             if ((o.Team || '').trim().toLowerCase() !== team.trim().toLowerCase()) return false;
 
             // Date Check
             if (!start) return true; // All time
-            const orderDate = new Date(o.Timestamp);
+            const orderDate = safeParseDate(o.Timestamp);
+            if (!orderDate) return false;
             
             if (end) {
                 return orderDate >= start && orderDate <= end;
             }
             return orderDate >= start;
         });
-    }, [fullOrders, initialOrders, team, initialFilters]);
+    }, [sourceOrders, team, initialFilters]);
 
     const pageStats = useMemo(() => {
         const stats: Record<string, any> = {};
@@ -332,10 +284,12 @@ const UserSalesPageReport: React.FC<UserSalesPageReportProps> = ({
             stats[page].orderCount += 1;
 
             if (o.Timestamp) {
-                const d = new Date(o.Timestamp);
-                const mName = MONTHS[d.getMonth()];
-                stats[page][`rev_${mName}`] += rev;
-                stats[page][`prof_${mName}`] += profit;
+                const d = safeParseDate(o.Timestamp);
+                if (d) {
+                    const mName = MONTHS[d.getMonth()];
+                    stats[page][`rev_${mName}`] += rev;
+                    stats[page][`prof_${mName}`] += profit;
+                }
             }
         });
 
@@ -407,10 +361,6 @@ const UserSalesPageReport: React.FC<UserSalesPageReportProps> = ({
             .slice(0, 5)
             .map(p => ({ label: p.pageName, value: p.revenue, imageUrl: p.logoUrl }));
     }, [pageStats]);
-
-    if (isLoadingData && fullOrders.length === 0) {
-        return <div className="flex h-96 items-center justify-center"><Spinner size="lg" /></div>;
-    }
 
     return (
         <div className="w-full space-y-6">
