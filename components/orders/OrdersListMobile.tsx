@@ -13,6 +13,7 @@ interface OrdersListMobileProps {
     selectedIds: Set<string>;
     onToggleSelect?: (id: string) => void;
     onEdit?: (order: ParsedOrder) => void;
+    onView?: (order: ParsedOrder) => void;
     handlePrint: (order: ParsedOrder) => void;
     handleCopy: (id: string) => void;
     handleCopyTemplate: (order: ParsedOrder) => void;
@@ -29,6 +30,7 @@ const OrdersListMobile: React.FC<OrdersListMobileProps> = ({
     selectedIds,
     onToggleSelect,
     onEdit,
+    onView,
     handlePrint,
     handleCopy,
     handleCopyTemplate,

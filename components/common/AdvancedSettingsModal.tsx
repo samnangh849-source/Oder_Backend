@@ -119,6 +119,52 @@ const AdvancedSettingsModal: React.FC<AdvancedSettingsModalProps> = ({ onClose }
                                     </button>
                                 </div>
 
+                                {/* Order Edit Grace Period Setting */}
+                                <div className="p-5 bg-gray-800/40 rounded-[2rem] border border-white/5 hover:border-blue-500/20 transition-all group">
+                                    <div className="flex items-center justify-between mb-4">
+                                        <div className="flex items-center gap-4">
+                                            <div className="w-12 h-12 rounded-2xl bg-indigo-500/10 flex items-center justify-center text-indigo-400 group-hover:scale-110 transition-all border border-indigo-500/20 shadow-inner">
+                                                <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M12 8v4l3 2m6-2a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
+                                            </div>
+                                            <div>
+                                                <h3 className="text-sm font-black text-white uppercase tracking-tight">{t.edit_grace_period || 'Edit Grace Period'}</h3>
+                                                <p className="text-[10px] text-gray-500 font-bold uppercase tracking-widest mt-0.5">{t.edit_grace_period_desc || 'Time limit to edit your own orders (seconds)'}</p>
+                                            </div>
+                                        </div>
+                                        <div className="flex items-center gap-2 bg-black/40 px-4 py-2 rounded-xl border border-white/5">
+                                            <input 
+                                                type="number" 
+                                                min="3"
+                                                value={advancedSettings.orderEditGracePeriod || 43200}
+                                                onChange={(e) => {
+                                                    const val = Math.max(3, parseInt(e.target.value) || 3);
+                                                    setAdvancedSettings(prev => ({ ...prev, orderEditGracePeriod: val }));
+                                                }}
+                                                className="bg-transparent border-none text-right text-blue-400 font-black font-mono p-0 w-20 focus:ring-0"
+                                            />
+                                            <span className="text-[10px] font-black text-slate-600 uppercase">Sec</span>
+                                        </div>
+                                    </div>
+                                    <div className="px-2">
+                                        <input 
+                                            type="range" 
+                                            min="3" 
+                                            max="86400" // 24 hours
+                                            step="1" 
+                                            value={advancedSettings.orderEditGracePeriod || 43200} 
+                                            onChange={(e) => {
+                                                const val = parseInt(e.target.value);
+                                                setAdvancedSettings(prev => ({ ...prev, orderEditGracePeriod: val }));
+                                            }}
+                                            className="w-full h-2 bg-gray-700 rounded-full appearance-none cursor-pointer accent-indigo-600"
+                                        />
+                                        <div className="flex justify-between mt-2">
+                                            <span className="text-[8px] font-black text-slate-600 uppercase tracking-tighter">3s</span>
+                                            <span className="text-[8px] font-black text-slate-600 uppercase tracking-tighter">24h</span>
+                                        </div>
+                                    </div>
+                                </div>
+
                                 {/* Notification Sound Selection */}
                                 <div className="p-5 bg-gray-800/20 rounded-[2rem] border border-white/5 shadow-inner">
                                     <div className="flex items-center gap-3 mb-6">

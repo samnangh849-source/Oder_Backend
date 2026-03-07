@@ -58,51 +58,73 @@ const FastPackModal: React.FC<FastPackModalProps> = ({ order, onClose, onSuccess
         const canvas = canvasRef.current;
         const context = canvas.getContext('2d');
         if (context) {
+            // Use native video resolution for better quality
             canvas.width = video.videoWidth;
             canvas.height = video.videoHeight;
             context.drawImage(video, 0, 0, canvas.width, canvas.height);
-            const imageData = canvas.toDataURL('image/jpeg', 0.8);
-            const response = await fetch(imageData);
-            const blob = await response.blob();
-            const file = new File([blob], "capture.jpg", { type: "image/jpeg" });
-            const compressedBlob = await compressImage(file, 0.4, 640);
-            const reader = new FileReader();
-            reader.onloadend = () => {
-                setPreviewImage(reader.result as string);
-                setRawFile(file);
-                stopCamera();
-            };
-            reader.readAsDataURL(compressedBlob);
+            
+            // Direct to Blob for efficiency
+            canvas.toBlob(async (blob) => {
+                if (!blob) return;
+                const file = new File([blob], "capture.jpg", { type: "image/jpeg" });
+                
+                // Better compression settings: 1280px width, 0.8 quality
+                const compressedBlob = await compressImage(file, 0.8, 1280);
+                const reader = new FileReader();
+                reader.onloadend = () => {
+                    setPreviewImage(reader.result as string);
+                    setRawFile(file);
+                    stopCamera();
+                };
+                reader.readAsDataURL(compressedBlob);
+            }, 'image/jpeg', 0.9);
         }
     }, [stopCamera, uploading]);
 
     const handleSubmit = useCallback(async () => {
         if (!previewImage || !rawFile) return;
         setUploading(true);
+        
         try {
-            const uploadRes = await fetch(`${WEB_APP_URL}/api/upload-image`, {
+            const startTime = Date.now();
+            
+            // --- Security & Compatibility Fix ---
+            // Remove "data:image/jpeg;base64," prefix before sending to Backend
+            const base64Data = previewImage.includes(',') ? previewImage.split(',')[1] : previewImage;
+
+            // --- Parallel Execution for Speed ---
+            const uploadPromise = fetch(`${WEB_APP_URL}/api/upload-image`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ 
-                    fileData: previewImage,
+                    fileData: base64Data, // Send clean Base64 data
                     fileName: `Package_${order!['Order ID']}_${Date.now()}.jpg`,
-                    mimeType: rawFile.type || 'image/jpeg',
+                    mimeType: 'image/jpeg',
                     userName: currentUser?.FullName || 'Station Packer'
                 })
-            });
-            const uploadData = await uploadRes.json();
+            }).then(r => r.json());
+
+            // Pre-calculate data for update
+            const orderId = order!['Order ID'];
+            const team = order!.Team;
+            const customerName = order!['Customer Name'];
+            const stationPacker = currentUser?.FullName || 'Station Packer';
+
+            // Wait for upload first because we need the URL for the order update
+            const uploadData = await uploadPromise;
             if (uploadData.status !== 'success') throw new Error("Upload Failed!");
 
+            // Now update the order with the new image URL
             const updateRes = await fetch(`${WEB_APP_URL}/api/admin/update-order`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
-                    orderId: order!['Order ID'],
-                    team: order!.Team, 
-                    userName: currentUser?.FullName || 'Station Packer',
+                    orderId,
+                    team, 
+                    userName: stationPacker,
                     newData: { 
                         'Fulfillment Status': 'Ready to Ship',
-                        'Packed By': currentUser?.FullName || 'Station Packer',
+                        'Packed By': stationPacker,
                         'Package Photo URL': uploadData.url,
                         'Packed Time': new Date().toLocaleString('km-KH')
                     }
@@ -112,17 +134,17 @@ const FastPackModal: React.FC<FastPackModalProps> = ({ order, onClose, onSuccess
             const updateData = await updateRes.json();
             if (updateData.status !== 'success') throw new Error("Order update failed!");
             
-            try {
-                const id = order!['Order ID'].substring(0,8);
-                const chatMsg = `📦 **[PACKED]** កញ្ចប់ #${id} (${order!['Customer Name']}) វេចខ្ចប់រួចរាល់ដោយ **${currentUser?.FullName || 'Station Packer'}**`;
-                await fetch(`${WEB_APP_URL}/api/chat/send`, {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ userName: 'System', type: 'text', content: chatMsg, MessageType: 'text', Content: chatMsg })
-                });
-            } catch (e) { console.warn("Chat broadcast failed", e); }
+            // --- Background Tasks (Don't wait for these to finish) ---
+            const id = orderId.substring(0,8);
+            const chatMsg = `📦 **[PACKED]** កញ្ចប់ #${id} (${customerName}) វេចខ្ចប់រួចរាល់ដោយ **${stationPacker}**`;
+            fetch(`${WEB_APP_URL}/api/chat/send`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ userName: 'System', type: 'text', content: chatMsg, MessageType: 'text', Content: chatMsg })
+            }).catch(e => console.warn("Background chat broadcast failed", e));
 
-            alert(`✅ វេចខ្ចប់ជោគជ័យ និងបានរក្សាទុករូបភាព!`);
+            console.log(`Fulfillment process took ${Date.now() - startTime}ms`);
+            
             onSuccess();
         } catch (err: any) {
             alert("❌ មានបញ្ហា: " + err.message);

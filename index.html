@@ -10,22 +10,30 @@
     <link rel="manifest" href="./manifest.json">
     
     <!-- iOS Support for Standalone Mode -->
-    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
     <meta name="apple-mobile-web-app-title" content="O-System">
+    
+    <script>
+      // Service Worker Registration
+      if ('serviceWorker' in navigator) {
+        window.addEventListener('load', () => {
+          const basePath = window.location.pathname.includes('/Order_System') ? '/Order_System/' : '/';
+          navigator.serviceWorker.register(basePath + 'sw.js')
+            .then(reg => console.log('SW Registered', reg.scope))
+            .catch(err => console.error('SW Registration Failed:', err));
+        });
+      }
+    </script>
     
     <!-- Theme Color for Browser Address Bar -->
     <meta name="theme-color" content="#020617">
 
     <!-- Icons Configuration for iOS & Android -->
-    <!-- Standard Favicon -->
     <link rel="icon" type="image/png" href="https://lh3.googleusercontent.com/d/1vb9IG8wn31LDYtUKLurm6cMow0MI4Tee">
-    
-    <!-- Apple Touch Icon (សំខាន់សម្រាប់ iOS) -->
     <link rel="apple-touch-icon" sizes="180x180" href="https://lh3.googleusercontent.com/d/1vb9IG8wn31LDYtUKLurm6cMow0MI4Tee">
-    <link rel="apple-touch-icon" href="https://lh3.googleusercontent.com/d/1vb9IG8wn31LDYtUKLurm6cMow0MI4Tee">
 
-    <!-- MapLibre GL CSS & JS (Global Fallback) -->
+    <!-- MapLibre GL CSS & JS -->
     <link href="https://unpkg.com/maplibre-gl@4.7.1/dist/maplibre-gl.css" rel="stylesheet" />
     <script src="https://unpkg.com/maplibre-gl@4.7.1/dist/maplibre-gl.js"></script>
 
@@ -37,12 +45,10 @@
     
     <link rel="stylesheet" href="index.css">
     
-    <!-- Global Error Handler: Shows errors on screen instead of blank page -->
     <script>
       window.onerror = function(message, source, lineno, colno, error) {
         console.error("Global Error:", message, source, lineno, error);
         const root = document.getElementById('root');
-        // Only show full screen error if app hasn't loaded or looks broken
         if (!root || root.innerHTML.trim() === '') {
             const errorDiv = document.createElement('div');
             errorDiv.style.cssText = 'position:fixed; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.9); color:red; padding:20px; z-index:9999; overflow:auto; font-family:monospace;';
@@ -64,34 +70,10 @@
         };
       })();
     </script>
-
-    <!-- ES Module Shims: Critical for Import Map compatibility in older browsers/Safari -->
-    <script async src="https://ga.jspm.io/npm:es-module-shims@1.10.0/dist/es-module-shims.js"></script>
-
-<script type="importmap">
-{
-  "imports": {
-    "vite": "https://aistudiocdn.com/vite@^7.2.2",
-    "@vitejs/plugin-react": "https://aistudiocdn.com/@vitejs/plugin-react@^5.1.0",
-    "react/": "https://aistudiocdn.com/react@^19.2.0/",
-    "react": "https://aistudiocdn.com/react@^19.2.0",
-    "react-dom/": "https://aistudiocdn.com/react-dom@^19.2.0/",
-    "react-dom": "https://aistudiocdn.com/react-dom@^19.2.0",
-    "react-dom/client": "https://aistudiocdn.com/react-dom@^19.2.0/client",
-    "@google/genai": "https://aistudiocdn.com/@google/genai@^1.29.0",
-    "path": "https://aistudiocdn.com/path@^0.12.7",
-    "url": "https://aistudiocdn.com/url@^0.11.4",
-    "jspdf": "https://aistudiocdn.com/jspdf@^2.5.2",
-    "jspdf-autotable": "https://aistudiocdn.com/jspdf-autotable@^3.8.4",
-    "lucide-react": "https://esm.sh/lucide-react@^0.562.0",
-    "html2canvas": "https://esm.sh/html2canvas@^1.4.1"
-  }
-}
-</script>
 </head>
 <body class="bg-gray-900 text-gray-200 antialiased overscroll-none">
     <div class="flare-light"></div>
     <div id="root"></div>
-    <script type="module" src="./index.tsx"></script>
+    <script type="module" src="/index.tsx"></script>
 </body>
 </html>

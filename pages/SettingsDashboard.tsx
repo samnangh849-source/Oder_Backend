@@ -12,6 +12,7 @@ import {
 } from '../constants/settingsConfig';
 import ConfigEditModal from '../components/admin/settings/ConfigEditModal';
 import SystemUpdateModal from '../components/admin/settings/SystemUpdateModal';
+import TelegramTemplateManager from '../components/admin/settings/TelegramTemplateManager';
 
 interface SettingsDashboardProps {
     onBack: () => void;
@@ -19,7 +20,7 @@ interface SettingsDashboardProps {
 }
 
 const SettingsDashboard: React.FC<SettingsDashboardProps> = ({ onBack, initialSection }) => {
-    const { appData, refreshData, logout, setMobilePageTitle } = useContext(AppContext);
+    const { appData, refreshData, logout, setMobilePageTitle, language } = useContext(AppContext);
     const [desktopSection, setDesktopSection] = useState<string>(initialSection || 'users');
     const [mobileSection, setMobileSection] = useState<string | null>(initialSection || null);
     const [modal, setModal] = useState<{ isOpen: boolean, sectionId: string, item: any | null }>({ isOpen: false, sectionId: '', item: null });
@@ -158,7 +159,9 @@ const SettingsDashboard: React.FC<SettingsDashboardProps> = ({ onBack, initialSe
                     </button>
 
                     {activeId === 'pages' && <button onClick={() => setIsPdfOpen(true)} className="flex-1 sm:flex-none btn btn-secondary px-6">PDF Export</button>}
-                    <button onClick={() => setModal({ isOpen: true, sectionId: activeId, item: null })} className="flex-1 sm:flex-none btn btn-primary px-10 shadow-lg shadow-blue-600/20 font-black">+ បន្ថែមថ្មី</button>
+                    {activeId !== 'telegramTemplates' && (
+                        <button onClick={() => setModal({ isOpen: true, sectionId: activeId, item: null })} className="flex-1 sm:flex-none btn btn-primary px-10 shadow-lg shadow-blue-600/20 font-black">+ បន្ថែមថ្មី</button>
+                    )}
                     <button onClick={onBack} className="hidden md:flex btn btn-secondary px-6">ត្រឡប់</button>
                 </div>
             </div>
@@ -176,86 +179,94 @@ const SettingsDashboard: React.FC<SettingsDashboardProps> = ({ onBack, initialSe
 
                 {/* Content Area */}
                 <main className="flex-grow min-w-0">
-                    <div className="bg-gray-800/30 border border-gray-700/50 rounded-3xl overflow-hidden shadow-2xl">
-                        {/* Desktop Table View */}
-                        <div className="hidden md:block overflow-x-auto custom-scrollbar">
-                            <table className="admin-table w-full">
-                                <thead>
-                                    <tr className="bg-gray-900/50 border-b border-gray-700">
-                                        <th className="w-12 text-center">#</th>
-                                        {activeSection?.fields.map(f => <th key={f.name}>{f.label}</th>)}
-                                        <th className="w-32 text-center uppercase tracking-widest text-[10px]">Action</th>
-                                    </tr>
-                                </thead>
-                                <tbody className="divide-y divide-gray-700/30">
-                                    {dataList.length > 0 ? dataList.map((item: any, idx: number) => (
-                                        <tr key={idx} className="hover:bg-blue-600/5 transition-colors group">
-                                            <td className="text-center text-gray-500 font-bold text-xs">{idx + 1}</td>
-                                            {activeSection?.fields.map(f => {
-                                                const val = getValueCaseInsensitive(item, f.name);
-                                                return (
-                                                    <td key={f.name} className="py-4">
-                                                        {f.type === 'image_url' && val ? (
-                                                            <img src={convertGoogleDriveUrl(String(val))} className="w-10 h-10 rounded-xl object-contain bg-gray-900 border border-gray-700 p-1" alt="logo" />
-                                                        ) : (
-                                                            <span className={`text-sm font-bold ${f.type === 'password' ? 'text-gray-600' : 'text-gray-200'}`}>
-                                                                {f.type === 'password' ? '••••••••' : (typeof val === 'boolean' ? (val ? '✅ Active' : '❌ Inactive') : String(val || '-'))}
-                                                            </span>
-                                                        )}
-                                                    </td>
-                                                );
-                                            })}
-                                            <td className="px-4 py-4 text-center">
-                                                <div className="flex items-center justify-center gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
-                                                    <button onClick={() => setModal({ isOpen: true, sectionId: activeId, item })} className="p-2 bg-amber-500/10 text-amber-400 rounded-lg hover:bg-amber-500 hover:text-white transition-all"><svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" /></svg></button>
-                                                    <button onClick={() => handleDelete(activeSection!, item)} className="p-2 bg-red-500/10 text-red-400 rounded-lg hover:bg-red-500 hover:text-white transition-all"><svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg></button>
-                                                </div>
-                                            </td>
-                                        </tr>
-                                    )) : (
-                                        <tr><td colSpan={10} className="py-20 text-center text-gray-500 font-bold">មិនមានទិន្នន័យត្រូវបានរកឃើញទេ</td></tr>
-                                    )}
-                                </tbody>
-                            </table>
+                    {activeId === 'telegramTemplates' ? (
+                        <div className="bg-gray-800/30 border border-gray-700/50 rounded-[3rem] p-8 shadow-2xl backdrop-blur-md">
+                            <TelegramTemplateManager language={language} />
                         </div>
+                    ) : (
+                        <div className="bg-gray-800/30 border border-gray-700/50 rounded-3xl overflow-hidden shadow-2xl">
+                            {/* Desktop Table View */}
+                            <div className="hidden md:block overflow-x-auto custom-scrollbar">
+                                <table className="admin-table w-full">
+                                    <thead>
+                                        <tr className="bg-gray-900/50 border-b border-gray-700">
+                                            <th className="w-12 text-center">#</th>
+                                            {activeSection?.fields.map(f => <th key={f.name}>{f.label}</th>)}
+                                            <th className="w-32 text-center uppercase tracking-widest text-[10px]">Action</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody className="divide-y divide-gray-700/30">
+                                        {dataList.length > 0 ? dataList.map((item: any, idx: number) => (
+                                            <tr key={idx} className="hover:bg-blue-600/5 transition-colors group">
+                                                <td className="text-center text-gray-500 font-bold text-xs">{idx + 1}</td>
+                                                {activeSection?.fields.map(f => {
+                                                    const val = getValueCaseInsensitive(item, f.name);
+                                                    return (
+                                                        <td key={f.name} className="py-4">
+                                                            {f.type === 'image_url' && val ? (
+                                                                <img src={convertGoogleDriveUrl(String(val))} className="w-10 h-10 rounded-xl object-contain bg-gray-900 border border-gray-700 p-1" alt="logo" />
+                                                            ) : (
+                                                                <span className={`text-sm font-bold ${f.type === 'password' ? 'text-gray-600' : 'text-gray-200'}`}>
+                                                                    {f.type === 'password' ? '••••••••' : (typeof val === 'boolean' ? (val ? '✅ Active' : '❌ Inactive') : String(val || '-'))}
+                                                                </span>
+                                                            )}
+                                                        </td>
+                                                    );
+                                                })}
+                                                <td className="px-4 py-4 text-center">
+                                                    <div className="flex items-center justify-center gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
+                                                        <button onClick={() => setModal({ isOpen: true, sectionId: activeId, item })} className="p-2 bg-amber-500/10 text-amber-400 rounded-lg hover:bg-amber-500 hover:text-white transition-all"><svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" /></svg></button>
+                                                        <button onClick={() => handleDelete(activeSection!, item)} className="p-2 bg-red-500/10 text-red-400 rounded-lg hover:bg-red-500 hover:text-white transition-all"><svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg></button>
+                                                    </div>
+                                                </td>
+                                            </tr>
+                                        )) : (
+                                            <tr><td colSpan={10} className="py-20 text-center text-gray-500 font-bold">មិនមានទិន្នន័យត្រូវបានរកឃើញទេ</td></tr>
+                                        )}
+                                    </tbody>
+                                </table>
+                            </div>
 
-                        {/* Mobile List View */}
-                        <div className="md:hidden divide-y divide-gray-700/50">
-                            {dataList.length > 0 ? dataList.map((item: any, idx: number) => {
-                                const title = getValueCaseInsensitive(item, activeSection?.displayField || '');
-                                const imgField = activeSection?.fields.find(f => f.type === 'image_url');
-                                const imgVal = imgField ? getValueCaseInsensitive(item, imgField.name) : null;
+                            {/* Mobile List View */}
+                            <div className="md:hidden divide-y divide-gray-700/50">
+                                {dataList.length > 0 ? dataList.map((item: any, idx: number) => {
+                                    const title = getValueCaseInsensitive(item, activeSection?.displayField || '');
+                                    const imgField = activeSection?.fields.find(f => f.type === 'image_url');
+                                    const imgVal = imgField ? getValueCaseInsensitive(item, imgField.name) : null;
 
-                                return (
-                                    <div key={idx} className="p-4 flex items-center justify-between">
-                                        <div className="flex items-center gap-3 min-w-0">
-                                            {imgVal && <img src={convertGoogleDriveUrl(imgVal)} className="w-12 h-12 rounded-xl object-contain bg-gray-900 border border-gray-700 p-1 flex-shrink-0" alt="logo" />}
-                                            <div className="min-w-0">
-                                                <h4 className="text-sm font-black text-white truncate">{String(title || '-')}</h4>
-                                                <p className="text-[10px] text-gray-500 font-bold uppercase mt-0.5">Item #{idx + 1}</p>
+                                    return (
+                                        <div key={idx} className="p-4 flex items-center justify-between">
+                                            <div className="flex items-center gap-3 min-w-0">
+                                                {imgVal && <img src={convertGoogleDriveUrl(imgVal)} className="w-12 h-12 rounded-xl object-contain bg-gray-900 border border-gray-700 p-1 flex-shrink-0" alt="logo" />}
+                                                <div className="min-w-0">
+                                                    <h4 className="text-sm font-black text-white truncate">{String(title || '-')}</h4>
+                                                    <p className="text-[10px] text-gray-500 font-bold uppercase mt-0.5">Item #{idx + 1}</p>
+                                                </div>
+                                            </div>
+                                            <div className="flex gap-2">
+                                                <button onClick={() => setModal({ isOpen: true, sectionId: activeId, item })} className="p-2.5 bg-gray-800 text-blue-400 rounded-xl border border-gray-700 active:scale-95 transition-all"><svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" /></svg></button>
+                                                <button onClick={() => handleDelete(activeSection!, item)} className="p-2.5 bg-gray-800 text-red-400 rounded-xl border border-gray-700 active:scale-95 transition-all"><svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg></button>
                                             </div>
                                         </div>
-                                        <div className="flex gap-2">
-                                            <button onClick={() => setModal({ isOpen: true, sectionId: activeId, item })} className="p-2.5 bg-gray-800 text-blue-400 rounded-xl border border-gray-700 active:scale-95 transition-all"><svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" /></svg></button>
-                                            <button onClick={() => handleDelete(activeSection!, item)} className="p-2.5 bg-gray-800 text-red-400 rounded-xl border border-gray-700 active:scale-95 transition-all"><svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg></button>
-                                        </div>
-                                    </div>
-                                );
-                            }) : (
-                                <div className="py-20 text-center text-gray-500 font-bold">មិនមានទិន្នន័យ</div>
-                            )}
+                                    );
+                                }) : (
+                                    <div className="py-20 text-center text-gray-500 font-bold">មិនមានទិន្នន័យ</div>
+                                )}
+                            </div>
                         </div>
-                    </div>
+                    )}
                 </main>
             </div>
 
             {/* Floating Action Button (Mobile Only) */}
-            <button 
-                onClick={() => setModal({ isOpen: true, sectionId: activeId, item: null })}
-                className="md:hidden fixed bottom-24 right-6 w-16 h-16 bg-blue-600 text-white rounded-full shadow-2xl flex items-center justify-center active:scale-90 transition-transform z-40 border-4 border-gray-900"
-            >
-                <svg className="w-8 h-8" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M12 4v16m8-8H4" /></svg>
-            </button>
+            {activeId !== 'telegramTemplates' && (
+                <button 
+                    onClick={() => setModal({ isOpen: true, sectionId: activeId, item: null })}
+                    className="md:hidden fixed bottom-24 right-6 w-16 h-16 bg-blue-600 text-white rounded-full shadow-2xl flex items-center justify-center active:scale-90 transition-transform z-40 border-4 border-gray-900"
+                >
+                    <svg className="w-8 h-8" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M12 4v16m8-8H4" /></svg>
+                </button>
+            )}
 
             {modal.isOpen && activeSection && (
                 <ConfigEditModal 

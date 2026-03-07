@@ -1,5 +1,5 @@
-import React, { useState, useEffect } from 'react';
-import { IncentiveProject, ParsedOrder } from '../types';
+import React, { useState, useEffect, useMemo, useContext } from 'react';
+import { IncentiveProject, ParsedOrder } from '../../types';
 import { translations } from '../../translations';
 import { AppContext } from '../../context/AppContext';
 
@@ -10,7 +10,7 @@ interface ManualDataInputProps {
 }
 
 const ManualDataInput: React.FC<ManualDataInputProps> = ({ project, onSave, onClose }) => {
-    const { language, appData } = React.useContext(AppContext);
+    const { language, appData } = useContext(AppContext);
     const t = translations[language];
     
     const [period, setPeriod] = useState(new Date().toISOString().slice(0, 7));

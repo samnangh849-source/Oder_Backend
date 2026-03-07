@@ -38,15 +38,15 @@ const lazyRetry = <T extends React.ComponentType<any>>(
   });
 };
 
-const LoginPage = lazyRetry(() => import('@/pages/LoginPage'), 'LoginPage');
-const RoleSelectionPage = lazyRetry(() => import('@/pages/RoleSelectionPage'), 'RoleSelectionPage');
-const AdminDashboard = lazyRetry(() => import('@/pages/AdminDashboard'), 'AdminDashboard');
-const UserJourney = lazyRetry(() => import('@/pages/UserJourney'), 'UserJourney');
-const DeliveryAgentView = lazyRetry(() => import('@/components/orders/DeliveryAgentView'), 'DeliveryAgentView');
-const FulfillmentPage = lazyRetry(() => import('@/pages/FulfillmentPage'), 'FulfillmentPage');
-const Header = lazyRetry(() => import('@/components/common/Header'), 'Header');
-const ImpersonationBanner = lazyRetry(() => import('@/components/common/ImpersonationBanner'), 'ImpersonationBanner');
-const ChatWidget = lazyRetry(() => import('@/components/chat/ChatWidget'), 'ChatWidget');
+const LoginPage = lazyRetry(() => import('./pages/LoginPage'), 'LoginPage');
+const RoleSelectionPage = lazyRetry(() => import('./pages/RoleSelectionPage'), 'RoleSelectionPage');
+const AdminDashboard = lazyRetry(() => import('./pages/AdminDashboard'), 'AdminDashboard');
+const UserJourney = lazyRetry(() => import('./pages/UserJourney'), 'UserJourney');
+const DeliveryAgentView = lazyRetry(() => import('./components/orders/DeliveryAgentView'), 'DeliveryAgentView');
+const FulfillmentPage = lazyRetry(() => import('./pages/FulfillmentPage'), 'FulfillmentPage');
+const Header = lazyRetry(() => import('./components/common/Header'), 'Header');
+const ImpersonationBanner = lazyRetry(() => import('./components/common/ImpersonationBanner'), 'ImpersonationBanner');
+const ChatWidget = lazyRetry(() => import('./components/chat/ChatWidget'), 'ChatWidget');
 
 const initialAppData: AppData = {
     users: [], products: [], pages: [], locations: [],

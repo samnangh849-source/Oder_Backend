@@ -81,10 +81,9 @@ const ProvincialMap: React.FC<ProvincialMapProps> = ({ data, onProvinceClick }) 
     }, [data]);
 
     const topRanks = useMemo(() => {
-        const sorted = Object.values(statsMap).sort((a, b) => {
-            const valA = a[activeMetric as keyof ProvinceStat] || 0;
-            const valB = b[activeMetric as keyof ProvinceStat] || 0;
-            // @ts-ignore
+        const sorted = (Object.values(statsMap) as ProvinceStat[]).sort((a, b) => {
+            const valA = Number(a[activeMetric as keyof ProvinceStat]) || 0;
+            const valB = Number(b[activeMetric as keyof ProvinceStat]) || 0;
             return valB - valA;
         });
         const ranks: Record<string, number> = {};
@@ -203,20 +202,20 @@ const ProvincialMap: React.FC<ProvincialMapProps> = ({ data, onProvinceClick }) 
                     displayName = props.shapeName;
                 }
 
-                let visualValue = revenue;
-                if (activeMetric === 'orders') visualValue = orders * 80; 
-                if (activeMetric === 'shipping') visualValue = shippingCost * 25;
+                let visualValue = Number(revenue) || 0;
+                if (activeMetric === 'orders') visualValue = (Number(orders) || 0) * 80; 
+                if (activeMetric === 'shipping') visualValue = (Number(shippingCost) || 0) * 25;
 
                 return { 
                     ...feature, 
                     properties: { 
                         ...props, 
-                        revenue: visualValue, 
-                        realRevenue: revenue,
-                        orders, 
-                        shippingCost,
+                        revenue: visualValue || 0, 
+                        realRevenue: Number(revenue) || 0,
+                        orders: Number(orders) || 0, 
+                        shippingCost: Number(shippingCost) || 0,
                         displayName, 
-                        rank 
+                        rank: Number(rank) || 999
                     } 
                 };
             });

@@ -29,9 +29,9 @@ export class PackageDetector {
             
             console.log("AI: Loading HandPose model...");
             const model = handPoseDetection.SupportedModels.MediaPipeHands;
-            const detectorConfig: handPoseDetection.MediaPipeHandsMediaPipeConfig = {
+            const detectorConfig: handPoseDetection.MediaPipeHandsMediaPipeModelConfig = {
                 runtime: 'mediapipe',
-                solutionPath: `https://cdn.jsdelivr.net/npm/@mediapipe/hands@0.4.1646424515`,
+                solutionPath: `https://cdn.jsdelivr.net/npm/@mediapipe/hands`,
                 modelType: 'lite', 
             };
             this.detector = await handPoseDetection.createDetector(model, detectorConfig);

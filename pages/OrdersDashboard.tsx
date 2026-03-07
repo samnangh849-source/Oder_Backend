@@ -13,6 +13,7 @@ import BulkActionManager from '../components/admin/BulkActionManager';
 import OrderFilters, { FilterState } from '../components/orders/OrderFilters';
 import { ColumnToggler, availableColumns } from '../components/orders/ColumnToggler';
 import { FilterPanel } from '../components/orders/FilterPanel';
+import OrderDetailModal from '../components/orders/OrderDetailModal';
 
 interface OrdersDashboardProps {
     onBack: () => void;
@@ -22,6 +23,7 @@ interface OrdersDashboardProps {
 const OrdersDashboard: React.FC<OrdersDashboardProps> = ({ onBack, initialFilters }) => {
     const { appData, refreshData, refreshTimestamp, currentUser, setMobilePageTitle } = useContext(AppContext);
     const [editingOrderId, setEditingOrderId] = useUrlState<string>('editOrder', '');
+    const [viewingOrder, setViewingOrder] = useState<ParsedOrder | null>(null);
     
     // Set Mobile Title
     useEffect(() => {
@@ -487,11 +489,12 @@ const OrdersDashboard: React.FC<OrdersDashboardProps> = ({ onBack, initialFilter
             </div>
 
             <div className="relative z-10">
-                <OrdersList orders={filteredOrders} onEdit={o => setEditingOrderId(o['Order ID'])} showActions={true} visibleColumns={visibleColumns} selectedIds={selectedIds} onToggleSelect={toggleSelection} onToggleSelectAll={toggleSelectAll} showBorders={showBorders} />
+                <OrdersList orders={filteredOrders} onEdit={o => setEditingOrderId(o['Order ID'])} onView={o => setViewingOrder(o)} showActions={true} visibleColumns={visibleColumns} selectedIds={selectedIds} onToggleSelect={toggleSelection} onToggleSelectAll={toggleSelectAll} showBorders={showBorders} />
             </div>
 
             <BulkActionManager orders={enrichedOrders} selectedIds={selectedIds} onComplete={() => { setSelectedIds(new Set()); fetchAllOrders(); }} onClearSelection={() => setSelectedIds(new Set())} />
             {isPdfModalOpen && <PdfExportModal isOpen={isPdfModalOpen} onClose={() => setIsPdfModalOpen(false)} orders={filteredOrders} />}
+            {viewingOrder && <OrderDetailModal order={viewingOrder} onClose={() => setViewingOrder(null)} />}
         </div>
     );
 };

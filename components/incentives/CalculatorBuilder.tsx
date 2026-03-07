@@ -1,9 +1,8 @@
-import React, { useState, useContext } from 'react';
+import React, { useState, useContext, useEffect } from 'react';
 import { IncentiveCalculator, CalculatorType, IncentiveTier, CommissionTier } from '../../types';
 import { addCalculatorToProject, updateCalculator } from '../../services/incentiveService';
 import { AppContext } from '../../context/AppContext';
 import { translations } from '../../translations';
-import UserAvatar from '../common/UserAvatar';
 
 interface CalculatorBuilderProps {
     projectId: string;
@@ -18,648 +17,280 @@ const CalculatorBuilder: React.FC<CalculatorBuilderProps> = ({ projectId, initia
     const t = translations[language];
 
     const [step, setStep] = useState(1);
+    const [previewInput, setPreviewInput] = useState<number>(5000);
     
-    // State for the calculator being built
     const [calcData, setCalcData] = useState<Partial<IncentiveCalculator>>(initialData || {
         name: '',
         type,
-        status: 'Draft',
+        status: 'Active',
         departmentOrRole: [],
         applyTo: [],
         metricType: 'Sales Amount',
         metricUnit: 'USD',
         calculationPeriod: 'Monthly',
         resetEveryPeriod: true,
-        // Type 1 defaults
         achievementTiers: [],
-        // Type 2 defaults
         commissionType: 'Flat Commission',
         commissionMethod: 'Percentage',
         commissionCondition: 'On Total Sales',
         commissionRate: 0,
-        commissionTiers: []
+        commissionTiers: [],
+        distributionRule: { method: 'Equal Split' }
     });
 
     const updateField = (field: keyof IncentiveCalculator, value: any) => {
         setCalcData(prev => ({ ...prev, [field]: value }));
     };
 
-    const handleSave = () => {
-        if (!calcData.name) {
-            alert("Please provide a name.");
-            return;
+    // Templates Logic
+    const applyTemplate = (templateName: string) => {
+        if (templateName === 'tiered_sales') {
+            updateField('name', 'Tiered Sales Bonus');
+            updateField('calculationPeriod', 'Monthly');
+            updateField('achievementTiers', [
+                { id: 't1', target: 3000, rewardAmount: 20, rewardType: 'Fixed Cash', name: 'Bronze' },
+                { id: 't2', target: 6000, rewardAmount: 50, rewardType: 'Fixed Cash', name: 'Silver' },
+                { id: 't3', target: 10000, rewardAmount: 100, rewardType: 'Fixed Cash', name: 'Gold' }
+            ]);
+        } else if (templateName === 'weekly_progressive') {
+            updateField('name', 'Weekly Sprint Incentive');
+            updateField('calculationPeriod', 'Weekly');
+            updateField('isMarathon', true);
+            updateField('achievementTiers', [
+                { id: 'w1', target: 1500, rewardAmount: 10, rewardType: 'Fixed Cash', subPeriod: 'W1', name: 'Week 1 Goal' },
+                { id: 'w2', target: 3000, rewardAmount: 15, rewardType: 'Fixed Cash', subPeriod: 'W2', name: 'Week 2 Goal' },
+                { id: 'w3', target: 4500, rewardAmount: 20, rewardType: 'Fixed Cash', subPeriod: 'W3', name: 'Week 3 Goal' },
+                { id: 'w4', target: 6000, rewardAmount: 30, rewardType: 'Fixed Cash', subPeriod: 'W4', name: 'Week 4 Goal' }
+            ]);
+        } else if (templateName === 'flat_commission') {
+            updateField('name', 'Standard 1% Commission');
+            updateField('type', 'Commission');
+            updateField('commissionType', 'Flat Commission');
+            updateField('commissionRate', 1);
+            updateField('commissionMethod', 'Percentage');
         }
+        setStep(2); // Jump to metrics
+    };
 
-        if (initialData && initialData.id) {
-            updateCalculator(projectId, initialData.id, calcData);
-        } else {
-            addCalculatorToProject(projectId, calcData as Omit<IncentiveCalculator, 'id'>);
-        }
+    const handleSave = () => {
+        if (!calcData.name) return alert("Please provide a name.");
+        if (initialData?.id) updateCalculator(projectId, initialData.id, calcData);
+        else addCalculatorToProject(projectId, calcData as Omit<IncentiveCalculator, 'id'>);
         onSave();
     };
 
-    // --- STEP 1: Basic Info ---
-    const renderBasicInfo = () => (
-        <div className="space-y-6 animate-fade-in">
-            <h3 className="text-lg font-black text-white uppercase tracking-tight border-b border-slate-800 pb-3">1. {t.calc_basic_info}</h3>
-            
-            <div>
-                <label className="block text-xs font-black text-slate-400 uppercase tracking-widest mb-2">{t.calc_name}</label>
-                <input 
-                    type="text" 
-                    value={calcData.name}
-                    onChange={e => updateField('name', e.target.value)}
-                    className="w-full bg-slate-900 border border-slate-700 rounded-xl px-4 py-3 text-white font-bold focus:border-blue-500"
-                    placeholder={type === 'Achievement' ? "e.g., Weekly Sales Incentive" : "e.g., Senior Sales Commission"}
-                />
+    const InfoBox = ({ title, children }: { title: string, children: React.ReactNode }) => (
+        <div className="bg-indigo-900/20 border border-indigo-500/20 p-4 rounded-2xl mb-6 shadow-sm">
+            <div className="flex items-center gap-2 mb-2">
+                <svg className="w-5 h-5 text-indigo-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>
+                <h4 className="text-[10px] font-black text-indigo-300 uppercase tracking-widest">{title}</h4>
+            </div>
+            <div className="text-[11px] text-slate-300 font-medium leading-relaxed">{children}</div>
+        </div>
+    );
+
+    // --- RENDER STEPS ---
+    const renderStep1 = () => (
+        <div className="space-y-8 animate-fade-in">
+            <div className="text-center mb-10">
+                <h3 className="text-xl font-black text-white uppercase tracking-tight mb-2">ចាប់ផ្តើមបង្កើតលក្ខខណ្ឌ</h3>
+                <p className="text-slate-500 text-xs font-bold uppercase tracking-widest">ជ្រើសរើសគំរូដែលមានស្រាប់ ដើម្បីចំណេញពេលវេលា</p>
+            </div>
+
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                {[
+                    { id: 'tiered_sales', title: 'Tiered Bonus', desc: 'រង្វាន់កើនតាមកម្រិតលក់', icon: '🏆' },
+                    { id: 'weekly_progressive', title: 'Weekly Sprint', desc: 'គោលដៅប្រចាំសប្តាហ៍', icon: '⚡' },
+                    { id: 'flat_commission', title: 'Flat Comm.', desc: 'កម្រៃជើងសារថេរ', icon: '💰' }
+                ].map(tmp => (
+                    <button key={tmp.id} onClick={() => applyTemplate(tmp.id)} className="p-6 bg-slate-900/50 border-2 border-slate-800 rounded-3xl hover:border-indigo-500 hover:bg-indigo-500/5 transition-all text-left group">
+                        <div className="text-3xl mb-4 group-hover:scale-110 transition-transform">{tmp.icon}</div>
+                        <div className="text-sm font-black text-white uppercase mb-1">{tmp.title}</div>
+                        <div className="text-[10px] text-slate-500 font-bold uppercase">{tmp.desc}</div>
+                    </button>
+                ))}
+            </div>
+
+            <div className="relative flex items-center py-4">
+                <div className="flex-grow border-t border-slate-800"></div>
+                <span className="flex-shrink mx-4 text-[10px] font-black text-slate-600 uppercase tracking-widest">ឬ បង្កើតដោយខ្លួនឯង</span>
+                <div className="flex-grow border-t border-slate-800"></div>
             </div>
 
             <div>
-                <label className="block text-xs font-black text-slate-400 uppercase tracking-widest mb-2">{t.status}</label>
-                <select 
-                    value={calcData.status}
-                    onChange={e => updateField('status', e.target.value)}
-                    className="w-full bg-slate-900 border border-slate-700 rounded-xl px-4 py-3 text-white font-bold focus:border-blue-500"
-                >
-                    <option value="Draft">Draft</option>
-                    <option value="Active">Active</option>
-                    <option value="Disable">Disable</option>
-                </select>
-            </div>
-            
-            <div>
-                <label className="block text-xs font-black text-slate-400 uppercase tracking-widest mb-2">{t.apply_to}</label>
+                <label className="block text-xs font-black text-slate-400 uppercase tracking-widest mb-3 italic">ឈ្មោះម៉ាស៊ីនគណនា</label>
                 <input 
-                    type="text" 
-                    value={calcData.applyTo?.join(', ')}
-                    onChange={e => updateField('applyTo', e.target.value.split(',').map(s => s.trim()))}
-                    className="w-full bg-slate-900 border border-slate-700 rounded-xl px-4 py-3 text-white font-bold focus:border-blue-500"
-                    placeholder="e.g., Sales, Marketing, Leader (Comma separated)"
+                    type="text" value={calcData.name} onChange={e => updateField('name', e.target.value)}
+                    className="w-full bg-slate-900/50 border border-slate-700 rounded-2xl px-5 py-4 text-white font-bold focus:border-indigo-500 focus:ring-0 shadow-inner"
+                    placeholder="ឧ. ប្រាក់លើកទឹកចិត្តប្រចាំខែ..."
                 />
             </div>
         </div>
     );
 
-    // --- STEP 2: Metric & Period ---
-    const renderMetricPeriod = () => (
+    const renderStep2 = () => (
         <div className="space-y-6 animate-fade-in">
-            <h3 className="text-lg font-black text-white uppercase tracking-tight border-b border-slate-800 pb-3">2. {t.perf_metric_period}</h3>
-            
+            <h3 className="text-lg font-black text-white uppercase tracking-tight border-b border-slate-800 pb-3">ស្វែងយល់ពី Metrics & Periods</h3>
             <div className="grid grid-cols-2 gap-4">
                 <div>
-                    <label className="block text-xs font-black text-slate-400 uppercase tracking-widest mb-2">{t.metric_type}</label>
-                    <select 
-                        value={calcData.metricType}
-                        onChange={e => updateField('metricType', e.target.value)}
-                        className="w-full bg-slate-900 border border-slate-700 rounded-xl px-4 py-3 text-white font-bold focus:border-blue-500"
-                    >
+                    <label className="block text-[10px] font-black text-slate-500 uppercase tracking-widest mb-2">Metric Type</label>
+                    <select value={calcData.metricType} onChange={e => updateField('metricType', e.target.value)} className="w-full bg-slate-900 border-slate-700 rounded-xl px-4 py-3 text-white font-bold">
                         <option value="Sales Amount">Sales Amount ($)</option>
-                        <option value="Number of Orders">Number of Orders</option>
-                        <option value="Number of Videos">Number of Videos</option>
-                        <option value="Leads Generated">Leads Generated</option>
-                        <option value="Revenue">Revenue</option>
-                        <option value="Profit">Profit</option>
-                        <option value="Custom KPI">Custom KPI</option>
+                        <option value="Number of Orders">Order Count</option>
+                        <option value="Revenue">Revenue ($)</option>
                     </select>
                 </div>
                 <div>
-                    <label className="block text-xs font-black text-slate-400 uppercase tracking-widest mb-2">{t.unit}</label>
-                    <select 
-                        value={calcData.metricUnit}
-                        onChange={e => updateField('metricUnit', e.target.value)}
-                        className="w-full bg-slate-900 border border-slate-700 rounded-xl px-4 py-3 text-white font-bold focus:border-blue-500"
-                    >
-                        <option value="USD">USD</option>
-                        <option value="Count">Count</option>
-                        <option value="%">Percentage (%)</option>
+                    <label className="block text-[10px] font-black text-slate-500 uppercase tracking-widest mb-2">Calculation Period</label>
+                    <select value={calcData.calculationPeriod} onChange={e => updateField('calculationPeriod', e.target.value)} className="w-full bg-slate-900 border-slate-700 rounded-xl px-4 py-3 text-white font-bold">
+                        <option value="Weekly">Weekly (W1-W5)</option>
+                        <option value="Monthly">Monthly</option>
                     </select>
                 </div>
             </div>
-
-            <div>
-                <label className="block text-xs font-black text-slate-400 uppercase tracking-widest mb-2">{t.calc_period}</label>
-                <div className="flex flex-wrap gap-3">
-                    {['Daily', 'Weekly', 'Monthly', 'Per Order', 'Custom Range'].map(p => (
-                        <button 
-                            key={p}
-                            onClick={() => updateField('calculationPeriod', p)}
-                            className={`px-4 py-2 rounded-xl text-xs font-bold border transition-all ${calcData.calculationPeriod === p ? 'bg-blue-600/20 border-blue-500/50 text-blue-400' : 'bg-slate-900 border-slate-700 text-slate-400 hover:text-slate-300'}`}
-                        >
-                            {p}
-                        </button>
-                    ))}
+            <InfoBox title="Marathon Mode">
+                ប្រសិនបើបើក <b>Marathon Mode</b> គោលដៅនឹងត្រូវគណនាដោយបូកសន្សំពីសប្តាហ៍ទី១ ដល់ទី៤។ បើបិទ វានឹងគិតគោលដៅដាច់ដោយឡែករៀងរាល់សប្តាហ៍។
+            </InfoBox>
+            <div className="flex items-center gap-3 p-4 bg-slate-900/50 rounded-2xl border border-slate-800 cursor-pointer" onClick={() => updateField('isMarathon', !calcData.isMarathon)}>
+                <div className={`w-10 h-6 rounded-full relative transition-colors ${calcData.isMarathon ? 'bg-indigo-600' : 'bg-slate-700'}`}>
+                    <div className={`absolute top-1 w-4 h-4 bg-white rounded-full transition-all ${calcData.isMarathon ? 'left-5' : 'left-1'}`}></div>
                 </div>
+                <span className="text-xs font-black text-white uppercase tracking-widest">Enable Marathon Mode</span>
             </div>
-
-            <label className="flex items-center gap-3 cursor-pointer">
-                <input 
-                    type="checkbox" 
-                    checked={calcData.resetEveryPeriod}
-                    onChange={e => updateField('resetEveryPeriod', e.target.checked)}
-                    className="w-5 h-5 rounded border-slate-700 bg-slate-900 text-blue-600 focus:ring-0"
-                />
-                <span className="text-sm font-bold text-white">{t.reset_progress}</span>
-            </label>
-
-            {type === 'Achievement' && (
-                <div className="bg-blue-600/5 border border-blue-500/20 p-4 rounded-2xl">
-                    <label className="flex items-center gap-3 cursor-pointer">
-                        <input 
-                            type="checkbox" 
-                            checked={calcData.isMarathon}
-                            onChange={e => updateField('isMarathon', e.target.checked)}
-                            className="w-5 h-5 rounded border-blue-500/50 bg-slate-900 text-blue-600 focus:ring-0"
-                        />
-                        <div>
-                            <span className="text-sm font-black text-blue-400 uppercase tracking-tight">Marathon Mode (Cumulative)</span>
-                            <p className="text-[10px] text-slate-500 font-bold leading-tight mt-0.5">Targets will be checked against total sales progress over time (e.g., Week 1 + Week 2 + ...)</p>
-                        </div>
-                    </label>
-                </div>
-            )}
         </div>
     );
 
-    // --- STEP 3: Rule Configuration (Type specific) ---
-    const renderRuleConfig = () => {
-        if (type === 'Achievement') {
-            const isWeekly = calcData.calculationPeriod === 'Weekly';
-            const tiers = calcData.achievementTiers || [];
-            
-            // Group tiers by subPeriod if weekly
-            const groupedTiers: Record<string, IncentiveTier[]> = {};
-            if (isWeekly) {
-                tiers.forEach(t => {
-                    const key = t.subPeriod || 'W1';
-                    if (!groupedTiers[key]) groupedTiers[key] = [];
-                    groupedTiers[key].push(t);
-                });
-            }
+    const renderStep3 = () => (
+        <div className="space-y-6 animate-fade-in">
+            <div className="flex justify-between items-center border-b border-slate-800 pb-3">
+                <h3 className="text-lg font-black text-white uppercase tracking-tight">កំណត់លក្ខខណ្ឌ (Rules)</h3>
+                <button onClick={() => {
+                    const nt = [...(calcData.achievementTiers || [])];
+                    nt.push({ id: `t${Date.now()}`, target: 0, rewardAmount: 0, rewardType: 'Fixed Cash', subPeriod: calcData.calculationPeriod === 'Weekly' ? 'W1' : undefined });
+                    updateField('achievementTiers', nt);
+                }} className="px-4 py-2 bg-indigo-600 text-white rounded-xl text-[10px] font-black uppercase tracking-widest">+ Add Tier</button>
+            </div>
 
-            const addTier = (subPeriod?: string) => {
-                const newTier: IncentiveTier = { 
-                    id: `t_${Date.now()}_${Math.random().toString(36).substr(2, 5)}`, 
-                    target: 0, 
-                    rewardAmount: 0, 
-                    rewardType: 'Fixed Cash',
-                    subPeriod: subPeriod,
-                    name: subPeriod ? `Week ${subPeriod.replace('W', '')}` : ''
-                };
-                updateField('achievementTiers', [...tiers, newTier]);
-            };
-
-            const addWeek = () => {
-                const existingWeeks = new Set(tiers.map(t => t.subPeriod).filter(Boolean));
-                const nextWeekNum = existingWeeks.size + 1;
-                addTier(`W${nextWeekNum}`);
-            };
-
-            return (
-                <div className="space-y-6 animate-fade-in">
-                    <div className="flex justify-between items-center border-b border-slate-800 pb-3">
-                        <h3 className="text-lg font-black text-white uppercase tracking-tight">3. {t.milestone_setup}</h3>
-                        <button 
-                            onClick={isWeekly ? addWeek : () => addTier()}
-                            className="px-4 py-2 bg-blue-600 hover:bg-blue-500 text-white rounded-xl text-[10px] font-black uppercase tracking-widest transition-all shadow-lg shadow-blue-900/20 active:scale-95 flex items-center gap-2"
-                        >
-                            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M12 4v16m8-8H4" /></svg>
-                            {isWeekly ? "Add Week" : t.add_tier}
-                        </button>
-                    </div>
-
-                    <div className="space-y-8">
-                        {isWeekly ? (
-                            Object.keys(groupedTiers).sort().map((weekKey) => (
-                                <div key={weekKey} className="bg-slate-900/30 rounded-[2rem] border border-slate-800 p-6 space-y-4">
-                                    <div className="flex justify-between items-center border-b border-slate-800 pb-3">
-                                        <div className="flex items-center gap-3">
-                                            <span className="w-2 h-2 bg-blue-500 rounded-full animate-pulse"></span>
-                                            <input 
-                                                type="text" 
-                                                value={groupedTiers[weekKey][0].name || weekKey}
-                                                onChange={e => {
-                                                    const nt = tiers.map(t => t.subPeriod === weekKey ? { ...t, name: e.target.value } : t);
-                                                    updateField('achievementTiers', nt);
-                                                }}
-                                                className="bg-transparent border-none p-0 text-sm font-black text-white uppercase tracking-widest focus:ring-0 w-40"
-                                            />
-                                        </div>
-                                        <button 
-                                            onClick={() => addTier(weekKey)}
-                                            className="px-3 py-1 bg-slate-800 hover:bg-slate-700 text-slate-400 hover:text-blue-400 rounded-lg text-[9px] font-black uppercase tracking-tighter transition-all border border-slate-700"
-                                        >
-                                            + Add Multi-Tier
-                                        </button>
-                                    </div>
-
-                                    <div className="grid grid-cols-1 gap-3">
-                                        {groupedTiers[weekKey].map((tier) => (
-                                            <div key={tier.id} className="flex items-center gap-3 bg-black/20 p-3 rounded-xl border border-white/5 group">
-                                                <div className="flex-1">
-                                                    <label className="block text-[7px] font-black text-slate-600 uppercase mb-1">Target Sales</label>
-                                                    <input 
-                                                        type="number" 
-                                                        value={tier.target}
-                                                        onChange={e => {
-                                                            const nt = tiers.map(t => t.id === tier.id ? { ...t, target: Number(e.target.value) } : t);
-                                                            updateField('achievementTiers', nt);
-                                                        }}
-                                                        className="w-full bg-slate-800 border-none rounded-lg px-3 py-1.5 text-xs text-white font-bold"
-                                                    />
-                                                </div>
-                                                <div className="text-slate-700 pt-3">
-                                                    <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M13 7l5 5m0 0l-5 5m5-5H6" /></svg>
-                                                </div>
-                                                <div className="flex-1">
-                                                    <label className="block text-[7px] font-black text-slate-600 uppercase mb-1">Reward</label>
-                                                    <div className="flex gap-1">
-                                                        <input 
-                                                            type="number" 
-                                                            value={tier.rewardAmount}
-                                                            onChange={e => {
-                                                                const nt = tiers.map(t => t.id === tier.id ? { ...t, rewardAmount: Number(e.target.value) } : t);
-                                                                updateField('achievementTiers', nt);
-                                                            }}
-                                                            className="flex-1 bg-slate-800 border-none rounded-lg px-3 py-1.5 text-xs text-emerald-400 font-bold"
-                                                        />
-                                                        <select 
-                                                            value={tier.rewardType}
-                                                            onChange={e => {
-                                                                const nt = tiers.map(t => t.id === tier.id ? { ...t, rewardType: e.target.value as any } : t);
-                                                                updateField('achievementTiers', nt);
-                                                            }}
-                                                            className="bg-slate-800 border-none rounded-lg px-1 py-1.5 text-[9px] text-white font-bold"
-                                                        >
-                                                            <option value="Fixed Cash">$</option>
-                                                            <option value="Percentage">%</option>
-                                                        </select>
-                                                    </div>
-                                                </div>
-                                                <button 
-                                                    onClick={() => {
-                                                        const nt = tiers.filter(t => t.id !== tier.id);
-                                                        updateField('achievementTiers', nt);
-                                                    }}
-                                                    className="mt-3 p-1.5 text-red-400 hover:bg-red-500/10 rounded-lg transition-colors opacity-0 group-hover:opacity-100"
-                                                >
-                                                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" /></svg>
-                                                </button>
-                                            </div>
-                                        ))}
-                                    </div>
-                                </div>
-                            ))
-                        ) : (
-                            <div className="space-y-3">
-                                {tiers.map((tier, index) => (
-                                    <div key={tier.id} className="flex flex-col gap-2 bg-slate-900/50 p-4 rounded-2xl border border-slate-700 group hover:border-blue-500/50 transition-all">
-                                        <div className="flex items-center gap-3">
-                                            <input 
-                                                type="text" 
-                                                value={tier.name || ''}
-                                                onChange={e => {
-                                                    const nt = [...tiers];
-                                                    nt[index].name = e.target.value;
-                                                    updateField('achievementTiers', nt);
-                                                }}
-                                                placeholder="Label (e.g. Bronze Tier)"
-                                                className="flex-1 bg-slate-800 border-none rounded-lg px-3 py-1.5 text-[10px] font-black uppercase text-blue-400 focus:ring-1 focus:ring-blue-500"
-                                            />
-                                            <button 
-                                                onClick={() => {
-                                                    const nt = [...tiers].filter((_, i) => i !== index);
-                                                    updateField('achievementTiers', nt);
-                                                }}
-                                                className="p-1.5 text-red-400 hover:bg-red-500/10 rounded-lg"
-                                            >
-                                                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" /></svg>
-                                            </button>
-                                        </div>
-                                        <div className="flex items-center gap-3">
-                                            <div className="flex-1">
-                                                <input type="number" value={tier.target} onChange={e => { const nt = [...tiers]; nt[index].target = Number(e.target.value); updateField('achievementTiers', nt); }} className="w-full bg-slate-800 border-none rounded-lg px-3 py-2 text-sm text-white font-bold" placeholder="Target"/>
-                                            </div>
-                                            <div className="flex-1 flex gap-1">
-                                                <input type="number" value={tier.rewardAmount} onChange={e => { const nt = [...tiers]; nt[index].rewardAmount = Number(e.target.value); updateField('achievementTiers', nt); }} className="flex-1 bg-slate-800 border-none rounded-lg px-3 py-2 text-sm text-emerald-400 font-bold" placeholder="Reward"/>
-                                                <select value={tier.rewardType} onChange={e => { const nt = [...tiers]; nt[index].rewardType = e.target.value as any; updateField('achievementTiers', nt); }} className="bg-slate-800 border-none rounded-lg px-1 py-2 text-[10px] text-white font-bold"><option value="Fixed Cash">$</option><option value="Percentage">%</option></select>
-                                            </div>
-                                        </div>
-                                    </div>
-                                ))}
-                            </div>
-                        )}
-                        {tiers.length === 0 && (
-                            <div className="text-center py-12 border-2 border-dashed border-slate-800 rounded-[2.5rem] text-slate-600 font-bold italic">
-                                {isWeekly ? "Click '+ Add Week' to begin setup." : "No milestones added yet."}
-                            </div>
-                        )}
-                    </div>
-                </div>
-            );
-        } else {
-            // Commission
-            return (
-                <div className="space-y-6 animate-fade-in">
-                    <h3 className="text-lg font-black text-white uppercase tracking-tight border-b border-slate-800 pb-3">3. {t.commission_rule}</h3>
-                    
-                    <div className="grid grid-cols-2 gap-4">
-                        <div>
-                            <label className="block text-xs font-black text-slate-400 uppercase tracking-widest mb-2">{t.commission_type}</label>
-                            <select 
-                                value={calcData.commissionType}
-                                onChange={e => updateField('commissionType', e.target.value)}
-                                className="w-full bg-slate-900 border border-slate-700 rounded-xl px-4 py-3 text-white font-bold focus:border-blue-500"
-                            >
-                                <option value="Flat Commission">Flat Commission</option>
-                                <option value="Above Target Commission">Above Target Commission</option>
-                                <option value="Tiered Commission">Tiered Commission</option>
+            <div className="space-y-3">
+                {(calcData.achievementTiers || []).map((tier, idx) => (
+                    <div key={tier.id} className="flex items-center gap-3 bg-black/40 p-4 rounded-2xl border border-white/5">
+                        <div className="text-[10px] font-black text-slate-600 bg-slate-800 w-6 h-6 rounded-full flex items-center justify-center">{idx + 1}</div>
+                        <div className="flex-1">
+                            <input type="number" value={tier.target} onChange={e => {
+                                const nt = [...(calcData.achievementTiers||[])]; nt[idx].target = Number(e.target.value); updateField('achievementTiers', nt);
+                            }} className="w-full bg-transparent border-none p-0 text-sm text-white font-bold focus:ring-0" placeholder="Target Amount" />
+                            <div className="text-[8px] text-slate-500 font-black uppercase mt-1">If Sales &gt;= Target</div>
+                        </div>
+                        <div className="w-px h-8 bg-white/5"></div>
+                        <div className="flex-1 flex gap-2">
+                            <input type="number" value={tier.rewardAmount} onChange={e => {
+                                const nt = [...(calcData.achievementTiers||[])]; nt[idx].rewardAmount = Number(e.target.value); updateField('achievementTiers', nt);
+                            }} className="w-full bg-transparent border-none p-0 text-sm text-emerald-400 font-bold focus:ring-0 text-right" placeholder="Reward" />
+                            <select value={tier.rewardType} onChange={e => {
+                                const nt = [...(calcData.achievementTiers||[])]; nt[idx].rewardType = e.target.value as any; updateField('achievementTiers', nt);
+                            }} className="bg-transparent border-none p-0 text-[10px] text-white font-black uppercase focus:ring-0 cursor-pointer">
+                                <option value="Fixed Cash">$</option>
+                                <option value="Percentage">%</option>
                             </select>
                         </div>
-                        <div>
-                            <label className="block text-xs font-black text-slate-400 uppercase tracking-widest mb-2">{t.reward_method}</label>
-                            <select 
-                                value={calcData.commissionMethod}
-                                onChange={e => updateField('commissionMethod', e.target.value)}
-                                className="w-full bg-slate-900 border border-slate-700 rounded-xl px-4 py-3 text-white font-bold focus:border-blue-500"
-                            >
-                                <option value="Percentage">Percentage (%)</option>
-                                <option value="Fixed Amount">Fixed Amount ($)</option>
-                            </select>
-                        </div>
+                        <button onClick={() => updateField('achievementTiers', (calcData.achievementTiers||[]).filter((_, i) => i !== idx))} className="text-red-500 hover:text-white p-2">✕</button>
                     </div>
+                ))}
+            </div>
+        </div>
+    );
 
-                    {(calcData.commissionType === 'Flat Commission' || calcData.commissionType === 'Above Target Commission') && (
-                        <div className="bg-slate-900/50 p-4 rounded-xl border border-slate-700 space-y-4">
-                            {calcData.commissionType === 'Above Target Commission' && (
-                                <div>
-                                    <label className="block text-xs font-black text-slate-400 uppercase tracking-widest mb-2">{t.target_amount} ({calcData.metricUnit})</label>
-                                    <input 
-                                        type="number" 
-                                        value={calcData.targetAmount || 0}
-                                        onChange={e => updateField('targetAmount', Number(e.target.value))}
-                                        className="w-full bg-slate-800 border border-slate-600 rounded-lg px-4 py-2 text-white font-bold focus:border-blue-500"
-                                    />
-                                </div>
-                            )}
-                            <div>
-                                <label className="block text-xs font-black text-slate-400 uppercase tracking-widest mb-2">
-                                    {t.commission_rate_label} {calcData.commissionMethod === 'Percentage' ? '(%)' : '($)'}
-                                </label>
-                                <input 
-                                    type="number" 
-                                    value={calcData.commissionRate || 0}
-                                    onChange={e => updateField('commissionRate', Number(e.target.value))}
-                                    className="w-full bg-slate-800 border border-slate-600 rounded-lg px-4 py-2 text-white font-bold focus:border-blue-500"
-                                />
-                            </div>
-                        </div>
-                    )}
-
-                    {calcData.commissionType === 'Tiered Commission' && (
-                        <div className="space-y-3">
-                            <div className="flex justify-between items-center">
-                                <label className="block text-xs font-black text-slate-400 uppercase tracking-widest">{t.tiers}</label>
-                                <button 
-                                    onClick={() => {
-                                        const newTier: CommissionTier = { id: `t_${Date.now()}`, from: 0, to: 0, rate: 0 };
-                                        updateField('commissionTiers', [...(calcData.commissionTiers || []), newTier]);
-                                    }}
-                                    className="px-2 py-1 bg-blue-600/20 text-blue-400 rounded text-[10px] font-black uppercase"
-                                >
-                                    + Tier
-                                </button>
-                            </div>
-                            {(calcData.commissionTiers || []).map((tier, index) => (
-                                <div key={tier.id} className="flex items-center gap-2 bg-slate-900/50 p-2 rounded-lg border border-slate-700">
-                                    <input 
-                                        type="number" value={tier.from} onChange={e => { const nt = [...(calcData.commissionTiers||[])]; nt[index].from = Number(e.target.value); updateField('commissionTiers', nt); }}
-                                        className="w-20 bg-slate-800 border border-slate-700 rounded px-2 py-1 text-xs text-white" placeholder="From"
-                                    />
-                                    <span className="text-slate-500 text-xs">to</span>
-                                    <input 
-                                        type="number" value={tier.to || ''} onChange={e => { const nt = [...(calcData.commissionTiers||[])]; nt[index].to = e.target.value ? Number(e.target.value) : null; updateField('commissionTiers', nt); }}
-                                        className="w-20 bg-slate-800 border border-slate-700 rounded px-2 py-1 text-xs text-white" placeholder="To (∞)"
-                                    />
-                                    <span className="text-slate-500 text-xs">→ Rate:</span>
-                                    <input 
-                                        type="number" value={tier.rate} onChange={e => { const nt = [...(calcData.commissionTiers||[])]; nt[index].rate = Number(e.target.value); updateField('commissionTiers', nt); }}
-                                        className="w-16 bg-slate-800 border border-slate-700 rounded px-2 py-1 text-xs text-white"
-                                    />
-                                    <button onClick={() => updateField('commissionTiers', (calcData.commissionTiers||[]).filter((_, i) => i !== index))} className="ml-auto text-red-400 hover:text-red-300"><svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" /></svg></button>
-                                </div>
-                            ))}
-                        </div>
-                    )}
-                </div>
-            );
-        }
-    };
-
-    const renderDistributionPreview = () => {
-        const previewVal = 5000;
-        let previewResult = 0;
-
-        const runCalcLogic = (val: number, pKey?: string) => {
-            let reward = 0;
-            if (type === 'Achievement') {
-                let tiers = [...(calcData.achievementTiers || [])];
-                
-                // Isolation logic for weeks
-                if (pKey && pKey !== 'month') {
-                    const subTiers = tiers.filter(t => t.subPeriod === pKey);
-                    if (subTiers.length > 0) tiers = subTiers;
-                }
-
-                tiers.sort((a, b) => b.target - a.target);
-                const achievedTier = tiers.find(tier => val >= tier.target);
-                if (achievedTier) {
-                    reward = achievedTier.rewardType === 'Percentage' 
-                        ? val * (achievedTier.rewardAmount / 100) 
-                        : achievedTier.rewardAmount;
-                }
-            } else {
-                if (calcData.commissionType === 'Flat Commission') {
-                    reward = calcData.commissionMethod === 'Percentage' ? val * ((calcData.commissionRate||0) / 100) : (calcData.commissionRate||0);
-                } else if (calcData.commissionType === 'Above Target Commission') {
-                    const target = calcData.targetAmount || 0;
-                    if (val > target) {
-                        reward = calcData.commissionMethod === 'Percentage' ? (val - target) * ((calcData.commissionRate||0) / 100) : (calcData.commissionRate||0);
-                    }
-                } else if (calcData.commissionType === 'Tiered Commission') {
-                    const tiers = calcData.commissionTiers || [];
-                    const tier = tiers.find(t => val >= t.from && (t.to === null || val <= t.to));
-                    if (tier) reward = val * (tier.rate / 100);
-                }
-            }
-            return reward;
-        };
-
-        const weeklyDetails: any[] = [];
-        if (type === 'Achievement' && calcData.calculationPeriod === 'Weekly') {
-            const definedWeeks = Array.from(new Set(calcData.achievementTiers?.map(t => t.subPeriod).filter(Boolean))).sort();
-            const weeksCount = definedWeeks.length || 4;
-            const valPerWeek = previewVal / weeksCount;
-            
-            let runningTotal = 0;
-
-            definedWeeks.forEach((wKey) => {
-                const currentWeekSales = valPerWeek;
-                let weekReward = 0;
-                let targetLabel = 'N/A';
-
-                if (calcData.isMarathon) {
-                    runningTotal += currentWeekSales;
-                    weekReward = runCalcLogic(runningTotal, wKey);
-                    
-                    const tiers = [...(calcData.achievementTiers || [])].filter(t => t.subPeriod === wKey).sort((a,b) => b.target - a.target);
-                    const reached = tiers.find(t => runningTotal >= t.target);
-                    targetLabel = reached ? (reached.name || `Target $${reached.target}`) : 'Below Target';
-                } else {
-                    weekReward = runCalcLogic(currentWeekSales, wKey);
-                    const tiers = [...(calcData.achievementTiers || [])].filter(t => t.subPeriod === wKey).sort((a,b) => b.target - a.target);
-                    const reached = tiers.find(t => currentWeekSales >= t.target);
-                    targetLabel = reached ? (reached.name || `Target $${reached.target}`) : 'Below Target';
-                }
-
-                weeklyDetails.push({
-                    week: wKey,
-                    sales: currentWeekSales,
-                    totalSoFar: calcData.isMarathon ? runningTotal : currentWeekSales,
-                    target: targetLabel,
-                    reward: weekReward
-                });
-                previewResult += weekReward;
-            });
-        } else {
-            previewResult = runCalcLogic(previewVal);
-        }
+    const renderStep4 = () => {
+        // Simple preview calculation
+        const tiers = [...(calcData.achievementTiers || [])].sort((a, b) => b.target - a.target);
+        const achieved = tiers.find(t => previewInput >= t.target);
+        const reward = achieved ? (achieved.rewardType === 'Percentage' ? previewInput * (achieved.rewardAmount/100) : achieved.rewardAmount) : 0;
 
         return (
-            <div className="space-y-6 animate-fade-in">
-                <h3 className="text-lg font-black text-white uppercase tracking-tight border-b border-slate-800 pb-3">4. {t.dist_preview}</h3>
+            <div className="space-y-8 animate-fade-in">
+                <h3 className="text-lg font-black text-white uppercase tracking-tight border-b border-slate-800 pb-3">សាកល្បងគណនា (Simulator)</h3>
                 
-                <div>
-                    <label className="block text-xs font-black text-slate-400 uppercase tracking-widest mb-2">{t.team_dist_method}</label>
-                    <select 
-                        value={calcData.distributionRule?.method || 'Equal Split'}
-                        onChange={e => updateField('distributionRule', { method: e.target.value as any })}
-                        className="w-full bg-slate-900 border border-slate-700 rounded-xl px-4 py-3 text-white font-bold focus:border-blue-500"
-                    >
-                        <option value="Equal Split">Equal Split (Reward / Team Size)</option>
-                        <option value="Percentage Allocation">Percentage Allocation</option>
-                        <option value="Performance-Based Split">Performance-Based Split</option>
-                    </select>
+                <div className="bg-indigo-600/10 p-6 rounded-[2.5rem] border border-indigo-500/20 shadow-xl">
+                    <label className="block text-[10px] font-black text-indigo-400 uppercase tracking-[0.2em] mb-4 text-center">សន្មតតួលេខលក់របស់បុគ្គលិក</label>
+                    <div className="flex items-center justify-center gap-4">
+                        <span className="text-2xl font-black text-slate-600">$</span>
+                        <input 
+                            type="number" value={previewInput} onChange={e => setPreviewInput(Number(e.target.value))}
+                            className="bg-transparent border-b-4 border-indigo-500 text-4xl font-black text-white text-center w-48 focus:ring-0 focus:outline-none"
+                        />
+                    </div>
                 </div>
 
-                <div className="bg-slate-900/80 rounded-[2rem] border border-slate-700 shadow-2xl relative overflow-hidden">
-                    <div className="p-6 border-b border-white/5">
-                        <h4 className="text-xs font-black text-blue-400 uppercase tracking-[0.2em] mb-4 flex items-center gap-2">
-                            <span className="w-1.5 h-4 bg-blue-500 rounded-full"></span>
-                            {t.simulation_preview}
-                        </h4>
-                        <div className="flex justify-between items-center mb-1">
-                            <span className="text-slate-400 text-sm">{t.if_sales} (Monthly)</span>
-                            <span className="text-white font-black text-lg">${previewVal.toLocaleString()}</span>
-                        </div>
-                        <p className="text-[10px] text-slate-500 font-bold uppercase tracking-tighter">Logic: {calcData.calculationPeriod} {calcData.isMarathon ? '(Marathon Mode)' : ''}</p>
+                <div className="grid grid-cols-2 gap-4">
+                    <div className="bg-slate-900/50 p-5 rounded-3xl border border-slate-800 text-center">
+                        <div className="text-[9px] font-black text-slate-500 uppercase tracking-widest mb-2">កម្រិតសម្រេចបាន</div>
+                        <div className="text-xl font-black text-indigo-400 uppercase italic">{achieved?.name || 'Below Target'}</div>
                     </div>
-
-                    {weeklyDetails.length > 0 && (
-                        <div className="px-6 py-4 bg-black/20 overflow-x-auto">
-                            <table className="w-full text-left">
-                                <thead>
-                                    <tr className="text-[8px] font-black text-slate-500 uppercase tracking-widest">
-                                        <th className="pb-3 pr-2">Period</th>
-                                        <th className="pb-3 pr-2">Assumption</th>
-                                        {calcData.isMarathon && <th className="pb-3 pr-2">Running Total</th>}
-                                        <th className="pb-3 pr-2">Status</th>
-                                        <th className="pb-3 text-right">Reward</th>
-                                    </tr>
-                                </thead>
-                                <tbody className="divide-y divide-white/5">
-                                    {weeklyDetails.map((d, i) => (
-                                        <tr key={i} className="text-[10px]">
-                                            <td className="py-2.5 font-black text-blue-400">{d.week}</td>
-                                            <td className="py-2.5 text-slate-300 font-bold">${d.sales.toFixed(0)}</td>
-                                            {calcData.isMarathon && <td className="py-2.5 text-slate-500 font-mono">${d.totalSoFar.toFixed(0)}</td>}
-                                            <td className="py-2.5">
-                                                <span className={`px-1.5 py-0.5 rounded ${d.reward > 0 ? 'bg-emerald-500/10 text-emerald-400' : 'bg-slate-800 text-slate-500'} font-bold`}>
-                                                    {d.target}
-                                                </span>
-                                            </td>
-                                            <td className="py-2.5 text-right font-black text-white">${d.reward.toFixed(2)}</td>
-                                        </tr>
-                                    ))}
-                                </tbody>
-                            </table>
-                        </div>
-                    )}
-
-                    <div className="p-6 bg-blue-600/5 flex justify-between items-center">
-                        <span className="text-slate-400 text-xs font-black uppercase italic">{t.est_reward} (Total)</span>
-                        <div className="text-right">
-                            <span className="text-emerald-400 font-black text-3xl drop-shadow-[0_0_15px_rgba(16,185,129,0.4)]">
-                                ${previewResult.toLocaleString(undefined, { minimumFractionDigits: 2 })}
-                            </span>
-                        </div>
+                    <div className="bg-emerald-500/10 p-5 rounded-3xl border border-emerald-500/20 text-center">
+                        <div className="text-[9px] font-black text-emerald-500/60 uppercase tracking-widest mb-2">ប្រាក់រង្វាន់ទទួលបាន</div>
+                        <div className="text-2xl font-black text-emerald-400">${reward.toFixed(2)}</div>
                     </div>
+                </div>
+
+                <div className="p-4 bg-slate-900/30 rounded-2xl border border-dashed border-slate-700">
+                    <p className="text-[10px] text-slate-500 font-bold leading-relaxed italic">
+                        * ការបង្ហាញខាងលើនេះគ្រាន់តែជាការសាកល្បងតាម Logic ដែលលោកអ្នកបានកំណត់។ តួលេខពិតប្រាកដនឹងត្រូវគណនានៅពេលលោកអ្នកបញ្ចូលទិន្នន័យជាក់ស្តែង។
+                    </p>
                 </div>
             </div>
         );
     };
 
     return (
-        <div className="max-w-3xl mx-auto p-4 sm:p-6 lg:p-8 animate-fade-in">
+        <div className="max-w-4xl mx-auto p-4 sm:p-8 animate-fade-in pb-32">
             {/* Header */}
-            <div className="flex justify-between items-center mb-8">
-                <div>
-                    <h2 className="text-2xl font-black text-white uppercase tracking-tighter">
-                        {initialData ? t.edit_calculator : t.create_calculator} {type === 'Achievement' ? t.achievement_bonus : t.commission_rate}
-                    </h2>
-                    <p className="text-xs text-slate-400 font-bold mt-1">{t.calculators_engine_desc}</p>
+            <div className="flex justify-between items-center mb-10">
+                <div className="flex items-center gap-4">
+                    <div className="w-12 h-12 bg-indigo-600 rounded-2xl flex items-center justify-center shadow-lg shadow-indigo-900/40">
+                        <svg className="w-6 h-6 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M9 7h6m0 10v-3m-3 3h.01M9 17h.01M9 14h.01M12 14h.01M15 11h.01M12 11h.01M9 11h.01M7 21h10a2 2 0 002-2V5a2 2 0 00-2-2H7a2 2 0 00-2 2v14a2 2 0 002 2z"></path></svg>
+                    </div>
+                    <h2 className="text-2xl font-black text-white uppercase tracking-tighter">Incentive Engine <span className="text-indigo-500 italic">v2.0</span></h2>
                 </div>
-                <button onClick={onClose} className="px-4 py-2 bg-slate-800 text-slate-400 hover:text-white rounded-lg text-xs font-bold transition-all">{t.cancel}</button>
+                <button onClick={onClose} className="text-slate-500 hover:text-white font-black uppercase text-xs tracking-widest transition-colors">✕ បិទវិញ</button>
             </div>
 
             {/* Stepper */}
-            <div className="flex gap-2 mb-8">
+            <div className="flex justify-between mb-12 px-4 relative">
+                <div className="absolute top-4 left-0 w-full h-0.5 bg-slate-800 z-0"></div>
+                <div className="absolute top-4 left-0 h-0.5 bg-indigo-500 z-0 transition-all duration-500" style={{ width: `${((step - 1) / 3) * 100}%` }}></div>
                 {[1, 2, 3, 4].map(s => (
-                    <div key={s} className={`h-1.5 flex-1 rounded-full transition-colors ${s <= step ? 'bg-blue-600' : 'bg-slate-800'}`}></div>
+                    <div key={s} className={`w-8 h-8 rounded-full flex items-center justify-center text-[10px] font-black z-10 border-4 ${step >= s ? 'bg-indigo-600 border-slate-900 text-white shadow-[0_0_15px_rgba(79,70,229,0.4)]' : 'bg-slate-800 border-slate-900 text-slate-500'}`}>{s}</div>
                 ))}
             </div>
 
             {/* Content Container */}
-            <div className="bg-slate-900/60 backdrop-blur-xl border border-white/5 rounded-3xl p-6 md:p-8 shadow-2xl min-h-[400px]">
-                {step === 1 && renderBasicInfo()}
-                {step === 2 && renderMetricPeriod()}
-                {step === 3 && renderRuleConfig()}
-                {step === 4 && renderDistributionPreview()}
+            <div className="bg-[#0f172a]/80 backdrop-blur-2xl border border-white/5 rounded-[3rem] p-8 md:p-12 shadow-2xl ring-1 ring-white/10 min-h-[450px]">
+                {step === 1 && renderStep1()}
+                {step === 2 && renderStep2()}
+                {step === 3 && renderStep3()}
+                {step === 4 && renderStep4()}
             </div>
 
             {/* Navigation Footer */}
-            <div className="flex justify-between items-center mt-8">
-                <button 
-                    onClick={() => setStep(s => Math.max(1, s - 1))}
-                    disabled={step === 1}
-                    className="px-6 py-3 bg-slate-800 text-white rounded-xl font-black uppercase tracking-widest text-xs disabled:opacity-50 disabled:cursor-not-allowed transition-all"
-                >
-                    {t.back}
-                </button>
-                {step < 4 ? (
+            <div className="fixed bottom-0 left-0 w-full p-6 bg-slate-950/80 backdrop-blur-xl border-t border-white/5 flex justify-center z-50">
+                <div className="max-w-4xl w-full flex justify-between items-center gap-4">
                     <button 
-                        onClick={() => setStep(s => Math.min(4, s + 1))}
-                        className="px-6 py-3 bg-blue-600 hover:bg-blue-500 text-white rounded-xl font-black uppercase tracking-widest text-xs transition-all shadow-[0_0_20px_rgba(37,99,235,0.4)] active:scale-95"
-                    >
-                        {t.next_step}
-                    </button>
-                ) : (
-                    <button 
-                        onClick={handleSave}
-                        className="px-8 py-3 bg-emerald-600 hover:bg-emerald-500 text-white rounded-xl font-black uppercase tracking-widest text-xs transition-all shadow-[0_0_20px_rgba(16,185,129,0.4)] active:scale-95"
-                    >
-                        {t.save_calculator}
-                    </button>
-                )}
+                        disabled={step === 1} onClick={() => setStep(s => s - 1)}
+                        className="px-8 py-4 bg-slate-900 text-slate-400 rounded-2xl font-black uppercase text-xs tracking-widest disabled:opacity-0 transition-all"
+                    >ត្រឡប់ក្រោយ</button>
+                    
+                    {step < 4 ? (
+                        <button 
+                            onClick={() => setStep(s => s + 1)}
+                            className="px-10 py-4 bg-indigo-600 text-white rounded-2xl font-black uppercase text-xs tracking-[0.2em] shadow-xl shadow-indigo-900/40 active:scale-95 transition-all"
+                        >បន្តទៅមុខទៀត</button>
+                    ) : (
+                        <button 
+                            onClick={handleSave}
+                            className="px-12 py-4 bg-emerald-500 text-white rounded-2xl font-black uppercase text-xs tracking-[0.2em] shadow-xl shadow-emerald-900/40 active:scale-95 transition-all"
+                        >រក្សាទុកម៉ាស៊ីនគណនា</button>
+                    )}
+                </div>
             </div>
         </div>
     );

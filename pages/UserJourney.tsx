@@ -230,7 +230,8 @@ const UserOrdersView: React.FC<{ team: string; onAdd: () => void }> = ({ team, o
         if (drilldownFilters && isDataFetchedRef.current) {
             setProcessing(true);
             setTimeout(() => {
-                const raw = allRawOrdersRef.current;
+                // Use Parsed Orders instead of Raw to avoid empty results and redundant parsing
+                const source = allParsedOrdersRef.current;
                 
                 // Determine Date Range from Drilldown Filters
                 let start: Date | null = null;
@@ -238,18 +239,22 @@ const UserOrdersView: React.FC<{ team: string; onAdd: () => void }> = ({ team, o
 
                 if (drilldownFilters.isMonthlyDrilldown) {
                     // Exact dates passed from report
-                    if (drilldownFilters.customStart) start = getValidDate(drilldownFilters.customStart + 'T00:00:00');
-                    if (drilldownFilters.customEnd) end = getValidDate(drilldownFilters.customEnd + 'T23:59:59');
+                    const dStart = drilldownFilters.customStart || drilldownFilters.startDate;
+                    const dEnd = drilldownFilters.customEnd || drilldownFilters.endDate;
+                    if (dStart) start = getValidDate(dStart + 'T00:00:00');
+                    if (dEnd) end = getValidDate(dEnd + 'T23:59:59');
                 } else if (drilldownFilters.datePreset === 'custom') {
-                    if (drilldownFilters.customStart) start = getValidDate(drilldownFilters.customStart + 'T00:00:00');
-                    if (drilldownFilters.customEnd) end = getValidDate(drilldownFilters.customEnd + 'T23:59:59');
+                    const dStart = drilldownFilters.customStart || drilldownFilters.startDate;
+                    const dEnd = drilldownFilters.customEnd || drilldownFilters.endDate;
+                    if (dStart) start = getValidDate(dStart + 'T00:00:00');
+                    if (dEnd) end = getValidDate(dEnd + 'T23:59:59');
                 } else if (drilldownFilters.datePreset) {
                     const bounds = getDateBounds(drilldownFilters.datePreset);
                     start = bounds.start;
                     end = bounds.end;
                 }
 
-                const filtered = raw.filter(o => {
+                const filtered = source.filter(o => {
                     // Exclude Opening Balance
                     if (o['Order ID'] === 'Opening_Balance' || o['Order ID'] === 'Opening Balance') return false;
 
@@ -261,30 +266,44 @@ const UserOrdersView: React.FC<{ team: string; onAdd: () => void }> = ({ team, o
                         if (start && d < start) return false;
                         if (end && d > end) return false;
                     }
-                    // Team Check
-                    if (drilldownFilters.team && (o.Team || '').trim() !== drilldownFilters.team) return false;
-                    // Page Check
-                    if (drilldownFilters.page && o.Page !== drilldownFilters.page) return false;
-                    // Shipping/Driver Checks from ShippingReport drilldown
-                    if (drilldownFilters.shipping && o['Internal Shipping Method'] !== drilldownFilters.shipping) return false;
-                    if (drilldownFilters.driver && o['Internal Shipping Details'] !== drilldownFilters.driver) return false;
-                    if (drilldownFilters.fulfillmentStore && o['Fulfillment Store'] !== drilldownFilters.fulfillmentStore) return false;
+                    
+                    // Team Check (Robust)
+                    if (drilldownFilters.team) {
+                        const oTeam = (o.Team || '').trim().toLowerCase();
+                        const fTeam = drilldownFilters.team.trim().toLowerCase();
+                        if (oTeam !== fTeam) return false;
+                    }
+
+                    // Page Check (Robust)
+                    if (drilldownFilters.page) {
+                        const oPage = (o.Page || 'Unknown').trim().toLowerCase();
+                        const fPage = drilldownFilters.page.trim().toLowerCase();
+                        if (oPage !== fPage) return false;
+                    }
+
+                    // Shipping/Driver Checks from ShippingReport drilldown (Robust)
+                    if (drilldownFilters.shipping) {
+                        const oShip = (o['Internal Shipping Method'] || 'Other').trim().toLowerCase();
+                        const fShip = drilldownFilters.shipping.trim().toLowerCase();
+                        if (oShip !== fShip) return false;
+                    }
+                    
+                    if (drilldownFilters.driver) {
+                        const oDriver = (o['Internal Shipping Details'] || 'N/A').trim().toLowerCase();
+                        const fDriver = drilldownFilters.driver.trim().toLowerCase();
+                        if (oDriver !== fDriver) return false;
+                    }
+
+                    if (drilldownFilters.fulfillmentStore) {
+                        const oStore = (o['Fulfillment Store'] || 'Unassigned').trim().toLowerCase();
+                        const fStore = drilldownFilters.fulfillmentStore.trim().toLowerCase();
+                        if (oStore !== fStore) return false;
+                    }
 
                     return true;
                 });
 
-                const parsed = filtered.map(o => {
-                    let products = [];
-                    try { if (o['Products (JSON)']) products = JSON.parse(o['Products (JSON)']); } catch(e) {}
-                    return { 
-                        ...o, 
-                        Products: products, 
-                        IsVerified: String(o.IsVerified).toUpperCase() === 'TRUE',
-                        FulfillmentStatus: o.FulfillmentStatus as any 
-                    };
-                });
-
-                setDrilldownData(parsed.sort((a, b) => {
+                setDrilldownData(filtered.sort((a, b) => {
                     const tA = getTimestamp(a.Timestamp);
                     const tB = getTimestamp(b.Timestamp);
                     return tB - tA;

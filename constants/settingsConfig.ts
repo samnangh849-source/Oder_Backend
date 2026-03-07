@@ -131,6 +131,36 @@ export const configSections: ConfigSection[] = [
         ], 
         displayField: 'CarrierName' 
     },
+    {
+        id: 'telegramTemplates',
+        title: 'Telegram Templates',
+        description: 'កំណត់ទម្រង់សារស្វ័យប្រវត្តិទៅកាន់ Telegram',
+        icon: '📢',
+        dataKey: 'telegramTemplates',
+        sheetName: 'TelegramTemplates',
+        primaryKeyField: 'TemplateName',
+        fields: [
+            { name: 'TemplateName', label: 'ឈ្មោះ Template', type: 'text' },
+            { name: 'TriggerEvent', label: 'ព្រឹត្តិការណ៍', type: 'text' },
+            { name: 'Content', label: 'ខ្លឹមសារសារ', type: 'text' }
+        ],
+        displayField: 'TemplateName'
+    },
+    {
+        id: 'systemSettings',
+        title: 'ការកំណត់ប្រព័ន្ធ',
+        description: 'កំណត់លក្ខខណ្ឌទូទៅរបស់កម្មវិធី',
+        icon: '⚙️',
+        dataKey: 'settings',
+        sheetName: 'Settings',
+        primaryKeyField: 'Key',
+        fields: [
+            { name: 'Key', label: 'ឈ្មោះការកំណត់', type: 'text' },
+            { name: 'Value', label: 'តម្លៃ (Value)', type: 'text' },
+            { name: 'Description', label: 'ការពន្យល់', type: 'text' }
+        ],
+        displayField: 'Key'
+    }
 ];
 
 export const getValueCaseInsensitive = (item: any, key: string) => {

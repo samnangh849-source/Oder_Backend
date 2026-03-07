@@ -157,6 +157,31 @@ export interface Target {
   TargetAmount: number;
 }
 
+export interface UserActivityLog {
+    user: string;
+    action: string;
+    details: string;
+    timestamp: string;
+    User?: string;
+    Action?: string;
+    Details?: string;
+}
+
+export interface EditLog {
+    orderId: string;
+    user: string;
+    field: string;
+    oldValue: string;
+    newValue: string;
+    timestamp: string;
+    OrderID?: string;
+    Requester?: string;
+    "Field Changed"?: string;
+    "Old Value"?: string;
+    "New Value"?: string;
+    Approver?: string;
+}
+
 // Added BackendChatMessage interface to fix missing member error in ChatWidget
 export interface BackendChatMessage {
     UserName: string;

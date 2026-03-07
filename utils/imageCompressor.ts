@@ -1,13 +1,14 @@
 
 /**
- * Compresses an image file iteratively to meet a target size.
+ * Compresses an image file efficiently to meet quality and size standards.
  * @param {File} file - The image file to compress.
- * @param {number} targetKB - The target size in KB.
+ * @param {number} quality - Initial quality (0.1 to 1.0).
  * @param {number} maxWidth - Starting maximum width.
  * @returns {Promise<Blob>} A promise that resolves with the compressed image as a Blob.
  */
-export const compressImage = async (file: File, quality = 0.6, maxWidth = 800): Promise<Blob> => {
-    const targetSize = 50 * 1024; // 50KB in bytes
+export const compressImage = async (file: File, quality = 0.8, maxWidth = 1280): Promise<Blob> => {
+    // Increased target size to 250KB for better quality
+    const targetSize = 250 * 1024; 
     
     return new Promise((resolve, reject) => {
         const reader = new FileReader();
@@ -18,29 +19,33 @@ export const compressImage = async (file: File, quality = 0.6, maxWidth = 800): 
             img.onload = async () => {
                 let currentQuality = quality;
                 let currentWidth = maxWidth;
-                let blob: Blob | null = null;
+                
+                // Calculate new dimensions
+                if (img.width > maxWidth) {
+                    currentWidth = maxWidth;
+                } else {
+                    currentWidth = img.width;
+                }
+                
+                const canvas = document.createElement('canvas');
+                const scaleRatio = currentWidth / img.width;
+                canvas.width = currentWidth;
+                canvas.height = img.height * scaleRatio;
 
-                // Simple iterative approach: if it's too big, shrink it
-                // We'll try at most 3 times to avoid hanging the UI
-                for (let i = 0; i < 3; i++) {
-                    const canvas = document.createElement('canvas');
-                    const scaleRatio = currentWidth / img.width;
-                    canvas.width = currentWidth;
-                    canvas.height = img.height * scaleRatio;
-
-                    const ctx = canvas.getContext('2d');
-                    if (!ctx) return reject(new Error('Failed to get canvas context'));
-                    ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
-                    
-                    blob = await new Promise<Blob | null>(res => canvas.toBlob(res, 'image/jpeg', currentQuality));
-                    
-                    if (blob && blob.size < targetSize) {
-                        break;
-                    }
-                    
-                    // Reduce quality and size for next iteration
-                    currentQuality -= 0.15;
-                    currentWidth -= 150;
+                const ctx = canvas.getContext('2d');
+                if (!ctx) return reject(new Error('Failed to get canvas context'));
+                
+                // Use better image smoothing
+                ctx.imageSmoothingEnabled = true;
+                ctx.imageSmoothingQuality = 'high';
+                ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+                
+                // One-shot compression if possible
+                let blob = await new Promise<Blob | null>(res => canvas.toBlob(res, 'image/jpeg', currentQuality));
+                
+                // If still too large, do ONE more pass at lower quality instead of a loop
+                if (blob && blob.size > targetSize) {
+                    blob = await new Promise<Blob | null>(res => canvas.toBlob(res, 'image/jpeg', currentQuality * 0.7));
                 }
 
                 if (blob) resolve(blob);

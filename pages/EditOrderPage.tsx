@@ -22,7 +22,7 @@ interface EditOrderPageProps {
 }
 
 const EditOrderPage: React.FC<EditOrderPageProps> = ({ order, onSaveSuccess, onCancel }) => {
-    const { appData, currentUser, previewImage, refreshData } = useContext(AppContext);
+    const { appData, currentUser, previewImage, refreshData, advancedSettings } = useContext(AppContext);
     
     // Keep a reference to the original order for Audit comparison
     const originalOrderRef = useRef<ParsedOrder>(order);
@@ -53,13 +53,28 @@ const EditOrderPage: React.FC<EditOrderPageProps> = ({ order, onSaveSuccess, onC
                     return;
                 }
 
-                // 2. Time Check (12 Hours)
+                // 2. Dynamic Grace Period Check
+                // Priority: 1. User Advanced Settings, 2. System Settings, 3. Default (12h)
+                const systemGraceSetting = Array.isArray(appData.settings) 
+                    ? appData.settings.find((s: any) => s.Key === 'OrderEditGracePeriod') 
+                    : null;
+                
+                const systemGraceSeconds = parseInt(systemGraceSetting?.Value) || 43200;
+                const userGraceSeconds = advancedSettings?.orderEditGracePeriod;
+                
+                // Use user setting if available, otherwise system setting. Always enforce 3s minimum.
+                const finalGraceSeconds = Math.max(3, userGraceSeconds !== undefined ? userGraceSeconds : systemGraceSeconds);
+                const graceMs = finalGraceSeconds * 1000;
+
                 const orderTime = new Date(order.Timestamp).getTime();
                 const timeDiff = Date.now() - orderTime;
-                const twelveHoursMs = 12 * 60 * 60 * 1000;
                 
-                if (timeDiff > twelveHoursMs) {
-                    alert("ការបញ្ជាទិញនេះលើសពី 12 ម៉ោងហើយ អ្នកមិនអាចកែប្រែបានទេ (Order is older than 12 hours).");
+                if (timeDiff > graceMs) {
+                    const displayTime = finalGraceSeconds >= 3600 
+                        ? `${(finalGraceSeconds / 3600).toFixed(1)} ម៉ោង` 
+                        : (finalGraceSeconds >= 60 ? `${(finalGraceSeconds / 60).toFixed(1)} នាទី` : `${finalGraceSeconds} វិនាទី`);
+                        
+                    alert(`ការបញ្ជាទិញនេះលើសពី ${displayTime} ហើយ អ្នកមិនអាចកែប្រែបានទេ (Order edit window of ${displayTime} expired).`);
                     onCancel();
                     return;
                 }
@@ -318,22 +333,81 @@ const EditOrderPage: React.FC<EditOrderPageProps> = ({ order, onSaveSuccess, onC
                 "Total Product Cost ($)": finalTotals['Total Product Cost ($)'],
                 "IsVerified": !!formData.IsVerified
             };
-            
-            // Clean products array
+                        // Clean products array for internal calculations
             const productsWithSubtotals = formData.Products.map(p => ({
                 ...p,
                 quantity: parseFloat(String(p.quantity)) || 0,
                 finalPrice: parseFloat(String(p.finalPrice)) || 0,
                 total: (parseFloat(String(p.quantity)) || 0) * (parseFloat(String(p.finalPrice)) || 0)
             }));
-            cleanNewData['Products (JSON)'] = JSON.stringify(productsWithSubtotals);
+            // --- OPTIMIZED UPDATE LOGIC START ---
+            // 1. Only include keys that actually changed to reduce payload and DB overhead
+            // 2. Ensure NO null values are sent (convert to "" or 0 for PostgreSQL compatibility)
+            // 3. Map keys to snake_case for Backend (Go/PostgreSQL) consistency
+            const changedData: any = {};
+            const original = originalOrderRef.current;
+            
+            // Map Frontend Keys to Backend Column Names (snake_case)
+            const fieldMap: Record<string, string> = {
+                'Customer Name': 'customer_name',
+                'Customer Phone': 'customer_phone',
+                'Location': 'location',
+                'Address Details': 'address_details',
+                'Internal Shipping Method': 'internal_shipping_method',
+                'Internal Shipping Details': 'internal_shipping_details',
+                'Note': 'note',
+                'Payment Status': 'payment_status',
+                'Payment Info': 'payment_info',
+                'Shipping Fee (Customer)': 'shipping_fee_customer',
+                'Internal Cost': 'internal_cost',
+                'Timestamp': 'timestamp',
+                'IsVerified': 'is_verified',
+                'Page': 'page',
+                'Team': 'team',
+                'Fulfillment Store': 'fulfillment_store'
+            };
+
+            Object.entries(fieldMap).forEach(([frontendKey, backendKey]) => {
+                const currentVal = formData[frontendKey as keyof ParsedOrder];
+                const originalVal = original[frontendKey as keyof ParsedOrder];
+
+                // Robust comparison (trim strings, handle nulls)
+                const isString = typeof currentVal === 'string';
+                const hasChanged = isString 
+                    ? String(currentVal || '').trim() !== String(originalVal || '').trim()
+                    : currentVal !== originalVal;
+
+                if (hasChanged) {
+                    if (currentVal === null || currentVal === undefined) {
+                        changedData[backendKey] = typeof originalVal === 'number' ? 0 : "";
+                    } else {
+                        changedData[backendKey] = currentVal;
+                    }
+                }
+            });
+
+            // Always check products separately as they are stringified in DB
+            const newProductsJson = JSON.stringify(productsWithSubtotals);
+            const oldProductsJson = JSON.stringify(original.Products);
+            
+            if (newProductsJson !== oldProductsJson) {
+                changedData['products_json'] = newProductsJson;
+                changedData["subtotal"] = finalTotals.Subtotal;
+                changedData["grand_total"] = finalTotals['Grand Total'];
+                changedData["discount_usd"] = finalTotals['Discount ($)'];
+                changedData["total_product_cost_usd"] = finalTotals['Total Product Cost ($)'];
+            }
+
+            // If nothing changed, just close
+            if (Object.keys(changedData).length === 0) {
+                onSaveSuccess();
+                return;
+            }
+            // --- OPTIMIZED UPDATE LOGIC END ---
 
             // --- AUDIT LOGIC START ---
-            // Updated to support structured logging
-            const changes = generateAuditLog(originalOrderRef.current, cleanNewData as ParsedOrder);
+            const changes = generateAuditLog(original, formData);
             if (changes && changes.length > 0) {
-                // Iterate through each change and log it individually
-                // This ensures each field change gets its own row/entry in the database
                 await Promise.all(changes.map(change => 
                     logOrderEdit(
                         formData['Order ID'], 
@@ -352,7 +426,7 @@ const EditOrderPage: React.FC<EditOrderPageProps> = ({ order, onSaveSuccess, onC
                     orderId: formData['Order ID'], 
                     team: formData.Team, 
                     userName: loggingUser,
-                    newData: cleanNewData 
+                    newData: changedData // Send ONLY changed fields
                 }) 
             });
             

@@ -11,6 +11,7 @@ import OrdersListTablet from './OrdersListTablet'; // Import Tablet Component
 interface OrdersListProps {
     orders: ParsedOrder[];
     onEdit?: (order: ParsedOrder) => void;
+    onView?: (order: ParsedOrder) => void;
     showActions: boolean;
     visibleColumns?: Set<string>;
     // Selection Props
@@ -21,7 +22,7 @@ interface OrdersListProps {
 }
 
 const OrdersList: React.FC<OrdersListProps> = ({ 
-    orders, onEdit, showActions, visibleColumns,
+    orders, onEdit, onView, showActions, visibleColumns,
     selectedIds = new Set(), onToggleSelect, onToggleSelectAll,
     showBorders = false
 }) => {
@@ -177,6 +178,7 @@ ${dateStr}
         selectedIds,
         onToggleSelect,
         onEdit,
+        onView, // បន្ថែម onView ទៅទីនេះ
         handlePrint,
         handleCopy,
         handleCopyTemplate,

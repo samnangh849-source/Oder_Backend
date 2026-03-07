@@ -1,8 +1,19 @@
 import { useState, useCallback, useRef } from 'react';
 
-export const useSmartZoom = () => {
-    const [zoom, setZoom] = useState(1);
-    const [capabilities, setCapabilities] = useState<any>(null);
+export const useSmartZoom = (
+    videoElement?: HTMLVideoElement | null,
+    track?: MediaStreamTrack | null,
+    currentZoom?: number,
+    setZoom?: (z: number) => void,
+    applyZoomExternal?: (z: number) => void
+) => {
+    const [isAutoZooming, setIsAutoZooming] = useState(false);
+    const [trackingBox, setTrackingBox] = useState<any>(null);
+    const [internalZoom, setInternalZoom] = useState(1);
+
+    const notifyManualZoom = useCallback(() => {
+        // Manual zoom notification logic
+    }, []);
 
     const applyZoom = useCallback(async (videoTrack: MediaStreamTrack, level: number) => {
         try {
@@ -15,13 +26,18 @@ export const useSmartZoom = () => {
                 await videoTrack.applyConstraints({
                     advanced: [{ zoom: clamped } as any]
                 });
-                setZoom(clamped);
-                setCapabilities(caps);
+                setInternalZoom(clamped);
             }
         } catch (e) {
             console.warn("Hardware zoom not supported or failed", e);
         }
     }, []);
 
-    return { zoom, capabilities, applyZoom };
+    return { 
+        zoom: currentZoom ?? internalZoom,
+        applyZoom,
+        trackingBox, 
+        isAutoZooming, 
+        notifyManualZoom 
+    };
 };
