@@ -341,64 +341,52 @@ const EditOrderPage: React.FC<EditOrderPageProps> = ({ order, onSaveSuccess, onC
                 total: (parseFloat(String(p.quantity)) || 0) * (parseFloat(String(p.finalPrice)) || 0)
             }));
             // --- OPTIMIZED UPDATE LOGIC START ---
-            // 1. Only include keys that actually changed to reduce payload and DB overhead
-            // 2. Ensure NO null values are sent (convert to "" or 0 for PostgreSQL compatibility)
-            // 3. Map keys to snake_case for Backend (Go/PostgreSQL) consistency
+            // 1. Only include keys that actually changed
+            // 2. Align keys with Backend's mapToDBColumn (e.g., "Location", "Customer Name")
+            // 3. Ensure NO null values (convert to "" or 0)
             const changedData: any = {};
             const original = originalOrderRef.current;
             
-            // Map Frontend Keys to Backend Column Names (snake_case)
-            const fieldMap: Record<string, string> = {
-                'Customer Name': 'customer_name',
-                'Customer Phone': 'customer_phone',
-                'Location': 'location',
-                'Address Details': 'address_details',
-                'Internal Shipping Method': 'internal_shipping_method',
-                'Internal Shipping Details': 'internal_shipping_details',
-                'Note': 'note',
-                'Payment Status': 'payment_status',
-                'Payment Info': 'payment_info',
-                'Shipping Fee (Customer)': 'shipping_fee_customer',
-                'Internal Cost': 'internal_cost',
-                'Timestamp': 'timestamp',
-                'IsVerified': 'is_verified',
-                'Page': 'page',
-                'Team': 'team',
-                'Fulfillment Store': 'fulfillment_store'
-            };
+            // List of keys Backend expects via mapToDBColumn
+            const keysToCheck = [
+                "Customer Name", "Customer Phone", "Location", "Address Details",
+                "Internal Shipping Method", "Internal Shipping Details", "Note",
+                "Payment Status", "Payment Info", "Shipping Fee (Customer)", "Internal Cost",
+                "Timestamp", "IsVerified", "Page", "Team", "Fulfillment Store"
+            ];
 
-            Object.entries(fieldMap).forEach(([frontendKey, backendKey]) => {
-                const currentVal = formData[frontendKey as keyof ParsedOrder];
-                const originalVal = original[frontendKey as keyof ParsedOrder];
+            keysToCheck.forEach(key => {
+                const currentVal = formData[key as keyof ParsedOrder];
+                const originalVal = original[key as keyof ParsedOrder];
 
-                // Robust comparison (trim strings, handle nulls)
+                // Comparison logic
                 const isString = typeof currentVal === 'string';
                 const hasChanged = isString 
                     ? String(currentVal || '').trim() !== String(originalVal || '').trim()
                     : currentVal !== originalVal;
 
                 if (hasChanged) {
+                    // Force no-null (PostgreSQL Compatibility)
                     if (currentVal === null || currentVal === undefined) {
-                        changedData[backendKey] = typeof originalVal === 'number' ? 0 : "";
+                        changedData[key] = typeof originalVal === 'number' ? 0 : "";
                     } else {
-                        changedData[backendKey] = currentVal;
+                        changedData[key] = currentVal;
                     }
                 }
             });
 
-            // Always check products separately as they are stringified in DB
+            // Handle Products separately
             const newProductsJson = JSON.stringify(productsWithSubtotals);
             const oldProductsJson = JSON.stringify(original.Products);
             
             if (newProductsJson !== oldProductsJson) {
-                changedData['products_json'] = newProductsJson;
-                changedData["subtotal"] = finalTotals.Subtotal;
-                changedData["grand_total"] = finalTotals['Grand Total'];
-                changedData["discount_usd"] = finalTotals['Discount ($)'];
-                changedData["total_product_cost_usd"] = finalTotals['Total Product Cost ($)'];
+                changedData["Products (JSON)"] = newProductsJson;
+                changedData["Subtotal"] = finalTotals.Subtotal;
+                changedData["Grand Total"] = finalTotals['Grand Total'];
+                changedData["Discount ($)"] = finalTotals['Discount ($)'];
+                changedData["Total Product Cost ($)"] = finalTotals['Total Product Cost ($)'];
             }
 
-            // If nothing changed, just close
             if (Object.keys(changedData).length === 0) {
                 onSaveSuccess();
                 return;
