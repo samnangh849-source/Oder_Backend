@@ -370,12 +370,12 @@ const App: React.FC = () => {
                 },
                 body: JSON.stringify({
                     UserName: 'System',
-                    MessageType: 'text',
-                    Content: `🟢 **${user.FullName}** ទើបតែបានចូលប្រើប្រាស់ប្រព័ន្ធ (Logged In).`
+                    MessageType: 'Text',
+                    Content: `🟢 **${user.FullName}** បានចូលប្រើប្រាស់ប្រព័ន្ធ (Logged In)`
                 })
             });
         } catch (e) {
-            console.warn("Failed to broadcast login event", e);
+            console.warn("Login broadcast failed", e);
         }
 
         determineAppState(user);

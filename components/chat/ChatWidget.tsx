@@ -322,11 +322,27 @@ const ChatWidget: React.FC<ChatWidgetProps> = ({ isOpen, onClose }) => {
                         if (action === 'new_message' || action === 'NEW_MESSAGE') {
                             const msg = handlersRef.current.transformBackendMessage(payload);
                             handlersRef.current.setAndCacheMessages(prev => {
-                                // Filter out if this message already exists (prevent duplicates from local echo)
-                                const exists = prev.some(m => m.id === msg.id || (m.isOptimistic && m.content === msg.content && m.user === msg.user));
-                                if (exists) {
-                                    return prev.map(m => (m.isOptimistic && m.content === msg.content && m.user === msg.user) ? msg : m);
+                                // Smart matching for optimistic messages
+                                const optimisticIndex = prev.findIndex(m => 
+                                    m.isOptimistic && 
+                                    m.user.toLowerCase() === msg.user.toLowerCase() &&
+                                    (
+                                        // For text: match content
+                                        (m.type === 'text' && m.content.trim() === msg.content.trim()) ||
+                                        // For media: match type (assume most recent optimistic of same type is the one)
+                                        (m.type !== 'text' && m.type === msg.type)
+                                    )
+                                );
+
+                                if (optimisticIndex !== -1) {
+                                    // Replace the optimistic message with the real one from server
+                                    const next = [...prev];
+                                    next[optimisticIndex] = msg;
+                                    return next;
                                 }
+
+                                // If not an optimistic match, just add if it doesn't exist
+                                if (prev.some(m => m.id === msg.id)) return prev;
                                 return [...prev, msg];
                             });
                             handlersRef.current.processNotifications([msg]);
