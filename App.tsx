@@ -97,7 +97,14 @@ const App: React.FC = () => {
     // Advanced Settings State
     const [advancedSettings, setAdvancedSettings] = useState<AdvancedSettings>(() => {
         const saved = localStorage.getItem('advancedSettings');
-        const defaultSettings: AdvancedSettings = { enableFloatingAlerts: true, notificationSound: 'default', notificationVolume: 1.0 };
+        const defaultSettings: AdvancedSettings = { 
+            enableFloatingAlerts: true, 
+            notificationSound: 'default', 
+            notificationVolume: 1.0,
+            orderEditGracePeriod: 43200, // 12 hours default
+            placingOrderGracePeriod: 5, // 5 seconds default
+            packagingGracePeriod: 3 // 3 seconds default
+        };
         if (saved) {
             try {
                 return { ...defaultSettings, ...JSON.parse(saved) };

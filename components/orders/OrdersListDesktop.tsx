@@ -88,7 +88,6 @@ const OrdersListDesktop: React.FC<OrdersListDesktopProps> = ({
         if (!dateStr) return new Date();
         const match = dateStr.match(/^(\d{4})-(\d{1,2})-(\d{1,2})\s(\d{1,2}):(\d{2})/);
         if (match) return new Date(parseInt(match[1]), parseInt(match[2]) - 1, parseInt(match[3]), parseInt(match[4]), parseInt(match[5]));
-        if (dateStr.endsWith('Z')) return new Date(dateStr.slice(0, -1));
         const d = new Date(dateStr);
         return isNaN(d.getTime()) ? new Date() : d;
     };
@@ -208,7 +207,7 @@ const OrdersListDesktop: React.FC<OrdersListDesktopProps> = ({
                                         </td>}
                                         {checkColumnVisible('brandSales') && <td className="px-6 py-3"><span className="font-bold text-gray-300 line-clamp-2 text-[11px] leading-tight" title={pageInfo?.DefaultStore}>{pageInfo?.DefaultStore || '-'}</span></td>}
                                         {checkColumnVisible('fulfillment') && <td className="px-6 py-3"><span className="font-bold text-gray-300 bg-gray-800 px-2 py-1 rounded border border-white/5 text-[10px]">{order['Fulfillment Store']}</span></td>}
-                                        {checkColumnVisible('total') && <td className="px-6 py-3 font-black text-blue-400 tracking-tighter text-[clamp(15px,1.1vw,17px)]">${order['Grand Total'].toFixed(2)}</td>}
+                                        {checkColumnVisible('total') && <td className="px-6 py-3 font-black text-blue-400 tracking-tighter text-[clamp(15px,1.1vw,17px)]">${(Number(order['Grand Total']) || 0).toFixed(2)}</td>}
                                         {checkColumnVisible('shippingService') && (
                                             <td className="px-2 py-3">
                                                 <div className="flex flex-col items-start gap-1">

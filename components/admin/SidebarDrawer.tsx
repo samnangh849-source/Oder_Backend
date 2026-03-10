@@ -15,6 +15,7 @@ interface SidebarDrawerProps {
     setIsReportSubMenuOpen: (open: boolean) => void;
     setIsProfileSubMenuOpen: (open: boolean) => void;
     setEditProfileModalOpen: (open: boolean) => void;
+    setAdvancedSettingsOpen: (open: boolean) => void;
 }
 
 const SidebarDrawer: React.FC<SidebarDrawerProps> = ({ 
@@ -26,7 +27,8 @@ const SidebarDrawer: React.FC<SidebarDrawerProps> = ({
     setIsReportSubMenuOpen,
     isProfileSubMenuOpen,
     setIsProfileSubMenuOpen,
-    setEditProfileModalOpen
+    setEditProfileModalOpen,
+    setAdvancedSettingsOpen
 }) => {
     const { isMobileMenuOpen, setIsMobileMenuOpen } = useContext(AppContext);
 
@@ -93,6 +95,7 @@ const SidebarDrawer: React.FC<SidebarDrawerProps> = ({
                         setIsReportSubMenuOpen={setIsReportSubMenuOpen}
                         setIsProfileSubMenuOpen={setIsProfileSubMenuOpen}
                         setEditProfileModalOpen={setEditProfileModalOpen}
+                        setAdvancedSettingsOpen={setAdvancedSettingsOpen}
                     />
                 </div>
             </div>

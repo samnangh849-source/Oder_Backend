@@ -17,6 +17,7 @@ interface MobileAdminLayoutProps {
     isProfileSubMenuOpen: boolean;
     setIsProfileSubMenuOpen: (open: boolean) => void;
     setEditProfileModalOpen: (open: boolean) => void;
+    setAdvancedSettingsOpen: (open: boolean) => void;
 }
 
 const MobileAdminLayout: React.FC<MobileAdminLayoutProps> = ({ 
@@ -29,7 +30,8 @@ const MobileAdminLayout: React.FC<MobileAdminLayoutProps> = ({
     setIsReportSubMenuOpen,
     isProfileSubMenuOpen,
     setIsProfileSubMenuOpen,
-    setEditProfileModalOpen
+    setEditProfileModalOpen,
+    setAdvancedSettingsOpen
 }) => {
     const { setIsMobileMenuOpen, currentUser } = useContext(AppContext);
 
@@ -76,6 +78,7 @@ const MobileAdminLayout: React.FC<MobileAdminLayoutProps> = ({
                 isProfileSubMenuOpen={isProfileSubMenuOpen}
                 setIsProfileSubMenuOpen={setIsProfileSubMenuOpen}
                 setEditProfileModalOpen={setEditProfileModalOpen}
+                setAdvancedSettingsOpen={setAdvancedSettingsOpen}
             />
 
             {/* Content Area */}

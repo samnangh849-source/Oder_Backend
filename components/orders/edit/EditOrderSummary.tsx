@@ -21,7 +21,7 @@ const EditOrderSummary: React.FC<EditOrderSummaryProps> = ({
             <div className="flex flex-wrap gap-8 items-center justify-center lg:justify-start w-full lg:w-auto">
                 <div className="text-center lg:text-left">
                     <p className="text-[9px] font-black text-gray-500 uppercase tracking-widest mb-1">Subtotal</p>
-                    <p className="text-xl font-bold text-gray-300">${subtotal.toFixed(2)}</p>
+                    <p className="text-xl font-bold text-gray-300">${(Number(subtotal) || 0).toFixed(2)}</p>
                 </div>
                 
                 <div className="w-px h-10 bg-white/10 hidden lg:block"></div>
@@ -46,7 +46,7 @@ const EditOrderSummary: React.FC<EditOrderSummaryProps> = ({
                 <div className="text-center lg:text-left">
                     <p className="text-[10px] font-black text-emerald-500 uppercase tracking-[0.2em] mb-1">Grand Total</p>
                     <p className="text-4xl font-black text-transparent bg-clip-text bg-gradient-to-r from-white to-emerald-200 tracking-tighter drop-shadow-md">
-                        ${grandTotal.toFixed(2)}
+                        ${(Number(grandTotal) || 0).toFixed(2)}
                     </p>
                 </div>
             </div>

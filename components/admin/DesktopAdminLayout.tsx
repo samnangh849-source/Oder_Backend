@@ -14,6 +14,7 @@ interface DesktopAdminLayoutProps {
     isProfileSubMenuOpen: boolean;
     setIsProfileSubMenuOpen: (open: boolean) => void;
     setEditProfileModalOpen: (open: boolean) => void;
+    setAdvancedSettingsOpen: (open: boolean) => void;
 }
 
 const DesktopAdminLayout: React.FC<DesktopAdminLayoutProps> = ({ 
@@ -27,7 +28,8 @@ const DesktopAdminLayout: React.FC<DesktopAdminLayoutProps> = ({
     setIsReportSubMenuOpen,
     isProfileSubMenuOpen,
     setIsProfileSubMenuOpen,
-    setEditProfileModalOpen
+    setEditProfileModalOpen,
+    setAdvancedSettingsOpen
 }) => {
     return (
         <div className="flex min-h-screen bg-gray-950">
@@ -42,6 +44,7 @@ const DesktopAdminLayout: React.FC<DesktopAdminLayoutProps> = ({
                 setIsReportSubMenuOpen={setIsReportSubMenuOpen}
                 setIsProfileSubMenuOpen={setIsProfileSubMenuOpen}
                 setEditProfileModalOpen={setEditProfileModalOpen}
+                setAdvancedSettingsOpen={setAdvancedSettingsOpen}
             />
             
             {/* Dynamic Content Margin based on Sidebar State */}

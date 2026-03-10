@@ -93,12 +93,6 @@ const OrdersListMobile: React.FC<OrdersListMobileProps> = ({
             );
         }
 
-        // Handle ISO-like format with Z (e.g., "2026-01-04T06:31:21Z")
-        if (dateStr.endsWith('Z')) {
-            const cleanDate = dateStr.slice(0, -1); // Remove Z
-            return new Date(cleanDate);
-        }
-
         const d = new Date(dateStr);
         return isNaN(d.getTime()) ? new Date() : d;
     };
@@ -236,7 +230,7 @@ const OrdersListMobile: React.FC<OrdersListMobileProps> = ({
                                                 </td>
                                             )}
                                             <td className="p-3 text-right font-black text-blue-400">
-                                                ${order['Grand Total'].toFixed(2)}
+                                                ${(Number(order['Grand Total']) || 0).toFixed(2)}
                                             </td>
                                             {checkColumnVisible('note') && (
                                                 <td className="p-3">
@@ -480,7 +474,7 @@ const OrdersListMobile: React.FC<OrdersListMobileProps> = ({
                             <div className="grid grid-cols-2 gap-3 mb-5">
                                 <div className="bg-white/5 rounded-xl p-3 border border-white/5">
                                     <p className="text-[9px] text-gray-500 font-black uppercase tracking-widest mb-1">Total Amount</p>
-                                    <p className="text-lg font-black text-white tracking-tight">${order['Grand Total'].toFixed(2)}</p>
+                                    <p className="text-lg font-black text-white tracking-tight">${(Number(order['Grand Total']) || 0).toFixed(2)}</p>
                                 </div>
                                 <div className="bg-white/5 rounded-xl p-3 border border-white/5">
                                     <div className="flex justify-between items-start">

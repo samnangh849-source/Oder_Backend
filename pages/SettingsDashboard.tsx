@@ -13,6 +13,7 @@ import {
 import ConfigEditModal from '../components/admin/settings/ConfigEditModal';
 import SystemUpdateModal from '../components/admin/settings/SystemUpdateModal';
 import TelegramTemplateManager from '../components/admin/settings/TelegramTemplateManager';
+import DatabaseManagement from '../components/admin/settings/DatabaseManagement';
 
 interface SettingsDashboardProps {
     onBack: () => void;
@@ -183,6 +184,8 @@ const SettingsDashboard: React.FC<SettingsDashboardProps> = ({ onBack, initialSe
                         <div className="bg-gray-800/30 border border-gray-700/50 rounded-[3rem] p-8 shadow-2xl backdrop-blur-md">
                             <TelegramTemplateManager language={language} />
                         </div>
+                    ) : activeId === 'database' ? (
+                        <DatabaseManagement />
                     ) : (
                         <div className="bg-gray-800/30 border border-gray-700/50 rounded-3xl overflow-hidden shadow-2xl">
                             {/* Desktop Table View */}

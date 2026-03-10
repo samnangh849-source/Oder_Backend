@@ -372,15 +372,18 @@ const CreateOrderPage: React.FC<CreateOrderPageProps> = ({ team, onSaveSuccess, 
     const [isUndoing, setIsUndoing] = useState(false);
     const submitTimeoutRef = useRef<NodeJS.Timeout | null>(null);
     const submitIntervalRef = useRef<NodeJS.Timeout | null>(null);
+    const { advancedSettings } = useContext(AppContext);
 
     const submitOrder = async () => {
         for (const step of STEPS) { if (!validateStep(step.number)) { setCurrentStep(step.number); return; } }
         setLoading(true);
 
-        // OPTIMISTIC UI: Start 7-second countdown
-        setUndoTimer(7);
+        const gracePeriod = advancedSettings?.placingOrderGracePeriod || 5;
+
+        // OPTIMISTIC UI: Start countdown
+        setUndoTimer(gracePeriod);
         
-        let secondsLeft = 7;
+        let secondsLeft = gracePeriod;
         if (submitIntervalRef.current) clearInterval(submitIntervalRef.current);
         submitIntervalRef.current = setInterval(() => {
             secondsLeft -= 1;
@@ -404,7 +407,7 @@ const CreateOrderPage: React.FC<CreateOrderPageProps> = ({ team, onSaveSuccess, 
             
             // Proceed with ACTUAL API CALL
             await executeFinalSubmit();
-        }, 7000);
+        }, gracePeriod * 1000);
     };
 
     const handleUndo = () => {
@@ -830,7 +833,7 @@ const CreateOrderPage: React.FC<CreateOrderPageProps> = ({ team, onSaveSuccess, 
                                 </div></div></div>
                         <div><h3 className="text-[10px] font-black text-gray-500 uppercase tracking-widest mb-2 sm:mb-3 flex items-center gap-2"><span className="w-1.5 h-1.5 rounded-full bg-orange-500"></span> ព័ត៌មានដឹកជញ្ជូន</h3><div className="bg-gray-900/40 p-3 sm:p-5 rounded-2xl sm:rounded-3xl border border-white/5 shadow-inner grid grid-cols-1 sm:grid-cols-3 gap-4 sm:gap-6"><div className="space-y-1"><p className="text-[9px] text-gray-500 font-bold uppercase">Shipping Method</p><div className="flex items-center gap-2">{shippingLogo && <img src={shippingLogo} className="h-4 sm:h-5 w-auto object-contain" alt="Logo" />}<p className="text-white font-black text-xs sm:text-sm">{order.shipping.method}</p></div></div><div className="space-y-1"><p className="text-[9px] text-gray-500 font-bold uppercase">Driver / Details</p><div className="flex items-center gap-2">{selectedDriver && (<img src={convertGoogleDriveUrl(selectedDriver.ImageURL)} className="h-6 w-6 sm:h-8 sm:w-8 rounded-full object-cover border border-gray-700 cursor-pointer active:scale-95 transition-transform" alt="Driver" onClick={() => previewImage(convertGoogleDriveUrl(selectedDriver.ImageURL))} />)}<p className="text-white font-bold text-xs sm:text-sm">{order.shipping.details || 'N/A'}</p></div></div><div className="space-y-1 sm:text-right"><p className="text-[9px] text-gray-500 font-bold uppercase">Internal Cost ($)</p><p className="text-orange-400 font-black text-base sm:text-lg font-mono">${(Number(order.shipping.cost) || 0).toFixed(2)}</p></div></div></div>
                         <div><h3 className="text-[10px] font-black text-gray-500 uppercase tracking-widest mb-2 sm:mb-3 flex items-center gap-2"><span className="w-1.5 h-1.5 rounded-full bg-blue-500"></span> បញ្ជីទំនិញកុម្ម៉ង់</h3><div className="space-y-2 sm:space-y-3">{order.products.map((p: any) => (<div key={p.id} className="flex items-center gap-3 sm:gap-4 bg-gray-900/40 p-2 sm:p-3 rounded-xl sm:rounded-2xl border border-white/5 group hover:border-blue-500/30 transition-all"><div className="w-12 h-12 sm:w-16 sm:h-16 bg-gray-800 rounded-lg sm:rounded-xl overflow-hidden border border-gray-700 flex-shrink-0 relative"><img src={convertGoogleDriveUrl(p.image)} className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-500" alt={p.name} /></div><div className="flex-grow min-w-0"><div className="flex justify-between items-start mb-0.5 sm:mb-1"><h4 className="text-white font-black text-xs sm:text-sm truncate leading-tight">{p.name}</h4><div className="flex gap-1.5"><span className="bg-blue-600/10 text-blue-400 text-[9px] sm:text-[10px] font-black px-1.5 sm:px-2.5 py-0.5 sm:py-1 rounded-lg border border-blue-500/20">x{p.quantity}</span></div></div><div className="flex items-center gap-2 sm:gap-3">{p.colorInfo && (<span className="text-[9px] bg-purple-500/10 text-purple-400 px-1.5 py-0.5 rounded-md font-bold">{p.colorInfo}</span>)}<p className="text-[9px] text-gray-500 font-bold uppercase tracking-tight"><span>${(p.finalPrice || 0).toFixed(2)}</span> / unit</p></div></div><div className="text-right"><p className="text-white font-black text-sm sm:text-base tracking-tight">${(p.total || 0).toFixed(2)}</p><p className="text-[8px] text-gray-600 font-bold uppercase">Subtotal</p></div></div>))}</div></div>
-                        <div className="grid grid-cols-2 md:grid-cols-4 gap-3 sm:gap-4"><div className="bg-gray-900/40 p-3 sm:p-4 rounded-xl sm:rounded-2xl border border-white/5 text-center"><p className="text-[8px] sm:text-[9px] text-gray-500 font-black uppercase mb-1">សរុបទំនិញ</p><p className="text-white font-black text-base sm:text-lg">${(order.subtotal || 0).toFixed(2)}</p></div><div className="bg-gray-900/40 p-3 sm:p-4 rounded-xl sm:rounded-2xl border border-white/5 text-center"><p className="text-[8px] sm:text-[9px] text-gray-500 font-black uppercase mb-1">សេវាដឹក</p><p className="text-white font-black text-base sm:text-lg">${(Number(order.customer.shippingFee) || 0).toFixed(2)}</p></div><div className="col-span-2 bg-blue-600/10 p-3 sm:p-4 rounded-xl sm:rounded-2xl border border-blue-500/20 text-center shadow-lg shadow-blue-900/10"><p className="text-[9px] sm:text-[10px] text-blue-400 font-black uppercase mb-1 tracking-widest">សរុបរួម (Grand Total)</p><p className="text-white font-black text-2xl sm:text-3xl tracking-tighter">${(order.grandTotal || 0).toFixed(2)}</p></div></div>
+                        <div className="grid grid-cols-2 md:grid-cols-4 gap-3 sm:gap-4"><div className="bg-gray-900/40 p-3 sm:p-4 rounded-xl sm:rounded-2xl border border-white/5 text-center"><p className="text-[8px] sm:text-[9px] text-gray-500 font-black uppercase mb-1">សរុបទំនិញ</p><p className="text-white font-black text-base sm:text-lg">${(Number(order.subtotal) || 0).toFixed(2)}</p></div><div className="bg-gray-900/40 p-3 sm:p-4 rounded-xl sm:rounded-2xl border border-white/5 text-center"><p className="text-[8px] sm:text-[9px] text-gray-500 font-black uppercase mb-1">សេវាដឹក</p><p className="text-white font-black text-base sm:text-lg">${(Number(order.customer.shippingFee) || 0).toFixed(2)}</p></div><div className="col-span-2 bg-blue-600/10 p-3 sm:p-4 rounded-xl sm:rounded-2xl border border-blue-500/20 text-center shadow-lg shadow-blue-900/10"><p className="text-[9px] sm:text-[10px] text-blue-400 font-black uppercase mb-1 tracking-widest">សរុបរួម (Grand Total)</p><p className="text-white font-black text-2xl sm:text-3xl tracking-tighter">${(Number(order.grandTotal) || 0).toFixed(2)}</p></div></div>
                         
                         {/* Improved Payment Section */}
                         <fieldset className="border border-gray-700 p-4 sm:p-6 rounded-2xl sm:rounded-3xl bg-gray-900/20">

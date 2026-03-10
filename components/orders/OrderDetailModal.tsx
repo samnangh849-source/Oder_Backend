@@ -156,15 +156,15 @@ const OrderDetailModal: React.FC<OrderDetailModalProps> = ({ order, onClose }) =
                             <div className="bg-gradient-to-br from-indigo-600 to-blue-700 rounded-3xl p-6 shadow-xl shadow-blue-900/20">
                                 <div className="flex justify-between items-center pb-4 border-b border-white/10">
                                     <span className="text-[10px] font-black uppercase text-blue-100">Subtotal</span>
-                                    <span className="font-mono font-black text-white">${Number(order.Subtotal).toFixed(2)}</span>
+                                    <span className="font-mono font-black text-white">${(Number(order.Subtotal) || 0).toFixed(2)}</span>
                                 </div>
                                 <div className="flex justify-between items-center py-4 border-b border-white/10">
                                     <span className="text-[10px] font-black uppercase text-blue-100">Shipping</span>
-                                    <span className="font-mono font-black text-white">${Number(order['Shipping Fee (Customer)']).toFixed(2)}</span>
+                                    <span className="font-mono font-black text-white">${(Number(order['Shipping Fee (Customer)']) || 0).toFixed(2)}</span>
                                 </div>
                                 <div className="flex justify-between items-center pt-4">
                                     <span className="text-xs font-black uppercase text-white">Grand Total</span>
-                                    <span className="text-2xl font-mono font-black text-white">${Number(order['Grand Total']).toFixed(2)}</span>
+                                    <span className="text-2xl font-mono font-black text-white">${(Number(order['Grand Total']) || 0).toFixed(2)}</span>
                                 </div>
                             </div>
                         </div>

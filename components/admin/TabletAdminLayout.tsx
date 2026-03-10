@@ -17,6 +17,7 @@ interface TabletAdminLayoutProps {
     isProfileSubMenuOpen: boolean;
     setIsProfileSubMenuOpen: (open: boolean) => void;
     setEditProfileModalOpen: (open: boolean) => void;
+    setAdvancedSettingsOpen: (open: boolean) => void;
 }
 
 const TabletAdminLayout: React.FC<TabletAdminLayoutProps> = ({ 
@@ -29,7 +30,8 @@ const TabletAdminLayout: React.FC<TabletAdminLayoutProps> = ({
     setIsReportSubMenuOpen,
     isProfileSubMenuOpen,
     setIsProfileSubMenuOpen,
-    setEditProfileModalOpen
+    setEditProfileModalOpen,
+    setAdvancedSettingsOpen
 }) => {
     const { setIsMobileMenuOpen, currentUser } = React.useContext(AppContext);
 
@@ -82,6 +84,7 @@ const TabletAdminLayout: React.FC<TabletAdminLayoutProps> = ({
                 isProfileSubMenuOpen={isProfileSubMenuOpen}
                 setIsProfileSubMenuOpen={setIsProfileSubMenuOpen}
                 setEditProfileModalOpen={setEditProfileModalOpen}
+                setAdvancedSettingsOpen={setAdvancedSettingsOpen}
             />
 
             {/* Content Area */}

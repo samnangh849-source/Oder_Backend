@@ -128,19 +128,65 @@ const AdvancedSettingsModal: React.FC<AdvancedSettingsModalProps> = ({ onClose }
                                             </div>
                                             <div>
                                                 <h3 className="text-sm font-black text-white uppercase tracking-tight">{t.edit_grace_period || 'Edit Grace Period'}</h3>
-                                                <p className="text-[10px] text-gray-500 font-bold uppercase tracking-widest mt-0.5">{t.edit_grace_period_desc || 'Time limit to edit your own orders (seconds)'}</p>
+                                                <p className="text-[10px] text-gray-500 font-bold uppercase tracking-widest mt-0.5">{language === 'km' ? 'កំណត់រយៈពេល (នាទី) ដែលអ្នកអាចកែប្រែការកម្មង់របស់ខ្លួនឯងបាន' : 'Time limit to edit your own orders (minutes)'}</p>
+                                            </div>
+                                        </div>
+                                        <div className="flex items-center gap-2 bg-black/40 px-4 py-2 rounded-xl border border-white/5">
+                                            <input 
+                                                type="number" 
+                                                min="1"
+                                                value={Math.round((advancedSettings.orderEditGracePeriod || 43200) / 60)}
+                                                onChange={(e) => {
+                                                    const mins = Math.max(1, parseInt(e.target.value) || 1);
+                                                    setAdvancedSettings(prev => ({ ...prev, orderEditGracePeriod: mins * 60 }));
+                                                }}
+                                                className="bg-transparent border-none text-right text-blue-400 font-black font-mono p-0 w-20 focus:ring-0"
+                                            />
+                                            <span className="text-[10px] font-black text-slate-600 uppercase">Min</span>
+                                        </div>
+                                    </div>
+                                    <div className="px-2">
+                                        <input 
+                                            type="range" 
+                                            min="1" 
+                                            max="1440" // 24 hours in minutes
+                                            step="1" 
+                                            value={Math.round((advancedSettings.orderEditGracePeriod || 43200) / 60)} 
+                                            onChange={(e) => {
+                                                const mins = parseInt(e.target.value);
+                                                setAdvancedSettings(prev => ({ ...prev, orderEditGracePeriod: mins * 60 }));
+                                            }}
+                                            className="w-full h-2 bg-gray-700 rounded-full appearance-none cursor-pointer accent-indigo-600"
+                                        />
+                                        <div className="flex justify-between mt-2">
+                                            <span className="text-[8px] font-black text-slate-600 uppercase tracking-tighter">1m</span>
+                                            <span className="text-[8px] font-black text-slate-600 uppercase tracking-tighter">24h</span>
+                                        </div>
+                                    </div>
+                                </div>
+
+                                {/* Placing Order Grace Period Setting */}
+                                <div className="p-5 bg-gray-800/40 rounded-[2rem] border border-white/5 hover:border-blue-500/20 transition-all group">
+                                    <div className="flex items-center justify-between mb-4">
+                                        <div className="flex items-center gap-4">
+                                            <div className="w-12 h-12 rounded-2xl bg-emerald-500/10 flex items-center justify-center text-emerald-400 group-hover:scale-110 transition-all border border-emerald-500/20 shadow-inner">
+                                                <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" /></svg>
+                                            </div>
+                                            <div>
+                                                <h3 className="text-sm font-black text-white uppercase tracking-tight">{t.placing_order_grace_period || 'Placing Order Grace Period'}</h3>
+                                                <p className="text-[10px] text-gray-500 font-bold uppercase tracking-widest mt-0.5">{t.placing_order_grace_period_desc || 'Time limit for placing orders (seconds)'}</p>
                                             </div>
                                         </div>
                                         <div className="flex items-center gap-2 bg-black/40 px-4 py-2 rounded-xl border border-white/5">
                                             <input 
                                                 type="number" 
                                                 min="3"
-                                                value={advancedSettings.orderEditGracePeriod || 43200}
+                                                value={advancedSettings.placingOrderGracePeriod || 5}
                                                 onChange={(e) => {
                                                     const val = Math.max(3, parseInt(e.target.value) || 3);
-                                                    setAdvancedSettings(prev => ({ ...prev, orderEditGracePeriod: val }));
+                                                    setAdvancedSettings(prev => ({ ...prev, placingOrderGracePeriod: val }));
                                                 }}
-                                                className="bg-transparent border-none text-right text-blue-400 font-black font-mono p-0 w-20 focus:ring-0"
+                                                className="bg-transparent border-none text-right text-emerald-400 font-black font-mono p-0 w-20 focus:ring-0"
                                             />
                                             <span className="text-[10px] font-black text-slate-600 uppercase">Sec</span>
                                         </div>
@@ -149,18 +195,64 @@ const AdvancedSettingsModal: React.FC<AdvancedSettingsModalProps> = ({ onClose }
                                         <input 
                                             type="range" 
                                             min="3" 
-                                            max="86400" // 24 hours
+                                            max="60" // 1 minute is plenty for placing orders
                                             step="1" 
-                                            value={advancedSettings.orderEditGracePeriod || 43200} 
+                                            value={advancedSettings.placingOrderGracePeriod || 5} 
                                             onChange={(e) => {
-                                                const val = parseInt(e.target.value);
-                                                setAdvancedSettings(prev => ({ ...prev, orderEditGracePeriod: val }));
+                                                const val = Math.max(3, parseInt(e.target.value));
+                                                setAdvancedSettings(prev => ({ ...prev, placingOrderGracePeriod: val }));
                                             }}
-                                            className="w-full h-2 bg-gray-700 rounded-full appearance-none cursor-pointer accent-indigo-600"
+                                            className="w-full h-2 bg-gray-700 rounded-full appearance-none cursor-pointer accent-emerald-600"
                                         />
                                         <div className="flex justify-between mt-2">
                                             <span className="text-[8px] font-black text-slate-600 uppercase tracking-tighter">3s</span>
-                                            <span className="text-[8px] font-black text-slate-600 uppercase tracking-tighter">24h</span>
+                                            <span className="text-[8px] font-black text-slate-600 uppercase tracking-tighter">60s</span>
+                                        </div>
+                                    </div>
+                                </div>
+
+                                {/* Packaging Grace Period Setting */}
+                                <div className="p-5 bg-gray-800/40 rounded-[2rem] border border-white/5 hover:border-blue-500/20 transition-all group">
+                                    <div className="flex items-center justify-between mb-4">
+                                        <div className="flex items-center gap-4">
+                                            <div className="w-12 h-12 rounded-2xl bg-orange-500/10 flex items-center justify-center text-orange-400 group-hover:scale-110 transition-all border border-orange-500/20 shadow-inner">
+                                                <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-14L4 7m8 4v10M4 7v10l8 4" /></svg>
+                                            </div>
+                                            <div>
+                                                <h3 className="text-sm font-black text-white uppercase tracking-tight">{t.packaging_grace_period || 'Packaging Grace Period'}</h3>
+                                                <p className="text-[10px] text-gray-500 font-bold uppercase tracking-widest mt-0.5">{t.packaging_grace_period_desc || 'Time limit for packaging function (seconds)'}</p>
+                                            </div>
+                                        </div>
+                                        <div className="flex items-center gap-2 bg-black/40 px-4 py-2 rounded-xl border border-white/5">
+                                            <input 
+                                                type="number" 
+                                                min="3"
+                                                value={advancedSettings.packagingGracePeriod || 3}
+                                                onChange={(e) => {
+                                                    const val = Math.max(3, parseInt(e.target.value) || 3);
+                                                    setAdvancedSettings(prev => ({ ...prev, packagingGracePeriod: val }));
+                                                }}
+                                                className="bg-transparent border-none text-right text-orange-400 font-black font-mono p-0 w-20 focus:ring-0"
+                                            />
+                                            <span className="text-[10px] font-black text-slate-600 uppercase">Sec</span>
+                                        </div>
+                                    </div>
+                                    <div className="px-2">
+                                        <input 
+                                            type="range" 
+                                            min="3" 
+                                            max="60" 
+                                            step="1" 
+                                            value={advancedSettings.packagingGracePeriod || 3} 
+                                            onChange={(e) => {
+                                                const val = Math.max(3, parseInt(e.target.value));
+                                                setAdvancedSettings(prev => ({ ...prev, packagingGracePeriod: val }));
+                                            }}
+                                            className="w-full h-2 bg-gray-700 rounded-full appearance-none cursor-pointer accent-orange-600"
+                                        />
+                                        <div className="flex justify-between mt-2">
+                                            <span className="text-[8px] font-black text-slate-600 uppercase tracking-tighter">3s</span>
+                                            <span className="text-[8px] font-black text-slate-600 uppercase tracking-tighter">60s</span>
                                         </div>
                                     </div>
                                 </div>

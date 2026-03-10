@@ -15,6 +15,7 @@ import PackagingView from './PackagingView';
 import DriverDeliveryView from './DriverDeliveryView';
 import InventoryManagement from '../components/admin/InventoryManagement';
 import EditProfileModal from '../components/common/EditProfileModal';
+import AdvancedSettingsModal from '../components/common/AdvancedSettingsModal';
 import IncentivesDashboard from './IncentivesDashboard';
 import IncentiveProjectDetails from './IncentiveProjectDetails';
 import IncentiveExecutionView from '../components/incentives/IncentiveExecutionView';
@@ -53,6 +54,7 @@ const AdminDashboard: React.FC = () => {
     const [isReportSubMenuOpen, setIsReportSubMenuOpen] = useState(false);
     const [isProfileSubMenuOpen, setIsProfileSubMenuOpen] = useState(false);
     const [editProfileModalOpen, setEditProfileModalOpen] = useState(false);
+    const [advancedSettingsOpen, setAdvancedSettingsOpen] = useState(false);
     
     // Responsive State
     const [screenSize, setScreenSize] = useState<'mobile' | 'tablet' | 'desktop'>(() => {
@@ -405,9 +407,10 @@ const AdminDashboard: React.FC = () => {
         setIsReportSubMenuOpen,
         isProfileSubMenuOpen,
         setIsProfileSubMenuOpen,
+        setEditProfileModalOpen,
+        setAdvancedSettingsOpen,
         onNavChange: handleNavChange,
         onReportSubNav: handleReportSubNav,
-        setEditProfileModalOpen,
         children: renderContent()
     };
 
@@ -421,6 +424,7 @@ const AdminDashboard: React.FC = () => {
                 <DesktopAdminLayout {...layoutProps} isSidebarCollapsed={isSidebarCollapsed} />
             )}
             {editProfileModalOpen && <EditProfileModal onClose={() => setEditProfileModalOpen(false)} />}
+            {advancedSettingsOpen && <AdvancedSettingsModal onClose={() => setAdvancedSettingsOpen(false)} />}
         </>
     );
 };

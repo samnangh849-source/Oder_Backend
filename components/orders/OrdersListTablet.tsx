@@ -182,8 +182,9 @@ const OrdersListTablet: React.FC<OrdersListTabletProps> = ({
                             <div className="mt-auto">
                                 <div className="flex justify-between items-end mb-4 pt-3 border-t border-white/5">
                                     <div>
-                                        <p className="text-xl font-black text-white tracking-tight">${order['Grand Total'].toFixed(2)}</p>
+                                        <p className="text-xl font-black text-white tracking-tight">${(Number(order['Grand Total']) || 0).toFixed(2)}</p>
                                     </div>
+
                                     <div className="text-right">
                                         <div className="flex items-center justify-end gap-1.5">
                                             {shippingLogo && <img src={shippingLogo} className="w-3.5 h-3.5 object-contain" alt="" />}

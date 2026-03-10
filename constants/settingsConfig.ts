@@ -160,6 +160,17 @@ export const configSections: ConfigSection[] = [
             { name: 'Description', label: 'ការពន្យល់', type: 'text' }
         ],
         displayField: 'Key'
+    },
+    {
+        id: 'database',
+        title: 'ការគ្រប់គ្រងទិន្នន័យ',
+        description: 'Sync ទិន្នន័យជាមួយ Google Sheet និងគ្រប់គ្រង Database',
+        icon: '🗄️',
+        dataKey: 'none',
+        sheetName: 'None',
+        primaryKeyField: 'None',
+        fields: [],
+        displayField: 'None'
     }
 ];
 

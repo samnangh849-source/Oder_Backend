@@ -1,3 +1,4 @@
+
 import React, { useState, useContext, useRef, useEffect, useCallback } from 'react';
 import { AppContext } from '@/context/AppContext';
 import { WEB_APP_URL } from '@/constants';
@@ -15,8 +16,9 @@ interface FastPackModalProps {
 }
 
 const FastPackModal: React.FC<FastPackModalProps> = ({ order, onClose, onSuccess }) => {
-    const { currentUser, appData, previewImage: showFullImage } = useContext(AppContext);
+    const { currentUser, appData, previewImage: showFullImage, advancedSettings } = useContext(AppContext);
     const [uploading, setUploading] = useState(false);
+    const [uploadProgress, setUploadProgress] = useState(0);
     const [previewImage, setPreviewImage] = useState<string | null>(null);
     const [isCameraActive, setIsCameraActive] = useState(false);
     
@@ -38,6 +40,12 @@ const FastPackModal: React.FC<FastPackModalProps> = ({ order, onClose, onSuccess
     const { zoom, applyZoom } = useSmartZoom();
     const [rawFile, setRawFile] = useState<File | null>(null);
 
+    // Undo Timer State
+    const [undoTimer, setUndoTimer] = useState<number | null>(null);
+    const [isUndoing, setIsUndoing] = useState(false);
+    const submitTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+    const submitIntervalRef = useRef<NodeJS.Timeout | null>(null);
+
     const stopCamera = useCallback(() => {
         if (aiLoopRef.current) cancelAnimationFrame(aiLoopRef.current);
         if (countdownIntervalRef.current) clearInterval(countdownIntervalRef.current);
@@ -58,18 +66,16 @@ const FastPackModal: React.FC<FastPackModalProps> = ({ order, onClose, onSuccess
         const canvas = canvasRef.current;
         const context = canvas.getContext('2d');
         if (context) {
-            // Use native video resolution for better quality
             canvas.width = video.videoWidth;
             canvas.height = video.videoHeight;
             context.drawImage(video, 0, 0, canvas.width, canvas.height);
             
-            // Direct to Blob for efficiency
             canvas.toBlob(async (blob) => {
                 if (!blob) return;
                 const file = new File([blob], "capture.jpg", { type: "image/jpeg" });
                 
-                // Better compression settings: 1280px width, 0.8 quality
-                const compressedBlob = await compressImage(file, 0.8, 1280);
+                // Mode 'high-detail' for Packaging
+                const compressedBlob = await compressImage(file, 'high-detail');
                 const reader = new FileReader();
                 reader.onloadend = () => {
                     setPreviewImage(reader.result as string);
@@ -81,51 +87,109 @@ const FastPackModal: React.FC<FastPackModalProps> = ({ order, onClose, onSuccess
         }
     }, [stopCamera, uploading]);
 
+    // Helper function for robust upload with progress
+    const uploadWithProgress = (base64Data: string, fileName: string): Promise<any> => {
+        return new Promise((resolve, reject) => {
+            const xhr = new XMLHttpRequest();
+            xhr.open('POST', `${WEB_APP_URL}/api/upload-image`, true);
+            xhr.setRequestHeader('Content-Type', 'application/json');
+
+            xhr.upload.onprogress = (e) => {
+                if (e.lengthComputable) {
+                    const percent = Math.round((e.loaded / e.total) * 100);
+                    setUploadProgress(percent);
+                }
+            };
+
+            xhr.onload = () => {
+                try {
+                    const resp = JSON.parse(xhr.responseText);
+                    if (xhr.status === 200 && resp.status === 'success') resolve(resp);
+                    else reject(new Error(resp.message || 'Upload Failed'));
+                } catch (e) { reject(new Error('Response Parse Error')); }
+            };
+
+            xhr.onerror = () => reject(new Error('Network Connection Error'));
+            
+            xhr.send(JSON.stringify({ 
+                fileData: base64Data,
+                fileName: fileName,
+                mimeType: 'image/jpeg',
+                userName: currentUser?.FullName || 'Packer',
+                orderId: order!['Order ID'],
+                targetColumn: 'Package Photo URL'
+            }));
+        });
+    };
+
     const handleSubmit = useCallback(async () => {
         if (!previewImage || !rawFile) return;
         setUploading(true);
-        
+        setUploadProgress(0);
+
+        const gracePeriod = advancedSettings?.packagingGracePeriod || 3;
+        setUndoTimer(gracePeriod);
+
+        let secondsLeft = gracePeriod;
+        if (submitIntervalRef.current) clearInterval(submitIntervalRef.current);
+        submitIntervalRef.current = setInterval(() => {
+            secondsLeft -= 1;
+            setUndoTimer(secondsLeft);
+            if (secondsLeft <= 0) {
+                if (submitIntervalRef.current) {
+                    clearInterval(submitIntervalRef.current);
+                    submitIntervalRef.current = null;
+                }
+            }
+        }, 1000);
+
+        if (submitTimeoutRef.current) clearTimeout(submitTimeoutRef.current);
+        submitTimeoutRef.current = setTimeout(async () => {
+            if (submitIntervalRef.current) {
+                clearInterval(submitIntervalRef.current);
+                submitIntervalRef.current = null;
+            }
+            setUndoTimer(null);
+            await executeFinalSubmit();
+        }, gracePeriod * 1000);
+    }, [previewImage, rawFile, order, currentUser, advancedSettings]);
+
+    const handleUndo = () => {
+        if (submitTimeoutRef.current) {
+            clearTimeout(submitTimeoutRef.current);
+            submitTimeoutRef.current = null;
+        }
+        if (submitIntervalRef.current) {
+            clearInterval(submitIntervalRef.current);
+            submitIntervalRef.current = null;
+        }
+        setIsUndoing(true);
+        setTimeout(() => {
+            setUndoTimer(null);
+            setUploading(false);
+            setIsUndoing(false);
+        }, 500);
+    };
+
+    const executeFinalSubmit = async () => {
         try {
-            const startTime = Date.now();
-            
-            // --- Security & Compatibility Fix ---
-            // Remove "data:image/jpeg;base64," prefix before sending to Backend
-            const base64Data = previewImage.includes(',') ? previewImage.split(',')[1] : previewImage;
+            const base64Data = previewImage!.includes(',') ? previewImage!.split(',')[1] : previewImage!;
+            const fileName = `Package_${order!['Order ID']}_${Date.now()}.jpg`;
 
-            // --- Parallel Execution for Speed ---
-            const uploadPromise = fetch(`${WEB_APP_URL}/api/upload-image`, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ 
-                    fileData: base64Data, // Send clean Base64 data
-                    fileName: `Package_${order!['Order ID']}_${Date.now()}.jpg`,
-                    mimeType: 'image/jpeg',
-                    userName: currentUser?.FullName || 'Station Packer'
-                })
-            }).then(r => r.json());
+            // 1. Ensure upload request is AT LEAST accepted by proxy
+            await uploadWithProgress(base64Data, fileName);
 
-            // Pre-calculate data for update
-            const orderId = order!['Order ID'];
-            const team = order!.Team;
-            const customerName = order!['Customer Name'];
-            const stationPacker = currentUser?.FullName || 'Station Packer';
-
-            // Wait for upload first because we need the URL for the order update
-            const uploadData = await uploadPromise;
-            if (uploadData.status !== 'success') throw new Error("Upload Failed!");
-
-            // Now update the order with the new image URL
+            // 2. Update order status
             const updateRes = await fetch(`${WEB_APP_URL}/api/admin/update-order`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
-                    orderId,
-                    team, 
-                    userName: stationPacker,
+                    orderId: order!['Order ID'],
+                    team: order!.Team, 
+                    userName: currentUser?.FullName || 'Packer',
                     newData: { 
                         'Fulfillment Status': 'Ready to Ship',
-                        'Packed By': stationPacker,
-                        'Package Photo URL': uploadData.url,
+                        'Packed By': currentUser?.FullName || 'Packer',
                         'Packed Time': new Date().toLocaleString('km-KH')
                     }
                 })
@@ -134,24 +198,24 @@ const FastPackModal: React.FC<FastPackModalProps> = ({ order, onClose, onSuccess
             const updateData = await updateRes.json();
             if (updateData.status !== 'success') throw new Error("Order update failed!");
             
-            // --- Background Tasks (Don't wait for these to finish) ---
-            const id = orderId.substring(0,8);
-            const chatMsg = `📦 **[PACKED]** កញ្ចប់ #${id} (${customerName}) វេចខ្ចប់រួចរាល់ដោយ **${stationPacker}**`;
+            onSuccess();
+            
+            // Send background chat
+            const id = order!['Order ID'].substring(0,8);
+            const chatMsg = `📦 **[PACKED]** កញ្ចប់ #${id} (${order!['Customer Name']}) វេចខ្ចប់រួចរាល់`;
             fetch(`${WEB_APP_URL}/api/chat/send`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ userName: 'System', type: 'text', content: chatMsg, MessageType: 'text', Content: chatMsg })
-            }).catch(e => console.warn("Background chat broadcast failed", e));
+                body: JSON.stringify({ UserName: 'System', MessageType: 'Text', Content: chatMsg })
+            }).catch(() => {});
 
-            console.log(`Fulfillment process took ${Date.now() - startTime}ms`);
-            
-            onSuccess();
         } catch (err: any) {
-            alert("❌ មានបញ្ហា: " + err.message);
+            alert("❌ ការបញ្ជូនបរាជ័យ: " + err.message);
         } finally {
             setUploading(false);
+            setUploadProgress(0);
         }
-    }, [previewImage, rawFile, order, currentUser, onSuccess]);
+    };
 
     const startCountdown = useCallback(() => {
         if (countdown !== null) return;
@@ -219,7 +283,6 @@ const FastPackModal: React.FC<FastPackModalProps> = ({ order, onClose, onSuccess
                 videoRef.current.onloadedmetadata = () => { runAiLoop(); };
             }
         } catch (err) {
-            console.error("Camera access error:", err);
             alert("មិនអាចបើកកាមេរ៉ាបានទេ។");
             setIsCameraActive(false);
             setIsAiLoading(false);
@@ -268,7 +331,7 @@ const FastPackModal: React.FC<FastPackModalProps> = ({ order, onClose, onSuccess
         if (file) {
             setRawFile(file);
             try {
-                const compressedBlob = await compressImage(file, 0.4, 640);
+                const compressedBlob = await compressImage(file, 'balanced');
                 const reader = new FileReader();
                 reader.onloadend = () => setPreviewImage(reader.result as string);
                 reader.readAsDataURL(compressedBlob);
@@ -289,6 +352,8 @@ const FastPackModal: React.FC<FastPackModalProps> = ({ order, onClose, onSuccess
                 .animate-scan-y { position: absolute; animation: scan-y 3s linear infinite; }
                 @keyframes bounce-slow { 0%, 100% { transform: translateY(0); } 50% { transform: translateY(-10px); } }
                 .animate-bounce-slow { animation: bounce-slow 2s infinite ease-in-out; }
+                @keyframes pulse-soft { 0%, 100% { opacity: 1; } 50% { opacity: 0.6; } }
+                .animate-pulse-soft { animation: pulse-soft 2s ease-in-out infinite; }
             `}</style>
             <div className="bg-[#0f172a] border border-white/10 rounded-[2.5rem] w-full max-w-4xl shadow-2xl overflow-hidden flex flex-col max-h-[95vh]">
                 {/* Detailed Header */}
@@ -324,6 +389,18 @@ const FastPackModal: React.FC<FastPackModalProps> = ({ order, onClose, onSuccess
                 </div>
 
                 <div className="p-6 overflow-y-auto space-y-6 flex-grow custom-scrollbar">
+                    {uploading && undoTimer === null && (
+                        <div className="bg-blue-600/10 border border-blue-500/20 rounded-2xl p-4 animate-pulse mb-4">
+                            <div className="flex justify-between items-center mb-2">
+                                <span className="text-[10px] font-black text-blue-400 uppercase tracking-widest">Sending Image Proof to System...</span>
+                                <span className="text-xs font-mono font-black text-blue-400">{uploadProgress}%</span>
+                            </div>
+                            <div className="w-full h-1.5 bg-gray-800 rounded-full overflow-hidden">
+                                <div className="h-full bg-blue-500 transition-all duration-300" style={{ width: `${uploadProgress}%` }}></div>
+                            </div>
+                        </div>
+                    )}
+
                     <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
                         {/* Detailed Left Side */}
                         <div className="space-y-6">
@@ -378,9 +455,6 @@ const FastPackModal: React.FC<FastPackModalProps> = ({ order, onClose, onSuccess
                                             {order['Payment Status'] === 'Paid' ? 'PAID' : 'UNPAID'}
                                         </span>
                                     </div>
-                                    <span className="text-[9px] font-black text-gray-500 uppercase tracking-widest bg-black/20 px-2 py-0.5 rounded-md border border-white/5">
-                                        {order['Payment Status'] === 'Paid' ? 'បង់រួច' : 'មិនទាន់បង់'}
-                                    </span>
                                 </div>
 
                                 {order['Payment Status'] === 'Paid' && bank && (
@@ -391,77 +465,15 @@ const FastPackModal: React.FC<FastPackModalProps> = ({ order, onClose, onSuccess
                                         <div className="min-w-0">
                                             <p className="text-[8px] font-black text-gray-500 uppercase tracking-widest mb-0.5">បង់តាមរយៈ (Payment via)</p>
                                             <h4 className="text-base font-black text-white uppercase tracking-tight truncate leading-none mb-0.5">{bank.BankName}</h4>
-                                            <p className="text-blue-400 font-mono text-[9px] font-bold opacity-80">{order['Payment Info'] || 'Verified Account'}</p>
                                         </div>
                                     </div>
                                 )}
-
-                                {order['Payment Status'] !== 'Paid' && (
-                                    <div className="bg-red-500/5 rounded-2xl p-3 border border-red-500/10 flex items-center gap-3 shadow-inner">
-                                        <div className="w-6 h-6 bg-red-500/20 rounded-md flex items-center justify-center text-red-500 border border-red-500/20">
-                                            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z" strokeWidth={3}/></svg>
-                                        </div>
-                                        <div>
-                                            <p className="text-red-400 font-black text-xs uppercase">Cash on Delivery</p>
-                                            <p className="text-[8px] text-gray-500 font-bold uppercase tracking-widest">សូមប្រមូលប្រាក់ពេលដឹកដល់</p>
-                                        </div>
-                                    </div>
-                                )}
-                            </div>
-
-                            <div className="bg-black/40 rounded-2xl p-5 border border-white/5 space-y-4">
-                                <p className="text-[10px] font-black text-gray-500 uppercase tracking-widest border-b border-white/5 pb-2">Logistics Manifest</p>
-                                <div className="grid grid-cols-2 gap-4">
-                                    <div className="flex items-center gap-3">
-                                        {shippingMethod && <img src={convertGoogleDriveUrl(shippingMethod.LogosURL)} className="w-8 h-8 object-contain bg-white/5 p-1 rounded-lg" alt="Shipping" />}
-                                        <div className="min-w-0">
-                                            <span className="text-[9px] font-black text-gray-600 uppercase block">Shipping</span>
-                                            <p className="text-indigo-400 font-bold text-xs truncate">{order['Internal Shipping Method']}</p>
-                                        </div>
-                                    </div>
-                                    <div className="flex items-center gap-3">
-                                        {driver && <img src={convertGoogleDriveUrl(driver.ImageURL)} className="w-8 h-8 rounded-full object-cover border border-white/10" alt="Driver" />}
-                                        <div className="min-w-0">
-                                            <span className="text-[9px] font-black text-gray-600 uppercase block">Driver</span>
-                                            <p className="text-blue-400 font-bold text-xs truncate">{order['Driver Name'] || order['Internal Shipping Details'] || 'N/A'}</p>
-                                        </div>
-                                    </div>
-                                    <div className="flex items-center gap-3 col-span-2">
-                                        <div className="w-8 h-8 bg-orange-500/20 rounded-lg flex items-center justify-center text-orange-500">
-                                            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4" strokeWidth={2}/></svg>
-                                        </div>
-                                        <div className="min-w-0">
-                                            <span className="text-[9px] font-black text-gray-600 uppercase block">Fulfillment Store</span>
-                                            <p className="text-orange-400 font-bold text-xs">{order['Fulfillment Store']}</p>
-                                        </div>
-                                    </div>
-                                </div>
-                            </div>
-
-                            <div className="space-y-3">
-                                <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest ml-1">បញ្ជីផលិតផល ({order.Products.length})</p>
-                                <div className="space-y-2 max-h-48 overflow-y-auto custom-scrollbar pr-2">
-                                    {order.Products.map((p, i) => (
-                                        <div key={i} className="flex items-center gap-4 p-3 bg-white/[0.03] rounded-2xl border border-white/5">
-                                            <div className="w-14 h-14 rounded-xl overflow-hidden bg-gray-900 border border-gray-800 cursor-pointer" onClick={() => showFullImage(convertGoogleDriveUrl(p.image))}>
-                                                <img src={convertGoogleDriveUrl(p.image)} className="w-full h-full object-cover" alt="" />
-                                            </div>
-                                            <div className="min-w-0 flex-grow">
-                                                <p className="text-sm font-black text-gray-200 truncate leading-tight">{p.name}</p>
-                                                <div className="flex justify-between items-end mt-1.5">
-                                                    <span className="text-xs text-blue-500 font-black">x{p.quantity} {p.colorInfo && `| ${p.colorInfo}`}</span>
-                                                    <p className="text-emerald-400 font-mono font-black text-sm">${(p.finalPrice || p.price || 0).toFixed(2)}</p>
-                                                </div>
-                                            </div>
-                                        </div>
-                                    ))}
-                                </div>
                             </div>
 
                             <div className="bg-blue-600/5 rounded-2xl p-5 border border-blue-500/10 space-y-3">
                                 <div className="flex justify-between items-center pt-2 border-t-2 border-dashed border-white/10">
                                     <span className="text-xs font-black text-white uppercase tracking-tighter">Grand Total</span>
-                                    <span className="text-xl font-black text-emerald-400 font-mono tracking-tighter">${order['Grand Total'].toFixed(2)}</span>
+                                    <span className="text-xl font-black text-emerald-400 font-mono tracking-tighter">${(Number(order['Grand Total']) || 0).toFixed(2)}</span>
                                 </div>
                             </div>
                         </div>
@@ -507,45 +519,15 @@ const FastPackModal: React.FC<FastPackModalProps> = ({ order, onClose, onSuccess
                                             }}>
                                                 <div className={`absolute inset-0 border-2 rounded-[2rem] transition-colors duration-300 ${detection.gesture !== 'none' ? 'border-emerald-500 shadow-[0_0_30px_rgba(16,185,129,0.4)]' : 'border-blue-500/50 shadow-[0_0_20px_rgba(59,130,246,0.2)]'}`}>
                                                     <div className="absolute inset-x-4 top-0 h-0.5 bg-gradient-to-r from-transparent via-blue-400 to-transparent animate-scan-y opacity-50" />
-                                                    <div className="absolute -top-1 -left-1 w-8 h-8 border-t-4 border-l-4 border-blue-500 rounded-tl-2xl" />
-                                                    <div className="absolute -top-1 -right-1 w-8 h-8 border-t-4 border-r-4 border-blue-500 rounded-tr-2xl" />
-                                                    <div className="absolute -bottom-1 -left-1 w-8 h-8 border-b-4 border-l-4 border-blue-500 rounded-bl-2xl" />
-                                                    <div className="absolute -bottom-1 -right-1 w-8 h-8 border-b-4 border-r-4 border-blue-500 rounded-bl-2xl" />
                                                 </div>
-                                                <div className="absolute -top-14 left-1/2 -translate-x-1/2 flex flex-col items-center gap-1 min-w-[150px]">
-                                                    <div className="flex items-center gap-2 bg-black/60 backdrop-blur-md px-3 py-1 rounded-full border border-white/10 shadow-2xl">
-                                                        <span className="text-[9px] font-black text-white uppercase tracking-widest">
-                                                            {detection.gesture === 'five_fingers' ? 'Action: Capture' : (detection.gesture === 'thumbs_up' ? 'Action: Confirm' : (detection.type === 'box' ? 'Object: Package' : 'Status: Tracking'))}
-                                                        </span>
-                                                    </div>
-                                                    <div className="w-20 h-1 bg-gray-800 rounded-full overflow-hidden border border-white/5">
-                                                        <div className="h-full bg-blue-500 transition-all duration-500" style={{ width: `${(detection.confidence || 0) * 100}%` }} />
-                                                    </div>
-                                                </div>
-                                            </div>
-                                        )}
-                                        {isAiEnabled && detection?.keypoints && !previewImage && (
-                                            <div className="absolute inset-0 pointer-events-none overflow-hidden rounded-[2.5rem]">
-                                                {detection.keypoints.map((kp, i) => (
-                                                    <div key={i} className={`absolute w-2 h-2 rounded-full transition-all duration-75 shadow-[0_0_10px_currentColor] ${detection.gesture !== 'none' ? 'text-emerald-400 bg-emerald-400' : 'text-blue-400 bg-blue-400'}`} style={{ left: `${(kp.x / (videoRef.current?.videoWidth || 1)) * 100}%`, top: `${(kp.y / (videoRef.current?.videoHeight || 1)) * 100}%`, transform: 'translate(-50%, -50%)', opacity: (detection.confidence || 0) * 0.8, scale: i % 4 === 0 ? '1.2' : '0.8' }} />
-                                                ))}
                                             </div>
                                         )}
                                         {countdown !== null && (
                                             <div className="absolute inset-0 flex items-center justify-center z-50 bg-black/20 backdrop-blur-[2px]">
                                                 <div className="relative">
-                                                    <div className="w-32 h-32 rounded-full border-4 border-white/20 flex items-center justify-center animate-ping absolute inset-0"></div>
                                                     <div className="w-32 h-32 rounded-full border-4 border-emerald-500 flex items-center justify-center bg-black/40 backdrop-blur-md shadow-[0_0_50px_rgba(16,185,129,0.5)]">
                                                         <span className="text-6xl font-black text-white animate-bounce-slow">{countdown}</span>
                                                     </div>
-                                                </div>
-                                            </div>
-                                        )}
-                                        {autoCaptureProgress > 0 && countdown === null && (
-                                            <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 z-30">
-                                                <div className="w-24 h-24 rounded-full border-4 border-white/10 flex items-center justify-center">
-                                                    <div className="absolute inset-0 rounded-full border-4 border-emerald-500 transition-all duration-100" style={{ clipPath: `inset(${100 - autoCaptureProgress}% 0 0 0)` }} />
-                                                    <svg className="w-10 h-10 text-white animate-bounce" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path d="M3 9a2 2 0 012-2h.93a2 2 0 001.664-.89l.812-1.22A2 2 0 0110.07 4h3.86a2 2 0 011.664.89l.812 1.22A2 2 0 0018.07 7H19a2 2 0 012 2v9a2 2 0 01-2 2H5a2 2 0 01-2-2V9z" strokeWidth={2}/><path d="M15 13a3 3 0 11-6 0 3 3 0 016 0z" strokeWidth={2}/></svg>
                                                 </div>
                                             </div>
                                         )}
@@ -580,10 +562,55 @@ const FastPackModal: React.FC<FastPackModalProps> = ({ order, onClose, onSuccess
                 <div className="p-8 bg-[#0f172a] border-t border-white/5 flex gap-4">
                     <button onClick={onClose} disabled={uploading} className="flex-1 py-5 bg-gray-800 hover:bg-gray-700 text-gray-400 rounded-3xl font-black uppercase text-xs tracking-[0.2em] transition-all active:scale-[0.98] border border-white/5 shadow-xl">បោះបង់ (Cancel)</button>
                     <button onClick={handleSubmit} disabled={!previewImage || uploading} className={`flex-[2.5] py-5 rounded-3xl font-black uppercase text-xs tracking-[0.2em] transition-all shadow-2xl flex items-center justify-center gap-3 relative overflow-hidden group ${!previewImage || uploading ? 'bg-gray-800 text-gray-500 cursor-not-allowed' : 'bg-blue-600 hover:bg-blue-500 text-white shadow-blue-900/40'}`}>
-                        {uploading ? <Spinner size="sm" /> : <><svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={3}><path d="M5 13l4 4L19 7" /></svg>ខ្ចប់រួចរាល់ & រក្សាទុក (Ready)</>}
+                        {uploading && undoTimer === null ? <Spinner size="sm" /> : <><svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={3}><path d="M5 13l4 4L19 7" /></svg>ខ្ចប់រួចរាល់ & រក្សាទុក (Ready)</>}
                     </button>
                 </div>
             </div>
+
+            {/* UNDO / GRACE PERIOD OVERLAY */}
+            {undoTimer !== null && (
+                <div className={`fixed inset-0 z-[250] flex items-center justify-center p-4 bg-slate-950/40 backdrop-blur-md transition-all duration-500 ${isUndoing ? 'opacity-0 scale-95 pointer-events-none' : 'opacity-100 scale-100'}`}>
+                    <div className="relative bg-[#0f172a]/90 border border-white/10 rounded-[2.5rem] p-8 sm:p-12 w-full max-w-sm shadow-[0_20px_70px_rgba(0,0,0,0.5)] text-center overflow-hidden ring-1 ring-white/10">
+                        <div className="absolute -top-24 -left-24 w-48 h-48 bg-orange-500/20 blur-[80px] rounded-full pointer-events-none"></div>
+                        <div className="absolute -bottom-24 -right-24 w-48 h-48 bg-blue-500/20 blur-[80px] rounded-full pointer-events-none"></div>
+
+                        <div className="relative w-32 h-32 mx-auto mb-8 flex items-center justify-center">
+                            <svg className="w-full h-full -rotate-90 transform" viewBox="0 0 100 100">
+                                <circle cx="50" cy="50" r="45" className="stroke-gray-800 fill-none" strokeWidth="6" />
+                                <circle 
+                                    cx="50" cy="50" r="45" 
+                                    className="stroke-orange-500 fill-none transition-all duration-1000 ease-linear" 
+                                    strokeWidth="6" 
+                                    strokeDasharray={2 * Math.PI * 45}
+                                    strokeDashoffset={2 * Math.PI * 45 * (1 - undoTimer / (advancedSettings?.packagingGracePeriod || 3))}
+                                    strokeLinecap="round"
+                                />
+                            </svg>
+                            <div className="absolute inset-0 flex flex-col items-center justify-center">
+                                <span className="text-3xl font-black text-white font-mono leading-none">{undoTimer}</span>
+                                <span className="text-[10px] font-black text-gray-500 uppercase tracking-widest mt-1">Seconds</span>
+                            </div>
+                        </div>
+
+                        <div className="space-y-2 mb-10">
+                            <h3 className="text-2xl font-black text-white uppercase tracking-tighter">រួចរាល់ហើយ!</h3>
+                            <p className="text-gray-400 text-sm font-medium px-4">ព័ត៌មានវេចខ្ចប់នឹងត្រូវបញ្ជូនទៅកាន់ប្រព័ន្ធក្នុងពេលបន្តិចទៀតនេះ...</p>
+                        </div>
+
+                        <button 
+                            onClick={handleUndo}
+                            className="w-full py-4 bg-red-500 hover:bg-red-600 text-white rounded-2xl font-black uppercase text-[11px] tracking-[0.2em] shadow-[0_10px_25px_rgba(239,68,68,0.3)] transition-all active:scale-95 flex items-center justify-center gap-3 group relative overflow-hidden"
+                        >
+                            <div className="absolute inset-0 bg-white/10 translate-y-full group-hover:translate-y-0 transition-transform duration-300"></div>
+                            <svg className="w-5 h-5 relative z-10 group-hover:-rotate-90 transition-transform duration-500" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={3}>
+                                <path strokeLinecap="round" strokeLinejoin="round" d="M3 10h10a8 8 0 018 8v2M3 10l6 6m-6-6l6-6" />
+                            </svg>
+                            <span className="relative z-10">បញ្ឈប់ការបញ្ជូន (Undo)</span>
+                        </button>
+                        <p className="mt-6 text-[10px] font-black text-gray-600 uppercase tracking-[0.3em] animate-pulse-soft">Finalizing Packaging Proof...</p>
+                    </div>
+                </div>
+            )}
         </div>
     );
 };

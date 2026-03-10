@@ -152,10 +152,10 @@ const DeliveryListGeneratorModal: React.FC<DeliveryListGeneratorModalProps> = ({
             const location = o.Location || '', details = o['Address Details'] || '';
             let fullAddress = (location === 'រាជធានីភ្នំពេញ' && details) ? details : [location, details].filter(Boolean).join(', ');
             if (fullAddress.length > 40) fullAddress = fullAddress.substring(0, 40) + '...';
-            text += `${index + 1}. 📞 ${o['Customer Phone']} | ID: \`${o['Order ID'].slice(-5)}\`\n   📍 ${fullAddress}\n   (💵 $${grandTotal.toFixed(2)}) - ${isPaid ? '🟢' : '🔴'} **${isPaid ? 'Paid' : 'COD'}**${lineSuffix}\n\n`;
+            text += `${index + 1}. 📞 ${o['Customer Phone']} | ID: \`${o['Order ID'].slice(-5)}\`\n   📍 ${fullAddress}\n   (💵 $${(Number(grandTotal) || 0).toFixed(2)}) - ${isPaid ? '🟢' : '🔴'} **${isPaid ? 'Paid' : 'COD'}**${lineSuffix}\n\n`;
         });
         
-        text += `--------------------------------\n📦 **ចំនួនកញ្ចប់សរុប:** ${successCount} កញ្ចប់\n💰 **សរុបទឹកប្រាក់ (ដឹកជោគជ័យ):** $${totalSuccessUSD.toFixed(2)}\n   ├─ 🟢 Paid: $${totalPaidUSD.toFixed(2)}\n   └─ 🔴 COD: $${totalCodUSD.toFixed(2)} 💸\n❌ **សរុបទឹកប្រាក់ (ដឹកមិនជោគជ័យ):** $${totalFailedUSD.toFixed(2)}\n\n`;
+        text += `--------------------------------\n📦 **ចំនួនកញ្ចប់សរុប:** ${successCount} កញ្ចប់\n💰 **សរុបទឹកប្រាក់ (ដឹកជោគជ័យ):** $${(Number(totalSuccessUSD) || 0).toFixed(2)}\n   ├─ 🟢 Paid: $${(Number(totalPaidUSD) || 0).toFixed(2)}\n   └─ 🔴 COD: $${(Number(totalCodUSD) || 0).toFixed(2)} 💸\n❌ **សរុបទឹកប្រាក់ (ដឹកមិនជោគជ័យ):** $${(Number(totalFailedUSD) || 0).toFixed(2)}\n\n`;
         
         const selectedOrderIds = filteredOrders.filter(o => step1SelectedIds.has(o['Order ID'])).map(o => o['Order ID']);
         const returnOrderIds = filteredOrders.filter(o => step1ReturnIds.has(o['Order ID'])).map(o => o['Order ID']);
@@ -524,7 +524,7 @@ const DeliveryListGeneratorModal: React.FC<DeliveryListGeneratorModalProps> = ({
                                                             <div key={order['Order ID']} className={`flex flex-col gap-3 p-4 rounded-[2rem] border transition-all ${isSelected ? 'bg-emerald-600/10 border-emerald-500/30' : isReturn ? 'bg-red-600/10 border-red-500/30' : 'bg-slate-900/60 border-white/5'}`}>
                                                                 <div className="flex items-start justify-between gap-3" onClick={toggleSuccess}>
                                                                     <div className="flex items-start gap-3 min-w-0 flex-grow cursor-pointer">
-                                                                        <div className="w-8 h-8 rounded-xl bg-black/40 flex items-center justify-center text-[10px] font-black text-gray-500 flex-shrink-0">{idx + 1}</div>
+                                                                        <div className="w-8 h-8 rounded-xl bg-black/40 flex items-center justify-center text-[10px] font-black text-gray-600 flex-shrink-0">{idx + 1}</div>
                                                                         <div className="min-w-0 flex-grow space-y-1">
                                                                             <p className="text-sm font-black text-white uppercase truncate">{order['Customer Name']}</p>
                                                                             <span className="text-lg font-black text-blue-400 font-mono leading-none block">{order['Customer Phone']}</span>
@@ -532,7 +532,7 @@ const DeliveryListGeneratorModal: React.FC<DeliveryListGeneratorModalProps> = ({
                                                                             {order['Address Details'] && <p className="text-[13px] text-gray-400 font-medium ml-4 border-l border-gray-700 pl-2 leading-tight italic">{order['Address Details']}</p>}
                                                                         </div>
                                                                     </div>
-                                                                    <div className="text-right flex-shrink-0"><p className="text-sm font-black text-white tracking-tighter mb-1">${Number(order['Grand Total']).toFixed(2)}</p><span className={`px-1.5 py-0.5 rounded text-[7px] font-black uppercase border ${order['Payment Status'] === 'Paid' ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20' : 'bg-red-500/10 text-red-400 border-red-500/20'}`}>{order['Payment Status']}</span></div>
+                                                                    <div className="text-right flex-shrink-0"><p className="text-sm font-black text-white tracking-tighter mb-1">${(Number(order['Grand Total']) || 0).toFixed(2)}</p><span className={`px-1.5 py-0.5 rounded text-[7px] font-black uppercase border ${order['Payment Status'] === 'Paid' ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20' : 'bg-red-500/10 text-red-400 border-red-500/20'}`}>{order['Payment Status']}</span></div>
                                                                 </div>
                                                                 {/* Side-by-Side Checkbox and Return */}
                                                                 <div className="flex items-center justify-end gap-3 pt-2 border-t border-white/5">
@@ -633,7 +633,7 @@ const DeliveryListGeneratorModal: React.FC<DeliveryListGeneratorModalProps> = ({
                                                     </div>
                                                     <div className="flex items-center justify-between sm:justify-end gap-6 bg-black/40 p-3 sm:bg-transparent sm:p-0 rounded-2xl">
                                                         <div className="flex flex-col items-end gap-1">
-                                                            <p className="text-xl font-black text-white tracking-tighter leading-none">${Number(order['Grand Total']).toFixed(2)}</p>
+                                                            <p className="text-xl font-black text-white tracking-tighter leading-none">${(Number(order['Grand Total']) || 0).toFixed(2)}</p>
                                                             <div className={`inline-flex flex-col items-center px-2 py-0.5 rounded-lg border ${isPaid ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20' : 'bg-red-500/10 text-red-400 border-red-500/20'}`}>
                                                                 <span className="text-[8px] font-black uppercase leading-none">{order['Payment Status']}</span>
                                                                 <span className="text-[7px] font-bold opacity-70 mt-0.5 whitespace-nowrap">{isPaid ? 'បង់រួច' : 'ប្រមូល COD'}</span>
@@ -677,22 +677,22 @@ const DeliveryListGeneratorModal: React.FC<DeliveryListGeneratorModalProps> = ({
                                         </div>
                                         <div className="bg-blue-600/10 p-4 rounded-[2rem] border border-blue-500/20 shadow-inner">
                                             <p className="text-[10px] text-blue-400 font-bold mb-1">ថ្លៃដឹកសរុប (SHIPPING)</p>
-                                            <p className="text-3xl font-black text-white">${summaryResult.shipCost.toFixed(2)}</p>
+                                            <p className="text-3xl font-black text-white">${(Number(summaryResult.shipCost) || 0).toFixed(2)}</p>
                                         </div>
                                     </div>
 
                                     <div className="w-full bg-black/20 p-5 rounded-[2rem] border border-white/5 space-y-3 text-left relative z-10">
                                         <div className="flex justify-between items-center border-b border-white/5 pb-3">
                                             <span className="text-[13px] font-bold text-gray-200">សរុបទឹកប្រាក់ (TOTAL)</span>
-                                            <span className="text-2xl font-black text-white tracking-tighter">${summaryResult.totalUSD.toFixed(2)}</span>
+                                            <span className="text-2xl font-black text-white tracking-tighter">${(Number(summaryResult.totalUSD) || 0).toFixed(2)}</span>
                                         </div>
                                         <div className="flex justify-between items-center text-xs font-bold text-gray-300">
                                             <span>├─ 🟢 បង់រួចស្រាប់ (Paid)</span>
-                                            <span className="text-emerald-400">${summaryResult.alreadyPaid.toFixed(2)}</span>
+                                            <span className="text-emerald-400">${(Number(summaryResult.alreadyPaid) || 0).toFixed(2)}</span>
                                         </div>
                                         <div className="flex justify-between items-center text-xs font-bold text-gray-300">
                                             <span>└─ 💵 ប្រមូលថ្មី (COD)</span>
-                                            <span className="text-blue-400">${summaryResult.newlyPaid.toFixed(2)}</span>
+                                            <span className="text-blue-400">${(Number(summaryResult.newlyPaid) || 0).toFixed(2)}</span>
                                         </div>
                                     </div>
 
@@ -712,10 +712,10 @@ const DeliveryListGeneratorModal: React.FC<DeliveryListGeneratorModalProps> = ({
                                                 `🏭 ឃ្លាំង: ${summaryResult.store}\n` +
                                                 `--------------------------------\n` +
                                                 `📦 ចំនួនកញ្ចប់: ${summaryResult.count} កញ្ចប់\n` +
-                                                `💰 សរុបទឹកប្រាក់: $${summaryResult.totalUSD.toFixed(2)}\n` +
-                                                `   ├─ 🟢 បង់រួចស្រាប់: $${summaryResult.alreadyPaid.toFixed(2)}\n` +
-                                                `   └─ 💵 ប្រមូលថ្មី (COD): $${summaryResult.newlyPaid.toFixed(2)}\n` +
-                                                `🚚 ថ្លៃដឹកសរុប: $${summaryResult.shipCost.toFixed(2)}\n` +
+                                                `💰 សរុបទឹកប្រាក់: $${(Number(summaryResult.totalUSD) || 0).toFixed(2)}\n` +
+                                                `   ├─ 🟢 បង់រួចស្រាប់: $${(Number(summaryResult.alreadyPaid) || 0).toFixed(2)}\n` +
+                                                `   └─ 💵 ប្រមូលថ្មី (COD): $${(Number(summaryResult.newlyPaid) || 0).toFixed(2)}\n` +
+                                                `🚚 ថ្លៃដឹកសរុប: $${(Number(summaryResult.shipCost) || 0).toFixed(2)}\n` +
                                                 `--------------------------------\n` +
                                                 `🙏 សូមអរគុណដល់ ${summaryResult.user} សម្រាប់ការបញ្ចប់កិច្ចការនេះ!`;
                                             try { await navigator.clipboard.writeText(text); } catch (e) {} // Silent fail for text

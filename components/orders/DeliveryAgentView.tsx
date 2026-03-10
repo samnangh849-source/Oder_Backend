@@ -311,28 +311,28 @@ const DeliveryAgentView: React.FC<DeliveryAgentViewProps> = ({ orderIds, returnO
                             </div>
                             <div className="bg-blue-600/10 p-6 rounded-[2rem] border border-blue-500/20 shadow-inner text-center">
                                 <p className="text-[10px] font-bold text-blue-400 mb-2">ថ្លៃដឹកសរុប (TOTAL)</p>
-                                <p className="text-4xl font-black text-white">${totalShipCost.toFixed(2)}</p>
+                                <p className="text-4xl font-black text-white">${(Number(totalShipCost) || 0).toFixed(2)}</p>
                             </div>
                         </div>
 
                         <div className="bg-black/20 p-7 rounded-[2.5rem] border border-white/5 text-left space-y-4">
                             <div className="flex justify-between items-center text-white font-black border-b border-white/10 pb-4 mb-1">
                                 <span className="text-[13px] font-bold">សរុបទឹកប្រាក់ (ដឹកជោគជ័យ)</span>
-                                <span className="text-2xl tracking-tighter">${financialStats.totalSuccess.toFixed(2)}</span>
+                                <span className="text-2xl tracking-tighter">${(Number(financialStats.totalSuccess) || 0).toFixed(2)}</span>
                             </div>
                             <div className="space-y-3 font-bold text-gray-300">
                                 <div className="flex justify-between items-center">
                                     <span className="text-sm">├─ 🟢 Paid (បង់រួច)</span>
-                                    <span className="text-2xl text-emerald-400 font-black">${financialStats.paidSuccess.toFixed(2)}</span>
+                                    <span className="text-2xl text-emerald-400 font-black">${(Number(financialStats.paidSuccess) || 0).toFixed(2)}</span>
                                 </div>
                                 <div className="flex justify-between items-center">
                                     <span className="text-sm">└─ 🔴 COD (ប្រមូលលុយ) 💸</span>
-                                    <span className="text-2xl text-red-400 font-black">${financialStats.codSuccess.toFixed(2)}</span>
+                                    <span className="text-2xl text-red-400 font-black">${(Number(financialStats.codSuccess) || 0).toFixed(2)}</span>
                                 </div>
                             </div>
                             <div className="flex justify-between items-center text-gray-600 font-bold pt-4 border-t border-white/10 opacity-60">
                                 <span className="text-xs font-bold">❌ ដឹកមិនជោគជ័យ និង Return</span>
-                                <span className="text-lg tracking-tighter">${financialStats.totalFailed.toFixed(2)}</span>
+                                <span className="text-lg tracking-tighter">${(Number(financialStats.totalFailed) || 0).toFixed(2)}</span>
                             </div>
                         </div>
                     </div>
@@ -427,7 +427,7 @@ const DeliveryAgentView: React.FC<DeliveryAgentViewProps> = ({ orderIds, returnO
                                                         </div>
                                                     </td>
                                                     <td className="p-3 text-right">
-                                                        <p className="text-base font-black text-emerald-400 italic">${Number(o['Grand Total']).toFixed(2)}</p>
+                                                        <p className="text-base font-black text-emerald-400 italic">${(Number(o['Grand Total']) || 0).toFixed(2)}</p>
                                                         <span className={`text-[7px] font-black uppercase px-1.5 py-0.5 rounded border mt-1 inline-block ${o['Payment Status'] === 'Paid' ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20' : 'bg-red-500/10 text-red-400 border-red-500/20'}`}>
                                                             {o['Payment Status'] === 'Paid' ? 'Paid' : 'COD'}
                                                         </span>
@@ -472,7 +472,7 @@ const DeliveryAgentView: React.FC<DeliveryAgentViewProps> = ({ orderIds, returnO
                                                     </div>
                                                 </div>
                                                 <div className="text-right flex-shrink-0">
-                                                    <p className={`text-base font-black italic transition-colors ${isNotSuccess ? 'text-gray-600 line-through' : 'text-emerald-400'}`}>${Number(o['Grand Total']).toFixed(2)}</p>
+                                                    <p className={`text-base font-black italic transition-colors ${isNotSuccess ? 'text-gray-600 line-through' : 'text-emerald-400'}`}>${(Number(o['Grand Total']) || 0).toFixed(2)}</p>
                                                     <div className="flex flex-col items-end gap-1 mt-1">
                                                         <span className={`text-[7px] font-black uppercase px-1.5 py-0.5 rounded border ${o['Payment Status'] === 'Paid' ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20' : 'bg-red-500/10 text-red-400 border-red-500/20'}`}>
                                                             {o['Payment Status'] === 'Paid' ? 'Paid' : 'COD'}
@@ -502,15 +502,15 @@ const DeliveryAgentView: React.FC<DeliveryAgentViewProps> = ({ orderIds, returnO
                         <div className="p-6 bg-black/20 border-t border-white/5 space-y-3 px-8 sm:px-12">
                             <div className="flex items-center justify-between text-white font-black">
                                 <span className="text-xs uppercase tracking-widest">សរុបទឹកប្រាក់ (ដឹកជោគជ័យ)</span>
-                                <span className="text-xl tracking-tighter">${financialStats.totalSuccess.toFixed(2)}</span>
+                                <span className="text-xl tracking-tighter">${(Number(financialStats.totalSuccess) || 0).toFixed(2)}</span>
                             </div>
                             <div className="space-y-1 ml-4 text-[11px] font-bold text-gray-400">
-                                <div className="flex justify-between items-center"><span>├─ 🟢 Paid</span><span className="text-emerald-400">${financialStats.paidSuccess.toFixed(2)}</span></div>
-                                <div className="flex justify-between items-center"><span>└─ 🔴 COD 💸</span><span className="text-red-400">${financialStats.codSuccess.toFixed(2)}</span></div>
+                                <div className="flex justify-between items-center"><span>├─ 🟢 Paid</span><span className="text-emerald-400">${(Number(financialStats.paidSuccess) || 0).toFixed(2)}</span></div>
+                                <div className="flex justify-between items-center"><span>└─ 🔴 COD 💸</span><span className="text-red-400">${(Number(financialStats.codSuccess) || 0).toFixed(2)}</span></div>
                             </div>
                             <div className="flex items-center justify-between text-gray-500 font-bold pt-2 border-t border-white/5">
                                 <span className="text-[10px] uppercase tracking-widest">❌ សរុបទឹកប្រាក់ (ដឹកមិនជោគជ័យ និង Return)</span>
-                                <span className="text-base tracking-tighter">${financialStats.totalFailed.toFixed(2)}</span>
+                                <span className="text-base tracking-tighter">${(Number(financialStats.totalFailed) || 0).toFixed(2)}</span>
                             </div>
                         </div>
 
@@ -518,7 +518,7 @@ const DeliveryAgentView: React.FC<DeliveryAgentViewProps> = ({ orderIds, returnO
                             <div className="flex flex-col lg:items-start items-center text-center lg:text-left gap-0.5">
                                 <span className="text-[8px] font-black text-gray-500 uppercase tracking-[0.3em]">Total Ship Fee (Success Only)</span>
                                 <div className="flex items-baseline gap-2">
-                                    <span className="text-3xl sm:text-4xl font-black text-white tracking-tighter italic leading-none">${totalShipCost.toFixed(2)}</span>
+                                    <span className="text-3xl sm:text-4xl font-black text-white tracking-tighter italic leading-none">${(Number(totalShipCost) || 0).toFixed(2)}</span>
                                     <span className="text-[9px] font-black text-blue-500 uppercase tracking-widest opacity-60">USD</span>
                                 </div>
                             </div>

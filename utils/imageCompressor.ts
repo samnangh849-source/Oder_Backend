@@ -1,15 +1,21 @@
 
 /**
- * Compresses an image file efficiently to meet quality and size standards.
- * @param {File} file - The image file to compress.
- * @param {number} quality - Initial quality (0.1 to 1.0).
- * @param {number} maxWidth - Starting maximum width.
- * @returns {Promise<Blob>} A promise that resolves with the compressed image as a Blob.
+ * Smart Image Compressor
+ * Modes: 
+ * - 'balanced': For Chat (Smaller size, good quality)
+ * - 'high-detail': For Labels/Packaging (Large size, high clarity)
  */
-export const compressImage = async (file: File, quality = 0.8, maxWidth = 1280): Promise<Blob> => {
-    // Increased target size to 250KB for better quality
-    const targetSize = 250 * 1024; 
-    
+export const compressImage = async (
+    file: File, 
+    mode: 'balanced' | 'high-detail' = 'balanced'
+): Promise<Blob> => {
+    const settings = {
+        balanced: { maxWidth: 1024, quality: 0.6, targetSize: 150 * 1024 },
+        'high-detail': { maxWidth: 1440, quality: 0.85, targetSize: 400 * 1024 }
+    };
+
+    const { maxWidth, quality, targetSize } = settings[mode];
+
     return new Promise((resolve, reject) => {
         const reader = new FileReader();
         reader.readAsDataURL(file);
@@ -17,42 +23,38 @@ export const compressImage = async (file: File, quality = 0.8, maxWidth = 1280):
             const img = new Image();
             img.src = event.target?.result as string;
             img.onload = async () => {
-                let currentQuality = quality;
-                let currentWidth = maxWidth;
-                
-                // Calculate new dimensions
-                if (img.width > maxWidth) {
-                    currentWidth = maxWidth;
-                } else {
-                    currentWidth = img.width;
-                }
-                
                 const canvas = document.createElement('canvas');
-                const scaleRatio = currentWidth / img.width;
-                canvas.width = currentWidth;
-                canvas.height = img.height * scaleRatio;
+                let width = img.width;
+                let height = img.height;
+
+                if (width > maxWidth) {
+                    height = (maxWidth / width) * height;
+                    width = maxWidth;
+                }
+
+                canvas.width = width;
+                canvas.height = height;
 
                 const ctx = canvas.getContext('2d');
-                if (!ctx) return reject(new Error('Failed to get canvas context'));
+                if (!ctx) return reject(new Error('Canvas Context Error'));
                 
-                // Use better image smoothing
                 ctx.imageSmoothingEnabled = true;
                 ctx.imageSmoothingQuality = 'high';
-                ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
-                
-                // One-shot compression if possible
+                ctx.drawImage(img, 0, 0, width, height);
+
+                let currentQuality = quality;
                 let blob = await new Promise<Blob | null>(res => canvas.toBlob(res, 'image/jpeg', currentQuality));
-                
-                // If still too large, do ONE more pass at lower quality instead of a loop
+
+                // Iterative compression if still too large (max 2 passes for speed)
                 if (blob && blob.size > targetSize) {
-                    blob = await new Promise<Blob | null>(res => canvas.toBlob(res, 'image/jpeg', currentQuality * 0.7));
+                    currentQuality *= 0.7;
+                    blob = await new Promise<Blob | null>(res => canvas.toBlob(res, 'image/jpeg', currentQuality));
                 }
 
                 if (blob) resolve(blob);
-                else reject(new Error('Compression failed'));
+                else reject(new Error('Compression Failed'));
             };
-            img.onerror = (error) => reject(error);
         };
-        reader.onerror = (error) => reject(error);
+        reader.onerror = (e) => reject(e);
     });
 };

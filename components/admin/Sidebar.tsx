@@ -3,9 +3,10 @@ import React, { useContext, useState } from 'react';
 import { AppContext } from '../../context/AppContext';
 import UserAvatar from '../common/UserAvatar';
 import { convertGoogleDriveUrl } from '../../utils/fileUtils';
-import { APP_LOGO_URL } from '../../constants';
+import { APP_LOGO_URL, WEB_APP_URL } from '../../constants';
 import Spinner from '../common/Spinner';
 import { translations } from '../../translations';
+import { requestNotificationPermission, sendSystemNotification } from '../../utils/notificationUtils';
 
 interface SidebarProps {
     activeDashboard: string;
@@ -17,18 +18,19 @@ interface SidebarProps {
     setIsReportSubMenuOpen: (open: boolean) => void;
     setIsProfileSubMenuOpen: (open: boolean) => void;
     setEditProfileModalOpen: (open: boolean) => void;
+    setAdvancedSettingsOpen: (open: boolean) => void;
     isMobile?: boolean;
 }
 
 const Sidebar: React.FC<SidebarProps> = ({
     activeDashboard, currentAdminView, isReportSubMenuOpen, isProfileSubMenuOpen,
     onNavChange, onReportSubNav, setIsReportSubMenuOpen, setIsProfileSubMenuOpen,
-    setEditProfileModalOpen, isMobile = false
+    setEditProfileModalOpen, setAdvancedSettingsOpen, isMobile = false
 }) => {
     const { 
         currentUser, logout, refreshData, isSidebarCollapsed, setIsSidebarCollapsed, 
         setAppState, setIsChatOpen, unreadCount,
-        language, setLanguage
+        language, setLanguage, showNotification
     } = useContext(AppContext);
 
     const [isRefreshing, setIsRefreshing] = useState(false);
@@ -59,13 +61,23 @@ const Sidebar: React.FC<SidebarProps> = ({
     const isHybridAdmin = currentUser?.IsSystemAdmin && (currentUser?.Team || '').split(',').map(t => t.trim()).filter(Boolean).length > 0;
 
     const handleRefresh = async () => {
-        setIsRefreshing(true);
-        try {
-            await refreshData();
-            window.location.reload();
-        } catch (err) {
-            setIsRefreshing(false);
+        if (window.confirm("Sync with Google Sheet?")) {
+            setIsRefreshing(true);
+            try {
+                const res = await fetch(`${WEB_APP_URL}/api/admin/migrate-data`, { method: 'POST' });
+                if (res.ok) alert("Migration Started!");
+                await refreshData();
+                window.location.reload();
+            } catch (err) {
+                setIsRefreshing(false);
+            }
         }
+    };
+
+    const handleTestNotification = async () => {
+        await requestNotificationPermission();
+        await sendSystemNotification(t.test_notification, t.test_notification_body);
+        showNotification(t.test_notification_body, 'success');
     };
 
     // Styling logic based on Desktop/Mobile prop
@@ -200,7 +212,7 @@ const Sidebar: React.FC<SidebarProps> = ({
                 {/* Expanded Profile Menu */}
                 <div className={`
                     overflow-hidden transition-all duration-300 ease-in-out
-                    ${isProfileSubMenuOpen && (isMobile || !isSidebarCollapsed) ? 'max-h-[300px] mt-4 opacity-100' : 'max-h-0 opacity-0'}
+                    ${isProfileSubMenuOpen && (isMobile || !isSidebarCollapsed) ? 'max-h-[400px] mt-4 opacity-100' : 'max-h-0 opacity-0'}
                 `}>
                     <div className="space-y-3">
                         <div className="bg-gray-900 rounded-xl p-1 flex border border-white/5">
@@ -209,25 +221,41 @@ const Sidebar: React.FC<SidebarProps> = ({
                         </div>
 
                         <div className="grid grid-cols-2 gap-2">
+                            {/* Profile */}
                             <button onClick={() => setEditProfileModalOpen(true)} className="flex flex-col items-center justify-center p-3 bg-gray-800/50 rounded-2xl border border-white/5 hover:bg-blue-600/20 hover:border-blue-500/30 transition-all group">
-                                <svg className="w-4 h-4 text-blue-400 mb-1.5 group-hover:scale-110 transition-transform" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" /></svg>
+                                <svg className="w-4 h-4 text-blue-400 mb-1.5 group-hover:scale-110 transition-transform" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2}><path d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" /></svg>
                                 <span className="text-[8px] font-black uppercase text-gray-400 group-hover:text-white">Profile</span>
                             </button>
-                            
-                            <button onClick={handleRefresh} disabled={isRefreshing} className="flex flex-col items-center justify-center p-3 bg-gray-800/50 rounded-2xl border border-white/5 hover:bg-emerald-600/20 hover:border-emerald-500/30 transition-all group">
-                                {isRefreshing ? <Spinner size="sm" /> : <svg className="w-4 h-4 text-emerald-400 mb-1.5 group-hover:rotate-180 transition-transform duration-500" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" /></svg>}
-                                <span className="text-[8px] font-black uppercase text-gray-400 group-hover:text-white">Sync</span>
+
+                            {/* Advanced Settings */}
+                            <button onClick={() => setAdvancedSettingsOpen(true)} className="flex flex-col items-center justify-center p-3 bg-gray-800/50 rounded-2xl border border-white/5 hover:bg-purple-600/20 hover:border-purple-500/30 transition-all group">
+                                <svg className="w-4 h-4 text-purple-400 mb-1.5 group-hover:rotate-90 transition-transform duration-500" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2}><path d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" /><path strokeLinecap="round" strokeLinejoin="round" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" /></svg>
+                                <span className="text-[8px] font-black uppercase text-gray-400 group-hover:text-white">Settings</span>
                             </button>
 
+                            {/* Sync DB */}
+                            <button onClick={handleRefresh} disabled={isRefreshing} className="flex flex-col items-center justify-center p-3 bg-gray-800/50 rounded-2xl border border-white/5 hover:bg-emerald-600/20 hover:border-emerald-500/30 transition-all group">
+                                {isRefreshing ? <Spinner size="sm" /> : <svg className="w-4 h-4 text-emerald-400 mb-1.5 group-hover:rotate-180 transition-transform duration-500" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" /></svg>}
+                                <span className="text-[8px] font-black uppercase text-gray-400 group-hover:text-white">Sync DB</span>
+                            </button>
+
+                            {/* Test Notification */}
+                            <button onClick={handleTestNotification} className="flex flex-col items-center justify-center p-3 bg-gray-800/50 rounded-2xl border border-white/5 hover:bg-indigo-600/20 hover:border-indigo-500/30 transition-all group">
+                                <svg className="w-4 h-4 text-indigo-400 mb-1.5 group-hover:animate-bounce" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V5a2 2 0 10-4 0v.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9" /></svg>
+                                <span className="text-[8px] font-black uppercase text-gray-400 group-hover:text-white">Notify</span>
+                            </button>
+
+                            {/* Switch Role */}
                             {isHybridAdmin && (
                                 <button onClick={() => setAppState('role_selection')} className="flex flex-col items-center justify-center p-3 bg-gray-800/50 rounded-2xl border border-white/5 hover:bg-yellow-600/20 hover:border-yellow-500/30 transition-all group">
-                                    <svg className="w-4 h-4 text-yellow-400 mb-1.5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7h12m0 0l-4-4m4 4l-4 4m0 6H4m0 0l4 4m-4-4l4-4" /></svg>
+                                    <svg className="w-4 h-4 text-yellow-400 mb-1.5" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2}><path d="M8 7h12m0 0l-4-4m4 4l-4 4m0 6H4m0 0l4 4m-4-4l4-4" /></svg>
                                     <span className="text-[8px] font-black uppercase text-gray-400 group-hover:text-white">Switch</span>
                                 </button>
                             )}
 
+                            {/* Logout */}
                             <button onClick={logout} className={`flex flex-col items-center justify-center p-3 bg-gray-800/50 rounded-2xl border border-white/5 hover:bg-red-600/20 hover:border-red-500/30 transition-all group ${!isHybridAdmin ? 'col-span-2' : ''}`}>
-                                <svg className="w-4 h-4 text-red-400 mb-1.5 group-hover:translate-x-0.5 transition-transform" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" /></svg>
+                                <svg className="w-4 h-4 text-red-400 mb-1.5 group-hover:translate-x-0.5 transition-transform" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" /></svg>
                                 <span className="text-[8px] font-black uppercase text-gray-400 group-hover:text-white">Logout</span>
                             </button>
                         </div>

@@ -164,7 +164,11 @@ export const translations = {
     high_security_desc: "តម្រូវឱ្យផ្ទៀងផ្ទាត់ម្តងទៀតសម្រាប់សកម្មភាពសំខាន់ៗ",
     verify_alerts: "ផ្ទៀងផ្ទាត់ការជូនដំណឹង",
     edit_grace_period: "រយៈពេលអនុញ្ញាតឲ្យកែប្រែ",
-    edit_grace_period_desc: "កំណត់រយៈពេល (វិនាទី) ដែលអ្នកអាចកែប្រែការកម្មង់របស់ខ្លួនឯងបាន",
+    edit_grace_period_desc: "កំណត់រយៈពេល (នាទី) ដែលអ្នកអាចកែប្រែការកម្មង់របស់ខ្លួនឯងបាន",
+    placing_order_grace_period: "រយៈពេលអនុញ្ញាតពេលដាក់ការកម្មង់",
+    placing_order_grace_period_desc: "កំណត់រយៈពេល (វិនាទី) សម្រាប់មុខងារដាក់ការកម្មង់",
+    packaging_grace_period: "រយៈពេលអនុញ្ញាតពេលវេចខ្ចប់",
+    packaging_grace_period_desc: "កំណត់រយៈពេល (វិនាទី) សម្រាប់មុខងារវេចខ្ចប់",
 
     // Incentives
     incentives: "អត្ថប្រយោជន៍ និង ប្រាក់រង្វាន់",
@@ -433,6 +437,12 @@ export const translations = {
     high_security: "High Security",
     high_security_desc: "Require re-authentication for critical actions",
     verify_alerts: "Verify system & In-app alerts",
+    edit_grace_period: "Edit Grace Period",
+    edit_grace_period_desc: "Time limit to edit your own orders (minutes)",
+    placing_order_grace_period: "Placing Order Grace Period",
+    placing_order_grace_period_desc: "Time limit for placing orders (seconds)",
+    packaging_grace_period: "Packaging Grace Period",
+    packaging_grace_period_desc: "Time limit for packaging function (seconds)",
 
     // Incentives
     incentives: "Incentives & Benefits",
