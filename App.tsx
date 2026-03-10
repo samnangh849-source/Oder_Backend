@@ -247,18 +247,41 @@ const App: React.FC = () => {
     }, [currentUser, appData.permissions]);
 
     const updatePermission = async (role: string, feature: string, isEnabled: boolean) => {
+        // 1. Optimistic Update in UI
+        const oldPermissions = [...appData.permissions];
+        const newPermissions = appData.permissions.map(p => 
+            (p.Role === role && p.Feature === feature) ? { ...p, IsEnabled: isEnabled } : p
+        );
+        
+        // If the permission object doesn't exist yet, add it
+        if (!newPermissions.find(p => p.Role === role && p.Feature === feature)) {
+            newPermissions.push({ Role: role, Feature: feature, IsEnabled: isEnabled });
+        }
+
+        setAppData(prev => {
+            const next = { ...prev, permissions: newPermissions };
+            CacheService.set(CACHE_KEYS.APP_DATA, next); // Update Cache too
+            return next;
+        });
+
         try {
             const response = await fetch(`${WEB_APP_URL}/api/admin/permissions/update`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ Role: role, Feature: feature, IsEnabled: isEnabled })
             });
+            
             if (response.ok) {
-                await fetchPermissions(); // Refresh local state
-                showNotification("Permission updated successfully", 'success');
+                showNotification("បានរក្សាទុកការកំណត់សិទ្ធិ", 'success');
+                // Optional: Full sync to be safe
+                fetchPermissions();
+            } else {
+                throw new Error("Update failed");
             }
         } catch (err) {
-            showNotification("Failed to update permission", 'error');
+            // Rollback on error
+            setAppData(prev => ({ ...prev, permissions: oldPermissions }));
+            showNotification("ការរក្សាទុកសិទ្ធិបរាជ័យ", 'error');
         }
     };
 
