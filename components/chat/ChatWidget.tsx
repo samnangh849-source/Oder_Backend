@@ -294,11 +294,30 @@ const ChatWidget: React.FC<ChatWidgetProps> = ({ isOpen, onClose }) => {
 
             ws.onmessage = (e) => {
                 const data = JSON.parse(e.data);
+                
+                // 1. ករណីមានសារថ្មីចូល (អាចជាអក្សរ ឬរូបភាព Base64)
                 if (data.action === 'new_message') {
                     const msg = transformBackendMessage(data.payload);
                     setAndCacheMessages(prev => [...prev.filter(m => m.id !== msg.id), msg]);
                     processNotifications([msg]);
                     if (isUserAtBottomRef.current) setTimeout(() => scrollToBottom('smooth'), 100);
+                }
+                
+                // 2. ករណី Backend Upload រូបភាពទៅ Drive ចប់ (ប្តូរពី Base64 មកប្រើ URL ផ្លូវការ)
+                if (data.action === 'upload_complete') {
+                    const payload = data.payload; // រួមមាន Message ID, FileID និង Content (URL ថ្មី)
+                    setAndCacheMessages(prev => prev.map(m => {
+                        // ឆែករកសារដែលត្រូវប្តូរតាមរយៈ ID ឬ Timestamp
+                        if (m.id === payload.Timestamp || m.id === String(payload.id)) {
+                            return {
+                                ...m,
+                                content: convertGoogleDriveUrl(payload.Content),
+                                fileID: payload.FileID,
+                                isOptimistic: false // បញ្ជាក់ថាជារូបភាពពិតប្រាកដក្នុង Server
+                            };
+                        }
+                        return m;
+                    }));
                 }
             };
 
