@@ -9,6 +9,7 @@ import { AppContext, Language, AdvancedSettings } from './context/AppContext';
 import BackgroundMusic from './components/common/BackgroundMusic';
 import { CacheService, CACHE_KEYS } from './services/cacheService';
 import Toast from './components/common/Toast';
+import NotificationStack from './components/common/NotificationStack';
 
 // Retry helper for lazy loading components to handle version mismatches or network errors
 const lazyRetry = <T extends React.ComponentType<any>>(
@@ -88,8 +89,8 @@ const App: React.FC = () => {
     // Invoke global order notifications system
     useOrderNotifications();
     
-    // Notification State
-    const [notification, setNotification] = useState<{ message: string; type: 'success' | 'info' | 'error' } | null>(null);
+    // Notifications State (Array for stacking)
+    const [notifications, setNotifications] = useState<import('./types').Notification[]>([]);
     
     // Header Title State for Mobile
     const [mobilePageTitle, setMobilePageTitle] = useState<string | null>(null);
@@ -135,8 +136,13 @@ const App: React.FC = () => {
         localStorage.setItem('appLanguage', lang);
     };
 
-    const showNotification = (message: string, type: 'success' | 'info' | 'error' = 'info') => {
-        setNotification({ message, type });
+    const showNotification = (message: string, type: 'success' | 'info' | 'error' = 'info', title?: string) => {
+        const id = Math.random().toString(36).substring(2, 9);
+        setNotifications(prev => [...prev, { id, message, type, title }]);
+    };
+
+    const removeNotification = (id: string) => {
+        setNotifications(prev => prev.filter(n => n.id !== id));
     };
 
     // Sync unreadCount to localStorage whenever it changes
@@ -515,12 +521,11 @@ const App: React.FC = () => {
                     )}
                 </Suspense>
                 
-                {/* Global Notification Toast */}
-                {notification && advancedSettings.enableFloatingAlerts && (
-                    <Toast 
-                        message={notification.message} 
-                        type={notification.type} 
-                        onClose={() => setNotification(null)} 
+                {/* Global Notification System (Stackable) */}
+                {advancedSettings.enableFloatingAlerts && (
+                    <NotificationStack 
+                        notifications={notifications} 
+                        onRemove={removeNotification} 
                     />
                 )}
 

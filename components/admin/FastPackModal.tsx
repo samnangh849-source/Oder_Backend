@@ -8,6 +8,7 @@ import { compressImage } from '@/utils/imageCompressor';
 import { convertGoogleDriveUrl } from '@/utils/fileUtils';
 import { useSmartZoom } from '@/hooks/useSmartZoom';
 import { packageDetector, DetectionResult } from '@/utils/visionAlgorithm';
+import { CacheService, CACHE_KEYS } from '@/services/cacheService';
 
 interface FastPackModalProps {
     order: ParsedOrder | null;
@@ -88,11 +89,15 @@ const FastPackModal: React.FC<FastPackModalProps> = ({ order, onClose, onSuccess
     }, [stopCamera, uploading]);
 
     // Helper function for robust upload with progress
-    const uploadWithProgress = (base64Data: string, fileName: string): Promise<any> => {
+    const uploadWithProgress = async (base64Data: string, fileName: string): Promise<any> => {
+        const session = await CacheService.get<{ token: string }>(CACHE_KEYS.SESSION);
+        const token = session?.token || '';
+
         return new Promise((resolve, reject) => {
             const xhr = new XMLHttpRequest();
             xhr.open('POST', `${WEB_APP_URL}/api/upload-image`, true);
             xhr.setRequestHeader('Content-Type', 'application/json');
+            if (token) xhr.setRequestHeader('Authorization', `Bearer ${token}`);
 
             xhr.upload.onprogress = (e) => {
                 if (e.lengthComputable) {
@@ -173,6 +178,9 @@ const FastPackModal: React.FC<FastPackModalProps> = ({ order, onClose, onSuccess
 
     const executeFinalSubmit = async () => {
         try {
+            const session = await CacheService.get<{ token: string }>(CACHE_KEYS.SESSION);
+            const token = session?.token || '';
+
             const base64Data = previewImage!.includes(',') ? previewImage!.split(',')[1] : previewImage!;
             const fileName = `Package_${order!['Order ID']}_${Date.now()}.jpg`;
 
@@ -182,7 +190,10 @@ const FastPackModal: React.FC<FastPackModalProps> = ({ order, onClose, onSuccess
             // 2. Update order status
             const updateRes = await fetch(`${WEB_APP_URL}/api/admin/update-order`, {
                 method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
+                headers: { 
+                    'Content-Type': 'application/json',
+                    'Authorization': `Bearer ${token}`
+                },
                 body: JSON.stringify({
                     orderId: order!['Order ID'],
                     team: order!.Team, 
@@ -196,6 +207,7 @@ const FastPackModal: React.FC<FastPackModalProps> = ({ order, onClose, onSuccess
             });
 
             const updateData = await updateRes.json();
+            if (updateRes.status === 401) throw new Error("Token expired. Please login again.");
             if (updateData.status !== 'success') throw new Error("Order update failed!");
             
             onSuccess();
@@ -205,7 +217,10 @@ const FastPackModal: React.FC<FastPackModalProps> = ({ order, onClose, onSuccess
             const chatMsg = `📦 **[PACKED]** កញ្ចប់ #${id} (${order!['Customer Name']}) វេចខ្ចប់រួចរាល់`;
             fetch(`${WEB_APP_URL}/api/chat/send`, {
                 method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
+                headers: { 
+                    'Content-Type': 'application/json',
+                    'Authorization': `Bearer ${token}`
+                },
                 body: JSON.stringify({ UserName: 'System', MessageType: 'Text', Content: chatMsg })
             }).catch(() => {});
 

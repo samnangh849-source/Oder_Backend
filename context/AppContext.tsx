@@ -44,7 +44,7 @@ export interface AppContextType {
     setIsMobileMenuOpen: (isOpen: boolean) => void;
     language: Language;
     setLanguage: (lang: Language) => void;
-    showNotification: (message: string, type?: 'success' | 'info' | 'error') => void;
+    showNotification: (message: string, type?: 'success' | 'info' | 'error', title?: string) => void;
     mobilePageTitle: string | null;
     setMobilePageTitle: (title: string | null) => void;
     advancedSettings: AdvancedSettings;

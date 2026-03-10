@@ -234,6 +234,14 @@ export interface Role {
     Description: string;
 }
 
+export interface Notification {
+    id: string;
+    message: string;
+    type: 'success' | 'info' | 'error';
+    title?: string;
+    duration?: number;
+}
+
 export interface AppData {
     users: User[];
     products: MasterProduct[];
