@@ -9,17 +9,21 @@ interface NotificationStackProps {
 }
 
 const NotificationStack: React.FC<NotificationStackProps> = ({ notifications, onRemove }) => {
+    // We reverse to show newest on top if needed, but currently they stack downwards.
+    // Let's keep them stacking downwards from the top right.
+    
     return (
-        <div className="fixed top-4 right-4 z-[100] flex flex-col gap-3 w-full max-w-sm pointer-events-none">
+        <div className="fixed top-4 right-4 left-4 md:left-auto md:w-96 z-[200] flex flex-col gap-3 pointer-events-none">
             {notifications.map((n, index) => (
                 <div 
                     key={n.id} 
-                    className="pointer-events-auto transition-all duration-500 ease-out"
+                    className="pointer-events-auto transition-all duration-500 ease-out w-full"
                     style={{ 
-                        transform: `translateY(${index * 10}px) scale(${1 - index * 0.05})`,
+                        // Visual stacking effect
+                        transform: `translateY(${index * 4}px) scale(${1 - index * 0.02})`,
                         zIndex: 100 - index,
-                        opacity: index > 3 ? 0 : 1,
-                        display: index > 3 ? 'none' : 'block'
+                        opacity: index > 4 ? 0 : 1,
+                        display: index > 4 ? 'none' : 'block'
                     }}
                 >
                     <FloatingAlert 
