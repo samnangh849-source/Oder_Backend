@@ -294,41 +294,57 @@ const ChatWidget: React.FC<ChatWidgetProps> = ({ isOpen, onClose }) => {
             try {
                 // Get token for authentication
                 const session = await CacheService.get<{ token: string }>(CACHE_KEYS.SESSION);
-                const token = session?.token ? encodeURIComponent(session.token) : '';
+                const token = session?.token || '';
                 
-                ws = new WebSocket(`${protocol}://${host}/api/chat/ws?token=Bearer%20${token}`);
+                // Try to connect with token. Use both Bearer and raw formats to ensure compatibility
+                ws = new WebSocket(`${protocol}://${host}/api/chat/ws?token=${encodeURIComponent(token)}`);
                 wsRef.current = ws;
 
                 ws.onopen = () => { 
                     if (isDisposed) { ws?.close(); return; }
+                    console.log("Chat WebSocket Connected");
                     setConnectionStatus('connected'); 
                     handlersRef.current.fetchHistory(); 
                 };
 
                 ws.onmessage = (e) => {
                     if (isDisposed) return;
-                    const data = JSON.parse(e.data);
-                    
-                    if (data.action === 'new_message') {
-                        const msg = handlersRef.current.transformBackendMessage(data.payload);
-                        handlersRef.current.setAndCacheMessages(prev => [...prev.filter(m => m.id !== msg.id), msg]);
-                        handlersRef.current.processNotifications([msg]);
-                        if (isUserAtBottomRef.current) setTimeout(() => scrollToBottom('smooth'), 100);
-                    }
-                    
-                    if (data.action === 'upload_complete') {
-                        const payload = data.payload;
-                        handlersRef.current.setAndCacheMessages(prev => prev.map(m => {
-                            if (m.id === payload.Timestamp || m.id === String(payload.id)) {
-                                return {
-                                    ...m,
-                                    content: convertGoogleDriveUrl(payload.Content),
-                                    fileID: payload.FileID,
-                                    isOptimistic: false
-                                };
-                            }
-                            return m;
-                        }));
+                    try {
+                        const data = JSON.parse(e.data);
+                        // Handle both lowercase and uppercase keys (Common in Go/JS interop)
+                        const action = data.action || data.Action;
+                        const payload = data.payload || data.Payload;
+
+                        if (action === 'new_message' || action === 'NEW_MESSAGE') {
+                            const msg = handlersRef.current.transformBackendMessage(payload);
+                            handlersRef.current.setAndCacheMessages(prev => {
+                                // Filter out if this message already exists (prevent duplicates from local echo)
+                                const exists = prev.some(m => m.id === msg.id || (m.isOptimistic && m.content === msg.content && m.user === msg.user));
+                                if (exists) {
+                                    return prev.map(m => (m.isOptimistic && m.content === msg.content && m.user === msg.user) ? msg : m);
+                                }
+                                return [...prev, msg];
+                            });
+                            handlersRef.current.processNotifications([msg]);
+                            if (isUserAtBottomRef.current) setTimeout(() => scrollToBottom('smooth'), 100);
+                        }
+                        
+                        if (action === 'upload_complete' || action === 'UPLOAD_COMPLETE') {
+                            const p = payload;
+                            handlersRef.current.setAndCacheMessages(prev => prev.map(m => {
+                                if (m.id === p.Timestamp || m.id === String(p.id) || m.id === String(p.ID)) {
+                                    return {
+                                        ...m,
+                                        content: convertGoogleDriveUrl(p.Content || p.content),
+                                        fileID: p.FileID || p.FileId || p.file_id,
+                                        isOptimistic: false
+                                    };
+                                }
+                                return m;
+                            }));
+                        }
+                    } catch (err) {
+                        console.warn("WS Message Parse Error:", err);
                     }
                 };
 
