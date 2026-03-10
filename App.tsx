@@ -277,9 +277,10 @@ const App: React.FC = () => {
         window.fetch = async (input: RequestInfo | URL, init?: RequestInit) => {
             const url = input.toString();
             
-            // 1. Add Authorization Header for API calls (except login)
-            if (url.includes('/api/') && !url.includes('/api/login')) {
+            // Apply only to internal API calls (not external assets like drive images)
+            if (url.includes(WEB_APP_URL) && !url.includes('/api/login')) {
                 try {
+                    // Try to get token from session cache
                     const session = await CacheService.get<{ token: string }>(CACHE_KEYS.SESSION);
                     if (session?.token) {
                         const headers = new Headers(init?.headers || {});
@@ -298,8 +299,10 @@ const App: React.FC = () => {
             // 2. Handle 401 Unauthorized (Token expired or invalid)
             if (response.status === 401 && !url.includes('/api/login')) {
                 console.warn("Session expired. Redirecting to login...");
-                await logout();
-                // Optional: reload or show notification
+                // We use a small delay to avoid state updates during render
+                setTimeout(async () => {
+                    await logout();
+                }, 0);
             }
 
             return response;
