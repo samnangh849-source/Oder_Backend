@@ -35,7 +35,7 @@ const SearchablePageDropdown: React.FC<SearchablePageDropdownProps> = ({ pages, 
     const filteredPages = useMemo(() => {
         if (!searchTerm.trim()) return pages;
         const q = searchTerm.toLowerCase();
-        return pages.filter(p => p.PageName.toLowerCase().includes(q));
+        return pages.filter(p => (p.PageName || '').toLowerCase().includes(q));
     }, [pages, searchTerm]);
 
     const selectedPage = pages.find(p => p.PageName === selectedPageName);

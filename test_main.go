@@ -1109,7 +1109,7 @@ func handleAdminUpdateSheet(c *gin.Context) {
 	for k, v := range req.NewData { 
 		dbCol := mapToDBColumn(k)
 		if v == nil { continue }
-		if strings.HasPrefix(dbCol, "is_") {
+		if strings.HasPrefix(dbCol, "is_") || dbCol == "is_system_admin" || dbCol == "require_driver_selection" {
 			if b, ok := v.(bool); ok { mappedData[dbCol] = b } else if s, ok := v.(string); ok { mappedData[dbCol] = strings.ToLower(s) == "true" }
 		} else { mappedData[dbCol] = v }
 	}
@@ -1117,6 +1117,15 @@ func handleAdminUpdateSheet(c *gin.Context) {
 	if err := DB.Table(tableName).Where(pkCol+" = ?", pkVal).Updates(mappedData).Error; err != nil {
 		c.Error(err); return
 	}
+
+	eventBytes, _ := json.Marshal(map[string]interface{}{
+		"type": "update_sheet",
+		"action": "data_update",
+		"sheetName": req.SheetName,
+		"primaryKey": req.PrimaryKey,
+		"newData": req.NewData,
+	})
+	hub.broadcast <- eventBytes
 	
 	go func() {
 		appsReq := AppsScriptRequest{
@@ -1127,7 +1136,7 @@ func handleAdminUpdateSheet(c *gin.Context) {
 			NewData: req.NewData,
 		}
 		jsonData, _ := json.Marshal(appsReq)
-		http.Post(appsScriptURL, "application/json", bytes.NewBuffer(jb))
+		http.Post(appsScriptURL, "application/json", bytes.NewBuffer(jsonData))
 	}()
 
 	c.JSON(200, gin.H{"status": "success"})
@@ -1138,10 +1147,46 @@ func handleAdminAddRow(c *gin.Context) {
 	var req struct { SheetName string `json:"sheetName"`; NewData map[string]interface{} `json:"newData"` }
 	if err := c.ShouldBindJSON(&req); err != nil { c.Error(err); return }
 	
-	// ១. បន្ថែមក្នុង Database (ប្រសិនបើចាំបាច់ បើមិនដូច្នោះទេគ្រាន់តែ Sync ទៅ Sheet ក៏បាន)
-	// (កូដត្រង់នេះអាស្រ័យលើថា តើ Table នោះមាន Struct ក្នុង Go ស្រាប់ឬអត់)
+	var tableName string
+	switch req.SheetName {
+		case "Users": tableName = "users"
+		case "Stores": tableName = "stores"
+		case "Settings": tableName = "settings"
+		case "TeamsPages": tableName = "team_pages"
+		case "Products": tableName = "products"
+		case "Locations": tableName = "locations"
+		case "ShippingMethods": tableName = "shipping_methods"
+		case "Colors": tableName = "colors"
+		case "Drivers": tableName = "drivers"
+		case "BankAccounts": tableName = "bank_accounts"
+		case "PhoneCarriers": tableName = "phone_carriers"
+		case "Inventory": tableName = "inventories"
+		case "Roles": tableName = "roles"
+		case "RolePermissions": tableName = "role_permissions"
+		default: c.Error(fmt.Errorf("unknown sheet")); return
+	}
 
-	// ២. Sync to Google Sheet
+	mappedData := make(map[string]interface{})
+	for k, v := range req.NewData { 
+		dbCol := mapToDBColumn(k)
+		if v == nil { continue }
+		if strings.HasPrefix(dbCol, "is_") || dbCol == "is_system_admin" || dbCol == "require_driver_selection" {
+			if b, ok := v.(bool); ok { mappedData[dbCol] = b } else if s, ok := v.(string); ok { mappedData[dbCol] = strings.ToLower(s) == "true" }
+		} else { mappedData[dbCol] = v }
+	}
+
+	if err := DB.Table(tableName).Create(mappedData).Error; err != nil {
+		c.Error(err); return
+	}
+
+	eventBytes, _ := json.Marshal(map[string]interface{}{
+		"type": "add_row",
+		"action": "data_update",
+		"sheetName": req.SheetName,
+		"newData": req.NewData,
+	})
+	hub.broadcast <- eventBytes
+
 	go func() {
 		appsReq := AppsScriptRequest{
 			Action: "addRow",
@@ -1161,7 +1206,40 @@ func handleAdminDeleteRow(c *gin.Context) {
 	var req struct { SheetName string `json:"sheetName"`; PrimaryKey map[string]string `json:"primaryKey"` }
 	if err := c.ShouldBindJSON(&req); err != nil { c.Error(err); return }
 
-	// Sync to Google Sheet
+	var tableName string
+	switch req.SheetName {
+		case "Users": tableName = "users"
+		case "Stores": tableName = "stores"
+		case "Settings": tableName = "settings"
+		case "TeamsPages": tableName = "team_pages"
+		case "Products": tableName = "products"
+		case "Locations": tableName = "locations"
+		case "ShippingMethods": tableName = "shipping_methods"
+		case "Colors": tableName = "colors"
+		case "Drivers": tableName = "drivers"
+		case "BankAccounts": tableName = "bank_accounts"
+		case "PhoneCarriers": tableName = "phone_carriers"
+		case "Inventory": tableName = "inventories"
+		case "Roles": tableName = "roles"
+		case "RolePermissions": tableName = "role_permissions"
+		default: c.Error(fmt.Errorf("unknown sheet")); return
+	}
+
+	pkCol := ""; pkVal := ""
+	for k, v := range req.PrimaryKey { pkCol = mapToDBColumn(k); pkVal = v }
+
+	if err := DB.Table(tableName).Where(pkCol+" = ?", pkVal).Delete(nil).Error; err != nil {
+		c.Error(err); return
+	}
+
+	eventBytes, _ := json.Marshal(map[string]interface{}{
+		"type": "delete_row",
+		"action": "data_update",
+		"sheetName": req.SheetName,
+		"primaryKey": req.PrimaryKey,
+	})
+	hub.broadcast <- eventBytes
+
 	go func() {
 		appsReq := AppsScriptRequest{
 			Action: "deleteRow",

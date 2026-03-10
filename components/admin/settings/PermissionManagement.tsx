@@ -23,11 +23,17 @@ const PermissionManagement: React.FC = () => {
 
     const roles = useMemo(() => {
         if (appData.roles && appData.roles.length > 0) {
-            return appData.roles.map(r => r.RoleName).sort();
+            return appData.roles
+                .map(r => r.RoleName)
+                .filter((name): name is string => !!name)
+                .sort();
         }
         
         // Fallback if roles table is empty
-        const uniqueRoles = new Set(appData.users?.map(u => u.Role).filter(Boolean));
+        const uniqueRoles = new Set<string>();
+        appData.users?.forEach(u => {
+            if (u.Role) uniqueRoles.add(u.Role);
+        });
         ['Sales', 'Fulfillment', 'Admin', 'Driver'].forEach(r => uniqueRoles.add(r));
         return Array.from(uniqueRoles).sort();
     }, [appData.roles, appData.users]);
@@ -43,10 +49,13 @@ const PermissionManagement: React.FC = () => {
     };
 
     const isEnabled = (role: string, feature: string) => {
-        if (!appData.permissions) return false;
+        if (!appData.permissions || !role || !feature) return false;
+        const lowerRole = role.toLowerCase();
+        const lowerFeature = feature.toLowerCase();
+        
         return appData.permissions.some(p => 
-            p.Role.toLowerCase() === role.toLowerCase() && 
-            p.Feature.toLowerCase() === feature.toLowerCase() && 
+            p.Role?.toLowerCase() === lowerRole && 
+            p.Feature?.toLowerCase() === lowerFeature && 
             p.IsEnabled
         );
     };

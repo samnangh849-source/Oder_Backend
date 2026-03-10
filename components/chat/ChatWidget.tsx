@@ -173,7 +173,7 @@ const ChatWidget: React.FC<ChatWidgetProps> = ({ isOpen, onClose }) => {
     const transformBackendMessage = useCallback((msg: BackendChatMessage): ChatMessage => {
         // Find user case-insensitively
         const user = appData.users?.find(u => 
-            u.UserName.toLowerCase() === (msg.UserName || '').toLowerCase()
+            (u.UserName || '').toLowerCase() === (msg.UserName || '').toLowerCase()
         );
         
         const normalizedType = (msg.MessageType || 'text').toLowerCase();
@@ -292,7 +292,7 @@ const ChatWidget: React.FC<ChatWidgetProps> = ({ isOpen, onClose }) => {
         
         const connectWS = async () => {
             if (isDisposed) return;
-            const protocol = window.location.protocol === 'https:' ? 'wss' : 'ws';
+            const protocol = WEB_APP_URL.startsWith('https') ? 'wss' : 'ws';
             const host = WEB_APP_URL.replace(/^https?:\/\//, '');
             
             try {
@@ -325,7 +325,7 @@ const ChatWidget: React.FC<ChatWidgetProps> = ({ isOpen, onClose }) => {
                                 // Smart matching for optimistic messages
                                 const optimisticIndex = prev.findIndex(m => 
                                     m.isOptimistic && 
-                                    m.user.toLowerCase() === msg.user.toLowerCase() &&
+                                    (m.user || '').toLowerCase() === (msg.user || '').toLowerCase() &&
                                     (
                                         // For text: match content
                                         (m.type === 'text' && m.content.trim() === msg.content.trim()) ||

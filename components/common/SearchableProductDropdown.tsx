@@ -88,7 +88,7 @@ const SearchableProductDropdown: React.FC<SearchableProductDropdownProps> = ({
         if (!allowAddNew) return false;
         const trimmedSearch = searchTerm.trim();
         if (!trimmedSearch) return false;
-        return !products.some(p => p.ProductName.trim().toLowerCase() === trimmedSearch.toLowerCase());
+        return !products.some(p => (p.ProductName || '').trim().toLowerCase() === trimmedSearch.toLowerCase());
     }, [searchTerm, products, allowAddNew]);
 
     const itemsForNavigation = useMemo(() => {

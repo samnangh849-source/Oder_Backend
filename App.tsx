@@ -187,30 +187,31 @@ const App: React.FC = () => {
                 const result = await response.json();
                 if (result.status === 'success') {
                     const rawData = result.data || {};
-                    const processedData = {
-                        ...initialAppData,
-                        ...rawData,
-                        pages: rawData.pages || rawData.TeamsPages || [],
-                        users: rawData.users || rawData.Users || [],
-                        roles: rawData.roles || rawData.Roles || [],
-                        products: rawData.products || rawData.Products || [],
-                        settings: rawData.settings || rawData.Settings || [],
-                        inventory: rawData.inventory || [],
-                        stockTransfers: rawData.stockTransfers || [],
-                        returns: rawData.returns || [],
-                        permissions: rawData.permissions || []
-                    };
                     
-                    setAppData(processedData);
-                    // Update cache
-                    CacheService.set(CACHE_KEYS.APP_DATA, processedData);
+                    setAppData(prev => {
+                        const processedData = {
+                            ...initialAppData,
+                            ...rawData,
+                            pages: rawData.pages || rawData.TeamsPages || rawData.Pages || prev.pages,
+                            users: rawData.users || rawData.Users || prev.users,
+                            roles: rawData.roles || rawData.Roles || prev.roles,
+                            products: rawData.products || rawData.Products || prev.products,
+                            settings: rawData.settings || rawData.Settings || prev.settings,
+                            inventory: rawData.inventory || prev.inventory || [],
+                            stockTransfers: rawData.stockTransfers || prev.stockTransfers || [],
+                            returns: rawData.returns || prev.returns || [],
+                            // IMPORTANT: Preserve existing permissions if not provided in static-data
+                            permissions: rawData.permissions || rawData.Permissions || prev.permissions || []
+                        };
+                        // Update cache
+                        CacheService.set(CACHE_KEYS.APP_DATA, processedData);
+                        return processedData;
+                    });
                     console.log("App data updated from network");
                 }
             }
         } catch (e) {
             console.error("Data Fetch Error:", e);
-            // If offline and no cache was loaded in step 1, UI will remain in loading state or show error if we handle it here.
-            // But since step 1 handles existing cache, this catch block ensures we don't crash on network fail.
         } finally {
             setIsGlobalLoading(false);
         }
@@ -241,21 +242,32 @@ const App: React.FC = () => {
     const hasPermission = useCallback((feature: string) => {
         if (!currentUser) return false;
         // Allow System Admin OR the 'create_order' feature for everyone
-        if (currentUser.IsSystemAdmin || feature === 'create_order') return true;
+        if (currentUser.IsSystemAdmin || (feature || '').toLowerCase() === 'create_order') return true;
 
-        const perm = appData.permissions?.find(p => p.Role === currentUser.Role && p.Feature === feature);
+        const perm = appData.permissions?.find(p => 
+            (p.Role || '').toLowerCase() === (currentUser.Role || '').toLowerCase() && 
+            (p.Feature || '').toLowerCase() === (feature || '').toLowerCase()
+        );
         return perm ? perm.IsEnabled : false;
     }, [currentUser, appData.permissions]);
 
     const updatePermission = async (role: string, feature: string, isEnabled: boolean) => {
         // 1. Optimistic Update in UI
-        const oldPermissions = [...appData.permissions];
-        const newPermissions = appData.permissions.map(p => 
-            (p.Role === role && p.Feature === feature) ? { ...p, IsEnabled: isEnabled } : p
-        );
+        const oldPermissions = appData.permissions ? [...appData.permissions] : [];
+        const lowerRole = (role || '').toLowerCase();
+        const lowerFeature = (feature || '').toLowerCase();
+
+        let found = false;
+        const newPermissions = oldPermissions.map(p => {
+            if ((p.Role || '').toLowerCase() === lowerRole && (p.Feature || '').toLowerCase() === lowerFeature) {
+                found = true;
+                return { ...p, IsEnabled: isEnabled };
+            }
+            return p;
+        });
         
         // If the permission object doesn't exist yet, add it
-        if (!newPermissions.find(p => p.Role === role && p.Feature === feature)) {
+        if (!found) {
             newPermissions.push({ Role: role, Feature: feature, IsEnabled: isEnabled });
         }
 
@@ -274,8 +286,7 @@ const App: React.FC = () => {
             
             if (response.ok) {
                 showNotification("បានរក្សាទុកការកំណត់សិទ្ធិ", 'success');
-                // Optional: Full sync to be safe
-                fetchPermissions();
+                // Removed fetchPermissions() call to prevent race condition flipping toggle back
             } else {
                 throw new Error("Update failed");
             }
@@ -322,7 +333,7 @@ const App: React.FC = () => {
         let reconnectTimer: any = null;
 
         const connect = async () => {
-            const protocol = window.location.protocol === 'https:' ? 'wss' : 'ws';
+            const protocol = WEB_APP_URL.startsWith('https') ? 'wss' : 'ws';
             const host = WEB_APP_URL.replace(/^https?:\/\//, '');
             const session = await CacheService.get<{ token: string }>(CACHE_KEYS.SESSION);
             const token = session?.token || '';

@@ -40,7 +40,7 @@ const SearchableShippingMethodDropdown: React.FC<SearchableShippingMethodDropdow
     const filteredMethods = useMemo(() => {
         if (!searchTerm.trim()) return methods;
         const q = searchTerm.toLowerCase();
-        return methods.filter(m => m.MethodName.toLowerCase().includes(q));
+        return methods.filter(m => (m.MethodName || '').toLowerCase().includes(q));
     }, [methods, searchTerm]);
 
     const selectedMethod = methods.find(m => m.MethodName === selectedMethodName);
