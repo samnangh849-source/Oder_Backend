@@ -321,7 +321,7 @@ const FulfillmentDashboard: React.FC<{ orders: ParsedOrder[] }> = ({ orders }) =
             ? `🚚 **[BULK DISPATCH]** ${ids.length} orders dispatched by **${currentUser?.FullName}**`
             : `📦 **[BULK STATUS]** ${ids.length} orders moved to **${targetStatus}** by **${currentUser?.FullName}**`;
         
-        fetch(`${WEB_APP_URL}/api/chat/send`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ userName: 'System', type: 'text', content: bulkMsg, MessageType: 'text', Content: bulkMsg }) }).catch(() => {});
+        fetch(`${WEB_APP_URL}/api/chat/send`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ UserName: 'System', MessageType: 'Text', Content: bulkMsg }) }).catch(() => {});
 
         Promise.all(promises).then(() => { refreshData(); }).finally(() => { setIsUpdatingBulk(false); setSelectedOrderIds(new Set()); });
     };

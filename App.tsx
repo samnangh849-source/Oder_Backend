@@ -298,14 +298,14 @@ const App: React.FC = () => {
         
         // Broadcast Login Event to all users via Chat System
         try {
-            await fetch(`${WEB_APP_URL}/api/send-chat`, {
+            await fetch(`${WEB_APP_URL}/api/chat/send`, {
                 method: 'POST',
-                headers: { 
+                headers: {
                     'Content-Type': 'application/json',
                     'Authorization': `Bearer ${token}`
                 },
                 body: JSON.stringify({
-                    userName: 'System',
+                    UserName: 'System',
                     MessageType: 'text',
                     Content: `🟢 **${user.FullName}** ទើបតែបានចូលប្រើប្រាស់ប្រព័ន្ធ (Logged In).`
                 })

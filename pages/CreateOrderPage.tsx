@@ -512,9 +512,9 @@ const CreateOrderPage: React.FC<CreateOrderPageProps> = ({ team, onSaveSuccess, 
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({
-                        userName: currentUser?.UserName,
-                        type: 'text',
-                        content: notificationMessage
+                        UserName: currentUser?.UserName,
+                        MessageType: 'Text',
+                        Content: notificationMessage
                     })
                 });
             } catch (notifyErr) {

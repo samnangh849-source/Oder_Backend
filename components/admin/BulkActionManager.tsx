@@ -209,13 +209,26 @@ const BulkActionManager: React.FC<BulkActionManagerProps> = ({ orders, selectedI
 
     const handleBulkDelete = async () => {
         if (selectedIds.size === 0) return;
-        if (deletePassword !== currentUser?.Password) {
-            alert("លេខសម្ងាត់មិនត្រឹមត្រូវ!");
-            return;
-        }
-
+        
         setIsProcessing(true);
         try {
+            // 1. Verify password via API since we don't store it in currentUser for security
+            const verifyRes = await fetch(`${WEB_APP_URL}/api/login`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ 
+                    username: currentUser?.UserName, 
+                    password: deletePassword 
+                })
+            });
+
+            if (!verifyRes.ok) {
+                alert("លេខសម្ងាត់មិនត្រឹមត្រូវ!");
+                setIsProcessing(false);
+                return;
+            }
+
+            // 2. Proceed with deletion
             const idArray = Array.from(selectedIds);
             for (const id of idArray) {
                 const order = orders.find(o => o['Order ID'] === id);
@@ -237,6 +250,7 @@ const BulkActionManager: React.FC<BulkActionManagerProps> = ({ orders, selectedI
             setDeletePassword('');
             onComplete();
         } catch (e) {
+            console.error("Bulk delete failed:", e);
             alert("ការលុបបរាជ័យ!");
         } finally {
             setIsProcessing(false);

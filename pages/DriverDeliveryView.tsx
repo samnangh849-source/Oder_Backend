@@ -123,7 +123,7 @@ const DriverDeliveryView: React.FC = () => {
                 await fetch(`${WEB_APP_URL}/api/chat/send`, {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ userName: 'System', type: 'text', content: chatMsg, MessageType: 'text', Content: chatMsg })
+                    body: JSON.stringify({ UserName: 'System', MessageType: 'Text', Content: chatMsg })
                 });
             } catch (e) { console.warn("Chat broadcast failed", e); }
 

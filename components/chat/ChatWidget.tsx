@@ -2,6 +2,7 @@
 import React, { useState, useContext, useRef, useEffect, useCallback, useMemo } from 'react';
 import { AppContext } from '../../context/AppContext';
 import { ChatMessage, User, BackendChatMessage } from '../../types';
+import { CacheService, CACHE_KEYS } from '../../services/cacheService';
 import Spinner from '../common/Spinner';
 import { useAudioRecorder } from '../../hooks/useAudioRecorder';
 import { compressImage } from '../../utils/imageCompressor';
@@ -63,6 +64,7 @@ const ChatWidget: React.FC<ChatWidgetProps> = ({ isOpen, onClose }) => {
     const [activeTab, setActiveTab] = useState<ActiveTab>('chat');
     const [showScrollBottom, setShowScrollBottom] = useState(false);
     const [isLoadingOlder, setIsLoadingOlder] = useState(false);
+    const [pendingImage, setPendingImage] = useState<string | null>(null);
     
     const [replyingTo, setReplyingTo] = useState<ChatMessage | null>(null);
 
@@ -376,23 +378,52 @@ const ChatWidget: React.FC<ChatWidgetProps> = ({ isOpen, onClose }) => {
             const payload = { UserName: currentUser?.UserName, MessageType: type.charAt(0).toUpperCase() + type.slice(1), Content: content };
             if (replyingTo) (payload as any).ReplyTo = { ID: replyingTo.id, User: replyingTo.fullName, Content: replyingTo.content, Type: replyingTo.type };
             
-            await fetch(`${WEB_APP_URL}/api/chat/send`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) });
+            const response = await fetch(`${WEB_APP_URL}/api/chat/send`, { 
+                method: 'POST', 
+                headers: { 'Content-Type': 'application/json' }, 
+                body: JSON.stringify(payload) 
+            });
+
+            if (!response.ok) {
+                throw new Error("Failed to send message");
+            }
+
             if (type === 'text') setNewMessage('');
             setReplyingTo(null);
             isUserAtBottomRef.current = true;
             scrollToBottom('smooth');
             if (!isMuted) { soundSent.current?.play().catch(() => {}); }
-        } catch (e) { alert("បញ្ជូនសារបរាជ័យ"); }
+        } catch (e) { 
+            console.error("Message send error:", e);
+            alert("បញ្ជូនសារបរាជ័យ"); 
+        }
     };
 
-    const handleFileUpload = async (file: File) => {
+    const handleFileSelect = async (file: File) => {
         setIsUploading(true);
         try {
             const compressed = await compressImage(file);
             const base64 = await fileToBase64(compressed);
-            await handleSendMessage(base64, 'image');
-        } catch (e) { alert("បញ្ជូនរូបភាពបរាជ័យ"); }
-        finally { setIsUploading(false); }
+            setPendingImage(base64);
+        } catch (e) { 
+            console.error("Image selection failed:", e);
+            alert("មិនអាចទាញយករូបភាពបានទេ"); 
+        } finally { 
+            setIsUploading(false); 
+        }
+    };
+
+    const handleSendPendingImage = async () => {
+        if (!pendingImage) return;
+        setIsUploading(true);
+        try {
+            await handleSendMessage(pendingImage, 'image');
+            setPendingImage(null);
+        } catch (e) {
+            console.error("Image send failed:", e);
+        } finally {
+            setIsUploading(false);
+        }
     };
 
     return (
@@ -441,7 +472,7 @@ const ChatWidget: React.FC<ChatWidgetProps> = ({ isOpen, onClose }) => {
                         })}
                         <div ref={messagesEndRef} />
                     </div>
-                ) : <ChatMembers users={allUsers} loading={isUsersLoading} />}
+                ) : <ChatMembers users={allUsers} loading={isUsersLoading} onRefresh={syncUsers} />}
             </div>
 
             {activeTab === 'chat' && (
@@ -452,6 +483,38 @@ const ChatWidget: React.FC<ChatWidgetProps> = ({ isOpen, onClose }) => {
                             <button onClick={() => setReplyingTo(null)}>&times;</button>
                         </div>
                     )}
+
+                    {/* Image Preview Overlay */}
+                    {pendingImage && (
+                        <div className="absolute inset-x-0 bottom-full mb-2 p-3 bg-gray-900/95 backdrop-blur-md border-t border-gray-800 animate-fade-in-up z-20 rounded-t-2xl shadow-2xl">
+                            <div className="relative group max-w-[200px] mx-auto">
+                                <img src={pendingImage} className="max-h-40 rounded-xl mx-auto border-2 border-blue-500/50 shadow-lg object-contain" alt="Preview" />
+                                <button 
+                                    onClick={() => setPendingImage(null)}
+                                    className="absolute -top-2 -right-2 w-6 h-6 bg-red-600 text-white rounded-full flex items-center justify-center shadow-lg hover:bg-red-500 transition-colors"
+                                >
+                                    &times;
+                                </button>
+                            </div>
+                            <div className="flex justify-center gap-4 mt-4">
+                                <button 
+                                    onClick={() => setPendingImage(null)} 
+                                    className="px-6 py-2 bg-gray-800 text-gray-400 rounded-xl font-black text-[10px] uppercase hover:bg-red-500/20 hover:text-red-500 transition-all tracking-widest"
+                                    disabled={isUploading}
+                                >
+                                    Cancel
+                                </button>
+                                <button 
+                                    onClick={handleSendPendingImage} 
+                                    className="px-8 py-2 bg-blue-600 text-white rounded-xl font-black text-[10px] uppercase shadow-xl shadow-blue-600/30 active:scale-95 flex items-center gap-2 tracking-widest"
+                                    disabled={isUploading}
+                                >
+                                    {isUploading ? <Spinner size="sm" /> : "Send Now ➤"}
+                                </button>
+                            </div>
+                        </div>
+                    )}
+
                     {isRecording ? (
                         <div className="flex items-center justify-between bg-red-500/10 p-2 rounded-2xl border border-red-500/50 animate-pulse">
                             <span className="text-red-500 font-mono text-sm ml-2">Recording {formatTime(recordingTime)}</span>
@@ -462,9 +525,9 @@ const ChatWidget: React.FC<ChatWidgetProps> = ({ isOpen, onClose }) => {
                         </div>
                     ) : (
                         <div className="flex items-center gap-2">
-                            <button onClick={() => fileInputRef.current?.click()} className="p-2 text-gray-400 hover:text-blue-400">📷</button>
-                            <input type="file" ref={fileInputRef} className="hidden" accept="image/*" onChange={e => e.target.files && handleFileUpload(e.target.files[0])} />
-                            <textarea value={newMessage} onChange={e => setNewMessage(e.target.value)} onKeyDown={e => e.key === 'Enter' && !e.shiftKey && (e.preventDefault(), handleSendMessage(newMessage, 'text'))} placeholder="Type a message..." className="flex-grow bg-gray-800 text-white rounded-2xl py-2 px-4 text-sm resize-none focus:ring-1 focus:ring-blue-500 border-none" rows={1} />
+                            <button onClick={() => fileInputRef.current?.click()} className="p-2 text-gray-400 hover:text-blue-400" disabled={isUploading}>📷</button>
+                            <input type="file" ref={fileInputRef} className="hidden" accept="image/*" onChange={e => e.target.files && handleFileSelect(e.target.files[0])} />
+                            <textarea value={newMessage} onChange={e => setNewMessage(e.target.value)} onKeyDown={e => e.key === 'Enter' && !e.shiftKey && (e.preventDefault(), handleSendMessage(newMessage, 'text'))} placeholder="Type a message..." className="flex-grow bg-gray-800 text-white rounded-2xl py-2 px-4 text-sm resize-none focus:ring-1 focus:ring-blue-500 border-none" rows={1} disabled={isUploading} />
                             {newMessage.trim() ? <button onClick={() => handleSendMessage(newMessage, 'text')} className="p-2 bg-blue-600 text-white rounded-xl">➤</button> : <button onClick={handleStartRecording} className="p-2 bg-gray-800 text-gray-400 rounded-xl hover:text-red-500">🎤</button>}
                         </div>
                     )}

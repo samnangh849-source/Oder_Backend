@@ -301,7 +301,7 @@ const PackagingView: React.FC<{ orders?: ParsedOrder[] }> = ({ orders: propOrder
                     fetch(`${WEB_APP_URL}/api/chat/send`, {
                         method: 'POST',
                         headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify({ userName: 'System', type: 'text', content: chatMsg, MessageType: 'text', Content: chatMsg })
+                        body: JSON.stringify({ UserName: 'System', MessageType: 'Text', Content: chatMsg })
                     }).catch(() => {});
                 }
                 refreshData();
@@ -340,7 +340,7 @@ const PackagingView: React.FC<{ orders?: ParsedOrder[] }> = ({ orders: propOrder
         fetch(`${WEB_APP_URL}/api/chat/send`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ userName: 'System', type: 'text', content: bulkMsg, MessageType: 'text', Content: bulkMsg })
+            body: JSON.stringify({ UserName: 'System', MessageType: 'Text', Content: bulkMsg })
         }).catch(() => {});
 
         // Handle results
