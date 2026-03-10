@@ -221,6 +221,19 @@ export interface ChatMessage {
     };
 }
 
+export interface RolePermission {
+    id?: number;
+    Role: string;
+    Feature: string;
+    IsEnabled: boolean;
+}
+
+export interface Role {
+    id?: number;
+    RoleName: string;
+    Description: string;
+}
+
 export interface AppData {
     users: User[];
     products: MasterProduct[];
@@ -237,6 +250,8 @@ export interface AppData {
     inventory?: InventoryItem[];
     stockTransfers?: StockTransfer[];
     returns?: ReturnOrder[];
+    permissions?: RolePermission[];
+    roles?: Role[];
 }
 
 export interface LocationInfo {

@@ -191,6 +191,7 @@ const App: React.FC = () => {
                         inventory: rawData.inventory || [],
                         stockTransfers: rawData.stockTransfers || [],
                         returns: rawData.returns || [],
+                        permissions: rawData.permissions || []
                     };
                     
                     setAppData(processedData);
@@ -207,6 +208,52 @@ const App: React.FC = () => {
             setIsGlobalLoading(false);
         }
     }, []);
+
+    // Fetch permissions from separate admin endpoint too if needed, 
+    // but better if static-data includes it for everyone to check locally.
+    const fetchPermissions = useCallback(async () => {
+        try {
+            const response = await fetch(`${WEB_APP_URL}/api/admin/permissions`);
+            if (response.ok) {
+                const result = await response.json();
+                if (result.status === 'success') {
+                    setAppData(prev => ({ ...prev, permissions: result.data }));
+                }
+            }
+        } catch (err) {
+            console.warn("Failed to fetch permissions", err);
+        }
+    }, []);
+
+    useEffect(() => {
+        if (currentUser?.IsSystemAdmin) {
+            fetchPermissions();
+        }
+    }, [currentUser, fetchPermissions]);
+
+    const hasPermission = useCallback((feature: string) => {
+        if (!currentUser) return false;
+        if (currentUser.IsSystemAdmin) return true;
+
+        const perm = appData.permissions?.find(p => p.Role === currentUser.Role && p.Feature === feature);
+        return perm ? perm.IsEnabled : false;
+    }, [currentUser, appData.permissions]);
+
+    const updatePermission = async (role: string, feature: string, isEnabled: boolean) => {
+        try {
+            const response = await fetch(`${WEB_APP_URL}/api/admin/permissions/update`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ Role: role, Feature: feature, IsEnabled: isEnabled })
+            });
+            if (response.ok) {
+                await fetchPermissions(); // Refresh local state
+                showNotification("Permission updated successfully", 'success');
+            }
+        } catch (err) {
+            showNotification("Failed to update permission", 'error');
+        }
+    };
 
     const determineAppState = useCallback((user: User) => {
         // All users now go through role selection to choose between Sales or Fulfillment
@@ -438,6 +485,7 @@ const App: React.FC = () => {
             originalAdminUser, returnToAdmin: () => {}, previewImage: (u) => setPreviewImageUrl(u),
             updateCurrentUser, setUnreadCount, unreadCount, updateProductInData: () => {}, apiKey: '',
             setAppState, setOriginalAdminUser, fetchData, setCurrentUser, setChatVisibility: setChatVisible,
+            hasPermission, updatePermission,
             isSidebarCollapsed, setIsSidebarCollapsed, setIsChatOpen,
             isMobileMenuOpen, setIsMobileMenuOpen,
             language, setLanguage: handleLanguageChange,

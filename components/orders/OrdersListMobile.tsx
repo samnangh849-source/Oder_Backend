@@ -39,7 +39,7 @@ const OrdersListMobile: React.FC<OrdersListMobileProps> = ({
     toggleOrderVerified,
     updatingIds
 }) => {
-    const { appData, previewImage, currentUser } = useContext(AppContext);
+    const { appData, previewImage, currentUser, hasPermission } = useContext(AppContext);
     
     // View Mode State - Default to 'table'
     const [viewMode, setViewMode] = useState<'card' | 'table'>(() => {
@@ -100,7 +100,16 @@ const OrdersListMobile: React.FC<OrdersListMobileProps> = ({
     // Helper to check edit permission
     const canEditOrder = (order: ParsedOrder) => {
         if (!currentUser) return false;
+        
+        const isVerified = order.IsVerified === true || String(order.IsVerified).toUpperCase() === 'TRUE' || order.IsVerified === 'A';
+        
+        // If order is verified, only Admins can edit
+        if (isVerified) {
+            return currentUser.IsSystemAdmin || currentUser.Role === 'Admin';
+        }
+
         if (currentUser.IsSystemAdmin) return true;
+        if (!hasPermission('edit_order')) return false;
 
         // Check Team Ownership
         const userTeams = (currentUser.Team || '').split(',').map(t => t.trim());
@@ -110,6 +119,10 @@ const OrdersListMobile: React.FC<OrdersListMobileProps> = ({
         const orderTime = getSafeDateObj(order.Timestamp).getTime();
         const timeDiff = Date.now() - orderTime;
         return timeDiff < 43200000;
+    };
+
+    const canVerifyOrder = () => {
+        return currentUser?.IsSystemAdmin || hasPermission('verify_order');
     };
 
     const getCarrierLogo = (phoneNumber: string) => {
@@ -535,8 +548,9 @@ const OrdersListMobile: React.FC<OrdersListMobileProps> = ({
                                         <input 
                                             type="checkbox" 
                                             checked={isVerified} 
-                                            onChange={() => toggleOrderVerified(order['Order ID'], isVerified)} 
-                                            className={`w-12 h-12 rounded-xl appearance-none border transition-all cursor-pointer ${isVerified ? 'bg-emerald-500 border-emerald-400' : 'bg-gray-800 border-gray-600'}`}
+                                            disabled={!canVerifyOrder()}
+                                            onChange={() => canVerifyOrder() && toggleOrderVerified(order['Order ID'], isVerified)} 
+                                            className={`w-12 h-12 rounded-xl appearance-none border transition-all ${canVerifyOrder() ? 'cursor-pointer' : 'cursor-not-allowed opacity-50'} ${isVerified ? 'bg-emerald-500 border-emerald-400' : 'bg-gray-800 border-gray-600'}`}
                                         />
                                         <div className="absolute inset-0 flex items-center justify-center pointer-events-none">{isUpdating ? <Spinner size="sm" /> : isVerified ? <svg className="w-6 h-6 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 13l4 4L19 7" /></svg> : <span className="text-[9px] font-black text-gray-500 uppercase">Check</span>}</div>
                                     </div>

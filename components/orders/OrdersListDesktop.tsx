@@ -29,7 +29,7 @@ const OrdersListDesktop: React.FC<OrdersListDesktopProps> = ({
     onEdit, onView, handlePrint, handleCopy, handleCopyTemplate, copiedId, copiedTemplateId,
     toggleOrderVerified, updatingIds, showBorders = false
 }) => {
-    const { appData, previewImage, currentUser } = useContext(AppContext);
+    const { appData, previewImage, currentUser, hasPermission } = useContext(AppContext);
     const containerRef = useRef<HTMLDivElement>(null);
     const [scrollTop, setScrollTop] = useState(0);
     const ROW_HEIGHT = 76;
@@ -94,11 +94,28 @@ const OrdersListDesktop: React.FC<OrdersListDesktopProps> = ({
 
     const canEditOrder = (order: ParsedOrder) => {
         if (!currentUser) return false;
+        
+        const isVerified = order.IsVerified === true || String(order.IsVerified).toUpperCase() === 'TRUE' || order.IsVerified === 'A';
+        
+        // If order is verified, only System Admin or role Admin can edit
+        if (isVerified) {
+            return currentUser.IsSystemAdmin || currentUser.Role === 'Admin';
+        }
+
+        // Check overall edit permission
         if (currentUser.IsSystemAdmin) return true;
+        if (!hasPermission('edit_order')) return false;
+
         const userTeams = (currentUser.Team || '').split(',').map(t => t.trim());
         if (!userTeams.includes(order.Team)) return false;
+        
         const orderTime = getSafeDateObj(order.Timestamp).getTime();
+        // 12 hours grace period for regular users
         return (Date.now() - orderTime) < 43200000;
+    };
+
+    const canVerifyOrder = () => {
+        return currentUser?.IsSystemAdmin || hasPermission('verify_order');
     };
 
     return (
@@ -253,8 +270,11 @@ const OrdersListDesktop: React.FC<OrdersListDesktopProps> = ({
                                         )}
                                         {checkColumnVisible('check') && (
                                             <td className="px-2 py-3 text-center">
-                                                <div className="relative flex items-center justify-center cursor-pointer group/check" onClick={() => !updatingIds.has(order['Order ID']) && toggleOrderVerified(order['Order ID'], order.IsVerified)}>
-                                                    <div className={`h-7 w-7 rounded-lg border-2 flex items-center justify-center transition-all duration-300 ${isVerified ? 'bg-emerald-500 border-emerald-400 shadow-[0_0_10px_rgba(16,185,129,0.4)] scale-105' : 'bg-gray-900 border-gray-700 hover:border-emerald-500/50 hover:bg-emerald-500/10'}`}>
+                                                <div 
+                                                    className={`relative flex items-center justify-center ${canVerifyOrder() ? 'cursor-pointer group/check' : 'cursor-not-allowed'}`} 
+                                                    onClick={() => canVerifyOrder() && !updatingIds.has(order['Order ID']) && toggleOrderVerified(order['Order ID'], order.IsVerified)}
+                                                >
+                                                    <div className={`h-7 w-7 rounded-lg border-2 flex items-center justify-center transition-all duration-300 ${isVerified ? 'bg-emerald-500 border-emerald-400 shadow-[0_0_10px_rgba(16,185,129,0.4)] scale-105' : 'bg-gray-900 border-gray-700'} ${canVerifyOrder() && !isVerified ? 'hover:border-emerald-500/50 hover:bg-emerald-500/10' : ''}`}>
                                                         {updatingIds.has(order['Order ID']) ? <Spinner size="xs" /> : <svg className={`w-4 h-4 text-white transition-opacity ${isVerified ? 'opacity-100' : 'opacity-0'}`} fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={4}><path d="M5 13l4 4L19 7" /></svg>}
                                                     </div>
                                                 </div>

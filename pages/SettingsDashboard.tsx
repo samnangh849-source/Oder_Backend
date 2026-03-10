@@ -14,6 +14,7 @@ import ConfigEditModal from '../components/admin/settings/ConfigEditModal';
 import SystemUpdateModal from '../components/admin/settings/SystemUpdateModal';
 import TelegramTemplateManager from '../components/admin/settings/TelegramTemplateManager';
 import DatabaseManagement from '../components/admin/settings/DatabaseManagement';
+import PermissionManagement from '../components/admin/settings/PermissionManagement';
 
 interface SettingsDashboardProps {
     onBack: () => void;
@@ -186,6 +187,8 @@ const SettingsDashboard: React.FC<SettingsDashboardProps> = ({ onBack, initialSe
                         </div>
                     ) : activeId === 'database' ? (
                         <DatabaseManagement />
+                    ) : activeId === 'permissions' ? (
+                        <PermissionManagement />
                     ) : (
                         <div className="bg-gray-800/30 border border-gray-700/50 rounded-3xl overflow-hidden shadow-2xl">
                             {/* Desktop Table View */}

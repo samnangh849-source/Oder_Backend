@@ -35,6 +35,8 @@ export interface AppContextType {
     fetchData: (force?: boolean) => Promise<void>;
     setCurrentUser: React.Dispatch<React.SetStateAction<User | null>>;
     setChatVisibility: (visible: boolean) => void;
+    hasPermission: (feature: string) => boolean;
+    updatePermission: (role: string, feature: string, isEnabled: boolean) => Promise<void>;
     isSidebarCollapsed: boolean;
     setIsSidebarCollapsed: (collapsed: boolean) => void;
     setIsChatOpen: (isOpen: boolean) => void;

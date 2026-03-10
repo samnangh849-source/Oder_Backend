@@ -21,6 +21,20 @@ export interface ConfigSection {
 
 export const configSections: ConfigSection[] = [
     { 
+        id: 'roles', 
+        title: 'តួនាទី (Roles)', 
+        description: 'គ្រប់គ្រងប្រភេទតួនាទីក្នុងប្រព័ន្ធ',
+        icon: '🎭', 
+        dataKey: 'roles', 
+        sheetName: 'Roles', 
+        primaryKeyField: 'RoleName', 
+        fields: [ 
+            { name: 'RoleName', label: 'ឈ្មោះតួនាទី', type: 'text' }, 
+            { name: 'Description', label: 'ការពន្យល់', type: 'text' } 
+        ], 
+        displayField: 'RoleName' 
+    },
+    { 
         id: 'users', 
         title: 'អ្នកប្រើប្រាស់', 
         description: 'គ្រប់គ្រងគណនីបុគ្គលិក និងសិទ្ធិប្រើប្រាស់',
@@ -160,6 +174,17 @@ export const configSections: ConfigSection[] = [
             { name: 'Description', label: 'ការពន្យល់', type: 'text' }
         ],
         displayField: 'Key'
+    },
+    {
+        id: 'permissions',
+        title: 'ការកំណត់សិទ្ធិ (Permissions)',
+        description: 'កំណត់មុខងារដែល Role នីមួយៗអាចប្រើប្រាស់បាន',
+        icon: '🔐',
+        dataKey: 'permissions',
+        sheetName: 'RolePermissions',
+        primaryKeyField: 'id',
+        fields: [],
+        displayField: 'Role'
     },
     {
         id: 'database',

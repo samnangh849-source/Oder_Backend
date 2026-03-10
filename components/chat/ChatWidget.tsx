@@ -274,22 +274,45 @@ const ChatWidget: React.FC<ChatWidgetProps> = ({ isOpen, onClose }) => {
     };
 
     useEffect(() => {
-        const protocol = window.location.protocol === 'https:' ? 'wss' : 'ws';
-        const host = WEB_APP_URL.replace(/^https?:\/\//, '');
-        const ws = new WebSocket(`${protocol}://${host}/api/chat/ws`);
-        wsRef.current = ws;
-        ws.onopen = () => { setConnectionStatus('connected'); fetchHistory(); };
-        ws.onmessage = (e) => {
-            const data = JSON.parse(e.data);
-            if (data.action === 'new_message') {
-                const msg = transformBackendMessage(data.payload);
-                setAndCacheMessages(prev => [...prev.filter(m => m.id !== msg.id), msg]);
-                processNotifications([msg]);
-                if (isUserAtBottomRef.current) setTimeout(() => scrollToBottom('smooth'), 100);
-            }
+        let ws: WebSocket | null = null;
+        
+        const connectWS = async () => {
+            const protocol = window.location.protocol === 'https:' ? 'wss' : 'ws';
+            const host = WEB_APP_URL.replace(/^https?:\/\//, '');
+            
+            // Get token for authentication
+            const session = await CacheService.get<{ token: string }>(CACHE_KEYS.SESSION);
+            const token = session?.token ? encodeURIComponent(session.token) : '';
+            
+            ws = new WebSocket(`${protocol}://${host}/api/chat/ws?token=Bearer%20${token}`);
+            wsRef.current = ws;
+
+            ws.onopen = () => { 
+                setConnectionStatus('connected'); 
+                fetchHistory(); 
+            };
+
+            ws.onmessage = (e) => {
+                const data = JSON.parse(e.data);
+                if (data.action === 'new_message') {
+                    const msg = transformBackendMessage(data.payload);
+                    setAndCacheMessages(prev => [...prev.filter(m => m.id !== msg.id), msg]);
+                    processNotifications([msg]);
+                    if (isUserAtBottomRef.current) setTimeout(() => scrollToBottom('smooth'), 100);
+                }
+            };
+
+            ws.onclose = () => {
+                setConnectionStatus('disconnected');
+                // Reconnect after 5 seconds if still open
+                if (isOpenRef.current) {
+                    setTimeout(connectWS, 5000);
+                }
+            };
         };
-        ws.onclose = () => setConnectionStatus('disconnected');
-        return () => ws.close();
+
+        connectWS();
+        return () => { if (ws) ws.close(); };
     }, [fetchHistory, transformBackendMessage, setAndCacheMessages, processNotifications]);
 
     const handleScroll = () => {

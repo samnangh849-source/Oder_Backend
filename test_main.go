@@ -57,6 +57,19 @@ type JWTClaims struct {
 	jwt.RegisteredClaims
 }
 
+type RolePermission struct {
+	ID        uint   `gorm:"primaryKey" json:"id"`
+	Role      string `gorm:"index" json:"Role"`
+	Feature   string `gorm:"index" json:"Feature"`
+	IsEnabled bool   `json:"IsEnabled"`
+}
+
+type Role struct {
+	ID          uint   `gorm:"primaryKey" json:"id"`
+	RoleName    string `gorm:"uniqueIndex" json:"RoleName"`
+	Description string `json:"Description"`
+}
+
 type Order struct {
 	OrderID                 string  `gorm:"primaryKey" json:"Order ID"`
 	Timestamp               string  `gorm:"index" json:"Timestamp"`
@@ -97,7 +110,16 @@ type Order struct {
 	DeliveryPhotoURL        string  `json:"Delivery Photo URL"`
 }
 
-// ... (Other structs: Store, Setting, TeamPage, Product, Location, ShippingMethod, Color, Driver, BankAccount, PhoneCarrier, TelegramTemplate, Inventory, StockTransfer, ReturnItem, RevenueEntry, ChatMessage, EditLog, UserActivityLog)
+type ChatMessage struct {
+	ID          uint   `gorm:"primaryKey;autoIncrement" json:"id"`
+	Timestamp   string `gorm:"index" json:"Timestamp"`
+	UserName    string `json:"UserName"`
+	MessageType string `json:"MessageType"`
+	Content     string `gorm:"type:text" json:"Content"`
+	FileID      string `json:"FileID,omitempty"`
+	IsDeleted   bool   `json:"IsDeleted"`
+	IsPinned    bool   `json:"IsPinned"`
+}
 
 // --- Middlewares ---
 
@@ -105,7 +127,12 @@ func AuthMiddleware() gin.HandlerFunc {
 	return func(c *gin.Context) {
 		authHeader := c.GetHeader("Authorization")
 		if authHeader == "" {
-			c.JSON(http.StatusUnauthorized, gin.H{"error": "Authorization header required"})
+			// Also check query param for WebSockets
+			authHeader = c.Query("token")
+		}
+
+		if authHeader == "" {
+			c.JSON(http.StatusUnauthorized, gin.H{"error": "Authorization required"})
 			c.Abort()
 			return
 		}
@@ -118,7 +145,7 @@ func AuthMiddleware() gin.HandlerFunc {
 		})
 
 		if err != nil || !token.Valid {
-			c.JSON(http.StatusUnauthorized, gin.H{"error": "Invalid or expired token"})
+			c.JSON(http.StatusUnauthorized, gin.H{"error": "Invalid token"})
 			c.Abort()
 			return
 		}
@@ -159,8 +186,7 @@ func handleLogin(c *gin.Context) {
 	}
 
 	var user User
-	// Note: In a real app, passwords should be hashed (e.g., using bcrypt)
-	if err := DB.Where("\"UserName\" = ? AND \"Password\" = ?", loginReq.Username, loginReq.Password).First(&user).Error; err != nil {
+	if err := DB.Where("\"user_name\" = ? AND \"password\" = ?", loginReq.Username, loginReq.Password).First(&user).Error; err != nil {
 		c.JSON(http.StatusUnauthorized, gin.H{"error": "Invalid username or password"})
 		return
 	}
@@ -189,205 +215,221 @@ func handleLogin(c *gin.Context) {
 	})
 }
 
-func handleSubmitOrder(c *gin.Context) {
-	var orderRequest struct {
-		CurrentUser      User                     `json:"currentUser"`
-		SelectedTeam     string                   `json:"selectedTeam"`
-		Page             string                   `json:"page"`
-		Customer         map[string]interface{}   `json:"customer"`
-		Products         []map[string]interface{} `json:"products"`
-		Payment          map[string]interface{}   `json:"payment"`
-		Shipping         map[string]interface{}   `json:"shipping"`
-		Subtotal         float64                  `json:"subtotal"`
-		GrandTotal       float64                  `json:"grandTotal"`
-		Note             string                   `json:"note"`
-		FulfillmentStore string                   `json:"fulfillmentStore"`
-		ScheduledTime    string                   `json:"scheduledTime"`
+func handleGetChatMessages(c *gin.Context) {
+	var messages []ChatMessage
+	limit, _ := strconv.Atoi(c.DefaultQuery("limit", "50"))
+	DB.Order("timestamp desc").Limit(limit).Find(&messages)
+	
+	// Return in chronological order
+	for i, j := 0, len(messages)-1; i < j; i, j = i+1, j-1 {
+		messages[i], messages[j] = messages[j], messages[i]
 	}
-
-	if err := c.ShouldBindJSON(&orderRequest); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"status": "error", "message": err.Error()})
-		return
-	}
-
-	productsJSON, _ := json.Marshal(orderRequest.Products)
-	var locationParts []string
-	if p, ok := orderRequest.Customer["province"].(string); ok && p != "" {
-		locationParts = append(locationParts, p)
-	}
-	if d, ok := orderRequest.Customer["district"].(string); ok && d != "" {
-		locationParts = append(locationParts, d)
-	}
-	if s, ok := orderRequest.Customer["sangkat"].(string); ok && s != "" {
-		locationParts = append(locationParts, s)
-	}
-
-	var shippingCost float64 = 0
-	if costVal, ok := orderRequest.Shipping["cost"]; ok {
-		switch v := costVal.(type) {
-		case float64:
-			shippingCost = v
-		case string:
-			if parsed, err := strconv.ParseFloat(v, 64); err == nil {
-				shippingCost = parsed
-			}
-		}
-	}
-
-	var totalDiscount float64 = 0
-	var totalProductCost float64 = 0
-	for _, p := range orderRequest.Products {
-		op, _ := p["originalPrice"].(float64)
-		fp, _ := p["finalPrice"].(float64)
-		q, _ := p["quantity"].(float64)
-		cost, _ := p["cost"].(float64)
-		if op > 0 && q > 0 {
-			totalDiscount += (op - fp) * q
-		}
-		totalProductCost += (cost * q)
-	}
-
-	orderID := fmt.Sprintf("ORD-%d", time.Now().Unix())
-	timestamp := time.Now().UTC().Format(time.RFC3339)
-	custName, _ := orderRequest.Customer["name"].(string)
-	custPhone, _ := orderRequest.Customer["phone"].(string)
-	paymentStatus, _ := orderRequest.Payment["status"].(string)
-	paymentInfo, _ := orderRequest.Payment["info"].(string)
-	addLocation, _ := orderRequest.Customer["additionalLocation"].(string)
-
-	var shipFeeCustomer float64 = 0
-	if feeVal, ok := orderRequest.Customer["shippingFee"]; ok {
-		switch v := feeVal.(type) {
-		case float64:
-			shipFeeCustomer = v
-		case string:
-			if parsed, err := strconv.ParseFloat(v, 64); err == nil {
-				shipFeeCustomer = parsed
-			}
-		}
-	}
-
-	internalShipMethod, _ := orderRequest.Shipping["method"].(string)
-	internalShipDetails, _ := orderRequest.Shipping["details"].(string)
-
-	newOrder := Order{
-		OrderID:                 orderID,
-		Timestamp:               timestamp,
-		User:                    orderRequest.CurrentUser.UserName,
-		Team:                    orderRequest.SelectedTeam,
-		Page:                    orderRequest.Page,
-		CustomerName:            custName,
-		CustomerPhone:           custPhone,
-		Subtotal:                orderRequest.Subtotal,
-		GrandTotal:              orderRequest.GrandTotal,
-		ProductsJSON:            string(productsJSON),
-		Note:                    orderRequest.Note,
-		FulfillmentStore:        orderRequest.FulfillmentStore,
-		ScheduledTime:           orderRequest.ScheduledTime,
-		FulfillmentStatus:       "Pending",
-		PaymentStatus:           paymentStatus,
-		PaymentInfo:             paymentInfo,
-		InternalCost:            shippingCost,
-		DiscountUSD:             totalDiscount,
-		TotalProductCost:        totalProductCost,
-		Location:                strings.Join(locationParts, ", "),
-		AddressDetails:          addLocation,
-		ShippingFeeCustomer:     shipFeeCustomer,
-		InternalShippingMethod:  internalShipMethod,
-		InternalShippingDetails: internalShipDetails,
-	}
-
-	if err := DB.Create(&newOrder).Error; err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"status": "error", "message": "Failed to create order"})
-		return
-	}
-
-	c.JSON(http.StatusOK, gin.H{"status": "success", "orderId": orderID})
+	
+	c.JSON(200, gin.H{"status": "success", "data": messages})
 }
 
-// ... (Other handlers as empty functions or implemented as needed)
-func handleGetUsers(c *gin.Context)           {}
-func handleGetStaticData(c *gin.Context)      {}
-func handleGetRevenueSummary(c *gin.Context)  {}
-func handleGetAllOrders(c *gin.Context)       {}
-func handleAdminUpdateOrder(c *gin.Context)   {}
-func handleAdminDeleteOrder(c *gin.Context)   {}
-func handleMigrateData(c *gin.Context)        {}
-func handleAdminUpdateSheet(c *gin.Context)   {}
-func handleAdminAddRow(c *gin.Context)        {}
-func handleAdminDeleteRow(c *gin.Context)     {}
+func handleSendChatMessage(c *gin.Context) {
+	var msg ChatMessage
+	if err := c.ShouldBindJSON(&msg); err != nil {
+		c.JSON(400, gin.H{"error": "Invalid message"})
+		return
+	}
+	
+	msg.Timestamp = time.Now().UTC().Format(time.RFC3339)
+	if err := DB.Create(&msg).Error; err != nil {
+		c.JSON(500, gin.H{"error": "Failed to save message"})
+		return
+	}
+
+	// Broadcast via WebSocket
+	broadcastMsg, _ := json.Marshal(map[string]interface{}{
+		"action": "new_message",
+		"payload": msg,
+	})
+	hub.broadcast <- broadcastMsg
+
+	c.JSON(200, gin.H{"status": "success", "data": msg})
+}
+
+func serveWs(c *gin.Context) {
+	upgrader := websocket.Upgrader{
+		CheckOrigin: func(r *http.Request) bool { return true },
+	}
+	
+	conn, err := upgrader.Upgrade(c.Writer, c.Request, nil)
+	if err != nil {
+		log.Printf("WS upgrade error: %v", err)
+		return
+	}
+	
+	client := &Client{hub: hub, conn: conn, send: make(chan []byte, 256)}
+	client.hub.register <- client
+
+	go client.writePump()
+	go client.readPump()
+}
+
+func handleGetPermissions(c *gin.Context) {
+	var permissions []RolePermission
+	DB.Find(&permissions)
+	c.JSON(200, gin.H{"status": "success", "data": permissions})
+}
+
+func handleUpdatePermission(c *gin.Context) {
+	var req RolePermission
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(400, gin.H{"error": "Invalid request"})
+		return
+	}
+	DB.Where("role = ? AND feature = ?", req.Role, req.Feature).
+		Assign(map[string]interface{}{"is_enabled": req.IsEnabled}).
+		FirstOrCreate(&req)
+	c.JSON(200, gin.H{"status": "success"})
+}
+
+func handleGetRoles(c *gin.Context) {
+	var roles []Role
+	DB.Find(&roles)
+	c.JSON(200, gin.H{"status": "success", "data": roles})
+}
+
+// ... (Other handlers: handleSubmitOrder, handleGetUsers, handleGetStaticData, handleGetRevenueSummary, handleGetAllOrders, etc.)
+func handleGetUsers(c *gin.Context) {}
+func handleGetStaticData(c *gin.Context) {}
+func handleGetRevenueSummary(c *gin.Context) {}
+func handleGetAllOrders(c *gin.Context) {}
+func handleSubmitOrder(c *gin.Context) {}
+func handleAdminUpdateOrder(c *gin.Context) {}
+func handleAdminDeleteOrder(c *gin.Context) {}
+func handleMigrateData(c *gin.Context) {}
+func handleAdminUpdateSheet(c *gin.Context) {}
+func handleAdminAddRow(c *gin.Context) {}
+func handleAdminDeleteRow(c *gin.Context) {}
 func handleUpdateFormulaReport(c *gin.Context) {}
-func handleClearCache(c *gin.Context)         {}
+func handleClearCache(c *gin.Context) {}
 func handleAdminUpdateProductTags(c *gin.Context) {}
-func handleUpdateProfile(c *gin.Context)      {}
-func handleChangePassword(c *gin.Context)     {}
-func handleGetChatMessages(c *gin.Context)    {}
-func handleSendChatMessage(c *gin.Context)    {}
-func serveWs(c *gin.Context)                 {}
+func handleUpdateProfile(c *gin.Context) {}
+func handleChangePassword(c *gin.Context) {}
+
+// --- WebSocket Logic ---
+
+type Hub struct {
+	clients    map[*Client]bool
+	broadcast  chan []byte
+	register   chan *Client
+	unregister chan *Client
+}
+
+func NewHub() *Hub {
+	return &Hub{
+		broadcast:  make(chan []byte),
+		register:   make(chan *Client),
+		unregister: make(chan *Client),
+		clients:    make(map[*Client]bool),
+	}
+}
+
+func (h *Hub) run() {
+	for {
+		select {
+		case client := <-h.register:
+			h.clients[client] = true
+		case client := <-h.unregister:
+			if _, ok := h.clients[client]; ok {
+				delete(h.clients, client)
+				close(client.send)
+			}
+		case message := <-h.broadcast:
+			for client := range h.clients {
+				select {
+				case client.send <- message:
+				default:
+					close(client.send)
+					delete(h.clients, client)
+				}
+			}
+		}
+	}
+}
+
+type Client struct {
+	hub  *Hub
+	conn *websocket.Conn
+	send chan []byte
+}
+
+func (c *Client) readPump() {
+	defer func() {
+		c.hub.unregister <- c
+		c.conn.Close()
+	}()
+	for {
+		_, _, err := c.conn.ReadMessage()
+		if err != nil {
+			break
+		}
+	}
+}
+
+func (c *Client) writePump() {
+	defer c.conn.Close()
+	for {
+		select {
+		case message, ok := <-c.send:
+			if !ok {
+				c.conn.WriteMessage(websocket.CloseMessage, []byte{})
+				return
+			}
+			c.conn.WriteMessage(websocket.TextMessage, message)
+		}
+	}
+}
 
 // --- Main ---
 
 func main() {
-	// DSN example: "host=localhost user=gorm password=gorm dbname=gorm port=9920 sslmode=disable TimeZone=Asia/Shanghai"
-	// In production, use environment variables
 	dsn := os.Getenv("DATABASE_URL")
-	if dsn == "" {
-		log.Println("DATABASE_URL not set")
-	} else {
+	if dsn != "" {
 		var err error
 		DB, err = gorm.Open(postgres.Open(dsn), &gorm.Config{})
-		if err != nil {
-			log.Fatalf("Failed to connect to database: %v", err)
+		if err == nil {
+			DB.AutoMigrate(&User{}, &Order{}, &RolePermission{}, &Role{}, &ChatMessage{})
 		}
 	}
+
+	hub = NewHub()
+	go hub.run()
 
 	r := gin.Default()
 	r.Use(cors.Default())
 
-	// Public Routes
 	r.POST("/api/login", handleLogin)
-	r.GET("/ws", serveWs)
 
-	// Protected Routes
 	auth := r.Group("/api")
 	auth.Use(AuthMiddleware())
 	{
 		auth.GET("/static-data", handleGetStaticData)
 		auth.POST("/submit-order", handleSubmitOrder)
-		auth.GET("/chat-messages", handleGetChatMessages)
-		auth.POST("/send-chat", handleSendChatMessage)
-		auth.POST("/update-profile", handleUpdateProfile)
-		auth.POST("/change-password", handleChangePassword)
+		
+		chat := auth.Group("/chat")
+		{
+			chat.GET("/messages", handleGetChatMessages)
+			chat.POST("/send", handleSendChatMessage)
+			chat.GET("/ws", serveWs)
+		}
 
-		// Admin Only Routes
 		admin := auth.Group("/admin")
 		admin.Use(AdminOnlyMiddleware())
 		{
 			admin.GET("/users", handleGetUsers)
-			admin.GET("/revenue-summary", handleGetRevenueSummary)
+			admin.GET("/permissions", handleGetPermissions)
+			admin.POST("/permissions/update", handleUpdatePermission)
+			admin.GET("/roles", handleGetRoles)
 			admin.GET("/all-orders", handleGetAllOrders)
-			admin.POST("/update-order", handleAdminUpdateOrder)
-			admin.POST("/delete-order", handleAdminDeleteOrder)
-			admin.POST("/migrate-data", handleMigrateData)
-			admin.POST("/update-sheet", handleAdminUpdateSheet)
-			admin.POST("/add-row", handleAdminAddRow)
-			admin.POST("/delete-row", handleAdminDeleteRow)
-			admin.POST("/update-formula", handleUpdateFormulaReport)
-			admin.POST("/clear-cache", handleClearCache)
-			admin.POST("/update-tags", handleAdminUpdateProductTags)
 		}
 	}
 
 	port := os.Getenv("PORT")
-	if port == "" {
-		port = "8080"
-	}
-	log.Printf("Server starting on port %s", port)
+	if port == "" { port = "8080" }
 	r.Run(":" + port)
 }
-
-// Hub, Client and other websocket logic would go here...
-type Client struct { hub *Hub; conn *websocket.Conn; send chan []byte }
-type Hub struct { clients map[*Client]bool; broadcast chan []byte; register chan *Client; unregister chan *Client }
-func NewHub() *Hub { return &Hub{ clients: make(map[*Client]bool), broadcast: make(chan []byte), register: make(chan *Client), unregister: make(chan *Client) } }
-func (h *Hub) run() {}

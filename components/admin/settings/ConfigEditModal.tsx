@@ -15,7 +15,7 @@ interface ConfigEditModalProps {
 }
 
 const ConfigEditModal: React.FC<ConfigEditModalProps> = ({ section, item, onClose, onSave }) => {
-    const { refreshData } = useContext(AppContext);
+    const { refreshData, appData } = useContext(AppContext);
     const [formData, setFormData] = useState<any>({}); 
     const [uploadingFields, setUploadingFields] = useState<Record<string, boolean>>({});
     const [isLoading, setIsLoading] = useState(false);
@@ -125,6 +125,28 @@ const ConfigEditModal: React.FC<ConfigEditModalProps> = ({ section, item, onClos
                                 <input type={passwordVisibility[field.name] ? 'text' : 'password'} name={field.name} value={formData[field.name] || ''} onChange={handleChange} className="form-input !py-2.5 pr-12" placeholder={item ? 'ទុកទទេបើមិនចង់ប្តូរ' : 'បញ្ចូលពាក្យសម្ងាត់'} />
                                 <button type="button" onClick={() => setPasswordVisibility(prev => ({ ...prev, [field.name]: !prev[field.name] }))} className="absolute inset-y-0 right-0 px-4 text-gray-500 hover:text-white transition-colors"><svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d={passwordVisibility[field.name] ? "M13.875 18.825A10.05 10.05 0 0112 19c-4.478 0-8.268-2.943-9.542-7 1.274-4.057 5.064-7 9.542-7 .847 0 1.67 .126 2.454 .364m-3.033 2.446a3 3 0 11-4.243 4.243m4.242-4.242l4.243 4.243M3 3l18 18" : "M15 12a3 3 0 11-6 0 3 3 0 016 0z M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z"} /></svg></button>
                             </div>
+                        ) : (section.id === 'users' && field.name === 'Role') ? (
+                            <select 
+                                name={field.name} 
+                                value={formData[field.name] || ''} 
+                                onChange={(e: any) => handleChange(e)}
+                                className="form-input !py-2.5 bg-gray-900 text-white"
+                            >
+                                <option value="">-- ជ្រើសរើសតួនាទី (Select Role) --</option>
+                                {(appData.roles || []).map(r => (
+                                    <option key={r.id || r.RoleName} value={r.RoleName}>{r.RoleName}</option>
+                                ))}
+                                {/* Fallback roles in case roles table is empty */}
+                                {(!appData.roles || appData.roles.length === 0) && (
+                                    <>
+                                        <option value="Admin">Admin</option>
+                                        <option value="Sales">Sales</option>
+                                        <option value="Fulfillment">Fulfillment</option>
+                                        <option value="Stock">Stock</option>
+                                        <option value="Driver">Driver</option>
+                                    </>
+                                )}
+                            </select>
                         ) : (
                             <input type={field.type} name={field.name} value={formData[field.name] || ''} onChange={handleChange} className="form-input !py-2.5" readOnly={item && field.name === section.primaryKeyField} />
                         )}
