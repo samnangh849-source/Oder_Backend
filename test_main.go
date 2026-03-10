@@ -1,22 +1,19 @@
 package main
 
 import (
-	"bytes"
 	"context"
-	"encoding/base64"
 	"encoding/json"
 	"fmt"
-	"io"
 	"log"
 	"net/http"
 	"os"
 	"strconv"
 	"strings"
 	"time"
-	"unicode"
 
 	"github.com/gin-contrib/cors"
 	"github.com/gin-gonic/gin"
+	"github.com/golang-jwt/jwt/v5"
 	"github.com/gorilla/websocket"
 	"google.golang.org/api/drive/v3"
 	"google.golang.org/api/option"
@@ -25,7 +22,6 @@ import (
 	// Import GORM & PostgreSQL Driver
 	"gorm.io/driver/postgres"
 	"gorm.io/gorm"
-	"gorm.io/gorm/logger"
 )
 
 var (
@@ -37,37 +33,30 @@ var (
 	appsScriptURL    string
 	appsScriptSecret string
 	hub              *Hub
+	jwtSecret        = []byte("your-very-secure-secret-key") // Change this in production
 )
 
-var sheetRanges = map[string]string{}
-type User struct { UserName string `gorm:"primaryKey" json:"UserName"`; Password string `json:"Password"`; Team string `json:"Team"`; FullName string `json:"FullName"`; ProfilePictureURL string `json:"ProfilePictureURL"`; Role string `json:"Role"`; IsSystemAdmin bool `json:"IsSystemAdmin"`; TelegramUsername string `json:"TelegramUsername"` }
-type Store struct { StoreName string `gorm:"primaryKey" json:"StoreName"`; StoreType string `json:"StoreType"`; Address string `json:"Address"`; TelegramBotToken string `json:"TelegramBotToken"`; TelegramGroupID string `json:"TelegramGroupID"`; TelegramTopicID string `json:"TelegramTopicID"`; LabelPrinterURL string `json:"LabelPrinterURL"`; CODAlertGroupID string `json:"CODAlertGroupID"` }
-type Setting struct { ConfigKey string `gorm:"primaryKey" json:"ConfigKey"`; ConfigValue string `json:"ConfigValue"` }
+// --- Models ---
 
-type TeamPage struct { 
-	ID              uint   `gorm:"primaryKey;autoIncrement" json:"ID"`
-	Team            string `json:"Team"`
-	PageName        string `json:"PageName"`
-	TelegramValue   string `json:"TelegramValue"`
-	PageLogoURL     string `json:"PageLogoURL"`
-	DefaultStore    string `json:"DefaultStore"`
-	TelegramTopicID string `json:"TelegramTopicID"`
+type User struct {
+	UserName          string `gorm:"primaryKey" json:"UserName"`
+	Password          string `json:"Password"`
+	Team              string `json:"Team"`
+	FullName          string `json:"FullName"`
+	ProfilePictureURL string `json:"ProfilePictureURL"`
+	Role              string `json:"Role"`
+	IsSystemAdmin     bool   `json:"IsSystemAdmin"`
+	TelegramUsername  string `json:"TelegramUsername"`
 }
 
-type Product struct { Barcode string `gorm:"primaryKey" json:"Barcode"`; ProductName string `json:"ProductName"`; Price float64 `json:"Price"`; Cost float64 `json:"Cost"`; ImageURL string `json:"ImageURL"`; Tags string `json:"Tags"` }
-type Location struct { ID uint `gorm:"primaryKey;autoIncrement"`; Province string `json:"Province"`; District string `json:"District"`; Sangkat string `json:"Sangkat"` }
-type ShippingMethod struct { MethodName string `gorm:"primaryKey" json:"MethodName"`; LogoURL string `json:"LogosURL"`; AllowManualDriver bool `json:"AllowManualDriver"`; RequireDriverSelection bool `json:"RequireDriverSelection"`; EnableCODAlert bool `json:"EnableCODAlert"`; AlertTopicID string `json:"AlertTopicID"` }
-type Color struct { ColorName string `gorm:"primaryKey" json:"ColorName"` }
-type Driver struct { DriverName string `gorm:"primaryKey" json:"DriverName"`; ImageURL string `json:"ImageURL"`; Phone string `json:"Phone"`; VehiclePlate string `json:"VehiclePlate"` }
-type BankAccount struct { BankName string `gorm:"primaryKey" json:"BankName"`; LogoURL string `json:"LogoURL"`; AssignedStores string `json:"AssignedStores"` }
-type PhoneCarrier struct { CarrierName string `gorm:"primaryKey" json:"CarrierName"`; Prefixes string `json:"Prefixes"`; CarrierLogoURL string `json:"CarrierLogoURL"` }
-type TelegramTemplate struct { ID uint `gorm:"primaryKey;autoIncrement"`; Team string `json:"Team"`; Part float64 `json:"Part"`; Template string `json:"Template"` }
+type JWTClaims struct {
+	UserName      string `json:"username"`
+	Role          string `json:"role"`
+	IsSystemAdmin bool   `json:"is_system_admin"`
+	Team          string `json:"team"`
+	jwt.RegisteredClaims
+}
 
-type Inventory struct { ID uint `gorm:"primaryKey;autoIncrement"`; StoreName string `gorm:"index" json:"StoreName"`; Barcode string `gorm:"index" json:"Barcode"`; Quantity float64 `json:"Quantity"`; LastUpdated string `json:"LastUpdated"`; UpdatedBy string `json:"UpdatedBy"` }
-type StockTransfer struct { TransferID string `gorm:"primaryKey" json:"TransferID"`; Timestamp string `json:"Timestamp"`; FromStore string `json:"FromStore"`; ToStore string `json:"ToStore"`; Barcode string `json:"Barcode"`; Quantity float64 `json:"Quantity"`; Status string `json:"Status"`; RequestedBy string `json:"RequestedBy"`; ApprovedBy string `json:"ApprovedBy"`; ReceivedBy string `json:"ReceivedBy"` }
-type ReturnItem struct { ReturnID string `gorm:"primaryKey" json:"ReturnID"`; Timestamp string `json:"Timestamp"`; OrderID string `json:"OrderID"`; StoreName string `json:"StoreName"`; Barcode string `json:"Barcode"`; Quantity float64 `json:"Quantity"`; Reason string `json:"Reason"`; IsRestocked bool `json:"IsRestocked"`; HandledBy string `json:"HandledBy"` }
-
-// ✅ ជួសជុល JSON Tags ដើម្បីឱ្យត្រូវនឹង Google Sheet "AllOrders" ទាំងស្រុងសម្រាប់ការទាញទិន្នន័យ (Migration) និង Frontend
 type Order struct {
 	OrderID                 string  `gorm:"primaryKey" json:"Order ID"`
 	Timestamp               string  `gorm:"index" json:"Timestamp"`
@@ -83,10 +72,10 @@ type Order struct {
 	Subtotal                float64 `json:"Subtotal"`
 	GrandTotal              float64 `json:"Grand Total"`
 	ProductsJSON            string  `gorm:"type:text" json:"Products (JSON)"`
-	InternalShippingMethod  string  `json:"Internal Shipping Method"` // ប្រើសម្រាប់ Logistics
+	InternalShippingMethod  string  `json:"Internal Shipping Method"`
 	InternalShippingDetails string  `json:"Internal Shipping Details"`
-	InternalCost            float64 `json:"Internal Cost"`            // ប្រើសម្រាប់ Exp. Cost
-	PaymentStatus           string  `json:"Payment Status"`           // ប្រើសម្រាប់ Status (Paid/Unpaid)
+	InternalCost            float64 `json:"Internal Cost"`
+	PaymentStatus           string  `json:"Payment Status"`
 	PaymentInfo             string  `json:"Payment Info"`
 	DiscountUSD             float64 `json:"Discount ($)"`
 	DeliveryUnpaid          float64 `json:"Delivery Unpaid"`
@@ -108,81 +97,131 @@ type Order struct {
 	DeliveryPhotoURL        string  `json:"Delivery Photo URL"`
 }
 
-type RevenueEntry struct { ID uint `gorm:"primaryKey;autoIncrement"`; Timestamp string `json:"Timestamp"`; Team string `json:"Team"`; Page string `json:"Page"`; Revenue float64 `json:"Revenue"`; FulfillmentStore string `json:"Fulfillment Store"` }
-type ChatMessage struct { ID uint `gorm:"primaryKey;autoIncrement"`; Timestamp string `gorm:"index" json:"Timestamp"`; UserName string `json:"UserName"`; MessageType string `json:"MessageType"`; Content string `gorm:"type:text" json:"Content"`; FileID string `json:"FileID,omitempty"` }
-type EditLog struct { ID uint `gorm:"primaryKey;autoIncrement"`; Timestamp string `json:"Timestamp"`; OrderID string `json:"OrderID"`; Requester string `json:"Requester"`; FieldChanged string `json:"Field Changed"`; OldValue string `json:"Old Value"`; NewValue string `json:"New Value"` }
-type UserActivityLog struct { ID uint `gorm:"primaryKey;autoIncrement"`; Timestamp string `json:"Timestamp"`; User string `json:"User"`; Action string `json:"Action"`; Details string `json:"Details"` }
+// ... (Other structs: Store, Setting, TeamPage, Product, Location, ShippingMethod, Color, Driver, BankAccount, PhoneCarrier, TelegramTemplate, Inventory, StockTransfer, ReturnItem, RevenueEntry, ChatMessage, EditLog, UserActivityLog)
 
-type DeleteOrderRequest struct { OrderID string `json:"orderId"`; Team string `json:"team"`; UserName string `json:"userName"` }
+// --- Middlewares ---
 
-func initDB() {}
-func createGoogleAPIClient(ctx context.Context) error { return nil }
+func AuthMiddleware() gin.HandlerFunc {
+	return func(c *gin.Context) {
+		authHeader := c.GetHeader("Authorization")
+		if authHeader == "" {
+			c.JSON(http.StatusUnauthorized, gin.H{"error": "Authorization header required"})
+			c.Abort()
+			return
+		}
 
-func mapToDBColumn(key string) string { return "" }
-func isValidOrderColumn(col string) bool { return true }
-func parseBase64(b64 string) ([]byte, error) { return nil, nil }
+		tokenString := strings.TrimPrefix(authHeader, "Bearer ")
+		claims := &JWTClaims{}
 
-type AppsScriptRequest struct {
-	Action         string      `json:"action"`
-	Secret         string      `json:"secret"`
-	UploadFolderID string      `json:"uploadFolderID,omitempty"`
-	FileData       string      `json:"fileData,omitempty"`
-	FileName       string      `json:"fileName,omitempty"`
-	MimeType       string      `json:"mimeType,omitempty"`
-	UserName       string      `json:"userName,omitempty"`
-	OrderData      interface{} `json:"orderData,omitempty"`
-	OrderID        string      `json:"orderId,omitempty"`
-	TargetColumn   string      `json:"targetColumn,omitempty"`
+		token, err := jwt.ParseWithClaims(tokenString, claims, func(token *jwt.Token) (interface{}, error) {
+			return jwtSecret, nil
+		})
+
+		if err != nil || !token.Valid {
+			c.JSON(http.StatusUnauthorized, gin.H{"error": "Invalid or expired token"})
+			c.Abort()
+			return
+		}
+
+		c.Set("username", claims.UserName)
+		c.Set("role", claims.Role)
+		c.Set("is_system_admin", claims.IsSystemAdmin)
+		c.Set("team", claims.Team)
+		c.Next()
+	}
 }
 
-type AppsScriptResponse struct {
-	Status     string `json:"status"`
-	URL        string `json:"url,omitempty"`
-	FileID     string `json:"fileID,omitempty"`
-	Message    string `json:"message,omitempty"`
-	MessageIds struct {
-		ID1 string `json:"id1"`
-		ID2 string `json:"id2"`
-	} `json:"messageIds,omitempty"`
+func AdminOnlyMiddleware() gin.HandlerFunc {
+	return func(c *gin.Context) {
+		role, _ := c.Get("role")
+		isAdmin, _ := c.Get("is_system_admin")
+
+		if role != "Admin" && isAdmin != true {
+			c.JSON(http.StatusForbidden, gin.H{"error": "Admin access required"})
+			c.Abort()
+			return
+		}
+		c.Next()
+	}
 }
 
-type OrderJob struct { JobID string; OrderID string; UserName string; OrderData map[string]interface{} }
-var orderChannel = make(chan OrderJob, 1000)
+// --- Handlers ---
 
-func startOrderWorker() {}
-func startScheduler() {}
-func callAppsScriptPOST(requestData AppsScriptRequest) (AppsScriptResponse, error) { return AppsScriptResponse{}, nil }
-func fetchSheetDataFromAPI(sheetName string) ([]map[string]interface{}, error) { return nil, nil }
-func isNumericHeader(h string) bool { return true }
-func isBoolHeader(h string) bool { return true }
-func convertSheetValuesToMaps(values *sheets.ValueRange) ([]map[string]interface{}, error) { return nil, nil }
-func fetchSheetDataToStruct(sheetName string, target interface{}) error { return nil }
-func handleMigrateData(c *gin.Context) {}
+func handleLogin(c *gin.Context) {
+	var loginReq struct {
+		Username string `json:"username"`
+		Password string `json:"password"`
+	}
 
-type Client struct { hub *Hub; conn *websocket.Conn; send chan []byte }
-type Hub struct { clients map[*Client]bool; broadcast chan []byte; register chan *Client; unregister chan *Client }
-func NewHub() *Hub { return &Hub{} }
-func (h *Hub) run() {}
-func (c *Client) writePump() {}
-func serveWs(c *gin.Context) {}
+	if err := c.ShouldBindJSON(&loginReq); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid request"})
+		return
+	}
 
-func handleGetUsers(c *gin.Context) {}
-func handleGetStaticData(c *gin.Context) {}
-func handleGetRevenueSummary(c *gin.Context) {}
-func handleGetAllOrders(c *gin.Context) {}
+	var user User
+	// Note: In a real app, passwords should be hashed (e.g., using bcrypt)
+	if err := DB.Where("\"UserName\" = ? AND \"Password\" = ?", loginReq.Username, loginReq.Password).First(&user).Error; err != nil {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "Invalid username or password"})
+		return
+	}
 
-// ✅ ជួសជុលបញ្ហាដែលបាត់ Payment Status, Info និង Internal Cost
+	expirationTime := time.Now().Add(24 * time.Hour)
+	claims := &JWTClaims{
+		UserName:      user.UserName,
+		Role:          user.Role,
+		IsSystemAdmin: user.IsSystemAdmin,
+		Team:          user.Team,
+		RegisteredClaims: jwt.RegisteredClaims{
+			ExpiresAt: jwt.NewNumericDate(expirationTime),
+		},
+	}
+
+	token := jwt.NewWithClaims(jwt.SigningMethodHS256, claims)
+	tokenString, err := token.SignedString(jwtSecret)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Could not generate token"})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{
+		"token": tokenString,
+		"user":  user,
+	})
+}
+
 func handleSubmitOrder(c *gin.Context) {
-	var orderRequest struct { CurrentUser User `json:"currentUser"`; SelectedTeam string `json:"selectedTeam"`; Page string `json:"page"`; Customer map[string]interface{} `json:"customer"`; Products []map[string]interface{} `json:"products"`; Payment map[string]interface{} `json:"payment"`; Shipping map[string]interface{} `json:"shipping"`; Subtotal float64 `json:"subtotal"`; GrandTotal float64 `json:"grandTotal"`; Note string `json:"note"`; FulfillmentStore string `json:"fulfillmentStore"`; ScheduledTime string `json:"scheduledTime"` }
-	if err := c.ShouldBindJSON(&orderRequest); err != nil { c.JSON(400, gin.H{"status": "error"}); return }
-	
+	var orderRequest struct {
+		CurrentUser      User                     `json:"currentUser"`
+		SelectedTeam     string                   `json:"selectedTeam"`
+		Page             string                   `json:"page"`
+		Customer         map[string]interface{}   `json:"customer"`
+		Products         []map[string]interface{} `json:"products"`
+		Payment          map[string]interface{}   `json:"payment"`
+		Shipping         map[string]interface{}   `json:"shipping"`
+		Subtotal         float64                  `json:"subtotal"`
+		GrandTotal       float64                  `json:"grandTotal"`
+		Note             string                   `json:"note"`
+		FulfillmentStore string                   `json:"fulfillmentStore"`
+		ScheduledTime    string                   `json:"scheduledTime"`
+	}
+
+	if err := c.ShouldBindJSON(&orderRequest); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"status": "error", "message": err.Error()})
+		return
+	}
+
 	productsJSON, _ := json.Marshal(orderRequest.Products)
 	var locationParts []string
-	if p, ok := orderRequest.Customer["province"].(string); ok && p != "" { locationParts = append(locationParts, p) }
-	if d, ok := orderRequest.Customer["district"].(string); ok && d != "" { locationParts = append(locationParts, d) }
-	if s, ok := orderRequest.Customer["sangkat"].(string); ok && s != "" { locationParts = append(locationParts, s) }
-	
-	// ✅ ទាញតម្លៃ Internal Cost (ពីប្រអប់ Cost ដែល Admin បញ្ចូល) ដោយប្រុងប្រយ័ត្ន
+	if p, ok := orderRequest.Customer["province"].(string); ok && p != "" {
+		locationParts = append(locationParts, p)
+	}
+	if d, ok := orderRequest.Customer["district"].(string); ok && d != "" {
+		locationParts = append(locationParts, d)
+	}
+	if s, ok := orderRequest.Customer["sangkat"].(string); ok && s != "" {
+		locationParts = append(locationParts, s)
+	}
+
 	var shippingCost float64 = 0
 	if costVal, ok := orderRequest.Shipping["cost"]; ok {
 		switch v := costVal.(type) {
@@ -195,20 +234,27 @@ func handleSubmitOrder(c *gin.Context) {
 		}
 	}
 
-	var totalDiscount float64 = 0; var totalProductCost float64 = 0
+	var totalDiscount float64 = 0
+	var totalProductCost float64 = 0
 	for _, p := range orderRequest.Products {
-		op, _ := p["originalPrice"].(float64); fp, _ := p["finalPrice"].(float64); q, _ := p["quantity"].(float64); cost, _ := p["cost"].(float64)
-		if op > 0 && q > 0 { totalDiscount += (op - fp) * q }; totalProductCost += (cost * q)
+		op, _ := p["originalPrice"].(float64)
+		fp, _ := p["finalPrice"].(float64)
+		q, _ := p["quantity"].(float64)
+		cost, _ := p["cost"].(float64)
+		if op > 0 && q > 0 {
+			totalDiscount += (op - fp) * q
+		}
+		totalProductCost += (cost * q)
 	}
-	
-	orderID := fmt.Sprintf("ORD-%d", time.Now().Unix()); timestamp := time.Now().UTC().Format(time.RFC3339)
-	custName, _ := orderRequest.Customer["name"].(string); custPhone, _ := orderRequest.Customer["phone"].(string)
 
-	// ✅ ទាញយក Payment Status ពី Request ឱ្យត្រូវ
+	orderID := fmt.Sprintf("ORD-%d", time.Now().Unix())
+	timestamp := time.Now().UTC().Format(time.RFC3339)
+	custName, _ := orderRequest.Customer["name"].(string)
+	custPhone, _ := orderRequest.Customer["phone"].(string)
 	paymentStatus, _ := orderRequest.Payment["status"].(string)
 	paymentInfo, _ := orderRequest.Payment["info"].(string)
 	addLocation, _ := orderRequest.Customer["additionalLocation"].(string)
-	
+
 	var shipFeeCustomer float64 = 0
 	if feeVal, ok := orderRequest.Customer["shippingFee"]; ok {
 		switch v := feeVal.(type) {
@@ -221,58 +267,127 @@ func handleSubmitOrder(c *gin.Context) {
 		}
 	}
 
-	// ✅ ទាញយក Logistics Method
 	internalShipMethod, _ := orderRequest.Shipping["method"].(string)
 	internalShipDetails, _ := orderRequest.Shipping["details"].(string)
 
-	newOrder := Order{ 
-		OrderID: orderID, 
-		Timestamp: timestamp, 
-		User: orderRequest.CurrentUser.UserName, 
-		Team: orderRequest.SelectedTeam, 
-		Page: orderRequest.Page, 
-		CustomerName: custName, 
-		CustomerPhone: custPhone, 
-		Subtotal: orderRequest.Subtotal, 
-		GrandTotal: orderRequest.GrandTotal, 
-		ProductsJSON: string(productsJSON), 
-		Note: orderRequest.Note, 
-		FulfillmentStore: orderRequest.FulfillmentStore, 
-		ScheduledTime: orderRequest.ScheduledTime, 
-		FulfillmentStatus: "Pending",
-		PaymentStatus: paymentStatus, 
-		PaymentInfo: paymentInfo,     
-		InternalCost: shippingCost,    
-		DiscountUSD: totalDiscount,
-		TotalProductCost: totalProductCost,
-		Location: strings.Join(locationParts, ", "),
-		AddressDetails: addLocation,
-		ShippingFeeCustomer: shipFeeCustomer,
-		InternalShippingMethod: internalShipMethod,
+	newOrder := Order{
+		OrderID:                 orderID,
+		Timestamp:               timestamp,
+		User:                    orderRequest.CurrentUser.UserName,
+		Team:                    orderRequest.SelectedTeam,
+		Page:                    orderRequest.Page,
+		CustomerName:            custName,
+		CustomerPhone:           custPhone,
+		Subtotal:                orderRequest.Subtotal,
+		GrandTotal:              orderRequest.GrandTotal,
+		ProductsJSON:            string(productsJSON),
+		Note:                    orderRequest.Note,
+		FulfillmentStore:        orderRequest.FulfillmentStore,
+		ScheduledTime:           orderRequest.ScheduledTime,
+		FulfillmentStatus:       "Pending",
+		PaymentStatus:           paymentStatus,
+		PaymentInfo:             paymentInfo,
+		InternalCost:            shippingCost,
+		DiscountUSD:             totalDiscount,
+		TotalProductCost:        totalProductCost,
+		Location:                strings.Join(locationParts, ", "),
+		AddressDetails:          addLocation,
+		ShippingFeeCustomer:     shipFeeCustomer,
+		InternalShippingMethod:  internalShipMethod,
 		InternalShippingDetails: internalShipDetails,
 	}
 
-	if err := DB.Create(&newOrder).Error; err != nil { c.JSON(500, gin.H{"status": "error"}); return }
-	orderChannel <- OrderJob{ JobID: fmt.Sprintf("job_%d", time.Now().UnixNano()), OrderID: orderID, UserName: orderRequest.CurrentUser.UserName, OrderData: map[string]interface{}{ "orderId": orderID, "timestamp": timestamp, "totalDiscount": totalDiscount, "totalProductCost": totalProductCost, "fullLocation": strings.Join(locationParts, ", "), "productsJSON": string(productsJSON), "shippingCost": shippingCost, "originalRequest": orderRequest, "scheduledTime": orderRequest.ScheduledTime } }
-	c.JSON(200, gin.H{"status": "success", "orderId": orderID})
+	if err := DB.Create(&newOrder).Error; err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"status": "error", "message": "Failed to create order"})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{"status": "success", "orderId": orderID})
 }
 
-func handleAdminUpdateOrder(c *gin.Context) {}
-func handleAdminDeleteOrder(c *gin.Context) {}
-func handleAdminUpdateSheet(c *gin.Context) {}
-func handleAdminAddRow(c *gin.Context) {}
-func handleAdminDeleteRow(c *gin.Context) {}
+// ... (Other handlers as empty functions or implemented as needed)
+func handleGetUsers(c *gin.Context)           {}
+func handleGetStaticData(c *gin.Context)      {}
+func handleGetRevenueSummary(c *gin.Context)  {}
+func handleGetAllOrders(c *gin.Context)       {}
+func handleAdminUpdateOrder(c *gin.Context)   {}
+func handleAdminDeleteOrder(c *gin.Context)   {}
+func handleMigrateData(c *gin.Context)        {}
+func handleAdminUpdateSheet(c *gin.Context)   {}
+func handleAdminAddRow(c *gin.Context)        {}
+func handleAdminDeleteRow(c *gin.Context)     {}
 func handleUpdateFormulaReport(c *gin.Context) {}
-func handleClearCache(c *gin.Context) {}
+func handleClearCache(c *gin.Context)         {}
 func handleAdminUpdateProductTags(c *gin.Context) {}
-func handleUpdateProfile(c *gin.Context) {}
-func handleChangePassword(c *gin.Context) {}
-func uploadToGoogleDriveDirectly(base64Data string, fileName string, mimeType string) (string, string, error) { return "", "", nil }
-func handleImageUploadProxy(c *gin.Context) {}
-func handleGetChatMessages(c *gin.Context) {}
-func handleSendChatMessage(c *gin.Context) {}
-func handleDeleteChatMessage(c *gin.Context) {}
-func handleGetAudioProxy(c *gin.Context) {}
+func handleUpdateProfile(c *gin.Context)      {}
+func handleChangePassword(c *gin.Context)     {}
+func handleGetChatMessages(c *gin.Context)    {}
+func handleSendChatMessage(c *gin.Context)    {}
+func serveWs(c *gin.Context)                 {}
+
+// --- Main ---
 
 func main() {
+	// DSN example: "host=localhost user=gorm password=gorm dbname=gorm port=9920 sslmode=disable TimeZone=Asia/Shanghai"
+	// In production, use environment variables
+	dsn := os.Getenv("DATABASE_URL")
+	if dsn == "" {
+		log.Println("DATABASE_URL not set")
+	} else {
+		var err error
+		DB, err = gorm.Open(postgres.Open(dsn), &gorm.Config{})
+		if err != nil {
+			log.Fatalf("Failed to connect to database: %v", err)
+		}
+	}
+
+	r := gin.Default()
+	r.Use(cors.Default())
+
+	// Public Routes
+	r.POST("/api/login", handleLogin)
+	r.GET("/ws", serveWs)
+
+	// Protected Routes
+	auth := r.Group("/api")
+	auth.Use(AuthMiddleware())
+	{
+		auth.GET("/static-data", handleGetStaticData)
+		auth.POST("/submit-order", handleSubmitOrder)
+		auth.GET("/chat-messages", handleGetChatMessages)
+		auth.POST("/send-chat", handleSendChatMessage)
+		auth.POST("/update-profile", handleUpdateProfile)
+		auth.POST("/change-password", handleChangePassword)
+
+		// Admin Only Routes
+		admin := auth.Group("/admin")
+		admin.Use(AdminOnlyMiddleware())
+		{
+			admin.GET("/users", handleGetUsers)
+			admin.GET("/revenue-summary", handleGetRevenueSummary)
+			admin.GET("/all-orders", handleGetAllOrders)
+			admin.POST("/update-order", handleAdminUpdateOrder)
+			admin.POST("/delete-order", handleAdminDeleteOrder)
+			admin.POST("/migrate-data", handleMigrateData)
+			admin.POST("/update-sheet", handleAdminUpdateSheet)
+			admin.POST("/add-row", handleAdminAddRow)
+			admin.POST("/delete-row", handleAdminDeleteRow)
+			admin.POST("/update-formula", handleUpdateFormulaReport)
+			admin.POST("/clear-cache", handleClearCache)
+			admin.POST("/update-tags", handleAdminUpdateProductTags)
+		}
+	}
+
+	port := os.Getenv("PORT")
+	if port == "" {
+		port = "8080"
+	}
+	log.Printf("Server starting on port %s", port)
+	r.Run(":" + port)
 }
+
+// Hub, Client and other websocket logic would go here...
+type Client struct { hub *Hub; conn *websocket.Conn; send chan []byte }
+type Hub struct { clients map[*Client]bool; broadcast chan []byte; register chan *Client; unregister chan *Client }
+func NewHub() *Hub { return &Hub{ clients: make(map[*Client]bool), broadcast: make(chan []byte), register: make(chan *Client), unregister: make(chan *Client) } }
+func (h *Hub) run() {}

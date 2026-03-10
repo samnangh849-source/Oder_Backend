@@ -7,6 +7,7 @@ import { APP_LOGO_URL, WEB_APP_URL } from '../../constants';
 import Spinner from '../common/Spinner';
 import { translations } from '../../translations';
 import { requestNotificationPermission, sendSystemNotification } from '../../utils/notificationUtils';
+import { CacheService, CACHE_KEYS } from '../../services/cacheService';
 
 interface SidebarProps {
     activeDashboard: string;
@@ -61,12 +62,12 @@ const Sidebar: React.FC<SidebarProps> = ({
     const isHybridAdmin = currentUser?.IsSystemAdmin && (currentUser?.Team || '').split(',').map(t => t.trim()).filter(Boolean).length > 0;
 
     const handleRefresh = async () => {
-        if (window.confirm("Sync with Google Sheet?")) {
+        if (window.confirm("Refresh Page & Clear Cache?")) {
             setIsRefreshing(true);
             try {
-                const res = await fetch(`${WEB_APP_URL}/api/admin/migrate-data`, { method: 'POST' });
-                if (res.ok) alert("Migration Started!");
-                await refreshData();
+                // Clear only data caches, preserving the session to avoid logging out
+                await CacheService.remove(CACHE_KEYS.APP_DATA);
+                await CacheService.remove(CACHE_KEYS.CHAT_HISTORY);
                 window.location.reload();
             } catch (err) {
                 setIsRefreshing(false);
@@ -233,10 +234,10 @@ const Sidebar: React.FC<SidebarProps> = ({
                                 <span className="text-[8px] font-black uppercase text-gray-400 group-hover:text-white">Settings</span>
                             </button>
 
-                            {/* Sync DB */}
+                            {/* Refresh Page */}
                             <button onClick={handleRefresh} disabled={isRefreshing} className="flex flex-col items-center justify-center p-3 bg-gray-800/50 rounded-2xl border border-white/5 hover:bg-emerald-600/20 hover:border-emerald-500/30 transition-all group">
                                 {isRefreshing ? <Spinner size="sm" /> : <svg className="w-4 h-4 text-emerald-400 mb-1.5 group-hover:rotate-180 transition-transform duration-500" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" /></svg>}
-                                <span className="text-[8px] font-black uppercase text-gray-400 group-hover:text-white">Sync DB</span>
+                                <span className="text-[8px] font-black uppercase text-gray-400 group-hover:text-white text-center leading-none">Refresh & សម្អាត Cache</span>
                             </button>
 
                             {/* Test Notification */}

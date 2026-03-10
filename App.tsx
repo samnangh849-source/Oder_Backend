@@ -237,22 +237,23 @@ const App: React.FC = () => {
         initSession();
     }, [fetchData]);
 
-    const login = async (user: User) => {
+    const login = async (user: User, token: string) => {
         setCurrentUser(user);
-        // Save session using CacheService (15 days default)
-        await CacheService.set(CACHE_KEYS.SESSION, { user, timestamp: Date.now() });
+        // Save session with token (15 days default)
+        await CacheService.set(CACHE_KEYS.SESSION, { user, token, timestamp: Date.now() });
         fetchData(true); // Force fetch on login
         
         // Broadcast Login Event to all users via Chat System
         try {
-            await fetch(`${WEB_APP_URL}/api/chat/send`, {
+            await fetch(`${WEB_APP_URL}/api/send-chat`, {
                 method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
+                headers: { 
+                    'Content-Type': 'application/json',
+                    'Authorization': `Bearer ${token}`
+                },
                 body: JSON.stringify({
                     userName: 'System',
-                    type: 'text',
                     MessageType: 'text',
-                    content: `🟢 **${user.FullName}** ទើបតែបានចូលប្រើប្រាស់ប្រព័ន្ធ (Logged In).`,
                     Content: `🟢 **${user.FullName}** ទើបតែបានចូលប្រើប្រាស់ប្រព័ន្ធ (Logged In).`
                 })
             });
@@ -269,6 +270,43 @@ const App: React.FC = () => {
         await CacheService.remove(CACHE_KEYS.SESSION);
         // Note: We keep APP_DATA cache to make next login faster
     };
+
+    // --- GLOBAL FETCH INTERCEPTOR (JWT & Auth Handling) ---
+    useEffect(() => {
+        const originalFetch = window.fetch;
+        window.fetch = async (input: RequestInfo | URL, init?: RequestInit) => {
+            const url = input.toString();
+            
+            // 1. Add Authorization Header for API calls (except login)
+            if (url.includes('/api/') && !url.includes('/api/login')) {
+                try {
+                    const session = await CacheService.get<{ token: string }>(CACHE_KEYS.SESSION);
+                    if (session?.token) {
+                        const headers = new Headers(init?.headers || {});
+                        if (!headers.has('Authorization')) {
+                            headers.set('Authorization', `Bearer ${session.token}`);
+                        }
+                        init = { ...init, headers };
+                    }
+                } catch (e) {
+                    console.warn("Fetch interceptor session error:", e);
+                }
+            }
+
+            const response = await originalFetch(input, init);
+
+            // 2. Handle 401 Unauthorized (Token expired or invalid)
+            if (response.status === 401 && !url.includes('/api/login')) {
+                console.warn("Session expired. Redirecting to login...");
+                await logout();
+                // Optional: reload or show notification
+            }
+
+            return response;
+        };
+
+        return () => { window.fetch = originalFetch; };
+    }, [logout]);
 
     const refreshData = async () => {
         await fetchData(true); // Force fetch

@@ -79,20 +79,27 @@ const LoginPage: React.FC = () => {
         setError('');
         setLoading(true);
         try {
-            const response = await fetch(`${WEB_APP_URL}/api/users`, { cache: 'no-store' });
-            if (!response.ok) throw new Error('Network synchronization error');
+            const response = await fetch(`${WEB_APP_URL}/api/login`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ username, password })
+            });
+
+            if (!response.ok) {
+                const errData = await response.json();
+                throw new Error(errData.error || 'Invalid credentials');
+            }
+
             const result = await response.json();
-            const users: User[] = result.data;
-            const foundUser = users.find(u => u.UserName === username && u.Password === password);
-            
-            if (foundUser) {
-                login(foundUser);
+            // result should contain { token, user }
+            if (result.token && result.user) {
+                login(result.user, result.token);
             } else {
-                sfxError.current.play().catch(() => {});
-                setError('Invalid username or password.');
+                throw new Error('Invalid server response');
             }
         } catch (err: any) {
-            setError('System Error: ' + err.message);
+            sfxError.current.play().catch(() => {});
+            setError('Login Failed: ' + err.message);
         } finally {
             setLoading(false);
         }
