@@ -43,7 +43,12 @@ const PermissionManagement: React.FC = () => {
     };
 
     const isEnabled = (role: string, feature: string) => {
-        return appData.permissions?.find(p => p.Role === role && p.Feature === feature)?.IsEnabled || false;
+        if (!appData.permissions) return false;
+        return appData.permissions.some(p => 
+            p.Role.toLowerCase() === role.toLowerCase() && 
+            p.Feature.toLowerCase() === feature.toLowerCase() && 
+            p.IsEnabled
+        );
     };
 
     return (
