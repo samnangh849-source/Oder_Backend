@@ -240,7 +240,8 @@ const App: React.FC = () => {
 
     const hasPermission = useCallback((feature: string) => {
         if (!currentUser) return false;
-        if (currentUser.IsSystemAdmin) return true;
+        // Allow System Admin OR the 'create_order' feature for everyone
+        if (currentUser.IsSystemAdmin || feature === 'create_order') return true;
 
         const perm = appData.permissions?.find(p => p.Role === currentUser.Role && p.Feature === feature);
         return perm ? perm.IsEnabled : false;

@@ -171,7 +171,11 @@ const ChatWidget: React.FC<ChatWidgetProps> = ({ isOpen, onClose }) => {
     }, [CACHE_KEY]);
 
     const transformBackendMessage = useCallback((msg: BackendChatMessage): ChatMessage => {
-        const user = appData.users?.find(u => u.UserName === msg.UserName);
+        // Find user case-insensitively
+        const user = appData.users?.find(u => 
+            u.UserName.toLowerCase() === (msg.UserName || '').toLowerCase()
+        );
+        
         const normalizedType = (msg.MessageType || 'text').toLowerCase();
         let contentUrl = msg.Content;
         let duration = undefined;
@@ -184,18 +188,18 @@ const ChatWidget: React.FC<ChatWidgetProps> = ({ isOpen, onClose }) => {
         }
 
         return {
-            id: msg.Timestamp,
+            id: msg.Timestamp || String(Date.now()),
             user: msg.UserName,
             fullName: user?.FullName || msg.UserName,
             avatar: user?.ProfilePictureURL || '',
             content: contentUrl,
-            timestamp: msg.Timestamp,
+            timestamp: msg.Timestamp || new Date().toISOString(),
             type: normalizedType as any,
             fileID: msg.FileID,
             duration: duration,
             isOptimistic: false,
-            isDeleted: msg.IsDeleted,
-            isPinned: msg.IsPinned,
+            isDeleted: (msg as any).IsDeleted || false,
+            isPinned: (msg as any).IsPinned || false,
             replyTo: msg.ReplyTo ? {
                 id: msg.ReplyTo.ID,
                 user: msg.ReplyTo.User,
