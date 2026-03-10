@@ -192,6 +192,7 @@ const App: React.FC = () => {
                         ...rawData,
                         pages: rawData.pages || rawData.TeamsPages || [],
                         users: rawData.users || rawData.Users || [],
+                        roles: rawData.roles || rawData.Roles || [],
                         products: rawData.products || rawData.Products || [],
                         settings: rawData.settings || rawData.Settings || [],
                         inventory: rawData.inventory || [],

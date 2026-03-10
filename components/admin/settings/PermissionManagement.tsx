@@ -22,11 +22,15 @@ const PermissionManagement: React.FC = () => {
     const [loading, setLoading] = useState<string | null>(null);
 
     const roles = useMemo(() => {
+        if (appData.roles && appData.roles.length > 0) {
+            return appData.roles.map(r => r.RoleName).sort();
+        }
+        
+        // Fallback if roles table is empty
         const uniqueRoles = new Set(appData.users?.map(u => u.Role).filter(Boolean));
-        // Ensure standard roles are included if not present
         ['Sales', 'Fulfillment', 'Admin', 'Driver'].forEach(r => uniqueRoles.add(r));
         return Array.from(uniqueRoles).sort();
-    }, [appData.users]);
+    }, [appData.roles, appData.users]);
 
     const handleToggle = async (role: string, feature: string, currentStatus: boolean) => {
         const id = `${role}-${feature}`;

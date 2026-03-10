@@ -27,6 +27,7 @@ const PackagingView: React.FC<{ orders?: ParsedOrder[] }> = ({ orders: propOrder
     const [selectedOrderIds, setSelectedOrderIds] = useState<Set<string>>(new Set());
     const [isUpdatingBulk, setIsUpdatingBulk] = useState(false);
     const [viewingOrder, setViewingOrder] = useState<ParsedOrder | null>(null);
+    const [localOrders, setLocalOrders] = useState<ParsedOrder[]>([]);
     
     // Grace Period State
     const [undoTimer, setUndoTimer] = useState<number | null>(null);
@@ -103,6 +104,10 @@ const PackagingView: React.FC<{ orders?: ParsedOrder[] }> = ({ orders: propOrder
             }) as ParsedOrder[];
     }, [appData, propOrders]);
 
+    useEffect(() => {
+        setLocalOrders(allOrders);
+    }, [allOrders]);
+
     // 3. Effects (Must be before any conditional return)
     useEffect(() => {
         setMobilePageTitle(selectedStore ? `វេចខ្ចប់: ${selectedStore}` : 'ជ្រើសរើសឃ្លាំងវេចខ្ចប់');
@@ -143,11 +148,11 @@ const PackagingView: React.FC<{ orders?: ParsedOrder[] }> = ({ orders: propOrder
 
     const storeOrders = useMemo(() => {
         if (!selectedStore) return [];
-        return allOrders.filter(o => {
+        return localOrders.filter(o => {
             const store = o['Fulfillment Store'] || 'Unassigned';
             return store.trim().toLowerCase() === selectedStore.trim().toLowerCase();
         });
-    }, [allOrders, selectedStore]);
+    }, [localOrders, selectedStore]);
 
     const groupedOrders = useMemo(() => {
         let filtered = storeOrders.filter(o => o.FulfillmentStatus === activeTab && o.FulfillmentStatus !== 'Cancelled');
@@ -275,7 +280,13 @@ const PackagingView: React.FC<{ orders?: ParsedOrder[] }> = ({ orders: propOrder
 
     const executeAction = async (order: ParsedOrder, newStatus: string, extraData: any = {}) => {
         const orderId = order['Order ID'];
-        // Optimistic UI: We can trigger a refresh later, but let's show success now
+        // Optimistic UI: Update local state immediately
+        setLocalOrders(prev => prev.map(o => 
+            o['Order ID'] === orderId 
+                ? { ...o, FulfillmentStatus: newStatus as any, ...extraData } 
+                : o
+        ));
+        
         setLoadingActionId(orderId);
         
         // Fire and forget (mostly)
@@ -308,6 +319,9 @@ const PackagingView: React.FC<{ orders?: ParsedOrder[] }> = ({ orders: propOrder
             }
         }).catch(err => {
             console.error("Action error:", err);
+            // Rollback on error
+            setLocalOrders(allOrders);
+            alert("ការបញ្ជូនបរាជ័យ!");
         }).finally(() => {
             setLoadingActionId(null);
         });
@@ -316,9 +330,16 @@ const PackagingView: React.FC<{ orders?: ParsedOrder[] }> = ({ orders: propOrder
     const executeBulkAction = async (ids: string[], targetStatus: string, extraData: any = {}) => {
         setIsUpdatingBulk(true);
         
+        // Optimistic UI: Update local state for all IDs
+        setLocalOrders(prev => prev.map(o => 
+            ids.includes(o['Order ID']) 
+                ? { ...o, FulfillmentStatus: targetStatus as any, ...extraData } 
+                : o
+        ));
+
         // Execute all updates
         const promises = ids.map(async (id) => {
-            const order = storeOrders.find(o => o['Order ID'] === id);
+            const order = localOrders.find(o => o['Order ID'] === id);
             if (!order) return;
             return fetch(`${WEB_APP_URL}/api/admin/update-order`, {
                 method: 'POST',
@@ -614,7 +635,28 @@ const PackagingView: React.FC<{ orders?: ParsedOrder[] }> = ({ orders: propOrder
                 </div>
             )}
 
-            {packingOrder && <FastPackModal order={packingOrder} onClose={() => setPackingOrder(null)} onSuccess={() => { setPackingOrder(null); setActiveTab('Ready to Ship'); refreshData(); }} />}
+            {packingOrder && (
+                <FastPackModal 
+                    order={packingOrder} 
+                    onClose={() => setPackingOrder(null)} 
+                    onSuccess={() => { 
+                        const orderId = packingOrder['Order ID'];
+                        setLocalOrders(prev => prev.map(o => 
+                            o['Order ID'] === orderId 
+                                ? { 
+                                    ...o, 
+                                    FulfillmentStatus: 'Ready to Ship' as any,
+                                    'Packed By': currentUser?.FullName || 'Packer',
+                                    'Packed Time': new Date().toLocaleString('km-KH')
+                                  } 
+                                : o
+                        ));
+                        setPackingOrder(null); 
+                        setActiveTab('Ready to Ship'); 
+                        refreshData(); 
+                    }} 
+                />
+            )}
             {viewingOrder && (
                 <Modal isOpen={true} onClose={() => setViewingOrder(null)} maxWidth="max-w-3xl">
                     <div className="p-6 sm:p-10 bg-[#0f172a] rounded-[2.5rem] border border-white/10 shadow-3xl overflow-hidden flex flex-col max-h-[90vh]">
