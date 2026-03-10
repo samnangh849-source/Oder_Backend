@@ -315,6 +315,45 @@ const App: React.FC = () => {
         initSession();
     }, [fetchData]);
 
+    // Global Real-time Data Sync via WebSocket
+    useEffect(() => {
+        if (!currentUser) return;
+        let ws: WebSocket | null = null;
+        let reconnectTimer: any = null;
+
+        const connect = async () => {
+            const protocol = window.location.protocol === 'https:' ? 'wss' : 'ws';
+            const host = WEB_APP_URL.replace(/^https?:\/\//, '');
+            const session = await CacheService.get<{ token: string }>(CACHE_KEYS.SESSION);
+            const token = session?.token || '';
+
+            ws = new WebSocket(`${protocol}://${host}/api/chat/ws?token=${encodeURIComponent(token)}`);
+
+            ws.onmessage = (e) => {
+                try {
+                    const data = JSON.parse(e.data);
+                    const action = data.action || data.Action;
+                    
+                    // If any data in the system changes, refresh the local store
+                    if (action === 'data_update' || action === 'DATA_UPDATE') {
+                        console.log("Real-time update received, refreshing...");
+                        fetchData(true); // Silent refresh in background
+                    }
+                } catch (err) {}
+            };
+
+            ws.onclose = () => {
+                reconnectTimer = setTimeout(connect, 5000);
+            };
+        };
+
+        connect();
+        return () => {
+            if (ws) ws.close();
+            if (reconnectTimer) clearTimeout(reconnectTimer);
+        };
+    }, [currentUser?.UserName, fetchData]);
+
     const login = async (user: User, token: string) => {
         setCurrentUser(user);
         // Save session with token (15 days default)
