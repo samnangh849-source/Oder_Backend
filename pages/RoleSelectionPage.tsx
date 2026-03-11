@@ -135,9 +135,9 @@ const RoleSelectionPage: React.FC<RoleSelectionPageProps> = ({ onSelect }) => {
                 </div>
 
                 {/* Role Selection - Specialized Grid */}
-                <div className={`grid grid-cols-1 ${currentUser.IsSystemAdmin ? 'md:grid-cols-3' : 'md:grid-cols-2'} gap-4 sm:gap-8 w-full px-2`}>
-                    {/* ADMIN ROLE - Only for System Admins */}
-                    {currentUser.IsSystemAdmin && (
+                <div className={`grid grid-cols-1 ${(currentUser.IsSystemAdmin || currentUser.Role?.toLowerCase() === 'admin') ? 'md:grid-cols-3' : 'md:grid-cols-2'} gap-4 sm:gap-8 w-full px-2`}>
+                    {/* ADMIN ROLE - Only for System Admins or Admin Role */}
+                    {(currentUser.IsSystemAdmin || currentUser.Role?.toLowerCase() === 'admin') && (
                         <button 
                             onClick={() => onSelect('admin_dashboard')}
                             className="role-btn premium-glass-mobile p-5 sm:p-8 rounded-[2rem] text-left transition-all duration-300 reveal-1 flex md:flex-col items-center md:items-start gap-5 sm:gap-0 border hover:border-blue-500/50 group"

@@ -116,8 +116,8 @@ type Order struct {
 	ProductsJSON            string  `gorm:"type:text" json:"Products (JSON)"`
 	InternalShippingMethod  string  `json:"Internal Shipping Method"` // ប្រើសម្រាប់ Logistics
 	InternalShippingDetails string  `json:"Internal Shipping Details"`
-	InternalCost            float64 `json:"Internal Cost"`            // ប្រើសម្រាប់ Exp. Cost
-	PaymentStatus           string  `json:"Payment Status"`           // ប្រើសម្រាប់ Status (Paid/Unpaid)
+	InternalCost            float64 `json:"Internal Cost"`
+	PaymentStatus           string  `json:"Payment Status"`
 	PaymentInfo             string  `json:"Payment Info"`
 	DiscountUSD             float64 `json:"Discount ($)"`
 	DeliveryUnpaid          float64 `json:"Delivery Unpaid"`
@@ -517,28 +517,56 @@ func handleGetRoles(c *gin.Context) {
 func handleCreateRole(c *gin.Context) {
 	var req Role
 	if err := c.ShouldBindJSON(&req); err != nil {
-		c.Error(err)
-		return
-	}
-	if err := DB.Create(&req).Error; err != nil {
-		c.Error(err)
+		c.JSON(http.StatusBadRequest, gin.H{"status": "error", "message": "ទិន្នន័យមិនត្រឹមត្រូវ"})
 		return
 	}
 
+	req.RoleName = strings.TrimSpace(req.RoleName)
+	req.Description = strings.TrimSpace(req.Description)
+
+	if req.RoleName == "" {
+		c.JSON(http.StatusBadRequest, gin.H{"status": "error", "message": "សូមបញ្ចូលឈ្មោះ Role"})
+		return
+	}
+
+	// Check if role already exists
+	var existing Role
+	if err := DB.Where("LOWER(role_name) = LOWER(?)", strings.ToLower(req.RoleName)).First(&existing).Error; err == nil {
+		c.JSON(http.StatusConflict, gin.H{"status": "error", "message": "Role នេះមានរួចហើយ"})
+		return
+	}
+
+	if err := DB.Create(&req).Error; err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"status": "error", "message": "មិនអាចបង្កើត Role បានទេ: " + err.Error()})
+		return
+	}
+
+	// ✅ Broadcast to WebSocket for Real-time UI update (e.g. User creation dropdown)
+	eventBytes, _ := json.Marshal(map[string]interface{}{
+		"type":      "add_row",
+		"action":    "data_update",
+		"sheetName": "Roles",
+		"newData": map[string]interface{}{
+			"RoleName":    req.RoleName,
+			"Description": req.Description,
+		},
+	})
+	hub.broadcast <- eventBytes
+
 	// Sync to Google Sheet
-	go func() {
+	go func(r Role) {
 		appsReq := AppsScriptRequest{
-			Action: "addRow",
-			Secret: appsScriptSecret,
+			Action:    "addRow",
+			Secret:    appsScriptSecret,
 			SheetName: "Roles",
 			NewData: map[string]interface{}{
-				"RoleName": req.RoleName,
-				"Description": req.Description,
+				"RoleName":    r.RoleName,
+				"Description": r.Description,
 			},
 		}
 		jb, _ := json.Marshal(appsReq)
 		http.Post(appsScriptURL, "application/json", bytes.NewBuffer(jb))
-	}()
+	}(req)
 
 	c.JSON(http.StatusOK, gin.H{"status": "success", "data": req})
 }
@@ -588,6 +616,17 @@ func handleUpdatePermission(c *gin.Context) {
 
 	// ✅ Sync Permissions to Sheet
 	go func(r RolePermission) {
+		// Broadcast to WebSocket for Real-time UI update
+		msg, _ := json.Marshal(map[string]interface{}{
+			"type": "update_permission",
+			"payload": map[string]interface{}{
+				"role":      r.Role,
+				"feature":   r.Feature,
+				"isEnabled": r.IsEnabled,
+			},
+		})
+		hub.broadcast <- msg
+
 		appsReq := AppsScriptRequest{
 			Action: "updateSheet",
 			Secret: appsScriptSecret,
@@ -950,17 +989,36 @@ func handleGetAllOrders(c *gin.Context) {
 }
 
 func handleSubmitOrder(c *gin.Context) {
-	var orderRequest struct { CurrentUser User `json:"currentUser"`; SelectedTeam string `json:"selectedTeam"`; Page string `json:"page"`; Customer map[string]interface{} `json:"customer"`; Products []map[string]interface{} `json:"products"`; Payment map[string]interface{} `json:"payment"`; Shipping map[string]interface{} `json:"shipping"`; Subtotal float64 `json:"subtotal"`; GrandTotal float64 `json:"grandTotal"`; Note string `json:"note"`; FulfillmentStore string `json:"fulfillmentStore"`; ScheduledTime string `json:"scheduledTime"` }
+	var orderRequest map[string]interface{}
 	if err := c.ShouldBindJSON(&orderRequest); err != nil { c.Error(err); return }
 	
-	productsJSON, _ := json.Marshal(orderRequest.Products)
+	currentUserMap, _ := orderRequest["currentUser"].(map[string]interface{})
+	userName, _ := currentUserMap["UserName"].(string)
+	selectedTeam, _ := orderRequest["selectedTeam"].(string)
+	page, _ := orderRequest["page"].(string)
+	customer, _ := orderRequest["customer"].(map[string]interface{})
+	products, _ := orderRequest["products"].([]interface{})
+	payment, _ := orderRequest["payment"].(map[string]interface{})
+	shipping, _ := orderRequest["shipping"].(map[string]interface{})
+	subtotal, _ := orderRequest["subtotal"].(float64)
+	grandTotal, _ := orderRequest["grandTotal"].(float64)
+	note, _ := orderRequest["note"].(string)
+	fulfillmentStore, _ := orderRequest["fulfillmentStore"].(string)
+	scheduledTime, _ := orderRequest["scheduledTime"].(string)
+
+	productsJSON, _ := json.Marshal(products)
 	var locationParts []string
-	if p, ok := orderRequest.Customer["province"].(string); ok && p != "" { locationParts = append(locationParts, p) }
-	if d, ok := orderRequest.Customer["district"].(string); ok && d != "" { locationParts = append(locationParts, d) }
-	if s, ok := orderRequest.Customer["sangkat"].(string); ok && s != "" { locationParts = append(locationParts, s) }
+	if p, ok := customer["province"].(string); ok && p != "" { locationParts = append(locationParts, p) }
+	if d, ok := customer["district"].(string); ok && d != "" { locationParts = append(locationParts, d) }
+	if s, ok := customer["sangkat"].(string); ok && s != "" { locationParts = append(locationParts, s) }
 	
 	var shippingCost float64 = 0
-	if costVal, ok := orderRequest.Shipping["cost"]; ok {
+	if val, ok := orderRequest["Internal Cost"]; ok {
+		switch v := val.(type) {
+		case float64: shippingCost = v
+		case string: if parsed, err := strconv.ParseFloat(v, 64); err == nil { shippingCost = parsed }
+		}
+	} else if costVal, ok := shipping["cost"]; ok {
 		switch v := costVal.(type) {
 		case float64: shippingCost = v
 		case string: if parsed, err := strconv.ParseFloat(v, 64); err == nil { shippingCost = parsed }
@@ -968,43 +1026,66 @@ func handleSubmitOrder(c *gin.Context) {
 	}
 
 	var totalDiscount float64 = 0; var totalProductCost float64 = 0
-	for _, p := range orderRequest.Products {
-		op, _ := p["originalPrice"].(float64); fp, _ := p["finalPrice"].(float64); q, _ := p["quantity"].(float64); cost, _ := p["cost"].(float64)
+	for _, p := range products {
+		pMap, _ := p.(map[string]interface{})
+		op, _ := pMap["originalPrice"].(float64); fp, _ := pMap["finalPrice"].(float64); q, _ := pMap["quantity"].(float64); cost, _ := pMap["cost"].(float64)
 		if op > 0 && q > 0 { totalDiscount += (op - fp) * q }; totalProductCost += (cost * q)
 	}
 	
 	rand.Seed(time.Now().UnixNano())
 	orderID := generateShortID()
 	timestamp := time.Now().UTC().Format(time.RFC3339)
-	custName, _ := orderRequest.Customer["name"].(string); custPhone, _ := orderRequest.Customer["phone"].(string)
+	custName, _ := orderRequest["Customer Name"].(string)
+	if custName == "" { custName, _ = customer["name"].(string) }
+	custPhone, _ := orderRequest["Customer Phone"].(string)
+	if custPhone == "" { custPhone, _ = customer["phone"].(string) }
 
-	paymentStatus, _ := orderRequest.Payment["status"].(string)
-	paymentInfo, _ := orderRequest.Payment["info"].(string)
-	addLocation, _ := orderRequest.Customer["additionalLocation"].(string)
+	paymentStatus, _ := orderRequest["Payment Status"].(string)
+	if paymentStatus == "" { paymentStatus, _ = payment["status"].(string) }
+	paymentInfo, _ := orderRequest["Payment Info"].(string)
+	if paymentInfo == "" { paymentInfo, _ = payment["info"].(string) }
+	
+	addLocation, _ := orderRequest["Address Details"].(string)
+	if addLocation == "" { addLocation, _ = customer["additionalLocation"].(string) }
 	
 	var shipFeeCustomer float64 = 0
-	if feeVal, ok := orderRequest.Customer["shippingFee"]; ok {
+	if val, ok := orderRequest["Shipping Fee (Customer)"]; ok {
+		switch v := val.(type) {
+		case float64: shipFeeCustomer = v
+		case string: if parsed, err := strconv.ParseFloat(v, 64); err == nil { shipFeeCustomer = parsed }
+		}
+	} else if feeVal, ok := customer["shippingFee"]; ok {
 		switch v := feeVal.(type) {
 		case float64: shipFeeCustomer = v
 		case string: if parsed, err := strconv.ParseFloat(v, 64); err == nil { shipFeeCustomer = parsed }
 		}
 	}
 
-	internalShipMethod, _ := orderRequest.Shipping["method"].(string)
-	internalShipDetails, _ := orderRequest.Shipping["details"].(string)
+	internalShipMethod, _ := orderRequest["Internal Shipping Method"].(string)
+	if internalShipMethod == "" { internalShipMethod, _ = shipping["method"].(string) }
+	internalShipDetails, _ := orderRequest["Internal Shipping Details"].(string)
+	if internalShipDetails == "" { internalShipDetails, _ = shipping["details"].(string) }
 
 	newOrder := Order{ 
-		OrderID: orderID, Timestamp: timestamp, User: orderRequest.CurrentUser.UserName, Team: orderRequest.SelectedTeam, 
-		Page: orderRequest.Page, CustomerName: custName, CustomerPhone: custPhone, Subtotal: orderRequest.Subtotal, 
-		GrandTotal: orderRequest.GrandTotal, ProductsJSON: string(productsJSON), Note: orderRequest.Note, 
-		FulfillmentStore: orderRequest.FulfillmentStore, ScheduledTime: orderRequest.ScheduledTime, FulfillmentStatus: "Pending",
+		OrderID: orderID, Timestamp: timestamp, User: userName, Team: selectedTeam, 
+		Page: page, CustomerName: custName, CustomerPhone: custPhone, Subtotal: subtotal, 
+		GrandTotal: grandTotal, ProductsJSON: string(productsJSON), Note: note, 
+		FulfillmentStore: fulfillmentStore, ScheduledTime: scheduledTime, FulfillmentStatus: "Pending",
 		PaymentStatus: paymentStatus, PaymentInfo: paymentInfo, InternalCost: shippingCost, DiscountUSD: totalDiscount,
 		TotalProductCost: totalProductCost, Location: strings.Join(locationParts, ", "), AddressDetails: addLocation,
 		ShippingFeeCustomer: shipFeeCustomer, InternalShippingMethod: internalShipMethod, InternalShippingDetails: internalShipDetails,
 	}
 
 	if err := DB.Create(&newOrder).Error; err != nil { c.Error(err); return }
-	orderChannel <- OrderJob{ JobID: fmt.Sprintf("job_%d", time.Now().UnixNano()), OrderID: orderID, UserName: orderRequest.CurrentUser.UserName, OrderData: map[string]interface{}{ "orderId": orderID, "timestamp": timestamp, "totalDiscount": totalDiscount, "totalProductCost": totalProductCost, "fullLocation": strings.Join(locationParts, ", "), "productsJSON": string(productsJSON), "shippingCost": shippingCost, "originalRequest": orderRequest, "scheduledTime": orderRequest.ScheduledTime } }
+
+	eventBytes, _ := json.Marshal(map[string]interface{}{
+		"type": "new_order",
+		"action": "data_update",
+		"data": newOrder,
+	})
+	hub.broadcast <- eventBytes
+
+	orderChannel <- OrderJob{ JobID: fmt.Sprintf("job_%d", time.Now().UnixNano()), OrderID: orderID, UserName: userName, OrderData: map[string]interface{}{ "orderId": orderID, "timestamp": timestamp, "totalDiscount": totalDiscount, "totalProductCost": totalProductCost, "fullLocation": strings.Join(locationParts, ", "), "productsJSON": string(productsJSON), "shippingCost": shippingCost, "originalRequest": orderRequest, "scheduledTime": scheduledTime } }
 	c.JSON(200, gin.H{"status": "success", "orderId": orderID})
 }
 
@@ -1230,6 +1311,11 @@ func handleAdminDeleteRow(c *gin.Context) {
 
 	if err := DB.Table(tableName).Where(pkCol+" = ?", pkVal).Delete(nil).Error; err != nil {
 		c.Error(err); return
+	}
+
+	// ✅ Special Cleanup for Roles (Delete associated permissions too)
+	if tableName == "roles" {
+		DB.Where("LOWER(role) = LOWER(?)", pkVal).Delete(&RolePermission{})
 	}
 
 	eventBytes, _ := json.Marshal(map[string]interface{}{

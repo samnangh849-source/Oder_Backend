@@ -75,18 +75,36 @@ const ConfigEditModal: React.FC<ConfigEditModalProps> = ({ section, item, onClos
         }
         setIsLoading(true);
         try {
-            const endpoint = item ? '/api/admin/update-sheet' : '/api/admin/add-row';
+            let endpoint = item ? '/api/admin/update-sheet' : '/api/admin/add-row';
+            
+            // Special endpoints for Roles and Permissions
+            if (!item) {
+                if (section.id === 'roles') endpoint = '/api/admin/roles';
+                else if (section.id === 'permissions') endpoint = '/api/admin/permissions';
+            } else {
+                if (section.id === 'permissions') endpoint = '/api/admin/permissions/update';
+            }
+
             const payloadData = { ...formData };
             section.fields.forEach(field => { if (field.type === 'number') payloadData[field.name] = Number(payloadData[field.name]); });
+            
             if (item && section.id === 'users' && !payloadData.Password) delete payloadData.Password;
-            const payload: any = { sheetName: section.sheetName, newData: payloadData };
+            
+            const payload: any = (section.id === 'roles' && !item) 
+                ? payloadData 
+                : { sheetName: section.sheetName, newData: payloadData };
+                
             if (item) payload.primaryKey = { [section.primaryKeyField]: getValueCaseInsensitive(item, section.primaryKeyField) };
+            
             const response = await fetch(`${WEB_APP_URL}${endpoint}`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify(payload)
             });
-            if (!response.ok) throw new Error('Save failed');
+            
+            const result = await response.json();
+            if (!response.ok) throw new Error(result.message || 'រក្សាទុកមិនបានជោគជ័យ');
+            
             await refreshData();
             onSave(formData);
         } catch (err: any) { setError(err.message); } finally { setIsLoading(false); }

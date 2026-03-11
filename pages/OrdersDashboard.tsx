@@ -455,7 +455,7 @@ const OrdersDashboard: React.FC<OrdersDashboardProps> = ({ onBack, initialFilter
                 </div>
             </div>
 
-            <div className="bg-gray-800/20 backdrop-blur-3xl border border-white/5 rounded-[2rem] xl:rounded-[2.5rem] p-4 xl:p-6 mb-8 shadow-2xl relative z-20 group transition-all hover:bg-gray-800/30">
+            <div className="bg-gray-800/40 border border-white/5 rounded-[2rem] xl:rounded-[2.5rem] p-4 xl:p-6 mb-8 shadow-2xl relative z-20 group transition-all hover:bg-gray-800/50 transform-gpu">
                 <div className="flex flex-col lg:flex-row justify-between items-center gap-4">
                     <div className="relative w-full lg:max-w-2xl group">
                         <input type="text" placeholder="ស្វែងរក ID, ឈ្មោះ, ឬលេខទូរស័ព្ទ..." value={searchQuery} onChange={e => setSearchQuery(e.target.value)} className="form-input !pl-14 xl:!pl-16 !py-4 xl:!py-5 bg-black/40 border-gray-800 rounded-[1.5rem] xl:rounded-[1.8rem] text-[13px] xl:text-[15px] font-bold text-white placeholder:text-gray-700 focus:border-blue-500/50 focus:bg-black/60 transition-all shadow-inner" />

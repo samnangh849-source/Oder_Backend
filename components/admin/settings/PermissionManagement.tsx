@@ -1,125 +1,60 @@
 
-import React, { useContext, useState, useMemo } from 'react';
+import React, { useContext } from 'react';
 import { AppContext } from '../../../context/AppContext';
-import Spinner from '../../common/Spinner';
-
-const FEATURES = [
-    { id: 'create_order', label: 'បង្កើតការកម្មង់ (Create Order)' },
-    { id: 'view_all_orders', label: 'មើលការកម្មង់ទាំងអស់ (View All Orders)' },
-    { id: 'edit_order', label: 'កែសម្រួលការកម្មង់ (Edit Order)' },
-    { id: 'delete_order', label: 'លុបការកម្មង់ (Delete Order)' },
-    { id: 'verify_order', label: 'ផ្ទៀងផ្ទាត់ការកម្មង់ (Verify Order/Check Box)' },
-    { id: 'pack_order', label: 'ខ្ចប់ឥវ៉ាន់ (Pack Order)' },
-    { id: 'dispatch_order', label: 'ប្រគល់ឱ្យអ្នកដឹក (Dispatch Order)' },
-    { id: 'view_reports', label: 'មើលរបាយការណ៍ (View Reports)' },
-    { id: 'manage_inventory', label: 'គ្រប់គ្រងស្តុក (Manage Inventory)' },
-    { id: 'manage_users', label: 'គ្រប់គ្រងអ្នកប្រើប្រាស់ (Manage Users)' },
-    { id: 'manage_settings', label: 'គ្រប់គ្រងការកំណត់ (Manage Settings)' },
-];
+import PermissionMatrix from './PermissionMatrix';
 
 const PermissionManagement: React.FC = () => {
-    const { appData, updatePermission } = useContext(AppContext);
-    const [loading, setLoading] = useState<string | null>(null);
-
-    const roles = useMemo(() => {
-        if (appData.roles && appData.roles.length > 0) {
-            return appData.roles
-                .map(r => r.RoleName)
-                .filter((name): name is string => !!name)
-                .sort();
-        }
-        
-        // Fallback if roles table is empty
-        const uniqueRoles = new Set<string>();
-        appData.users?.forEach(u => {
-            if (u.Role) uniqueRoles.add(u.Role);
-        });
-        ['Sales', 'Fulfillment', 'Admin', 'Driver'].forEach(r => uniqueRoles.add(r));
-        return Array.from(uniqueRoles).sort();
-    }, [appData.roles, appData.users]);
-
-    const handleToggle = async (role: string, feature: string, currentStatus: boolean) => {
-        const id = `${role}-${feature}`;
-        setLoading(id);
-        try {
-            await updatePermission(role, feature, !currentStatus);
-        } finally {
-            setLoading(null);
-        }
-    };
-
-    const isEnabled = (role: string, feature: string) => {
-        if (!appData.permissions || !role || !feature) return false;
-        const lowerRole = role.toLowerCase();
-        const lowerFeature = feature.toLowerCase();
-        
-        return appData.permissions.some(p => 
-            p.Role?.toLowerCase() === lowerRole && 
-            p.Feature?.toLowerCase() === lowerFeature && 
-            p.IsEnabled
-        );
-    };
+    const { currentUser } = useContext(AppContext);
 
     return (
-        <div className="space-y-6">
-            <div className="bg-blue-600/10 border border-blue-500/20 p-4 rounded-2xl">
-                <p className="text-blue-400 text-xs font-bold leading-relaxed">
-                    💡 <span className="underline italic">ចំណាំ:</span> System Admin មានសិទ្ធិប្រើប្រាស់គ្រប់មុខងារទាំងអស់ដោយស្វ័យប្រវត្តិ។ ការកំណត់ខាងក្រោមនេះគឺសម្រាប់ Role ធម្មតា។
-                </p>
+        <div className="space-y-8 animate-fade-in">
+            {/* Header Info Section */}
+            <div className="relative overflow-hidden bg-blue-600/10 border border-blue-500/20 p-8 rounded-[2.5rem] shadow-2xl group">
+                <div className="relative z-10 flex flex-col md:flex-row items-center gap-6">
+                    <div className="w-16 h-16 bg-blue-600/20 text-blue-500 rounded-2xl flex items-center justify-center border border-blue-500/30 shadow-inner group-hover:scale-110 transition-transform duration-500">
+                        <svg className="w-8 h-8" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.040L3 14.535a12 12 0 001.218 5.463l7.782 4.002 7.782-4.002a12 12 0 001.218-5.463l-.618-8.591z" />
+                        </svg>
+                    </div>
+                    <div className="flex-grow text-center md:text-left">
+                        <h2 className="text-xl font-black text-white uppercase tracking-tighter italic">Role-Based Access Control (RBAC)</h2>
+                        <p className="text-blue-400/80 text-xs font-bold leading-relaxed mt-1 max-w-2xl">
+                            ប្រព័ន្ធគ្រប់គ្រងសិទ្ធិអនុញ្ញាតឱ្យអ្នកកំណត់មុខងារនីមួយៗសម្រាប់ក្រុមការងារ (Roles)។ 
+                            <span className="text-white font-black mx-1 underline italic">System Admin</span> 
+                            នឹងទទួលបានសិទ្ធិពេញលេញដោយស្វ័យប្រវត្តិលើគ្រប់ផ្នែកទាំងអស់នៃកម្មវិធី។
+                        </p>
+                    </div>
+                </div>
+                {/* Decorative Elements */}
+                <div className="absolute top-0 right-0 w-64 h-64 bg-blue-600/5 rounded-full blur-3xl -translate-y-1/2 translate-x-1/2 pointer-events-none"></div>
             </div>
 
-            <div className="overflow-x-auto custom-scrollbar rounded-2xl border border-white/5 bg-black/20">
-                <table className="w-full text-left border-collapse">
-                    <thead>
-                        <tr className="bg-white/5 border-b border-white/10">
-                            <th className="p-4 text-[10px] font-black text-gray-400 uppercase tracking-widest">មុខងារ (Features)</th>
-                            {roles.map(role => (
-                                <th key={role} className="p-4 text-[10px] font-black text-gray-400 uppercase tracking-widest text-center">{role}</th>
-                            ))}
-                        </tr>
-                    </thead>
-                    <tbody className="divide-y divide-white/5">
-                        {FEATURES.map(feature => (
-                            <tr key={feature.id} className="hover:bg-white/[0.02] transition-colors">
-                                <td className="p-4">
-                                    <p className="text-sm font-bold text-white">{feature.label}</p>
-                                    <p className="text-[9px] text-gray-500 font-mono italic">{feature.id}</p>
-                                </td>
-                                {roles.map(role => {
-                                    const active = isEnabled(role, feature.id);
-                                    const loadingId = `${role}-${feature.id}`;
-                                    const isLoading = loading === loadingId;
+            {/* The Main Matrix Component */}
+            <div className="bg-gray-800/20 border border-white/5 rounded-[3rem] p-4 lg:p-8 shadow-3xl backdrop-blur-xl relative overflow-hidden group">
+                <div className="flex items-center justify-between mb-8 px-2">
+                    <div className="flex items-center gap-3">
+                        <div className="w-1.5 h-6 bg-blue-600 rounded-full animate-pulse"></div>
+                        <h3 className="text-lg font-black text-white uppercase tracking-widest italic">Permission Configuration Matrix</h3>
+                    </div>
+                    <div className="hidden md:flex items-center gap-2 px-4 py-2 bg-black/40 border border-white/5 rounded-2xl">
+                        <div className="w-2 h-2 rounded-full bg-green-500 animate-pulse"></div>
+                        <span className="text-[10px] font-black text-gray-500 uppercase tracking-widest">Real-time Sync Active</span>
+                    </div>
+                </div>
 
-                                    return (
-                                        <td key={role} className="p-4 text-center">
-                                            <button
-                                                onClick={() => handleToggle(role, feature.id, active)}
-                                                disabled={isLoading}
-                                                className={`
-                                                    relative inline-flex h-6 w-11 items-center rounded-full transition-colors focus:outline-none
-                                                    ${active ? 'bg-blue-600' : 'bg-gray-700'}
-                                                    ${isLoading ? 'opacity-50 cursor-not-allowed' : 'cursor-pointer'}
-                                                `}
-                                            >
-                                                <span
-                                                    className={`
-                                                        inline-block h-4 w-4 transform rounded-full bg-white transition-transform
-                                                        ${active ? 'translate-x-6' : 'translate-x-1'}
-                                                    `}
-                                                />
-                                                {isLoading && (
-                                                    <div className="absolute inset-0 flex items-center justify-center">
-                                                        <Spinner size="sm" color="white" />
-                                                    </div>
-                                                )}
-                                            </button>
-                                        </td>
-                                    );
-                                })}
-                            </tr>
-                        ))}
-                    </tbody>
-                </table>
+                <div className="relative z-10 min-h-[400px]">
+                    <PermissionMatrix />
+                </div>
+                
+                {/* Background Decoration */}
+                <div className="absolute -bottom-20 -left-20 w-80 h-80 bg-blue-600/5 rounded-full blur-[100px] pointer-events-none group-hover:bg-blue-600/10 transition-colors duration-700"></div>
+            </div>
+
+            {/* Footer Notice */}
+            <div className="flex flex-col md:flex-row justify-center items-center gap-4 py-4 opacity-50">
+                <div className="h-px bg-white/10 flex-grow"></div>
+                <p className="text-[10px] font-black text-gray-500 uppercase tracking-[0.3em] italic">Authorized Personnel Only</p>
+                <div className="h-px bg-white/10 flex-grow"></div>
             </div>
         </div>
     );

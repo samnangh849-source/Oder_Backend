@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback, Suspense, useMemo } from 'react';
+import React, { useState, useEffect, useCallback, Suspense, useMemo, useRef } from 'react';
 import { User, AppData } from './types';
 import { WEB_APP_URL } from './constants';
 import { useUrlState } from './hooks/useUrlState';
@@ -241,8 +241,10 @@ const App: React.FC = () => {
 
     const hasPermission = useCallback((feature: string) => {
         if (!currentUser) return false;
-        // Allow System Admin OR the 'create_order' feature for everyone
-        if (currentUser.IsSystemAdmin || (feature || '').toLowerCase() === 'create_order') return true;
+        // Allow System Admin OR Admin Role OR the 'create_order' feature for everyone
+        if (currentUser.IsSystemAdmin || 
+            (currentUser.Role || '').toLowerCase() === 'admin' ||
+            (feature || '').toLowerCase() === 'create_order') return true;
 
         const perm = appData.permissions?.find(p => 
             (p.Role || '').toLowerCase() === (currentUser.Role || '').toLowerCase() && 
@@ -307,10 +309,11 @@ const App: React.FC = () => {
         // Use CacheService for Session Management
         const initSession = async () => {
             try {
-                const session = await CacheService.get<{ user: User, timestamp: number }>(CACHE_KEYS.SESSION);
+                const session = await CacheService.get<{ user: User, token: string, timestamp: number }>(CACHE_KEYS.SESSION);
                 
                 if (session && session.user) {
                     setCurrentUser(session.user);
+                    if (session.token) tokenRef.current = session.token;
                     fetchData(); // This is async but we don't await it here to avoid blocking
                     if (appState === 'login') determineAppState(session.user);
                 } else {
@@ -344,9 +347,32 @@ const App: React.FC = () => {
                 try {
                     const data = JSON.parse(e.data);
                     const action = data.action || data.Action;
+                    const type = data.type || data.Type;
                     
-                    // If any data in the system changes, refresh the local store
-                    if (action === 'data_update' || action === 'DATA_UPDATE') {
+                    // 1. Real-time Permission Update
+                    if (type === 'update_permission' && data.payload) {
+                        const { role, feature, isEnabled } = data.payload;
+                        console.log(`Permission Update: ${feature} for ${role} -> ${isEnabled}`);
+                        setAppData(prev => {
+                            const oldPerms = prev.permissions || [];
+                            const foundIndex = oldPerms.findIndex(p => 
+                                (p.Role || '').toLowerCase() === (role || '').toLowerCase() && 
+                                (p.Feature || '').toLowerCase() === (feature || '').toLowerCase()
+                            );
+                            
+                            let nextPerms = [...oldPerms];
+                            if (foundIndex >= 0) {
+                                nextPerms[foundIndex] = { ...nextPerms[foundIndex], IsEnabled: isEnabled };
+                            } else {
+                                nextPerms.push({ Role: role, Feature: feature, IsEnabled: isEnabled });
+                            }
+                            return { ...prev, permissions: nextPerms };
+                        });
+                        return;
+                    }
+
+                    // 2. Real-time Data Sync for everything else
+                    if (action === 'data_update' || action === 'DATA_UPDATE' || type === 'data_update') {
                         console.log("Real-time update received, refreshing...");
                         fetchData(true); // Silent refresh in background
                     }
@@ -367,6 +393,7 @@ const App: React.FC = () => {
 
     const login = async (user: User, token: string) => {
         setCurrentUser(user);
+        tokenRef.current = token; // Update synchronous ref
         // Save session with token (15 days default)
         await CacheService.set(CACHE_KEYS.SESSION, { user, token, timestamp: Date.now() });
         fetchData(true); // Force fetch on login
@@ -392,28 +419,41 @@ const App: React.FC = () => {
         determineAppState(user);
     };
 
-    const logout = async () => {
+    const logout = useCallback(async () => {
         setCurrentUser(null);
+        tokenRef.current = null;
         setAppState('login');
         await CacheService.remove(CACHE_KEYS.SESSION);
         // Note: We keep APP_DATA cache to make next login faster
-    };
+    }, [setAppState]);
+
+    // Ref to store token for synchronous access in fetch interceptor
+    const tokenRef = useRef<string | null>(null);
 
     // --- GLOBAL FETCH INTERCEPTOR (JWT & Auth Handling) ---
     useEffect(() => {
         const originalFetch = window.fetch;
         window.fetch = async (input: RequestInfo | URL, init?: RequestInit) => {
-            const url = input.toString();
+            let url = '';
+            if (typeof input === 'string') url = input;
+            else if (input instanceof URL) url = input.toString();
+            else if (input instanceof Request) url = input.url;
             
             // Apply only to internal API calls (not external assets like drive images)
             if (url.includes(WEB_APP_URL) && !url.includes('/api/login')) {
                 try {
-                    // Try to get token from session cache
-                    const session = await CacheService.get<{ token: string }>(CACHE_KEYS.SESSION);
-                    if (session?.token) {
+                    // Try to get token from Ref first (fast), then Cache (fallback)
+                    let token = tokenRef.current;
+                    if (!token) {
+                        const session = await CacheService.get<{ token: string }>(CACHE_KEYS.SESSION);
+                        token = session?.token || null;
+                        if (token) tokenRef.current = token;
+                    }
+
+                    if (token) {
                         const headers = new Headers(init?.headers || {});
                         if (!headers.has('Authorization')) {
-                            headers.set('Authorization', `Bearer ${session.token}`);
+                            headers.set('Authorization', `Bearer ${token}`);
                         }
                         init = { ...init, headers };
                     }
@@ -439,10 +479,10 @@ const App: React.FC = () => {
         return () => { window.fetch = originalFetch; };
     }, [logout]);
 
-    const refreshData = async () => {
+    const refreshData = useCallback(async () => {
         await fetchData(true); // Force fetch
         setRefreshTimestamp(Date.now());
-    };
+    }, [fetchData]);
 
     // --- SYSTEM UPDATE REAL-TIME POLLING ---
     useEffect(() => {

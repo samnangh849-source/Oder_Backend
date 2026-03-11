@@ -161,7 +161,7 @@ const SettingsDashboard: React.FC<SettingsDashboardProps> = ({ onBack, initialSe
                     </button>
 
                     {activeId === 'pages' && <button onClick={() => setIsPdfOpen(true)} className="flex-1 sm:flex-none btn btn-secondary px-6">PDF Export</button>}
-                    {activeId !== 'telegramTemplates' && (
+                    {activeId !== 'telegramTemplates' && activeId !== 'permissions' && activeId !== 'database' && (
                         <button onClick={() => setModal({ isOpen: true, sectionId: activeId, item: null })} className="flex-1 sm:flex-none btn btn-primary px-10 shadow-lg shadow-blue-600/20 font-black">+ បន្ថែមថ្មី</button>
                     )}
                     <button onClick={onBack} className="hidden md:flex btn btn-secondary px-6">ត្រឡប់</button>

@@ -389,3 +389,39 @@ body {
 .bottom-nav a.active {
     color: var(--primary);
 }
+
+/* --- SAFARI & PERFORMANCE OPTIMIZATIONS --- */
+
+/* High-performance backdrop blur for Safari */
+@supports (-webkit-backdrop-filter: none) or (backdrop-filter: none) {
+  .backdrop-blur-xl, .backdrop-blur-2xl, .backdrop-blur-3xl {
+    -webkit-backdrop-filter: blur(12px) saturate(160%);
+    backdrop-filter: blur(12px) saturate(160%);
+    /* Boost GPU usage to avoid CPU bottleneck in Safari */
+    transform: translateZ(0);
+    -webkit-transform: translateZ(0);
+    perspective: 1000px;
+    backface-visibility: hidden;
+  }
+}
+
+/* Force hardware acceleration for problematic Safari elements */
+.animate-fade-in, .animate-pulse, .transition-all {
+    will-change: transform, opacity;
+    transform: translateZ(0);
+}
+
+/* Global optimization for WebKit */
+* {
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+    -webkit-tap-highlight-color: transparent;
+}
+
+/* Optimize large scrollable lists */
+.overflow-y-auto {
+    -webkit-overflow-scrolling: touch;
+    scroll-behavior: smooth;
+    will-change: scroll-position;
+}
+
