@@ -500,8 +500,8 @@ const UserOrdersView: React.FC<{ team: string; onAdd: () => void }> = ({ team, o
                 </div>
             </div>
 
-            {/* Compact Dashboard Filters & Actions */}
-            <div className="bg-[#111827] p-4 rounded-[2rem] border border-white/5 space-y-4 shadow-xl mx-1">
+            {/* Compact Dashboard Filters & Actions - STICKY */}
+            <div className="sticky top-2 z-[40] bg-[#020617]/80 backdrop-blur-2xl p-4 rounded-[2rem] border border-white/10 space-y-4 shadow-2xl mx-1 ring-1 ring-white/5 transition-all hover:bg-gray-900/90">
                 <div className="flex flex-col gap-4">
                     <div className="flex items-center gap-1 overflow-x-auto hide-scrollbar bg-black/40 p-1 rounded-xl border border-white/5">
                         {(['today', 'this_week', 'this_month', 'custom'] as const).map(p => (

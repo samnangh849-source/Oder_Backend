@@ -406,8 +406,9 @@ const UserSalesPageReport: React.FC<UserSalesPageReportProps> = ({
             )}
 
             {/* Top Stats Summary */}
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
                 <StatCard label="ចំណូលសរុប (Revenue)" value={`$${grandTotals.revenue.toLocaleString()}`} icon="💰" colorClass="from-blue-600 to-indigo-500" />
+                <StatCard label="ប្រាក់ចំណេញ (Profit)" value={`$${grandTotals.profit.toLocaleString()}`} icon="📈" colorClass="from-emerald-600 to-teal-500" />
                 <StatCard label="ការកម្មង់ (Orders)" value={grandTotals.orders} icon="📦" colorClass="from-purple-600 to-pink-500" />
                 <StatCard label="Page សកម្ម" value={grandTotals.pagesCount} icon="📄" colorClass="from-orange-500 to-yellow-500" />
             </div>

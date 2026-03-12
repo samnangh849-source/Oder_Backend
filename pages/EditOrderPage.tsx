@@ -352,7 +352,8 @@ const EditOrderPage: React.FC<EditOrderPageProps> = ({ order, onSaveSuccess, onC
                 "Customer Name", "Customer Phone", "Location", "Address Details",
                 "Internal Shipping Method", "Internal Shipping Details", "Note",
                 "Payment Status", "Payment Info", "Shipping Fee (Customer)", "Internal Cost",
-                "Timestamp", "IsVerified", "Page", "Team", "Fulfillment Store"
+                "Timestamp", "IsVerified", "Page", "Team", "Fulfillment Store",
+                "Subtotal", "Grand Total", "Discount ($)", "Total Product Cost ($)"
             ];
 
             keysToCheck.forEach(key => {

@@ -116,22 +116,22 @@ const Sidebar: React.FC<SidebarProps> = ({
             )}
 
             {/* Navigation Section */}
-            <div className="flex-grow overflow-y-auto custom-scrollbar px-0 py-6 space-y-1">
+            <div className="flex-grow overflow-hidden px-0 py-2 space-y-0">
                 {/* Mobile Chat Button - Visible only on Mobile */}
                 {isMobile && (
-                    <div className="px-4 mb-6">
+                    <div className="px-4 mb-2">
                         <button 
                             onClick={() => setIsChatOpen(true)}
-                            className="w-full flex items-center justify-between px-4 py-3.5 rounded-2xl bg-gradient-to-r from-blue-600/20 to-indigo-600/20 text-blue-300 border border-blue-500/30 active:scale-[0.98] transition-all shadow-lg"
+                            className="w-full flex items-center justify-between px-4 py-2.5 rounded-xl bg-gradient-to-r from-blue-600/20 to-indigo-600/20 text-blue-300 border border-blue-500/30 active:scale-[0.98] transition-all shadow-lg"
                         >
                             <div className="flex items-center gap-3">
-                                <div className="relative p-1.5 bg-blue-500/20 rounded-lg">
-                                    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" /></svg>
-                                    {unreadCount > 0 && <span className="absolute -top-1 -right-1 w-2.5 h-2.5 bg-red-500 rounded-full border-2 border-gray-900 animate-pulse"></span>}
+                                <div className="relative p-1 bg-blue-500/20 rounded-lg">
+                                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" /></svg>
+                                    {unreadCount > 0 && <span className="absolute -top-1 -right-1 w-2 h-2 bg-red-500 rounded-full border-2 border-gray-900 animate-pulse"></span>}
                                 </div>
-                                <span className="text-xs font-black uppercase tracking-widest">{t.chat_system}</span>
+                                <span className="text-[10px] font-black uppercase tracking-widest">{t.chat_system}</span>
                             </div>
-                            {unreadCount > 0 && <span className="bg-red-500 text-white text-[9px] font-black px-2 py-0.5 rounded-full shadow-lg">{unreadCount}</span>}
+                            {unreadCount > 0 && <span className="bg-red-500 text-white text-[8px] font-black px-1.5 py-0.5 rounded-full shadow-lg">{unreadCount}</span>}
                         </button>
                     </div>
                 )}
@@ -146,7 +146,7 @@ const Sidebar: React.FC<SidebarProps> = ({
                             <button 
                                 onClick={() => onNavChange(item.id)} 
                                 className={`
-                                    w-full flex items-center justify-between px-6 py-4 transition-all duration-200 group relative
+                                    w-full flex items-center justify-between px-6 py-2.5 transition-all duration-200 group relative
                                     ${isActive 
                                         ? 'text-white bg-gradient-to-r from-blue-600/30 to-transparent border-l-4 border-blue-500 shadow-[0_0_20px_rgba(37,99,235,0.1)]' 
                                         : 'text-gray-400 hover:text-white hover:bg-white/5 border-l-4 border-transparent'
@@ -159,26 +159,26 @@ const Sidebar: React.FC<SidebarProps> = ({
                                         {item.icon}
                                     </span>
                                     {(isMobile || !isSidebarCollapsed) && (
-                                        <span className={`text-xs font-bold uppercase tracking-widest ${isActive ? 'text-white' : ''}`}>
+                                        <span className={`text-[10px] font-bold uppercase tracking-widest ${isActive ? 'text-white' : ''}`}>
                                             {item.label}
                                         </span>
                                     )}
                                 </div>
                                 
                                 {isReports && (isMobile || !isSidebarCollapsed) && (
-                                    <svg className={`w-3 h-3 transition-transform duration-300 opacity-50 ${isExpanded ? 'rotate-180' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" /></svg>
+                                    <svg className={`w-2.5 h-2.5 transition-transform duration-300 opacity-50 ${isExpanded ? 'rotate-180' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" /></svg>
                                 )}
                             </button>
 
                             {/* Reports Submenu */}
-                            <div className={`overflow-hidden transition-all duration-300 ease-in-out bg-black/20 ${isExpanded && (isMobile || !isSidebarCollapsed) ? 'max-h-[500px] opacity-100 py-2' : 'max-h-0 opacity-0'}`}>
+                            <div className={`overflow-hidden transition-all duration-300 ease-in-out bg-black/20 ${isExpanded && (isMobile || !isSidebarCollapsed) ? 'max-h-[300px] opacity-100 py-1' : 'max-h-0 opacity-0'}`}>
                                 {reportSections.map(sub => (
                                     <button 
                                         key={sub.id}
                                         onClick={() => onReportSubNav(sub.id)}
-                                        className="w-full flex items-center gap-3 px-6 pl-14 py-2.5 text-[10px] font-bold uppercase tracking-wider text-gray-500 hover:text-white hover:bg-white/5 transition-all relative group"
+                                        className="w-full flex items-center gap-3 px-6 pl-14 py-1.5 text-[9px] font-bold uppercase tracking-wider text-gray-500 hover:text-white hover:bg-white/5 transition-all relative group"
                                     >
-                                        <div className="absolute left-10 w-1.5 h-1.5 rounded-full bg-gray-700 group-hover:bg-blue-500 transition-colors"></div>
+                                        <div className="absolute left-10 w-1 h-1 rounded-full bg-gray-700 group-hover:bg-blue-500 transition-colors"></div>
                                         <span className="truncate">{sub.title}</span>
                                     </button>
                                 ))}

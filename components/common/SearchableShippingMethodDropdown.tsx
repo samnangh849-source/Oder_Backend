@@ -11,39 +11,40 @@ interface SearchableShippingMethodDropdownProps {
 }
 
 const SearchableShippingMethodDropdown: React.FC<SearchableShippingMethodDropdownProps> = ({ 
-    methods, 
+    methods = [], 
     selectedMethodName, 
     onSelect, 
     placeholder = "ជ្រើសរើសសេវាដឹកជញ្ជូន..." 
 }) => {
+    const safeMethods = useMemo(() => Array.isArray(methods) ? methods : [], [methods]);
     const [isOpen, setIsOpen] = useState(false);
     const [searchTerm, setSearchTerm] = useState('');
     const dropdownRef = useRef<HTMLDivElement>(null);
 
     useEffect(() => {
-        const selected = methods.find(m => m.MethodName === selectedMethodName);
+        const selected = safeMethods.find(m => m.MethodName === selectedMethodName);
         if (selected) setSearchTerm(selected.MethodName);
-    }, [selectedMethodName, methods]);
+    }, [selectedMethodName, safeMethods]);
 
     useEffect(() => {
         const handleClickOutside = (e: MouseEvent) => {
             if (dropdownRef.current && !dropdownRef.current.contains(e.target as Node)) {
                 setIsOpen(false);
-                const selected = methods.find(m => m.MethodName === selectedMethodName);
+                const selected = safeMethods.find(m => m.MethodName === selectedMethodName);
                 setSearchTerm(selected ? selected.MethodName : '');
             }
         };
         document.addEventListener('mousedown', handleClickOutside);
         return () => document.removeEventListener('mousedown', handleClickOutside);
-    }, [selectedMethodName, methods]);
+    }, [selectedMethodName, safeMethods]);
 
     const filteredMethods = useMemo(() => {
-        if (!searchTerm.trim()) return methods;
+        if (!searchTerm.trim()) return safeMethods;
         const q = searchTerm.toLowerCase();
-        return methods.filter(m => (m.MethodName || '').toLowerCase().includes(q));
-    }, [methods, searchTerm]);
+        return safeMethods.filter(m => (m.MethodName || '').toLowerCase().includes(q));
+    }, [safeMethods, searchTerm]);
 
-    const selectedMethod = methods.find(m => m.MethodName === selectedMethodName);
+    const selectedMethod = safeMethods.find(m => m.MethodName === selectedMethodName);
 
     return (
         <div className="relative w-full" ref={dropdownRef}>

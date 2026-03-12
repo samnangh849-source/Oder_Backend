@@ -43,28 +43,40 @@ const ReportDashboard: React.FC<ReportDashboardProps> = ({ activeReport, onBack,
         return () => setMobilePageTitle(null);
     }, [activeReport, setMobilePageTitle]);
     
-    // Sync Date Filters with URL
+    // Sync All Filters with URL
     const [urlDate, setUrlDate] = useUrlState<string>('dateFilter', 'this_month');
     const [urlStart, setUrlStart] = useUrlState<string>('startDate', '');
     const [urlEnd, setUrlEnd] = useUrlState<string>('endDate', '');
     const [urlCustomer, setUrlCustomer] = useUrlState<string>('customerFilter', '');
+    const [urlTeam, setUrlTeam] = useUrlState<string>('teamFilter', '');
+    const [urlUser, setUrlUser] = useUrlState<string>('userFilter', '');
+    const [urlPayment, setUrlPayment] = useUrlState<string>('paymentFilter', '');
+    const [urlShipping, setUrlShipping] = useUrlState<string>('shippingFilter', '');
+    const [urlDriver, setUrlDriver] = useUrlState<string>('driverFilter', '');
+    const [urlProduct, setUrlProduct] = useUrlState<string>('productFilter', '');
+    const [urlBank, setUrlBank] = useUrlState<string>('bankFilter', '');
+    const [urlFulfillment, setUrlFulfillment] = useUrlState<string>('fulfillmentFilter', '');
+    const [urlStore, setUrlStore] = useUrlState<string>('storeFilter', '');
+    const [urlPage, setUrlPage] = useUrlState<string>('pageFilter', '');
+    const [urlLocation, setUrlLocation] = useUrlState<string>('locationFilter', '');
+    const [urlCost, setUrlCost] = useUrlState<string>('costFilter', '');
 
     const [filters, setFilters] = useState<FilterState>({
         datePreset: (urlDate as any) || 'this_month',
         startDate: urlStart || '',
         endDate: urlEnd || '',
-        team: '',
-        user: '',
-        paymentStatus: '',
-        shippingService: '',
-        driver: '',
-        product: '',
-        bank: '',
-        fulfillmentStore: '',
-        store: '',
-        page: '',
-        location: '',
-        internalCost: '',
+        team: urlTeam || '',
+        user: urlUser || '',
+        paymentStatus: urlPayment || '',
+        shippingService: urlShipping || '',
+        driver: urlDriver || '',
+        product: urlProduct || '',
+        bank: urlBank || '',
+        fulfillmentStore: urlFulfillment || '',
+        store: urlStore || '',
+        page: urlPage || '',
+        location: urlLocation || '',
+        internalCost: urlCost || '',
         customerName: urlCustomer || '',
     });
 
@@ -74,7 +86,19 @@ const ReportDashboard: React.FC<ReportDashboardProps> = ({ activeReport, onBack,
         if (filters.startDate !== urlStart) setUrlStart(filters.startDate);
         if (filters.endDate !== urlEnd) setUrlEnd(filters.endDate);
         if (filters.customerName !== urlCustomer) setUrlCustomer(filters.customerName);
-    }, [filters.datePreset, filters.startDate, filters.endDate, filters.customerName, urlDate, urlStart, urlEnd, urlCustomer, setUrlDate, setUrlStart, setUrlEnd, setUrlCustomer]);
+        if (filters.team !== urlTeam) setUrlTeam(filters.team);
+        if (filters.user !== urlUser) setUrlUser(filters.user);
+        if (filters.paymentStatus !== urlPayment) setUrlPayment(filters.paymentStatus);
+        if (filters.shippingService !== urlShipping) setUrlShipping(filters.shippingService);
+        if (filters.driver !== urlDriver) setUrlDriver(filters.driver);
+        if (filters.product !== urlProduct) setUrlProduct(filters.product);
+        if (filters.bank !== urlBank) setUrlBank(filters.bank);
+        if (filters.fulfillmentStore !== urlFulfillment) setUrlFulfillment(filters.fulfillmentStore);
+        if (filters.store !== urlStore) setUrlStore(filters.store);
+        if (filters.page !== urlPage) setUrlPage(filters.page);
+        if (filters.location !== urlLocation) setUrlLocation(filters.location);
+        if (filters.internalCost !== urlCost) setUrlCost(filters.internalCost);
+    }, [filters, urlDate, urlStart, urlEnd, urlCustomer, urlTeam, urlUser, urlPayment, urlShipping, urlDriver, urlProduct, urlBank, urlFulfillment, urlStore, urlPage, urlLocation, urlCost, setUrlDate, setUrlStart, setUrlEnd, setUrlCustomer, setUrlTeam, setUrlUser, setUrlPayment, setUrlShipping, setUrlDriver, setUrlProduct, setUrlBank, setUrlFulfillment, setUrlStore, setUrlPage, setUrlLocation, setUrlCost]);
 
     const fetchInitialData = async () => {
         setLoading(true);
@@ -85,13 +109,20 @@ const ReportDashboard: React.FC<ReportDashboardProps> = ({ activeReport, onBack,
             ]);
             const ordersData = await ordersRes.json();
             const usersData = await usersRes.json();
-            
+
             if (ordersData.status === 'success') {
                 const parsed = (ordersData.data || [])
                     .filter((o: any) => o !== null && o['Order ID'] !== 'Opening_Balance' && o['Order ID'] !== 'Opening Balance')
                     .map((o: any) => {
                         let p = []; try { if (o['Products (JSON)']) p = JSON.parse(o['Products (JSON)']); } catch (e) {}
-                        return { ...o, Products: p };
+
+                        // Normalize product fields
+                        const normalizedProducts = Array.isArray(p) ? p.map((prod: any) => {
+                            const name = prod.name || prod.ProductName || '';
+                            return { ...prod, name };
+                        }) : [];
+
+                        return { ...o, Products: normalizedProducts };
                     });
                 setOrders(parsed);
             }
@@ -114,10 +145,11 @@ const ReportDashboard: React.FC<ReportDashboardProps> = ({ activeReport, onBack,
             case 'this_month': start = new Date(now.getFullYear(), now.getMonth(), 1); break;
             case 'last_month': start = new Date(now.getFullYear(), now.getMonth() - 1, 1); end = new Date(now.getFullYear(), now.getMonth(), 0, 23, 59, 59); break;
             case 'this_year': start = new Date(now.getFullYear(), 0, 1); break;
+            case 'last_year': start = new Date(now.getFullYear() - 1, 0, 1); end = new Date(now.getFullYear() - 1, 11, 31, 23, 59, 59); break;
             case 'all': return 'All time data stream';
             case 'custom': return `${filters.startDate || '...'} to ${filters.endDate || '...'}`;
         }
-        
+
         // Use local date parts to construct string to avoid timezone shifts
         const formatDate = (d: Date) => {
             const year = d.getFullYear();
@@ -125,7 +157,7 @@ const ReportDashboard: React.FC<ReportDashboardProps> = ({ activeReport, onBack,
             const day = String(d.getDate()).padStart(2, '0');
             return `${year}-${month}-${day}`;
         };
-        
+
         return start ? `${formatDate(start)} to ${formatDate(end)}` : 'All time data stream';
     }, [filters.datePreset, filters.startDate, filters.endDate]);
 
@@ -136,7 +168,7 @@ const ReportDashboard: React.FC<ReportDashboardProps> = ({ activeReport, onBack,
                 const now = new Date();
                 const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
                 let start: Date | null = null, end: Date | null = new Date();
-                
+
                 switch (filters.datePreset) {
                     case 'today': 
                         start = today; 
@@ -149,6 +181,7 @@ const ReportDashboard: React.FC<ReportDashboardProps> = ({ activeReport, onBack,
                     case 'this_month': start = new Date(now.getFullYear(), now.getMonth(), 1); break;
                     case 'last_month': start = new Date(now.getFullYear(), now.getMonth() - 1, 1); end = new Date(now.getFullYear(), now.getMonth(), 0, 23, 59, 59); break;
                     case 'this_year': start = new Date(now.getFullYear(), 0, 1); break;
+                    case 'last_year': start = new Date(now.getFullYear() - 1, 0, 1); end = new Date(now.getFullYear() - 1, 11, 31, 23, 59, 59); break;
                     case 'custom':
                         if (filters.startDate) start = new Date(filters.startDate + 'T00:00:00');
                         if (filters.endDate) end = new Date(filters.endDate + 'T23:59:59');
@@ -159,10 +192,13 @@ const ReportDashboard: React.FC<ReportDashboardProps> = ({ activeReport, onBack,
             }
 
             // Helper for multi-select checking
-            const isMatch = (filterValue: string, orderValue: string) => {
+            const isMatch = (filterValue: string, orderValue: string, partial = false) => {
                 if (!filterValue) return true;
                 const selectedValues = filterValue.split(',').map(v => v.trim().toLowerCase());
                 const val = (orderValue || '').trim().toLowerCase();
+                if (partial) {
+                    return selectedValues.some(sv => val.includes(sv));
+                }
                 return selectedValues.includes(val);
             };
 
@@ -174,18 +210,20 @@ const ReportDashboard: React.FC<ReportDashboardProps> = ({ activeReport, onBack,
             if (!isMatch(filters.bank, o['Payment Info'])) return false;
             if (!isMatch(filters.fulfillmentStore, o['Fulfillment Store'])) return false;
             if (!isMatch(filters.page, o.Page)) return false;
-            if (!isMatch(filters.location, o.Location)) return false;
+            if (!isMatch(filters.location, o.Location, true)) return false; // Partial match for Location
             if (!isMatch(filters.internalCost, String(o['Internal Cost']))) return false;
 
-            // Product Filter (Special case for products array)
-            if (filters.product && !o.Products.some(p => p.name === filters.product)) return false;
+            // Product Filter (Multi-select support)
+            if (filters.product) {
+                const selectedProducts = filters.product.split(',').map(v => v.trim().toLowerCase());
+                if (!o.Products.some(p => selectedProducts.includes((p.name || '').toLowerCase()))) return false;
+            }
 
             // Store (Brand) Filter (Multi)
             if (filters.store) {
                const pageConfig = appData.pages?.find(p => p.PageName === o.Page);
                const orderStore = pageConfig ? pageConfig.DefaultStore : null;
-               const selectedStores = filters.store.split(',');
-               if (!orderStore || !selectedStores.includes(orderStore)) return false;
+               if (!isMatch(filters.store, orderStore || '')) return false;
             }
 
             // Customer Name Filter (Multi-Select Logic)
@@ -257,17 +295,20 @@ const ReportDashboard: React.FC<ReportDashboardProps> = ({ activeReport, onBack,
             </div>
 
             {/* Global Filter Modal */}
-            <Modal isOpen={isFilterOpen} onClose={() => setIsFilterOpen(false)} maxWidth="max-w-4xl">
-                <div className="p-8 bg-[#0f172a] rounded-[3rem] border border-white/10 shadow-3xl overflow-hidden relative">
-                    <div className="flex justify-between items-center mb-10 relative z-10">
+            <Modal isOpen={isFilterOpen} onClose={() => setIsFilterOpen(false)} maxWidth="max-w-5xl">
+                <div className="p-8 bg-[#0f172a] rounded-[2.5rem] overflow-hidden relative flex flex-col h-full">
+                    <div className="flex justify-between items-center mb-8 relative z-10">
                         <div className="flex items-center gap-4">
-                            <div className="w-1.5 h-8 bg-blue-600 rounded-full"></div>
-                            <h2 className="text-2xl font-black text-white uppercase tracking-tighter italic leading-none">Filter Subsystem</h2>
+                            <div className="w-2 h-10 bg-blue-600 rounded-full shadow-[0_0_20px_rgba(37,99,235,0.5)]"></div>
+                            <div>
+                                <h2 className="text-3xl font-black text-white uppercase tracking-tighter italic leading-none">Filter Engine</h2>
+                                <p className="text-[10px] text-gray-500 font-bold uppercase tracking-[0.3em] mt-1 ml-0.5">Report Analysis Subsystem</p>
+                            </div>
                         </div>
-                        <button onClick={() => setIsFilterOpen(false)} className="w-12 h-12 bg-white/5 rounded-2xl flex items-center justify-center text-gray-500 hover:text-white transition-all active:scale-90 border border-white/5">&times;</button>
+                        <button onClick={() => setIsFilterOpen(false)} className="w-12 h-12 bg-white/5 rounded-2xl flex items-center justify-center text-gray-500 hover:text-white transition-all active:scale-90 border border-white/5 hover:bg-white/10 shadow-xl">&times;</button>
                     </div>
                     
-                    <div className="max-h-[60vh] overflow-y-auto custom-scrollbar pr-2 relative z-10">
+                    <div className="overflow-y-auto custom-scrollbar pr-4 relative z-10 flex-grow" style={{ maxHeight: 'calc(85vh - 250px)' }}>
                         <OrderFilters 
                             filters={filters} 
                             setFilters={setFilters} 
@@ -278,15 +319,16 @@ const ReportDashboard: React.FC<ReportDashboardProps> = ({ activeReport, onBack,
                         />
                     </div>
                     
-                    <div className="mt-12 flex justify-center relative z-10">
+                    <div className="mt-10 flex justify-center relative z-10 border-t border-white/5 pt-8">
                         <button 
                             onClick={() => setIsFilterOpen(false)} 
-                            className="btn btn-primary w-full py-5 text-[13px] font-black uppercase tracking-[0.25em] shadow-[0_20px_50px_rgba(37,99,235,0.3)] rounded-2xl active:scale-[0.98] transition-all"
+                            className="btn btn-primary w-full max-w-md py-5 text-[13px] font-black uppercase tracking-[0.25em] shadow-[0_20px_50px_rgba(37,99,235,0.3)] rounded-2xl active:scale-[0.98] transition-all"
                         >
-                            Apply Filter Configuration
+                            Apply Report Parameters
                         </button>
                     </div>
                     <div className="absolute -bottom-20 -right-20 w-80 h-80 bg-blue-600/10 rounded-full blur-[100px] pointer-events-none"></div>
+                    <div className="absolute -top-20 -left-20 w-60 h-60 bg-indigo-600/5 rounded-full blur-[80px] pointer-events-none"></div>
                 </div>
             </Modal>
         </div>

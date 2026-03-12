@@ -109,7 +109,7 @@ const OrderFilters: React.FC<OrderFiltersProps> = ({
     };
 
     return (
-        <div className="space-y-8">
+        <div className="space-y-10">
             <DateWindowFilter 
                 datePreset={filters.datePreset}
                 setDatePreset={(v) => setFilters({ ...filters, datePreset: v })}
@@ -120,7 +120,7 @@ const OrderFilters: React.FC<OrderFiltersProps> = ({
                 calculatedRange={calculatedRange}
             />
 
-            <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-x-6 gap-y-6 px-1">
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-x-6 gap-y-8 px-1">
                 
                 {/* Customer Name Select Filter (Searchable by Name OR Phone) */}
                 <SelectFilter 
@@ -210,7 +210,7 @@ const OrderFilters: React.FC<OrderFiltersProps> = ({
                     label="Merchant Node (User)" 
                     value={filters.user} 
                     onChange={(v) => updateFilter('user', v)}
-                    options={usersList.map(u => ({ label: u.FullName, value: u.UserName }))}
+                    options={(usersList || []).map(u => ({ label: u.FullName, value: u.UserName }))}
                     placeholder="All Registered Users"
                     multiple={true}
                 />

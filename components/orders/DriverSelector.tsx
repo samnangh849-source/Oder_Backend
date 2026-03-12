@@ -1,24 +1,24 @@
 
-import React, { useRef, useEffect } from 'react';
+import React, { useRef, useEffect, useMemo } from 'react';
 import { Driver } from '../../types';
 import { convertGoogleDriveUrl } from '../../utils/fileUtils';
 
 interface DriverSelectorProps {
-    drivers: Driver[];
+    drivers?: Driver[];
     selectedDriverName: string;
     onSelect: (driverName: string) => void;
 }
 
-const DriverSelector: React.FC<DriverSelectorProps> = ({ drivers, selectedDriverName, onSelect }) => {
+const DriverSelector: React.FC<DriverSelectorProps> = ({ drivers = [], selectedDriverName, onSelect }) => {
+    const safeDrivers = useMemo(() => Array.isArray(drivers) ? drivers : [], [drivers]);
+    
     // --- Audio System ---
     const sfxHover = useRef<HTMLAudioElement | null>(null);
     const sfxSelect = useRef<HTMLAudioElement | null>(null);
 
     useEffect(() => {
         // High-Tech Digital Interface Sounds
-        // Hover: Short crisp digital tick
         sfxHover.current = new Audio('https://assets.mixkit.co/active_storage/sfx/2572/2572-preview.mp3'); 
-        // Select: Mechanical/Sci-fi Lock-in sound
         sfxSelect.current = new Audio('https://assets.mixkit.co/active_storage/sfx/2570/2570-preview.mp3'); 
         
         if (sfxHover.current) sfxHover.current.volume = 0.15;
@@ -45,47 +45,35 @@ const DriverSelector: React.FC<DriverSelectorProps> = ({ drivers, selectedDriver
     return (
         <div className="w-full py-4">
             <style>{`
-                /* CSS Variable for Rotation */
-                @property --angle {
-                    syntax: '<angle>';
-                    initial-value: 0deg;
-                    inherits: false;
-                }
-
                 /* Flux Animation Keyframes */
                 @keyframes spin-flux {
                     from { --angle: 0deg; }
                     to { --angle: 360deg; }
                 }
 
-                /* Base Card Style */
                 .flux-card {
                     position: relative;
-                    background: #0f172a; /* Slate 900 */
+                    background: #0f172a;
                     border-radius: 1rem;
                     z-index: 1;
                     box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.5);
                 }
 
-                /* Electric Flux Effect (Active State) */
                 .flux-card.selected::after, .flux-card.selected::before {
                     content: '';
                     position: absolute;
                     inset: -2px;
                     z-index: -1;
-                    /* Electric Gradient Colors: Cyan -> Blue -> Purple -> Cyan */
-                    background: conic-gradient(from var(--angle), transparent 60%, #22d3ee, #3b82f6, #a855f7, #22d3ee);
+                    background: conic-gradient(from var(--angle, 0deg), transparent 60%, #22d3ee, #3b82f6, #a855f7, #22d3ee);
                     border-radius: inherit;
                     animation: spin-flux 2s linear infinite;
                 }
 
-                /* Outer Glow (Blur) */
                 .flux-card.selected::before {
                     filter: blur(10px);
                     opacity: 0.7;
                 }
 
-                /* Floating Text Animation */
                 @keyframes float-text {
                     0%, 100% { transform: translateY(0); }
                     50% { transform: translateY(-2px); }
@@ -95,14 +83,14 @@ const DriverSelector: React.FC<DriverSelectorProps> = ({ drivers, selectedDriver
                 }
             `}</style>
 
-            {drivers.length === 0 ? (
+            {safeDrivers.length === 0 ? (
                 <div className="flex flex-col items-center justify-center p-8 border-2 border-dashed border-gray-800 rounded-2xl bg-gray-900/30">
                     <div className="w-10 h-10 border-2 border-gray-700 border-t-cyan-500 rounded-full animate-spin mb-3"></div>
                     <p className="text-gray-500 font-black uppercase tracking-[0.2em] text-[10px]">NO DRIVERS DETECTED</p>
                 </div>
             ) : (
                 <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-5 p-2">
-                    {drivers.map((d) => (
+                    {safeDrivers.map((d) => (
                         <DriverCard 
                             key={d.DriverName}
                             driver={d}
@@ -133,25 +121,21 @@ const DriverCard: React.FC<DriverCardProps> = ({ driver, isSelected, onSelect, o
                 flux-card relative h-48 cursor-pointer transition-all duration-300 group overflow-visible
                 flex flex-col items-center justify-end pb-3
                 ${isSelected 
-                    ? 'selected scale-[1.03]' // Reduced scaling from previous versions
+                    ? 'selected scale-[1.03]' 
                     : 'border border-white/5 hover:border-blue-500/30 grayscale opacity-70 hover:opacity-100 hover:grayscale-0'
                 }
             `}
         >
-            {/* Tech Grid Background (Inside Card) */}
             <div className="absolute inset-0 rounded-2xl overflow-hidden bg-gray-900">
                 <div className="absolute inset-0 opacity-20" style={{ 
                     backgroundImage: 'radial-gradient(#3b82f6 1px, transparent 1px)', 
                     backgroundSize: '10px 10px' 
                 }}></div>
-                
-                {/* Active Floor Light */}
                 {isSelected && (
                     <div className="absolute bottom-0 left-0 right-0 h-1/2 bg-gradient-to-t from-blue-900/40 to-transparent"></div>
                 )}
             </div>
 
-            {/* Driver Image */}
             <div className={`
                 absolute inset-x-0 transition-all duration-500 z-10 flex justify-center
                 ${isSelected ? 'top-3 bottom-12' : 'top-4 bottom-10'}
@@ -168,9 +152,7 @@ const DriverCard: React.FC<DriverCardProps> = ({ driver, isSelected, onSelect, o
                 </div>
             </div>
 
-            {/* Info Section */}
             <div className="relative z-20 w-full px-2 text-center">
-                {/* Name Tag */}
                 <div className={`
                     transition-all duration-300 transform
                     ${isSelected ? 'translate-y-0 animate-float-text' : 'translate-y-1'}
@@ -182,8 +164,6 @@ const DriverCard: React.FC<DriverCardProps> = ({ driver, isSelected, onSelect, o
                         {driver.DriverName}
                     </h3>
                 </div>
-
-                {/* Active Indicator */}
                 <div className={`
                     mt-2 flex items-center justify-center gap-1.5 transition-all duration-300
                     ${isSelected ? 'opacity-100' : 'opacity-0 scale-0'}

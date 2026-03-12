@@ -5,11 +5,12 @@ import '@tensorflow/tfjs-backend-webgl';
 export interface DetectionResult {
     found: boolean;
     box?: { x: number, y: number, w: number, h: number };
-    keypoints?: handPoseDetection.Keypoint[]; // Added keypoints for finger tracking
+    keypoints?: handPoseDetection.Keypoint[]; 
     stability: number;
     type: 'box' | 'bag' | 'general';
     gesture?: 'none' | 'five_fingers' | 'thumbs_up';
     confidence: number;
+    isHand: boolean;
 }
 
 export class PackageDetector {
@@ -61,7 +62,7 @@ export class PackageDetector {
 
     async detect(video: HTMLVideoElement): Promise<DetectionResult> {
         if (!video.videoWidth || video.paused || video.ended) {
-            return { found: false, stability: 0, type: 'general', gesture: 'none', confidence: 0 };
+            return { found: false, stability: 0, type: 'general', gesture: 'none', confidence: 0, isHand: false };
         }
 
         let gestureDetected: 'none' | 'five_fingers' | 'thumbs_up' = 'none';
@@ -112,6 +113,7 @@ export class PackageDetector {
 
         return {
             found: true,
+            isHand: isHand,
             type: isHand ? 'general' : 'box',
             box: rawBox ? this.smoothBox(rawBox) : undefined,
             keypoints, // Send keypoints back to UI

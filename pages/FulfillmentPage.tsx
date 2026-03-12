@@ -1,15 +1,15 @@
-import React, { useState, useContext, useEffect, useMemo } from 'react';
+import React, { useState, useContext, useEffect } from 'react';
 import { AppContext } from '@/context/AppContext';
 import { WEB_APP_URL } from '@/constants';
 import Spinner from '@/components/common/Spinner';
-import { ParsedOrder, FulfillmentStatus } from '@/types';
+import { ParsedOrder } from '@/types';
 import FulfillmentDashboard from '@/pages/FulfillmentDashboard';
 import PackagingView from '@/pages/PackagingView';
 import DriverDeliveryView from '@/pages/DriverDeliveryView';
 import InventoryManagement from '@/components/admin/InventoryManagement';
 
 const FulfillmentPage: React.FC = () => {
-    const { refreshTimestamp, setMobilePageTitle, appData } = useContext(AppContext);
+    const { refreshTimestamp, setMobilePageTitle } = useContext(AppContext);
     const [orders, setOrders] = useState<ParsedOrder[]>([]);
     const [loading, setLoading] = useState(true);
     const [activeSubView, setActiveSubView] = useState<'dashboard' | 'packaging' | 'delivery' | 'inventory'>('dashboard');
@@ -18,36 +18,24 @@ const FulfillmentPage: React.FC = () => {
         const fetchOrders = async () => {
             setLoading(true);
             try {
-                // Fetch 30 days of data to ensure we see all recent pending/active orders
+                // Backend is already optimized to 60 days, but we can explicitly ask for 30 if needed
                 const response = await fetch(`${WEB_APP_URL}/api/admin/all-orders?days=30`);
                 if (response.ok) {
                     const result = await response.json();
                     if (result.status === 'success') {
                         const rawData = Array.isArray(result.data) ? result.data : [];
                         const parsed = rawData
-                            .filter((o: any) => o !== null && o['Order ID'] !== 'Opening_Balance')
+                            .filter((o: any) => o && o['Order ID'] && o['Order ID'] !== 'Opening_Balance')
                             .map(o => {
                                 let products = [];
-                                try { if (o['Products (JSON)']) products = JSON.parse(o['Products (JSON)']); } catch(e) {}
+                                try { 
+                                    if (o.Products && Array.isArray(o.Products)) products = o.Products;
+                                    else if (o['Products (JSON)']) products = JSON.parse(o['Products (JSON)']); 
+                                } catch(e) {}
                                 
-                                // Normalize product fields
-                                const normalizedProducts = Array.isArray(products) ? products.map((p: any) => {
-                                    let img = [p.image, p.ImageURL, p.Image].find(val => val && val !== 'N/A' && val !== 'null') || '';
-                                    
-                                    // Fallback to Master Product image if missing
-                                    if (!img && appData.products) {
-                                        const masterProd = appData.products.find(mp => mp.ProductName === p.name);
-                                        if (masterProd && masterProd.ImageURL && masterProd.ImageURL !== 'N/A') {
-                                            img = masterProd.ImageURL;
-                                        }
-                                    }
-
-                                    return { ...p, image: img };
-                                }) : [];
-
                                 return { 
                                     ...o, 
-                                    Products: normalizedProducts, 
+                                    Products: Array.isArray(products) ? products : [], 
                                     IsVerified: String(o.IsVerified).toUpperCase() === 'TRUE' || o.IsVerified === 'A',
                                     FulfillmentStatus: (o['Fulfillment Status'] || o.FulfillmentStatus || 'Pending') as any
                                 };
@@ -55,10 +43,14 @@ const FulfillmentPage: React.FC = () => {
                         setOrders(parsed);
                     }
                 }
-            } catch (e) { console.error(e); } finally { setLoading(false); }
+            } catch (e) { 
+                console.error("Fulfillment Fetch Error:", e); 
+            } finally { 
+                setLoading(false); 
+            }
         };
         fetchOrders();
-    }, [refreshTimestamp, appData.products]);
+    }, [refreshTimestamp]);
 
     if (loading && orders.length === 0) {
         return <div className="flex h-screen items-center justify-center bg-gray-950"><Spinner size="lg" /></div>;
@@ -66,7 +58,6 @@ const FulfillmentPage: React.FC = () => {
 
     return (
         <div className="flex flex-col min-h-[calc(100vh-120px)] relative">
-            {/* Content Area */}
             <div className="flex-grow pb-28 animate-fade-in px-1">
                 {activeSubView === 'dashboard' && <FulfillmentDashboard orders={orders} />}
                 {activeSubView === 'packaging' && <PackagingView orders={orders} />}

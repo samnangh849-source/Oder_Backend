@@ -131,10 +131,20 @@ const SalesByPageDesktop: React.FC<SalesByPageDesktopProps> = ({
                                         else if (col.key === 'pageName') { stickyClass = `sticky z-30 bg-[#0f172a] shadow-md`; stickyStyle = { left: '225px', minWidth: '160px' }; }
                                         else if (col.key.includes('total')) { stickyClass = `sticky z-30 bg-[#0f172a] border-r border-white/20 shadow-lg`; stickyStyle = { left: '385px', width: '100px', minWidth: '100px' }; }
                                     }
-                                    const headerBg = col.key.includes('total') ? (type === 'Revenue' ? 'bg-blue-900/80' : 'bg-green-900/80') : '';
+                                    const isSorting = sortConfig.key === col.sortKey;
+                                    const headerBg = col.key.includes('total') 
+                                        ? (type === 'Revenue' ? 'bg-blue-900/80' : 'bg-green-900/80') 
+                                        : isSorting ? 'bg-white/5' : '';
                                     return (
-                                        <th key={col.key} onClick={() => col.sortable && onToggleSort(col.sortKey!)} className={`px-4 py-5 whitespace-nowrap text-left font-black uppercase tracking-wider border-b-2 border-white/20 ${showBorders ? 'border-x border-white/10' : ''} ${stickyClass} ${headerBg} ${col.sortable ? 'cursor-pointer hover:bg-gray-700' : ''}`} style={stickyStyle}>
-                                            <div className="flex items-center gap-1">{col.label} {col.sortable && sortConfig.key === col.sortKey && (<span>{sortConfig.direction === 'asc' ? '↑' : '↓'}</span>)}</div>
+                                        <th key={col.key} onClick={() => col.sortable && onToggleSort(col.sortKey!)} className={`px-4 py-5 whitespace-nowrap text-left font-black uppercase tracking-wider border-b-2 border-white/20 transition-colors ${showBorders ? 'border-x border-white/10' : ''} ${stickyClass} ${headerBg} ${col.sortable ? 'cursor-pointer hover:bg-gray-800' : ''}`} style={stickyStyle}>
+                                            <div className="flex items-center gap-1.5">
+                                                <span className={isSorting ? 'text-blue-400' : 'text-gray-400'}>{col.label}</span>
+                                                {col.sortable && isSorting && (
+                                                    <span className="text-blue-500 animate-pulse">
+                                                        {sortConfig.direction === 'asc' ? '↑' : '↓'}
+                                                    </span>
+                                                )}
+                                            </div>
                                         </th>
                                     );
                                 })}
@@ -170,15 +180,17 @@ const SalesByPageDesktop: React.FC<SalesByPageDesktopProps> = ({
                                                 return <td 
                                                     key={col.key} 
                                                     rowSpan={currentSpan} 
-                                                    className={`${cellClass} font-black text-white bg-gray-900/95 align-middle text-center ${stickyClass} ${showFillColor ? colorSet.border : ''} border-b border-white/10 cursor-pointer hover:text-blue-400`} 
+                                                    className={`${cellClass} font-black text-white bg-gray-900/95 align-middle text-center ${stickyClass} ${showFillColor ? colorSet.border : ''} border-b border-white/10 cursor-pointer hover:text-blue-400 group/team`} 
                                                     style={stickyStyle}
                                                     onClick={() => onNavigate('team', item.teamName)}
                                                 >
-                                                    <div className="bg-gray-800/80 py-1 px-3 rounded-xl border border-white/5 shadow-sm inline-block">{item.teamName}</div>
+                                                    <div className="bg-gray-800/80 py-1.5 px-4 rounded-xl border border-white/5 shadow-inner inline-block group-hover/team:bg-blue-600 transition-all">
+                                                        {item.teamName}
+                                                    </div>
                                                 </td>;
                                             }
                                             
-                                            if (col.key === 'logo') return <td key={col.key} className={`${cellClass} text-center ${stickyClass} border-b border-white/10`} style={stickyStyle}><img src={convertGoogleDriveUrl(item.logoUrl)} className="w-9 h-9 rounded-full border border-gray-700 mx-auto shadow-md cursor-pointer hover:scale-110 transition-transform" alt="logo" onClick={() => onPreviewImage(convertGoogleDriveUrl(item.logoUrl))} /></td>;
+                                            if (col.key === 'logo') return <td key={col.key} className={`${cellClass} text-center ${stickyClass} border-b border-white/10`} style={stickyStyle}><img src={convertGoogleDriveUrl(item.logoUrl)} className="w-9 h-9 rounded-full border border-gray-700 mx-auto shadow-md cursor-pointer hover:scale-110 active:scale-95 transition-all" alt="logo" onClick={() => onPreviewImage(convertGoogleDriveUrl(item.logoUrl))} /></td>;
                                             
                                             if (col.key === 'pageName') {
                                                 return <td 
@@ -194,7 +206,7 @@ const SalesByPageDesktop: React.FC<SalesByPageDesktopProps> = ({
                                             if (col.key.includes('total')) {
                                                 return <td 
                                                     key={col.key} 
-                                                    className={`${cellClass} text-right font-black ${stickyClass} ${type === 'Revenue' ? 'text-blue-100 bg-blue-600/10 hover:text-blue-300' : 'text-green-100 bg-green-600/10'} border-b border-white/10 cursor-pointer`} 
+                                                    className={`${cellClass} text-right font-black ${stickyClass} ${type === 'Revenue' ? 'text-blue-100 bg-blue-600/10 group-hover:text-blue-300' : 'text-green-100 bg-green-600/10 group-hover:text-green-300'} border-b border-white/10 cursor-pointer transition-colors`} 
                                                     style={stickyStyle}
                                                     onClick={() => onNavigate('page', item.pageName)}
                                                 >
@@ -209,7 +221,7 @@ const SalesByPageDesktop: React.FC<SalesByPageDesktopProps> = ({
                                                 return (
                                                     <td 
                                                         key={col.key} 
-                                                        className={`${cellClass} text-right font-bold font-mono ${color} border-b border-white/10 cursor-pointer hover:bg-gray-800 transition-colors`}
+                                                        className={`${cellClass} text-right font-bold font-mono ${color} border-b border-white/10 cursor-pointer hover:bg-white/5 transition-colors`}
                                                         onClick={() => onMonthClick(item.pageName, monthIndex)}
                                                     >
                                                         {val !== 0 ? `$${val.toLocaleString(undefined, {minimumFractionDigits: 2})}` : '-'}
@@ -244,6 +256,25 @@ const SalesByPageDesktop: React.FC<SalesByPageDesktopProps> = ({
                             </tr>
                         </tfoot>
                     </table>
+                </div>
+
+                <div className="mt-4 flex flex-wrap items-center justify-between gap-4 px-2">
+                    <div className="flex items-center gap-6">
+                        <div className="flex items-center gap-2">
+                            <span className="text-[10px] font-black text-gray-500 uppercase tracking-widest">ចំនួនក្រុម:</span>
+                            <span className="text-sm font-black text-white">{uniqueTeams.length}</span>
+                        </div>
+                        <div className="flex items-center gap-2">
+                            <span className="text-[10px] font-black text-gray-500 uppercase tracking-widest">ចំនួន Page សរុប:</span>
+                            <span className="text-sm font-black text-white">{filteredData.length}</span>
+                        </div>
+                    </div>
+                    <div className="flex items-center gap-3 bg-white/5 py-2 px-4 rounded-xl border border-white/5 shadow-inner">
+                        <span className="text-[10px] font-black text-blue-400 uppercase tracking-widest">មធ្យមភាគ/{type === 'Revenue' ? 'ចំណូល' : 'ចំណេញ'}:</span>
+                        <span className="text-sm font-black text-white">
+                            ${(grandTotals[type.toLowerCase() === 'revenue' ? 'revenue' : 'profit'] / (filteredData.length || 1)).toLocaleString(undefined, {maximumFractionDigits: 2})}
+                        </span>
+                    </div>
                 </div>
             </div>
         );

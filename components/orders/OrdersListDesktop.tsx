@@ -119,7 +119,7 @@ const OrdersListDesktop: React.FC<OrdersListDesktopProps> = ({
     };
 
     return (
-        <div className="page-card !p-0 shadow-2xl border-white/5 bg-gray-900/60 backdrop-blur-3xl rounded-[2.5rem] flex flex-col h-[calc(100vh-220px)] overflow-hidden">
+        <div className="page-card !p-0 shadow-2xl border-white/5 bg-gray-900/60 backdrop-blur-3xl rounded-[2.5rem] flex flex-col h-[65vh] lg:h-[70vh] xl:h-[75vh] min-h-[500px] overflow-hidden">
             {/* Header Table (Sticky) */}
             <div className="flex-shrink-0 z-20 bg-gray-900 rounded-t-[2.5rem] border-b border-white/10">
                 <table className={`admin-table w-full border-collapse ${showBorders ? 'divide-x divide-white/10 border-x border-white/10' : ''}`} style={{ tableLayout: 'fixed' }}>
@@ -157,7 +157,7 @@ const OrdersListDesktop: React.FC<OrdersListDesktopProps> = ({
             </div>
 
             {/* Scrollable Body Table */}
-            <div ref={containerRef} className="flex-grow overflow-y-auto overflow-x-auto custom-scrollbar" onScroll={handleScroll}>
+            <div ref={containerRef} className="flex-grow overflow-y-auto overflow-x-auto custom-scrollbar overscroll-contain" onScroll={handleScroll}>
                 <div style={{ height: `${totalHeight}px`, position: 'relative', minWidth: '1400px' }}>
                     <table className={`admin-table w-full border-collapse ${showBorders ? 'divide-x divide-white/5 border-x border-white/10' : ''}`} style={{ tableLayout: 'fixed', transform: `translateY(${paddingTop}px)` }}>
                         <colgroup>

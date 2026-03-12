@@ -151,7 +151,7 @@ const FulfillmentCard: React.FC<{
                     {order['Packed By'] && <div className="flex justify-between items-center text-[10px] font-black pt-1 border-t border-white/5"><span className="text-gray-500 uppercase tracking-widest">អ្នកវេចខ្ចប់</span><span className="text-indigo-400">{order['Packed By']}</span></div>}
                     {order['Dispatched By'] && <div className="flex justify-between items-center text-[10px] font-black"><span className="text-gray-500 uppercase tracking-widest">អ្នកប្រគល់ឱ្យអ្នកដឹក</span><span className="text-orange-400">{order['Dispatched By']}</span></div>}
                 </div>
-                <div className="flex gap-2 overflow-x-auto custom-scrollbar pb-1">{order.Products.map((p, i) => (<div key={i} className="flex-shrink-0 w-8 h-8 rounded-lg overflow-hidden bg-gray-900 border border-gray-800" onClick={() => previewImage(convertGoogleDriveUrl(p.image))}><img src={convertGoogleDriveUrl(p.image)} className="w-full h-full object-cover" alt="" /></div>))}<span className="flex-shrink-0 flex items-center justify-center w-8 h-8 rounded-lg bg-white/5 text-[10px] text-gray-400 font-bold border border-white/5">x{order.Products.length}</span></div>
+                <div className="flex gap-2 overflow-x-auto custom-scrollbar pb-1">{(order.Products || []).map((p, i) => (<div key={i} className="flex-shrink-0 w-8 h-8 rounded-lg overflow-hidden bg-gray-900 border border-gray-800" onClick={() => previewImage(convertGoogleDriveUrl(p.image))}><img src={convertGoogleDriveUrl(p.image)} className="w-full h-full object-cover" alt="" /></div>))}<span className="flex-shrink-0 flex items-center justify-center w-8 h-8 rounded-lg bg-white/5 text-[10px] text-gray-400 font-bold border border-white/5">x{(order.Products || []).length}</span></div>
             </div>
             {currentStatus === 'Shipped' && (<div className="p-4 pt-0 mt-auto border-t border-white/5 bg-black/20"><button onClick={() => onConfirmDelivery(order)} className="w-full mt-4 py-3 bg-emerald-600 hover:bg-emerald-700 text-white text-[11px] font-black uppercase tracking-widest rounded-xl shadow-xl flex items-center justify-center gap-2 active:scale-95"><svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={3}><path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" /></svg>បញ្ជាក់ថាដឹកជោគជ័យ</button></div>)}
         </div>
@@ -411,7 +411,7 @@ const FulfillmentDashboard: React.FC<{ orders: ParsedOrder[] }> = ({ orders }) =
                 </div>
             </div>
 
-            <div className="flex justify-center px-2">
+            <div className="sticky top-[100px] z-[30] flex justify-center px-2 py-4 bg-gray-950/50 backdrop-blur-md -mx-4 lg:-mx-8">
                 <div className="flex bg-black/40 p-1.5 rounded-[2rem] border border-white/5 overflow-x-auto no-scrollbar max-w-full shadow-inner gap-1">
                     {statusTabs.map(tab => {
                         const isActive = activeTab === tab.id;
@@ -482,6 +482,29 @@ const FulfillmentDashboard: React.FC<{ orders: ParsedOrder[] }> = ({ orders }) =
                         <button onClick={handleUndoAction} className="w-full py-4 bg-red-600 text-white rounded-2xl font-black uppercase text-sm tracking-widest active:scale-95">UNDO (បោះបង់)</button>
                     </div>
                 </div>
+            )}
+
+            {isFilterModalOpen && (
+                <Modal isOpen={isFilterModalOpen} onClose={() => setIsFilterModalOpen(false)} maxWidth="max-w-5xl">
+                    <div className="p-8 bg-[#0f172a] rounded-[2.5rem] overflow-hidden relative flex flex-col h-full">
+                        <div className="flex justify-between items-center mb-8 relative z-10">
+                            <div className="flex items-center gap-4">
+                                <div className="w-2 h-10 bg-blue-600 rounded-full shadow-[0_0_20px_rgba(37,99,235,0.5)]"></div>
+                                <div>
+                                    <h2 className="text-3xl font-black text-white uppercase tracking-tighter italic leading-none">Filter Engine</h2>
+                                    <p className="text-[10px] text-gray-500 font-bold uppercase tracking-[0.3em] mt-1 ml-0.5">Fulfillment Analysis Subsystem</p>
+                                </div>
+                            </div>
+                            <button onClick={() => setIsFilterModalOpen(false)} className="w-12 h-12 bg-white/5 rounded-2xl flex items-center justify-center text-gray-500 hover:text-white transition-all active:scale-90 border border-white/5 hover:bg-white/10 shadow-xl">&times;</button>
+                        </div>
+                        <div className="flex-grow pr-4 relative z-10">
+                            <OrderFilters filters={filters} setFilters={setFilters} orders={storeOrders} usersList={appData.users || []} appData={appData} calculatedRange={calculatedRange} />
+                        </div>
+                        <div className="mt-10 flex justify-center relative z-10 border-t border-white/5 pt-8">
+                            <button onClick={() => setIsFilterModalOpen(false)} className="btn btn-primary w-full max-w-md py-5 text-[13px] font-black uppercase tracking-[0.25em] shadow-[0_20px_50px_rgba(37,99,235,0.3)] rounded-2xl active:scale-[0.98] transition-all">Apply Parameters</button>
+                        </div>
+                    </div>
+                </Modal>
             )}
         </div>
     );

@@ -10,6 +10,7 @@ import BackgroundMusic from './components/common/BackgroundMusic';
 import { CacheService, CACHE_KEYS } from './services/cacheService';
 import Toast from './components/common/Toast';
 import NotificationStack from './components/common/NotificationStack';
+import ScrollToTop from './components/common/ScrollToTop';
 
 // Retry helper for lazy loading components to handle version mismatches or network errors
 const lazyRetry = <T extends React.ComponentType<any>>(
@@ -53,7 +54,8 @@ const initialAppData: AppData = {
     users: [], products: [], pages: [], locations: [],
     shippingMethods: [], drivers: [], bankAccounts: [],
     phoneCarriers: [], colors: [], stores: [], settings: [], targets: [],
-    inventory: [], stockTransfers: [], returns: []
+    inventory: [], stockTransfers: [], returns: [],
+    roles: [], permissions: []
 };
 
 const App: React.FC = () => {
@@ -657,6 +659,7 @@ const App: React.FC = () => {
                         </div>
                     </Modal>
                 )}
+                <ScrollToTop />
             </div>
         </AppContext.Provider>
     );

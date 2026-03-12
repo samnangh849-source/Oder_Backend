@@ -5,6 +5,8 @@ export interface ConfigField {
     name: string;
     label: string;
     type: FieldType;
+    placeholder?: string;
+    readOnly?: boolean;
 }
 
 export interface ConfigSection {
@@ -27,10 +29,11 @@ export const configSections: ConfigSection[] = [
         icon: '🎭', 
         dataKey: 'roles', 
         sheetName: 'Roles', 
-        primaryKeyField: 'RoleName', 
+        primaryKeyField: 'id', 
         fields: [ 
-            { name: 'RoleName', label: 'ឈ្មោះតួនាទី', type: 'text' }, 
-            { name: 'Description', label: 'ការពន្យល់', type: 'text' } 
+            { name: 'id', label: 'ID', type: 'text', readOnly: true, placeholder: 'ស្វ័យប្រវត្តិ (Auto)' },
+            { name: 'RoleName', label: 'ឈ្មោះតួនាទី', type: 'text', placeholder: 'ឧទាហរណ៍៖ Admin, Sales, Fulfillment, ...' }, 
+            { name: 'Description', label: 'ការពន្យល់', type: 'text', placeholder: 'ឧទាហរណ៍៖ បុគ្គលិកផ្នែកលក់ ឬ អ្នកគ្រប់គ្រង...' } 
         ], 
         displayField: 'RoleName' 
     },

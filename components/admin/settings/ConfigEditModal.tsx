@@ -68,6 +68,9 @@ const ConfigEditModal: React.FC<ConfigEditModalProps> = ({ section, item, onClos
     const handleSave = async () => {
         setError('');
         for (const field of section.fields) {
+            // Skip validation for readOnly fields or optional fields like Password when editing
+            if (field.readOnly) continue;
+            
             if (field.type !== 'checkbox' && (formData[field.name] === undefined || formData[field.name] === '') && field.name !== 'Password' && !item) {
                  setError(`សូមបំពេញចន្លោះ "${field.label}"`);
                  return;
@@ -90,6 +93,12 @@ const ConfigEditModal: React.FC<ConfigEditModalProps> = ({ section, item, onClos
             
             if (item && section.id === 'users' && !payloadData.Password) delete payloadData.Password;
             
+            // For new items, omit the ID field if it's auto-generated
+            if (!item) {
+                delete payloadData.id;
+                delete payloadData.ID;
+            }
+
             const payload: any = (section.id === 'roles' && !item) 
                 ? payloadData 
                 : { sheetName: section.sheetName, newData: payloadData };
@@ -111,70 +120,83 @@ const ConfigEditModal: React.FC<ConfigEditModalProps> = ({ section, item, onClos
     };
     
     return (
-        <Modal isOpen={true} onClose={onClose} maxWidth="max-w-xl">
-            <div className="flex justify-between items-center mb-6">
-                <h2 className="text-xl font-black text-white">{(item ? 'កែសម្រួល' : 'បន្ថែម')} {section.title}</h2>
-                <button onClick={onClose} className="p-2 text-gray-500 hover:text-white transition-colors">
-                    <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M6 18L18 6M6 6l12 12" /></svg>
-                </button>
-            </div>
-            <div className="space-y-5 max-h-[65vh] overflow-y-auto pr-2 custom-scrollbar">
-                {section.fields.map(field => (
-                    <div key={field.name} className="space-y-1.5">
-                        <label className="block text-xs font-black text-gray-500 uppercase tracking-widest">{field.label}</label>
-                        {field.type === 'checkbox' ? (
-                            <div className="flex items-center gap-3 bg-gray-900/50 p-3 rounded-xl border border-gray-700">
-                                <input type="checkbox" name={field.name} checked={!!formData[field.name]} onChange={handleChange} className="h-6 w-6 rounded-lg border-gray-600 bg-gray-700 text-blue-600 focus:ring-blue-500" />
-                                <span className="text-sm text-gray-300">បើកដំណើរការមុខងារនេះ</span>
-                            </div>
-                        ) : field.type === 'image_url' ? (
-                            <div className="space-y-3">
-                                <div className="flex items-center gap-2">
-                                    <input type="text" name={field.name} value={formData[field.name] || ''} onChange={handleChange} placeholder="បិទភ្ជាប់ Link ឬ Upload រូបភាព" className="form-input flex-grow !py-2.5" />
-                                    <input type="file" accept="image/*" ref={el => { fileInputRefs.current[field.name] = el; }} onChange={(e) => e.target.files && handleImageUpload(field.name, e.target.files[0])} className="hidden" />
-                                    <button type="button" onClick={() => fileInputRefs.current[field.name]?.click()} className="p-2.5 bg-blue-600/10 text-blue-400 rounded-xl border border-blue-500/20 hover:bg-blue-600 hover:text-white transition-all" disabled={uploadingFields[field.name]}>
-                                        {uploadingFields[field.name] ? <Spinner size="sm" /> : <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h14a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" /></svg>}
-                                    </button>
-                                </div>
-                                {formData[field.name] && <div className="relative w-32 h-32 bg-gray-900 rounded-2xl border border-gray-700 p-2 overflow-hidden shadow-inner mx-auto sm:mx-0"><img src={convertGoogleDriveUrl(formData[field.name])} className="w-full h-full object-contain" alt="preview" /></div>}
-                            </div>
-                        ) : field.type === 'password' ? (
-                            <div className="relative">
-                                <input type={passwordVisibility[field.name] ? 'text' : 'password'} name={field.name} value={formData[field.name] || ''} onChange={handleChange} className="form-input !py-2.5 pr-12" placeholder={item ? 'ទុកទទេបើមិនចង់ប្តូរ' : 'បញ្ចូលពាក្យសម្ងាត់'} />
-                                <button type="button" onClick={() => setPasswordVisibility(prev => ({ ...prev, [field.name]: !prev[field.name] }))} className="absolute inset-y-0 right-0 px-4 text-gray-500 hover:text-white transition-colors"><svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d={passwordVisibility[field.name] ? "M13.875 18.825A10.05 10.05 0 0112 19c-4.478 0-8.268-2.943-9.542-7 1.274-4.057 5.064-7 9.542-7 .847 0 1.67 .126 2.454 .364m-3.033 2.446a3 3 0 11-4.243 4.243m4.242-4.242l4.243 4.243M3 3l18 18" : "M15 12a3 3 0 11-6 0 3 3 0 016 0z M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z"} /></svg></button>
-                            </div>
-                        ) : (section.id === 'users' && field.name === 'Role') ? (
-                            <select 
-                                name={field.name} 
-                                value={formData[field.name] || ''} 
-                                onChange={(e: any) => handleChange(e)}
-                                className="form-input !py-2.5 bg-gray-900 text-white"
-                            >
-                                <option value="">-- ជ្រើសរើសតួនាទី (Select Role) --</option>
-                                {(appData.roles || []).map(r => (
-                                    <option key={r.id || r.RoleName} value={r.RoleName}>{r.RoleName}</option>
-                                ))}
-                                {/* Fallback roles in case roles table is empty */}
-                                {(!appData.roles || appData.roles.length === 0) && (
-                                    <>
-                                        <option value="Admin">Admin</option>
-                                        <option value="Sales">Sales</option>
-                                        <option value="Fulfillment">Fulfillment</option>
-                                        <option value="Stock">Stock</option>
-                                        <option value="Driver">Driver</option>
-                                    </>
-                                )}
-                            </select>
-                        ) : (
-                            <input type={field.type} name={field.name} value={formData[field.name] || ''} onChange={handleChange} className="form-input !py-2.5" readOnly={item && field.name === section.primaryKeyField} />
-                        )}
+        <Modal isOpen={true} onClose={onClose} maxWidth="max-w-2xl">
+            <div className="p-8 flex flex-col h-full">
+                <div className="flex justify-between items-center mb-8 relative z-10">
+                    <div className="flex items-center gap-4">
+                        <div className="w-1.5 h-8 bg-blue-600 rounded-full shadow-[0_0_15px_rgba(37,99,235,0.4)]"></div>
+                        <h2 className="text-2xl font-black text-white uppercase tracking-tighter italic">{(item ? 'កែសម្រួល' : 'បន្ថែម')} {section.title}</h2>
                     </div>
-                ))}
-            </div>
-            {error && <div className="mt-4 p-3 bg-red-500/10 text-red-400 border border-red-500/20 rounded-xl text-sm font-bold">{error}</div>}
-            <div className="flex justify-end gap-3 mt-8 pt-6 border-t border-gray-700/50">
-                <button type="button" onClick={onClose} className="px-6 py-2.5 text-gray-400 hover:text-white font-bold transition-colors">បោះបង់</button>
-                <button type="button" onClick={handleSave} className="btn btn-primary px-8 shadow-lg shadow-blue-600/20 active:scale-95" disabled={isLoading}>{isLoading ? <Spinner size="sm" /> : 'រក្សាទុក'}</button>
+                    <button onClick={onClose} className="w-10 h-10 bg-white/5 rounded-xl flex items-center justify-center text-gray-500 hover:text-white transition-all active:scale-90 border border-white/5 hover:bg-white/10 shadow-lg">
+                        <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M6 18L18 6M6 6l12 12" /></svg>
+                    </button>
+                </div>
+                
+                <div className="space-y-6 max-h-[60vh] overflow-y-auto pr-4 custom-scrollbar flex-grow">
+                    {section.fields.map(field => (
+                        <div key={field.name} className="space-y-2">
+                            <label className="block text-[10px] font-black text-gray-500 uppercase tracking-[0.2em] ml-2">{field.label}</label>
+                            {field.type === 'checkbox' ? (
+                                <div className="flex items-center gap-4 bg-gray-900/50 p-4 rounded-[1.5rem] border border-gray-800 transition-all hover:border-gray-700">
+                                    <input type="checkbox" name={field.name} checked={!!formData[field.name]} onChange={handleChange} className="h-6 w-6 rounded-lg border-gray-600 bg-gray-700 text-blue-600 focus:ring-blue-500" />
+                                    <span className="text-sm font-bold text-gray-300">បើកដំណើរការមុខងារនេះ</span>
+                                </div>
+                            ) : field.type === 'image_url' ? (
+                                <div className="space-y-4">
+                                    <div className="flex items-center gap-3">
+                                        <input type="text" name={field.name} value={formData[field.name] || ''} onChange={handleChange} placeholder={field.placeholder || "បិទភ្ជាប់ Link ឬ Upload រូបភាព"} className="form-input flex-grow !py-3.5 !px-5" />
+                                        <input type="file" accept="image/*" ref={el => { fileInputRefs.current[field.name] = el; }} onChange={(e) => e.target.files && handleImageUpload(field.name, e.target.files[0])} className="hidden" />
+                                        <button type="button" onClick={() => fileInputRefs.current[field.name]?.click()} className="w-12 h-12 bg-blue-600/10 text-blue-400 rounded-2xl border border-blue-500/20 hover:bg-blue-600 hover:text-white transition-all flex flex-shrink-0 items-center justify-center shadow-lg" disabled={uploadingFields[field.name]}>
+                                            {uploadingFields[field.name] ? <Spinner size="sm" /> : <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h14a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" /></svg>}
+                                        </button>
+                                    </div>
+                                    {formData[field.name] && <div className="relative w-24 h-24 bg-gray-900 rounded-2xl border border-gray-800 p-2 overflow-hidden shadow-inner mx-auto sm:mx-0"><img src={convertGoogleDriveUrl(formData[field.name])} className="w-full h-full object-contain" alt="preview" /></div>}
+                                </div>
+                            ) : field.type === 'password' ? (
+                                <div className="relative">
+                                    <input type={passwordVisibility[field.name] ? 'text' : 'password'} name={field.name} value={formData[field.name] || ''} onChange={handleChange} className="form-input !py-3.5 !px-5 pr-14" placeholder={field.placeholder || (item ? 'ទុកទទេបើមិនចង់ប្តូរ' : 'បញ្ចូលពាក្យសម្ងាត់')} />
+                                    <button type="button" onClick={() => setPasswordVisibility(prev => ({ ...prev, [field.name]: !prev[field.name] }))} className="absolute inset-y-0 right-0 px-4 text-gray-500 hover:text-white transition-colors"><svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d={passwordVisibility[field.name] ? "M13.875 18.825A10.05 10.05 0 0112 19c-4.478 0-8.268-2.943-9.542-7 1.274-4.057 5.064-7 9.542-7 .847 0 1.67 .126 2.454 .364m-3.033 2.446a3 3 0 11-4.243 4.243m4.242-4.242l4.243 4.243M3 3l18 18" : "M15 12a3 3 0 11-6 0 3 3 0 016 0z M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z"} /></svg></button>
+                                </div>
+                            ) : (section.id === 'users' && field.name === 'Role') ? (
+                                <select 
+                                    name={field.name} 
+                                    value={formData[field.name] || ''} 
+                                    onChange={(e: any) => handleChange(e)}
+                                    className="form-input !py-3.5 !px-5 bg-gray-900 text-white appearance-none cursor-pointer"
+                                >
+                                    <option value="">-- ជ្រើសរើសតួនាទី (Select Role) --</option>
+                                    {(appData.roles || []).map(r => (
+                                        <option key={r.id || r.RoleName} value={r.RoleName}>{r.RoleName}</option>
+                                    ))}
+                                    {(!appData.roles || appData.roles.length === 0) && (
+                                        <>
+                                            <option value="Admin">Admin</option>
+                                            <option value="Sales">Sales</option>
+                                            <option value="Fulfillment">Fulfillment</option>
+                                            <option value="Stock">Stock</option>
+                                            <option value="Driver">Driver</option>
+                                        </>
+                                    )}
+                                </select>
+                            ) : (
+                                <input 
+                                    type={field.type} 
+                                    name={field.name} 
+                                    value={formData[field.name] || ''} 
+                                    onChange={handleChange} 
+                                    placeholder={field.placeholder}
+                                    className={`form-input !py-3.5 !px-5 ${field.readOnly ? 'bg-gray-800/50 text-gray-500 cursor-not-allowed' : ''}`} 
+                                    readOnly={field.readOnly || (item && field.name === section.primaryKeyField)} 
+                                />
+                            )}
+                        </div>
+                    ))}
+                </div>
+                {error && <div className="mt-6 p-4 bg-red-500/10 text-red-400 border border-red-500/20 rounded-2xl text-sm font-bold animate-shake">{error}</div>}
+                <div className="flex justify-end gap-4 mt-8 pt-6 border-t border-white/5">
+                    <button type="button" onClick={onClose} className="px-8 py-3 text-gray-400 hover:text-white font-black uppercase text-xs tracking-widest transition-colors">បោះបង់</button>
+                    <button type="button" onClick={handleSave} className="btn btn-primary px-10 py-3 shadow-lg shadow-blue-600/20 active:scale-95 text-xs font-black uppercase tracking-widest rounded-2xl" disabled={isLoading}>{isLoading ? <Spinner size="sm" /> : 'រក្សាទុក'}</button>
+                </div>
             </div>
         </Modal>
     );

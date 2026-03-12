@@ -304,10 +304,13 @@ const OrdersDashboard: React.FC<OrdersDashboardProps> = ({ onBack, initialFilter
             }
 
             // Helper for multi-select checking
-            const isMatch = (filterValue: string, orderValue: string) => {
+            const isMatch = (filterValue: string, orderValue: string, partial = false) => {
                 if (!filterValue) return true;
                 const selectedValues = filterValue.split(',').map(v => v.trim().toLowerCase());
                 const val = (orderValue || '').trim().toLowerCase();
+                if (partial) {
+                    return selectedValues.some(sv => val.includes(sv));
+                }
                 return selectedValues.includes(val);
             };
 
@@ -318,10 +321,7 @@ const OrdersDashboard: React.FC<OrdersDashboardProps> = ({ onBack, initialFilter
             if (filters.store) {
                 const pageConfig = appData.pages?.find(p => p.PageName === order.Page);
                 const orderStore = pageConfig ? pageConfig.DefaultStore : null;
-                const selectedStores = filters.store.split(',');
-                if (!orderStore || !selectedStores.includes(orderStore)) {
-                    return false;
-                }
+                if (!isMatch(filters.store, orderStore || '')) return false;
             }
 
             // 4. Other Filters (Multi where applicable)
@@ -332,14 +332,17 @@ const OrdersDashboard: React.FC<OrdersDashboardProps> = ({ onBack, initialFilter
             if (!isMatch(filters.driver, order['Internal Shipping Details'])) return false;
             if (!isMatch(filters.bank, order['Payment Info'])) return false;
             if (!isMatch(filters.page, order.Page)) return false;
-            if (!isMatch(filters.location, order.Location)) return false;
+            if (!isMatch(filters.location, order.Location, true)) return false; // Partial match for Location
             if (!isMatch(filters.internalCost, String(order['Internal Cost']))) return false;
 
             // Customer Name Filter (Multi-Select Logic)
             if (!isMatch(filters.customerName, order['Customer Name'])) return false;
 
-            // Product Filter (Special logic: "contains")
-            if (filters.product && !order.Products.some(p => p.name === filters.product)) return false;
+            // Product Filter (Multi-select support)
+            if (filters.product) {
+                const selectedProducts = filters.product.split(',').map(v => v.trim().toLowerCase());
+                if (!order.Products.some(p => selectedProducts.includes((p.name || '').toLowerCase()))) return false;
+            }
 
             if (searchQuery.trim()) {
                 const q = searchQuery.toLowerCase();
@@ -414,20 +417,33 @@ const OrdersDashboard: React.FC<OrdersDashboardProps> = ({ onBack, initialFilter
                 </FilterPanel>
             </div>
             <div className="hidden md:block">
-                <Modal isOpen={isFilterModalOpen} onClose={() => setIsFilterModalOpen(false)} maxWidth="max-w-4xl">
-                    <div className="p-8 bg-[#0f172a] rounded-[3rem] border border-white/10 shadow-3xl overflow-hidden relative">
-                        <div className="flex justify-between items-center mb-10 relative z-10">
+                <Modal isOpen={isFilterModalOpen} onClose={() => setIsFilterModalOpen(false)} maxWidth="max-w-5xl">
+                    <div className="p-8 bg-[#0f172a] rounded-[2.5rem] overflow-hidden relative flex flex-col h-full">
+                        <div className="flex justify-between items-center mb-8 relative z-10">
                             <div className="flex items-center gap-4">
-                                <div className="w-1.5 h-8 bg-blue-600 rounded-full"></div>
-                                <h2 className="text-2xl font-black text-white uppercase tracking-tighter italic leading-none">Filter Subsystem</h2>
+                                <div className="w-2 h-10 bg-blue-600 rounded-full shadow-[0_0_20px_rgba(37,99,235,0.5)]"></div>
+                                <div>
+                                    <h2 className="text-3xl font-black text-white uppercase tracking-tighter italic leading-none">Filter Engine</h2>
+                                    <p className="text-[10px] text-gray-500 font-bold uppercase tracking-[0.3em] mt-1 ml-0.5">Advanced Search Subsystem</p>
+                                </div>
                             </div>
-                            <button onClick={() => setIsFilterModalOpen(false)} className="w-12 h-12 bg-white/5 rounded-2xl flex items-center justify-center text-gray-500 hover:text-white transition-all active:scale-90 border border-white/5">&times;</button>
+                            <button onClick={() => setIsFilterModalOpen(false)} className="w-12 h-12 bg-white/5 rounded-2xl flex items-center justify-center text-gray-500 hover:text-white transition-all active:scale-90 border border-white/5 hover:bg-white/10 shadow-xl">&times;</button>
                         </div>
-                        <div className="max-h-[60vh] overflow-y-auto custom-scrollbar pr-2 relative z-10">
+                        
+                        <div className="flex-grow pr-4 relative z-10">
                             <OrderFilters filters={filters} setFilters={setFilters} orders={enrichedOrders} usersList={usersList} appData={appData} calculatedRange={calculatedRange} />
                         </div>
-                        <div className="mt-12 flex justify-center relative z-10"><button onClick={() => setIsFilterModalOpen(false)} className="btn btn-primary w-full py-5 text-[13px] font-black uppercase tracking-[0.25em] shadow-[0_20px_50px_rgba(37,99,235,0.3)] rounded-2xl active:scale-[0.98] transition-all">Apply Filter Configuration</button></div>
+                        
+                        <div className="mt-10 flex justify-center relative z-10 border-t border-white/5 pt-8">
+                            <button 
+                                onClick={() => setIsFilterModalOpen(false)} 
+                                className="btn btn-primary w-full max-w-md py-5 text-[13px] font-black uppercase tracking-[0.25em] shadow-[0_20px_50px_rgba(37,99,235,0.3)] rounded-2xl active:scale-[0.98] transition-all"
+                            >
+                                Apply Filter Configuration
+                            </button>
+                        </div>
                         <div className="absolute -bottom-20 -right-20 w-80 h-80 bg-blue-600/10 rounded-full blur-[100px] pointer-events-none"></div>
+                        <div className="absolute -top-20 -left-20 w-60 h-60 bg-indigo-600/5 rounded-full blur-[80px] pointer-events-none"></div>
                     </div>
                 </Modal>
             </div>
@@ -455,7 +471,7 @@ const OrdersDashboard: React.FC<OrdersDashboardProps> = ({ onBack, initialFilter
                 </div>
             </div>
 
-            <div className="bg-gray-800/40 border border-white/5 rounded-[2rem] xl:rounded-[2.5rem] p-4 xl:p-6 mb-8 shadow-2xl relative z-20 group transition-all hover:bg-gray-800/50 transform-gpu">
+            <div className="sticky top-4 z-[40] bg-[#020617]/80 backdrop-blur-2xl border border-white/5 rounded-[2rem] xl:rounded-[2.5rem] p-4 xl:p-6 mb-8 shadow-2xl group transition-all hover:bg-gray-800/50 transform-gpu">
                 <div className="flex flex-col lg:flex-row justify-between items-center gap-4">
                     <div className="relative w-full lg:max-w-2xl group">
                         <input type="text" placeholder="ស្វែងរក ID, ឈ្មោះ, ឬលេខទូរស័ព្ទ..." value={searchQuery} onChange={e => setSearchQuery(e.target.value)} className="form-input !pl-14 xl:!pl-16 !py-4 xl:!py-5 bg-black/40 border-gray-800 rounded-[1.5rem] xl:rounded-[1.8rem] text-[13px] xl:text-[15px] font-bold text-white placeholder:text-gray-700 focus:border-blue-500/50 focus:bg-black/60 transition-all shadow-inner" />
