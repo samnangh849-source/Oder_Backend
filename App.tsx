@@ -244,11 +244,16 @@ const App: React.FC = () => {
 
         if (orders.length === 0 || force) setIsOrdersLoading(true);
         try {
+            // 2. Determine Endpoint based on Role
+            const isAdmin = currentUser?.IsSystemAdmin || (currentUser?.Role || '').toLowerCase() === 'admin';
+            const endpoint = isAdmin ? `${WEB_APP_URL}/api/admin/all-orders` : `${WEB_APP_URL}/api/orders`;
+            
             // 2. Fetch fresh data (Background)
-            const response = await fetch(`${WEB_APP_URL}/api/admin/all-orders`);
+            const response = await fetch(endpoint);
             if (response.ok) {
                 const result = await response.json();
                 if (result.status === 'success') {
+                    // ... parsing ...
                     const rawData = (result.data || []).filter((o: any) => 
                         o !== null && 
                         o['Order ID'] !== 'Opening Balance' && 
@@ -268,15 +273,19 @@ const App: React.FC = () => {
                     
                     setOrders(parsed);
                     await CacheService.set(CACHE_KEYS.ALL_ORDERS, parsed);
-                    console.log(`App orders updated from network: ${parsed.length} items`);
+                    console.log(`Orders updated: ${parsed.length} items from ${endpoint}`);
+                } else {
+                    console.warn(`Server returned error for ${endpoint}:`, result.message);
                 }
+            } else {
+                console.error(`HTTP Error ${response.status} for ${endpoint}`);
             }
         } catch (e) {
             console.warn("Orders Fetch Error:", e);
         } finally {
             setIsOrdersLoading(false);
         }
-    }, [orders.length]);
+    }, [orders.length, currentUser]);
 
     const refreshData = useCallback(async () => {
         await Promise.all([
@@ -681,7 +690,7 @@ const App: React.FC = () => {
                         <>
                             {originalAdminUser && <ImpersonationBanner />}
                             {shouldShowHeader && <Header appState={appState} onBackToRoleSelect={() => setAppState('role_selection')} />}
-                            <main className={`${containerClass} ${paddingClass} transition-all duration-300`}>
+                            <main className={`${containerClass} ${paddingClass} transition-all duration-300 ${appState !== 'admin_dashboard' && appState !== 'role_selection' ? 'h-full overflow-y-auto custom-scrollbar' : ''}`}>
                                 {appState === 'admin_dashboard' && <AdminDashboard />}
                                 {appState === 'user_journey' && <UserJourney onBackToRoleSelect={() => setAppState('role_selection')} />}
                                 {appState === 'fulfillment' && <FulfillmentPage />}

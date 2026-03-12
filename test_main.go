@@ -1530,6 +1530,55 @@ func handleGetRevenueSummary(c *gin.Context) {
 	c.JSON(200, gin.H{"status": "success", "data": revs})
 }
 
+func handleGetMyOrders(c *gin.Context) {
+	userName, _ := c.Get("userName")
+	isSystemAdmin, _ := c.Get("isSystemAdmin")
+	role, _ := c.Get("role")
+	teamStr, _ := c.Get("team")
+
+	var orders []Order
+	query := DB.Order("timestamp desc")
+
+	// If not Admin, filter by user's teams
+	if !isSystemAdmin.(bool) && role.(string) != "Admin" {
+		teams := strings.Split(teamStr.(string), ",")
+		var cleanTeams []string
+		for _, t := range teams {
+			cleanTeams = append(cleanTeams, strings.TrimSpace(t))
+		}
+		if len(cleanTeams) > 0 {
+			query = query.Where("team IN ?", cleanTeams)
+		} else {
+			// No team assigned, return nothing or filter by username if that's the logic
+			query = query.Where("user = ?", userName)
+		}
+	}
+
+	// Optional limit for performance (e.g. last 60 days by default for Sales)
+	daysParam := c.Query("days")
+	if daysParam != "" {
+		days, _ := strconv.Atoi(daysParam)
+		if days > 0 {
+			cutoff := time.Now().AddDate(0, 0, -days).Format("2006-01-02")
+			query = query.Where("timestamp >= ?", cutoff)
+		}
+	} else {
+		// Default to 60 days for non-admins to keep it fast
+		isInternalAdmin := isSystemAdmin.(bool) || role.(string) == "Admin"
+		if !isInternalAdmin {
+			cutoff := time.Now().AddDate(0, 0, -60).Format("2006-01-02")
+			query = query.Where("timestamp >= ?", cutoff)
+		}
+	}
+
+	if err := query.Find(&orders).Error; err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"status": "error", "message": err.Error()})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{"status": "success", "data": orders})
+}
+
 func handleGetAllOrders(c *gin.Context) {
 	monthParam := c.Query("month")
 	pageParam := c.Query("page")
@@ -2473,6 +2522,7 @@ func main() {
 		protected.POST("/upload-image", handleImageUploadProxy)
 		protected.GET("/permissions", handleGetUserPermissions)
 		protected.GET("/roles", handleGetRoles)
+		protected.GET("/orders", RequirePermission("view_order_list"), handleGetMyOrders)
 
 		chat := protected.Group("/chat")
 		chat.GET("/messages", handleGetChatMessages)

@@ -44,7 +44,10 @@ const UserOrdersView: React.FC<{ team: string; onAdd: () => void }> = ({ team, o
         }
         
         // Strictly filter by the verified team context
-        return orders.filter(o => (o.Team || '').trim().toLowerCase() === requestedTeam);
+        return orders.filter(o => {
+            const orderTeam = (o.Team || '').trim().toLowerCase();
+            return orderTeam === requestedTeam;
+        });
     }, [orders, team, currentUser]);
 
     // Stores parsed orders for the CURRENTLY SELECTED date range only
@@ -363,7 +366,7 @@ const UserOrdersView: React.FC<{ team: string; onAdd: () => void }> = ({ team, o
     }
 
     return (
-        <div className="space-y-6 flex flex-col min-h-screen">
+        <div className="space-y-6 flex flex-col pb-20">
             <style>{`
                 .hide-scrollbar::-webkit-scrollbar { display: none; }
                 .hide-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
@@ -542,7 +545,7 @@ const UserJourney: React.FC<{ onBackToRoleSelect: () => void }> = ({ onBackToRol
     const [view, setView] = useState<'list' | 'create'>('list');
     const [selectedTeam, setSelectedTeam] = useUrlState<string>('team', '');
     const userTeams = useMemo(() => (currentUser?.Team || '').split(',').map(t => t.trim()).filter(Boolean), [currentUser]);
-
+    
     useEffect(() => { setChatVisibility(view !== 'create'); }, [view, setChatVisibility]);
     useEffect(() => { if (userTeams.length === 1 && !selectedTeam) setSelectedTeam(userTeams[0]); }, [userTeams, selectedTeam, setSelectedTeam]);
 
