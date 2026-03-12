@@ -27,9 +27,29 @@ interface ReportFilterState {
 const UserOrdersView: React.FC<{ team: string; onAdd: () => void }> = ({ team, onAdd }) => {
     const { currentUser, refreshData, appData, orders, isOrdersLoading, hasPermission } = useContext(AppContext);
     
+    // 0. Base Data Isolation: Filter all orders based on user team if not Admin
+    const permittedOrders = useMemo(() => {
+        if (!currentUser) return [];
+        const isInternalAdmin = currentUser.IsSystemAdmin || (currentUser.Role || '').toLowerCase() === 'admin';
+        
+        if (isInternalAdmin) return orders;
+        
+        // Security Check: Verify user actually belongs to the requested team
+        const userAllowedTeams = (currentUser.Team || '').split(',').map(t => t.trim().toLowerCase());
+        const requestedTeam = (team || '').trim().toLowerCase();
+        
+        if (!userAllowedTeams.includes(requestedTeam)) {
+            console.warn(`Access denied for user ${currentUser.UserName} to team ${team}`);
+            return [];
+        }
+        
+        // Strictly filter by the verified team context
+        return orders.filter(o => (o.Team || '').trim().toLowerCase() === requestedTeam);
+    }, [orders, team, currentUser]);
+
     // Stores parsed orders for the CURRENTLY SELECTED date range only
     const [viewOrders, setViewOrders] = useState<ParsedOrder[]>([]);
-    const [globalViewOrders, setGlobalOrders] = useState<ParsedOrder[]>([]); // For Top Teams stats AND Delivery List
+    const [globalViewOrders, setGlobalOrders] = useState<ParsedOrder[]>([]); // For stats restricted to permitted range
     
     // Drilldown State
     const [drilldownFilters, setDrilldownFilters] = useState<any>(null);
@@ -41,10 +61,7 @@ const UserOrdersView: React.FC<{ team: string; onAdd: () => void }> = ({ team, o
     
     // Feature States
     const [showReport, setShowReport] = useState(false);
-    const [showShippingReport, setShowShippingReport] = useState(false); // New state for Shipping Report
-    const [alertOpen, setAlertOpen] = useState(false); // State for Floating Alert Demo
-    
-    // Delivery Modal State
+    const [showShippingReport, setShowShippingReport] = useState(false); 
     const [isDeliveryModalOpen, setIsDeliveryModalOpen] = useState(false);
 
     // Dashboard Date State
@@ -59,7 +76,6 @@ const UserOrdersView: React.FC<{ team: string; onAdd: () => void }> = ({ team, o
         customEnd: new Date().toISOString().split('T')[0]
     });
 
-    // Permission Check
     const isSystemAdmin = !!currentUser?.IsSystemAdmin;
 
     const userVisibleColumns = useMemo(() => new Set([
@@ -90,7 +106,7 @@ const UserOrdersView: React.FC<{ team: string; onAdd: () => void }> = ({ team, o
         setProcessing(true);
         setTimeout(() => {
             const { start, end } = getDateBounds(range, customStart, customEnd);
-            const filtered = orders.filter(o => {
+            const filtered = permittedOrders.filter(o => {
                 if (o['Order ID'] === 'Opening_Balance' || o['Order ID'] === 'Opening Balance') return false;
                 if (!o.Timestamp) return false;
                 const orderDate = safeParseDate(o.Timestamp);
@@ -99,30 +115,26 @@ const UserOrdersView: React.FC<{ team: string; onAdd: () => void }> = ({ team, o
                 if (end && orderDate > end) return false;
                 return true;
             });
-            setGlobalViewOrders(filtered);
-            const teamOnly = filtered.filter(o => (o.Team || '').trim() === (team || '').trim());
-            setViewOrders(teamOnly.sort((a, b) => getTimestamp(b.Timestamp) - getTimestamp(a.Timestamp)));
+            setGlobalOrders(filtered);
+            setViewOrders(filtered.sort((a, b) => getTimestamp(b.Timestamp) - getTimestamp(a.Timestamp)));
             setProcessing(false);
         }, 10);
     };
 
     useEffect(() => {
         processDataForRange(dateRange);
-    }, [dateRange, customStart, customEnd, team, orders]);
+    }, [dateRange, customStart, customEnd, team, permittedOrders]);
 
     useEffect(() => {
         if (drilldownFilters) {
             setProcessing(true);
             setTimeout(() => {
-                // Use Parsed Orders from AppContext
-                const source = orders;
+                const source = permittedOrders;
                 
-                // Determine Date Range from Drilldown Filters
                 let start: Date | null = null;
                 let end: Date | null = null;
 
                 if (drilldownFilters.isMonthlyDrilldown) {
-                    // Exact dates passed from report
                     const dStart = drilldownFilters.customStart || drilldownFilters.startDate;
                     const dEnd = drilldownFilters.customEnd || drilldownFilters.endDate;
                     if (dStart) start = getValidDate(dStart + 'T00:00:00');
@@ -139,10 +151,8 @@ const UserOrdersView: React.FC<{ team: string; onAdd: () => void }> = ({ team, o
                 }
 
                 const filtered = source.filter(o => {
-                    // Exclude Opening Balance
                     if (o['Order ID'] === 'Opening_Balance' || o['Order ID'] === 'Opening Balance') return false;
 
-                    // Date Check
                     if (start || end) {
                         if (!o.Timestamp) return false;
                         const d = safeParseDate(o.Timestamp);
@@ -151,21 +161,18 @@ const UserOrdersView: React.FC<{ team: string; onAdd: () => void }> = ({ team, o
                         if (end && d > end) return false;
                     }
                     
-                    // Team Check (Robust)
                     if (drilldownFilters.team) {
                         const oTeam = (o.Team || '').trim().toLowerCase();
                         const fTeam = drilldownFilters.team.trim().toLowerCase();
                         if (oTeam !== fTeam) return false;
                     }
 
-                    // Page Check (Robust)
                     if (drilldownFilters.page) {
                         const oPage = (o.Page || 'Unknown').trim().toLowerCase();
                         const fPage = drilldownFilters.page.trim().toLowerCase();
                         if (oPage !== fPage) return false;
                     }
 
-                    // Shipping/Driver Checks from ShippingReport drilldown (Robust)
                     if (drilldownFilters.shipping) {
                         const oShip = (o['Internal Shipping Method'] || 'Other').trim().toLowerCase();
                         const fShip = drilldownFilters.shipping.trim().toLowerCase();
@@ -195,7 +202,7 @@ const UserOrdersView: React.FC<{ team: string; onAdd: () => void }> = ({ team, o
                 setProcessing(false);
             }, 10);
         }
-    }, [drilldownFilters, orders]);
+    }, [drilldownFilters, permittedOrders]);
 
     // Client-side search filtering
     const filteredOrders = useMemo(() => {
@@ -217,15 +224,26 @@ const UserOrdersView: React.FC<{ team: string; onAdd: () => void }> = ({ team, o
 
     const topTeams = useMemo(() => {
         const teamStats: Record<string, number> = {};
-        globalViewOrders.forEach(o => {
+        // Aggregate statistics can use the full order set for the leaderboard context
+        orders.forEach(o => {
+            if (o['Order ID'] === 'Opening_Balance' || o['Order ID'] === 'Opening Balance') return;
             const tName = (o.Team || 'Unassigned').trim();
+            
+            // Apply current date range to the leaderboard
+            const { start, end } = getDateBounds(dateRange, customStart, customEnd);
+            if (!o.Timestamp) return;
+            const orderDate = safeParseDate(o.Timestamp);
+            if (!orderDate) return;
+            if (start && orderDate < start) return;
+            if (end && orderDate > end) return;
+
             teamStats[tName] = (teamStats[tName] || 0) + (Number(o['Grand Total']) || 0);
         });
         return Object.entries(teamStats)
             .map(([name, revenue]) => ({ name, revenue }))
             .sort((a, b) => b.revenue - a.revenue)
             .slice(0, 3);
-    }, [globalViewOrders]);
+    }, [orders, dateRange, customStart, customEnd]);
 
     const periodLabel = useMemo(() => {
         switch (dateRange) {
@@ -312,7 +330,7 @@ const UserOrdersView: React.FC<{ team: string; onAdd: () => void }> = ({ team, o
         return (
             <div className="animate-fade-in p-2">
                 <UserSalesPageReport 
-                    orders={orders} 
+                    orders={permittedOrders} 
                     onBack={() => setShowReport(false)} 
                     team={team}
                     onNavigate={(filters) => setDrilldownFilters(filters)}
@@ -329,7 +347,7 @@ const UserOrdersView: React.FC<{ team: string; onAdd: () => void }> = ({ team, o
         return (
             <div className="animate-fade-in p-2 min-h-screen">
                 <ShippingReport 
-                    orders={orders} 
+                    orders={permittedOrders} 
                     appData={appData} 
                     dateFilter={dateRange}
                     startDate={customStart}
@@ -407,33 +425,39 @@ const UserOrdersView: React.FC<{ team: string; onAdd: () => void }> = ({ team, o
                             <span className="text-[9px] font-black text-gray-500 uppercase tracking-widest">ប្រតិបត្តិការណ៍</span>
                             <span className="text-lg font-black text-white">{filteredOrders.length} <span className="text-[10px] text-gray-600 italic">Orders</span></span>
                         </div>
-                        <div className="text-right">
-                            <span className="text-[9px] font-black text-blue-500 uppercase tracking-widest">ទឹកប្រាក់សរុប</span>
-                            <p className="text-xl font-black text-transparent bg-clip-text bg-gradient-to-r from-white via-blue-200 to-blue-400">
-                                ${totalFilteredRevenue.toLocaleString(undefined, { minimumFractionDigits: 0 })}
-                            </p>
-                        </div>
+                        {hasPermission('view_revenue') && (
+                            <div className="text-right">
+                                <span className="text-[9px] font-black text-blue-500 uppercase tracking-widest">ទឹកប្រាក់សរុប</span>
+                                <p className="text-xl font-black text-transparent bg-clip-text bg-gradient-to-r from-white via-blue-200 to-blue-400">
+                                    ${totalFilteredRevenue.toLocaleString(undefined, { minimumFractionDigits: 0 })}
+                                </p>
+                            </div>
+                        )}
                     </div>
 
                     {/* Report & Delivery Buttons Grid - Expanded to 4 columns */}
                     <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-                        <button 
-                            onClick={() => setShowReport(true)}
-                            className="py-3 bg-indigo-600/10 border border-indigo-500/30 text-indigo-400 rounded-xl font-black uppercase text-[10px] tracking-widest hover:bg-indigo-600 hover:text-white transition-all flex items-center justify-center gap-2 active:scale-95"
-                        >
-                            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" /></svg>
-                            Page Report
-                        </button>
-                        <button 
-                            onClick={() => setShowShippingReport(true)}
-                            className="py-3 bg-orange-600/10 border border-orange-500/30 text-orange-400 rounded-xl font-black uppercase text-[10px] tracking-widest hover:bg-orange-600 hover:text-white transition-all flex items-center justify-center gap-2 active:scale-95"
-                        >
-                            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16V6a1 1 0 00-1-1H4a1 1 0 00-1 1v10a1 1 0 001 1h8a1 1 0 001-1z" /><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M20 8h-2m2 4h-2m-2-4h.01M17 16h.01" /></svg>
-                            Shipping Cost
-                        </button>
+                        {hasPermission('view_revenue') && (
+                            <>
+                                <button 
+                                    onClick={() => setShowReport(true)}
+                                    className="py-3 bg-indigo-600/10 border border-indigo-500/30 text-indigo-400 rounded-xl font-black uppercase text-[10px] tracking-widest hover:bg-indigo-600 hover:text-white transition-all flex items-center justify-center gap-2 active:scale-95"
+                                >
+                                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" /></svg>
+                                    Page Report
+                                </button>
+                                <button 
+                                    onClick={() => setShowShippingReport(true)}
+                                    className="py-3 bg-orange-600/10 border border-orange-500/30 text-orange-400 rounded-xl font-black uppercase text-[10px] tracking-widest hover:bg-orange-600 hover:text-white transition-all flex items-center justify-center gap-2 active:scale-95"
+                                >
+                                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16V6a1 1 0 00-1-1H4a1 1 0 00-1 1v10a1 1 0 001 1h8a1 1 0 001-1z" /><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M20 8h-2m2 4h-2m-2-4h.01M17 16h.01" /></svg>
+                                    Shipping Cost
+                                </button>
+                            </>
+                        )}
                         <button 
                             onClick={() => setIsDeliveryModalOpen(true)}
-                            className="py-3 bg-emerald-600/10 border border-emerald-500/30 text-emerald-400 rounded-xl font-black uppercase text-[10px] tracking-widest hover:bg-emerald-600 hover:text-white transition-all flex items-center justify-center gap-2 active:scale-95"
+                            className={`py-3 bg-emerald-600/10 border border-emerald-500/30 text-emerald-400 rounded-xl font-black uppercase text-[10px] tracking-widest hover:bg-emerald-600 hover:text-white transition-all flex items-center justify-center gap-2 active:scale-95 ${!hasPermission('view_revenue') ? 'col-span-2' : ''}`}
                         >
                             <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-3 7h3m-3 4h3m-6-4h.01M9 16h.01" /></svg>
                             Delivery List
@@ -487,8 +511,10 @@ const UserOrdersView: React.FC<{ team: string; onAdd: () => void }> = ({ team, o
             <div className="md:hidden fixed bottom-6 left-6 right-6 z-40">
                 <div className="bg-gray-900/95 backdrop-blur-3xl p-4 rounded-3xl shadow-2xl border border-white/10 flex justify-between items-center ring-1 ring-white/5">
                     <div className="flex flex-col">
-                        <span className="text-[8px] font-black text-blue-500 uppercase tracking-[0.2em] mb-0.5">Session Revenue</span>
-                        <span className="text-white font-black text-xl tracking-tighter">${totalFilteredRevenue.toLocaleString()}</span>
+                        <span className="text-[8px] font-black text-blue-500 uppercase tracking-[0.2em] mb-0.5">{hasPermission('view_revenue') ? 'Session Revenue' : 'Operational Mode'}</span>
+                        <span className="text-white font-black text-xl tracking-tighter">
+                            {hasPermission('view_revenue') ? `$${totalFilteredRevenue.toLocaleString()}` : team}
+                        </span>
                     </div>
                     <button 
                         onClick={onAdd}
@@ -504,7 +530,7 @@ const UserOrdersView: React.FC<{ team: string; onAdd: () => void }> = ({ team, o
             <DeliveryListGeneratorModal 
                 isOpen={isDeliveryModalOpen} 
                 onClose={() => setIsDeliveryModalOpen(false)} 
-                orders={orders} 
+                orders={permittedOrders} 
                 appData={appData} 
                 team={team}
             />        </div>
