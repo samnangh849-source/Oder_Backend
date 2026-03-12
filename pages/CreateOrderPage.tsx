@@ -888,7 +888,8 @@ const CreateOrderPage: React.FC<CreateOrderPageProps> = ({ team, onSaveSuccess, 
     };
 
     return (
-        <div className="w-full max-w-4xl mx-auto mt-2 sm:mt-10 lg:mt-14 px-1 sm:px-0">
+        <div className="w-full h-full overflow-y-auto custom-scrollbar px-1 sm:px-4 pb-24">
+            <div className="max-w-4xl mx-auto mt-2 sm:mt-10 lg:mt-14">
              <style>{`
                 @keyframes shimmer {
                     0% { background-position: -200% 0; }

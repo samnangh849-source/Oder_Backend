@@ -1,10 +1,9 @@
 
-import React, { useState, useContext, useEffect, useMemo, useRef } from 'react';
+import React, { useState, useContext, useEffect, useMemo, useRef, useCallback } from 'react';
 import { AppContext } from '../context/AppContext';
 import { ParsedOrder, FullOrder } from '../types';
 import { WEB_APP_URL } from '../constants';
 import Spinner from '../components/common/Spinner';
-import FloatingAlert from '../components/common/FloatingAlert';
 import OrdersList from '../components/orders/OrdersList';
 import CreateOrderPage from './CreateOrderPage';
 import EditOrderPage from './EditOrderPage'; 
@@ -17,7 +16,6 @@ import { translations } from '../translations';
 
 type DateRangePreset = 'today' | 'yesterday' | 'this_week' | 'this_month' | 'last_month' | 'this_year' | 'last_year' | 'all' | 'custom';
 
-// Define the state shape for the report filters
 interface ReportFilterState {
     datePreset: DateRangePreset;
     customStart: string;
@@ -100,7 +98,7 @@ const UserOrdersView: React.FC<{ team: string; onAdd: () => void }> = ({ team, o
         return { start, end };
     };
 
-    const processDataForRange = (range: DateRangePreset) => {
+    const processDataForRange = useCallback((range: DateRangePreset) => {
         setProcessing(true);
         setTimeout(() => {
             const { start, end } = getDateBounds(range, customStart, customEnd);
@@ -117,11 +115,11 @@ const UserOrdersView: React.FC<{ team: string; onAdd: () => void }> = ({ team, o
             setViewOrders(filtered.sort((a, b) => getTimestamp(b.Timestamp) - getTimestamp(a.Timestamp)));
             setProcessing(false);
         }, 10);
-    };
+    }, [permittedOrders, customStart, customEnd]);
 
     useEffect(() => {
         processDataForRange(dateRange);
-    }, [dateRange, customStart, customEnd, team, permittedOrders]);
+    }, [dateRange, processDataForRange]);
 
     useEffect(() => {
         if (drilldownFilters) {
@@ -244,7 +242,7 @@ const UserOrdersView: React.FC<{ team: string; onAdd: () => void }> = ({ team, o
     if (showShippingReport) return <div className="animate-fade-in p-2 min-h-screen"><ShippingReport orders={permittedOrders} appData={appData} dateFilter={dateRange} startDate={customStart} endDate={customEnd} onNavigate={(filters) => { setDrilldownFilters(filters); setShowShippingReport(false); }} onBack={() => setShowShippingReport(false)} /></div>;
 
     return (
-        <div className="flex flex-col h-full space-y-4 lg:space-y-6">
+        <div className="flex flex-col h-auto md:h-full space-y-4 lg:space-y-6">
             <style>{`
                 .hide-scrollbar::-webkit-scrollbar { display: none; }
                 .hide-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
@@ -332,10 +330,10 @@ const UserOrdersView: React.FC<{ team: string; onAdd: () => void }> = ({ team, o
                 </div>
             </div>
 
-            <div className="flex-1 min-h-0 relative px-1 overflow-hidden md:overflow-visible">
+            <div className="flex-1 min-h-0 relative px-1 overflow-visible md:overflow-visible">
                 {processing ? <div className="flex justify-center py-20"><Spinner size="md" /></div> : filteredOrders.length === 0 ? (
                     <div className="flex items-center justify-center h-64 bg-gray-900/20 rounded-[2rem] border-2 border-dashed border-white/5"><p className="text-[10px] font-black text-gray-600 uppercase tracking-widest italic">រកមិនឃើញទិន្នន័យ</p></div>
-                ) : <div className="h-full"><OrdersList orders={filteredOrders} showActions={true} visibleColumns={userVisibleColumns} onEdit={setEditingOrder} /></div>}
+                ) : <div className="h-auto md:h-full"><OrdersList orders={filteredOrders} showActions={true} visibleColumns={userVisibleColumns} onEdit={setEditingOrder} /></div>}
             </div>
 
             <div className="md:hidden fixed bottom-6 left-6 right-6 z-40">

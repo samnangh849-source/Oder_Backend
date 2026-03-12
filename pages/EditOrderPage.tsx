@@ -436,7 +436,7 @@ const EditOrderPage: React.FC<EditOrderPageProps> = ({ order, onSaveSuccess, onC
 
     return (
         // Main Container - Fixed Layout
-        <div className="w-full h-full lg:h-[calc(100vh-40px)] flex flex-col animate-fade-in lg:overflow-hidden">
+        <div className="w-full h-full flex flex-col animate-fade-in overflow-y-auto custom-scrollbar pb-20">
             {/* Scanner Modal */}
             {isScannerVisible && (
                 <BarcodeScannerModal 
