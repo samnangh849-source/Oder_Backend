@@ -44,6 +44,7 @@ const LoginPage = lazyRetry(() => import('./pages/LoginPage'), 'LoginPage');
 const RoleSelectionPage = lazyRetry(() => import('./pages/RoleSelectionPage'), 'RoleSelectionPage');
 const AdminDashboard = lazyRetry(() => import('./pages/AdminDashboard'), 'AdminDashboard');
 const UserJourney = lazyRetry(() => import('./pages/UserJourney'), 'UserJourney');
+const CreateOrderPage = lazyRetry(() => import('./pages/CreateOrderPage'), 'CreateOrderPage');
 const DeliveryAgentView = lazyRetry(() => import('./components/orders/DeliveryAgentView'), 'DeliveryAgentView');
 const FulfillmentPage = lazyRetry(() => import('./pages/FulfillmentPage'), 'FulfillmentPage');
 const Header = lazyRetry(() => import('./components/common/Header'), 'Header');
@@ -69,7 +70,7 @@ const App: React.FC = () => {
     const [isMobile, setIsMobile] = useState(window.innerWidth < 768);
     const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
     const [language, setLanguage] = useState<Language>(() => (localStorage.getItem('appLanguage') as Language) || 'en');
-    const [appState, setAppState] = useUrlState<'login' | 'role_selection' | 'admin_dashboard' | 'user_journey' | 'confirm_delivery' | 'fulfillment'>('view', 'login');
+    const [appState, setAppState] = useUrlState<'login' | 'role_selection' | 'admin_dashboard' | 'user_journey' | 'confirm_delivery' | 'fulfillment' | 'create_order'>('view', 'login');
     const [previewImageUrl, setPreviewImageUrl] = useState<string | null>(null);
     
     // URL Params for Delivery Confirmation
@@ -134,6 +135,7 @@ const App: React.FC = () => {
     const [isChatOpen, setIsChatOpen] = useState(false);
     const [isChatVisible, setChatVisible] = useState(true);
     const [isGlobalLoading, setIsGlobalLoading] = useState(true);
+    const [selectedTeamForOrder, setSelectedTeamForOrder] = useUrlState<string>('team', '');
 
     const handleLanguageChange = (lang: Language) => {
         setLanguage(lang);
@@ -674,7 +676,7 @@ const App: React.FC = () => {
 
     const paddingClass = useMemo(() => {
         if (appState === 'role_selection' || appState === 'login') return 'pt-0 pb-0';
-        const basePadding = isMobile ? 'pt-20' : (appState === 'user_journey' ? 'pt-16' : 'pt-24');
+        const basePadding = isMobile ? 'pt-20' : (appState === 'user_journey' || appState === 'create_order' ? 'pt-16' : 'pt-24');
         return `${shouldShowHeader ? basePadding : 'pt-0'} pb-24 md:pb-8`;
     }, [appState, shouldShowHeader, isMobile]);
 
@@ -703,9 +705,10 @@ const App: React.FC = () => {
                         <>
                             {originalAdminUser && <ImpersonationBanner />}
                             {shouldShowHeader && <Header appState={appState} onBackToRoleSelect={() => setAppState('role_selection')} />}
-                            <main className={`${containerClass} ${paddingClass} transition-all duration-300 ${appState === 'fulfillment' ? 'h-full overflow-hidden' : (appState === 'user_journey' ? 'h-full overflow-y-auto custom-scrollbar' : (appState !== 'admin_dashboard' && appState !== 'role_selection' ? 'h-full overflow-y-auto custom-scrollbar' : ''))}`}>
+                            <main className={`${containerClass} ${paddingClass} transition-all duration-300 ${appState === 'fulfillment' ? 'h-full overflow-hidden' : (appState === 'user_journey' || appState === 'create_order' ? 'h-full overflow-y-auto custom-scrollbar' : (appState !== 'admin_dashboard' && appState !== 'role_selection' ? 'h-full overflow-y-auto custom-scrollbar' : ''))}`}>
                                 {appState === 'admin_dashboard' && <AdminDashboard />}
                                 {appState === 'user_journey' && <UserJourney onBackToRoleSelect={() => setAppState('role_selection')} />}
+                                {appState === 'create_order' && <CreateOrderPage team={selectedTeamForOrder} onSaveSuccess={() => setAppState('user_journey')} onCancel={() => setAppState('user_journey')} />}
                                 {appState === 'fulfillment' && <FulfillmentPage />}
                                 {appState === 'role_selection' && <RoleSelectionPage onSelect={(s) => setAppState(s as any)} />}
                             </main>
@@ -731,7 +734,7 @@ const App: React.FC = () => {
                                 onClick={() => setPreviewImageUrl(null)}
                                 className="absolute top-4 right-4 z-50 w-10 h-10 bg-red-600/80 hover:bg-red-600 text-white rounded-full flex items-center justify-center shadow-2xl transition-all border border-white/20 active:scale-90"
                             >
-                                <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M6 18L18 6M6 6l12 12" /></svg>
+                                <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2.5}><path d="M6 18L18 6M6 6l12 12" /></svg>
                             </button>
                             <img src={previewImageUrl} className="max-h-[85vh] w-full object-contain rounded-xl" alt="Preview" />
                         </div>
