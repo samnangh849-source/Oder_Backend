@@ -564,7 +564,7 @@ const OrdersDashboard: React.FC<OrdersDashboardProps> = ({ onBack, initialFilter
             </div>
 
             {/* Scrollable Area */}
-            <div className="flex-1 overflow-y-auto no-scrollbar relative z-10">
+            <div className="flex-1 min-h-0 relative z-10 overflow-hidden">
                 <OrdersList orders={filteredOrders} onEdit={o => setEditingOrderId(o['Order ID'])} onView={o => setViewingOrder(o)} showActions={true} visibleColumns={visibleColumns} selectedIds={selectedIds} onToggleSelect={toggleSelection} onToggleSelectAll={toggleSelectAll} showBorders={showBorders} groupBy={groupBy} />
             </div>
 

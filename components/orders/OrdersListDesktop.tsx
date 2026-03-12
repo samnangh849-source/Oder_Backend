@@ -159,7 +159,7 @@ const OrdersListDesktop: React.FC<OrdersListDesktopProps> = ({
     const canVerifyOrder = () => currentUser?.IsSystemAdmin || hasPermission('verify_order');
 
     return (
-        <div className="page-card !p-0 shadow-2xl border-white/5 bg-gray-900/60 backdrop-blur-3xl rounded-[2.5rem] flex flex-col h-[75vh] lg:h-[80vh] xl:h-[85vh] min-h-[600px] overflow-hidden">
+        <div className="page-card !p-0 shadow-2xl border-white/5 bg-gray-900/60 backdrop-blur-3xl rounded-[2.5rem] flex flex-col h-full min-h-[400px] overflow-hidden">
             <div className="flex-shrink-0 z-20 bg-gray-900 rounded-t-[2.5rem] border-b border-white/10">
                 <table className={`admin-table w-full border-collapse ${showBorders ? 'divide-x divide-white/10 border-x border-white/10' : ''}`} style={{ tableLayout: 'fixed' }}>
                     <thead>

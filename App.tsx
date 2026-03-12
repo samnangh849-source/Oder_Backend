@@ -661,7 +661,7 @@ const App: React.FC = () => {
 
     const paddingClass = useMemo(() => {
         if (appState === 'role_selection' || appState === 'login') return 'pt-0 pb-0';
-        const basePadding = isMobile ? 'pt-20' : 'pt-24';
+        const basePadding = isMobile ? 'pt-20' : (appState === 'user_journey' ? 'pt-16' : 'pt-24');
         return `${shouldShowHeader ? basePadding : 'pt-0'} pb-24 md:pb-8`;
     }, [appState, shouldShowHeader, isMobile]);
 
@@ -690,7 +690,7 @@ const App: React.FC = () => {
                         <>
                             {originalAdminUser && <ImpersonationBanner />}
                             {shouldShowHeader && <Header appState={appState} onBackToRoleSelect={() => setAppState('role_selection')} />}
-                            <main className={`${containerClass} ${paddingClass} transition-all duration-300 ${appState !== 'admin_dashboard' && appState !== 'role_selection' ? 'h-full overflow-y-auto custom-scrollbar' : ''}`}>
+                            <main className={`${containerClass} ${paddingClass} transition-all duration-300 ${appState === 'user_journey' ? 'h-full overflow-hidden' : (appState !== 'admin_dashboard' && appState !== 'role_selection' ? 'h-full overflow-y-auto custom-scrollbar' : '')}`}>
                                 {appState === 'admin_dashboard' && <AdminDashboard />}
                                 {appState === 'user_journey' && <UserJourney onBackToRoleSelect={() => setAppState('role_selection')} />}
                                 {appState === 'fulfillment' && <FulfillmentPage />}

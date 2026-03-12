@@ -192,8 +192,8 @@ ${dateStr}
     };
 
     return (
-        <div className="w-full flex flex-col">
-            <div className="flex-grow space-y-4">
+        <div className="w-full h-full flex flex-col">
+            <div className="flex-1 min-h-0 space-y-4">
                 {viewType === 'desktop' && (
                     <OrdersListDesktop 
                         {...sharedProps}

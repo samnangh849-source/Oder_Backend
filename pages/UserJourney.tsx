@@ -366,149 +366,188 @@ const UserOrdersView: React.FC<{ team: string; onAdd: () => void }> = ({ team, o
     }
 
     return (
-        <div className="space-y-6 flex flex-col pb-20">
+        <div className="flex flex-col h-full space-y-4 lg:space-y-6">
             <style>{`
                 .hide-scrollbar::-webkit-scrollbar { display: none; }
                 .hide-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
             `}</style>
 
-            {/* Top Teams Horizontal Scroll */}
-            <div className="space-y-4">
-                <div className="flex items-center justify-between px-2">
-                    <div className="flex items-center gap-2">
-                        <div className="w-1 h-5 bg-blue-500 rounded-full"></div>
-                        <h3 className="text-xs font-black text-white uppercase tracking-widest">តារាងក្រុមឆ្នើម</h3>
-                    </div>
-                    <span className="text-[10px] font-black text-gray-500 uppercase">{periodLabel}</span>
-                </div>
-
-                <div className="flex overflow-x-auto gap-4 px-2 pb-4 hide-scrollbar snap-x">
-                    {topTeams.length === 0 ? (
-                        <div className="text-gray-500 text-xs p-4 italic">មិនមានទិន្នន័យសម្រាប់ {periodLabel}</div>
-                    ) : (
-                        topTeams.map((t, i) => (
-                            <div key={t.name} className="flex-shrink-0 w-[240px] sm:w-[300px] snap-center bg-gray-900 border border-white/5 p-5 rounded-3xl flex items-center gap-4 relative overflow-hidden shadow-lg">
-                                <div className={`w-12 h-12 rounded-xl flex items-center justify-center text-2xl border ${
-                                    i === 0 ? 'bg-yellow-500/20 text-yellow-500 border-yellow-500/30' : 
-                                    i === 1 ? 'bg-gray-400/20 text-gray-300 border-gray-400/30' : 
-                                    'bg-orange-600/20 text-orange-500 border-orange-600/30'
-                                }`}>
-                                    {i === 0 ? '🥇' : i === 1 ? '🥈' : '🥉'}
-                                </div>
-                                <div className="min-w-0 flex-1">
-                                    <h4 className="text-sm font-black text-white truncate uppercase tracking-tighter">{t.name}</h4>
-                                    <p className="text-lg font-black text-blue-400">${t.revenue.toLocaleString(undefined, { maximumFractionDigits: 0 })}</p>
-                                </div>
-                                <div className={`absolute -right-4 -bottom-4 w-20 h-20 rounded-full blur-3xl opacity-10 ${
-                                    i === 0 ? 'bg-yellow-500' : i === 1 ? 'bg-gray-400' : 'bg-orange-600'
-                                }`}></div>
-                            </div>
-                        ))
-                    )}
-                </div>
-            </div>
-
-            {/* Compact Dashboard Filters & Actions - STICKY */}
-            <div className="sticky top-2 z-[40] bg-[#020617]/80 backdrop-blur-2xl p-4 rounded-[2rem] border border-white/10 space-y-4 shadow-2xl mx-1 ring-1 ring-white/5 transition-all hover:bg-gray-900/90">
-                <div className="flex flex-col gap-4">
-                    <div className="flex items-center gap-1 overflow-x-auto hide-scrollbar bg-black/40 p-1 rounded-xl border border-white/5">
-                        {(['today', 'this_week', 'this_month', 'custom'] as const).map(p => (
-                            <button 
-                                key={p} 
-                                onClick={() => setDateRange(p)} 
-                                className={`flex-shrink-0 px-4 py-2 text-[10px] font-black uppercase rounded-lg transition-all ${dateRange === p ? 'bg-blue-600 text-white shadow-lg shadow-blue-600/40' : 'text-gray-500'}`}
-                            >
-                                {p === 'today' ? 'ថ្ងៃនេះ' : p === 'this_week' ? 'សប្តាហ៍នេះ' : p === 'this_month' ? 'ខែនេះ' : 'កំណត់'}
-                            </button>
-                        ))}
-                    </div>
-
+            {/* Top Section: Teams & Stats (Fixed on Desktop) */}
+            <div className="flex-shrink-0 space-y-4 lg:space-y-6">
+                {/* Top Teams Horizontal Scroll */}
+                <div className="space-y-3">
                     <div className="flex items-center justify-between px-2">
-                         <div className="flex flex-col">
-                            <span className="text-[9px] font-black text-gray-500 uppercase tracking-widest">ប្រតិបត្តិការណ៍</span>
-                            <span className="text-lg font-black text-white">{filteredOrders.length} <span className="text-[10px] text-gray-600 italic">Orders</span></span>
+                        <div className="flex items-center gap-2">
+                            <div className="w-1 h-5 bg-blue-500 rounded-full"></div>
+                            <h3 className="text-xs font-black text-white uppercase tracking-widest">តារាងក្រុមឆ្នើម</h3>
                         </div>
-                        {hasPermission('view_revenue') && (
-                            <div className="text-right">
-                                <span className="text-[9px] font-black text-blue-500 uppercase tracking-widest">ទឹកប្រាក់សរុប</span>
-                                <p className="text-xl font-black text-transparent bg-clip-text bg-gradient-to-r from-white via-blue-200 to-blue-400">
-                                    ${totalFilteredRevenue.toLocaleString(undefined, { minimumFractionDigits: 0 })}
-                                </p>
-                            </div>
+                        <span className="text-[10px] font-black text-gray-500 uppercase">{periodLabel}</span>
+                    </div>
+
+                    <div className="flex overflow-x-auto gap-4 px-2 pb-2 hide-scrollbar snap-x">
+                        {topTeams.length === 0 ? (
+                            <div className="text-gray-500 text-xs p-4 italic">មិនមានទិន្នន័យសម្រាប់ {periodLabel}</div>
+                        ) : (
+                            topTeams.map((t, i) => (
+                                <div key={t.name} className="flex-shrink-0 w-[240px] sm:w-[280px] snap-center bg-gray-900 border border-white/5 p-4 rounded-3xl flex items-center gap-4 relative overflow-hidden shadow-lg group transition-all hover:bg-gray-800/50">
+                                    <div className={`w-10 h-10 rounded-xl flex items-center justify-center text-xl border ${
+                                        i === 0 ? 'bg-yellow-500/20 text-yellow-500 border-yellow-500/30 shadow-[0_0_15px_rgba(234,179,8,0.15)]' : 
+                                        i === 1 ? 'bg-gray-400/20 text-gray-300 border-gray-400/30' : 
+                                        'bg-orange-600/20 text-orange-500 border-orange-600/30'
+                                    }`}>
+                                        {i === 0 ? '🥇' : i === 1 ? '🥈' : '🥉'}
+                                    </div>
+                                    <div className="min-w-0 flex-1">
+                                        <h4 className="text-[11px] font-black text-gray-400 truncate uppercase tracking-tighter group-hover:text-white transition-colors">{t.name}</h4>
+                                        <p className="text-lg font-black text-blue-400 group-hover:scale-105 origin-left transition-transform">${t.revenue.toLocaleString(undefined, { maximumFractionDigits: 0 })}</p>
+                                    </div>
+                                    <div className={`absolute -right-4 -bottom-4 w-16 h-16 rounded-full blur-3xl opacity-10 ${
+                                        i === 0 ? 'bg-yellow-500' : i === 1 ? 'bg-gray-400' : 'bg-orange-600'
+                                    }`}></div>
+                                </div>
+                            ))
                         )}
                     </div>
+                </div>
 
-                    {/* Report & Delivery Buttons Grid - Expanded to 4 columns */}
-                    <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+                {/* Dashboard Filters & Actions */}
+                <div className="bg-[#020617]/80 backdrop-blur-2xl p-4 rounded-[2rem] border border-white/10 space-y-4 shadow-2xl mx-1 ring-1 ring-white/5 transition-all hover:bg-gray-900/90">
+                    <div className="flex flex-col lg:flex-row lg:items-center gap-4">
+                        {/* Time Presets */}
+                        <div className="flex items-center gap-1 overflow-x-auto hide-scrollbar bg-black/40 p-1 rounded-xl border border-white/5 flex-shrink-0">
+                            {(['today', 'this_week', 'this_month', 'custom'] as const).map(p => (
+                                <button 
+                                    key={p} 
+                                    onClick={() => setDateRange(p)} 
+                                    className={`flex-shrink-0 px-4 py-2 text-[10px] font-black uppercase rounded-lg transition-all ${dateRange === p ? 'bg-blue-600 text-white shadow-lg shadow-blue-600/40' : 'text-gray-500'}`}
+                                >
+                                    {p === 'today' ? 'ថ្ងៃនេះ' : p === 'this_week' ? 'សប្តាហ៍នេះ' : p === 'this_month' ? 'ខែនេះ' : 'កំណត់'}
+                                </button>
+                            ))}
+                        </div>
+
+                        {/* Revenue Stats */}
+                        <div className="flex items-center gap-6 lg:ml-auto lg:pr-4">
+                            <div className="flex flex-col">
+                                <span className="text-[9px] font-black text-gray-500 uppercase tracking-widest">ប្រតិបត្តិការណ៍</span>
+                                <span className="text-lg font-black text-white">{filteredOrders.length} <span className="text-[10px] text-gray-600 italic">Orders</span></span>
+                            </div>
+                            {hasPermission('view_revenue') && (
+                                <div className="text-right">
+                                    <span className="text-[9px] font-black text-blue-500 uppercase tracking-widest">ទឹកប្រាក់សរុប</span>
+                                    <p className="text-xl font-black text-transparent bg-clip-text bg-gradient-to-r from-white via-blue-200 to-blue-400">
+                                        ${totalFilteredRevenue.toLocaleString(undefined, { minimumFractionDigits: 0 })}
+                                    </p>
+                                </div>
+                            )}
+                        </div>
+
+                        {/* Global Search (Moved here for Desktop visibility) */}
+                        <div className="relative flex-grow lg:max-w-xs group">
+                            <input 
+                                type="text" 
+                                placeholder="ស្វែងរក..." 
+                                value={searchQuery} 
+                                onChange={e => setSearchQuery(e.target.value)} 
+                                className="w-full bg-black/40 border border-gray-800 rounded-xl py-2.5 pl-9 pr-4 text-xs font-bold text-white placeholder:text-gray-700 focus:border-blue-500/50 transition-all" 
+                            />
+                            <svg className="absolute left-3 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-gray-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                <path d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round" />
+                            </svg>
+                        </div>
+                    </div>
+
+                    {/* Action Grid */}
+                    <div className="flex flex-wrap gap-2 lg:gap-3">
                         {hasPermission('view_revenue') && (
                             <>
                                 <button 
                                     onClick={() => setShowReport(true)}
-                                    className="py-3 bg-indigo-600/10 border border-indigo-500/30 text-indigo-400 rounded-xl font-black uppercase text-[10px] tracking-widest hover:bg-indigo-600 hover:text-white transition-all flex items-center justify-center gap-2 active:scale-95"
+                                    className="px-5 py-2.5 bg-indigo-600/10 border border-indigo-500/20 text-indigo-400 rounded-xl font-black uppercase text-[9px] tracking-widest hover:bg-indigo-600 hover:text-white transition-all flex items-center gap-2 active:scale-95"
                                 >
-                                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" /></svg>
+                                    <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" /></svg>
                                     Page Report
                                 </button>
                                 <button 
                                     onClick={() => setShowShippingReport(true)}
-                                    className="py-3 bg-orange-600/10 border border-orange-500/30 text-orange-400 rounded-xl font-black uppercase text-[10px] tracking-widest hover:bg-orange-600 hover:text-white transition-all flex items-center justify-center gap-2 active:scale-95"
+                                    className="px-5 py-2.5 bg-orange-600/10 border border-orange-500/20 text-orange-400 rounded-xl font-black uppercase text-[9px] tracking-widest hover:bg-orange-600 hover:text-white transition-all flex items-center gap-2 active:scale-95"
                                 >
-                                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16V6a1 1 0 00-1-1H4a1 1 0 00-1 1v10a1 1 0 001 1h8a1 1 0 001-1z" /><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M20 8h-2m2 4h-2m-2-4h.01M17 16h.01" /></svg>
+                                    <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M13 16V6a1 1 0 00-1-1H4a1 1 0 00-1 1v10a1 1 0 001 1h8a1 1 0 001-1z" /><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M20 8h-2m2 4h-2m-2-4h.01M17 16h.01" /></svg>
                                     Shipping Cost
                                 </button>
                             </>
                         )}
                         <button 
                             onClick={() => setIsDeliveryModalOpen(true)}
-                            className={`py-3 bg-emerald-600/10 border border-emerald-500/30 text-emerald-400 rounded-xl font-black uppercase text-[10px] tracking-widest hover:bg-emerald-600 hover:text-white transition-all flex items-center justify-center gap-2 active:scale-95 ${!hasPermission('view_revenue') ? 'col-span-2' : ''}`}
+                            className="px-5 py-2.5 bg-emerald-600/10 border border-emerald-500/20 text-emerald-400 rounded-xl font-black uppercase text-[9px] tracking-widest hover:bg-emerald-600 hover:text-white transition-all flex items-center gap-2 active:scale-95"
                         >
-                            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-3 7h3m-3 4h3m-6-4h.01M9 16h.01" /></svg>
+                            <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-3 7h3m-3 4h3m-6-4h.01M9 16h.01" /></svg>
                             Delivery List
                         </button>
+                        
+                        {/* Custom Date Inputs (Inline for Desktop) */}
+                        {dateRange === 'custom' && (
+                            <div className="flex items-center gap-2 animate-fade-in pl-2 border-l border-white/5 ml-2">
+                                <input type="date" value={customStart} onChange={e => setCustomStart(e.target.value)} className="bg-black/40 border border-white/5 text-[10px] font-black text-white rounded-lg px-3 py-2 outline-none focus:border-blue-500/50" />
+                                <span className="text-gray-600 text-[10px] font-bold">TO</span>
+                                <input type="date" value={customEnd} onChange={e => setCustomEnd(e.target.value)} className="bg-black/40 border border-white/5 text-[10px] font-black text-white rounded-lg px-3 py-2 outline-none focus:border-blue-500/50" />
+                            </div>
+                        )}
                     </div>
-                </div>
-
-                {dateRange === 'custom' && (
-                    <div className="grid grid-cols-2 gap-2 animate-fade-in-down">
-                        <input type="date" value={customStart} onChange={e => setCustomStart(e.target.value)} className="bg-gray-800 border-none text-[10px] font-black text-white rounded-lg p-2" />
-                        <input type="date" value={customEnd} onChange={e => setCustomEnd(e.target.value)} className="bg-gray-800 border-none text-[10px] font-black text-white rounded-lg p-2" />
-                    </div>
-                )}
-                
-                <div className="relative group">
-                    <input 
-                        type="text" 
-                        placeholder="ស្វែងរកតាម ID, ឈ្មោះ, ឬទូរស័ព្ទ..." 
-                        value={searchQuery} 
-                        onChange={e => setSearchQuery(e.target.value)} 
-                        className="w-full bg-black/40 border border-gray-800 rounded-xl py-3 pl-10 pr-4 text-xs font-bold text-white placeholder:text-gray-700 focus:border-blue-500/50 transition-all" 
-                    />
-                    <svg className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                        <path d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round" />
-                    </svg>
                 </div>
             </div>
 
-            {/* List View */}
-            <div className="px-1">
+            {/* List View Section (Internal Scroll managed by OrdersList on Desktop) */}
+            <div className="flex-1 min-h-0 relative px-1 overflow-hidden md:overflow-visible">
                 {processing ? (
                     <div className="flex justify-center py-20">
                         <Spinner size="md" />
                     </div>
                 ) : filteredOrders.length === 0 ? (
-                    <div className="text-center py-20 bg-gray-800/10 rounded-[2rem] border-2 border-dashed border-gray-800/50">
+                    <div className="flex items-center justify-center h-64 bg-gray-900/20 rounded-[2rem] border-2 border-dashed border-white/5">
                         <p className="text-[10px] font-black text-gray-600 uppercase tracking-widest italic">រកមិនឃើញទិន្នន័យ</p>
                     </div>
                 ) : (
-                    <div className="animate-fade-in-up">
+                    <div className="h-full">
                         <OrdersList 
                             orders={filteredOrders} 
                             showActions={true} 
                             visibleColumns={userVisibleColumns}
                             onEdit={(o) => setEditingOrder(o)}
                         />
-                    </div>                )}
+                    </div>
+                )}
             </div>
+
+            {/* Mobile Sticky Action Bar */}
+            <div className="md:hidden fixed bottom-6 left-6 right-6 z-40">
+                <div className="bg-gray-900/95 backdrop-blur-3xl p-4 rounded-3xl shadow-2xl border border-white/10 flex justify-between items-center ring-1 ring-white/5">
+                    <div className="flex flex-col">
+                        <span className="text-[8px] font-black text-blue-500 uppercase tracking-[0.2em] mb-0.5">{hasPermission('view_revenue') ? 'Session Revenue' : 'Operational Mode'}</span>
+                        <span className="text-white font-black text-xl tracking-tighter">
+                            {hasPermission('view_revenue') ? `$${totalFilteredRevenue.toLocaleString()}` : team}
+                        </span>
+                    </div>
+                    <button 
+                        onClick={onAdd}
+                        className="bg-blue-600 hover:bg-blue-500 text-white p-4 rounded-2xl shadow-lg shadow-blue-600/40 active:scale-90 transition-all"
+                    >
+                        <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path d="M12 4v16m8-8H4" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"/></svg>
+                    </button>
+                </div>
+            </div>
+
+            <div className="h-20 md:hidden"></div>
+
+            <DeliveryListGeneratorModal 
+                isOpen={isDeliveryModalOpen} 
+                onClose={() => setIsDeliveryModalOpen(false)} 
+                orders={permittedOrders} 
+                appData={appData} 
+                team={team}
+            />        </div>
+    );
+};
 
             {/* Mobile Sticky Action Bar */}
             <div className="md:hidden fixed bottom-6 left-6 right-6 z-40">
@@ -625,14 +664,14 @@ const UserJourney: React.FC<{ onBackToRoleSelect: () => void }> = ({ onBackToRol
     if (view === 'create') return <CreateOrderPage team={selectedTeam} onSaveSuccess={() => setView('list')} onCancel={() => setView('list')} />;
 
     return (
-        <div className="w-full max-w-full mx-auto p-2 sm:p-4 animate-fade-in min-h-screen relative overflow-x-hidden">
-            {/* Optimized Header for Mobile */}
-            <div className="flex flex-col md:flex-row justify-between items-start md:items-end mb-8 gap-4 px-2">
-                <div className="space-y-2">
+        <div className="w-full max-w-full mx-auto p-2 sm:p-4 animate-fade-in h-full flex flex-col relative overflow-y-auto md:overflow-hidden">
+            {/* Optimized Header for Mobile/Desktop */}
+            <div className="flex-shrink-0 flex flex-col md:flex-row justify-between items-start md:items-center mb-4 lg:mb-6 gap-4 px-2">
+                <div className="space-y-1">
                     {/* Hidden on mobile, shown on desktop */}
                     <div className="hidden md:flex items-center gap-3">
-                        <h1 className="text-2xl sm:text-4xl font-black text-white italic tracking-tighter leading-none">MY ORDERS</h1>
-                        <div className="h-6 w-px bg-white/10"></div>
+                        <h1 className="text-xl sm:text-2xl font-black text-white italic tracking-tighter leading-none">MY ORDERS</h1>
+                        <div className="h-5 w-px bg-white/10"></div>
                         <span className="text-blue-500 font-black text-xs uppercase tracking-widest">{selectedTeam}</span>
                     </div>
                     {/* Mobile Only: Just the Team Badge */}
@@ -654,14 +693,14 @@ const UserJourney: React.FC<{ onBackToRoleSelect: () => void }> = ({ onBackToRol
 
                 <button 
                     onClick={() => setView('create')} 
-                    className="hidden md:flex px-10 py-4 bg-gradient-to-r from-blue-600 to-blue-700 hover:from-blue-500 hover:to-blue-600 text-white font-black uppercase tracking-widest text-xs rounded-2xl shadow-xl shadow-blue-900/20 transition-all active:scale-95 items-center gap-3 border border-blue-400/20"
+                    className="hidden md:flex px-8 py-3 bg-blue-600 hover:bg-blue-500 text-white font-black uppercase tracking-widest text-[10px] rounded-xl shadow-lg shadow-blue-900/20 transition-all active:scale-95 items-center gap-2 border border-blue-400/20"
                 >
                     <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={3}><path d="M12 4v16m8-8H4"/></svg>
                     Create Order
                 </button>
             </div>
             
-            <div className="relative">
+            <div className="flex-1 min-h-0">
                 <UserOrdersView team={selectedTeam} onAdd={() => setView('create')} />
             </div>
         </div>
