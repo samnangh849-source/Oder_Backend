@@ -17,8 +17,8 @@ const FulfillmentPage: React.FC = () => {
     }
 
     return (
-        <div className="flex flex-col min-h-[calc(100vh-120px)] relative">
-            <div className="flex-grow pb-28 animate-fade-in px-1">
+        <div className="flex flex-col h-full relative">
+            <div className="flex-1 min-h-0 animate-fade-in px-1">
                 {activeSubView === 'dashboard' && <FulfillmentDashboard orders={orders} />}
                 {activeSubView === 'packaging' && <PackagingView orders={orders} />}
                 {activeSubView === 'delivery' && <DriverDeliveryView />}

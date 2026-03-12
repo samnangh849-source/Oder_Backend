@@ -10,6 +10,10 @@ export const FEATURES = {
     VERIFY_ORDER: "verify_order",
     CREATE_ORDER: "create_order",
     
+    // Module Access
+    ACCESS_SALES_PORTAL: "access_sales_portal",
+    ACCESS_FULFILLMENT: "access_fulfillment",
+    
     // Admin & Management
     MANAGE_ROLES: "manage_roles",
     MANAGE_PERMISSIONS: "manage_permissions",

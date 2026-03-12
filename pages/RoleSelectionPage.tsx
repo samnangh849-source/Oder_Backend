@@ -9,7 +9,7 @@ interface RoleSelectionPageProps {
 }
 
 const RoleSelectionPage: React.FC<RoleSelectionPageProps> = ({ onSelect }) => {
-    const { currentUser } = useContext(AppContext);
+    const { currentUser, hasPermission } = useContext(AppContext);
     const [mounted, setMounted] = useState(false);
 
     useEffect(() => {
@@ -17,6 +17,13 @@ const RoleSelectionPage: React.FC<RoleSelectionPageProps> = ({ onSelect }) => {
     }, []);
 
     if (!currentUser) return null;
+
+    const showAdmin = currentUser.IsSystemAdmin || currentUser.Role?.toLowerCase() === 'admin';
+    const showFulfillment = hasPermission('access_fulfillment');
+    const showSales = hasPermission('access_sales_portal');
+
+    // Count how many modules are visible to adjust grid layout
+    const visibleCount = (showAdmin ? 1 : 0) + (showFulfillment ? 1 : 0) + (showSales ? 1 : 0);
 
     return (
         <div className="min-h-screen flex flex-col items-center justify-center p-4 sm:p-6 bg-transparent relative overflow-hidden">
@@ -135,9 +142,9 @@ const RoleSelectionPage: React.FC<RoleSelectionPageProps> = ({ onSelect }) => {
                 </div>
 
                 {/* Role Selection - Specialized Grid */}
-                <div className={`grid grid-cols-1 ${(currentUser.IsSystemAdmin || currentUser.Role?.toLowerCase() === 'admin') ? 'md:grid-cols-3' : 'md:grid-cols-2'} gap-4 sm:gap-8 w-full px-2`}>
-                    {/* ADMIN ROLE - Only for System Admins or Admin Role */}
-                    {(currentUser.IsSystemAdmin || currentUser.Role?.toLowerCase() === 'admin') && (
+                <div className={`grid grid-cols-1 ${visibleCount === 3 ? 'md:grid-cols-3' : visibleCount === 2 ? 'md:grid-cols-2' : 'md:grid-cols-1'} gap-4 sm:gap-8 w-full px-2 max-w-5xl mx-auto`}>
+                    {/* ADMIN ROLE */}
+                    {showAdmin && (
                         <button 
                             onClick={() => onSelect('admin_dashboard')}
                             className="role-btn premium-glass-mobile p-5 sm:p-8 rounded-[2rem] text-left transition-all duration-300 reveal-1 flex md:flex-col items-center md:items-start gap-5 sm:gap-0 border hover:border-blue-500/50 group"
@@ -162,48 +169,52 @@ const RoleSelectionPage: React.FC<RoleSelectionPageProps> = ({ onSelect }) => {
                     )}
 
                     {/* FULFILLMENT ROLE */}
-                    <button 
-                        onClick={() => onSelect('fulfillment')}
-                        className="role-btn premium-glass-mobile p-5 sm:p-8 rounded-[2rem] text-left transition-all duration-300 reveal-2 flex md:flex-col items-center md:items-start gap-5 sm:gap-0 border hover:border-amber-500/50 group"
-                    >
-                        <div className="w-14 h-14 sm:w-16 sm:h-16 bg-gradient-to-br from-amber-500 to-orange-600 rounded-2xl flex items-center justify-center text-white sm:mb-6 transition-all shadow-xl flex-shrink-0 group-hover:scale-110">
-                            <svg className="w-7 h-7 sm:w-8 sm:h-8" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2.5}>
-                                <path d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4" />
-                            </svg>
-                        </div>
-                        <div className="flex-grow min-w-0">
-                            <h3 className="text-lg sm:text-xl font-black text-white uppercase tracking-tight mb-1">វេចខ្ចប់ & ដឹកជញ្ជូន</h3>
-                            <p className="text-[11px] sm:text-[12px] text-gray-500 font-bold leading-snug opacity-70">
-                                រៀបឥវ៉ាន់ ស្កេនកញ្ចប់ និងបញ្ជូនទៅកាន់អ្នកដឹក។
-                            </p>
-                        </div>
-                        <div className="md:mt-6 hidden sm:flex items-center gap-2 text-amber-500 font-black text-[10px] uppercase tracking-widest">
-                            <span>Fulfillment Ops</span>
-                            <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={3}><path d="M13 7l5 5-5 5" /></svg>
-                        </div>
-                    </button>
+                    {showFulfillment && (
+                        <button 
+                            onClick={() => onSelect('fulfillment')}
+                            className="role-btn premium-glass-mobile p-5 sm:p-8 rounded-[2rem] text-left transition-all duration-300 reveal-2 flex md:flex-col items-center md:items-start gap-5 sm:gap-0 border hover:border-amber-500/50 group"
+                        >
+                            <div className="w-14 h-14 sm:w-16 sm:h-16 bg-gradient-to-br from-amber-500 to-orange-600 rounded-2xl flex items-center justify-center text-white sm:mb-6 transition-all shadow-xl flex-shrink-0 group-hover:scale-110">
+                                <svg className="w-7 h-7 sm:w-8 sm:h-8" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2.5}>
+                                    <path d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4" />
+                                </svg>
+                            </div>
+                            <div className="flex-grow min-w-0">
+                                <h3 className="text-lg sm:text-xl font-black text-white uppercase tracking-tight mb-1">វេចខ្ចប់ & ដឹកជញ្ជូន</h3>
+                                <p className="text-[11px] sm:text-[12px] text-gray-500 font-bold leading-snug opacity-70">
+                                    រៀបឥវ៉ាន់ ស្កេនកញ្ចប់ និងបញ្ជូនទៅកាន់អ្នកដឹក។
+                                </p>
+                            </div>
+                            <div className="md:mt-6 hidden sm:flex items-center gap-2 text-amber-500 font-black text-[10px] uppercase tracking-widest">
+                                <span>Fulfillment Ops</span>
+                                <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={3}><path d="M13 7l5 5-5 5" /></svg>
+                            </div>
+                        </button>
+                    )}
 
                     {/* USER/SALES ROLE */}
-                    <button 
-                        onClick={() => onSelect('user_journey')}
-                        className="role-btn premium-glass-mobile p-5 sm:p-8 rounded-[2rem] text-left transition-all duration-300 reveal-3 flex md:flex-col items-center md:items-start gap-5 sm:gap-0 border hover:border-emerald-500/50 group"
-                    >
-                        <div className="w-14 h-14 sm:w-16 sm:h-16 bg-gradient-to-br from-emerald-500 to-cyan-600 rounded-2xl flex items-center justify-center text-white sm:mb-6 transition-all shadow-xl flex-shrink-0 group-hover:scale-110">
-                            <svg className="w-7 h-7 sm:w-8 sm:h-8" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2.5}>
-                                <path d="M16 11V7a4 4 0 00-8 0v4M5 9h14l1 12H4L5 9z" />
-                            </svg>
-                        </div>
-                        <div className="flex-grow min-w-0">
-                            <h3 className="text-lg sm:text-xl font-black text-white uppercase tracking-tight mb-1">ប្រតិបត្តិការលក់</h3>
-                            <p className="text-[11px] sm:text-[12px] text-gray-500 font-bold leading-snug opacity-70">
-                                បង្កើតកម្មង់ ពិនិត្យប្រវត្តិលក់ និងទិន្នន័យ។
-                            </p>
-                        </div>
-                        <div className="md:mt-6 hidden sm:flex items-center gap-2 text-emerald-500 font-black text-[10px] uppercase tracking-widest">
-                            <span>Sales Portal</span>
-                            <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={3}><path d="M13 7l5 5-5 5" /></svg>
-                        </div>
-                    </button>
+                    {showSales && (
+                        <button 
+                            onClick={() => onSelect('user_journey')}
+                            className="role-btn premium-glass-mobile p-5 sm:p-8 rounded-[2rem] text-left transition-all duration-300 reveal-3 flex md:flex-col items-center md:items-start gap-5 sm:gap-0 border hover:border-emerald-500/50 group"
+                        >
+                            <div className="w-14 h-14 sm:w-16 sm:h-16 bg-gradient-to-br from-emerald-500 to-cyan-600 rounded-2xl flex items-center justify-center text-white sm:mb-6 transition-all shadow-xl flex-shrink-0 group-hover:scale-110">
+                                <svg className="w-7 h-7 sm:w-8 sm:h-8" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2.5}>
+                                    <path d="M16 11V7a4 4 0 00-8 0v4M5 9h14l1 12H4L5 9z" />
+                                </svg>
+                            </div>
+                            <div className="flex-grow min-w-0">
+                                <h3 className="text-lg sm:text-xl font-black text-white uppercase tracking-tight mb-1">ប្រតិបត្តិការលក់</h3>
+                                <p className="text-[11px] sm:text-[12px] text-gray-500 font-bold leading-snug opacity-70">
+                                    បង្កើតកម្មង់ ពិនិត្យប្រវត្តិលក់ និងទិន្នន័យ។
+                                </p>
+                            </div>
+                            <div className="md:mt-6 hidden sm:flex items-center gap-2 text-emerald-500 font-black text-[10px] uppercase tracking-widest">
+                                <span>Sales Portal</span>
+                                <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={3}><path d="M13 7l5 5-5 5" /></svg>
+                            </div>
+                        </button>
+                    )}
                 </div>
 
                 {/* Brand Footer */}

@@ -415,16 +415,29 @@ const App: React.FC = () => {
 
     const hasPermission = useCallback((feature: string) => {
         if (!currentUser) return false;
-        // Allow System Admin OR Admin Role OR the 'create_order' feature for everyone
-        if (currentUser.IsSystemAdmin || 
-            (currentUser.Role || '').toLowerCase() === 'admin' ||
-            (feature || '').toLowerCase() === 'create_order') return true;
+        
+        // Features that are enabled by default for everyone (unless explicitly disabled in matrix)
+        const defaultEnabled = [
+            'create_order', 
+            'access_sales_portal', 
+            'access_fulfillment'
+        ];
+
+        // Allow System Admin OR Admin Role
+        if (currentUser.IsSystemAdmin || (currentUser.Role || '').toLowerCase() === 'admin') return true;
+        
+        // Check if it's a default enabled feature
+        const isDefaultEnabled = defaultEnabled.includes(feature.toLowerCase());
 
         const perm = appData.permissions?.find(p => 
             (p.role || '').toLowerCase() === (currentUser.Role || '').toLowerCase() && 
             (p.feature || '').toLowerCase() === (feature || '').toLowerCase()
         );
-        return perm ? perm.isEnabled : false;
+
+        if (perm) return perm.isEnabled;
+        
+        // If no explicit permission found, use default
+        return isDefaultEnabled;
     }, [currentUser, appData.permissions]);
 
     const updatePermission = async (role: string, feature: string, isEnabled: boolean) => {
@@ -690,7 +703,7 @@ const App: React.FC = () => {
                         <>
                             {originalAdminUser && <ImpersonationBanner />}
                             {shouldShowHeader && <Header appState={appState} onBackToRoleSelect={() => setAppState('role_selection')} />}
-                            <main className={`${containerClass} ${paddingClass} transition-all duration-300 ${appState === 'user_journey' ? 'h-full overflow-hidden' : (appState !== 'admin_dashboard' && appState !== 'role_selection' ? 'h-full overflow-y-auto custom-scrollbar' : '')}`}>
+                            <main className={`${containerClass} ${paddingClass} transition-all duration-300 ${appState === 'user_journey' || appState === 'fulfillment' ? 'h-full overflow-hidden' : (appState !== 'admin_dashboard' && appState !== 'role_selection' ? 'h-full overflow-y-auto custom-scrollbar' : '')}`}>
                                 {appState === 'admin_dashboard' && <AdminDashboard />}
                                 {appState === 'user_journey' && <UserJourney onBackToRoleSelect={() => setAppState('role_selection')} />}
                                 {appState === 'fulfillment' && <FulfillmentPage />}
