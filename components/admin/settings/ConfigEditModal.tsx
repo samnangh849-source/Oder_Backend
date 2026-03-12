@@ -23,6 +23,9 @@ const ConfigEditModal: React.FC<ConfigEditModalProps> = ({ section, item, onClos
     const fileInputRefs = useRef<Record<string, HTMLInputElement | null>>({});
     const [passwordVisibility, setPasswordVisibility] = useState<Record<string, boolean>>({});
 
+    // Suggested Roles
+    const suggestedRoles = ['Admin', 'Sales', 'Fulfillment', 'Stock', 'Driver', 'Manager', 'Accountant'];
+
     useEffect(() => {
         if (item) {
             const dataToLoad: any = {};
@@ -37,12 +40,19 @@ const ConfigEditModal: React.FC<ConfigEditModalProps> = ({ section, item, onClos
             setFormData(dataToLoad);
         } else {
             const defaultData = section.fields.reduce((acc, field) => {
-                acc[field.name] = field.type === 'checkbox' ? false : field.type === 'number' ? 0 : '';
+                // Special case for Role ID (Auto-suggest next ID)
+                if (section.id === 'roles' && field.name === 'id') {
+                    const roles = appData.roles || [];
+                    const maxId = roles.reduce((max: number, r: any) => Math.max(max, Number(r.id) || 0), 0);
+                    acc[field.name] = maxId + 1;
+                } else {
+                    acc[field.name] = field.type === 'checkbox' ? false : field.type === 'number' ? 0 : '';
+                }
                 return acc;
             }, {} as any);
             setFormData(defaultData);
         }
-    }, [item, section]);
+    }, [item, section, appData.roles]);
 
     const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
         const { name, value, type, checked } = e.target;
@@ -93,12 +103,13 @@ const ConfigEditModal: React.FC<ConfigEditModalProps> = ({ section, item, onClos
             
             if (item && section.id === 'users' && !payloadData.Password) delete payloadData.Password;
             
-            // For new items, omit the ID field if it's auto-generated
-            if (!item) {
+            // For new items (except Roles which might need the ID we calculated), omit the ID field if it's auto-generated
+            if (!item && section.id !== 'roles') {
                 delete payloadData.id;
                 delete payloadData.ID;
             }
 
+            // Backend specific role creation expects direct Role object in body
             const payload: any = (section.id === 'roles' && !item) 
                 ? payloadData 
                 : { sheetName: section.sheetName, newData: payloadData };
@@ -136,6 +147,23 @@ const ConfigEditModal: React.FC<ConfigEditModalProps> = ({ section, item, onClos
                     {section.fields.map(field => (
                         <div key={field.name} className="space-y-2">
                             <label className="block text-[10px] font-black text-gray-500 uppercase tracking-[0.2em] ml-2">{field.label}</label>
+                            
+                            {/* Special Recommendation for Role Name */}
+                            {section.id === 'roles' && field.name === 'roleName' && !item && (
+                                <div className="flex flex-wrap gap-2 mb-2 ml-2">
+                                    {suggestedRoles.map(role => (
+                                        <button 
+                                            key={role} 
+                                            type="button"
+                                            onClick={() => setFormData((prev: any) => ({ ...prev, roleName: role }))}
+                                            className="px-3 py-1 bg-blue-600/10 border border-blue-500/20 rounded-full text-[10px] font-black text-blue-400 hover:bg-blue-600 hover:text-white transition-all uppercase tracking-tighter"
+                                        >
+                                            + {role}
+                                        </button>
+                                    ))}
+                                </div>
+                            )}
+
                             {field.type === 'checkbox' ? (
                                 <div className="flex items-center gap-4 bg-gray-900/50 p-4 rounded-[1.5rem] border border-gray-800 transition-all hover:border-gray-700">
                                     <input type="checkbox" name={field.name} checked={!!formData[field.name]} onChange={handleChange} className="h-6 w-6 rounded-lg border-gray-600 bg-gray-700 text-blue-600 focus:ring-blue-500" />

@@ -20,9 +20,7 @@ interface ReportDashboardProps {
 }
 
 const ReportDashboard: React.FC<ReportDashboardProps> = ({ activeReport, onBack, onNavigate }) => {
-    const { appData, refreshTimestamp, setMobilePageTitle } = useContext(AppContext);
-    const [loading, setLoading] = useState(true);
-    const [orders, setOrders] = useState<ParsedOrder[]>([]);
+    const { appData, refreshTimestamp, setMobilePageTitle, orders, isOrdersLoading } = useContext(AppContext);
     const [usersList, setUsersList] = useState<User[]>([]);
     const [isFilterOpen, setIsFilterOpen] = useState(false);
     
@@ -100,37 +98,16 @@ const ReportDashboard: React.FC<ReportDashboardProps> = ({ activeReport, onBack,
         if (filters.internalCost !== urlCost) setUrlCost(filters.internalCost);
     }, [filters, urlDate, urlStart, urlEnd, urlCustomer, urlTeam, urlUser, urlPayment, urlShipping, urlDriver, urlProduct, urlBank, urlFulfillment, urlStore, urlPage, urlLocation, urlCost, setUrlDate, setUrlStart, setUrlEnd, setUrlCustomer, setUrlTeam, setUrlUser, setUrlPayment, setUrlShipping, setUrlDriver, setUrlProduct, setUrlBank, setUrlFulfillment, setUrlStore, setUrlPage, setUrlLocation, setUrlCost]);
 
-    const fetchInitialData = async () => {
-        setLoading(true);
-        try {
-            const [ordersRes, usersRes] = await Promise.all([
-                fetch(`${WEB_APP_URL}/api/admin/all-orders`),
-                fetch(`${WEB_APP_URL}/api/users`)
-            ]);
-            const ordersData = await ordersRes.json();
-            const usersData = await usersRes.json();
-
-            if (ordersData.status === 'success') {
-                const parsed = (ordersData.data || [])
-                    .filter((o: any) => o !== null && o['Order ID'] !== 'Opening_Balance' && o['Order ID'] !== 'Opening Balance')
-                    .map((o: any) => {
-                        let p = []; try { if (o['Products (JSON)']) p = JSON.parse(o['Products (JSON)']); } catch (e) {}
-
-                        // Normalize product fields
-                        const normalizedProducts = Array.isArray(p) ? p.map((prod: any) => {
-                            const name = prod.name || prod.ProductName || '';
-                            return { ...prod, name };
-                        }) : [];
-
-                        return { ...o, Products: normalizedProducts };
-                    });
-                setOrders(parsed);
-            }
-            if (usersData.status === 'success') setUsersList(usersData.data || []);
-        } catch (e) { console.error(e); } finally { setLoading(false); }
-    };
-
-    useEffect(() => { fetchInitialData(); }, [refreshTimestamp]);
+    useEffect(() => {
+        const fetchUsers = async () => {
+            try {
+                const res = await fetch(`${WEB_APP_URL}/api/users`);
+                const data = await res.json();
+                if (data.status === 'success') setUsersList(data.data || []);
+            } catch (e) {}
+        };
+        fetchUsers();
+    }, [refreshTimestamp]);
 
     const calculatedRange = useMemo(() => {
         const now = new Date();
@@ -233,31 +210,31 @@ const ReportDashboard: React.FC<ReportDashboardProps> = ({ activeReport, onBack,
         });
     }, [orders, filters, appData.pages]);
 
-    if (loading) return <div className="flex h-screen items-center justify-center bg-gray-950"><Spinner size="lg" /></div>;
+    if (isOrdersLoading && orders.length === 0) return <div className="flex h-screen items-center justify-center bg-gray-950"><Spinner size="lg" /></div>;
 
     const activeFilterCount = Object.values(filters).filter(v => v !== '' && v !== 'this_month' && v !== 'all').length;
 
     return (
-        <div className="animate-fade-in space-y-8 pb-20">
-            {/* Header */}
-            <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 bg-gray-800/20 p-6 rounded-[2.5rem] border border-white/5 backdrop-blur-md">
+        <div className="animate-fade-in space-y-4 pb-20">
+            {/* Header (Compact) */}
+            <div className="flex flex-col sm:flex-row justify-between items-center gap-3 bg-gray-800/20 p-3 lg:p-4 rounded-2xl border border-white/5 backdrop-blur-md">
                 <div>
-                    <h1 className="hidden sm:block text-2xl font-black text-white uppercase tracking-tight italic">{reportTitles[activeReport]}</h1>
+                    <h1 className="hidden sm:block text-lg font-black text-white uppercase tracking-tight italic leading-none">{reportTitles[activeReport]}</h1>
                     <div className="flex items-center gap-2 mt-1">
-                        <span className="w-2 h-2 rounded-full bg-blue-500 animate-pulse"></span>
-                        <p className="text-[10px] text-blue-400 font-black uppercase tracking-widest">
-                            {calculatedRange} {activeFilterCount > 0 && ` • ${activeFilterCount} Active Filters`}
+                        <span className="w-1.5 h-1.5 rounded-full bg-blue-500 animate-pulse"></span>
+                        <p className="text-[9px] text-blue-400 font-black uppercase tracking-widest">
+                            {calculatedRange} {activeFilterCount > 0 && ` • ${activeFilterCount} Active`}
                         </p>
                     </div>
                 </div>
                 <div className="flex gap-2 w-full sm:w-auto">
                     <button 
                         onClick={() => setIsFilterOpen(true)} 
-                        className="relative flex-1 sm:flex-none btn btn-secondary !py-2.5 !px-6 rounded-2xl border border-gray-700 flex items-center justify-center gap-3 transition-all hover:bg-gray-700 active:scale-95"
+                        className="relative flex-1 sm:flex-none btn btn-secondary !py-2 !px-4 rounded-xl border border-gray-700 flex items-center justify-center gap-2 transition-all hover:bg-gray-700 active:scale-95 text-[10px] font-black uppercase"
                     >
-                        <svg className="w-4 h-4 text-blue-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}><path d="M3 4a1 1 0 011-1h16a1 1 0 011 1v2.586a1 1 0 01-.293.707l-6.414 6.414a1 1 0 00-.293.707V17l-4 4v-6.586a1 1 0 00-.293-.707L3.293 7.293A1 1 0 013 6.586V4z" /></svg>
-                        Filter Engine
-                        {activeFilterCount > 0 && <span className="absolute -top-1 -right-1 w-5 h-5 bg-blue-600 text-white text-[10px] font-black rounded-full flex items-center justify-center border-2 border-gray-900">{activeFilterCount}</span>}
+                        <svg className="w-3.5 h-3.5 text-blue-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}><path d="M3 4a1 1 0 011-1h16a1 1 0 011 1v2.586a1 1 0 01-.293.707l-6.414 6.414a1 1 0 00-.293.707V17l-4 4v-6.586a1 1 0 00-.293-.707L3.293 7.293A1 1 0 013 6.586V4z" /></svg>
+                        Filters
+                        {activeFilterCount > 0 && <span className="absolute -top-1 -right-1 w-4 h-4 bg-blue-600 text-white text-[8px] font-black rounded-full flex items-center justify-center border border-gray-900">{activeFilterCount}</span>}
                     </button>
                 </div>
             </div>

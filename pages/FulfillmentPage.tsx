@@ -9,50 +9,10 @@ import DriverDeliveryView from '@/pages/DriverDeliveryView';
 import InventoryManagement from '@/components/admin/InventoryManagement';
 
 const FulfillmentPage: React.FC = () => {
-    const { refreshTimestamp, setMobilePageTitle } = useContext(AppContext);
-    const [orders, setOrders] = useState<ParsedOrder[]>([]);
-    const [loading, setLoading] = useState(true);
+    const { orders, isOrdersLoading, setMobilePageTitle } = useContext(AppContext);
     const [activeSubView, setActiveSubView] = useState<'dashboard' | 'packaging' | 'delivery' | 'inventory'>('dashboard');
 
-    useEffect(() => {
-        const fetchOrders = async () => {
-            setLoading(true);
-            try {
-                // Backend is already optimized to 60 days, but we can explicitly ask for 30 if needed
-                const response = await fetch(`${WEB_APP_URL}/api/admin/all-orders?days=30`);
-                if (response.ok) {
-                    const result = await response.json();
-                    if (result.status === 'success') {
-                        const rawData = Array.isArray(result.data) ? result.data : [];
-                        const parsed = rawData
-                            .filter((o: any) => o && o['Order ID'] && o['Order ID'] !== 'Opening_Balance')
-                            .map(o => {
-                                let products = [];
-                                try { 
-                                    if (o.Products && Array.isArray(o.Products)) products = o.Products;
-                                    else if (o['Products (JSON)']) products = JSON.parse(o['Products (JSON)']); 
-                                } catch(e) {}
-                                
-                                return { 
-                                    ...o, 
-                                    Products: Array.isArray(products) ? products : [], 
-                                    IsVerified: String(o.IsVerified).toUpperCase() === 'TRUE' || o.IsVerified === 'A',
-                                    FulfillmentStatus: (o['Fulfillment Status'] || o.FulfillmentStatus || 'Pending') as any
-                                };
-                            });
-                        setOrders(parsed);
-                    }
-                }
-            } catch (e) { 
-                console.error("Fulfillment Fetch Error:", e); 
-            } finally { 
-                setLoading(false); 
-            }
-        };
-        fetchOrders();
-    }, [refreshTimestamp]);
-
-    if (loading && orders.length === 0) {
+    if (isOrdersLoading && orders.length === 0) {
         return <div className="flex h-screen items-center justify-center bg-gray-950"><Spinner size="lg" /></div>;
     }
 

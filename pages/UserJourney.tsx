@@ -25,18 +25,17 @@ interface ReportFilterState {
 }
 
 const UserOrdersView: React.FC<{ team: string; onAdd: () => void }> = ({ team, onAdd }) => {
-    const { currentUser, refreshData, appData } = useContext(AppContext);
+    const { currentUser, refreshData, appData, orders, isOrdersLoading } = useContext(AppContext);
     
     // Stores parsed orders for the CURRENTLY SELECTED date range only
-    const [orders, setOrders] = useState<ParsedOrder[]>([]);
-    const [globalOrders, setGlobalOrders] = useState<ParsedOrder[]>([]); // For Top Teams stats AND Delivery List
+    const [viewOrders, setViewOrders] = useState<ParsedOrder[]>([]);
+    const [globalViewOrders, setGlobalOrders] = useState<ParsedOrder[]>([]); // For Top Teams stats AND Delivery List
     
     // Drilldown State
     const [drilldownFilters, setDrilldownFilters] = useState<any>(null);
     const [drilldownData, setDrilldownData] = useState<ParsedOrder[]>([]);
     const [editingOrder, setEditingOrder] = useState<ParsedOrder | null>(null);
     
-    const [loading, setLoading] = useState(true);
     const [processing, setProcessing] = useState(false); 
     const [searchQuery, setSearchQuery] = useState('');
     
@@ -60,178 +59,63 @@ const UserOrdersView: React.FC<{ team: string; onAdd: () => void }> = ({ team, o
         customEnd: new Date().toISOString().split('T')[0]
     });
 
-    // REF to hold ALL raw data.
-    const allRawOrdersRef = useRef<FullOrder[]>([]);
-    const allParsedOrdersRef = useRef<ParsedOrder[]>([]); // New Ref to hold PRE-PARSED orders
-    const isDataFetchedRef = useRef(false);
-    const hasFullHistoryRef = useRef(false); // New: Track if full history was fetched
-
     // Permission Check
     const isSystemAdmin = !!currentUser?.IsSystemAdmin;
 
     const userVisibleColumns = useMemo(() => new Set([
         'index', 'orderId', 'customerName', 'productInfo', 'location', 'pageInfo', 'total', 'shippingService', 'status', 'date', 'print', 'actions'
-    ]), [isSystemAdmin]);
+    ]), []);
 
     const getDateBounds = (preset: DateRangePreset, cStart?: string, cEnd?: string) => {
         const now = new Date();
         const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
         let start: Date | null = null;
-        let end: Date | null = new Date(); // Default end is now
+        let end: Date | null = new Date();
 
         switch (preset) {
-            case 'today': 
-                start = today; 
-                end = new Date(today);
-                end.setHours(23, 59, 59, 999);
-                break;
-            case 'yesterday': 
-                start = new Date(today); 
-                start.setDate(today.getDate() - 1); 
-                end = new Date(today); 
-                end.setMilliseconds(-1); 
-                break;
-            case 'this_week': 
-                const d = now.getDay(); 
-                start = new Date(today); 
-                start.setDate(today.getDate() - (d === 0 ? 6 : d - 1)); 
-                end = new Date(start);
-                end.setDate(start.getDate() + 6);
-                end.setHours(23, 59, 59, 999);
-                break;
-            case 'this_month': 
-                start = new Date(now.getFullYear(), now.getMonth(), 1); 
-                end = new Date(now.getFullYear(), now.getMonth() + 1, 0, 23, 59, 59, 999);
-                break;
-            case 'last_month':
-                start = new Date(now.getFullYear(), now.getMonth() - 1, 1);
-                end = new Date(now.getFullYear(), now.getMonth(), 0, 23, 59, 59, 999);
-                break;
-            case 'this_year':
-                start = new Date(now.getFullYear(), 0, 1);
-                end = new Date(now.getFullYear(), 11, 31, 23, 59, 59, 999);
-                break;
-            case 'last_year':
-                start = new Date(now.getFullYear() - 1, 0, 1);
-                end = new Date(now.getFullYear() - 1, 11, 31, 23, 59, 59, 999);
-                break;
-            case 'all': 
-                start = null; 
-                end = null; 
-                break;
-            case 'custom': 
-                if (cStart) start = getValidDate(cStart + 'T00:00:00');
-                if (cEnd) end = getValidDate(cEnd + 'T23:59:59');
-                break;
+            case 'today': start = today; end = new Date(today); end.setHours(23, 59, 59, 999); break;
+            case 'yesterday': start = new Date(today); start.setDate(today.getDate() - 1); end = new Date(today); end.setMilliseconds(-1); break;
+            case 'this_week': const d = now.getDay(); start = new Date(today); start.setDate(today.getDate() - (d === 0 ? 6 : d - 1)); end = new Date(start); end.setDate(start.getDate() + 6); end.setHours(23, 59, 59, 999); break;
+            case 'this_month': start = new Date(now.getFullYear(), now.getMonth(), 1); break;
+            case 'last_month': start = new Date(now.getFullYear(), now.getMonth() - 1, 1); end = new Date(now.getFullYear(), now.getMonth(), 0, 23, 59, 59, 999); break;
+            case 'this_year': start = new Date(now.getFullYear(), 0, 1); break;
+            case 'last_year': start = new Date(now.getFullYear() - 1, 0, 1); end = new Date(now.getFullYear() - 1, 11, 31, 23, 59, 59, 999); break;
+            case 'all': start = null; end = null; break;
+            case 'custom': if (cStart) start = getValidDate(cStart + 'T00:00:00'); if (cEnd) end = getValidDate(cEnd + 'T23:59:59'); break;
         }
         return { start, end };
     };
 
-    // 1. Initial Data Fetch (Runs once)
-    const fetchOrders = async (forceFull = false) => {
-        if (forceFull && hasFullHistoryRef.current) return;
-        
-        setLoading(true);
-        try {
-            // Initial fetch uses 30-day hint, forceFull fetches everything
-            const url = forceFull ? `${WEB_APP_URL}/api/admin/all-orders` : `${WEB_APP_URL}/api/admin/all-orders?days=30`;
-            const response = await fetch(url);
-            const result = await response.json();
-            
-            if (result.status === 'success') {
-                const rawData = Array.isArray(result.data) ? result.data.filter((o: any) => o !== null) : [];
-                
-                // Pre-parse and filter immediately to save memory
-                const parsed = rawData.map((o: any) => {
-                    let products = [];
-                    try { if (o['Products (JSON)']) products = JSON.parse(o['Products (JSON)']); } catch(e) {}
-                    return { 
-                        ...o, 
-                        Products: products, 
-                        IsVerified: String(o.IsVerified).toUpperCase() === 'TRUE',
-                        FulfillmentStatus: o.FulfillmentStatus as any 
-                    };
-                });
-
-                allParsedOrdersRef.current = parsed;
-                allRawOrdersRef.current = []; // Clear raw data immediately to free memory
-                
-                isDataFetchedRef.current = true;
-                if (forceFull) hasFullHistoryRef.current = true;
-                
-                processDataForRange(dateRange); 
-            }
-        } catch (err: any) { 
-            console.error(err); 
-        } finally { 
-            setLoading(false); 
-        }
-    };
-
-    useEffect(() => {
-        fetchOrders();
-    }, []);
-
-    // 2. Process Data for Dashboard View
     const processDataForRange = (range: DateRangePreset) => {
-        if (!isDataFetchedRef.current) return;
-
-        // Check if we need to fetch full history
-        const needsFullHistory = ['this_year', 'last_year', 'last_month', 'all'].includes(range);
-        if (needsFullHistory && !hasFullHistoryRef.current) {
-            fetchOrders(true);
-            return;
-        }
-        
         setProcessing(true);
-        // Use requestAnimationFrame or small timeout to allow UI to update
         setTimeout(() => {
             const { start, end } = getDateBounds(range, customStart, customEnd);
-            
-            // Filter PRE-PARSED Data
-            const parsedChunk = allParsedOrdersRef.current.filter(o => {
-                // Filter out Opening Balance
+            const filtered = orders.filter(o => {
                 if (o['Order ID'] === 'Opening_Balance' || o['Order ID'] === 'Opening Balance') return false;
-
                 if (!o.Timestamp) return false;
                 const orderDate = safeParseDate(o.Timestamp);
                 if (!orderDate) return false;
-
                 if (start && orderDate < start) return false;
                 if (end && orderDate > end) return false;
                 return true;
             });
-
-            // globalOrders contains orders from ALL teams within the selected date range
-            setGlobalOrders(parsedChunk);
-            
-            // orders contains orders ONLY for the current user's team
-            const teamOnly = parsedChunk.filter(o => (o.Team || '').trim() === (team || '').trim());
-            
-            // Sorting is still needed but it's on a smaller subset
-            setOrders(teamOnly.sort((a, b) => {
-                const tA = getTimestamp(a.Timestamp);
-                const tB = getTimestamp(b.Timestamp);
-                return tB - tA;
-            }));
+            setGlobalViewOrders(filtered);
+            const teamOnly = filtered.filter(o => (o.Team || '').trim() === (team || '').trim());
+            setViewOrders(teamOnly.sort((a, b) => getTimestamp(b.Timestamp) - getTimestamp(a.Timestamp)));
             setProcessing(false);
         }, 10);
     };
 
-    // Listen for changes in controls
     useEffect(() => {
-        if (isDataFetchedRef.current) {
-            processDataForRange(dateRange);
-        }
-    }, [dateRange, customStart, customEnd, team]);
+        processDataForRange(dateRange);
+    }, [dateRange, customStart, customEnd, team, orders]);
 
-    // Process Drilldown Data (Updated to handle month clicks correctly)
     useEffect(() => {
-        if (drilldownFilters && isDataFetchedRef.current) {
+        if (drilldownFilters) {
             setProcessing(true);
             setTimeout(() => {
-                // Use Parsed Orders instead of Raw to avoid empty results and redundant parsing
-                const source = allParsedOrdersRef.current;
+                // Use Parsed Orders from AppContext
+                const source = orders;
                 
                 // Determine Date Range from Drilldown Filters
                 let start: Date | null = null;
@@ -311,11 +195,11 @@ const UserOrdersView: React.FC<{ team: string; onAdd: () => void }> = ({ team, o
                 setProcessing(false);
             }, 10);
         }
-    }, [drilldownFilters]);
+    }, [drilldownFilters, orders]);
 
     // Client-side search filtering
     const filteredOrders = useMemo(() => {
-        const source = drilldownFilters ? drilldownData : orders;
+        const source = drilldownFilters ? drilldownData : viewOrders;
         return source.filter(o => {
             if (searchQuery.trim()) {
                 const q = searchQuery.toLowerCase();
@@ -325,7 +209,7 @@ const UserOrdersView: React.FC<{ team: string; onAdd: () => void }> = ({ team, o
             }
             return true;
         });
-    }, [orders, drilldownData, drilldownFilters, searchQuery]);
+    }, [viewOrders, drilldownData, drilldownFilters, searchQuery]);
 
     const totalFilteredRevenue = useMemo(() => {
         return filteredOrders.reduce((sum, o) => sum + (Number(o['Grand Total']) || 0), 0);
@@ -333,7 +217,7 @@ const UserOrdersView: React.FC<{ team: string; onAdd: () => void }> = ({ team, o
 
     const topTeams = useMemo(() => {
         const teamStats: Record<string, number> = {};
-        globalOrders.forEach(o => {
+        globalViewOrders.forEach(o => {
             const tName = (o.Team || 'Unassigned').trim();
             teamStats[tName] = (teamStats[tName] || 0) + (Number(o['Grand Total']) || 0);
         });
@@ -341,7 +225,7 @@ const UserOrdersView: React.FC<{ team: string; onAdd: () => void }> = ({ team, o
             .map(([name, revenue]) => ({ name, revenue }))
             .sort((a, b) => b.revenue - a.revenue)
             .slice(0, 3);
-    }, [globalOrders]);
+    }, [globalViewOrders]);
 
     const periodLabel = useMemo(() => {
         switch (dateRange) {
@@ -356,13 +240,10 @@ const UserOrdersView: React.FC<{ team: string; onAdd: () => void }> = ({ team, o
 
     const handleSaveEdit = () => {
         setEditingOrder(null);
-        setLoading(true);
-        refreshData().then(() => {
-             window.location.reload(); 
-        });
+        refreshData();
     };
 
-    if (loading) return (
+    if (isOrdersLoading && orders.length === 0) return (
         <div className="flex flex-col justify-center items-center h-96 gap-4">
             <Spinner size="lg" />
             <p className="text-[10px] font-black text-blue-500 uppercase tracking-[0.4em] animate-pulse">Initializing Data Stream...</p>
@@ -413,19 +294,18 @@ const UserOrdersView: React.FC<{ team: string; onAdd: () => void }> = ({ team, o
                         orders={filteredOrders} 
                         showActions={true} 
                         visibleColumns={userVisibleColumns}
-                        onEdit={setEditingOrder}
+                        onEdit={(o) => setEditingOrder(o)}
                     />
                 )}
             </div>
         );
     }
 
-    // Render Page Report View
     if (showReport) {
         return (
             <div className="animate-fade-in p-2">
                 <UserSalesPageReport 
-                    orders={allParsedOrdersRef.current} 
+                    orders={orders} 
                     onBack={() => setShowReport(false)} 
                     team={team}
                     onNavigate={(filters) => setDrilldownFilters(filters)}
@@ -590,11 +470,10 @@ const UserOrdersView: React.FC<{ team: string; onAdd: () => void }> = ({ team, o
                         <OrdersList 
                             orders={filteredOrders} 
                             showActions={true} 
-                            visibleColumns={userVisibleColumns} 
-                            onEdit={setEditingOrder}
+                            visibleColumns={userVisibleColumns}
+                            onEdit={(o) => setEditingOrder(o)}
                         />
-                    </div>
-                )}
+                    </div>                )}
             </div>
 
             {/* Mobile Sticky Action Bar */}
@@ -615,15 +494,13 @@ const UserOrdersView: React.FC<{ team: string; onAdd: () => void }> = ({ team, o
 
             <div className="h-32 md:hidden"></div>
 
-            {/* Delivery List Modal */}
-            <DeliveryListGeneratorModal
-                isOpen={isDeliveryModalOpen}
-                onClose={() => setIsDeliveryModalOpen(false)}
-                orders={allParsedOrdersRef.current} // Pass ALL pre-parsed orders (not limited by dashboard date)
-                appData={appData}
+            <DeliveryListGeneratorModal 
+                isOpen={isDeliveryModalOpen} 
+                onClose={() => setIsDeliveryModalOpen(false)} 
+                orders={orders} 
+                appData={appData} 
                 team={team}
-            />
-        </div>
+            />        </div>
     );
 };
 

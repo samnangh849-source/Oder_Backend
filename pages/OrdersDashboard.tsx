@@ -21,9 +21,15 @@ interface OrdersDashboardProps {
 }
 
 const OrdersDashboard: React.FC<OrdersDashboardProps> = ({ onBack, initialFilters }) => {
-    const { appData, refreshData, refreshTimestamp, currentUser, setMobilePageTitle } = useContext(AppContext);
+    const { 
+        appData, refreshData, refreshTimestamp, currentUser, 
+        setMobilePageTitle, orders, isOrdersLoading 
+    } = useContext(AppContext);
     const [editingOrderId, setEditingOrderId] = useUrlState<string>('editOrder', '');
     const [viewingOrder, setViewingOrder] = useState<ParsedOrder | null>(null);
+    const [sortBy, setSortBy] = useState<string>('date');
+    const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>('desc');
+    const [groupBy, setGroupBy] = useState<string>('none');
     
     // Set Mobile Title
     useEffect(() => {
@@ -69,10 +75,7 @@ const OrdersDashboard: React.FC<OrdersDashboardProps> = ({ onBack, initialFilter
         );
     });
 
-    const [allOrders, setAllOrders] = useState<ParsedOrder[]>([]);
     const [usersList, setUsersList] = useState<User[]>([]); 
-    const [loading, setLoading] = useState(true);
-    const [loadingProgress, setLoadingProgress] = useState(0); 
     const [fetchError, setFetchError] = useState<string | null>(null);
     const [isFilterModalOpen, setIsFilterModalOpen] = useState(false);
     const [isPdfModalOpen, setIsPdfModalOpen] = useState(false);
@@ -106,7 +109,8 @@ const OrdersDashboard: React.FC<OrdersDashboardProps> = ({ onBack, initialFilter
             internalCost: initialFilters?.internalCost || searchParams.get('costFilter') || '',
             bank: initialFilters?.bank || searchParams.get('bankFilter') || '',
             product: initialFilters?.product || searchParams.get('productFilter') || '',
-            customerName: initialFilters?.customerName || searchParams.get('customerFilter') || '',
+            customerSearch: initialFilters?.customerSearch || searchParams.get('customerFilter') || '',
+            isVerified: 'All'
         };
     });
 
@@ -129,7 +133,7 @@ const OrdersDashboard: React.FC<OrdersDashboardProps> = ({ onBack, initialFilter
         if (filters.internalCost !== urlCost) setUrlCost(filters.internalCost);
         if (filters.bank !== urlBank) setUrlBank(filters.bank);
         if (filters.product !== urlProduct) setUrlProduct(filters.product);
-        if (filters.customerName !== urlCustomer) setUrlCustomer(filters.customerName);
+        if (filters.customerSearch !== urlCustomer) setUrlCustomer(filters.customerSearch);
 
     }, [filters, urlTeam, urlDate, urlLocation, urlStore, urlStart, urlEnd, urlShipping, urlDriver, urlBrand, urlPayment, urlUser, urlPage, urlCost, urlBank, urlProduct, urlCustomer]);
 
@@ -169,31 +173,6 @@ const OrdersDashboard: React.FC<OrdersDashboardProps> = ({ onBack, initialFilter
         });
     };
 
-    // --- Lazy Parsing Logic ---
-    const parseOrdersInChunks = async (rawOrders: any[]) => {
-        const chunkSize = 500;
-        let processedOrders: ParsedOrder[] = [];
-        for (let i = 0; i < rawOrders.length; i += chunkSize) {
-            const chunk = rawOrders.slice(i, i + chunkSize);
-            const parsedChunk = chunk.map((o: any) => {
-                let products = [];
-                try { if (o['Products (JSON)']) products = JSON.parse(o['Products (JSON)']); } catch (e) {}
-                
-                // Normalize product fields (image vs ImageURL)
-                const normalizedProducts = Array.isArray(products) ? products.map((p: any) => {
-                    const img = [p.image, p.ImageURL, p.Image].find(val => val && val !== 'N/A' && val !== 'null') || '';
-                    return { ...p, image: img };
-                }) : [];
-
-                return { ...o, Products: normalizedProducts, IsVerified: String(o.IsVerified).toUpperCase() === 'TRUE' };
-            });
-            processedOrders = [...processedOrders, ...parsedChunk];
-            setLoadingProgress(Math.round(((i + chunkSize) / rawOrders.length) * 100));
-            await new Promise(resolve => setTimeout(resolve, 0));
-        }
-        return processedOrders;
-    };
-
     // Robust Date Parsing helper for sorting and filtering
     const getOrderTimestamp = (order: any) => {
         const ts = order.Timestamp;
@@ -221,42 +200,23 @@ const OrdersDashboard: React.FC<OrdersDashboardProps> = ({ onBack, initialFilter
         return isNaN(d.getTime()) ? 0 : d.getTime();
     };
 
-    const fetchAllOrders = async () => {
-        setLoading(true);
-        setLoadingProgress(0);
-        setFetchError(null);
-        try {
-            const [ordersRes, usersRes] = await Promise.all([
-                fetch(`${WEB_APP_URL}/api/admin/all-orders`),
-                fetch(`${WEB_APP_URL}/api/users`)
-            ]);
-            const ordersData = await ordersRes.json();
-            const usersData = await usersRes.json();
-            if (ordersData.status === 'success') {
-                // Filter out Opening Balance (both formats)
-                const rawData = (ordersData.data || []).filter((o: any) => 
-                    o !== null && 
-                    o['Order ID'] !== 'Opening Balance' && 
-                    o['Order ID'] !== 'Opening_Balance'
-                );
-                const parsed = await parseOrdersInChunks(rawData);
-                
-                // Sort using the robust timestamp parser
-                setAllOrders(parsed.sort((a: any, b: any) => getOrderTimestamp(b) - getOrderTimestamp(a)));
-            } else {
-                setFetchError(ordersData.message || "Failed to load orders");
-            }
-            if (usersData.status === 'success') setUsersList(usersData.data || []);
-        } catch (e: any) { 
-            console.error("Fetch Error:", e);
-            setFetchError("មិនអាចទាញយកទិន្នន័យបានទេ។ សូមពិនិត្យ Internet របស់អ្នក។");
-        } finally { setLoading(false); }
-    };
+    const sortedOrders = useMemo(() => {
+        return [...orders].sort((a: any, b: any) => getOrderTimestamp(b) - getOrderTimestamp(a));
+    }, [orders]);
 
-    useEffect(() => { fetchAllOrders(); }, [refreshTimestamp]);
+    useEffect(() => {
+        const fetchUsers = async () => {
+            try {
+                const res = await fetch(`${WEB_APP_URL}/api/users`);
+                const data = await res.json();
+                if (data.status === 'success') setUsersList(data.data || []);
+            } catch (e) {}
+        };
+        fetchUsers();
+    }, [refreshTimestamp]);
 
     const enrichedOrders = useMemo(() => {
-        return allOrders.map(order => {
+        return sortedOrders.map(order => {
             let team = (order.Team || '').trim();
             if (!team) {
                 const u = usersList.find(u => u.UserName === order.User);
@@ -268,13 +228,12 @@ const OrdersDashboard: React.FC<OrdersDashboardProps> = ({ onBack, initialFilter
             }
             return { ...order, Team: team || 'Unassigned' };
         });
-    }, [allOrders, usersList, appData.pages]);
+    }, [sortedOrders, usersList, appData.pages]);
 
     const filteredOrders = useMemo(() => {
-        return enrichedOrders.filter(order => {
+        const base = enrichedOrders.filter(order => {
             // 1. Date Filter
             if (filters.datePreset !== 'all') {
-                // Use robust parsing for filtering as well
                 const ts = getOrderTimestamp(order);
                 const orderDate = new Date(ts);
                 
@@ -283,11 +242,7 @@ const OrdersDashboard: React.FC<OrdersDashboardProps> = ({ onBack, initialFilter
                 let start: Date | null = null;
                 let end: Date | null = null;
                 switch (filters.datePreset) {
-                    case 'today': 
-                        start = today; 
-                        end = new Date(today); 
-                        end.setHours(23, 59, 59, 999); 
-                        break;
+                    case 'today': start = today; end = new Date(today); end.setHours(23, 59, 59, 999); break;
                     case 'yesterday': start = new Date(today); start.setDate(today.getDate() - 1); end = new Date(today); end.setMilliseconds(-1); break;
                     case 'this_week': const day = now.getDay(); start = new Date(today); start.setDate(today.getDate() - (day === 0 ? 6 : day - 1)); break;
                     case 'last_week': start = new Date(today); start.setDate(today.getDate() - now.getDay() - 6); end = new Date(start); end.setDate(start.getDate() + 6); end.setHours(23, 59, 59); break;
@@ -324,7 +279,7 @@ const OrdersDashboard: React.FC<OrdersDashboardProps> = ({ onBack, initialFilter
                 if (!isMatch(filters.store, orderStore || '')) return false;
             }
 
-            // 4. Other Filters (Multi where applicable)
+            // 4. Other Filters
             if (!isMatch(filters.team, order.Team)) return false;
             if (!isMatch(filters.user, order.User || '')) return false;
             if (!isMatch(filters.paymentStatus, order['Payment Status'])) return false;
@@ -332,16 +287,17 @@ const OrdersDashboard: React.FC<OrdersDashboardProps> = ({ onBack, initialFilter
             if (!isMatch(filters.driver, order['Internal Shipping Details'])) return false;
             if (!isMatch(filters.bank, order['Payment Info'])) return false;
             if (!isMatch(filters.page, order.Page)) return false;
-            if (!isMatch(filters.location, order.Location, true)) return false; // Partial match for Location
+            if (!isMatch(filters.location, order.Location, true)) return false;
             if (!isMatch(filters.internalCost, String(order['Internal Cost']))) return false;
 
-            // Customer Name Filter (Multi-Select Logic)
-            if (!isMatch(filters.customerName, order['Customer Name'])) return false;
+            if (filters.customerSearch) {
+                const q = filters.customerSearch.toLowerCase();
+                if (!(order['Customer Name'] || '').toLowerCase().includes(q) && !(order['Customer Phone'] || '').includes(q)) return false;
+            }
 
-            // Product Filter (Multi-select support)
             if (filters.product) {
                 const selectedProducts = filters.product.split(',').map(v => v.trim().toLowerCase());
-                if (!order.Products.some(p => selectedProducts.includes((p.name || '').toLowerCase()))) return false;
+                if (!order.Products.some(p => selectedProducts.includes((p.name || p.ProductName || '').toLowerCase()))) return false;
             }
 
             if (searchQuery.trim()) {
@@ -352,7 +308,22 @@ const OrdersDashboard: React.FC<OrdersDashboardProps> = ({ onBack, initialFilter
             }
             return true;
         });
-    }, [enrichedOrders, filters, searchQuery, appData.pages]);
+
+        // Apply Sorting
+        return base.sort((a, b) => {
+            let valA: any, valB: any;
+            switch(sortBy) {
+                case 'date': valA = getOrderTimestamp(a); valB = getOrderTimestamp(b); break;
+                case 'total': valA = Number(a['Grand Total']) || 0; valB = Number(b['Grand Total']) || 0; break;
+                case 'customer': valA = (a['Customer Name'] || '').toLowerCase(); valB = (b['Customer Name'] || '').toLowerCase(); break;
+                case 'id': valA = a['Order ID']; valB = b['Order ID']; break;
+                default: valA = getOrderTimestamp(a); valB = getOrderTimestamp(b);
+            }
+            if (valA < valB) return sortOrder === 'asc' ? -1 : 1;
+            if (valA > valB) return sortOrder === 'asc' ? 1 : -1;
+            return 0;
+        });
+    }, [enrichedOrders, filters, searchQuery, appData.pages, sortBy, sortOrder]);
 
     const toggleSelection = (id: string) => {
         setSelectedIds(prev => {
@@ -369,16 +340,11 @@ const OrdersDashboard: React.FC<OrdersDashboardProps> = ({ onBack, initialFilter
         else setSelectedIds(prev => new Set([...prev, ...ids]));
     };
 
-    if (loading) return (
+    if (isOrdersLoading && sortedOrders.length === 0) return (
         <div className="flex flex-col h-96 items-center justify-center gap-5">
             <Spinner size="lg" />
             <div className="flex flex-col items-center gap-2">
                 <p className="text-[10px] font-black text-blue-500 uppercase tracking-[0.4em] animate-pulse">Syncing Operational Logs...</p>
-                {loadingProgress > 0 && (
-                    <div className="w-48 h-1 bg-gray-800 rounded-full overflow-hidden">
-                        <div className="h-full bg-blue-500 transition-all duration-300" style={{ width: `${loadingProgress}%` }}></div>
-                    </div>
-                )}
             </div>
         </div>
     );
@@ -392,7 +358,7 @@ const OrdersDashboard: React.FC<OrdersDashboardProps> = ({ onBack, initialFilter
                 <h3 className="text-xl font-black text-white uppercase tracking-tight">កំហុសទាញយកទិន្នន័យ</h3>
                 <p className="text-gray-500 font-bold max-w-md">{fetchError}</p>
             </div>
-            <button onClick={fetchAllOrders} className="btn btn-primary px-10 py-4 shadow-lg shadow-blue-600/20">ព្យាយាមម្ដងទៀត</button>
+            <button onClick={() => refreshData()} className="btn btn-primary px-10 py-4 shadow-lg shadow-blue-600/20">ព្យាយាមម្ដងទៀត</button>
         </div>
     );
 
@@ -401,7 +367,7 @@ const OrdersDashboard: React.FC<OrdersDashboardProps> = ({ onBack, initialFilter
         return order ? (
             <EditOrderPage 
                 order={order} 
-                onSaveSuccess={() => { setEditingOrderId(''); fetchAllOrders(); refreshData(); }} 
+                onSaveSuccess={() => { setEditingOrderId(''); refreshData(); }} 
                 onCancel={() => setEditingOrderId('')} 
             />
         ) : (
@@ -410,7 +376,7 @@ const OrdersDashboard: React.FC<OrdersDashboardProps> = ({ onBack, initialFilter
     }
 
     return (
-        <div className="w-full mx-auto px-0 animate-fade-in relative pb-40 pt-6 overflow-x-hidden">
+        <div className="w-full h-full flex flex-col animate-fade-in relative overflow-hidden">
             <div className="md:hidden">
                 <FilterPanel isOpen={isFilterModalOpen} onClose={() => setIsFilterModalOpen(false)}>
                     <OrderFilters filters={filters} setFilters={setFilters} orders={enrichedOrders} usersList={usersList} appData={appData} calculatedRange={calculatedRange} />
@@ -448,67 +414,161 @@ const OrdersDashboard: React.FC<OrdersDashboardProps> = ({ onBack, initialFilter
                 </Modal>
             </div>
 
-            <div className="flex flex-col xl:flex-row justify-between items-start xl:items-end mb-8 gap-6 px-1">
-                <div className="max-w-full">
-                    <h1 className="hidden md:block text-xl lg:text-2xl xl:text-4xl font-black text-white italic tracking-tighter leading-tight mb-2 py-1">គ្រប់គ្រងប្រតិបត្តិការណ៍</h1>
-                    <div className="flex flex-wrap items-center gap-3">
-                        <div className="flex items-center gap-2 px-3 py-1 bg-blue-600/10 rounded-full border border-blue-500/20">
-                            <div className="w-1.5 h-1.5 rounded-full bg-blue-500 animate-pulse"></div>
-                            <span className="text-[9px] xl:text-[11px] font-black text-blue-400 uppercase tracking-widest">{filteredOrders.length} Entries Logged</span>
-                        </div>
-                        {filters.team && (
-                            <div className="px-3 py-1 bg-purple-600/10 rounded-full border border-purple-500/20">
-                                <span className="text-[9px] xl:text-[11px] font-black text-purple-400 uppercase tracking-widest">Team: {filters.team}</span>
+            {/* Header Section (Compact) */}
+            <div className="flex-shrink-0 px-1 pt-1">
+                <div className="flex flex-col lg:flex-row justify-between items-center mb-2 gap-2">
+                    <div className="flex items-center gap-3">
+                        <button onClick={onBack} className="p-2 hover:bg-white/5 rounded-xl transition-all active:scale-90 text-gray-400 hover:text-white">
+                            <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M15 19l-7-7 7-7" /></svg>
+                        </button>
+                        <h1 className="hidden md:block text-lg lg:text-xl font-black text-white italic tracking-tighter leading-none py-1">គ្រប់គ្រងប្រតិបត្តិការណ៍</h1>
+                        <div className="flex items-center gap-2">
+                            <div className="flex items-center gap-1.5 px-2 py-0.5 bg-blue-600/10 rounded-full border border-blue-500/20">
+                                <div className="w-1 h-1 rounded-full bg-blue-500 animate-pulse"></div>
+                                <span className="text-[8px] xl:text-[10px] font-black text-blue-400 uppercase tracking-widest">{filteredOrders.length} Logged</span>
                             </div>
-                        )}
-                    </div>
-                </div>
-                <div className="flex flex-wrap gap-2 w-full xl:w-auto">
-                    <button onClick={onBack} className="hidden md:flex group items-center gap-2 px-5 py-3 xl:px-8 xl:py-4 bg-gray-800/40 backdrop-blur-xl border border-white/5 hover:border-blue-500/30 text-gray-500 hover:text-blue-400 font-black uppercase tracking-widest text-[10px] xl:text-[12px] rounded-2xl transition-all shadow-xl active:scale-95">
-                        <svg className="w-4 h-4 xl:w-5 xl:h-5 transform group-hover:-translate-x-1 transition-transform" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={3}><path d="M10 19l-7-7m0 0l7-7m-7 7h18" /></svg>
-                        Back
-                    </button>
-                </div>
-            </div>
-
-            <div className="sticky top-4 z-[40] bg-[#020617]/80 backdrop-blur-2xl border border-white/5 rounded-[2rem] xl:rounded-[2.5rem] p-4 xl:p-6 mb-8 shadow-2xl group transition-all hover:bg-gray-800/50 transform-gpu">
-                <div className="flex flex-col lg:flex-row justify-between items-center gap-4">
-                    <div className="relative w-full lg:max-w-2xl group">
-                        <input type="text" placeholder="ស្វែងរក ID, ឈ្មោះ, ឬលេខទូរស័ព្ទ..." value={searchQuery} onChange={e => setSearchQuery(e.target.value)} className="form-input !pl-14 xl:!pl-16 !py-4 xl:!py-5 bg-black/40 border-gray-800 rounded-[1.5rem] xl:rounded-[1.8rem] text-[13px] xl:text-[15px] font-bold text-white placeholder:text-gray-700 focus:border-blue-500/50 focus:bg-black/60 transition-all shadow-inner" />
-                        <div className="absolute left-5 xl:left-6 top-1/2 -translate-y-1/2 flex items-center gap-3 xl:gap-4 text-gray-700 group-focus-within:text-blue-500 transition-colors">
-                            <svg className="h-5 w-5 xl:h-6 xl:w-6" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={3}><path d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" /></svg>
-                            <div className="h-5 xl:h-6 w-px bg-gray-800"></div>
+                            {filters.team && (
+                                <div className="px-2 py-0.5 bg-purple-600/10 rounded-full border border-purple-500/20">
+                                    <span className="text-[8px] xl:text-[10px] font-black text-purple-400 uppercase tracking-widest">Team: {filters.team}</span>
+                                </div>
+                            )}
                         </div>
                     </div>
-                    <div className="flex items-stretch gap-2 xl:gap-3 w-full lg:w-auto h-14 xl:h-[68px]">
-                        <button onClick={() => setIsFilterModalOpen(true)} className="flex-1 lg:flex-none flex items-center justify-center gap-2 px-4 xl:px-8 bg-gray-900 border border-gray-800 text-gray-400 hover:text-white hover:border-blue-500/30 rounded-xl xl:rounded-2xl text-[10px] xl:text-[12px] font-black uppercase tracking-widest transition-all active:scale-95">
-                            <svg className="w-4 h-4 xl:w-5 xl:h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2.5}><path d="M3 4a1 1 0 011-1h16a1 1 0 011 1v2.586a1 1 0 01-.293.707l-6.414 6.414a1 1 0 00-.293.707V17l-4 4v-6.586a1 1 0 00-.293-.707L3.293 7.293A1 1 0 013 6.586V4z" /></svg>
-                            Filters
+                    {/* Floating Add Button for Mobile/Desktop */}
+                    <div className="flex items-center gap-2">
+                        <button onClick={() => window.location.hash = '#/create-order'} className="flex items-center gap-2 px-4 md:px-6 py-2 bg-blue-600 hover:bg-blue-500 text-white rounded-xl text-[10px] md:text-xs font-black uppercase tracking-widest shadow-lg shadow-blue-600/20 transition-all active:scale-95">
+                            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={3}><path d="M12 4v16m8-8H4" /></svg>
+                            <span className="hidden sm:inline">បន្ថែមថ្មី</span>
+                            <span className="sm:hidden">Add</span>
                         </button>
-                        <button onClick={() => setIsPdfModalOpen(true)} className="flex-1 lg:flex-none flex items-center justify-center gap-2 px-4 xl:px-8 bg-red-600/10 border border-red-500/20 text-red-500 hover:bg-red-600 hover:text-white rounded-xl xl:rounded-2xl text-[10px] xl:text-[12px] font-black uppercase tracking-widest transition-all active:scale-95 shadow-lg shadow-red-950/20">
-                            <svg className="w-4 h-4 xl:w-5 xl:h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={3}><path d="M7 21h10a2 2 0 002-2V9.414a1 1 0 00-.293-.707l-5.414-5.414A1 1 0 0012.586 3H7a2 2 0 00-2 2v14a2 2 0 002 2z" /></svg>
-                            Export
-                        </button>
-                        <button 
-                            onClick={() => setShowBorders(!showBorders)} 
-                            className={`flex-1 lg:flex-none flex items-center justify-center gap-2 px-4 xl:px-8 rounded-xl xl:rounded-2xl text-[10px] xl:text-[12px] font-black uppercase tracking-widest transition-all active:scale-95 border ${showBorders ? 'bg-blue-600 border-blue-500 text-white shadow-lg shadow-blue-900/40' : 'bg-gray-900 border-gray-800 text-gray-400 hover:text-white'}`}
-                            title="Toggle Borders"
-                        >
-                            <svg className="w-4 h-4 xl:w-5 xl:h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2.5}>
-                                <path strokeLinecap="round" strokeLinejoin="round" d="M4 5h16M4 12h16M4 19h16" />
-                            </svg>
-                            Borders
-                        </button>
-                        <div className="hidden lg:block h-full"><ColumnToggler columns={availableColumns} visibleColumns={visibleColumns} onToggle={toggleColumn} /></div>
+                    </div>
+                </div>
+
+                <div className="bg-[#020617]/60 backdrop-blur-2xl border border-white/5 rounded-2xl p-2 xl:p-3 mb-2 shadow-xl group transition-all hover:bg-gray-800/40">
+                    <div className="flex flex-col lg:flex-row justify-between items-center gap-2">
+                        <div className="relative w-full lg:max-w-xl group">
+                            <input type="text" placeholder="ស្វែងរក..." value={searchQuery} onChange={e => setSearchQuery(e.target.value)} className="form-input !pl-10 !py-2.5 bg-black/40 border-gray-800 rounded-xl text-[12px] font-bold text-white placeholder:text-gray-700 focus:border-blue-500/50 focus:bg-black/60 transition-all shadow-inner" />
+                            <div className="absolute left-3.5 top-1/2 -translate-y-1/2 flex items-center gap-2.5 text-gray-700 group-focus-within:text-blue-500 transition-colors">
+                                <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={3}><path d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" /></svg>
+                                <div className="h-4 w-px bg-gray-800"></div>
+                            </div>
+                        </div>
+                        <div className="flex items-center gap-2 w-full lg:w-auto">
+                            {/* Group By UI */}
+                            <div className="flex items-center gap-2 bg-gray-900 border border-gray-800 rounded-xl px-3 h-11">
+                                <span className="text-[10px] font-black text-gray-500 uppercase tracking-tighter leading-none flex flex-col">
+                                    <span>ក្រុមតាម</span>
+                                    <span className="text-[7px] opacity-50">Group By</span>
+                                </span>
+                                <select value={groupBy} onChange={e => setGroupBy(e.target.value)} className="bg-transparent border-none text-[11px] font-black text-purple-400 p-0 focus:ring-0 uppercase tracking-tight cursor-pointer">
+                                    <option value="none">None</option>
+                                    <option value="Page">Page</option>
+                                    <option value="Team">Team</option>
+                                    <option value="Fulfillment Store">Warehouse</option>
+                                    <option value="Payment Status">Payment</option>
+                                    <option value="Internal Shipping Method">Shipping</option>
+                                </select>
+                            </div>
+
+                            {/* Sort UI */}
+                            <div className="flex items-center gap-2 bg-gray-900 border border-gray-800 rounded-xl px-3 h-11">
+                                <span className="text-[10px] font-black text-gray-500 uppercase tracking-tighter leading-none flex flex-col">
+                                    <span>តម្រៀបតាម</span>
+                                    <span className="text-[7px] opacity-50">Order By</span>
+                                </span>
+                                <select value={sortBy} onChange={e => setSortBy(e.target.value)} className="bg-transparent border-none text-[11px] font-black text-blue-400 p-0 focus:ring-0 uppercase tracking-tight cursor-pointer">
+                                    <option value="date">Date</option>
+                                    <option value="total">Amount</option>
+                                    <option value="customer">Client</option>
+                                    <option value="id">ID</option>
+                                </select>
+                                <button onClick={() => setSortOrder(prev => prev === 'asc' ? 'desc' : 'asc')} className="ml-1 text-blue-500 hover:text-white transition-colors">
+                                    {sortOrder === 'asc' ? 
+                                        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={3}><path d="M3 4h13M3 8h9m-9 4h6m4 0l4-4m0 0l4 4m-4-4v12" strokeLinecap="round" strokeLinejoin="round"/></svg> :
+                                        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={3}><path d="M3 4h13M3 8h9m-9 4h6m4 0l4-4m0 0l4 4m-4-4v12" strokeLinecap="round" strokeLinejoin="round"/></svg>
+                                    }
+                                </button>
+                            </div>
+
+                            <button onClick={() => setIsFilterModalOpen(true)} className="flex-1 lg:flex-none flex items-center justify-center gap-2 px-4 py-2.5 bg-gray-900 border border-gray-800 text-gray-400 hover:text-white rounded-xl text-[11px] font-black uppercase tracking-widest transition-all active:scale-95 h-11">
+                                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2.5}><path d="M3 4a1 1 0 011-1h16a1 1 0 011 1v2.586a1 1 0 01-.293.707l-6.414 6.414a1 1 0 00-.293.707V17l-4 4v-6.586a1 1 0 00-.293-.707L3.293 7.293A1 1 0 013 6.586V4z" /></svg>
+                                Filters
+                            </button>
+                            <button onClick={() => setIsPdfModalOpen(true)} className="flex-1 lg:flex-none flex items-center justify-center gap-2 px-4 py-2.5 bg-red-600/10 border border-red-500/20 text-red-500 hover:bg-red-600 hover:text-white rounded-xl text-[11px] font-black uppercase tracking-widest transition-all active:scale-95 h-11">
+                                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={3}><path d="M7 21h10a2 2 0 002-2V9.414a1 1 0 00-.293-.707l-5.414-5.414A1 1 0 0012.586 3H7a2 2 0 00-2 2v14a2 2 0 002 2z" /></svg>
+                                Export
+                            </button>
+                            <button 
+                                onClick={() => setShowBorders(!showBorders)} 
+                                className={`flex-1 lg:flex-none flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl text-[11px] font-black uppercase tracking-widest transition-all active:scale-95 border h-11 ${showBorders ? 'bg-blue-600 border-blue-500 text-white shadow-lg shadow-blue-900/40' : 'bg-gray-900 border-gray-800 text-gray-400 hover:text-white'}`}
+                            >
+                                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2.5}>
+                                    <path strokeLinecap="round" strokeLinejoin="round" d="M4 5h16M4 12h16M4 19h16" />
+                                </svg>
+                                Borders
+                            </button>
+                            <div className="hidden lg:block h-11"><ColumnToggler columns={availableColumns} visibleColumns={visibleColumns} onToggle={toggleColumn} /></div>
+                        </div>
+                    </div>
+                </div>
+
+                {/* Shortcuts Area (New) */}
+                <div className="flex flex-wrap items-center gap-3 px-1 mb-3">
+                    <div className="flex items-center gap-2 bg-gray-900/50 p-1.5 rounded-xl border border-white/5 shadow-inner">
+                        <span className="text-[9px] font-black text-gray-500 uppercase ml-2">Short Cut</span>
+                        {['today', 'yesterday', 'this_week', 'this_month'].map(p => (
+                            <button key={p} onClick={() => setFilters(prev => ({...prev, datePreset: p as any}))} className={`px-3 py-1.5 rounded-lg text-[10px] font-black uppercase transition-all ${filters.datePreset === p ? 'bg-blue-600 text-white shadow-lg shadow-blue-600/20' : 'text-gray-500 hover:bg-white/5'}`}>{p.replace('_', ' ')}</button>
+                        ))}
+                    </div>
+                    
+                    <div className="flex items-center gap-2 bg-gray-900/50 p-1.5 rounded-xl border border-white/5 shadow-inner">
+                        <span className="text-[9px] font-black text-gray-500 uppercase ml-2">ឃ្លាំង</span>
+                        {Array.from(new Set(appData.stores?.map(s => s.StoreName) || [])).slice(0, 4).map(s => {
+                            const selected = filters.fulfillmentStore.split(',').map(v => v.trim()).includes(s);
+                            return (
+                                <button 
+                                    key={s} 
+                                    onClick={() => {
+                                        const current = filters.fulfillmentStore.split(',').map(v => v.trim()).filter(v => v);
+                                        const next = selected ? current.filter(v => v !== s) : [...current, s];
+                                        setFilters(prev => ({...prev, fulfillmentStore: next.join(',')}));
+                                    }} 
+                                    className={`px-3 py-1.5 rounded-lg text-[10px] font-black uppercase transition-all ${selected ? 'bg-indigo-600 text-white shadow-lg shadow-indigo-600/20' : 'text-gray-500 hover:bg-white/5'}`}
+                                >
+                                    {s}
+                                </button>
+                            );
+                        })}
+                    </div>
+
+                    <div className="flex items-center gap-2 bg-gray-900/50 p-1.5 rounded-xl border border-white/5 shadow-inner">
+                        <span className="text-[9px] font-black text-gray-500 uppercase ml-2">ហាង</span>
+                        {Array.from(new Set(appData.pages?.map(p => p.DefaultStore).filter(Boolean) || [])).slice(0, 4).map(s => {
+                            const selected = filters.store.split(',').map(v => v.trim()).includes(s);
+                            return (
+                                <button 
+                                    key={s} 
+                                    onClick={() => {
+                                        const current = filters.store.split(',').map(v => v.trim()).filter(v => v);
+                                        const next = selected ? current.filter(v => v !== s) : [...current, s];
+                                        setFilters(prev => ({...prev, store: next.join(',')}));
+                                    }} 
+                                    className={`px-3 py-1.5 rounded-lg text-[10px] font-black uppercase transition-all ${selected ? 'bg-purple-600 text-white shadow-lg shadow-purple-600/20' : 'text-gray-500 hover:bg-white/5'}`}
+                                >
+                                    {s}
+                                </button>
+                            );
+                        })}
                     </div>
                 </div>
             </div>
 
-            <div className="relative z-10">
-                <OrdersList orders={filteredOrders} onEdit={o => setEditingOrderId(o['Order ID'])} onView={o => setViewingOrder(o)} showActions={true} visibleColumns={visibleColumns} selectedIds={selectedIds} onToggleSelect={toggleSelection} onToggleSelectAll={toggleSelectAll} showBorders={showBorders} />
+            {/* Scrollable Area */}
+            <div className="flex-1 overflow-y-auto no-scrollbar relative z-10">
+                <OrdersList orders={filteredOrders} onEdit={o => setEditingOrderId(o['Order ID'])} onView={o => setViewingOrder(o)} showActions={true} visibleColumns={visibleColumns} selectedIds={selectedIds} onToggleSelect={toggleSelection} onToggleSelectAll={toggleSelectAll} showBorders={showBorders} groupBy={groupBy} />
             </div>
 
-            <BulkActionManager orders={enrichedOrders} selectedIds={selectedIds} onComplete={() => { setSelectedIds(new Set()); fetchAllOrders(); }} onClearSelection={() => setSelectedIds(new Set())} />
+            <BulkActionManager orders={enrichedOrders} selectedIds={selectedIds} onComplete={() => { setSelectedIds(new Set()); refreshData(); }} onClearSelection={() => setSelectedIds(new Set())} />
             {isPdfModalOpen && <PdfExportModal isOpen={isPdfModalOpen} onClose={() => setIsPdfModalOpen(false)} orders={filteredOrders} />}
             {viewingOrder && <OrderDetailModal order={viewingOrder} onClose={() => setViewingOrder(null)} />}
         </div>

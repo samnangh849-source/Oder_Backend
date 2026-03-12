@@ -7,7 +7,7 @@ import { convertGoogleDriveUrl } from '@/utils/fileUtils';
 import Modal from '@/components/common/Modal';
 
 const DriverDeliveryView: React.FC = () => {
-    const { setMobilePageTitle, refreshData, previewImage: showFullImage, appData, previewImage: globalPreview } = useContext(AppContext);
+    const { setMobilePageTitle, refreshData, orders, previewImage: showFullImage, appData, previewImage: globalPreview } = useContext(AppContext);
     
     // Store Selection State
     const [selectedStore, setSelectedStore] = useState<string>('');
@@ -52,27 +52,21 @@ const DriverDeliveryView: React.FC = () => {
         setPreviewImage(null);
         
         try {
-            const res = await fetch(`${WEB_APP_URL}/api/admin/all-orders`);
-            const result = await res.json();
-            if (result.status === 'success') {
-                const order = result.data.find((o: any) => {
-                    const idMatch = o['Order ID'].toLowerCase() === input.toLowerCase() || o['Order ID'].toLowerCase().endsWith(input.toLowerCase());
-                    if (!idMatch) return false;
-                    
-                    const orderStore = (o['Fulfillment Store'] || 'Unassigned').toLowerCase();
-                    return orderStore === selectedStore.toLowerCase();
-                });
+            const order = orders.find((o: any) => {
+                const idMatch = o['Order ID'].toLowerCase() === input.toLowerCase() || o['Order ID'].toLowerCase().endsWith(input.toLowerCase());
+                if (!idMatch) return false;
                 
-                if (order) {
-                    let products = [];
-                    try { if (order['Products (JSON)']) products = JSON.parse(order['Products (JSON)']); } catch(e) {}
-                    setFoundOrder({ ...order, Products: products });
-                } else {
-                    alert("រកមិនឃើញកញ្ចប់ឥវ៉ាន់នេះនៅក្នុងឃ្លាំង " + selectedStore + " ទេ។");
-                }
+                const orderStore = (o['Fulfillment Store'] || 'Unassigned').toLowerCase();
+                return orderStore === selectedStore.toLowerCase();
+            });
+            
+            if (order) {
+                setFoundOrder(order);
+            } else {
+                alert("រកមិនឃើញកញ្ចប់ឥវ៉ាន់នេះនៅក្នុងឃ្លាំង " + selectedStore + " ទេ។");
             }
         } catch (err) {
-            alert("Connection error.");
+            alert("Search error.");
         } finally {
             setLoading(false);
         }

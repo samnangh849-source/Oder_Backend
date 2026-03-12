@@ -228,25 +228,24 @@ const PackagingView: React.FC<{ orders?: ParsedOrder[] }> = ({ orders: propOrder
     const { groups, total, hasMore } = filteredResult;
 
     return (
-        <div className="space-y-10 pb-32 animate-fade-in px-4 lg:px-10 max-w-[2000px] mx-auto">
-            {/* Header / Stats Overlay */}
-            <div className="flex flex-col xl:flex-row justify-between items-center bg-slate-900/40 backdrop-blur-2xl border border-white/10 rounded-[3rem] p-8 shadow-3xl gap-8 relative overflow-hidden">
+        <div className="space-y-4 pb-32 animate-fade-in px-2 lg:px-4 max-w-[2000px] mx-auto">
+            {/* Header (Compact) */}
+            <div className="flex flex-col xl:flex-row justify-between items-center bg-slate-900/40 backdrop-blur-2xl border border-white/5 rounded-2xl p-4 shadow-xl gap-4 relative overflow-hidden">
                 <div className="absolute inset-0 bg-gradient-to-r from-blue-600/5 via-transparent to-transparent pointer-events-none"></div>
-                <div className="flex items-center gap-6 relative z-10">
-                    <div className="w-20 h-20 bg-blue-600 rounded-[1.8rem] flex items-center justify-center text-white shadow-2xl shadow-blue-900/50 border border-white/20"><svg className="w-10 h-10" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2.5}><path d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4" /></svg></div>
+                <div className="flex items-center gap-4 relative z-10">
+                    <div className="w-12 h-12 bg-blue-600 rounded-xl flex items-center justify-center text-white shadow-lg shadow-blue-900/40 border border-white/10"><svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2.5}><path d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4" /></svg></div>
                     <div>
-                        <h1 className="text-3xl font-black text-white uppercase tracking-tighter italic leading-none flex items-center gap-4"><span>Packaging Ops</span><span className="text-xs bg-blue-500/20 text-blue-400 px-4 py-1.5 rounded-full border border-blue-500/30 not-italic tracking-widest font-black">{selectedStore}</span></h1>
-                        <div className="flex items-center gap-6 mt-3">
-                            <div className="flex items-center gap-2"><div className="w-2 h-2 rounded-full bg-emerald-500 shadow-[0_0_10px_#10b981]"></div><span className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Active Stream</span></div>
-                            <div className="flex items-center gap-2"><span className="text-[10px] font-black text-blue-400 uppercase tracking-widest">Operator: {currentUser?.FullName}</span></div>
-                            <div className="flex items-center gap-4 ml-2 pl-4 border-l border-white/10">
-                                <div className="flex flex-col">
-                                    <span className="text-[8px] font-black text-gray-500 uppercase tracking-widest">Session Packed</span>
-                                    <span className="text-sm font-black text-emerald-400 font-mono">{sessionStats.packed} Units</span>
+                        <h1 className="text-xl font-black text-white uppercase tracking-tighter italic leading-none flex items-center gap-3"><span>Packaging Ops</span><span className="text-[9px] bg-blue-500/20 text-blue-400 px-2 py-0.5 rounded-full border border-blue-500/30 not-italic tracking-widest font-black">{selectedStore}</span></h1>
+                        <div className="flex items-center gap-4 mt-1.5">
+                            <div className="flex items-center gap-1.5"><div className="w-1.5 h-1.5 rounded-full bg-emerald-500 shadow-[0_0_8px_#10b981]"></div><span className="text-[8px] font-black text-gray-400 uppercase tracking-widest">Active Stream</span></div>
+                            <div className="flex items-center gap-3 ml-2 pl-3 border-l border-white/10">
+                                <div className="flex items-center gap-1.5">
+                                    <span className="text-[7px] font-black text-gray-500 uppercase tracking-widest">Packed</span>
+                                    <span className="text-xs font-black text-emerald-400 font-mono">{sessionStats.packed}</span>
                                 </div>
-                                <div className="flex flex-col">
-                                    <span className="text-[8px] font-black text-gray-500 uppercase tracking-widest">Efficiency</span>
-                                    <span className="text-sm font-black text-indigo-400 font-mono">
+                                <div className="flex items-center gap-1.5">
+                                    <span className="text-[7px] font-black text-gray-500 uppercase tracking-widest">Rate</span>
+                                    <span className="text-xs font-black text-indigo-400 font-mono">
                                         {Math.round((sessionStats.packed / ((Date.now() - sessionStats.startTime) / 3600000)) || 0)} p/h
                                     </span>
                                 </div>
@@ -254,18 +253,18 @@ const PackagingView: React.FC<{ orders?: ParsedOrder[] }> = ({ orders: propOrder
                         </div>
                     </div>
                 </div>
-                <div className="flex items-center gap-4 relative z-10">
-                    <div className="hidden md:grid grid-cols-2 gap-3 mr-4">
-                        <div className="bg-black/40 px-5 py-3 rounded-2xl border border-white/5 text-center shadow-inner"><p className="text-[8px] font-black text-gray-500 uppercase tracking-widest mb-1">Queue</p><p className="text-lg font-black text-white font-mono">{total}</p></div>
-                        <div className="bg-black/40 px-5 py-3 rounded-2xl border border-white/5 text-center shadow-inner"><p className="text-[8px] font-black text-gray-500 uppercase tracking-widest mb-1">Station</p><p className="text-lg font-black text-indigo-400 font-mono">#01</p></div>
+                <div className="flex items-center gap-3 relative z-10 w-full xl:w-auto">
+                    <div className="flex-1 xl:flex-none grid grid-cols-2 gap-2">
+                        <div className="bg-black/40 px-3 py-1.5 rounded-lg border border-white/5 text-center shadow-inner"><p className="text-[7px] font-black text-gray-500 uppercase tracking-widest">Queue</p><p className="text-sm font-black text-white font-mono">{total}</p></div>
+                        <div className="bg-black/40 px-3 py-1.5 rounded-lg border border-white/5 text-center shadow-inner"><p className="text-[7px] font-black text-gray-500 uppercase tracking-widest">Station</p><p className="text-sm font-black text-indigo-400 font-mono">#01</p></div>
                     </div>
-                    <button onClick={() => setSelectedStore('')} className="px-8 py-4 bg-gray-800/50 hover:bg-red-600 hover:text-white text-gray-400 rounded-2xl border border-white/5 active:scale-95 transition-all text-[11px] font-black uppercase tracking-widest shadow-xl">ប្តូរទីតាំង (Switch)</button>
+                    <button onClick={() => setSelectedStore('')} className="px-4 py-3 bg-gray-800/50 hover:bg-red-600 hover:text-white text-gray-400 rounded-xl border border-white/5 active:scale-95 transition-all text-[9px] font-black uppercase tracking-widest shadow-lg">Switch HUB</button>
                 </div>
             </div>
 
-            {/* Segmented Status Control */}
-            <div className="flex justify-center mb-8">
-                <div className="flex bg-[#0f172a]/80 backdrop-blur-2xl p-1.5 rounded-3xl border border-white/10 shadow-2xl max-w-full overflow-x-auto no-scrollbar gap-1.5 ring-1 ring-white/5">
+            {/* Segmented Status Control (Compact) */}
+            <div className="flex justify-center mb-4">
+                <div className="flex bg-[#0f172a]/80 backdrop-blur-2xl p-1 rounded-2xl border border-white/10 shadow-xl max-w-full overflow-x-auto no-scrollbar gap-1 ring-1 ring-white/5">
                     {[
                         {id:'Pending',label:'រង់ចាំវេចខ្ចប់',icon:'📥', color: 'blue'},
                         {id:'Ready to Ship',label:'ខ្ចប់រួចរាល់',icon:'📦', color: 'indigo'},
@@ -276,12 +275,12 @@ const PackagingView: React.FC<{ orders?: ParsedOrder[] }> = ({ orders: propOrder
                             <button 
                                 key={tab.id} 
                                 onClick={() => setActiveTab(tab.id as any)} 
-                                className={`px-6 py-3 rounded-2xl text-[10px] font-black uppercase tracking-widest transition-all duration-300 flex items-center gap-2.5 whitespace-nowrap relative ${activeTab === tab.id ? 'bg-blue-600 text-white shadow-xl shadow-blue-900/40' : 'text-gray-500 hover:text-gray-300 hover:bg-white/5'}`}
+                                className={`px-4 py-2 rounded-xl text-[9px] font-black uppercase tracking-widest transition-all duration-300 flex items-center gap-2 whitespace-nowrap relative ${activeTab === tab.id ? 'bg-blue-600 text-white shadow-lg' : 'text-gray-500 hover:text-gray-300'}`}
                             >
-                                <span className="text-lg">{tab.icon}</span>
-                                <span>{tab.label}</span>
+                                <span className="text-base">{tab.icon}</span>
+                                <span className="hidden sm:inline">{tab.label}</span>
                                 {count > 0 && (
-                                    <span className={`px-1.5 py-0.5 rounded-md text-[9px] font-black min-w-[20px] text-center ${activeTab === tab.id ? 'bg-white text-blue-600' : 'bg-blue-600/20 text-blue-400 border border-blue-500/20'}`}>
+                                    <span className={`px-1.5 py-0.5 rounded-md text-[8px] font-black min-w-[18px] text-center ${activeTab === tab.id ? 'bg-white text-blue-600' : 'bg-blue-600/20 text-blue-400 border border-blue-500/20'}`}>
                                         {count}
                                     </span>
                                 )}
@@ -291,19 +290,19 @@ const PackagingView: React.FC<{ orders?: ParsedOrder[] }> = ({ orders: propOrder
                 </div>
             </div>
 
-            {/* Floating Filter Hub */}
-            <div className="sticky top-24 z-[40] bg-[#020617]/60 backdrop-blur-2xl border border-white/5 rounded-[2.5rem] p-5 shadow-3xl group transition-all hover:bg-slate-900/80 max-w-6xl mx-auto ring-1 ring-white/5">
-                <div className="flex flex-col lg:flex-row justify-between items-center gap-6">
-                    <div className="relative w-full lg:max-w-2xl group/search">
-                        <input type="text" placeholder="ស្វែងរក ID, ឈ្មោះ, ឬលេខទូរស័ព្ទ..." value={searchTerm} onChange={e => setSearchTerm(e.target.value)} className="form-input !pl-16 !py-5 bg-black/40 border-gray-800 rounded-[2rem] text-[16px] font-bold text-white placeholder:text-gray-700 focus:border-blue-500/50 focus:bg-black/60 transition-all shadow-inner" />
-                        <div className="absolute left-6 top-1/2 -translate-y-1/2 flex items-center gap-4 text-gray-700 group-focus-within/search:text-blue-500 transition-colors"><svg className="h-7 w-7" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={3.5}><path d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" /></svg><div className="h-8 w-px bg-gray-800"></div></div>
+            {/* Floating Filter Hub (Compact) */}
+            <div className="sticky top-0 z-[40] bg-[#020617]/60 backdrop-blur-2xl border border-white/5 rounded-2xl p-2.5 shadow-2xl group transition-all hover:bg-slate-900/80 max-w-6xl mx-auto ring-1 ring-white/5">
+                <div className="flex flex-col lg:flex-row justify-between items-center gap-3">
+                    <div className="relative w-full lg:max-w-xl group/search">
+                        <input type="text" placeholder="ស្វែងរក..." value={searchTerm} onChange={e => setSearchTerm(e.target.value)} className="form-input !pl-12 !py-2.5 bg-black/40 border-gray-800 rounded-xl text-[14px] font-bold text-white placeholder:text-gray-700 focus:border-blue-500/50 focus:bg-black/60 transition-all shadow-inner" />
+                        <div className="absolute left-4 top-1/2 -translate-y-1/2 flex items-center gap-3 text-gray-700 group-focus-within/search:text-blue-500 transition-colors"><svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={3.5}><path d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" /></svg><div className="h-5 w-px bg-gray-800"></div></div>
                     </div>
-                    <div className="flex items-center gap-4">
-                        <div className="flex bg-black/40 p-1.5 rounded-2xl border border-white/5 shadow-inner">
-                            <button onClick={() => setViewMode('card')} className={`w-14 h-14 flex items-center justify-center rounded-xl transition-all duration-500 ${viewMode === 'card' ? 'bg-blue-600 text-white shadow-2xl' : 'text-gray-600 hover:text-gray-400'}`}><svg className="w-6 h-6" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={3}><rect x="3" y="3" width="7" height="7" rx="1.5" /><rect x="14" y="3" width="7" height="7" rx="1.5" /><rect x="14" y="14" width="7" height="7" rx="1.5" /><rect x="3" y="14" width="7" height="7" rx="1.5" /></svg></button>
-                            <button onClick={() => setViewMode('list')} className={`w-14 h-14 flex items-center justify-center rounded-xl transition-all duration-500 ${viewMode === 'list' ? 'bg-blue-600 text-white shadow-2xl' : 'text-gray-600 hover:text-gray-400'}`}><svg className="w-6 h-6" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={3}><line x1="3" y1="6" x2="21" y2="6" /><line x1="3" y1="12" x2="21" y2="12" /><line x1="3" y1="18" x2="21" y2="18" /></svg></button>
+                    <div className="flex items-center gap-3 w-full lg:w-auto">
+                        <div className="flex-1 lg:flex-none flex bg-black/40 p-1 rounded-xl border border-white/5 shadow-inner">
+                            <button onClick={() => setViewMode('card')} className={`flex-1 lg:w-10 lg:h-10 flex items-center justify-center rounded-lg transition-all ${viewMode === 'card' ? 'bg-blue-600 text-white shadow-lg' : 'text-gray-600'}`}><svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={3}><rect x="3" y="3" width="7" height="7" rx="1.5" /><rect x="14" y="3" width="7" height="7" rx="1.5" /><rect x="14" y="14" width="7" height="7" rx="1.5" /><rect x="3" y="14" width="7" height="7" rx="1.5" /></svg></button>
+                            <button onClick={() => setViewMode('list')} className={`flex-1 lg:w-10 lg:h-10 flex items-center justify-center rounded-lg transition-all ${viewMode === 'list' ? 'bg-blue-600 text-white shadow-lg' : 'text-gray-600'}`}><svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={3}><line x1="3" y1="6" x2="21" y2="6" /><line x1="3" y1="12" x2="21" y2="12" /><line x1="3" y1="18" x2="21" y2="18" /></svg></button>
                         </div>
-                        <button onClick={() => setIsFilterModalOpen(true)} className="flex items-center justify-center gap-4 px-10 py-5 bg-gray-900 border border-gray-800 text-gray-400 hover:text-white hover:border-blue-500/40 rounded-[2rem] text-[13px] font-black uppercase tracking-widest transition-all active:scale-95 shadow-xl shadow-black/50"><svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={3}><path d="M3 4a1 1 0 011-1h16a1 1 0 011 1v2.586a1 1 0 01-.293.707l-6.414 6.414a1 1 0 00-.293.707V17l-4 4v-6.586a1 1 0 00-.293-.707L3.293 7.293A1 1 0 013 6.586V4z" /></svg>Engine</button>
+                        <button onClick={() => setIsFilterModalOpen(true)} className="flex-1 lg:flex-none flex items-center justify-center gap-2 px-6 py-3 bg-gray-900 border border-gray-800 text-gray-400 hover:text-white rounded-xl text-[10px] font-black uppercase tracking-widest transition-all active:scale-95 shadow-lg shadow-black/50"><svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={3}><path d="M3 4a1 1 0 011-1h16a1 1 0 011 1v2.586a1 1 0 01-.293.707l-6.414 6.414a1 1 0 00-.293.707V17l-4 4v-6.586a1 1 0 00-.293-.707L3.293 7.293A1 1 0 013 6.586V4z" /></svg>Engine</button>
                     </div>
                 </div>
             </div>

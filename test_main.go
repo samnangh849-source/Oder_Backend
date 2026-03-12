@@ -2,6 +2,7 @@ package main
 
 import (
 	"bytes"
+	"compress/gzip"
 	"context"
 	"encoding/base64"
 	"encoding/json"
@@ -13,6 +14,7 @@ import (
 	"os"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 	"unicode"
 
@@ -355,6 +357,11 @@ func initDB() {
 		log.Fatal("❌ Migration failed:", err)
 	}
 
+	// Performance Optimization: Create Indexes
+	db.Exec("CREATE INDEX IF NOT EXISTS idx_orders_timestamp_desc ON orders (timestamp DESC);")
+	db.Exec("CREATE INDEX IF NOT EXISTS idx_orders_fulfillment_status ON orders (fulfillment_status);")
+	db.Exec("CREATE INDEX IF NOT EXISTS idx_orders_team ON orders (team);")
+
 	DB = db
 
 	var count int64
@@ -498,6 +505,41 @@ func parseBase64(b64 string) ([]byte, error) {
 	cleanB64 = strings.ReplaceAll(cleanB64, "\n", "")
 	cleanB64 = strings.ReplaceAll(cleanB64, "\r", "")
 	return base64.StdEncoding.DecodeString(cleanB64)
+}
+
+func GzipMiddleware() gin.HandlerFunc {
+	return func(c *gin.Context) {
+		if !strings.Contains(c.GetHeader("Accept-Encoding"), "gzip") {
+			c.Next()
+			return
+		}
+
+		gz, err := gzip.NewWriterLevel(c.Writer, gzip.BestSpeed)
+		if err != nil {
+			c.Next()
+			return
+		}
+		defer gz.Close()
+
+		c.Header("Content-Encoding", "gzip")
+		c.Header("Vary", "Accept-Encoding")
+
+		c.Writer = &gzipWriter{c.Writer, gz}
+		c.Next()
+	}
+}
+
+type gzipWriter struct {
+	gin.ResponseWriter
+	writer *gzip.Writer
+}
+
+func (g *gzipWriter) Write(data []byte) (int, error) {
+	return g.writer.Write(data)
+}
+
+func (g *gzipWriter) WriteString(s string) (int, error) {
+	return g.writer.Write([]byte(s))
 }
 
 func ErrorHandlingMiddleware() gin.HandlerFunc {
@@ -1427,53 +1469,59 @@ func handleGetUsers(c *gin.Context) {
 }
 func handleGetStaticData(c *gin.Context) {
 	result := make(map[string]interface{})
-	var products []Product
-	DB.Find(&products)
-	result["products"] = products
-	var stores []Store
-	DB.Find(&stores)
-	result["stores"] = stores
-	var pages []TeamPage
-	DB.Find(&pages)
-	result["pages"] = pages
-	var locations []Location
-	DB.Find(&locations)
-	result["locations"] = locations
-	var shippingMethods []ShippingMethod
-	DB.Find(&shippingMethods)
-	result["shippingMethods"] = shippingMethods
-	var colors []Color
-	DB.Find(&colors)
-	result["colors"] = colors
-	var drivers []Driver
-	DB.Find(&drivers)
-	result["drivers"] = drivers
-	var bankAccounts []BankAccount
-	DB.Find(&bankAccounts)
-	result["bankAccounts"] = bankAccounts
-	var phoneCarriers []PhoneCarrier
-	DB.Find(&phoneCarriers)
-	result["phoneCarriers"] = phoneCarriers
-	var inventory []Inventory
-	DB.Find(&inventory)
-	result["inventory"] = inventory
-	var stockTransfers []StockTransfer
-	DB.Find(&stockTransfers)
-	result["stockTransfers"] = stockTransfers
-	var returns []ReturnItem
-	DB.Find(&returns)
-	result["returns"] = returns
+	var mu sync.Mutex
+	var wg sync.WaitGroup
 
-	var settings []Setting
-	DB.Find(&settings)
-	settingsObj := make(map[string]interface{})
-	for _, s := range settings {
-		settingsObj[s.ConfigKey] = s.ConfigValue
-		if s.ConfigKey == "UploadFolderID" {
-			uploadFolderID = s.ConfigValue
+	fetch := func(key string, target interface{}) {
+		defer wg.Done()
+		if err := DB.Find(target).Error; err == nil {
+			mu.Lock()
+			result[key] = target
+			mu.Unlock()
 		}
 	}
-	result["settings"] = settingsObj
+
+	tables := map[string]interface{}{
+		"products":        &[]Product{},
+		"stores":          &[]Store{},
+		"pages":           &[]TeamPage{},
+		"locations":       &[]Location{},
+		"shippingMethods": &[]ShippingMethod{},
+		"colors":          &[]Color{},
+		"drivers":         &[]Driver{},
+		"bankAccounts":    &[]BankAccount{},
+		"phoneCarriers":   &[]PhoneCarrier{},
+		"inventory":       &[]Inventory{},
+		"stockTransfers":  &[]StockTransfer{},
+		"returns":         &[]ReturnItem{},
+		"roles":           &[]Role{},
+	}
+
+	wg.Add(len(tables))
+	for k, v := range tables {
+		go fetch(k, v)
+	}
+
+	// Fetch settings separately as it needs processing
+	wg.Add(1)
+	go func() {
+		defer wg.Done()
+		var settings []Setting
+		if err := DB.Find(&settings).Error; err == nil {
+			settingsObj := make(map[string]interface{})
+			for _, s := range settings {
+				settingsObj[s.ConfigKey] = s.ConfigValue
+				if s.ConfigKey == "UploadFolderID" {
+					uploadFolderID = s.ConfigValue
+				}
+			}
+			mu.Lock()
+			result["settings"] = settingsObj
+			mu.Unlock()
+		}
+	}()
+
+	wg.Wait()
 	c.JSON(http.StatusOK, gin.H{"status": "success", "data": result})
 }
 func handleGetRevenueSummary(c *gin.Context) {
@@ -1486,12 +1534,21 @@ func handleGetAllOrders(c *gin.Context) {
 	monthParam := c.Query("month")
 	pageParam := c.Query("page")
 	limitParam := c.Query("limit")
+	daysParam := c.Query("days")
 
 	var orders []Order
 	query := DB.Order("timestamp desc")
 
 	if monthParam != "" {
 		query = query.Where("timestamp LIKE ?", monthParam+"%")
+	}
+
+	if daysParam != "" {
+		days, _ := strconv.Atoi(daysParam)
+		if days > 0 {
+			cutoff := time.Now().AddDate(0, 0, -days).Format("2006-01-02")
+			query = query.Where("timestamp >= ?", cutoff)
+		}
 	}
 
 	if pageParam != "" && limitParam != "" {
@@ -1512,6 +1569,13 @@ func handleGetAllOrders(c *gin.Context) {
 	countQuery := DB.Model(&Order{})
 	if monthParam != "" {
 		countQuery = countQuery.Where("timestamp LIKE ?", monthParam+"%")
+	}
+	if daysParam != "" {
+		days, _ := strconv.Atoi(daysParam)
+		if days > 0 {
+			cutoff := time.Now().AddDate(0, 0, -days).Format("2006-01-02")
+			countQuery = countQuery.Where("timestamp >= ?", cutoff)
+		}
 	}
 	countQuery.Count(&total)
 
@@ -1842,6 +1906,51 @@ func handleAdminAddRow(c *gin.Context) {
 		return
 	}
 
+	var tableName string
+	switch req.SheetName {
+	case "Users":
+		tableName = "users"
+	case "Stores":
+		tableName = "stores"
+	case "Settings":
+		tableName = "settings"
+	case "TeamsPages":
+		tableName = "team_pages"
+	case "Products":
+		tableName = "products"
+	case "Locations":
+		tableName = "locations"
+	case "ShippingMethods":
+		tableName = "shipping_methods"
+	case "Colors":
+		tableName = "colors"
+	case "Drivers":
+		tableName = "drivers"
+	case "BankAccounts":
+		tableName = "bank_accounts"
+	case "PhoneCarriers":
+		tableName = "phone_carriers"
+	case "Inventory":
+		tableName = "inventories"
+	case "Roles":
+		tableName = "roles"
+	case "RolePermissions":
+		tableName = "role_permissions"
+	default:
+		c.Error(fmt.Errorf("unknown sheet"))
+		return
+	}
+
+	mappedData := make(map[string]interface{})
+	for k, v := range req.NewData {
+		dbCol := mapToDBColumn(k)
+		mappedData[dbCol] = v
+	}
+
+	if err := DB.Table(tableName).Create(mappedData).Error; err != nil {
+		log.Printf("⚠️ PostgreSQL Create failed: %v", err)
+	}
+
 	eventBytes, _ := json.Marshal(map[string]interface{}{
 		"type":      "add_row",
 		"sheetName": req.SheetName,
@@ -1871,6 +1980,54 @@ func handleAdminDeleteRow(c *gin.Context) {
 	if err := c.ShouldBindJSON(&req); err != nil {
 		c.Error(err)
 		return
+	}
+
+	var tableName string
+	switch req.SheetName {
+	case "Users":
+		tableName = "users"
+	case "Stores":
+		tableName = "stores"
+	case "Settings":
+		tableName = "settings"
+	case "TeamsPages":
+		tableName = "team_pages"
+	case "Products":
+		tableName = "products"
+	case "Locations":
+		tableName = "locations"
+	case "ShippingMethods":
+		tableName = "shipping_methods"
+	case "Colors":
+		tableName = "colors"
+	case "Drivers":
+		tableName = "drivers"
+	case "BankAccounts":
+		tableName = "bank_accounts"
+	case "PhoneCarriers":
+		tableName = "phone_carriers"
+	case "Inventory":
+		tableName = "inventories"
+	case "Roles":
+		tableName = "roles"
+	case "RolePermissions":
+		tableName = "role_permissions"
+	default:
+		c.Error(fmt.Errorf("unknown sheet"))
+		return
+	}
+
+	pkCol := ""
+	pkVal := ""
+	for k, v := range req.PrimaryKey {
+		pkCol = mapToDBColumn(k)
+		pkVal = v
+	}
+
+	if pkCol != "" {
+		if err := DB.Table(tableName).Where(pkCol+" = ?", pkVal).Delete(nil).Error; err != nil {
+			log.Printf("⚠️ PostgreSQL Delete failed: %v", err)
+		}
 	}
 
 	eventBytes, _ := json.Marshal(map[string]interface{}{
@@ -2287,6 +2444,7 @@ func main() {
 	startScheduler()
 
 	r := gin.Default()
+	r.Use(GzipMiddleware())
 	r.Use(ErrorHandlingMiddleware())
 	r.MaxMultipartMemory = 100 << 20 // 100MB
 

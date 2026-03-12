@@ -16,6 +16,8 @@ import TelegramTemplateManager from '../components/admin/settings/TelegramTempla
 import DatabaseManagement from '../components/admin/settings/DatabaseManagement';
 import PermissionManagement from '../components/admin/settings/PermissionManagement';
 
+import { translations } from '../translations';
+
 interface SettingsDashboardProps {
     onBack: () => void;
     initialSection?: string;
@@ -23,15 +25,23 @@ interface SettingsDashboardProps {
 
 const SettingsDashboard: React.FC<SettingsDashboardProps> = ({ onBack, initialSection }) => {
     const { appData, refreshData, logout, setMobilePageTitle, language } = useContext(AppContext);
+    const t = translations[language];
     const [desktopSection, setDesktopSection] = useState<string>(initialSection || 'users');
     const [mobileSection, setMobileSection] = useState<string | null>(initialSection || null);
+    const [searchQuery, setSearchQuery] = useState('');
     const [modal, setModal] = useState<{ isOpen: boolean, sectionId: string, item: any | null }>({ isOpen: false, sectionId: '', item: null });
     const [localUsers, setLocalUsers] = useState<any[]>([]);
+    const [localRoles, setLocalRoles] = useState<any[]>([]);
     const [isPdfOpen, setIsPdfOpen] = useState(false);
     
     // System Update State
     const [isUpdateModalOpen, setIsUpdateModalOpen] = useState(false);
     const [isUpdatingSystem, setIsUpdatingSystem] = useState(false);
+    
+    // Reset search when section changes
+    useEffect(() => {
+        setSearchQuery('');
+    }, [desktopSection, mobileSection]);
 
     const activeId = (window.innerWidth < 768) ? mobileSection : desktopSection;
     const activeSection = configSections.find(s => s.id === activeId);
@@ -55,16 +65,56 @@ const SettingsDashboard: React.FC<SettingsDashboardProps> = ({ onBack, initialSe
             };
             fetchUsers();
         }
+        if (activeId === 'roles') {
+            const fetchRoles = async () => {
+                const appRoles = getArrayCaseInsensitive(appData, 'roles');
+                if (appRoles.length === 0) {
+                    const res = await fetch(`${WEB_APP_URL}/api/roles`);
+                    const json = await res.json();
+                    if (json.status === 'success') setLocalRoles(json.data || []);
+                }
+            };
+            fetchRoles();
+        }
     }, [activeId, appData]);
 
     const dataList = useMemo(() => {
         if (!activeSection) return [];
+        let list: any[] = [];
+        
         if (activeSection.id === 'users') {
             const au = getArrayCaseInsensitive(appData, 'users');
-            return au.length > 0 ? au : localUsers;
+            list = au.length > 0 ? au : localUsers;
+        } else if (activeSection.id === 'roles') {
+            const ar = getArrayCaseInsensitive(appData, 'roles');
+            list = ar.length > 0 ? ar : localRoles;
+        } else {
+            list = getArrayCaseInsensitive(appData, activeSection.dataKey);
         }
-        return getArrayCaseInsensitive(appData, activeSection.dataKey);
-    }, [activeSection, appData, localUsers]);
+
+        if (searchQuery.trim()) {
+            const q = searchQuery.toLowerCase();
+            return list.filter(item => {
+                // Search in the display field
+                const displayVal = String(getValueCaseInsensitive(item, activeSection.displayField) || '').toLowerCase();
+                if (displayVal.includes(q)) return true;
+
+                // Also search in primary key if different
+                const pkVal = String(getValueCaseInsensitive(item, activeSection.primaryKeyField) || '').toLowerCase();
+                if (pkVal.includes(q)) return true;
+
+                // Specific case for products (Barcode)
+                if (activeSection.id === 'products') {
+                    const barcode = String(getValueCaseInsensitive(item, 'Barcode') || '').toLowerCase();
+                    if (barcode.includes(q)) return true;
+                }
+
+                return false;
+            });
+        }
+
+        return list;
+    }, [activeSection, appData, localUsers, localRoles, searchQuery]);
 
     const handleDelete = async (section: ConfigSection, item: any) => {
         if (!window.confirm(`តើអ្នកប្រាកដទេថាចង់លុប "${getValueCaseInsensitive(item, section.displayField)}"?`)) return;
@@ -136,9 +186,9 @@ const SettingsDashboard: React.FC<SettingsDashboardProps> = ({ onBack, initialSe
 
     // Desktop/Tablet Sidebar + Detail View
     return (
-        <div className="w-full max-w-[100rem] mx-auto p-4 lg:p-6 animate-fade-in">
+        <div className="w-full max-w-[100rem] mx-auto h-full flex flex-col p-4 lg:p-6 animate-fade-in overflow-hidden">
             {/* Header */}
-            <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-8 gap-4">
+            <div className="flex-shrink-0 flex flex-col sm:flex-row justify-between items-start sm:items-center mb-8 gap-4">
                 <div className="flex items-center gap-4">
                     <button onClick={() => { if(window.innerWidth < 768) setMobileSection(null); else onBack(); }} className="md:hidden p-2 bg-gray-800 text-white rounded-xl border border-gray-700"><svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M15 19l-7-7 7-7" /></svg></button>
                     <div>
@@ -150,6 +200,33 @@ const SettingsDashboard: React.FC<SettingsDashboardProps> = ({ onBack, initialSe
                     </div>
                 </div>
                 <div className="flex gap-2 w-full sm:w-auto">
+                    {/* Search Input (Standardized Design) */}
+                    {activeId !== 'telegramTemplates' && activeId !== 'permissions' && activeId !== 'database' && (
+                        <div className="relative flex-grow sm:flex-grow-0 sm:min-w-[240px] lg:min-w-[320px] group">
+                            <div className="absolute inset-0 bg-blue-600/5 rounded-2xl blur-md opacity-0 group-focus-within:opacity-100 transition-opacity pointer-events-none"></div>
+                            <div className="relative flex items-center">
+                                <div className="absolute left-4 text-gray-500 group-focus-within:text-blue-500 transition-colors">
+                                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={3}><path d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" /></svg>
+                                </div>
+                                <input 
+                                    type="text" 
+                                    placeholder={`Search ${activeSection?.title}...`}
+                                    value={searchQuery}
+                                    onChange={(e) => setSearchQuery(e.target.value)}
+                                    className="w-full !py-3 !pl-11 !pr-10 bg-gray-900/40 backdrop-blur-xl border border-white/5 rounded-2xl text-[13px] font-bold text-white placeholder:text-gray-600 focus:border-blue-500/50 focus:bg-gray-900/60 transition-all outline-none shadow-lg ring-0"
+                                />
+                                {searchQuery && (
+                                    <button 
+                                        onClick={() => setSearchQuery('')} 
+                                        className="absolute right-3 w-7 h-7 bg-white/5 hover:bg-white/10 rounded-lg flex items-center justify-center text-gray-500 hover:text-white transition-all active:scale-90"
+                                    >
+                                        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={3}><path d="M6 18L18 6M6 6l12 12" /></svg>
+                                    </button>
+                                )}
+                            </div>
+                        </div>
+                    )}
+
                     {/* Update Version Button */}
                     <button 
                         onClick={() => setIsUpdateModalOpen(true)} 
@@ -162,15 +239,15 @@ const SettingsDashboard: React.FC<SettingsDashboardProps> = ({ onBack, initialSe
 
                     {activeId === 'pages' && <button onClick={() => setIsPdfOpen(true)} className="flex-1 sm:flex-none btn btn-secondary px-6">PDF Export</button>}
                     {activeId !== 'telegramTemplates' && activeId !== 'permissions' && activeId !== 'database' && (
-                        <button onClick={() => setModal({ isOpen: true, sectionId: activeId, item: null })} className="flex-1 sm:flex-none btn btn-primary px-10 shadow-lg shadow-blue-600/20 font-black">+ បន្ថែមថ្មី</button>
+                        <button onClick={() => setModal({ isOpen: true, sectionId: activeId, item: null })} className="flex-1 sm:flex-none btn btn-primary px-10 shadow-lg shadow-blue-600/20 font-black">+ {t.add_new}</button>
                     )}
                     <button onClick={onBack} className="hidden md:flex btn btn-secondary px-6">ត្រឡប់</button>
                 </div>
             </div>
 
-            <div className="flex flex-col md:flex-row gap-6">
+            <div className="flex-1 flex flex-col md:flex-row gap-6 overflow-hidden">
                 {/* Desktop Sidebar */}
-                <aside className="hidden md:flex flex-col gap-2 w-72 flex-shrink-0">
+                <aside className="hidden md:flex flex-col gap-2 w-72 flex-shrink-0 overflow-y-auto no-scrollbar pb-20">
                     {configSections.map(s => (
                         <button key={s.id} onClick={() => setDesktopSection(s.id)} className={`flex items-center gap-4 p-4 rounded-2xl transition-all ${desktopSection === s.id ? 'bg-blue-600 text-white shadow-xl shadow-blue-600/20' : 'text-gray-400 hover:bg-gray-800 hover:text-gray-200'}`}>
                             <span className="text-xl">{s.icon}</span>
@@ -180,22 +257,22 @@ const SettingsDashboard: React.FC<SettingsDashboardProps> = ({ onBack, initialSe
                 </aside>
 
                 {/* Content Area */}
-                <main className="flex-grow min-w-0">
+                <main className="flex-grow min-w-0 h-full overflow-hidden flex flex-col">
                     {activeId === 'telegramTemplates' ? (
-                        <div className="bg-gray-800/30 border border-gray-700/50 rounded-[3rem] p-8 shadow-2xl backdrop-blur-md">
+                        <div className="bg-gray-800/30 border border-gray-700/50 rounded-[3rem] p-8 shadow-2xl backdrop-blur-md overflow-y-auto no-scrollbar flex-grow">
                             <TelegramTemplateManager language={language} />
                         </div>
                     ) : activeId === 'database' ? (
-                        <DatabaseManagement />
+                        <div className="flex-grow overflow-y-auto no-scrollbar"><DatabaseManagement /></div>
                     ) : activeId === 'permissions' ? (
-                        <PermissionManagement />
+                        <div className="flex-grow overflow-y-auto no-scrollbar"><PermissionManagement /></div>
                     ) : (
-                        <div className="bg-gray-800/30 border border-gray-700/50 rounded-3xl overflow-hidden shadow-2xl">
+                        <div className="bg-gray-800/30 border border-gray-700/50 rounded-3xl overflow-hidden shadow-2xl flex flex-col flex-grow">
                             {/* Desktop Table View */}
-                            <div className="hidden md:block overflow-x-auto custom-scrollbar">
+                            <div className="hidden md:block overflow-y-auto no-scrollbar flex-grow">
                                 <table className="admin-table w-full">
                                     <thead>
-                                        <tr className="bg-gray-900/50 border-b border-gray-700">
+                                        <tr className="bg-gray-900/50 border-b border-gray-700 sticky top-0 z-10 backdrop-blur-md">
                                             <th className="w-12 text-center">#</th>
                                             {activeSection?.fields.map(f => <th key={f.name}>{f.label}</th>)}
                                             <th className="w-32 text-center uppercase tracking-widest text-[10px]">Action</th>
@@ -234,7 +311,7 @@ const SettingsDashboard: React.FC<SettingsDashboardProps> = ({ onBack, initialSe
                             </div>
 
                             {/* Mobile List View */}
-                            <div className="md:hidden divide-y divide-gray-700/50">
+                            <div className="md:hidden divide-y divide-gray-700/50 overflow-y-auto no-scrollbar flex-grow pb-20">
                                 {dataList.length > 0 ? dataList.map((item: any, idx: number) => {
                                     const title = getValueCaseInsensitive(item, activeSection?.displayField || '');
                                     const imgField = activeSection?.fields.find(f => f.type === 'image_url');
@@ -263,16 +340,6 @@ const SettingsDashboard: React.FC<SettingsDashboardProps> = ({ onBack, initialSe
                     )}
                 </main>
             </div>
-
-            {/* Floating Action Button (Mobile Only) */}
-            {activeId !== 'telegramTemplates' && (
-                <button 
-                    onClick={() => setModal({ isOpen: true, sectionId: activeId, item: null })}
-                    className="md:hidden fixed bottom-24 right-6 w-16 h-16 bg-blue-600 text-white rounded-full shadow-2xl flex items-center justify-center active:scale-90 transition-transform z-40 border-4 border-gray-900"
-                >
-                    <svg className="w-8 h-8" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M12 4v16m8-8H4" /></svg>
-                </button>
-            )}
 
             {modal.isOpen && activeSection && (
                 <ConfigEditModal 

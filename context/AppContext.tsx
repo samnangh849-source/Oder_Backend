@@ -1,6 +1,6 @@
 
 import React, { createContext } from 'react';
-import { User, AppData, MasterProduct } from '../types';
+import { User, AppData, MasterProduct, ParsedOrder } from '../types';
 
 export type Language = 'en' | 'km';
 
@@ -18,7 +18,9 @@ export interface AdvancedSettings {
 export interface AppContextType {
     currentUser: User | null;
     appData: AppData;
-    login: (user: User) => void;
+    orders: ParsedOrder[];
+    isOrdersLoading: boolean;
+    login: (user: User, token: string) => Promise<void>;
     logout: () => void;
     refreshData: () => Promise<void>;
     refreshTimestamp: number;
@@ -30,9 +32,10 @@ export interface AppContextType {
     unreadCount: number;
     updateProductInData: (productName: string, newData: Partial<MasterProduct>) => void;
     apiKey: string;
-    setAppState: (newState: 'login' | 'role_selection' | 'admin_dashboard' | 'user_journey') => void;
+    setAppState: (newState: 'login' | 'role_selection' | 'admin_dashboard' | 'user_journey' | 'confirm_delivery' | 'fulfillment') => void;
     setOriginalAdminUser: React.Dispatch<React.SetStateAction<User | null>>;
     fetchData: (force?: boolean) => Promise<void>;
+    fetchOrders: (force?: boolean) => Promise<void>;
     setCurrentUser: React.Dispatch<React.SetStateAction<User | null>>;
     setChatVisibility: (visible: boolean) => void;
     hasPermission: (feature: string) => boolean;

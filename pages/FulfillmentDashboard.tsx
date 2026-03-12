@@ -389,37 +389,37 @@ const FulfillmentDashboard: React.FC<{ orders: ParsedOrder[] }> = ({ orders }) =
     ];
 
     return (
-        <div className="space-y-6 pb-24 animate-fade-in relative">
-            <div className="bg-[#0f172a]/60 backdrop-blur-3xl border border-white/5 rounded-[2.5rem] p-6 lg:p-8 flex flex-col lg:flex-row justify-between items-center gap-6 shadow-3xl">
-                <div className="flex items-center gap-5">
-                    <div className="w-14 h-14 bg-indigo-600 rounded-[1.2rem] flex items-center justify-center text-white shadow-xl shadow-indigo-900/40"><svg className="w-7 h-7" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2.5}><path strokeLinecap="round" strokeLinejoin="round" d="M9 20l-5.447-2.724A1 1 0 013 16.382V5.618a1 1 0 011.447-.894L9 7m0 13l6-3m-6 3V7m6 10l4.553 2.276A1 1 0 0021 18.382V7.618a1 1 0 00-.553-.894L15 4m0 13V4m0 0L9 7" /></svg></div>
-                    <div><h1 className="text-2xl font-black text-white uppercase tracking-tight flex items-center gap-3"><span>កញ្ចប់ឥវ៉ាន់</span><span className="text-xs bg-indigo-500/20 text-indigo-400 px-3 py-1 rounded-lg border border-indigo-500/30">{selectedStore}</span></h1><p className="text-[10px] font-black text-gray-500 uppercase tracking-widest mt-1">Fulfillment Tracking</p></div>
+        <div className="space-y-3 pb-24 animate-fade-in relative">
+            <div className="bg-[#0f172a]/60 backdrop-blur-3xl border border-white/5 rounded-2xl p-3 lg:p-4 flex flex-col lg:flex-row justify-between items-center gap-3 shadow-xl">
+                <div className="flex items-center gap-3">
+                    <div className="w-10 h-10 bg-indigo-600 rounded-xl flex items-center justify-center text-white shadow-lg shadow-indigo-900/40"><svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2.5}><path strokeLinecap="round" strokeLinejoin="round" d="M9 20l-5.447-2.724A1 1 0 013 16.382V5.618a1 1 0 011.447-.894L9 7m0 13l6-3m-6 3V7m6 10l4.553 2.276A1 1 0 0021 18.382V7.618a1 1 0 00-.553-.894L15 4m0 13V4m0 0L9 7" /></svg></div>
+                    <div><h1 className="text-lg font-black text-white uppercase tracking-tight flex items-center gap-2"><span>កញ្ចប់ឥវ៉ាន់</span><span className="text-[10px] bg-indigo-500/20 text-indigo-400 px-2 py-0.5 rounded-md border border-indigo-500/30">{selectedStore}</span></h1><p className="text-[8px] font-black text-gray-500 uppercase tracking-widest">Fulfillment Tracking</p></div>
                 </div>
-                <div className="flex flex-col sm:flex-row items-center gap-4 w-full lg:w-auto">
-                    <button onClick={() => setSelectedStore('')} className="w-full sm:w-auto px-6 py-3 bg-gray-800/50 hover:bg-gray-800 text-gray-400 hover:text-white rounded-xl border border-white/5 active:scale-95 transition-all text-xs font-black uppercase tracking-widest flex items-center justify-center gap-2"><svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M8 7h12m0 0l-4-4m4 4l-4 4m0 6H4m0 0l4 4m-4-4l4-4" /></svg>ប្ដូរឃ្លាំង</button>
-                    <button onClick={refreshData} className="w-full sm:w-auto bg-gray-800 hover:bg-gray-700 text-white p-3 rounded-xl border border-white/5 active:scale-90 transition-all shadow-xl group flex justify-center"><svg className="w-5 h-5 group-hover:rotate-180 transition-transform duration-500" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2.5}><path strokeLinecap="round" strokeLinejoin="round" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" /></svg></button>
+                <div className="flex items-center gap-2 w-full lg:w-auto">
+                    <button onClick={() => setSelectedStore('')} className="flex-1 lg:flex-none px-4 py-2 bg-gray-800/50 hover:bg-gray-800 text-gray-400 hover:text-white rounded-lg border border-white/5 active:scale-95 transition-all text-[10px] font-black uppercase tracking-widest flex items-center justify-center gap-1.5"><svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M8 7h12m0 0l-4-4m4 4l-4 4m0 6H4m0 0l4 4m-4-4l4-4" /></svg>ប្ដូរឃ្លាំង</button>
+                    <button onClick={refreshData} className="bg-gray-800 hover:bg-gray-700 text-white p-2 rounded-lg border border-white/5 active:scale-90 transition-all shadow-lg group flex justify-center"><svg className="w-4 h-4 group-hover:rotate-180 transition-transform duration-500" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2.5}><path strokeLinecap="round" strokeLinejoin="round" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" /></svg></button>
                 </div>
             </div>
 
-            <div className="bg-gray-800/20 backdrop-blur-3xl border border-white/5 rounded-[2.5rem] p-5 sm:p-6 mb-8 shadow-2xl relative z-20 group transition-all hover:bg-gray-800/30 max-w-6xl mx-auto">
-                <div className="flex flex-col lg:flex-row justify-between items-center gap-4">
-                    <div className="relative w-full lg:max-w-2xl group">
-                        <input type="text" placeholder="ស្វែងរក ID, ឈ្មោះ, ឬលេខទូរស័ព្ទ..." value={searchTerm} onChange={e => setSearchTerm(e.target.value)} className="form-input !pl-16 !py-5 bg-black/40 border-gray-800 rounded-[1.8rem] text-[15px] font-bold text-white placeholder:text-gray-700 focus:border-blue-500/50 focus:bg-black/60 transition-all shadow-inner" />
-                        <div className="absolute left-6 top-1/2 -translate-y-1/2 flex items-center gap-4 text-gray-700 group-focus-within:text-blue-500 transition-colors"><svg className="h-6 w-6" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={3}><path d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" /></svg><div className="h-6 w-px bg-gray-800"></div></div>
+            <div className="bg-gray-800/20 backdrop-blur-3xl border border-white/5 rounded-2xl p-3 mb-4 shadow-xl relative z-20 group transition-all hover:bg-gray-800/30 max-w-6xl mx-auto">
+                <div className="flex flex-col lg:flex-row justify-between items-center gap-2">
+                    <div className="relative w-full lg:max-w-xl group">
+                        <input type="text" placeholder="ស្វែងរក..." value={searchTerm} onChange={e => setSearchTerm(e.target.value)} className="form-input !pl-12 !py-2.5 bg-black/40 border-gray-800 rounded-xl text-[13px] font-bold text-white placeholder:text-gray-700 focus:border-blue-500/50 focus:bg-black/60 transition-all shadow-inner" />
+                        <div className="absolute left-4 top-1/2 -translate-y-1/2 flex items-center gap-3 text-gray-700 group-focus-within:text-blue-500 transition-colors"><svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={3}><path d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" /></svg><div className="h-4 w-px bg-gray-800"></div></div>
                     </div>
-                    <button onClick={() => setIsFilterModalOpen(true)} className="flex items-center justify-center gap-3 px-8 py-5 bg-gray-900 border border-gray-800 text-gray-400 hover:text-white rounded-2xl text-[12px] font-black uppercase tracking-widest transition-all active:scale-95"><svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2.5}><path d="M3 4a1 1 0 011-1h16a1 1 0 011 1v2.586a1 1 0 01-.293.707l-6.414 6.414a1 1 0 00-.293.707V17l-4 4v-6.586a1 1 0 00-.293-.707L3.293 7.293A1 1 0 013 6.586V4z" /></svg>Filters</button>
+                    <button onClick={() => setIsFilterModalOpen(true)} className="w-full lg:w-auto flex items-center justify-center gap-2 px-6 py-2.5 bg-gray-900 border border-gray-800 text-gray-400 hover:text-white rounded-xl text-[10px] font-black uppercase tracking-widest transition-all active:scale-95"><svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2.5}><path d="M3 4a1 1 0 011-1h16a1 1 0 011 1v2.586a1 1 0 01-.293.707l-6.414 6.414a1 1 0 00-.293.707V17l-4 4v-6.586a1 1 0 00-.293-.707L3.293 7.293A1 1 0 013 6.586V4z" /></svg>Filters</button>
                 </div>
             </div>
 
-            <div className="sticky top-[100px] z-[30] flex justify-center px-2 py-4 bg-gray-950/50 backdrop-blur-md -mx-4 lg:-mx-8">
-                <div className="flex bg-black/40 p-1.5 rounded-[2rem] border border-white/5 overflow-x-auto no-scrollbar max-w-full shadow-inner gap-1">
+            <div className="sticky top-[0px] z-[30] flex justify-center px-2 py-2 bg-gray-950/50 backdrop-blur-md -mx-4 lg:-mx-8">
+                <div className="flex bg-black/40 p-1 rounded-xl border border-white/5 overflow-x-auto no-scrollbar max-w-full shadow-inner gap-1">
                     {statusTabs.map(tab => {
                         const isActive = activeTab === tab.id;
                         const count = storeOrders.filter(o => (o.FulfillmentStatus || 'Pending') === tab.id).length;
                         return (
-                            <button key={tab.id} onClick={() => setActiveTab(tab.id)} className={`px-4 py-2.5 rounded-[1.5rem] text-[10px] font-black uppercase tracking-widest transition-all flex items-center gap-2 whitespace-nowrap relative ${isActive ? `bg-white/10 text-white shadow-lg` : 'text-gray-500 hover:text-gray-300'}`}>
-                                <span>{tab.icon}</span><span className="hidden sm:inline">{tab.label}</span><span className={`px-2 py-0.5 rounded-lg text-[9px] font-mono ${isActive ? 'bg-indigo-600 text-white' : 'bg-gray-900 text-gray-600'}`}>{count}</span>
-                                {isActive && <div className="absolute -bottom-0.5 left-1/2 -translate-x-1/2 w-10 h-1 bg-indigo-500 rounded-full animate-pulse"></div>}
+                            <button key={tab.id} onClick={() => setActiveTab(tab.id)} className={`px-3 py-1.5 rounded-lg text-[9px] font-black uppercase tracking-widest transition-all flex items-center gap-1.5 whitespace-nowrap relative ${isActive ? `bg-white/10 text-white shadow-lg` : 'text-gray-500 hover:text-gray-300'}`}>
+                                <span className="text-xs">{tab.icon}</span><span className="hidden sm:inline">{tab.label}</span><span className={`px-1.5 py-0.5 rounded-md text-[8px] font-mono ${isActive ? 'bg-indigo-600 text-white' : 'bg-gray-900 text-gray-600'}`}>{count}</span>
+                                {isActive && <div className="absolute -bottom-0.5 left-1/2 -translate-x-1/2 w-6 h-0.5 bg-indigo-500 rounded-full animate-pulse"></div>}
                             </button>
                         );
                     })}

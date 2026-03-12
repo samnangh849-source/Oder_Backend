@@ -19,12 +19,13 @@ interface OrdersListProps {
     onToggleSelect?: (id: string) => void;
     onToggleSelectAll?: (ids: string[]) => void;
     showBorders?: boolean;
+    groupBy?: string;
 }
 
 const OrdersList: React.FC<OrdersListProps> = ({ 
     orders, onEdit, onView, showActions, visibleColumns,
     selectedIds = new Set(), onToggleSelect, onToggleSelectAll,
-    showBorders = false
+    showBorders = false, groupBy = 'none'
 }) => {
     const { refreshData } = useContext(AppContext);
     const [copiedId, setCopiedId] = useState<string | null>(null);
@@ -186,7 +187,8 @@ ${dateStr}
         copiedTemplateId,
         toggleOrderVerified,
         updatingIds,
-        showBorders
+        showBorders,
+        groupBy
     };
 
     return (
@@ -212,8 +214,8 @@ ${dateStr}
                 )}
             </div>
 
-            {/* Aesthetic Spacer */}
-            <div className="h-64 md:h-[400px] w-full pointer-events-none opacity-0 shrink-0" aria-hidden="true"></div>
+            {/* Aesthetic Spacer (Reduced) */}
+            <div className="h-20 w-full pointer-events-none opacity-0 shrink-0" aria-hidden="true"></div>
         </div>
     );
 };

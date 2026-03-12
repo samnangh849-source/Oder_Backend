@@ -30,7 +30,7 @@ type ReportType = 'overview' | 'performance' | 'profitability' | 'forecasting' |
 
 const AdminDashboard: React.FC = () => {
     const { 
-        appData, currentUser, refreshTimestamp, 
+        appData, currentUser, refreshTimestamp, orders, isOrdersLoading,
         isSidebarCollapsed
     } = useContext(AppContext);
     
@@ -50,7 +50,6 @@ const AdminDashboard: React.FC = () => {
 
     const activeProject = useMemo(() => incentiveProjects.find(p => p.id === activeIncentiveProjectId), [incentiveProjects, activeIncentiveProjectId]);
     
-    const [loading, setLoading] = useState(false);
     const [isReportSubMenuOpen, setIsReportSubMenuOpen] = useState(false);
     const [isProfileSubMenuOpen, setIsProfileSubMenuOpen] = useState(false);
     const [editProfileModalOpen, setEditProfileModalOpen] = useState(false);
@@ -65,9 +64,6 @@ const AdminDashboard: React.FC = () => {
         }
         return 'desktop';
     });
-    
-    const [parsedOrders, setParsedOrders] = useState<ParsedOrder[]>([]);
-    const hasFullHistoryRef = useRef(false); // Track if full data is loaded
     
     // New Date Filter State Object (Local)
     const [dateFilter, setDateFilter] = useState({
@@ -112,60 +108,12 @@ const AdminDashboard: React.FC = () => {
         return () => window.removeEventListener('resize', handleResize);
     }, []);
 
-    const fetchOrders = async (forceFull = false) => {
-        if (forceFull && hasFullHistoryRef.current) return;
-        
-        if (parsedOrders.length === 0 || forceFull) setLoading(true);
-        try {
-            // Initial fetch uses 30-day hint, forceFull fetches everything
-            const url = forceFull ? `${WEB_APP_URL}/api/admin/all-orders` : `${WEB_APP_URL}/api/admin/all-orders?days=30`;
-            const response = await fetch(url);
-            if (response.ok) {
-                const result = await response.json();
-                if (result.status === 'success') {
-                    // Filter out Opening Balance and parse immediately
-                    const rawData = Array.isArray(result.data) ? result.data : [];
-                    const parsed = rawData
-                        .filter((o: any) => o !== null && o['Order ID'] !== 'Opening_Balance' && o['Order ID'] !== 'Opening Balance')
-                        .map(o => {
-                            let products = [];
-                            try { if (o['Products (JSON)']) products = JSON.parse(o['Products (JSON)']); } catch(e) {}
-                            
-                            // Normalize product fields (image vs ImageURL)
-                            const normalizedProducts = Array.isArray(products) ? products.map((p: any) => {
-                                const img = [p.image, p.ImageURL, p.Image].find(val => val && val !== 'N/A' && val !== 'null') || '';
-                                return { ...p, image: img };
-                            }) : [];
-
-                            return { 
-                                ...o, 
-                                Products: normalizedProducts, 
-                                IsVerified: String(o.IsVerified).toUpperCase() === 'TRUE' || o.IsVerified === 'A',
-                                FulfillmentStatus: (o['Fulfillment Status'] || o.FulfillmentStatus || 'Pending') as any
-                            };
-                        });
-                    setParsedOrders(parsed);
-                    if (forceFull) hasFullHistoryRef.current = true;
-                }
-            }
-        } catch (e) { console.error(e); } finally { setLoading(false); }
-    };
-
-    useEffect(() => { fetchOrders(); }, [refreshTimestamp]);
-
     // Helper to filter data based on current state
     const getFilteredData = () => {
         const now = new Date();
         const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
         
-        // Trigger full fetch if range requires old data
-        const needsFullHistory = ['this_year', 'last_year', 'all'].includes(dateFilter.preset);
-        if (needsFullHistory && !hasFullHistoryRef.current) {
-            fetchOrders(true);
-            return [];
-        }
-
-        return parsedOrders.filter(order => {
+        return orders.filter(order => {
             if (!order.Timestamp) return false;
             const d = new Date(order.Timestamp);
             
@@ -193,7 +141,7 @@ const AdminDashboard: React.FC = () => {
         });
     };
 
-    const filteredData = useMemo(() => getFilteredData(), [parsedOrders, dateFilter]);
+    const filteredData = useMemo(() => getFilteredData(), [orders, dateFilter]);
 
     const teamRevenueStats = useMemo(() => {
         const stats: Record<string, { name: string, revenue: number, orders: number }> = {};
@@ -330,14 +278,14 @@ const AdminDashboard: React.FC = () => {
     };
 
     const renderContent = () => {
-        if (loading && parsedOrders.length === 0) return <div className="flex h-96 items-center justify-center"><Spinner size="lg" /></div>;
+        if (isOrdersLoading && orders.length === 0) return <div className="flex h-96 items-center justify-center"><Spinner size="lg" /></div>;
         switch (activeDashboard) {
             case 'admin':
                 if (currentAdminView === 'dashboard') {
                     return (
                         <DashboardOverview 
                             currentUser={currentUser}
-                            parsedOrders={parsedOrders}
+                            parsedOrders={orders}
                             dateFilter={dateFilter}
                             setDateFilter={setDateFilter}
                             teamRevenueStats={teamRevenueStats}
@@ -351,7 +299,7 @@ const AdminDashboard: React.FC = () => {
                         />
                     );
                 }
-                return <PerformanceTrackingPage orders={parsedOrders} users={appData.users || []} targets={appData.targets || []} />;
+                return <PerformanceTrackingPage orders={orders} users={appData.users || []} targets={appData.targets || []} />;
             case 'orders': 
                 return (
                     <OrdersDashboard 
@@ -384,14 +332,14 @@ const AdminDashboard: React.FC = () => {
                     />
                 );
             case 'settings': return <SettingsDashboard onBack={() => setActiveDashboard('admin')} />;
-            case 'fulfillment': return <FulfillmentDashboard orders={parsedOrders} />;
-            case 'packaging': return <PackagingView orders={parsedOrders} />;
+            case 'fulfillment': return <FulfillmentDashboard orders={orders} />;
+            case 'packaging': return <PackagingView orders={orders} />;
             case 'delivery': return <DriverDeliveryView />;
             case 'inventory': return <InventoryManagement />;
             case 'incentives':
                 if (activeIncentiveProjectId) {
                     if (incentiveViewMode === 'execute') {
-                        return <IncentiveExecutionView projectId={activeIncentiveProjectId} orders={parsedOrders} onBack={() => setActiveIncentiveProjectId('')} />;
+                        return <IncentiveExecutionView projectId={activeIncentiveProjectId} orders={orders} onBack={() => setActiveIncentiveProjectId('')} />;
                     }
                     return <IncentiveProjectDetails projectId={activeIncentiveProjectId} onBack={() => setActiveIncentiveProjectId('')} />;
                 }

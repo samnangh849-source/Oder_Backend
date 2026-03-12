@@ -1,6 +1,7 @@
 
 export const CACHE_KEYS = {
     APP_DATA: 'appDataCache',
+    ALL_ORDERS: 'allOrdersCache',
     SESSION: 'orderAppSession',
     CHAT_HISTORY: 'chatHistoryCache'
 };

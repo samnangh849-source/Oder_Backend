@@ -35,7 +35,7 @@ const Modal: React.FC<ModalProps> = ({ isOpen, onClose, children, maxWidth = 'ma
                 className={`${fullScreen ? 'w-screen h-screen' : `page-card w-full ${maxWidth} rounded-[2.5rem] shadow-[0_30px_100px_rgba(0,0,0,0.8)] border border-white/10`} bg-[#0f172a]/95 transform transition-all duration-300 scale-100 opacity-100 animate-modal-in max-h-[92vh] flex flex-col overflow-hidden my-auto`}
                 onClick={(e) => e.stopPropagation()}
             >
-                <div className="flex-grow overflow-y-auto overscroll-contain custom-scrollbar scroll-smooth">
+                <div className="flex-grow overflow-y-auto overscroll-contain no-scrollbar scroll-smooth">
                     {children}
                 </div>
             </div>

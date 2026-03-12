@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback, Suspense, useMemo, useRef } from 'react';
-import { User, AppData } from './types';
+import { User, AppData, ParsedOrder } from './types';
 import { WEB_APP_URL } from './constants';
 import { useUrlState } from './hooks/useUrlState';
 import { useOrderNotifications } from './hooks/useOrderNotifications';
@@ -55,13 +55,15 @@ const initialAppData: AppData = {
     shippingMethods: [], drivers: [], bankAccounts: [],
     phoneCarriers: [], colors: [], stores: [], settings: [], targets: [],
     inventory: [], stockTransfers: [], returns: [],
-    roles: [], permissions: []
+    roles: [], permissions: [], orders: []
 };
 
 const App: React.FC = () => {
     const [currentUser, setCurrentUser] = useState<User | null>(null);
     const [originalAdminUser, setOriginalAdminUser] = useState<User | null>(null);
     const [appData, setAppData] = useState<AppData>(initialAppData);
+    const [orders, setOrders] = useState<ParsedOrder[]>([]);
+    const [isOrdersLoading, setIsOrdersLoading] = useState(false);
     const [refreshTimestamp, setRefreshTimestamp] = useState<number>(Date.now());
     const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false);
     const [isMobile, setIsMobile] = useState(window.innerWidth < 768);
@@ -147,6 +149,17 @@ const App: React.FC = () => {
         setNotifications(prev => prev.filter(n => n.id !== id));
     };
 
+    // Ref to store token for synchronous access in fetch interceptor
+    const tokenRef = useRef<string | null>(null);
+
+    const logout = useCallback(async () => {
+        setCurrentUser(null);
+        tokenRef.current = null;
+        setAppState('login');
+        await CacheService.remove(CACHE_KEYS.SESSION);
+        // Note: We keep APP_DATA cache to make next login faster
+    }, [setAppState]);
+
     // Sync unreadCount to localStorage whenever it changes
     useEffect(() => {
         localStorage.setItem('chatUnreadCount', unreadCount.toString());
@@ -219,117 +232,66 @@ const App: React.FC = () => {
         }
     }, []);
 
-    // Fetch permissions from separate admin endpoint too if needed, 
-    // but better if static-data includes it for everyone to check locally.
-    const fetchPermissions = useCallback(async () => {
+    const fetchOrders = useCallback(async (force = false) => {
+        // 1. Load from cache first
+        if (!force) {
+            const cachedOrders = await CacheService.get<ParsedOrder[]>(CACHE_KEYS.ALL_ORDERS);
+            if (cachedOrders && Array.isArray(cachedOrders)) {
+                setOrders(cachedOrders);
+                console.log(`Loaded ${cachedOrders.length} orders from cache`);
+            }
+        }
+
+        if (orders.length === 0 || force) setIsOrdersLoading(true);
         try {
-            const response = await fetch(`${WEB_APP_URL}/api/admin/permissions`);
+            // 2. Fetch fresh data (Background)
+            const response = await fetch(`${WEB_APP_URL}/api/admin/all-orders`);
             if (response.ok) {
                 const result = await response.json();
                 if (result.status === 'success') {
-                    setAppData(prev => ({ ...prev, permissions: result.data }));
+                    const rawData = (result.data || []).filter((o: any) => 
+                        o !== null && 
+                        o['Order ID'] !== 'Opening Balance' && 
+                        o['Order ID'] !== 'Opening_Balance'
+                    );
+                    
+                    const parsed: ParsedOrder[] = rawData.map((o: any) => {
+                        let products = [];
+                        try { if (o['Products (JSON)']) products = JSON.parse(o['Products (JSON)']); } catch(e) {}
+                        return { 
+                            ...o, 
+                            Products: products, 
+                            IsVerified: String(o.IsVerified).toUpperCase() === 'TRUE' || o.IsVerified === 'A',
+                            FulfillmentStatus: (o['Fulfillment Status'] || o.FulfillmentStatus || 'Pending') as any
+                        };
+                    });
+                    
+                    setOrders(parsed);
+                    await CacheService.set(CACHE_KEYS.ALL_ORDERS, parsed);
+                    console.log(`App orders updated from network: ${parsed.length} items`);
                 }
             }
-        } catch (err) {
-            console.warn("Failed to fetch permissions", err);
+        } catch (e) {
+            console.warn("Orders Fetch Error:", e);
+        } finally {
+            setIsOrdersLoading(false);
         }
-    }, []);
+    }, [orders.length]);
+
+    const refreshData = useCallback(async () => {
+        await Promise.all([
+            fetchData(true),
+            fetchOrders(true)
+        ]);
+        setRefreshTimestamp(Date.now());
+    }, [fetchData, fetchOrders]);
 
     useEffect(() => {
-        if (currentUser?.IsSystemAdmin) {
-            fetchPermissions();
+        if (currentUser) {
+            // Initial Orders Load (Background)
+            fetchOrders();
         }
-    }, [currentUser, fetchPermissions]);
-
-    const hasPermission = useCallback((feature: string) => {
-        if (!currentUser) return false;
-        // Allow System Admin OR Admin Role OR the 'create_order' feature for everyone
-        if (currentUser.IsSystemAdmin || 
-            (currentUser.Role || '').toLowerCase() === 'admin' ||
-            (feature || '').toLowerCase() === 'create_order') return true;
-
-        const perm = appData.permissions?.find(p => 
-            (p.Role || '').toLowerCase() === (currentUser.Role || '').toLowerCase() && 
-            (p.Feature || '').toLowerCase() === (feature || '').toLowerCase()
-        );
-        return perm ? perm.IsEnabled : false;
-    }, [currentUser, appData.permissions]);
-
-    const updatePermission = async (role: string, feature: string, isEnabled: boolean) => {
-        // 1. Optimistic Update in UI
-        const oldPermissions = appData.permissions ? [...appData.permissions] : [];
-        const lowerRole = (role || '').toLowerCase();
-        const lowerFeature = (feature || '').toLowerCase();
-
-        let found = false;
-        const newPermissions = oldPermissions.map(p => {
-            if ((p.Role || '').toLowerCase() === lowerRole && (p.Feature || '').toLowerCase() === lowerFeature) {
-                found = true;
-                return { ...p, IsEnabled: isEnabled };
-            }
-            return p;
-        });
-        
-        // If the permission object doesn't exist yet, add it
-        if (!found) {
-            newPermissions.push({ Role: role, Feature: feature, IsEnabled: isEnabled });
-        }
-
-        setAppData(prev => {
-            const next = { ...prev, permissions: newPermissions };
-            CacheService.set(CACHE_KEYS.APP_DATA, next); // Update Cache too
-            return next;
-        });
-
-        try {
-            const response = await fetch(`${WEB_APP_URL}/api/admin/permissions/update`, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ Role: role, Feature: feature, IsEnabled: isEnabled })
-            });
-            
-            if (response.ok) {
-                showNotification("បានរក្សាទុកការកំណត់សិទ្ធិ", 'success');
-                // Removed fetchPermissions() call to prevent race condition flipping toggle back
-            } else {
-                throw new Error("Update failed");
-            }
-        } catch (err) {
-            // Rollback on error
-            setAppData(prev => ({ ...prev, permissions: oldPermissions }));
-            showNotification("ការរក្សាទុកសិទ្ធិបរាជ័យ", 'error');
-        }
-    };
-
-    const determineAppState = useCallback((user: User) => {
-        // All users now go through role selection to choose between Sales or Fulfillment
-        // Only System Admins will see the "Admin Dashboard" option inside RoleSelectionPage
-        setAppState('role_selection');
-    }, [setAppState]);
-
-    useEffect(() => {
-        // Use CacheService for Session Management
-        const initSession = async () => {
-            try {
-                const session = await CacheService.get<{ user: User, token: string, timestamp: number }>(CACHE_KEYS.SESSION);
-                
-                if (session && session.user) {
-                    setCurrentUser(session.user);
-                    if (session.token) tokenRef.current = session.token;
-                    fetchData(); // This is async but we don't await it here to avoid blocking
-                    if (appState === 'login') determineAppState(session.user);
-                } else {
-                    // Session expired or doesn't exist
-                    setIsGlobalLoading(false);
-                }
-            } catch (e) {
-                console.warn("Session init error:", e);
-                setIsGlobalLoading(false);
-            }
-        };
-
-        initSession();
-    }, [fetchData]);
+    }, [currentUser, fetchOrders]);
 
     // Global Real-time Data Sync via WebSocket
     useEffect(() => {
@@ -350,7 +312,7 @@ const App: React.FC = () => {
                     const data = JSON.parse(e.data);
                     const action = data.action || data.Action;
                     const type = data.type || data.Type;
-                    
+
                     // 1. Real-time Permission Update
                     if (type === 'update_permission' && data.payload) {
                         const { role, feature, isEnabled } = data.payload;
@@ -361,7 +323,7 @@ const App: React.FC = () => {
                                 (p.Role || '').toLowerCase() === (role || '').toLowerCase() && 
                                 (p.Feature || '').toLowerCase() === (feature || '').toLowerCase()
                             );
-                            
+
                             let nextPerms = [...oldPerms];
                             if (foundIndex >= 0) {
                                 nextPerms[foundIndex] = { ...nextPerms[foundIndex], IsEnabled: isEnabled };
@@ -376,7 +338,7 @@ const App: React.FC = () => {
                     // 2. Real-time Data Sync for everything else
                     if (action === 'data_update' || action === 'DATA_UPDATE' || type === 'data_update') {
                         console.log("Real-time update received, refreshing...");
-                        fetchData(true); // Silent refresh in background
+                        refreshData(); // Sync everything
                     }
                 } catch (err) {}
             };
@@ -391,7 +353,7 @@ const App: React.FC = () => {
             if (ws) ws.close();
             if (reconnectTimer) clearTimeout(reconnectTimer);
         };
-    }, [currentUser?.UserName, fetchData]);
+    }, [currentUser?.UserName, refreshData]);
 
     const login = async (user: User, token: string) => {
         setCurrentUser(user);
@@ -421,16 +383,91 @@ const App: React.FC = () => {
         determineAppState(user);
     };
 
-    const logout = useCallback(async () => {
-        setCurrentUser(null);
-        tokenRef.current = null;
-        setAppState('login');
-        await CacheService.remove(CACHE_KEYS.SESSION);
-        // Note: We keep APP_DATA cache to make next login faster
-    }, [setAppState]);
+    // fetchPermissions is called silently for admins
+    const fetchPermissions = useCallback(async () => {
+        try {
+            const response = await fetch(`${WEB_APP_URL}/api/admin/permissions`);
+            if (response.ok) {
+                const result = await response.json();
+                if (result.status === 'success') {
+                    setAppData(prev => ({ ...prev, permissions: result.data }));
+                }
+            }
+        } catch (err) {
+            console.warn("Failed to fetch permissions", err);
+        }
+    }, []);
 
-    // Ref to store token for synchronous access in fetch interceptor
-    const tokenRef = useRef<string | null>(null);
+    useEffect(() => {
+        if (currentUser?.IsSystemAdmin) {
+            fetchPermissions();
+        }
+    }, [currentUser, fetchPermissions]);
+
+    const hasPermission = useCallback((feature: string) => {
+        if (!currentUser) return false;
+        // Allow System Admin OR Admin Role OR the 'create_order' feature for everyone
+        if (currentUser.IsSystemAdmin || 
+            (currentUser.Role || '').toLowerCase() === 'admin' ||
+            (feature || '').toLowerCase() === 'create_order') return true;
+
+        const perm = appData.permissions?.find(p => 
+            (p.role || '').toLowerCase() === (currentUser.Role || '').toLowerCase() && 
+            (p.feature || '').toLowerCase() === (feature || '').toLowerCase()
+        );
+        return perm ? perm.isEnabled : false;
+    }, [currentUser, appData.permissions]);
+
+    const updatePermission = async (role: string, feature: string, isEnabled: boolean) => {
+        // 1. Optimistic Update in UI
+        const oldPermissions = appData.permissions ? [...appData.permissions] : [];
+        const lowerRole = (role || '').toLowerCase();
+        const lowerFeature = (feature || '').toLowerCase();
+
+        let found = false;
+        const newPermissions = oldPermissions.map(p => {
+            if ((p.role || '').toLowerCase() === lowerRole && (p.feature || '').toLowerCase() === lowerFeature) {
+                found = true;
+                return { ...p, isEnabled: isEnabled };
+            }
+            return p;
+        });
+        
+        // If the permission object doesn't exist yet, add it
+        if (!found) {
+            newPermissions.push({ role: role, feature: feature, isEnabled: isEnabled });
+        }
+
+        setAppData(prev => {
+            const next = { ...prev, permissions: newPermissions };
+            CacheService.set(CACHE_KEYS.APP_DATA, next); // Update Cache too
+            return next;
+        });
+
+        try {
+            const response = await fetch(`${WEB_APP_URL}/api/admin/permissions/update`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ role: role, feature: feature, isEnabled: isEnabled })
+            });
+            
+            if (response.ok) {
+                showNotification("បានរក្សាទុកការកំណត់សិទ្ធិ", 'success');
+            } else {
+                throw new Error("Update failed");
+            }
+        } catch (err) {
+            // Rollback on error
+            setAppData(prev => ({ ...prev, permissions: oldPermissions }));
+            showNotification("ការរក្សាទុកសិទ្ធិបរាជ័យ", 'error');
+        }
+    };
+
+    const determineAppState = useCallback((user: User) => {
+        // All users now go through role selection to choose between Sales or Fulfillment
+        // Only System Admins will see the "Admin Dashboard" option inside RoleSelectionPage
+        setAppState('role_selection');
+    }, [setAppState]);
 
     // --- GLOBAL FETCH INTERCEPTOR (JWT & Auth Handling) ---
     useEffect(() => {
@@ -481,9 +518,28 @@ const App: React.FC = () => {
         return () => { window.fetch = originalFetch; };
     }, [logout]);
 
-    const refreshData = useCallback(async () => {
-        await fetchData(true); // Force fetch
-        setRefreshTimestamp(Date.now());
+    useEffect(() => {
+        // Use CacheService for Session Management
+        const initSession = async () => {
+            try {
+                const session = await CacheService.get<{ user: User, token: string, timestamp: number }>(CACHE_KEYS.SESSION);
+                
+                if (session && session.user) {
+                    setCurrentUser(session.user);
+                    if (session.token) tokenRef.current = session.token;
+                    fetchData(); // This is async but we don't await it here to avoid blocking
+                    if (appState === 'login') determineAppState(session.user);
+                } else {
+                    // Session expired or doesn't exist
+                    setIsGlobalLoading(false);
+                }
+            } catch (e) {
+                console.warn("Session init error:", e);
+                setIsGlobalLoading(false);
+            }
+        };
+
+        initSession();
     }, [fetchData]);
 
     // --- SYSTEM UPDATE REAL-TIME POLLING ---
@@ -604,10 +660,10 @@ const App: React.FC = () => {
 
     return (
         <AppContext.Provider value={{
-            currentUser, appData, login, logout, refreshData, refreshTimestamp,
+            currentUser, appData, orders, isOrdersLoading, login, logout, refreshData, refreshTimestamp,
             originalAdminUser, returnToAdmin: () => {}, previewImage: (u) => setPreviewImageUrl(u),
             updateCurrentUser, setUnreadCount, unreadCount, updateProductInData: () => {}, apiKey: '',
-            setAppState, setOriginalAdminUser, fetchData, setCurrentUser, setChatVisibility: setChatVisible,
+            setAppState, setOriginalAdminUser, fetchData, fetchOrders, setCurrentUser, setChatVisibility: setChatVisible,
             hasPermission, updatePermission,
             isSidebarCollapsed, setIsSidebarCollapsed, setIsChatOpen,
             isMobileMenuOpen, setIsMobileMenuOpen,
@@ -616,7 +672,7 @@ const App: React.FC = () => {
             mobilePageTitle, setMobilePageTitle,
             advancedSettings, setAdvancedSettings
         }}>
-            <div className="min-h-screen relative z-10">
+            <div className="h-screen relative z-10 overflow-hidden">
                 <BackgroundMusic />
                 <Suspense fallback={<div className="flex h-screen items-center justify-center"><Spinner size="lg" /></div>}>
                     {appState === 'confirm_delivery' ? (

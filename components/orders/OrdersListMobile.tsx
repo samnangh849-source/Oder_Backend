@@ -21,6 +21,7 @@ interface OrdersListMobileProps {
     copiedTemplateId: string | null;
     toggleOrderVerified: (id: string, currentStatus: boolean) => void;
     updatingIds: Set<string>;
+    groupBy?: string;
 }
 
 const OrdersListMobile: React.FC<OrdersListMobileProps> = ({
@@ -37,7 +38,8 @@ const OrdersListMobile: React.FC<OrdersListMobileProps> = ({
     copiedId,
     copiedTemplateId,
     toggleOrderVerified,
-    updatingIds
+    updatingIds,
+    groupBy = 'none'
 }) => {
     const { appData, previewImage, currentUser, hasPermission } = useContext(AppContext);
     
@@ -61,6 +63,19 @@ const OrdersListMobile: React.FC<OrdersListMobileProps> = ({
     const visibleOrders = useMemo(() => {
         return orders.slice(0, displayCount);
     }, [orders, displayCount]);
+
+    const groupedData = useMemo(() => {
+        if (groupBy === 'none') return [{ label: '', orders: visibleOrders }];
+        
+        const groups: Record<string, ParsedOrder[]> = {};
+        visibleOrders.forEach(o => {
+            const key = String((o as any)[groupBy] || 'Unassigned');
+            if (!groups[key]) groups[key] = [];
+            groups[key].push(o);
+        });
+        
+        return Object.entries(groups).map(([label, items]) => ({ label, orders: items }));
+    }, [visibleOrders, groupBy]);
 
     // Handle "Load More" logic
     const handleLoadMore = () => {
@@ -183,383 +198,395 @@ const OrdersListMobile: React.FC<OrdersListMobileProps> = ({
                 </div>
             </div>
 
-            {viewMode === 'table' ? (
-                // --- TABLE VIEW ---
-                <div className="bg-[#0f172a] border border-white/10 rounded-3xl overflow-hidden shadow-2xl animate-fade-in relative">
-                    <div className="overflow-x-auto">
-                        <table className="w-full text-left border-collapse">
-                            <thead>
-                                <tr className="bg-[#0f172a] border-b border-white/10 text-[10px] text-gray-400 font-black uppercase tracking-wider">
-                                    <th className="p-3 sticky left-0 z-20 bg-[#0f172a] border-r border-white/10 min-w-[130px] shadow-[4px_0_10px_-2px_rgba(0,0,0,0.5)]">
-                                        Customer
-                                    </th>
-                                    {isFulfillmentVisible && (
-                                        <th className="p-3 min-w-[100px] text-gray-400">Store</th>
-                                    )}
-                                    {isBrandSalesVisible && (
-                                        <th className="p-3 min-w-[100px] text-gray-400">Brand/Sales</th>
-                                    )}
-                                    {checkColumnVisible('driver') && (
-                                        <th className="p-3 min-w-[100px] text-gray-400">Driver</th>
-                                    )}
-                                    <th className="p-3 text-right min-w-[80px]">Total</th>
-                                    {checkColumnVisible('note') && <th className="p-3 text-left min-w-[120px]">Note</th>}
-                                    <th className="p-3 text-center min-w-[90px]">Status</th>
-                                    <th className="p-3 text-center min-w-[50px]">Act</th>
-                                    <th className="p-3 min-w-[100px]">Date</th>
-                                </tr>
-                            </thead>
-                            <tbody className="divide-y divide-white/5 text-xs">
-                                {visibleOrders.map((order) => {
-                                    const isSelected = selectedIds.has(order['Order ID']);
-                                    const isVerified = order.IsVerified === true || String(order.IsVerified).toUpperCase() === 'TRUE' || order.IsVerified === 'A';
-                                    const isThisTemplateCopied = copiedTemplateId === order['Order ID'];
-                                    const allowEdit = canEditOrder(order);
-                                    
-                                    return (
-                                        <tr key={order['Order ID']} className={`${isSelected ? 'bg-blue-900/20' : isVerified ? 'bg-emerald-900/5' : 'hover:bg-white/5'} transition-colors`}>
-                                            <td className="p-3 sticky left-0 z-20 bg-gray-900 border-r border-white/10 shadow-[4px_0_10px_-2px_rgba(0,0,0,0.5)]">
-                                                <div className="flex flex-col">
-                                                    <span className="font-bold text-white truncate max-w-[110px]">{order['Customer Name']}</span>
-                                                    <span className="text-[9px] text-gray-500 font-mono">{order['Customer Phone']}</span>
-                                                </div>
-                                            </td>
+            {groupedData.map((group, gIdx) => (
+                <div key={gIdx} className="space-y-4">
+                    {group.label && (
+                        <div className="flex items-center gap-3 px-2 py-1">
+                            <div className="w-1 h-4 bg-purple-500 rounded-full"></div>
+                            <span className="text-[10px] font-black text-gray-400 uppercase tracking-widest">{groupBy}: <span className="text-white">{group.label}</span></span>
+                            <span className="text-[9px] text-gray-600 font-bold ml-auto">{group.orders.length} orders</span>
+                        </div>
+                    )}
+
+                    {viewMode === 'table' ? (
+                        // --- TABLE VIEW ---
+                        <div className="bg-[#0f172a] border border-white/10 rounded-3xl overflow-hidden shadow-2xl animate-fade-in relative">
+                            <div className="overflow-x-auto">
+                                <table className="w-full text-left border-collapse">
+                                    <thead>
+                                        <tr className="bg-[#0f172a] border-b border-white/10 text-[10px] text-gray-400 font-black uppercase tracking-wider">
+                                            <th className="p-3 sticky left-0 z-20 bg-[#0f172a] border-r border-white/10 min-w-[130px] shadow-[4px_0_10px_-2px_rgba(0,0,0,0.5)]">
+                                                Customer
+                                            </th>
                                             {isFulfillmentVisible && (
-                                                <td className="p-3 text-gray-300 font-bold text-[10px]">
-                                                    {order['Fulfillment Store']}
-                                                </td>
+                                                <th className="p-3 min-w-[100px] text-gray-400">Store</th>
                                             )}
                                             {isBrandSalesVisible && (
-                                                <td className="p-3 text-gray-300 font-bold text-[10px]">
-                                                    {(() => {
-                                                        const pInfo = appData.pages?.find((p: any) => p.PageName === order.Page);
-                                                        return pInfo?.DefaultStore || '-';
-                                                    })()}
-                                                </td>
+                                                <th className="p-3 min-w-[100px] text-gray-400">Brand/Sales</th>
                                             )}
                                             {checkColumnVisible('driver') && (
-                                                <td className="p-3 text-emerald-400 font-bold text-[10px]">
-                                                    {order['Driver Name'] || order['Internal Shipping Details'] || '-'}
-                                                </td>
+                                                <th className="p-3 min-w-[100px] text-gray-400">Driver</th>
                                             )}
-                                            <td className="p-3 text-right font-black text-blue-400">
-                                                ${(Number(order['Grand Total']) || 0).toFixed(2)}
-                                            </td>
-                                            {checkColumnVisible('note') && (
-                                                <td className="p-3">
-                                                    <div className="text-gray-400 line-clamp-1 truncate max-w-[100px] break-words" title={order.Note}>
-                                                        {order.Note || '-'}
-                                                    </div>
-                                                </td>
-                                            )}
-                                            <td className="p-3 text-center">
-                                                <div className="flex flex-col items-center gap-1">
-                                                    <span className={`px-2 py-0.5 rounded text-[8px] font-black uppercase border ${order['Payment Status'] === 'Paid' ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20' : 'bg-red-500/10 text-red-400 border-red-500/20'}`}>
-                                                        {order['Payment Status']}
-                                                    </span>
-                                                    {order['Scheduled Time'] && getSafeDateObj(order['Scheduled Time']).getTime() > Date.now() && (
-                                                        <div className="flex items-center gap-1 text-[7px] font-black text-indigo-400 uppercase tracking-widest bg-indigo-500/10 px-1 rounded animate-pulse">
-                                                            <svg className="w-2 h-2" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
-                                                            Sch
-                                                        </div>
-                                                    )}
-                                                </div>
-                                            </td>
-                                            <td className="p-3 text-center">
-                                                <div className="flex items-center gap-2 justify-center">
-                                                    <button 
-                                                        onClick={() => handleCopyTemplate(order)}
-                                                        className={`text-gray-400 hover:text-white transition-all active:scale-90 ${isThisTemplateCopied ? 'text-indigo-400' : ''}`}
-                                                    >
-                                                        {isThisTemplateCopied ? <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7"/></svg> : <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 5H6a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2v-1M8 5a2 2 0 002 2h2a2 2 0 002-2M8 5a2 2 0 012-2h2a2 2 0 012 2m0 0h2a2 2 0 012 2v3m2 4H10m0 0l3-3m-3 3l3 3" /></svg>}
-                                                    </button>
-                                                    
-                                                    {isPrintVisible && (
-                                                        <button 
-                                                            onClick={() => handlePrint(order)}
-                                                            className="text-emerald-400 hover:text-white transition-all active:scale-90"
-                                                        >
-                                                            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2.5}>
-                                                                <path strokeLinecap="round" strokeLinejoin="round" d="M6 9V2h12v7M6 18H4a2 2 0 01-2-2v-5a2 2 0 012-2h16a2 2 0 012 2v5a2 2 0 01-2 2h-2m-2 4H8v-4h8v4z" />
-                                                            </svg>
-                                                        </button>
-                                                    )}
-
-                                                    {onEdit && allowEdit ? (
-                                                        <button onClick={() => onEdit(order)} className="text-gray-400 hover:text-white">
-                                                            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" /></svg>
-                                                        </button>
-                                                    ) : (
-                                                        <span className="text-gray-600" title="Locked">
-                                                            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" /></svg>
-                                                        </span>
-                                                    )}
-                                                </div>
-                                            </td>
-                                            <td className="p-3 text-[9px] text-gray-500 font-bold">
-                                                {getSafeDateString(order.Timestamp)}
-                                            </td>
+                                            <th className="p-3 text-right min-w-[80px]">Total</th>
+                                            {checkColumnVisible('note') && <th className="p-3 text-left min-w-[120px]">Note</th>}
+                                            <th className="p-3 text-center min-w-[90px]">Status</th>
+                                            <th className="p-3 text-center min-w-[50px]">Act</th>
+                                            <th className="p-3 min-w-[100px]">Date</th>
                                         </tr>
-                                    );
-                                })}
-                            </tbody>
-                        </table>
-                    </div>
-                </div>
-            ) : (
-                // --- CARD VIEW ---
-                visibleOrders.map((order) => {
-                    const pageInfo = appData.pages?.find((p: any) => p.PageName === order.Page);
-                    const logoUrl = pageInfo ? convertGoogleDriveUrl(pageInfo.PageLogoURL) : '';
-                    const displayPhone = formatPhone(order['Customer Phone']);
-                    const carrierLogo = getCarrierLogo(displayPhone);
-                    const isVerified = order.IsVerified === true || String(order.IsVerified).toUpperCase() === 'TRUE' || order.IsVerified === 'A';
-                    const isUpdating = updatingIds.has(order['Order ID']);
-                    const isSelected = selectedIds.has(order['Order ID']);
-                    const shippingLogo = getShippingLogo(order['Internal Shipping Method']);
-                    const isThisCopied = copiedId === order['Order ID'];
-                    const isThisTemplateCopied = copiedTemplateId === order['Order ID'];
-                    const allowEdit = canEditOrder(order);
-                    const isScheduled = order['Scheduled Time'] && getSafeDateObj(order['Scheduled Time']).getTime() > Date.now();
-
-                    return (
-                        <div 
-                            key={order['Order ID']} 
-                            className={`
-                                relative rounded-3xl p-5 shadow-lg transition-all duration-300 overflow-hidden group
-                                ${isSelected 
-                                    ? 'bg-blue-900/30 border-2 border-blue-500/50 shadow-blue-900/20' 
-                                    : isVerified 
-                                        ? 'bg-emerald-950/40 border border-emerald-500/20 shadow-none' 
-                                        : 'bg-slate-900 border border-white/5 shadow-md'
-                                }
-                            `}
-                        >
-                            {/* Background Selection Glow */}
-                            {isSelected && (
-                                <div className="absolute inset-0 bg-blue-500/5 pointer-events-none"></div>
-                            )}
-
-                            {/* Top Row: ID, Date, Selection */}
-                            <div className="flex justify-between items-start mb-4">
-                                <div className="flex items-center gap-3">
-                                    {onToggleSelect && (
-                                        <div className="relative z-10">
-                                            <input 
-                                                type="checkbox" 
-                                                className="h-6 w-6 rounded-xl border-gray-600 bg-gray-800 text-blue-500 focus:ring-blue-500/20 cursor-pointer transition-all"
-                                                checked={isSelected}
-                                                onChange={() => onToggleSelect(order['Order ID'])}
-                                            />
-                                        </div>
-                                    )}
-                                    <div className="flex flex-col gap-1">
-                                        <div className="flex gap-2">
-                                            <button 
-                                                onClick={() => handleCopy(order['Order ID'])}
-                                                className={`
-                                                    flex items-center gap-2 px-3 py-1 rounded-xl border transition-all active:scale-95
-                                                    ${isThisCopied 
-                                                        ? 'bg-emerald-500/20 border-emerald-500/50 text-emerald-400' 
-                                                        : 'bg-black/30 border-white/5 text-gray-400 hover:text-white'
-                                                    }
-                                                `}
-                                            >
-                                                <span className="text-[10px] font-black uppercase tracking-widest font-mono">
-                                                    #{order['Order ID'].substring(0, 8)}
-                                                </span>
-                                                {isThisCopied && <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 13l4 4L19 7" /></svg>}
-                                            </button>
+                                    </thead>
+                                    <tbody className="divide-y divide-white/5 text-xs">
+                                        {group.orders.map((order) => {
+                                            const isSelected = selectedIds.has(order['Order ID']);
+                                            const isVerified = order.IsVerified === true || String(order.IsVerified).toUpperCase() === 'TRUE' || order.IsVerified === 'A';
+                                            const isThisTemplateCopied = copiedTemplateId === order['Order ID'];
+                                            const allowEdit = canEditOrder(order);
                                             
-                                            {/* Copy Template Button */}
-                                            <button
-                                                onClick={() => handleCopyTemplate(order)}
-                                                className={`
-                                                    flex items-center justify-center w-8 h-8 rounded-xl border transition-all active:scale-95
-                                                    ${isThisTemplateCopied 
-                                                        ? 'bg-indigo-500/20 border-indigo-500/50 text-indigo-400' 
-                                                        : 'bg-black/30 border-white/5 text-gray-400 hover:text-white'
-                                                    }
-                                                `}
-                                            >
-                                                {isThisTemplateCopied ? (
-                                                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={3}><path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7"/></svg>
-                                                ) : (
-                                                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M8 5H6a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2v-1M8 5a2 2 0 002 2h2a2 2 0 002-2M8 5a2 2 0 012-2h2a2 2 0 012 2m0 0h2a2 2 0 012 2v3m2 4H10m0 0l3-3m-3 3l3 3" /></svg>
-                                                )}
-                                            </button>
-                                        </div>
-                                        {isScheduled && (
-                                            <div className="flex items-center gap-1.5 px-2 py-0.5 bg-indigo-500/20 border border-indigo-500/30 rounded-lg animate-pulse self-start" title={`Scheduled: ${order['Scheduled Time']}`}>
-                                                <svg className="w-2.5 h-2.5 text-indigo-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
-                                                <span className="text-[8px] font-black text-indigo-400 uppercase tracking-widest">Scheduled</span>
-                                            </div>
-                                        )}
-                                    </div>
-                                </div>
-                                
-                                <div className="flex flex-col items-end">
-                                    <span className={`px-2.5 py-1 rounded-lg text-[8px] font-black uppercase tracking-wider border ${order['Payment Status'] === 'Paid' ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20' : 'bg-red-500/10 text-red-400 border border-red-500/20'}`}>
-                                        {order['Payment Status']}
-                                    </span>
-                                    <span className="text-[9px] text-gray-600 font-bold mt-1">
-                                        {getSafeDateString(order.Timestamp)}
-                                    </span>
-                                </div>
-                            </div>
-
-                            {/* Customer & Page Section */}
-                            <div className="flex items-start gap-4 mb-5">
-                                <div className="relative w-14 h-14 rounded-2xl bg-black/40 border border-white/10 p-1 flex-shrink-0">
-                                    {logoUrl ? (
-                                        <img src={logoUrl} className="w-full h-full object-cover rounded-xl" alt="page logo" />
-                                    ) : (
-                                        <div className="w-full h-full flex items-center justify-center text-gray-600 text-[10px] font-black">N/A</div>
-                                    )}
-                                    <div className="absolute -bottom-1 -right-1 bg-gray-900 rounded-lg p-0.5 border border-gray-700">
-                                        {carrierLogo && <img src={carrierLogo} className="w-4 h-4 object-contain" alt="carrier" />}
-                                    </div>
-                                </div>
-                                
-                                <div className="flex-grow min-w-0">
-                                    <h3 className="text-white font-black text-sm truncate leading-tight mb-1">{order['Customer Name']}</h3>
-                                    <p className="text-blue-400 font-mono font-bold text-xs tracking-wide mb-1">{displayPhone}</p>
-                                    <div className="flex items-center gap-1.5 text-[10px] text-gray-500 font-bold truncate mb-1">
-                                        <svg className="w-3 h-3 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z" /><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 11a3 3 0 11-6 0 3 3 0 016 0z" /></svg>
-                                        <span className="truncate">{order.Location || 'N/A'}</span>
-                                    </div>
-                                    {isBrandSalesVisible && pageInfo?.DefaultStore && (
-                                        <div className="text-[9px] text-gray-400 font-bold truncate flex items-center gap-1">
-                                            <span className="bg-gray-800 px-1.5 py-0.5 rounded text-[8px] uppercase">Brand</span>
-                                            {pageInfo.DefaultStore}
-                                        </div>
-                                    )}
-                                </div>
-                            </div>
-
-                            {/* Product List (Collapsible / Modal Trigger) */}
-                            {isProductInfoVisible && order.Products && order.Products.length > 0 && (
-                                <div className="bg-black/20 rounded-2xl p-3 border border-white/5 mb-5 shadow-inner">
-                                    <div className="flex overflow-x-auto gap-3 pb-2 snap-x no-scrollbar">
-                                        {order.Products.slice(0, 4).map((p, i) => {
-                                            const masterProd = appData.products?.find(mp => mp.ProductName === p.name);
-                                            const displayImg = p.image || masterProd?.ImageURL || '';
                                             return (
-                                                <div key={i} className="flex-shrink-0 w-[200px] snap-center bg-gray-800/50 rounded-xl p-2 border border-white/5 flex items-center gap-3">
-                                                    <div className="w-10 h-10 rounded-lg bg-black/50 flex-shrink-0 overflow-hidden border border-white/5" onClick={() => previewImage(convertGoogleDriveUrl(displayImg))}>
-                                                        <img src={convertGoogleDriveUrl(displayImg)} className="w-full h-full object-cover" alt="" />
-                                                    </div>
-                                                    <div className="min-w-0">
-                                                        <p className="text-[11px] font-bold text-gray-200 truncate">{p.name}</p>
-                                                        <div className="flex justify-between items-center mt-0.5">
-                                                            <span className="text-[9px] text-gray-500 font-bold">Qty: <span className="text-white">{p.quantity}</span></span>
-                                                            {p.colorInfo && <span className="text-[8px] bg-purple-500/10 text-purple-400 px-1.5 rounded uppercase font-bold">{p.colorInfo}</span>}
+                                                <tr key={order['Order ID']} className={`${isSelected ? 'bg-blue-900/20' : isVerified ? 'bg-emerald-900/5' : 'hover:bg-white/5'} transition-colors`}>
+                                                    <td className="p-3 sticky left-0 z-20 bg-gray-900 border-r border-white/10 shadow-[4px_0_10px_-2px_rgba(0,0,0,0.5)]">
+                                                        <div className="flex flex-col">
+                                                            <span className="font-bold text-white truncate max-w-[110px]">{order['Customer Name']}</span>
+                                                            <span className="text-[9px] text-gray-500 font-mono">{order['Customer Phone']}</span>
                                                         </div>
-                                                    </div>
-                                                </div>
+                                                    </td>
+                                                    {isFulfillmentVisible && (
+                                                        <td className="p-3 text-gray-300 font-bold text-[10px]">
+                                                            {order['Fulfillment Store']}
+                                                        </td>
+                                                    )}
+                                                    {isBrandSalesVisible && (
+                                                        <td className="p-3 text-gray-300 font-bold text-[10px]">
+                                                            {(() => {
+                                                                const pInfo = appData.pages?.find((p: any) => p.PageName === order.Page);
+                                                                return pInfo?.DefaultStore || '-';
+                                                            })()}
+                                                        </td>
+                                                    )}
+                                                    {checkColumnVisible('driver') && (
+                                                        <td className="p-3 text-emerald-400 font-bold text-[10px]">
+                                                            {order['Driver Name'] || order['Internal Shipping Details'] || '-'}
+                                                        </td>
+                                                    )}
+                                                    <td className="p-3 text-right font-black text-blue-400">
+                                                        ${(Number(order['Grand Total']) || 0).toFixed(2)}
+                                                    </td>
+                                                    {checkColumnVisible('note') && (
+                                                        <td className="p-3">
+                                                            <div className="text-gray-400 line-clamp-1 truncate max-w-[100px] break-words" title={order.Note}>
+                                                                {order.Note || '-'}
+                                                            </div>
+                                                        </td>
+                                                    )}
+                                                    <td className="p-3 text-center">
+                                                        <div className="flex flex-col items-center gap-1">
+                                                            <span className={`px-2 py-0.5 rounded text-[8px] font-black uppercase border ${order['Payment Status'] === 'Paid' ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20' : 'bg-red-500/10 text-red-400 border-red-500/20'}`}>
+                                                                {order['Payment Status']}
+                                                            </span>
+                                                            {order['Scheduled Time'] && getSafeDateObj(order['Scheduled Time']).getTime() > Date.now() && (
+                                                                <div className="flex items-center gap-1 text-[7px] font-black text-indigo-400 uppercase tracking-widest bg-indigo-500/10 px-1 rounded animate-pulse">
+                                                                    <svg className="w-2 h-2" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
+                                                                    Sch
+                                                                </div>
+                                                            )}
+                                                        </div>
+                                                    </td>
+                                                    <td className="p-3 text-center">
+                                                        <div className="flex items-center gap-2 justify-center">
+                                                            <button 
+                                                                onClick={() => handleCopyTemplate(order)}
+                                                                className={`text-gray-400 hover:text-white transition-all active:scale-90 ${isThisTemplateCopied ? 'text-indigo-400' : ''}`}
+                                                            >
+                                                                {isThisTemplateCopied ? <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7"/></svg> : <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 5H6a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2v-1M8 5a2 2 0 002 2h2a2 2 0 002-2M8 5a2 2 0 012-2h2a2 2 0 012 2m0 0h2a2 2 0 012 2v3m2 4H10m0 0l3-3m-3 3l3 3" /></svg>}
+                                                            </button>
+                                                            
+                                                            {isPrintVisible && (
+                                                                <button 
+                                                                    onClick={() => handlePrint(order)}
+                                                                    className="text-emerald-400 hover:text-white transition-all active:scale-90"
+                                                                >
+                                                                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2.5}>
+                                                                        <path strokeLinecap="round" strokeLinejoin="round" d="M6 9V2h12v7M6 18H4a2 2 0 01-2-2v-5a2 2 0 012-2h16a2 2 0 012 2v5a2 2 0 01-2 2h-2m-2 4H8v-4h8v4z" />
+                                                                    </svg>
+                                                                </button>
+                                                            )}
+
+                                                            {onEdit && allowEdit ? (
+                                                                <button onClick={() => onEdit(order)} className="text-gray-400 hover:text-white">
+                                                                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" /></svg>
+                                                                </button>
+                                                            ) : (
+                                                                <span className="text-gray-600" title="Locked">
+                                                                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" /></svg>
+                                                                </span>
+                                                            )}
+                                                        </div>
+                                                    </td>
+                                                    <td className="p-3 text-[9px] text-gray-500 font-bold">
+                                                        {getSafeDateString(order.Timestamp)}
+                                                    </td>
+                                                </tr>
                                             );
                                         })}
-                                        
-                                        {/* Show More Trigger for Many Products */}
-                                        {order.Products.length > 4 && (
-                                            <button 
-                                                onClick={() => setViewingProductsOrder(order)}
-                                                className="flex-shrink-0 w-[100px] snap-center bg-gray-800/80 rounded-xl p-2 border border-white/10 flex flex-col items-center justify-center gap-2 hover:bg-gray-700 transition-colors active:scale-95"
-                                            >
-                                                <div className="w-10 h-10 rounded-full bg-blue-600/20 text-blue-400 flex items-center justify-center border border-blue-500/30">
-                                                    <span className="font-black text-sm">+{order.Products.length - 4}</span>
+                                    </tbody>
+                                </table>
+                            </div>
+                        </div>
+                    ) : (
+                        // --- CARD VIEW ---
+                        group.orders.map((order) => {
+                            const pageInfo = appData.pages?.find((p: any) => p.PageName === order.Page);
+                            const logoUrl = pageInfo ? convertGoogleDriveUrl(pageInfo.PageLogoURL) : '';
+                            const displayPhone = formatPhone(order['Customer Phone']);
+                            const carrierLogo = getCarrierLogo(displayPhone);
+                            const isVerified = order.IsVerified === true || String(order.IsVerified).toUpperCase() === 'TRUE' || order.IsVerified === 'A';
+                            const isUpdating = updatingIds.has(order['Order ID']);
+                            const isSelected = selectedIds.has(order['Order ID']);
+                            const shippingLogo = getShippingLogo(order['Internal Shipping Method']);
+                            const isThisCopied = copiedId === order['Order ID'];
+                            const isThisTemplateCopied = copiedTemplateId === order['Order ID'];
+                            const allowEdit = canEditOrder(order);
+                            const isScheduled = order['Scheduled Time'] && getSafeDateObj(order['Scheduled Time']).getTime() > Date.now();
+
+                            return (
+                                <div 
+                                    key={order['Order ID']} 
+                                    className={`
+                                        relative rounded-3xl p-5 shadow-lg transition-all duration-300 overflow-hidden group
+                                        ${isSelected 
+                                            ? 'bg-blue-900/30 border-2 border-blue-500/50 shadow-blue-900/20' 
+                                            : isVerified 
+                                                ? 'bg-emerald-950/40 border border-emerald-500/20 shadow-none' 
+                                                : 'bg-slate-900 border border-white/5 shadow-md'
+                                        }
+                                    `}
+                                >
+                                    {/* Background Selection Glow */}
+                                    {isSelected && (
+                                        <div className="absolute inset-0 bg-blue-500/5 pointer-events-none"></div>
+                                    )}
+
+                                    {/* Top Row: ID, Date, Selection */}
+                                    <div className="flex justify-between items-start mb-4">
+                                        <div className="flex items-center gap-3">
+                                            {onToggleSelect && (
+                                                <div className="relative z-10">
+                                                    <input 
+                                                        type="checkbox" 
+                                                        className="h-6 w-6 rounded-xl border-gray-600 bg-gray-800 text-blue-500 focus:ring-blue-500/20 cursor-pointer transition-all"
+                                                        checked={isSelected}
+                                                        onChange={() => onToggleSelect(order['Order ID'])}
+                                                    />
                                                 </div>
-                                                <span className="text-[9px] font-bold text-gray-400 uppercase tracking-wider">View All</span>
-                                            </button>
-                                        )}
-                                    </div>
-                                </div>
-                            )}
-
-                            {checkColumnVisible('note') && order.Note && (
-                                <div className="bg-black/20 rounded-2xl p-3 border border-white/5 mb-5 shadow-inner">
-                                    <p className="text-[9px] text-gray-500 font-black uppercase tracking-widest mb-1">Note</p>
-                                    <p className="text-[11px] text-gray-300 line-clamp-2 break-words">{order.Note}</p>
-                                </div>
-                            )}
-
-                            {/* Stats Grid */}
-                            <div className="grid grid-cols-2 gap-3 mb-5">
-                                <div className="bg-white/5 rounded-xl p-3 border border-white/5">
-                                    <p className="text-[9px] text-gray-500 font-black uppercase tracking-widest mb-1">Total Amount</p>
-                                    <p className="text-lg font-black text-white tracking-tight">${(Number(order['Grand Total']) || 0).toFixed(2)}</p>
-                                </div>
-                                <div className="bg-white/5 rounded-xl p-3 border border-white/5">
-                                    <div className="flex justify-between items-start">
-                                        <div>
-                                            <p className="text-[9px] text-gray-500 font-black uppercase tracking-widest mb-1">Shipping</p>
-                                            <div className="flex items-center gap-1.5">
-                                                {shippingLogo && <img src={shippingLogo} className="w-3.5 h-3.5 object-contain" alt="" />}
-                                                <span className="text-xs font-bold text-orange-400">{order['Internal Shipping Method']?.substring(0, 10)}</span>
+                                            )}
+                                            <div className="flex flex-col gap-1">
+                                                <div className="flex gap-2">
+                                                    <button 
+                                                        onClick={() => handleCopy(order['Order ID'])}
+                                                        className={`
+                                                            flex items-center gap-2 px-3 py-1 rounded-xl border transition-all active:scale-95
+                                                            ${isThisCopied 
+                                                                ? 'bg-emerald-500/20 border-emerald-500/50 text-emerald-400' 
+                                                                : 'bg-black/30 border-white/5 text-gray-400 hover:text-white'
+                                                            }
+                                                        `}
+                                                    >
+                                                        <span className="text-[10px] font-black uppercase tracking-widest font-mono">
+                                                            #{order['Order ID'].substring(0, 8)}
+                                                        </span>
+                                                        {isThisCopied && <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 13l4 4L19 7" /></svg>}
+                                                    </button>
+                                                    
+                                                    {/* Copy Template Button */}
+                                                    <button
+                                                        onClick={() => handleCopyTemplate(order)}
+                                                        className={`
+                                                            flex items-center justify-center w-8 h-8 rounded-xl border transition-all active:scale-95
+                                                            ${isThisTemplateCopied 
+                                                                ? 'bg-indigo-500/20 border-indigo-500/50 text-indigo-400' 
+                                                                : 'bg-black/30 border-white/5 text-gray-400 hover:text-white'
+                                                            }
+                                                        `}
+                                                    >
+                                                        {isThisTemplateCopied ? (
+                                                            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={3}><path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7"/></svg>
+                                                        ) : (
+                                                            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M8 5H6a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2v-1M8 5a2 2 0 002 2h2a2 2 0 002-2M8 5a2 2 0 012-2h2a2 2 0 012 2m0 0h2a2 2 0 012 2v3m2 4H10m0 0l3-3m-3 3l3 3" /></svg>
+                                                        )}
+                                                    </button>
+                                                </div>
+                                                {isScheduled && (
+                                                    <div className="flex items-center gap-1.5 px-2 py-0.5 bg-indigo-500/20 border border-indigo-500/30 rounded-lg animate-pulse self-start" title={`Scheduled: ${order['Scheduled Time']}`}>
+                                                        <svg className="w-2.5 h-2.5 text-indigo-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
+                                                        <span className="text-[8px] font-black text-indigo-400 uppercase tracking-widest">Scheduled</span>
+                                                    </div>
+                                                )}
                                             </div>
-                                            {checkColumnVisible('driver') && (
-                                                <div className="flex items-center gap-1.5 mt-1 border-t border-white/5 pt-1">
-                                                    <span className="text-[9px] font-bold text-emerald-400 opacity-80">{order['Driver Name'] || order['Internal Shipping Details'] || '-'}</span>
+                                        </div>
+                                        
+                                        <div className="flex flex-col items-end">
+                                            <span className={`px-2.5 py-1 rounded-lg text-[8px] font-black uppercase tracking-wider border ${order['Payment Status'] === 'Paid' ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20' : 'bg-red-500/10 text-red-400 border border-red-500/20'}`}>
+                                                {order['Payment Status']}
+                                            </span>
+                                            <span className="text-[9px] text-gray-600 font-bold mt-1">
+                                                {getSafeDateString(order.Timestamp)}
+                                            </span>
+                                        </div>
+                                    </div>
+
+                                    {/* Customer & Page Section */}
+                                    <div className="flex items-start gap-4 mb-5">
+                                        <div className="relative w-14 h-14 rounded-2xl bg-black/40 border border-white/10 p-1 flex-shrink-0">
+                                            {logoUrl ? (
+                                                <img src={logoUrl} className="w-full h-full object-cover rounded-xl" alt="page logo" />
+                                            ) : (
+                                                <div className="w-full h-full flex items-center justify-center text-gray-600 text-[10px] font-black">N/A</div>
+                                            )}
+                                            <div className="absolute -bottom-1 -right-1 bg-gray-900 rounded-lg p-0.5 border border-gray-700">
+                                                {carrierLogo && <img src={carrierLogo} className="w-4 h-4 object-contain" alt="carrier" />}
+                                            </div>
+                                        </div>
+                                        
+                                        <div className="flex-grow min-w-0">
+                                            <h3 className="text-white font-black text-sm truncate leading-tight mb-1">{order['Customer Name']}</h3>
+                                            <p className="text-blue-400 font-mono font-bold text-xs tracking-wide mb-1">{displayPhone}</p>
+                                            <div className="flex items-center gap-1.5 text-[10px] text-gray-500 font-bold truncate mb-1">
+                                                <svg className="w-3 h-3 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z" /><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 11a3 3 0 11-6 0 3 3 0 016 0z" /></svg>
+                                                <span className="truncate">{order.Location || 'N/A'}</span>
+                                            </div>
+                                            {isBrandSalesVisible && pageInfo?.DefaultStore && (
+                                                <div className="text-[9px] text-gray-400 font-bold truncate flex items-center gap-1">
+                                                    <span className="bg-gray-800 px-1.5 py-0.5 rounded text-[8px] uppercase">Brand</span>
+                                                    {pageInfo.DefaultStore}
                                                 </div>
                                             )}
                                         </div>
-                                        {order['Internal Cost'] > 0 && (
-                                            <span className="text-[9px] font-mono text-gray-600 font-bold bg-black/20 px-1.5 py-0.5 rounded">
-                                                -${(Number(order['Internal Cost']) || 0).toFixed(3)}
-                                            </span>
+                                    </div>
+
+                                    {/* Product List (Collapsible / Modal Trigger) */}
+                                    {isProductInfoVisible && order.Products && order.Products.length > 0 && (
+                                        <div className="bg-black/20 rounded-2xl p-3 border border-white/5 mb-5 shadow-inner">
+                                            <div className="flex overflow-x-auto gap-3 pb-2 snap-x no-scrollbar">
+                                                {order.Products.slice(0, 4).map((p, i) => {
+                                                    const masterProd = appData.products?.find(mp => mp.ProductName === p.name);
+                                                    const displayImg = p.image || masterProd?.ImageURL || '';
+                                                    return (
+                                                        <div key={i} className="flex-shrink-0 w-[200px] snap-center bg-gray-800/50 rounded-xl p-2 border border-white/5 flex items-center gap-3">
+                                                            <div className="w-10 h-10 rounded-lg bg-black/50 flex-shrink-0 overflow-hidden border border-white/5" onClick={() => previewImage(convertGoogleDriveUrl(displayImg))}>
+                                                                <img src={convertGoogleDriveUrl(displayImg)} className="w-full h-full object-cover" alt="" />
+                                                            </div>
+                                                            <div className="min-w-0">
+                                                                <p className="text-[11px] font-bold text-gray-200 truncate">{p.name}</p>
+                                                                <div className="flex justify-between items-center mt-0.5">
+                                                                    <span className="text-[9px] text-gray-500 font-bold">Qty: <span className="text-white">{p.quantity}</span></span>
+                                                                    {p.colorInfo && <span className="text-[8px] bg-purple-500/10 text-purple-400 px-1.5 rounded uppercase font-bold">{p.colorInfo}</span>}
+                                                                </div>
+                                                            </div>
+                                                        </div>
+                                                    );
+                                                })}
+                                                
+                                                {/* Show More Trigger for Many Products */}
+                                                {order.Products.length > 4 && (
+                                                    <button 
+                                                        onClick={() => setViewingProductsOrder(order)}
+                                                        className="flex-shrink-0 w-[100px] snap-center bg-gray-800/80 rounded-xl p-2 border border-white/10 flex flex-col items-center justify-center gap-2 hover:bg-gray-700 transition-colors active:scale-95"
+                                                    >
+                                                        <div className="w-10 h-10 rounded-full bg-blue-600/20 text-blue-400 flex items-center justify-center border border-blue-500/30">
+                                                            <span className="font-black text-sm">+{order.Products.length - 4}</span>
+                                                        </div>
+                                                        <span className="text-[9px] font-bold text-gray-400 uppercase tracking-wider">View All</span>
+                                                    </button>
+                                                )}
+                                            </div>
+                                        </div>
+                                    )}
+
+                                    {checkColumnVisible('note') && order.Note && (
+                                        <div className="bg-black/20 rounded-2xl p-3 border border-white/5 mb-5 shadow-inner">
+                                            <p className="text-[9px] text-gray-500 font-black uppercase tracking-widest mb-1">Note</p>
+                                            <p className="text-[11px] text-gray-300 line-clamp-2 break-words">{order.Note}</p>
+                                        </div>
+                                    )}
+
+                                    {/* Stats Grid */}
+                                    <div className="grid grid-cols-2 gap-3 mb-5">
+                                        <div className="bg-white/5 rounded-xl p-3 border border-white/5">
+                                            <p className="text-[9px] text-gray-500 font-black uppercase tracking-widest mb-1">Total Amount</p>
+                                            <p className="text-lg font-black text-white tracking-tight">${(Number(order['Grand Total']) || 0).toFixed(2)}</p>
+                                        </div>
+                                        <div className="bg-white/5 rounded-xl p-3 border border-white/5">
+                                            <div className="flex justify-between items-start">
+                                                <div>
+                                                    <p className="text-[9px] text-gray-500 font-black uppercase tracking-widest mb-1">Shipping</p>
+                                                    <div className="flex items-center gap-1.5">
+                                                        {shippingLogo && <img src={shippingLogo} className="w-3.5 h-3.5 object-contain" alt="" />}
+                                                        <span className="text-xs font-bold text-orange-400">{order['Internal Shipping Method']?.substring(0, 10)}</span>
+                                                    </div>
+                                                    {checkColumnVisible('driver') && (
+                                                        <div className="flex items-center gap-1.5 mt-1 border-t border-white/5 pt-1">
+                                                            <span className="text-[9px] font-bold text-emerald-400 opacity-80">{order['Driver Name'] || order['Internal Shipping Details'] || '-'}</span>
+                                                        </div>
+                                                    )}
+                                                </div>
+                                                {order['Internal Cost'] > 0 && (
+                                                    <span className="text-[9px] font-mono text-gray-600 font-bold bg-black/20 px-1.5 py-0.5 rounded">
+                                                        -${(Number(order['Internal Cost']) || 0).toFixed(3)}
+                                                    </span>
+                                                )}
+                                            </div>
+                                        </div>
+                                    </div>
+
+                                    {/* Action Bar */}
+                                    <div className="flex items-center gap-3 pt-4 border-t border-white/5">
+                                        {isActionsVisible && (
+                                            allowEdit ? (
+                                                <button 
+                                                    onClick={() => onEdit && onEdit(order)} 
+                                                    className="flex-1 py-3 bg-blue-600/10 text-blue-400 rounded-xl border border-blue-500/20 font-black text-[10px] uppercase tracking-widest hover:bg-blue-600 hover:text-white transition-all active:scale-95"
+                                                >
+                                                    Edit
+                                                </button>
+                                            ) : (
+                                                <button 
+                                                    disabled
+                                                    className="flex-1 py-3 bg-gray-800 text-gray-600 rounded-xl border border-white/5 font-black text-[10px] uppercase tracking-widest cursor-not-allowed"
+                                                >
+                                                    Locked
+                                                </button>
+                                            )
+                                        )}
+                                        
+                                        {isPrintVisible && (
+                                            <button 
+                                                onClick={() => handlePrint(order)} 
+                                                className="w-12 h-12 flex items-center justify-center bg-gray-800 text-gray-400 rounded-xl border border-white/10 hover:text-white active:scale-90 transition-all"
+                                            >
+                                                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2.5}>
+                                                    <path strokeLinecap="round" strokeLinejoin="round" d="M6 9V2h12v7M6 18H4a2 2 0 01-2-2v-5a2 2 0 012-2h16a2 2 0 012 2v5a2 2 0 01-2 2h-2m-2 4H8v-4h8v4z" />
+                                                </svg>
+                                            </button>
+                                        )}
+
+                                        {isCheckVisible && (
+                                            <div className="ml-auto relative">
+                                                <input 
+                                                    type="checkbox" 
+                                                    checked={isVerified} 
+                                                    disabled={!canVerifyOrder()}
+                                                    onChange={() => canVerifyOrder() && toggleOrderVerified(order['Order ID'], isVerified)} 
+                                                    className={`w-12 h-12 rounded-xl appearance-none border transition-all ${canVerifyOrder() ? 'cursor-pointer' : 'cursor-not-allowed opacity-50'} ${isVerified ? 'bg-emerald-500 border-emerald-400' : 'bg-gray-800 border-gray-600'}`}
+                                                />
+                                                <div className="absolute inset-0 flex items-center justify-center pointer-events-none">{isUpdating ? <Spinner size="sm" /> : isVerified ? <svg className="w-6 h-6 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 13l4 4L19 7" /></svg> : <span className="text-[9px] font-black text-gray-500 uppercase">Check</span>}</div>
+                                            </div>
                                         )}
                                     </div>
                                 </div>
-                            </div>
-
-                            {/* Action Bar */}
-                            <div className="flex items-center gap-3 pt-4 border-t border-white/5">
-                                {isActionsVisible && (
-                                    allowEdit ? (
-                                        <button 
-                                            onClick={() => onEdit && onEdit(order)} 
-                                            className="flex-1 py-3 bg-blue-600/10 text-blue-400 rounded-xl border border-blue-500/20 font-black text-[10px] uppercase tracking-widest hover:bg-blue-600 hover:text-white transition-all active:scale-95"
-                                        >
-                                            Edit
-                                        </button>
-                                    ) : (
-                                        <button 
-                                            disabled
-                                            className="flex-1 py-3 bg-gray-800 text-gray-600 rounded-xl border border-white/5 font-black text-[10px] uppercase tracking-widest cursor-not-allowed"
-                                        >
-                                            Locked
-                                        </button>
-                                    )
-                                )}
-                                
-                                {isPrintVisible && (
-                                    <button 
-                                        onClick={() => handlePrint(order)} 
-                                        className="w-12 h-12 flex items-center justify-center bg-gray-800 text-gray-400 rounded-xl border border-white/10 hover:text-white active:scale-90 transition-all"
-                                    >
-                                        <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2.5}>
-                                            <path strokeLinecap="round" strokeLinejoin="round" d="M6 9V2h12v7M6 18H4a2 2 0 01-2-2v-5a2 2 0 012-2h16a2 2 0 012 2v5a2 2 0 01-2 2h-2m-2 4H8v-4h8v4z" />
-                                        </svg>
-                                    </button>
-                                )}
-
-                                {isCheckVisible && (
-                                    <div className="ml-auto relative">
-                                        <input 
-                                            type="checkbox" 
-                                            checked={isVerified} 
-                                            disabled={!canVerifyOrder()}
-                                            onChange={() => canVerifyOrder() && toggleOrderVerified(order['Order ID'], isVerified)} 
-                                            className={`w-12 h-12 rounded-xl appearance-none border transition-all ${canVerifyOrder() ? 'cursor-pointer' : 'cursor-not-allowed opacity-50'} ${isVerified ? 'bg-emerald-500 border-emerald-400' : 'bg-gray-800 border-gray-600'}`}
-                                        />
-                                        <div className="absolute inset-0 flex items-center justify-center pointer-events-none">{isUpdating ? <Spinner size="sm" /> : isVerified ? <svg className="w-6 h-6 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 13l4 4L19 7" /></svg> : <span className="text-[9px] font-black text-gray-500 uppercase">Check</span>}</div>
-                                    </div>
-                                )}
-                            </div>
-                        </div>
-                    );
-                })
-            )}
+                            );
+                        })
+                    )}
+                </div>
+            ))}
             
             {/* Load More Trigger */}
             {displayCount < orders.length && (

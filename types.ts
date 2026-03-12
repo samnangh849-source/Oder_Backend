@@ -223,15 +223,15 @@ export interface ChatMessage {
 
 export interface RolePermission {
     id?: number;
-    Role: string;
-    Feature: string;
-    IsEnabled: boolean;
+    role: string;
+    feature: string;
+    isEnabled: boolean;
 }
 
 export interface Role {
     id?: number;
-    RoleName: string;
-    Description: string;
+    roleName: string;
+    description: string;
 }
 
 export interface Notification {
@@ -260,6 +260,7 @@ export interface AppData {
     returns?: ReturnOrder[];
     permissions?: RolePermission[];
     roles?: Role[];
+    orders?: ParsedOrder[];
 }
 
 export interface LocationInfo {
