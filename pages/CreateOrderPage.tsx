@@ -988,6 +988,7 @@ const CreateOrderPage: React.FC<CreateOrderPageProps> = ({ team, onSaveSuccess, 
                     <button onClick={handleCancelClick} className="md:hidden w-full py-4 bg-gray-800/40 text-gray-500 hover:text-red-400 font-black rounded-2xl uppercase text-[10px] tracking-widest transition-all active:scale-95 border border-white/5">បោះបង់ការបញ្ចូល</button>
                 </div>
             </div>
+        </div>
 
             {/* UNDO / GRACE PERIOD OVERLAY */}
             {undoTimer !== null && (
