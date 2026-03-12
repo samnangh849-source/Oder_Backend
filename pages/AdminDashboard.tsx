@@ -31,7 +31,7 @@ type ReportType = 'overview' | 'performance' | 'profitability' | 'forecasting' |
 const AdminDashboard: React.FC = () => {
     const { 
         appData, currentUser, refreshTimestamp, orders, isOrdersLoading,
-        isSidebarCollapsed
+        isSidebarCollapsed, hasPermission
     } = useContext(AppContext);
     
     const [activeDashboard, setActiveDashboard] = useUrlState<ActiveDashboard>('tab', 'admin');
@@ -301,6 +301,7 @@ const AdminDashboard: React.FC = () => {
                 }
                 return <PerformanceTrackingPage orders={orders} users={appData.users || []} targets={appData.targets || []} />;
             case 'orders': 
+                if (!hasPermission('view_order_list')) return <div className="flex h-96 items-center justify-center text-gray-500 font-black uppercase italic tracking-widest">អ្នកមិនមានសិទ្ធិចូលមើលផ្នែកនេះទេ</div>;
                 return (
                     <OrdersDashboard 
                         onBack={() => setActiveDashboard('admin')} 
