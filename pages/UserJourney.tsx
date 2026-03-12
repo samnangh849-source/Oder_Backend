@@ -5,8 +5,7 @@ import { translations } from '../translations';
 import UserOrdersView from '../components/user/UserOrdersView';
 
 const UserJourney: React.FC<{ onBackToRoleSelect: () => void }> = ({ onBackToRoleSelect }) => {
-    const { currentUser, setChatVisibility, setMobilePageTitle, language, setAppState } = useContext(AppContext);
-    const [selectedTeam, setSelectedTeam] = useUrlState<string>('team', '');
+    const { currentUser, setChatVisibility, setMobilePageTitle, language, setAppState, selectedTeam, setSelectedTeam } = useContext(AppContext);
     const userTeams = useMemo(() => (currentUser?.Team || '').split(',').map(t => t.trim()).filter(Boolean), [currentUser]);
     const t = translations[language];
 
@@ -180,7 +179,7 @@ const UserJourney: React.FC<{ onBackToRoleSelect: () => void }> = ({ onBackToRol
                 </div>
             </div>
             
-            <div className="flex-1 h-auto"><UserOrdersView team={selectedTeam} onAdd={handleCreateOrder} /></div>
+            <div className="flex-1 h-auto"><UserOrdersView onAdd={handleCreateOrder} /></div>
         </div>
     );
 };

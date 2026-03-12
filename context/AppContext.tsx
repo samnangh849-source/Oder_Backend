@@ -32,7 +32,7 @@ export interface AppContextType {
     unreadCount: number;
     updateProductInData: (productName: string, newData: Partial<MasterProduct>) => void;
     apiKey: string;
-    setAppState: (newState: 'login' | 'role_selection' | 'admin_dashboard' | 'user_journey' | 'confirm_delivery' | 'fulfillment') => void;
+    setAppState: (newState: 'login' | 'role_selection' | 'admin_dashboard' | 'user_journey' | 'confirm_delivery' | 'fulfillment' | 'create_order') => void;
     setOriginalAdminUser: React.Dispatch<React.SetStateAction<User | null>>;
     fetchData: (force?: boolean) => Promise<void>;
     fetchOrders: (force?: boolean) => Promise<void>;
@@ -52,6 +52,8 @@ export interface AppContextType {
     setMobilePageTitle: (title: string | null) => void;
     advancedSettings: AdvancedSettings;
     setAdvancedSettings: React.Dispatch<React.SetStateAction<AdvancedSettings>>;
+    selectedTeam: string;
+    setSelectedTeam: (team: string) => void;
 }
 
 export const AppContext = createContext<AppContextType>({} as AppContextType);

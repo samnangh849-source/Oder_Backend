@@ -18,8 +18,8 @@ interface ReportFilterState {
     customEnd: string;
 }
 
-const UserOrdersView: React.FC<{ team: string; onAdd: () => void }> = ({ team, onAdd }) => {
-    const { currentUser, refreshData, appData, orders, isOrdersLoading, hasPermission, language } = useContext(AppContext);
+const UserOrdersView: React.FC<{ onAdd: () => void }> = ({ onAdd }) => {
+    const { currentUser, refreshData, appData, orders, isOrdersLoading, hasPermission, language, selectedTeam: team } = useContext(AppContext);
     const t = translations[language];
     
     const permittedOrders = useMemo(() => {

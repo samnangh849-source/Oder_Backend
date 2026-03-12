@@ -72,6 +72,7 @@ const App: React.FC = () => {
     const [language, setLanguage] = useState<Language>(() => (localStorage.getItem('appLanguage') as Language) || 'en');
     const [appState, setAppState] = useUrlState<'login' | 'role_selection' | 'admin_dashboard' | 'user_journey' | 'confirm_delivery' | 'fulfillment' | 'create_order'>('view', 'login');
     const [previewImageUrl, setPreviewImageUrl] = useState<string | null>(null);
+    const [selectedTeam, setSelectedTeam] = useUrlState<string>('team', '');
     
     // URL Params for Delivery Confirmation
     const urlParams = new URLSearchParams(window.location.search);
@@ -135,7 +136,6 @@ const App: React.FC = () => {
     const [isChatOpen, setIsChatOpen] = useState(false);
     const [isChatVisible, setChatVisible] = useState(true);
     const [isGlobalLoading, setIsGlobalLoading] = useState(true);
-    const [selectedTeamForOrder, setSelectedTeamForOrder] = useUrlState<string>('team', '');
 
     const handleLanguageChange = (lang: Language) => {
         setLanguage(lang);
@@ -694,7 +694,8 @@ const App: React.FC = () => {
             language, setLanguage: handleLanguageChange,
             showNotification,
             mobilePageTitle, setMobilePageTitle,
-            advancedSettings, setAdvancedSettings
+            advancedSettings, setAdvancedSettings,
+            selectedTeam, setSelectedTeam
         }}>
             <div className="h-screen relative z-10 overflow-hidden">
                 <BackgroundMusic />
@@ -708,7 +709,7 @@ const App: React.FC = () => {
                             <main className={`${containerClass} ${paddingClass} transition-all duration-300 ${appState === 'fulfillment' ? 'h-full overflow-hidden' : (appState === 'user_journey' || appState === 'create_order' ? 'h-full overflow-y-auto custom-scrollbar' : (appState !== 'admin_dashboard' && appState !== 'role_selection' ? 'h-full overflow-y-auto custom-scrollbar' : ''))}`}>
                                 {appState === 'admin_dashboard' && <AdminDashboard />}
                                 {appState === 'user_journey' && <UserJourney onBackToRoleSelect={() => setAppState('role_selection')} />}
-                                {appState === 'create_order' && <CreateOrderPage team={selectedTeamForOrder} onSaveSuccess={() => setAppState('user_journey')} onCancel={() => setAppState('user_journey')} />}
+                                {appState === 'create_order' && <CreateOrderPage team={selectedTeam} onSaveSuccess={() => setAppState('user_journey')} onCancel={() => setAppState('user_journey')} />}
                                 {appState === 'fulfillment' && <FulfillmentPage />}
                                 {appState === 'role_selection' && <RoleSelectionPage onSelect={(s) => setAppState(s as any)} />}
                             </main>

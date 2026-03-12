@@ -148,7 +148,8 @@ const CreateOrderPage: React.FC<CreateOrderPageProps> = ({ team, onSaveSuccess, 
     
     const teamPages = useMemo(() => {
         if (!appData.pages) return [];
-        return appData.pages.filter((p: TeamPage) => p.Team === team);
+        const requestedTeam = (team || '').trim().toLowerCase();
+        return appData.pages.filter((p: TeamPage) => (p.Team || '').trim().toLowerCase() === requestedTeam);
     }, [appData.pages, team]);
 
     useEffect(() => {
