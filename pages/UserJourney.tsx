@@ -1,415 +1,182 @@
-
-import React, { useState, useContext, useEffect, useMemo, useRef, useCallback } from 'react';
+import React, { useState, useContext, useEffect, useMemo } from 'react';
 import { AppContext } from '../context/AppContext';
-import { ParsedOrder, FullOrder } from '../types';
-import { WEB_APP_URL } from '../constants';
-import Spinner from '../components/common/Spinner';
-import OrdersList from '../components/orders/OrdersList';
 import CreateOrderPage from './CreateOrderPage';
-import EditOrderPage from './EditOrderPage'; 
 import { useUrlState } from '../hooks/useUrlState';
-import UserSalesPageReport from './UserSalesPageReport'; 
-import DeliveryListGeneratorModal from '../components/orders/DeliveryListGeneratorModal';
-import ShippingReport from '../components/reports/ShippingReport';
-import { safeParseDate, getValidDate, getTimestamp } from '../utils/dateUtils';
 import { translations } from '../translations';
-
-type DateRangePreset = 'today' | 'yesterday' | 'this_week' | 'this_month' | 'last_month' | 'this_year' | 'last_year' | 'all' | 'custom';
-
-interface ReportFilterState {
-    datePreset: DateRangePreset;
-    customStart: string;
-    customEnd: string;
-}
-
-const UserOrdersView: React.FC<{ team: string; onAdd: () => void }> = ({ team, onAdd }) => {
-    const { currentUser, refreshData, appData, orders, isOrdersLoading, hasPermission } = useContext(AppContext);
-    
-    // 0. Base Data Isolation: Filter all orders based on user team if not Admin
-    const permittedOrders = useMemo(() => {
-        if (!currentUser) return [];
-        const isInternalAdmin = currentUser.IsSystemAdmin || (currentUser.Role || '').toLowerCase() === 'admin';
-        
-        if (isInternalAdmin) return orders;
-        
-        // Security Check: Verify user actually belongs to the requested team
-        const userAllowedTeams = (currentUser.Team || '').split(',').map(t => t.trim().toLowerCase());
-        const requestedTeam = (team || '').trim().toLowerCase();
-        
-        if (!userAllowedTeams.includes(requestedTeam)) {
-            console.warn(`Access denied for user ${currentUser.UserName} to team ${team}`);
-            return [];
-        }
-        
-        // Strictly filter by the verified team context
-        return orders.filter(o => (o.Team || '').trim().toLowerCase() === requestedTeam);
-    }, [orders, team, currentUser]);
-
-    // Stores parsed orders for the CURRENTLY SELECTED date range only
-    const [viewOrders, setViewOrders] = useState<ParsedOrder[]>([]);
-    const [globalViewOrders, setGlobalViewOrders] = useState<ParsedOrder[]>([]); 
-    
-    // Drilldown State
-    const [drilldownFilters, setDrilldownFilters] = useState<any>(null);
-    const [drilldownData, setDrilldownData] = useState<ParsedOrder[]>([]);
-    const [editingOrder, setEditingOrder] = useState<ParsedOrder | null>(null);
-    
-    const [processing, setProcessing] = useState(false); 
-    const [searchQuery, setSearchQuery] = useState('');
-    
-    // Feature States
-    const [showReport, setShowReport] = useState(false);
-    const [showShippingReport, setShowShippingReport] = useState(false); 
-    const [isDeliveryModalOpen, setIsDeliveryModalOpen] = useState(false);
-
-    // Dashboard Date State
-    const [dateRange, setDateRange] = useState<DateRangePreset>('today');
-    const [customStart, setCustomStart] = useState(new Date().toISOString().split('T')[0]);
-    const [customEnd, setCustomEnd] = useState(new Date().toISOString().split('T')[0]);
-
-    // Report State (Lifted up to preserve on back)
-    const [reportFilters, setReportFilters] = useState<ReportFilterState>({
-        datePreset: 'this_month',
-        customStart: new Date().toISOString().split('T')[0],
-        customEnd: new Date().toISOString().split('T')[0]
-    });
-
-    const userVisibleColumns = useMemo(() => new Set([
-        'index', 'orderId', 'customerName', 'productInfo', 'location', 'pageInfo', 'total', 'shippingService', 'status', 'date', 'print', 'actions'
-    ]), []);
-
-    const getDateBounds = (preset: DateRangePreset, cStart?: string, cEnd?: string) => {
-        const now = new Date();
-        const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
-        let start: Date | null = null;
-        let end: Date | null = new Date();
-
-        switch (preset) {
-            case 'today': start = today; end = new Date(today); end.setHours(23, 59, 59, 999); break;
-            case 'yesterday': start = new Date(today); start.setDate(today.getDate() - 1); end = new Date(today); end.setMilliseconds(-1); break;
-            case 'this_week': const d = now.getDay(); start = new Date(today); start.setDate(today.getDate() - (d === 0 ? 6 : d - 1)); end = new Date(start); end.setDate(start.getDate() + 6); end.setHours(23, 59, 59, 999); break;
-            case 'this_month': start = new Date(now.getFullYear(), now.getMonth(), 1); break;
-            case 'last_month': start = new Date(now.getFullYear(), now.getMonth() - 1, 1); end = new Date(now.getFullYear(), now.getMonth(), 0, 23, 59, 59, 999); break;
-            case 'this_year': start = new Date(now.getFullYear(), 0, 1); break;
-            case 'last_year': start = new Date(now.getFullYear() - 1, 0, 1); end = new Date(now.getFullYear() - 1, 11, 31, 23, 59, 59, 999); break;
-            case 'all': start = null; end = null; break;
-            case 'custom': if (cStart) start = getValidDate(cStart + 'T00:00:00'); if (cEnd) end = getValidDate(cEnd + 'T23:59:59'); break;
-        }
-        return { start, end };
-    };
-
-    const processDataForRange = useCallback((range: DateRangePreset) => {
-        setProcessing(true);
-        setTimeout(() => {
-            const { start, end } = getDateBounds(range, customStart, customEnd);
-            const filtered = permittedOrders.filter(o => {
-                if (o['Order ID'] === 'Opening_Balance' || o['Order ID'] === 'Opening Balance') return false;
-                if (!o.Timestamp) return false;
-                const orderDate = safeParseDate(o.Timestamp);
-                if (!orderDate) return false;
-                if (start && orderDate < start) return false;
-                if (end && orderDate > end) return false;
-                return true;
-            });
-            setGlobalViewOrders(filtered);
-            setViewOrders(filtered.sort((a, b) => getTimestamp(b.Timestamp) - getTimestamp(a.Timestamp)));
-            setProcessing(false);
-        }, 10);
-    }, [permittedOrders, customStart, customEnd]);
-
-    useEffect(() => {
-        processDataForRange(dateRange);
-    }, [dateRange, processDataForRange]);
-
-    useEffect(() => {
-        if (drilldownFilters) {
-            setProcessing(true);
-            setTimeout(() => {
-                const source = permittedOrders;
-                let start: Date | null = null;
-                let end: Date | null = null;
-
-                if (drilldownFilters.isMonthlyDrilldown || drilldownFilters.datePreset === 'custom') {
-                    const dStart = drilldownFilters.customStart || drilldownFilters.startDate;
-                    const dEnd = drilldownFilters.customEnd || drilldownFilters.endDate;
-                    if (dStart) start = getValidDate(dStart + 'T00:00:00');
-                    if (dEnd) end = getValidDate(dEnd + 'T23:59:59');
-                } else if (drilldownFilters.datePreset) {
-                    const bounds = getDateBounds(drilldownFilters.datePreset);
-                    start = bounds.start;
-                    end = bounds.end;
-                }
-
-                const filtered = source.filter(o => {
-                    if (o['Order ID'] === 'Opening_Balance' || o['Order ID'] === 'Opening Balance') return false;
-                    if (start || end) {
-                        if (!o.Timestamp) return false;
-                        const d = safeParseDate(o.Timestamp);
-                        if (!d) return false;
-                        if (start && d < start) return false;
-                        if (end && d > end) return false;
-                    }
-                    if (drilldownFilters.user && o.User !== drilldownFilters.user) return false;
-                    if (drilldownFilters.page && o.Page !== drilldownFilters.page) return false;
-                    return true;
-                });
-                setDrilldownData(filtered.sort((a, b) => getTimestamp(b.Timestamp) - getTimestamp(a.Timestamp)));
-                setProcessing(false);
-            }, 10);
-        }
-    }, [drilldownFilters, permittedOrders]);
-
-    const filteredOrders = useMemo(() => {
-        const source = drilldownFilters ? drilldownData : viewOrders;
-        return source.filter(o => {
-            if (searchQuery.trim()) {
-                const q = searchQuery.toLowerCase();
-                return o['Order ID'].toLowerCase().includes(q) || (o['Customer Name'] || '').toLowerCase().includes(q) || (o['Customer Phone'] || '').includes(q);
-            }
-            return true;
-        });
-    }, [viewOrders, drilldownData, drilldownFilters, searchQuery]);
-
-    const totalFilteredRevenue = useMemo(() => filteredOrders.reduce((sum, o) => sum + (Number(o['Grand Total']) || 0), 0), [filteredOrders]);
-
-    const topTeams = useMemo(() => {
-        const teamStats: Record<string, number> = {};
-        orders.forEach(o => {
-            if (o['Order ID'] === 'Opening_Balance' || o['Order ID'] === 'Opening Balance') return;
-            const tName = (o.Team || 'Unassigned').trim();
-            const { start, end } = getDateBounds(dateRange, customStart, customEnd);
-            if (!o.Timestamp) return;
-            const orderDate = safeParseDate(o.Timestamp);
-            if (!orderDate) return;
-            if (start && orderDate < start) return;
-            if (end && orderDate > end) return;
-            teamStats[tName] = (teamStats[tName] || 0) + (Number(o['Grand Total']) || 0);
-        });
-        return Object.entries(teamStats).map(([name, revenue]) => ({ name, revenue })).sort((a, b) => b.revenue - a.revenue).slice(0, 3);
-    }, [orders, dateRange, customStart, customEnd]);
-
-    const periodLabel = useMemo(() => {
-        switch (dateRange) {
-            case 'today': return 'ថ្ងៃនេះ';
-            case 'yesterday': return 'ម្សិលមិញ';
-            case 'this_week': return 'សប្តាហ៍នេះ';
-            case 'this_month': return 'ខែនេះ';
-            case 'custom': return `តាមកំណត់`;
-            default: return '';
-        }
-    }, [dateRange]);
-
-    const handleSaveEdit = () => { setEditingOrder(null); refreshData(); };
-
-    if (!hasPermission('view_order_list')) return (
-        <div className="flex flex-col justify-center items-center h-96 gap-4 p-6 text-center">
-            <div className="w-16 h-16 bg-red-500/10 rounded-2xl flex items-center justify-center border border-red-500/20 mb-2">
-                <svg className="w-8 h-8 text-red-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" /></svg>
-            </div>
-            <h3 className="text-white font-black uppercase tracking-tight">ចូលមើលមិនបានទេ</h3>
-            <p className="text-gray-500 text-xs font-bold uppercase tracking-widest max-w-xs">អ្នកមិនមានសិទ្ធិចូលមើលបញ្ជីការកម្មង់ឡើយ។ សូមទាក់ទង Admin។</p>
-        </div>
-    );
-
-    if (isOrdersLoading && orders.length === 0) return (
-        <div className="flex flex-col justify-center items-center h-96 gap-4">
-            <Spinner size="lg" />
-            <p className="text-[10px] font-black text-blue-500 uppercase tracking-[0.4em] animate-pulse">Initializing Data Stream...</p>
-        </div>
-    );
-
-    if (editingOrder) return <div className="animate-fade-in p-2"><EditOrderPage order={editingOrder} onSaveSuccess={handleSaveEdit} onCancel={() => setEditingOrder(null)} /></div>;
-
-    if (drilldownFilters) return (
-        <div className="animate-fade-in p-2 min-h-screen flex flex-col">
-            <div className="flex items-center justify-between mb-6 bg-gray-900/50 p-4 rounded-3xl border border-white/5">
-                <div>
-                    <h2 className="text-lg font-black text-white uppercase tracking-tight italic">ផ្ទាំងរបាយការណ៍ប្រតិបត្តិការណ៍</h2>
-                    <div className="flex items-center gap-2 mt-1">
-                        <span className="text-[10px] font-bold text-blue-400 bg-blue-900/20 px-2 py-0.5 rounded border border-blue-500/20">{drilldownFilters.page || drilldownFilters.shipping || 'Filtered View'}</span>
-                        {drilldownFilters.isMonthlyDrilldown && <span className="text-[10px] font-bold text-emerald-400 bg-emerald-900/20 px-2 py-0.5 rounded border border-emerald-500/20">{drilldownFilters.customStart} - {drilldownFilters.customEnd}</span>}
-                        <span className="text-[10px] text-gray-500 font-bold">{drilldownData.length} entries</span>
-                    </div>
-                </div>
-                <button onClick={() => setDrilldownFilters(null)} className="px-6 py-2 bg-gray-800 hover:bg-gray-700 text-white rounded-xl text-xs font-black uppercase tracking-widest border border-white/10 transition-all active:scale-95">Back</button>
-            </div>
-            {processing ? <div className="flex justify-center py-20"><Spinner size="md" /></div> : <OrdersList orders={filteredOrders} showActions={true} visibleColumns={userVisibleColumns} onEdit={setEditingOrder} />}
-        </div>
-    );
-
-    if (showReport) return <div className="animate-fade-in p-2"><UserSalesPageReport orders={permittedOrders} onBack={() => setShowReport(false)} team={team} onNavigate={(filters) => setDrilldownFilters(filters)} initialFilters={reportFilters} onFilterChange={setReportFilters} /></div>;
-
-    if (showShippingReport) return <div className="animate-fade-in p-2 min-h-screen"><ShippingReport orders={permittedOrders} appData={appData} dateFilter={dateRange} startDate={customStart} endDate={customEnd} onNavigate={(filters) => { setDrilldownFilters(filters); setShowShippingReport(false); }} onBack={() => setShowShippingReport(false)} /></div>;
-
-    return (
-        <div className="flex flex-col h-auto md:h-full space-y-4 lg:space-y-6">
-            <style>{`
-                .hide-scrollbar::-webkit-scrollbar { display: none; }
-                .hide-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
-            `}</style>
-
-            <div className="flex-shrink-0 space-y-4 lg:space-y-6">
-                <div className="space-y-3">
-                    <div className="flex items-center justify-between px-2">
-                        <div className="flex items-center gap-2">
-                            <div className="w-1 h-5 bg-blue-500 rounded-full"></div>
-                            <h3 className="text-xs font-black text-white uppercase tracking-widest">តារាងក្រុមឆ្នើម</h3>
-                        </div>
-                        <span className="text-[10px] font-black text-gray-500 uppercase">{periodLabel}</span>
-                    </div>
-
-                    <div className="flex overflow-x-auto gap-4 px-2 pb-2 hide-scrollbar snap-x">
-                        {topTeams.length === 0 ? (
-                            <div className="text-gray-500 text-xs p-4 italic">មិនមានទិន្នន័យសម្រាប់ {periodLabel}</div>
-                        ) : (
-                            topTeams.map((t, i) => (
-                                <div key={t.name} className="flex-shrink-0 w-[240px] sm:w-[280px] snap-center bg-gray-900 border border-white/5 p-4 rounded-3xl flex items-center gap-4 relative overflow-hidden shadow-lg group transition-all hover:bg-gray-800/50">
-                                    <div className={`w-10 h-10 rounded-xl flex items-center justify-center text-xl border ${
-                                        i === 0 ? 'bg-yellow-500/20 text-yellow-500 border-yellow-500/30 shadow-[0_0_15px_rgba(234,179,8,0.15)]' : 
-                                        i === 1 ? 'bg-gray-400/20 text-gray-300 border-gray-400/30' : 
-                                        'bg-orange-600/20 text-orange-500 border-orange-600/30'
-                                    }`}>
-                                        {i === 0 ? '🥇' : i === 1 ? '🥈' : '🥉'}
-                                    </div>
-                                    <div className="min-w-0 flex-1">
-                                        <h4 className="text-[11px] font-black text-gray-400 truncate uppercase tracking-tighter group-hover:text-white transition-colors">{t.name}</h4>
-                                        <p className="text-lg font-black text-blue-400 group-hover:scale-105 origin-left transition-transform">${t.revenue.toLocaleString(undefined, { maximumFractionDigits: 0 })}</p>
-                                    </div>
-                                    <div className={`absolute -right-4 -bottom-4 w-16 h-16 rounded-full blur-3xl opacity-10 ${
-                                        i === 0 ? 'bg-yellow-500' : i === 1 ? 'bg-gray-400' : 'bg-orange-600'
-                                    }`}></div>
-                                </div>
-                            ))
-                        )}
-                    </div>
-                </div>
-
-                <div className="bg-[#020617]/80 backdrop-blur-2xl p-4 rounded-[2rem] border border-white/10 space-y-4 shadow-2xl mx-1 ring-1 ring-white/5 transition-all hover:bg-gray-900/90">
-                    <div className="flex flex-col lg:flex-row lg:items-center gap-4">
-                        <div className="flex items-center gap-1 overflow-x-auto hide-scrollbar bg-black/40 p-1 rounded-xl border border-white/5 flex-shrink-0">
-                            {(['today', 'this_week', 'this_month', 'custom'] as const).map(p => (
-                                <button key={p} onClick={() => setDateRange(p)} className={`flex-shrink-0 px-4 py-2 text-[10px] font-black uppercase rounded-lg transition-all ${dateRange === p ? 'bg-blue-600 text-white shadow-lg shadow-blue-600/40' : 'text-gray-500'}`}>{p === 'today' ? 'ថ្ងៃនេះ' : p === 'this_week' ? 'សប្តាហ៍នេះ' : p === 'this_month' ? 'ខែនេះ' : 'កំណត់'}</button>
-                            ))}
-                        </div>
-
-                        <div className="flex items-center gap-6 lg:ml-auto lg:pr-4">
-                            <div className="flex flex-col">
-                                <span className="text-[9px] font-black text-gray-500 uppercase tracking-widest">ប្រតិបត្តិការណ៍</span>
-                                <span className="text-lg font-black text-white">{filteredOrders.length} <span className="text-[10px] text-gray-600 italic">Orders</span></span>
-                            </div>
-                            {hasPermission('view_revenue') && (
-                                <div className="text-right">
-                                    <span className="text-[9px] font-black text-blue-500 uppercase tracking-widest">ទឹកប្រាក់សរុប</span>
-                                    <p className="text-xl font-black text-transparent bg-clip-text bg-gradient-to-r from-white via-blue-200 to-blue-400">${totalFilteredRevenue.toLocaleString(undefined, { minimumFractionDigits: 0 })}</p>
-                                </div>
-                            )}
-                        </div>
-
-                        <div className="relative flex-grow lg:max-w-xs group">
-                            <input type="text" placeholder="ស្វែងរក..." value={searchQuery} onChange={e => setSearchQuery(e.target.value)} className="w-full bg-black/40 border border-gray-800 rounded-xl py-2.5 pl-9 pr-4 text-xs font-bold text-white placeholder:text-gray-700 focus:border-blue-500/50 transition-all" />
-                            <svg className="absolute left-3 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-gray-600" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round" /></svg>
-                        </div>
-                    </div>
-
-                    <div className="flex flex-wrap gap-2 lg:gap-3">
-                        {hasPermission('view_revenue') && (
-                            <>
-                                <button onClick={() => setShowReport(true)} className="px-5 py-2.5 bg-indigo-600/10 border border-indigo-500/20 text-indigo-400 rounded-xl font-black uppercase text-[9px] tracking-widest hover:bg-indigo-600 hover:text-white transition-all flex items-center gap-2 active:scale-95"><svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" /></svg>Page Report</button>
-                                <button onClick={() => setShowShippingReport(true)} className="px-5 py-2.5 bg-orange-600/10 border border-orange-500/20 text-orange-400 rounded-xl font-black uppercase text-[9px] tracking-widest hover:bg-orange-600 hover:text-white transition-all flex items-center gap-2 active:scale-95"><svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M13 16V6a1 1 0 00-1-1H4a1 1 0 00-1 1v10a1 1 0 001 1h8a1 1 0 001-1z" /><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M20 8h-2m2 4h-2m-2-4h.01M17 16h.01" /></svg>Shipping Cost</button>
-                            </>
-                        )}
-                        <button onClick={() => setIsDeliveryModalOpen(true)} className="px-5 py-2.5 bg-emerald-600/10 border border-emerald-500/20 text-emerald-400 rounded-xl font-black uppercase text-[9px] tracking-widest hover:bg-emerald-600 hover:text-white transition-all flex items-center gap-2 active:scale-95"><svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-3 7h3m-3 4h3m-6-4h.01M9 16h.01" /></svg>Delivery List</button>
-                        {dateRange === 'custom' && (
-                            <div className="flex items-center gap-2 animate-fade-in pl-2 border-l border-white/5 ml-2">
-                                <input type="date" value={customStart} onChange={e => setCustomStart(e.target.value)} className="bg-black/40 border border-white/5 text-[10px] font-black text-white rounded-lg px-3 py-2 outline-none focus:border-blue-500/50" />
-                                <span className="text-gray-600 text-[10px] font-bold">TO</span>
-                                <input type="date" value={customEnd} onChange={e => setCustomEnd(e.target.value)} className="bg-black/40 border border-white/5 text-[10px] font-black text-white rounded-lg px-3 py-2 outline-none focus:border-blue-500/50" />
-                            </div>
-                        )}
-                    </div>
-                </div>
-            </div>
-
-            <div className="flex-1 min-h-0 relative px-1 overflow-visible md:overflow-visible">
-                {processing ? <div className="flex justify-center py-20"><Spinner size="md" /></div> : filteredOrders.length === 0 ? (
-                    <div className="flex items-center justify-center h-64 bg-gray-900/20 rounded-[2rem] border-2 border-dashed border-white/5"><p className="text-[10px] font-black text-gray-600 uppercase tracking-widest italic">រកមិនឃើញទិន្នន័យ</p></div>
-                ) : <div className="h-auto md:h-full"><OrdersList orders={filteredOrders} showActions={true} visibleColumns={userVisibleColumns} onEdit={setEditingOrder} /></div>}
-            </div>
-
-            <div className="md:hidden fixed bottom-6 left-6 right-6 z-40">
-                <div className="bg-gray-900/95 backdrop-blur-3xl p-4 rounded-3xl shadow-2xl border border-white/10 flex justify-between items-center ring-1 ring-white/5">
-                    <div className="flex flex-col">
-                        <span className="text-[8px] font-black text-blue-500 uppercase tracking-[0.2em] mb-0.5">{hasPermission('view_revenue') ? 'Session Revenue' : 'Operational Mode'}</span>
-                        <span className="text-white font-black text-xl tracking-tighter">{hasPermission('view_revenue') ? `$${totalFilteredRevenue.toLocaleString()}` : team}</span>
-                    </div>
-                    <button onClick={onAdd} className="bg-blue-600 hover:bg-blue-500 text-white p-4 rounded-2xl shadow-lg shadow-blue-600/40 active:scale-90 transition-all"><svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path d="M12 4v16m8-8H4" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"/></svg></button>
-                </div>
-            </div>
-            <div className="h-20 md:hidden"></div>
-            <DeliveryListGeneratorModal isOpen={isDeliveryModalOpen} onClose={() => setIsDeliveryModalOpen(false)} orders={permittedOrders} appData={appData} team={team} />
-        </div>
-    );
-};
+import UserOrdersView from '../components/user/UserOrdersView';
 
 const UserJourney: React.FC<{ onBackToRoleSelect: () => void }> = ({ onBackToRoleSelect }) => {
-    const { currentUser, setChatVisibility, setMobilePageTitle } = useContext(AppContext);
+    const { currentUser, setChatVisibility, setMobilePageTitle, language } = useContext(AppContext);
     const [view, setView] = useState<'list' | 'create'>('list');
     const [selectedTeam, setSelectedTeam] = useUrlState<string>('team', '');
     const userTeams = useMemo(() => (currentUser?.Team || '').split(',').map(t => t.trim()).filter(Boolean), [currentUser]);
+    const t = translations[language];
 
     useEffect(() => { setChatVisibility(view !== 'create'); }, [view, setChatVisibility]);
     useEffect(() => { if (userTeams.length === 1 && !selectedTeam) setSelectedTeam(userTeams[0]); }, [userTeams, selectedTeam, setSelectedTeam]);
 
     useEffect(() => {
-        if (selectedTeam) setMobilePageTitle('MY ORDERS');
+        if (selectedTeam) setMobilePageTitle('OPERATIONS');
         else setMobilePageTitle(null);
         return () => setMobilePageTitle(null);
     }, [selectedTeam, setMobilePageTitle]);
 
     if (userTeams.length === 0) return (
-        <div className="page-card text-center p-12 mt-20 max-w-lg mx-auto bg-gray-900/60 backdrop-blur-xl border border-white/5 rounded-[3rem]">
-            <h2 className="text-xl font-black text-white mb-4">សួស្តី, {currentUser?.FullName}</h2>
-            <p className="text-gray-500 text-sm">គណនីរបស់អ្នកមិនទាន់មានក្រុមការងារនៅឡើយទេ។</p>
-            <button onClick={onBackToRoleSelect} className="btn btn-secondary mt-8 w-full rounded-2xl font-black">ត្រឡប់ក្រោយ</button>
+        <div className="flex items-center justify-center min-h-screen p-6 bg-[#020202]">
+            <div className="text-center p-12 max-w-lg w-full bg-white/[0.02] border border-white/5 rounded-[3rem] backdrop-blur-3xl shadow-2xl animate-fade-in">
+                <h2 className="text-2xl font-bold text-white mb-4 italic">Identification Error</h2>
+                <p className="text-gray-500 text-sm leading-relaxed mb-10">គណនីរបស់អ្នកមិនទាន់មានក្រុមការងារនៅឡើយទេ។ សូមទាក់ទងរដ្ឋបាលប្រព័ន្ធ។</p>
+                <button onClick={onBackToRoleSelect} className="w-full py-4 bg-white text-black rounded-2xl font-bold uppercase text-xs tracking-widest hover:bg-gray-200 transition-colors shadow-xl">{t.back}</button>
+            </div>
         </div>
     );
 
     if (!selectedTeam) return (
-        <div className="w-full max-w-4xl mx-auto p-4 mt-6 animate-fade-in flex flex-col items-center">
-            <div className="text-center space-y-3 mb-10">
-                <p className="text-blue-500 font-black uppercase tracking-[0.4em] text-[10px]">Access Identification</p>
-                <h2 className="text-4xl sm:text-5xl font-black text-white tracking-tighter italic">ជ្រើសរើសក្រុមការងារ</h2>
-                <div className="w-16 h-1.5 bg-gradient-to-r from-blue-600 to-indigo-600 rounded-full mx-auto shadow-[0_0_15px_rgba(59,130,246,0.5)]"></div>
+        <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 sm:p-8 overflow-hidden bg-[#020202]">
+            <style>{`
+                @keyframes float { 0%, 100% { transform: translateY(0px) scale(1); opacity: 0.3; } 50% { transform: translateY(-20px) scale(1.1); opacity: 0.6; } }
+                .glow-orb { position: absolute; border-radius: 50%; filter: blur(80px); z-index: 0; animation: float 10s infinite ease-in-out; }
+                .portal-card-pro { 
+                    background: rgba(255, 255, 255, 0.03); 
+                    border: 1px solid rgba(255, 255, 255, 0.08); 
+                    backdrop-filter: blur(20px);
+                    transition: all 0.5s cubic-bezier(0.23, 1, 0.32, 1);
+                }
+                .portal-card-pro:hover { 
+                    background: rgba(255, 255, 255, 0.06); 
+                    border-color: rgba(255, 255, 255, 0.2);
+                    transform: translateY(-8px) scale(1.02);
+                    box-shadow: 0 20px 40px rgba(0,0,0,0.4), 0 0 20px rgba(59, 130, 246, 0.1);
+                }
+                .portal-card-pro:active { transform: translateY(-2px) scale(0.98); }
+                .stagger-in { opacity: 0; transform: translateY(20px); animation: staggerIn 0.6s cubic-bezier(0.23, 1, 0.32, 1) forwards; }
+                @keyframes staggerIn { to { opacity: 1; transform: translateY(0); } }
+            `}</style>
+
+            {/* Dynamic Animated Background */}
+            <div className="absolute inset-0 overflow-hidden">
+                <div className="glow-orb w-[400px] h-[400px] bg-blue-600/20 -top-20 -left-20" style={{ animationDelay: '0s' }}></div>
+                <div className="glow-orb w-[300px] h-[300px] bg-purple-600/20 bottom-20 -right-10" style={{ animationDelay: '-2s' }}></div>
+                <div className="glow-orb w-[250px] h-[250px] bg-emerald-600/10 top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2" style={{ animationDelay: '-5s' }}></div>
             </div>
-            <div className="w-full space-y-4 max-w-md">
-                {userTeams.map((team, idx) => (
-                    <button key={team} onClick={() => setSelectedTeam(team)} className="group relative w-full overflow-hidden bg-gray-900/60 backdrop-blur-3xl border border-white/5 rounded-[2.5rem] p-6 hover:border-blue-500/40 transition-all duration-500 active:scale-[0.97] shadow-xl flex items-center gap-6">
-                        <div className="absolute top-4 left-6"><div className="w-1.5 h-1.5 bg-emerald-500 rounded-full animate-ping opacity-75"></div><div className="absolute top-0 w-1.5 h-1.5 bg-emerald-500 rounded-full"></div></div>
-                        <div className="relative z-10 w-16 h-16 sm:w-20 sm:h-20 bg-gray-800 rounded-3xl flex items-center justify-center border border-white/5 shadow-inner group-hover:bg-blue-600/10 group-hover:border-blue-500/20 transition-all duration-500 group-hover:rotate-6"><span className="text-3xl sm:text-4xl font-black text-transparent bg-clip-text bg-gradient-to-br from-blue-400 to-blue-600">{team.charAt(0)}</span></div>
-                        <div className="relative z-10 flex-grow text-left"><h3 className="text-xl sm:text-2xl font-black text-white uppercase tracking-tight mb-1">{team}</h3><p className="text-[9px] text-gray-500 font-bold uppercase tracking-widest opacity-60">Team Operational Node {idx + 1}</p></div>
-                        <div className="relative z-10 p-3 bg-white/5 rounded-2xl group-hover:bg-blue-600 group-hover:text-white transition-all text-gray-600"><svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={3}><path d="M9 5l7 7-7 7" strokeLinecap="round" strokeLinejoin="round"/></svg></div>
-                        <div className="absolute inset-0 bg-gradient-to-r from-blue-600/0 via-blue-600/5 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-700"></div>
-                        <div className="absolute -bottom-10 -right-10 w-32 h-32 bg-blue-500 opacity-0 group-hover:opacity-5 blur-[40px] transition-opacity"></div>
+
+            <div className="w-full max-w-4xl flex flex-col items-center relative z-10">
+                <div className="text-center space-y-4 mb-10 sm:mb-16 stagger-in" style={{ animationDelay: '0.1s' }}>
+                    <div className="flex flex-col items-center">
+                        <div className="w-12 h-1.5 bg-gradient-to-r from-blue-600 to-indigo-600 rounded-full mb-8 shadow-[0_0_20px_rgba(37,99,235,0.4)]"></div>
+                        <p className="text-blue-500 font-black uppercase tracking-[0.5em] text-[10px] mb-2 opacity-80">Connected Node Portal</p>
+                        <h2 className="text-4xl sm:text-6xl font-black text-white tracking-tighter italic text-center uppercase leading-none">
+                            Select <span className="text-transparent bg-clip-text bg-gradient-to-r from-blue-400 via-indigo-400 to-purple-400">Team</span>
+                        </h2>
+                    </div>
+                    <p className="text-gray-500 text-xs sm:text-sm font-medium tracking-widest uppercase opacity-40 max-w-md mx-auto">{t.role_subtext}</p>
+                </div>
+
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-5 w-full max-w-2xl">
+                    {userTeams.map((team, idx) => (
+                        <button 
+                            key={team} 
+                            onClick={() => setSelectedTeam(team)} 
+                            className="portal-card-pro group relative overflow-hidden rounded-[2.5rem] p-8 flex flex-col gap-10 text-left stagger-in"
+                            style={{ animationDelay: `${0.2 + (idx * 0.1)}s` }}
+                        >
+                            <div className="flex items-center justify-between relative z-10">
+                                <div className="w-14 h-14 bg-gradient-to-br from-white/5 to-white/[0.01] rounded-2xl flex items-center justify-center border border-white/10 group-hover:from-blue-600 group-hover:to-indigo-600 group-hover:border-transparent transition-all duration-500 shadow-xl">
+                                    <span className="text-2xl font-black italic text-white group-hover:scale-110 transition-transform">{team.charAt(0)}</span>
+                                </div>
+                                <div className="p-3 rounded-full bg-white/5 border border-white/10 opacity-0 group-hover:opacity-100 group-hover:translate-x-0 -translate-x-4 transition-all duration-500 shadow-inner">
+                                    <svg className="w-5 h-5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={3}><path d="M17 8l4 4m0 0l-4 4m4-4H3"/></svg>
+                                </div>
+                            </div>
+                            
+                            <div className="relative z-10">
+                                <h3 className="text-2xl sm:text-3xl font-black text-white uppercase tracking-tighter leading-none mb-3 group-hover:text-blue-400 transition-colors">{team}</h3>
+                                <div className="flex items-center gap-2.5">
+                                    <div className="w-1.5 h-1.5 bg-blue-500 rounded-full shadow-[0_0_8px_rgba(59,130,246,0.8)]"></div>
+                                    <p className="text-[10px] text-gray-500 font-bold uppercase tracking-[0.2em] group-hover:text-gray-300 transition-colors">Operational Node 0{idx + 1}</p>
+                                </div>
+                            </div>
+
+                            {/* Background Pattern */}
+                            <div className="absolute inset-0 opacity-[0.03] group-hover:opacity-[0.07] pointer-events-none transition-opacity duration-700" style={{ backgroundImage: 'radial-gradient(circle, white 1px, transparent 1px)', backgroundSize: '24px 24px' }}></div>
+                            
+                            {/* Hover Gradient Overlay */}
+                            <div className="absolute inset-0 bg-gradient-to-br from-blue-600/0 via-transparent to-indigo-600/0 group-hover:from-blue-600/5 group-hover:to-indigo-600/10 transition-all duration-700"></div>
+                        </button>
+                    ))}
+                </div>
+
+                {currentUser?.IsSystemAdmin && (
+                    <button 
+                        onClick={onBackToRoleSelect} 
+                        className="mt-12 text-[10px] font-black text-gray-600 uppercase tracking-[0.4em] hover:text-white transition-all flex items-center gap-3 group px-6 py-3 rounded-full hover:bg-white/5 border border-transparent hover:border-white/5 stagger-in"
+                        style={{ animationDelay: '0.5s' }}
+                    >
+                        <svg className="w-4 h-4 group-hover:-translate-x-1 transition-transform" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={3}><path d="M15 19l-7-7 7-7" strokeLinecap="round" strokeLinejoin="round"/></svg>
+                        {t.change_team}
                     </button>
-                ))}
+                )}
             </div>
-            {currentUser?.IsSystemAdmin && <button onClick={onBackToRoleSelect} className="mt-12 flex items-center gap-2 text-[10px] font-black text-gray-600 uppercase tracking-widest hover:text-blue-500 transition-all active:scale-95"><svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={3}><path d="M15 19l-7-7 7-7" strokeLinecap="round" strokeLinejoin="round"/></svg>ត្រឡប់ទៅតួនាទី</button>}
         </div>
     );
 
     if (view === 'create') return <CreateOrderPage team={selectedTeam} onSaveSuccess={() => setView('list')} onCancel={() => setView('list')} />;
 
     return (
-        <div className="w-full max-w-full mx-auto p-2 sm:p-4 animate-fade-in h-full flex flex-col relative overflow-y-auto md:overflow-hidden">
-            <div className="flex-shrink-0 flex flex-col md:flex-row justify-between items-start md:items-center mb-4 lg:mb-6 gap-4 px-2">
-                <div className="space-y-1">
-                    <div className="hidden md:flex items-center gap-3"><h1 className="text-xl sm:text-2xl font-black text-white italic tracking-tighter leading-none">MY ORDERS</h1><div className="h-5 w-px bg-white/10"></div><span className="text-blue-500 font-black text-xs uppercase tracking-widest">{selectedTeam}</span></div>
-                    <div className="md:hidden flex items-center gap-2"><span className="text-[10px] bg-blue-900/30 text-blue-400 px-3 py-1 rounded-full border border-blue-500/20 font-black uppercase tracking-widest">Team: {selectedTeam}</span></div>
-                    <div className="flex gap-2">{userTeams.length > 1 && <button onClick={() => setSelectedTeam('')} className="text-[9px] font-black uppercase text-gray-500 hover:text-blue-400 transition-colors flex items-center gap-1.5 bg-gray-800/50 px-3 py-1.5 rounded-lg border border-white/5 active:scale-95"><svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path d="M8 7h12m0 0l-4-4m4 4l-4 4m0 6H4m0 0l4 4m-4-4l4-4" strokeWidth={3} /></svg>Switch Team</button>}</div>
+        <div className="w-full max-w-full mx-auto px-4 sm:px-6 py-4 sm:py-6 animate-fade-in flex flex-col min-h-screen bg-[#020202]">
+            <style>{`
+                .header-glass {
+                    background: rgba(15, 23, 42, 0.6);
+                    backdrop-filter: blur(20px);
+                    border: 1px solid rgba(255, 255, 255, 0.05);
+                }
+                .btn-create {
+                    background: linear-gradient(135deg, #2563eb 0%, #4f46e5 100%);
+                    box-shadow: 0 10px 20px -5px rgba(37, 99, 235, 0.4);
+                }
+                .btn-create:hover {
+                    box-shadow: 0 15px 25px -5px rgba(37, 99, 235, 0.5);
+                    transform: translateY(-2px);
+                }
+            `}</style>
+
+            {/* Modern Global Header */}
+            <div className="flex-shrink-0 flex items-center justify-between mb-8 pb-6 border-b border-white/5">
+                <div className="flex items-center gap-4">
+                    <div className="w-12 h-12 bg-white text-black rounded-2xl flex items-center justify-center shadow-2xl rotate-3 hover:rotate-0 transition-transform duration-500">
+                        <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2.5}><path d="M16 11V7a4 4 0 00-8 0v4M5 9h14l1 12H4L5 9z" /></svg>
+                    </div>
+                    <div>
+                        <h1 className="text-base sm:text-xl font-black text-white tracking-tighter uppercase italic leading-none">Operational <span className="text-blue-500">Portal</span></h1>
+                        <div className="flex items-center gap-2 mt-2">
+                            <div className="w-1.5 h-1.5 bg-emerald-500 rounded-full animate-pulse"></div>
+                            <p className="text-[9px] font-black text-gray-500 uppercase tracking-[0.3em]">Node: {selectedTeam}</p>
+                        </div>
+                    </div>
                 </div>
-                <button onClick={() => setView('create')} className="hidden md:flex px-8 py-3 bg-blue-600 hover:bg-blue-500 text-white font-black uppercase tracking-widest text-[10px] rounded-xl shadow-lg shadow-blue-900/20 transition-all active:scale-95 items-center gap-2 border border-blue-400/20"><svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={3}><path d="M12 4v16m8-8H4"/></svg>Create Order</button>
+
+                <div className="flex items-center gap-3">
+                    <button 
+                        onClick={() => setView('create')} 
+                        className="btn-create flex px-4 sm:px-8 py-2.5 sm:py-3 text-white rounded-2xl text-[10px] sm:text-[11px] font-black uppercase tracking-[0.15em] transition-all active:scale-95 items-center gap-2.5"
+                    >
+                        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={3}><path d="M12 4v16m8-8H4"/></svg>
+                        <span className="hidden sm:inline">Create New Order</span>
+                        <span className="sm:hidden">Create</span>
+                    </button>
+
+                    {userTeams.length > 1 && (
+                        <button 
+                            onClick={() => setSelectedTeam('')} 
+                            className="px-4 py-2.5 text-[10px] font-black uppercase tracking-widest text-gray-400 bg-white/5 hover:bg-white/10 hover:text-white rounded-2xl border border-white/5 active:scale-95 transition-all"
+                        >
+                            Switch
+                        </button>
+                    )}
+                </div>
             </div>
-            <div className="flex-1 min-h-0"><UserOrdersView team={selectedTeam} onAdd={() => setView('create')} /></div>
+            
+            <div className="flex-1 h-auto"><UserOrdersView team={selectedTeam} onAdd={() => setView('create')} /></div>
         </div>
     );
 };

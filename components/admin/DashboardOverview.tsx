@@ -76,10 +76,10 @@ const DashboardOverview: React.FC<DashboardOverviewProps> = ({
     return (
         <div className="space-y-6 lg:space-y-8 animate-fade-in pb-10">
             {/* Header */}
-            <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 bg-gray-800/10 p-5 rounded-[2rem] border border-white/5 backdrop-blur-md">
-                <div>
-                    <h2 className="text-xl lg:text-2xl 2xl:text-3xl font-black text-white leading-tight">សួស្តី, {currentUser?.FullName} 👋</h2>
-                    <p className="text-gray-500 text-xs lg:text-sm font-bold uppercase tracking-widest mt-1.5">
+            <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 bg-gray-800/10 p-4 sm:p-5 rounded-2xl sm:rounded-[2rem] border border-white/5 backdrop-blur-md">
+                <div className="flex flex-col">
+                    <h2 className="text-lg sm:text-xl lg:text-2xl font-black text-white leading-tight">សួស្តី, {currentUser?.FullName} 👋</h2>
+                    <p className="text-gray-500 text-[10px] sm:text-xs font-bold uppercase tracking-widest mt-1">
                         {new Date().toLocaleDateString('km-KH', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })}
                     </p>
                 </div>

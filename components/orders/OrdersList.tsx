@@ -213,9 +213,6 @@ ${dateStr}
                     />
                 )}
             </div>
-
-            {/* Aesthetic Spacer (Reduced) */}
-            <div className="h-20 w-full pointer-events-none opacity-0 shrink-0" aria-hidden="true"></div>
         </div>
     );
 };

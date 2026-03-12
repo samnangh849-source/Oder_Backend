@@ -6,7 +6,7 @@ import { AppContext } from '../../context/AppContext';
 interface UserAvatarProps {
     avatarUrl?: string;
     name: string;
-    size?: 'sm' | 'md' | 'lg' | 'xl';
+    size?: 'xxs' | 'xs' | 'sm' | 'md' | 'lg' | 'xl';
     className?: string;
     onClick?: () => void;
     enablePreview?: boolean;
@@ -31,7 +31,9 @@ const UserAvatar: React.FC<UserAvatarProps> = ({ avatarUrl, name, size, classNam
     let dimClasses = "";
     // If size is provided, set standard dimensions and text size. 
     // If not, rely on className (useful for responsive headers).
-    if (size === 'sm') dimClasses = "w-8 h-8 text-xs";
+    if (size === 'xxs') dimClasses = "w-5 h-5 text-[8px]";
+    else if (size === 'xs') dimClasses = "w-6 h-6 text-[10px]";
+    else if (size === 'sm') dimClasses = "w-8 h-8 text-xs";
     else if (size === 'md') dimClasses = "w-10 h-10 text-sm";
     else if (size === 'lg') dimClasses = "w-12 h-12 text-base";
     else if (size === 'xl') dimClasses = "w-16 h-16 text-lg";

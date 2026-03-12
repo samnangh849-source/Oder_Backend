@@ -1002,13 +1002,13 @@ const CreateOrderPage: React.FC<CreateOrderPageProps> = ({ team, onSaveSuccess, 
                         <div className="relative w-32 h-32 mx-auto mb-8 flex items-center justify-center">
                             <svg className="w-full h-full -rotate-90 transform" viewBox="0 0 100 100">
                                 {/* Background Circle */}
-                                <circle 
-                                    cx="50" cy="50" r="45" 
-                                    className="stroke-gray-800 fill-none" 
-                                    strokeWidth="6" 
+                                <circle
+                                    cx="50" cy="50" r="45"
+                                    className="stroke-gray-800 fill-none"
+                                    strokeWidth="6"
                                 />
                                 {/* Progress Circle */}
-                                <circle 
+                                <circle
                                     cx="50" cy="50" r="45" 
                                     className="stroke-emerald-500 fill-none transition-all duration-1000 ease-linear" 
                                     strokeWidth="6" 

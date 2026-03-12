@@ -703,7 +703,7 @@ const App: React.FC = () => {
                         <>
                             {originalAdminUser && <ImpersonationBanner />}
                             {shouldShowHeader && <Header appState={appState} onBackToRoleSelect={() => setAppState('role_selection')} />}
-                            <main className={`${containerClass} ${paddingClass} transition-all duration-300 ${appState === 'user_journey' || appState === 'fulfillment' ? 'h-full overflow-hidden' : (appState !== 'admin_dashboard' && appState !== 'role_selection' ? 'h-full overflow-y-auto custom-scrollbar' : '')}`}>
+                            <main className={`${containerClass} ${paddingClass} transition-all duration-300 ${appState === 'fulfillment' ? 'h-full overflow-hidden' : (appState === 'user_journey' ? 'h-full overflow-y-auto custom-scrollbar' : (appState !== 'admin_dashboard' && appState !== 'role_selection' ? 'h-full overflow-y-auto custom-scrollbar' : ''))}`}>
                                 {appState === 'admin_dashboard' && <AdminDashboard />}
                                 {appState === 'user_journey' && <UserJourney onBackToRoleSelect={() => setAppState('role_selection')} />}
                                 {appState === 'fulfillment' && <FulfillmentPage />}
@@ -737,7 +737,6 @@ const App: React.FC = () => {
                         </div>
                     </Modal>
                 )}
-                <ScrollToTop />
             </div>
         </AppContext.Provider>
     );

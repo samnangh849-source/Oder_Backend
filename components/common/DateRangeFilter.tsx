@@ -18,12 +18,12 @@ const DateRangeFilter: React.FC<DateRangeFilterProps> = ({
     return (
         <div className="space-y-4">
             <div className="flex flex-wrap items-center gap-2">
-                <div className="flex items-center gap-1 bg-gray-800/80 p-1 rounded-xl border border-gray-700 shadow-inner">
+                <div className="flex items-center gap-1.5 bg-gray-800/80 p-1.5 rounded-2xl border border-gray-700 shadow-inner">
                     {(['today', 'this_week', 'this_month', 'custom'] as const).map(p => (
                         <button 
                             key={p} 
                             onClick={() => onRangeChange(p)} 
-                            className={`px-4 py-2 text-[10px] font-black uppercase rounded-lg transition-all ${dateRange === p ? 'bg-blue-600 text-white shadow-lg' : 'text-gray-500 hover:text-gray-300'}`}
+                            className={`px-5 py-2.5 text-[12px] font-black uppercase rounded-xl transition-all active:scale-95 ${dateRange === p ? 'bg-blue-600 text-white shadow-lg' : 'text-gray-500 hover:text-gray-300'}`}
                         >
                             {p === 'today' ? 'ថ្ងៃនេះ' : p === 'this_week' ? 'សប្តាហ៍នេះ' : p === 'this_month' ? 'ខែនេះ' : 'កំណត់'}
                         </button>
