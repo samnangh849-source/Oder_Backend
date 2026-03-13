@@ -159,7 +159,11 @@ const App: React.FC = () => {
         tokenRef.current = null;
         setAppState('login');
         await CacheService.remove(CACHE_KEYS.SESSION);
-        // Note: We keep APP_DATA cache to make next login faster
+        // IMPORTANT: Also clear app data to prevent permission "leaks" between users on same browser
+        await CacheService.remove(CACHE_KEYS.APP_DATA);
+        await CacheService.remove(CACHE_KEYS.ALL_ORDERS);
+        setAppData(initialAppData);
+        setOrders([]);
     }, [setAppState]);
 
     // Sync unreadCount to localStorage whenever it changes

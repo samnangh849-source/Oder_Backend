@@ -376,7 +376,7 @@ const OrdersDashboard: React.FC<OrdersDashboardProps> = ({ onBack, initialFilter
     }
 
     return (
-        <div className="w-full h-full flex flex-col animate-fade-in relative overflow-hidden">
+        <div className="w-full h-full flex flex-col animate-fade-in relative bg-[#020617] overflow-hidden">
             <div className="md:hidden">
                 <FilterPanel isOpen={isFilterModalOpen} onClose={() => setIsFilterModalOpen(false)}>
                     <OrderFilters filters={filters} setFilters={setFilters} orders={enrichedOrders} usersList={usersList} appData={appData} calculatedRange={calculatedRange} />
@@ -384,8 +384,8 @@ const OrdersDashboard: React.FC<OrdersDashboardProps> = ({ onBack, initialFilter
             </div>
             <div className="hidden md:block">
                 <Modal isOpen={isFilterModalOpen} onClose={() => setIsFilterModalOpen(false)} maxWidth="max-w-5xl">
-                    <div className="p-8 bg-[#0f172a] rounded-[2.5rem] overflow-hidden relative flex flex-col h-full">
-                        <div className="flex justify-between items-center mb-8 relative z-10">
+                    <div className="p-8 bg-[#0f172a] rounded-[2.5rem] overflow-hidden relative flex flex-col h-[85vh]">
+                        <div className="flex-shrink-0 flex justify-between items-center mb-8 relative z-10">
                             <div className="flex items-center gap-4">
                                 <div className="w-2 h-10 bg-blue-600 rounded-full shadow-[0_0_20px_rgba(37,99,235,0.5)]"></div>
                                 <div>
@@ -396,14 +396,14 @@ const OrdersDashboard: React.FC<OrdersDashboardProps> = ({ onBack, initialFilter
                             <button onClick={() => setIsFilterModalOpen(false)} className="w-12 h-12 bg-white/5 rounded-2xl flex items-center justify-center text-gray-500 hover:text-white transition-all active:scale-90 border border-white/5 hover:bg-white/10 shadow-xl">&times;</button>
                         </div>
                         
-                        <div className="flex-grow pr-4 relative z-10">
+                        <div className="flex-grow overflow-y-auto pr-4 relative z-10 custom-scrollbar">
                             <OrderFilters filters={filters} setFilters={setFilters} orders={enrichedOrders} usersList={usersList} appData={appData} calculatedRange={calculatedRange} />
                         </div>
                         
-                        <div className="mt-10 flex justify-center relative z-10 border-t border-white/5 pt-8">
+                        <div className="flex-shrink-0 mt-6 flex justify-center relative z-10 border-t border-white/5 pt-6">
                             <button 
                                 onClick={() => setIsFilterModalOpen(false)} 
-                                className="btn btn-primary w-full max-w-md py-5 text-[13px] font-black uppercase tracking-[0.25em] shadow-[0_20px_50px_rgba(37,99,235,0.3)] rounded-2xl active:scale-[0.98] transition-all"
+                                className="w-full py-4 bg-blue-600 hover:bg-blue-500 text-white text-[13px] font-black uppercase tracking-[0.25em] shadow-[0_20px_50px_rgba(37,99,235,0.3)] rounded-2xl active:scale-[0.98] transition-all"
                             >
                                 Apply Filter Configuration
                             </button>
@@ -414,53 +414,54 @@ const OrdersDashboard: React.FC<OrdersDashboardProps> = ({ onBack, initialFilter
                 </Modal>
             </div>
 
-            {/* Header Section (Compact) */}
-            <div className="flex-shrink-0 px-1 pt-1">
-                <div className="flex flex-col lg:flex-row justify-between items-center mb-2 gap-2">
-                    <div className="flex items-center gap-3">
-                        <button onClick={onBack} className="p-2 hover:bg-white/5 rounded-xl transition-all active:scale-90 text-gray-400 hover:text-white">
-                            <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M15 19l-7-7 7-7" /></svg>
+            {/* Header Section (Fixed Height Area) */}
+            <div className="flex-shrink-0 px-4 pt-4 pb-2">
+                <div className="flex flex-col lg:flex-row justify-between items-center mb-4 gap-4">
+                    <div className="flex items-center gap-4">
+                        <button onClick={onBack} className="p-2.5 bg-white/5 hover:bg-white/10 rounded-2xl transition-all active:scale-90 text-gray-400 hover:text-white border border-white/5 shadow-xl">
+                            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={3}><path d="M15 19l-7-7 7-7" /></svg>
                         </button>
-                        <h1 className="hidden md:block text-lg lg:text-xl font-black text-white italic tracking-tighter leading-none py-1">គ្រប់គ្រងប្រតិបត្តិការណ៍</h1>
-                        <div className="flex items-center gap-2">
-                            <div className="flex items-center gap-1.5 px-2 py-0.5 bg-blue-600/10 rounded-full border border-blue-500/20">
-                                <div className="w-1 h-1 rounded-full bg-blue-500 animate-pulse"></div>
-                                <span className="text-[8px] xl:text-[10px] font-black text-blue-400 uppercase tracking-widest">{filteredOrders.length} Logged</span>
-                            </div>
-                            {filters.team && (
-                                <div className="px-2 py-0.5 bg-purple-600/10 rounded-full border border-purple-500/20">
-                                    <span className="text-[8px] xl:text-[10px] font-black text-purple-400 uppercase tracking-widest">Team: {filters.team}</span>
+                        <div className="flex flex-col">
+                            <h1 className="hidden md:block text-xl font-black text-white italic tracking-tighter leading-none">គ្រប់គ្រងប្រតិបត្តិការណ៍</h1>
+                            <div className="flex items-center gap-2 mt-1">
+                                <div className="flex items-center gap-1.5 px-2 py-0.5 bg-blue-600/10 rounded-full border border-blue-500/20">
+                                    <div className="w-1 h-1 rounded-full bg-blue-500 animate-pulse"></div>
+                                    <span className="text-[10px] font-black text-blue-400 uppercase tracking-widest">{filteredOrders.length} Logged</span>
                                 </div>
-                            )}
+                                {filters.team && (
+                                    <div className="px-2 py-0.5 bg-purple-600/10 rounded-full border border-purple-500/20">
+                                        <span className="text-[10px] font-black text-purple-400 uppercase tracking-widest">Team: {filters.team}</span>
+                                    </div>
+                                )}
+                            </div>
                         </div>
                     </div>
-                    {/* Floating Add Button for Mobile/Desktop */}
-                    <div className="flex items-center gap-2">
-                        <button onClick={() => window.location.hash = '#/create-order'} className="flex items-center gap-2 px-4 md:px-6 py-2 bg-blue-600 hover:bg-blue-500 text-white rounded-xl text-[10px] md:text-xs font-black uppercase tracking-widest shadow-lg shadow-blue-600/20 transition-all active:scale-95">
+                    
+                    <div className="flex items-center gap-3">
+                        <button onClick={() => window.location.hash = '#/create-order'} className="flex items-center gap-2 px-6 py-3 bg-blue-600 hover:bg-blue-500 text-white rounded-2xl text-xs font-black uppercase tracking-widest shadow-[0_10px_30px_rgba(37,99,235,0.3)] transition-all active:scale-95 border border-blue-400/20">
                             <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={3}><path d="M12 4v16m8-8H4" /></svg>
-                            <span className="hidden sm:inline">បន្ថែមថ្មី</span>
-                            <span className="sm:hidden">Add</span>
+                            <span>បន្ថែមថ្មី</span>
                         </button>
                     </div>
                 </div>
 
-                <div className="bg-[#020617]/60 backdrop-blur-2xl border border-white/5 rounded-2xl p-2 xl:p-3 mb-2 shadow-xl group transition-all hover:bg-gray-800/40">
-                    <div className="flex flex-col lg:flex-row justify-between items-center gap-2">
+                <div className="bg-gray-900/40 backdrop-blur-3xl border border-white/5 rounded-3xl p-3 mb-4 shadow-2xl transition-all">
+                    <div className="flex flex-col lg:flex-row justify-between items-center gap-3">
                         <div className="relative w-full lg:max-w-xl group">
-                            <input type="text" placeholder="ស្វែងរក..." value={searchQuery} onChange={e => setSearchQuery(e.target.value)} className="form-input !pl-10 !py-2.5 bg-black/40 border-gray-800 rounded-xl text-[12px] font-bold text-white placeholder:text-gray-700 focus:border-blue-500/50 focus:bg-black/60 transition-all shadow-inner" />
-                            <div className="absolute left-3.5 top-1/2 -translate-y-1/2 flex items-center gap-2.5 text-gray-700 group-focus-within:text-blue-500 transition-colors">
-                                <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={3}><path d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" /></svg>
-                                <div className="h-4 w-px bg-gray-800"></div>
+                            <input type="text" placeholder="ស្វែងរកតាមឈ្មោះ ឬលេខទូរស័ព្ទ..." value={searchQuery} onChange={e => setSearchQuery(e.target.value)} className="form-input !pl-12 !py-3.5 bg-black/40 border-gray-800/50 rounded-2xl text-sm font-bold text-white placeholder:text-gray-600 focus:border-blue-500/50 focus:bg-black/60 transition-all shadow-inner" />
+                            <div className="absolute left-4 top-1/2 -translate-y-1/2 flex items-center gap-3 text-gray-600 group-focus-within:text-blue-500 transition-colors">
+                                <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2.5}><path d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" /></svg>
+                                <div className="h-5 w-px bg-gray-800/50"></div>
                             </div>
                         </div>
-                        <div className="flex items-center gap-2 w-full lg:w-auto">
+                        <div className="flex items-center gap-3 w-full lg:w-auto">
                             {/* Group By UI */}
-                            <div className="flex items-center gap-2 bg-gray-900 border border-gray-800 rounded-xl px-3 h-11">
-                                <span className="text-[10px] font-black text-gray-500 uppercase tracking-tighter leading-none flex flex-col">
+                            <div className="flex items-center gap-3 bg-black/40 border border-gray-800/50 rounded-2xl px-4 h-12 shadow-inner">
+                                <span className="text-[10px] font-black text-gray-500 uppercase tracking-widest leading-none flex flex-col">
                                     <span>ក្រុមតាម</span>
-                                    <span className="text-[7px] opacity-50">Group By</span>
+                                    <span className="text-[7px] opacity-40">Group</span>
                                 </span>
-                                <select value={groupBy} onChange={e => setGroupBy(e.target.value)} className="bg-transparent border-none text-[11px] font-black text-purple-400 p-0 focus:ring-0 uppercase tracking-tight cursor-pointer">
+                                <select value={groupBy} onChange={e => setGroupBy(e.target.value)} className="bg-transparent border-none text-xs font-black text-purple-400 p-0 focus:ring-0 uppercase tracking-tight cursor-pointer">
                                     <option value="none">None</option>
                                     <option value="Page">Page</option>
                                     <option value="Team">Team</option>
@@ -471,58 +472,58 @@ const OrdersDashboard: React.FC<OrdersDashboardProps> = ({ onBack, initialFilter
                             </div>
 
                             {/* Sort UI */}
-                            <div className="flex items-center gap-2 bg-gray-900 border border-gray-800 rounded-xl px-3 h-11">
-                                <span className="text-[10px] font-black text-gray-500 uppercase tracking-tighter leading-none flex flex-col">
-                                    <span>តម្រៀបតាម</span>
-                                    <span className="text-[7px] opacity-50">Order By</span>
+                            <div className="flex items-center gap-3 bg-black/40 border border-gray-800/50 rounded-2xl px-4 h-12 shadow-inner">
+                                <span className="text-[10px] font-black text-gray-500 uppercase tracking-widest leading-none flex flex-col">
+                                    <span>តម្រៀប</span>
+                                    <span className="text-[7px] opacity-40">Sort</span>
                                 </span>
-                                <select value={sortBy} onChange={e => setSortBy(e.target.value)} className="bg-transparent border-none text-[11px] font-black text-blue-400 p-0 focus:ring-0 uppercase tracking-tight cursor-pointer">
+                                <select value={sortBy} onChange={e => setSortBy(e.target.value)} className="bg-transparent border-none text-xs font-black text-blue-400 p-0 focus:ring-0 uppercase tracking-tight cursor-pointer">
                                     <option value="date">Date</option>
                                     <option value="total">Amount</option>
                                     <option value="customer">Client</option>
                                     <option value="id">ID</option>
                                 </select>
-                                <button onClick={() => setSortOrder(prev => prev === 'asc' ? 'desc' : 'asc')} className="ml-1 text-blue-500 hover:text-white transition-colors">
+                                <button onClick={() => setSortOrder(prev => prev === 'asc' ? 'desc' : 'asc')} className="ml-1 text-blue-500 hover:text-white transition-colors active:scale-90">
                                     {sortOrder === 'asc' ? 
-                                        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={3}><path d="M3 4h13M3 8h9m-9 4h6m4 0l4-4m0 0l4 4m-4-4v12" strokeLinecap="round" strokeLinejoin="round"/></svg> :
-                                        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={3}><path d="M3 4h13M3 8h9m-9 4h6m4 0l4-4m0 0l4 4m-4-4v12" strokeLinecap="round" strokeLinejoin="round"/></svg>
+                                        <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2.5}><path d="M3 4h13M3 8h9m-9 4h6m4 0l4-4m0 0l4 4m-4-4v12" strokeLinecap="round" strokeLinejoin="round"/></svg> :
+                                        <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2.5}><path d="M3 4h13M3 8h9m-9 4h6m4 0l4-4m0 0l4 4m-4-4v12" strokeLinecap="round" strokeLinejoin="round"/></svg>
                                     }
                                 </button>
                             </div>
 
-                            <button onClick={() => setIsFilterModalOpen(true)} className="flex-1 lg:flex-none flex items-center justify-center gap-2 px-4 py-2.5 bg-gray-900 border border-gray-800 text-gray-400 hover:text-white rounded-xl text-[11px] font-black uppercase tracking-widest transition-all active:scale-95 h-11">
+                            <button onClick={() => setIsFilterModalOpen(true)} className="flex-1 lg:flex-none flex items-center justify-center gap-2.5 px-5 bg-black/40 border border-gray-800/50 text-gray-400 hover:text-white rounded-2xl text-[11px] font-black uppercase tracking-widest transition-all active:scale-95 h-12 shadow-inner">
                                 <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2.5}><path d="M3 4a1 1 0 011-1h16a1 1 0 011 1v2.586a1 1 0 01-.293.707l-6.414 6.414a1 1 0 00-.293.707V17l-4 4v-6.586a1 1 0 00-.293-.707L3.293 7.293A1 1 0 013 6.586V4z" /></svg>
                                 Filters
                             </button>
-                            <button onClick={() => setIsPdfModalOpen(true)} className="flex-1 lg:flex-none flex items-center justify-center gap-2 px-4 py-2.5 bg-red-600/10 border border-red-500/20 text-red-500 hover:bg-red-600 hover:text-white rounded-xl text-[11px] font-black uppercase tracking-widest transition-all active:scale-95 h-11">
+                            <button onClick={() => setIsPdfModalOpen(true)} className="flex-1 lg:flex-none flex items-center justify-center gap-2.5 px-5 bg-red-600/10 border border-red-500/20 text-red-500 hover:bg-red-600 hover:text-white rounded-2xl text-[11px] font-black uppercase tracking-widest transition-all active:scale-95 h-12 shadow-lg shadow-red-900/10">
                                 <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={3}><path d="M7 21h10a2 2 0 002-2V9.414a1 1 0 00-.293-.707l-5.414-5.414A1 1 0 0012.586 3H7a2 2 0 00-2 2v14a2 2 0 002 2z" /></svg>
                                 Export
                             </button>
                             <button 
                                 onClick={() => setShowBorders(!showBorders)} 
-                                className={`flex-1 lg:flex-none flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl text-[11px] font-black uppercase tracking-widest transition-all active:scale-95 border h-11 ${showBorders ? 'bg-blue-600 border-blue-500 text-white shadow-lg shadow-blue-900/40' : 'bg-gray-900 border-gray-800 text-gray-400 hover:text-white'}`}
+                                className={`flex-1 lg:flex-none flex items-center justify-center gap-2.5 px-5 rounded-2xl text-[11px] font-black uppercase tracking-widest transition-all active:scale-95 border h-12 ${showBorders ? 'bg-blue-600 border-blue-500 text-white shadow-lg shadow-blue-900/40' : 'bg-black/40 border-gray-800/50 text-gray-400 hover:text-white shadow-inner'}`}
                             >
                                 <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2.5}>
                                     <path strokeLinecap="round" strokeLinejoin="round" d="M4 5h16M4 12h16M4 19h16" />
                                 </svg>
                                 Borders
                             </button>
-                            <div className="hidden lg:block h-11"><ColumnToggler columns={availableColumns} visibleColumns={visibleColumns} onToggle={toggleColumn} /></div>
+                            <div className="hidden lg:block h-12"><ColumnToggler columns={availableColumns} visibleColumns={visibleColumns} onToggle={toggleColumn} /></div>
                         </div>
                     </div>
                 </div>
 
-                {/* Shortcuts Area (New) */}
-                <div className="flex flex-wrap items-center gap-3 px-1 mb-3">
-                    <div className="flex items-center gap-2 bg-gray-900/50 p-1.5 rounded-xl border border-white/5 shadow-inner">
-                        <span className="text-[9px] font-black text-gray-500 uppercase ml-2">Short Cut</span>
+                {/* Shortcuts Area */}
+                <div className="flex flex-wrap items-center gap-3 mb-2 px-1">
+                    <div className="flex items-center gap-2 bg-black/30 p-1.5 rounded-2xl border border-white/5 shadow-inner">
+                        <span className="text-[9px] font-black text-gray-600 uppercase ml-2 tracking-widest">Time</span>
                         {['today', 'yesterday', 'this_week', 'this_month'].map(p => (
-                            <button key={p} onClick={() => setFilters(prev => ({...prev, datePreset: p as any}))} className={`px-3 py-1.5 rounded-lg text-[10px] font-black uppercase transition-all ${filters.datePreset === p ? 'bg-blue-600 text-white shadow-lg shadow-blue-600/20' : 'text-gray-500 hover:bg-white/5'}`}>{p.replace('_', ' ')}</button>
+                            <button key={p} onClick={() => setFilters(prev => ({...prev, datePreset: p as any}))} className={`px-4 py-2 rounded-xl text-[10px] font-black uppercase transition-all ${filters.datePreset === p ? 'bg-blue-600 text-white shadow-lg shadow-blue-900/40' : 'text-gray-500 hover:text-white hover:bg-white/5'}`}>{p.replace('_', ' ')}</button>
                         ))}
                     </div>
                     
-                    <div className="flex items-center gap-2 bg-gray-900/50 p-1.5 rounded-xl border border-white/5 shadow-inner">
-                        <span className="text-[9px] font-black text-gray-500 uppercase ml-2">ឃ្លាំង</span>
+                    <div className="flex items-center gap-2 bg-black/30 p-1.5 rounded-2xl border border-white/5 shadow-inner">
+                        <span className="text-[9px] font-black text-gray-600 uppercase ml-2 tracking-widest">Warehouse</span>
                         {Array.from(new Set(appData.stores?.map(s => s.StoreName) || [])).slice(0, 4).map(s => {
                             const selected = filters.fulfillmentStore.split(',').map(v => v.trim()).includes(s);
                             return (
@@ -533,27 +534,7 @@ const OrdersDashboard: React.FC<OrdersDashboardProps> = ({ onBack, initialFilter
                                         const next = selected ? current.filter(v => v !== s) : [...current, s];
                                         setFilters(prev => ({...prev, fulfillmentStore: next.join(',')}));
                                     }} 
-                                    className={`px-3 py-1.5 rounded-lg text-[10px] font-black uppercase transition-all ${selected ? 'bg-indigo-600 text-white shadow-lg shadow-indigo-600/20' : 'text-gray-500 hover:bg-white/5'}`}
-                                >
-                                    {s}
-                                </button>
-                            );
-                        })}
-                    </div>
-
-                    <div className="flex items-center gap-2 bg-gray-900/50 p-1.5 rounded-xl border border-white/5 shadow-inner">
-                        <span className="text-[9px] font-black text-gray-500 uppercase ml-2">ហាង</span>
-                        {Array.from(new Set(appData.pages?.map(p => p.DefaultStore).filter(Boolean) || [])).slice(0, 4).map(s => {
-                            const selected = filters.store.split(',').map(v => v.trim()).includes(s);
-                            return (
-                                <button 
-                                    key={s} 
-                                    onClick={() => {
-                                        const current = filters.store.split(',').map(v => v.trim()).filter(v => v);
-                                        const next = selected ? current.filter(v => v !== s) : [...current, s];
-                                        setFilters(prev => ({...prev, store: next.join(',')}));
-                                    }} 
-                                    className={`px-3 py-1.5 rounded-lg text-[10px] font-black uppercase transition-all ${selected ? 'bg-purple-600 text-white shadow-lg shadow-purple-600/20' : 'text-gray-500 hover:bg-white/5'}`}
+                                    className={`px-4 py-2 rounded-xl text-[10px] font-black uppercase transition-all ${selected ? 'bg-indigo-600 text-white shadow-lg shadow-indigo-900/40' : 'text-gray-500 hover:text-white hover:bg-white/5'}`}
                                 >
                                     {s}
                                 </button>
@@ -564,8 +545,10 @@ const OrdersDashboard: React.FC<OrdersDashboardProps> = ({ onBack, initialFilter
             </div>
 
             {/* Scrollable Area */}
-            <div className="flex-1 min-h-0 relative z-10 overflow-hidden">
-                <OrdersList orders={filteredOrders} onEdit={o => setEditingOrderId(o['Order ID'])} onView={o => setViewingOrder(o)} showActions={true} visibleColumns={visibleColumns} selectedIds={selectedIds} onToggleSelect={toggleSelection} onToggleSelectAll={toggleSelectAll} showBorders={showBorders} groupBy={groupBy} />
+            <div className="flex-1 min-h-0 relative z-10 px-4 pb-4">
+                <div className="h-full bg-white/[0.02] border border-white/5 rounded-[2.5rem] overflow-hidden shadow-2xl">
+                    <OrdersList orders={filteredOrders} onEdit={o => setEditingOrderId(o['Order ID'])} onView={o => setViewingOrder(o)} showActions={true} visibleColumns={visibleColumns} selectedIds={selectedIds} onToggleSelect={toggleSelection} onToggleSelectAll={toggleSelectAll} showBorders={showBorders} groupBy={groupBy} />
+                </div>
             </div>
 
             <BulkActionManager orders={enrichedOrders} selectedIds={selectedIds} onComplete={() => { setSelectedIds(new Set()); refreshData(); }} onClearSelection={() => setSelectedIds(new Set())} />

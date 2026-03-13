@@ -43,6 +43,7 @@ var (
 	appsScriptSecret string
 	hub              *Hub
 	jwtSecret        []byte
+	permissionsCache sync.Map // key: role:feature (lowercase), value: bool
 )
 
 var sheetRanges = map[string]string{
@@ -361,8 +362,19 @@ func initDB() {
 	db.Exec("CREATE INDEX IF NOT EXISTS idx_orders_timestamp_desc ON orders (timestamp DESC);")
 	db.Exec("CREATE INDEX IF NOT EXISTS idx_orders_fulfillment_status ON orders (fulfillment_status);")
 	db.Exec("CREATE INDEX IF NOT EXISTS idx_orders_team ON orders (team);")
+	db.Exec("CREATE UNIQUE INDEX IF NOT EXISTS idx_role_permissions_role_feature ON role_permissions (role, feature);")
 
 	DB = db
+
+	// Populate Permissions Cache
+	var allPerms []RolePermission
+	if err := DB.Find(&allPerms).Error; err == nil {
+		for _, p := range allPerms {
+			key := strings.ToLower(p.Role + ":" + p.Feature)
+			permissionsCache.Store(key, p.IsEnabled)
+		}
+		log.Printf("✅ Preloaded %d permissions into memory cache.", len(allPerms))
+	}
 
 	var count int64
 	DB.Model(&Role{}).Count(&count)
@@ -689,21 +701,27 @@ func RequirePermission(feature string) gin.HandlerFunc {
 			return
 		}
 
-		if role != nil && role.(string) == "Admin" {
+		roleStr := ""
+		if role != nil {
+			roleStr = role.(string)
+		}
+
+		if roleStr == "Admin" {
 			c.Next()
 			return
 		}
 
-		var perm RolePermission
-		result := DB.Where("role = ? AND feature = ?", role, feature).First(&perm)
-
-		if result.Error != nil || !perm.IsEnabled {
-			c.JSON(http.StatusForbidden, gin.H{"status": "error", "message": "អ្នកមិនមានសិទ្ធិសម្រាប់មុខងារនេះទេ (" + feature + ")"})
-			c.Abort()
-			return
+		// ⚡ High Performance Cache Check
+		key := strings.ToLower(roleStr + ":" + feature)
+		if isEnabled, ok := permissionsCache.Load(key); ok {
+			if isEnabled.(bool) {
+				c.Next()
+				return
+			}
 		}
 
-		c.Next()
+		c.JSON(http.StatusForbidden, gin.H{"status": "error", "message": "អ្នកមិនមានសិទ្ធិសម្រាប់មុខងារនេះទេ (" + feature + ")"})
+		c.Abort()
 	}
 }
 
@@ -711,9 +729,12 @@ func hasPermissionInternal(role string, isSystemAdmin bool, feature string) bool
 	if isSystemAdmin || role == "Admin" {
 		return true
 	}
-	var perm RolePermission
-	result := DB.Where("role = ? AND feature = ?", role, feature).First(&perm)
-	return result.Error == nil && perm.IsEnabled
+	// ⚡ High Performance Cache Check
+	key := strings.ToLower(role + ":" + feature)
+	if isEnabled, ok := permissionsCache.Load(key); ok {
+		return isEnabled.(bool)
+	}
+	return false
 }
 
 // =========================================================================
@@ -849,6 +870,10 @@ func handleUpdatePermission(c *gin.Context) {
 				http.Post(appsScriptURL, "application/json", bytes.NewBuffer(jb))
 			}(req)
 		}
+
+		// ⚡ Update Memory Cache immediately
+		key := strings.ToLower(req.Role + ":" + req.Feature)
+		permissionsCache.Store(key, req.IsEnabled)
 
 		eventBytes, _ := json.Marshal(map[string]interface{}{
 			"type":      "update_permission",
@@ -1495,6 +1520,7 @@ func handleGetStaticData(c *gin.Context) {
 		"stockTransfers":  &[]StockTransfer{},
 		"returns":         &[]ReturnItem{},
 		"roles":           &[]Role{},
+		"permissions":     &[]RolePermission{},
 	}
 
 	wg.Add(len(tables))
