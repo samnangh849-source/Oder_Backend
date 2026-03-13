@@ -1,4 +1,3 @@
-
 export interface User {
   UserName: string;
   Password?: string; 
@@ -7,6 +6,8 @@ export interface User {
   Team: string;
   IsSystemAdmin: boolean;
   ProfilePictureURL: string;
+  TelegramUsername: string; // Added to match Go
+  Permissions?: RolePermission[]; // Added for frontend logic
 }
 
 export interface MasterProduct {
@@ -63,19 +64,20 @@ export interface FullOrder {
     "Telegram Message ID 2": string;
     "Scheduled Time": string;
     "Fulfillment Store": string;
-    "Brand/Sales"?: string;
     Team: string;
-    IsVerified?: boolean;
-    FulfillmentStatus?: FulfillmentStatus;
-    "Packed By"?: string;
-    "Dispatched By"?: string;
-    "Package Photo URL"?: string;
-    "Driver Name"?: string;
-    "Tracking Number"?: string;
-    "Delivery Photo URL"?: string;
+    IsVerified: string; // Changed to string to match Go
+    FulfillmentStatus: FulfillmentStatus;
+    "Packed By": string;
+    "Package Photo URL": string;
+    "Driver Name": string;
+    "Tracking Number": string;
+    "Dispatched Time": string; // Added to match Go
+    "Delivered Time": string; // Added to match Go
+    "Delivery Photo URL": string;
 }
 
 export interface InventoryItem {
+    id?: number; // Added for GORM
     StoreName: string;
     Barcode: string;
     Quantity: number;
@@ -114,43 +116,47 @@ export interface ParsedOrder extends Omit<FullOrder, "Products (JSON)"> {
 
 export interface Store {
   StoreName: string;
-  StoreType?: string;
-  Address?: string;
-  TelegramBotToken?: string;
-  TelegramGroupID?: string;
-  TelegramTopicID?: string;
-  LabelPrinterURL?: string;
-  CODAlertGroupID?: string;
-  Location?: string;
+  StoreType: string;
+  Address: string;
+  TelegramBotToken: string;
+  TelegramGroupID: string;
+  TelegramTopicID: string;
+  LabelPrinterURL: string;
+  CODAlertGroupID: string;
 }
 
 export interface TeamPage {
+  ID?: number; // Added to match Go
   PageName: string;
   Team: string;
   TelegramValue: string;
   PageLogoURL: string;
   DefaultStore?: string;
+  TelegramTopicID?: string;
 }
 
 export interface ShippingMethod {
   MethodName: string;
+  LogosURL: string; // Matches Go backend json tag
+  AllowManualDriver: boolean;
   RequireDriverSelection: boolean;
-  LogosURL: string; // Matches Go backend conversion
+  EnableCODAlert: boolean;
+  AlertTopicID: string;
 }
 
 export interface Driver {
   DriverName: string;
   ImageURL: string;
+  Phone: string;
+  VehiclePlate: string;
 }
 
 export interface BankAccount {
   BankName: string;
-  AccountName?: string;
   LogoURL: string;
-  AssignedStores?: string;
+  AssignedStores: string;
 }
 
-// Added Target interface to fix missing member error in performance hooks/pages
 export interface Target {
   UserName: string;
   Month: string;
@@ -158,40 +164,33 @@ export interface Target {
 }
 
 export interface UserActivityLog {
-    user: string;
-    action: string;
-    details: string;
-    timestamp: string;
-    User?: string;
-    Action?: string;
-    Details?: string;
+    id?: number;
+    Timestamp: string;
+    User: string;
+    Action: string;
+    Details: string;
 }
 
 export interface EditLog {
-    orderId: string;
-    user: string;
-    field: string;
-    oldValue: string;
-    newValue: string;
-    timestamp: string;
-    OrderID?: string;
-    Requester?: string;
-    "Field Changed"?: string;
-    "Old Value"?: string;
-    "New Value"?: string;
-    Approver?: string;
+    id?: number;
+    Timestamp: string;
+    OrderID: string;
+    Requester: string;
+    "Field Changed": string;
+    "Old Value": string;
+    "New Value": string;
+    Approver?: string; // Restored
 }
 
-// Added BackendChatMessage interface to fix missing member error in ChatWidget
 export interface BackendChatMessage {
-    UserName: string;
+    id?: number;
     Timestamp: string;
-    MessageType: 'text' | 'image' | 'audio' | 'video';
+    UserName: string;
+    Receiver: string;
+    MessageType: string;
     Content: string;
     FileID?: string;
-    IsDeleted?: boolean;
-    IsPinned?: boolean;
-    ReplyTo?: {
+    ReplyTo?: { // Restored
         ID: string;
         User: string;
         Content: string;
@@ -199,7 +198,6 @@ export interface BackendChatMessage {
     };
 }
 
-// Added ChatMessage interface to fix missing member error in ChatWidget
 export interface ChatMessage {
     id: string;
     user: string;
@@ -209,8 +207,8 @@ export interface ChatMessage {
     timestamp: string;
     type: 'text' | 'image' | 'audio' | 'video';
     fileID?: string;
-    duration?: string; // New field for audio/video duration
-    isOptimistic?: boolean; // New field for optimistic UI
+    duration?: string;
+    isOptimistic?: boolean;
     isDeleted?: boolean;
     isPinned?: boolean;
     replyTo?: {
@@ -264,6 +262,7 @@ export interface AppData {
 }
 
 export interface LocationInfo {
+  id?: number;
   Province: string;
   District: string;
   Sangkat: string;
@@ -279,25 +278,14 @@ export interface PhoneCarrier {
   CarrierLogoURL: string;
 }
 
-// --- Incentive System Types ---
-
-export interface IncentiveProject {
-    id: string;
-    name: string;
-    colorCode: string;
-    requirePeriodSelection: boolean;
-    dataSource: 'system' | 'manual';
-    status: 'Active' | 'Disable' | 'Draft';
-    createdAt: string;
-    calculators: IncentiveCalculator[];
-}
+// --- Incentive System Types (Aligned with Go + Restored Complexity) ---
 
 export type CalculatorType = 'Achievement' | 'Commission';
 
 export interface IncentiveTier {
     id: string;
     name?: string;
-    subPeriod?: string; // e.g. "W1", "W2"
+    subPeriod?: string; 
     target: number;
     rewardAmount: number;
     rewardType: 'Fixed Cash' | 'Percentage' | 'Point';
@@ -306,8 +294,8 @@ export interface IncentiveTier {
 export interface CommissionTier {
     id: string;
     from: number;
-    to: number | null; // null means infinity
-    rate: number; // percentage
+    to: number | null; 
+    rate: number; 
 }
 
 export interface DistributionRule {
@@ -316,45 +304,61 @@ export interface DistributionRule {
 }
 
 export interface IncentiveCalculator {
-    id: string;
+    id?: number; // Go uint
     name: string;
-    type: CalculatorType;
-    status: 'Draft' | 'Active' | 'Disable';
+    type: string; // Achievement or Commission
+    value: number; // Base value
+    rulesJson?: string; // For backend storage
     
-    // Common
-    departmentOrRole: string[];
-    applyTo: string[]; // Role, Dept, Team, Individual
-    
-    // Metric
-    metricType: 'Sales Amount' | 'Number of Orders' | 'Number of Videos' | 'Leads Generated' | 'Revenue' | 'Profit' | 'Custom KPI';
-    metricUnit: 'USD' | 'Count' | '%';
-    
-    // Period
-    calculationPeriod: 'Daily' | 'Weekly' | 'Monthly' | 'Per Order' | 'Custom Range';
-    resetEveryPeriod: boolean;
+    // Frontend fields (will be serialized to rulesJson)
+    status?: 'Draft' | 'Active' | 'Disable';
+    departmentOrRole?: string[];
+    applyTo?: string[];
+    metricType?: 'Sales Amount' | 'Number of Orders' | 'Number of Videos' | 'Leads Generated' | 'Revenue' | 'Profit' | 'Custom KPI';
+    metricUnit?: 'USD' | 'Count' | '%';
+    calculationPeriod?: 'Daily' | 'Weekly' | 'Monthly' | 'Per Order' | 'Custom Range';
+    resetEveryPeriod?: boolean;
     startDate?: string;
     endDate?: string;
-
-    // Type 1: Achievement specific
     achievementTiers?: IncentiveTier[];
-
-    // Type 2: Commission specific
     commissionType?: 'Flat Commission' | 'Above Target Commission' | 'Tiered Commission' | 'Product-Based Commission';
     commissionMethod?: 'Percentage' | 'Fixed Amount';
     commissionCondition?: 'On Total Sales' | 'Above Target' | 'Per Transaction';
     targetAmount?: number;
-    commissionRate?: number; // for flat or above target
+    commissionRate?: number;
     commissionTiers?: CommissionTier[];
-    
-    // Advanced Rules
     minSalesRequired?: number;
     maxCommissionCap?: number;
-    isMarathon?: boolean; // Cumulative Achievement logic
-    subPeriodCheck?: boolean; // If true, checks milestones at sub-periods (like weekly)
+    isMarathon?: boolean;
+    subPeriodCheck?: boolean;
     requireApproval?: boolean;
     excludeRefunded?: boolean;
     includeTax?: boolean;
-
-    // Distribution
     distributionRule?: DistributionRule;
+}
+
+export interface IncentiveProject {
+    id?: number; // Go uint
+    projectName: string;
+    calculatorId: number;
+    startDate: string;
+    endDate: string;
+    targetTeam: string;
+    status: string;
+    
+    // Frontend fields
+    createdAt?: string;
+    colorCode?: string;
+    requirePeriodSelection?: boolean;
+    dataSource?: 'system' | 'manual';
+    calculators?: IncentiveCalculator[]; // For frontend display
+}
+
+export interface IncentiveResult {
+    id?: number;
+    projectId: number;
+    userName: string;
+    totalOrders: number;
+    totalRevenue: number;
+    calculatedValue: number;
 }

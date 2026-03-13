@@ -244,7 +244,7 @@ const SalesByTeamPage: React.FC<SalesByTeamPageProps> = ({ orders, onBack }) => 
                                     </div>
                                 </div>
                                 <div className={`px-3 py-1 rounded-lg text-[9px] font-black uppercase tracking-widest ${mobileTab === 'revenue' ? 'bg-blue-600/10 text-blue-400' : 'bg-emerald-600/10 text-emerald-400'}`}>
-                                    {mobileTab === 'revenue' ? 'Revenue Node' : 'Profit Node'}
+                                    {mobileTab === 'revenue' ? 'Revenue Team' : 'Profit Team'}
                                 </div>
                             </div>
 

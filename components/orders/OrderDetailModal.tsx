@@ -71,7 +71,7 @@ const OrderDetailModal: React.FC<OrderDetailModalProps> = ({ order, onClose }) =
                             {/* Logistics & Payment */}
                             <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
                                 <div className="bg-white/[0.03] border border-white/5 rounded-[2rem] p-8 space-y-5 shadow-inner">
-                                    <h3 className="text-[11px] font-black uppercase tracking-[0.25em] text-gray-400 italic">Logistics Node</h3>
+                                    <h3 className="text-[11px] font-black uppercase tracking-[0.25em] text-gray-400 italic">Logistics Team</h3>
                                     <div className="flex items-center gap-4 bg-gray-900/50 p-4 rounded-2xl border border-white/5">
                                         {shippingMethod ? (
                                             <img src={convertGoogleDriveUrl(shippingMethod.LogosURL)} className="w-12 h-12 object-contain bg-white/5 p-2 rounded-xl border border-white/5" alt="" />

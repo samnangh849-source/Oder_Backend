@@ -4,6 +4,7 @@ import { AppContext } from '../context/AppContext';
 import { ParsedOrder, Product, MasterProduct, ShippingMethod } from '../types';
 import { WEB_APP_URL } from '../constants';
 import { convertGoogleDriveUrl } from '../utils/fileUtils';
+import { CacheService, CACHE_KEYS } from '../services/cacheService';
 
 // Import New Utils & Services
 import { formatForInput, recalculateTotals, generateAuditLog } from '../utils/orderLogic';
@@ -277,9 +278,14 @@ const EditOrderPage: React.FC<EditOrderPageProps> = ({ order, onSaveSuccess, onC
         const loggingUser = currentUser.UserName || 'Unknown User';
 
         try {
+            const session = await CacheService.get<{ token: string }>(CACHE_KEYS.SESSION);
+            const token = session?.token;
+            const headers: HeadersInit = { 'Content-Type': 'application/json' };
+            if (token) headers['Authorization'] = `Bearer ${token}`;
+
             const response = await fetch(`${WEB_APP_URL}/api/admin/delete-order`, {
                 method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
+                headers,
                 body: JSON.stringify({ 
                     orderId: formData['Order ID'], 
                     team: formData.Team, 
@@ -409,8 +415,14 @@ const EditOrderPage: React.FC<EditOrderPageProps> = ({ order, onSaveSuccess, onC
             }
             // --- AUDIT LOGIC END ---
 
+            const session = await CacheService.get<{ token: string }>(CACHE_KEYS.SESSION);
+            const token = session?.token;
+            const headers: HeadersInit = { 'Content-Type': 'application/json' };
+            if (token) headers['Authorization'] = `Bearer ${token}`;
+
             const response = await fetch(`${WEB_APP_URL}/api/admin/update-order`, { 
-                method: 'POST', headers: { 'Content-Type': 'application/json' }, 
+                method: 'POST', 
+                headers, 
                 body: JSON.stringify({ 
                     orderId: formData['Order ID'], 
                     team: formData.Team, 

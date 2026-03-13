@@ -18,6 +18,7 @@ import SetQuantity from '../components/orders/SetQuantity';
 import DriverSelector from '../components/orders/DriverSelector';
 import BankSelector from '../components/orders/BankSelector'; // Import the new component
 import { logUserActivity } from '../services/auditService';
+import { CacheService, CACHE_KEYS } from '../services/cacheService';
 
 interface CreateOrderPageProps {
     team: string;
@@ -509,9 +510,14 @@ const CreateOrderPage: React.FC<CreateOrderPageProps> = ({ team, onSaveSuccess, 
         };
         
         try {
+            const session = await CacheService.get<{ token: string }>(CACHE_KEYS.SESSION);
+            const token = session?.token;
+            const headers: HeadersInit = { 'Content-Type': 'application/json' };
+            if (token) headers['Authorization'] = `Bearer ${token}`;
+
             const res = await fetch(`${WEB_APP_URL}/api/submit-order`, { 
                 method: 'POST', 
-                headers: { 'Content-Type': 'application/json' }, 
+                headers: headers, 
                 body: JSON.stringify(payload) 
             });
             const result = await res.json();
@@ -528,7 +534,7 @@ const CreateOrderPage: React.FC<CreateOrderPageProps> = ({ team, onSaveSuccess, 
                 
                 await fetch(`${WEB_APP_URL}/api/chat/send`, {
                     method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
+                    headers: headers,
                     body: JSON.stringify({
                         UserName: currentUser?.UserName,
                         MessageType: 'Text',

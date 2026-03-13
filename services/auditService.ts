@@ -1,66 +1,59 @@
-
 import { WEB_APP_URL } from '../constants';
 import { UserActivityLog, EditLog } from '../types';
+import { CacheService, CACHE_KEYS } from './cacheService';
 
-// Function to log general user activity (Navigation, Clicks, etc.)
+const getAuthHeaders = async () => {
+    const session = await CacheService.get<{ token: string }>(CACHE_KEYS.SESSION);
+    return {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${session?.token || ''}`
+    };
+};
+
+// Function to log general user activity
 export const logUserActivity = async (user: string, action: string, details: string) => {
     try {
-        // Sends to backend endpoint that writes to 'UserActivityLogs' sheet
-        await fetch(`${WEB_APP_URL}/api/logging/activity`, {
+        const headers = await getAuthHeaders();
+        await fetch(`${WEB_APP_URL}/api/admin/add-row`, {
             method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
+            headers,
             body: JSON.stringify({
-                user,
-                action,
-                details,
-                timestamp: new Date().toISOString(),
-                // Add fallback keys for backend compatibility
-                User: user,
-                Action: action,
-                Details: details
+                sheetName: 'UserActivityLogs',
+                newData: {
+                    Timestamp: new Date().toISOString(),
+                    User: user,
+                    Action: action,
+                    Details: details
+                }
             })
         });
     } catch (error) {
-        // Silently fail for logging to not disrupt user flow
-        // console.warn("[Audit] Failed to log activity:", error);
+        // Silently fail
     }
 };
 
-// Function to log specific edits to orders (Data changes)
+// Function to log specific edits to orders
 export const logOrderEdit = async (orderId: string, user: string, field: string, oldValue: string, newValue: string) => {
     if (!field) return; 
 
     try {
-        // Construct payload with multiple key variations to ensure Backend compatibility
-        // Some backends expect "Old Value" (Sheet Header) or "OldValue" (PascalCase)
-        const payload = {
-            // Standard camelCase
-            orderId,
-            user,
-            field,
-            oldValue,
-            newValue,
-            timestamp: new Date().toISOString(),
-
-            // PascalCase / Spaced (Likely required by Google Apps Script mapping)
-            "OrderID": orderId,
-            "Requester": user,
-            "Field Changed": field,
-            "Old Value": oldValue,
-            "New Value": newValue,
-            
-            // Additional variations just in case
-            "OldValue": oldValue,
-            "NewValue": newValue
-        };
-
-        await fetch(`${WEB_APP_URL}/api/logging/edit`, {
+        const headers = await getAuthHeaders();
+        await fetch(`${WEB_APP_URL}/api/admin/add-row`, {
             method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify(payload)
+            headers,
+            body: JSON.stringify({
+                sheetName: 'EditLogs',
+                newData: {
+                    Timestamp: new Date().toISOString(),
+                    OrderID: orderId,
+                    Requester: user,
+                    "Field Changed": field,
+                    "Old Value": oldValue,
+                    "New Value": newValue
+                }
+            })
         });
     } catch (error) {
-        // Silently fail
         console.warn("[Audit] Failed to log edit:", error);
     }
 };
@@ -68,20 +61,15 @@ export const logOrderEdit = async (orderId: string, user: string, field: string,
 // --- Fetch Logs ---
 export const fetchAuditLogs = async (type: 'activity' | 'edit'): Promise<UserActivityLog[] | EditLog[]> => {
     try {
-        const response = await fetch(`${WEB_APP_URL}/api/admin/logs?type=${type}`);
-        
-        if (!response.ok) {
-            // If endpoint doesn't exist (404), return empty array without throwing error
-            if (response.status === 404) {
-                console.debug(`[Audit] Endpoint not found for ${type}.`);
-                return [];
-            }
-            throw new Error(`Failed to fetch logs: ${response.statusText}`);
-        }
-        
+        const headers = await getAuthHeaders();
+        // Since logs are now just static data from DB, we can get them from static-data or specific endpoint if added
+        // For now, let's assume static-data is refreshed. 
+        // If specific log endpoints are added to Go, we use them here.
+        // The Go backend handleGetStaticData returns editLogs and actLogs.
+        const response = await fetch(`${WEB_APP_URL}/api/static-data`, { headers });
         const result = await response.json();
         if (result.status === 'success') {
-            return result.data;
+            return type === 'activity' ? result.data.actLogs : result.data.editLogs;
         }
         return [];
     } catch (error) {

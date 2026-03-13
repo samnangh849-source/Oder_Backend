@@ -529,7 +529,7 @@ const DeliveryAgentView: React.FC<DeliveryAgentViewProps> = ({ orderIds, returnO
                     </div>
                 </div>
             </div>
-            <div className="p-4 text-center opacity-20 relative z-10"><p className="text-[7px] font-black uppercase tracking-[0.4em]">ACC Node v2.0 Operations</p></div>
+            <div className="p-4 text-center opacity-20 relative z-10"><p className="text-[7px] font-black uppercase tracking-[0.4em]">ACC Team v2.0 Operations</p></div>
         </div>
     );
 };

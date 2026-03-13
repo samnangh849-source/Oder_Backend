@@ -3,7 +3,8 @@ export const CACHE_KEYS = {
     APP_DATA: 'appDataCache',
     ALL_ORDERS: 'allOrdersCache',
     SESSION: 'orderAppSession',
-    CHAT_HISTORY: 'chatHistoryCache'
+    CHAT_HISTORY: 'chatHistoryCache',
+    GEOJSON: 'cambodiaGeoJsonCache'
 };
 
 // Default expiration set to 15 days (15 * 24 * 60 * 60 * 1000)

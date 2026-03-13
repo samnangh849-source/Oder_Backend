@@ -372,7 +372,7 @@ const UserSalesPageReport: React.FC<UserSalesPageReportProps> = ({
                     </button>
                     <div>
                         <h1 className="text-xl sm:text-2xl font-black text-white uppercase tracking-tighter italic">Page Report</h1>
-                        <p className="text-[10px] text-gray-500 font-bold uppercase tracking-widest">{team}</p>
+                        <p className="text-[10px] text-gray-500 font-bold uppercase tracking-widest flex items-center gap-1.5"><span className="w-1 h-1 bg-blue-500 rounded-full"></span>TEAM: {team}</p>
                     </div>
                 </div>
 

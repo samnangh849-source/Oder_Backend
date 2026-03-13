@@ -38,7 +38,7 @@ const EditProfileModal: React.FC<EditProfileModalProps> = ({ onClose }) => {
         setIsUploading(true);
         setError('');
         try {
-            const compressedBlob = await compressImage(file, 0.8, 1024);
+            const compressedBlob = await compressImage(file, 'balanced');
             const base64Data = await fileToBase64(compressedBlob);
             const payload = {
                 fileData: base64Data,

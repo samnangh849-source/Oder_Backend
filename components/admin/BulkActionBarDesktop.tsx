@@ -36,7 +36,7 @@ const BulkActionBarDesktop: React.FC<BulkActionBarDesktopProps> = ({
                     </div>
                     <div className="flex flex-col">
                         <span className="text-[13px] font-black text-white leading-none tracking-tight">ជ្រើសរើស</span>
-                        <span className="text-[8px] text-blue-400 font-bold uppercase tracking-[0.25em] mt-1">ACTIVE NODE</span>
+                        <span className="text-[8px] text-blue-400 font-bold uppercase tracking-[0.25em] mt-1">ACTIVE TEAM</span>
                     </div>
                 </div>
 

@@ -16,12 +16,13 @@ const IncentivesDashboard: React.FC<IncentivesDashboardProps> = ({ onOpenProject
     const [projects, setProjects] = useState<IncentiveProject[]>([]);
     const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
 
-    const loadProjects = () => {
-        setProjects(getIncentiveProjects());
+    const loadProjects = async () => {
+        const data = await getIncentiveProjects();
+        setProjects(data);
     };
 
-    const handleDuplicate = (id: string) => {
-        duplicateProject(id);
+    const handleDuplicate = async (id: string) => {
+        await duplicateProject(Number(id));
         loadProjects();
     };
 

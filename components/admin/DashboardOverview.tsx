@@ -97,6 +97,26 @@ const DashboardOverview: React.FC<DashboardOverviewProps> = ({
                 </div>
             </div>
 
+            {/* Dashboard Header Section */}
+            <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 bg-white/[0.02] p-6 rounded-[2.5rem] border border-white/5 backdrop-blur-xl mb-2">
+                <div className="flex items-center gap-4">
+                    <div className="w-2 h-10 bg-blue-600 rounded-full shadow-[0_0_15px_rgba(37,99,235,0.5)]"></div>
+                    <div className="flex flex-col">
+                        <h3 className="text-lg font-black text-white uppercase tracking-tight leading-none">
+                            System Dashboard
+                        </h3>
+                        <span className="text-[10px] font-bold text-blue-400/80 uppercase tracking-widest mt-1.5">Overview Statistics</span>
+                    </div>
+                </div>
+                <div className="flex items-center gap-3">
+                    <div className="bg-white/5 border border-white/10 px-4 py-2 rounded-2xl shadow-xl">
+                        <span className="text-xs font-black text-blue-400">
+                            {metrics.orders} <span className="text-gray-500 ml-1">Processed</span>
+                        </span>
+                    </div>
+                </div>
+            </div>
+
             {/* Metrics - Adaptive Grid for 13" (2 cols) vs 15"+ (3 cols) */}
             <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-4 lg:gap-6">
                 <StatCard label="ចំណូលសរុប" value={`$${metrics.revenue.toLocaleString(undefined, {minimumFractionDigits: 2})}`} icon="💰" colorClass="from-blue-600 to-blue-400" />

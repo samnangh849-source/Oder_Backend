@@ -1,9 +1,11 @@
 
-import React, { useState, useContext, useEffect, useMemo } from 'react';
+import React, { useState, useContext, useEffect, useMemo, useCallback } from 'react';
 import { AppContext } from '../context/AppContext';
 import { WEB_APP_URL } from '../constants';
 import { convertGoogleDriveUrl } from '../utils/fileUtils';
 import PagesPdfExportModal from '../components/admin/PagesPdfExportModal';
+import Spinner from '../components/common/Spinner';
+import { CacheService, CACHE_KEYS } from '../services/cacheService';
 import { 
     configSections, 
     ConfigSection, 
@@ -24,14 +26,14 @@ interface SettingsDashboardProps {
 }
 
 const SettingsDashboard: React.FC<SettingsDashboardProps> = ({ onBack, initialSection }) => {
-    const { appData, refreshData, logout, setMobilePageTitle, language } = useContext(AppContext);
+    const { appData, refreshData, logout, setMobilePageTitle, language, showNotification } = useContext(AppContext);
     const t = translations[language];
     const [desktopSection, setDesktopSection] = useState<string>(initialSection || 'users');
     const [mobileSection, setMobileSection] = useState<string | null>(initialSection || null);
     const [searchQuery, setSearchQuery] = useState('');
     const [modal, setModal] = useState<{ isOpen: boolean, sectionId: string, item: any | null }>({ isOpen: false, sectionId: '', item: null });
-    const [localUsers, setLocalUsers] = useState<any[]>([]);
-    const [localRoles, setLocalRoles] = useState<any[]>([]);
+    const [localData, setLocalData] = useState<any[]>([]);
+    const [isLoading, setIsLoading] = useState(false);
     const [isPdfOpen, setIsPdfOpen] = useState(false);
     
     // System Update State
@@ -53,85 +55,136 @@ const SettingsDashboard: React.FC<SettingsDashboardProps> = ({ onBack, initialSe
         return () => setMobilePageTitle(null);
     }, [activeSection, setMobilePageTitle]);
 
+    const fetchSectionData = useCallback(async (sectionId: string) => {
+        const section = configSections.find(s => s.id === sectionId);
+        if (!section || section.id === 'telegramTemplates' || section.id === 'permissions' || section.id === 'database') return;
+
+        setIsLoading(true);
+        try {
+            // Priority 1: Check AppData first
+            const appDataList = getArrayCaseInsensitive(appData, section.dataKey);
+            if (appDataList.length > 0) {
+                setLocalData(appDataList);
+                setIsLoading(false);
+                return;
+            }
+
+            // Priority 2: Fetch from API if empty in appData
+            const session = await CacheService.get<{ token: string }>(CACHE_KEYS.SESSION);
+            const token = session?.token;
+            const headers: HeadersInit = {};
+            if (token) headers['Authorization'] = `Bearer ${token}`;
+
+            // Use section ID as endpoint (standard pattern)
+            const endpoint = sectionId === 'pages' ? 'static-data' : sectionId;
+            const res = await fetch(`${WEB_APP_URL}/api/${endpoint}`, { headers });
+            if (res.ok) {
+                const json = await res.json();
+                if (json.status === 'success') {
+                    const data = Array.isArray(json.data) ? json.data : (json.data?.[section.dataKey] || []);
+                    setLocalData(data);
+                }
+            }
+        } catch (err) {
+            console.error(`Failed to fetch ${sectionId}:`, err);
+        } finally {
+            setIsLoading(false);
+        }
+    }, [appData]);
+
     useEffect(() => {
-        if (activeId === 'users') {
-            const fetchUsers = async () => {
-                const appUsers = getArrayCaseInsensitive(appData, 'users');
-                if (appUsers.length === 0) {
-                    const res = await fetch(`${WEB_APP_URL}/api/users`);
-                    const json = await res.json();
-                    if (json.status === 'success') setLocalUsers(json.data || []);
-                }
-            };
-            fetchUsers();
-        }
-        if (activeId === 'roles') {
-            const fetchRoles = async () => {
-                const appRoles = getArrayCaseInsensitive(appData, 'roles');
-                if (appRoles.length === 0) {
-                    const res = await fetch(`${WEB_APP_URL}/api/roles`);
-                    const json = await res.json();
-                    if (json.status === 'success') setLocalRoles(json.data || []);
-                }
-            };
-            fetchRoles();
-        }
-    }, [activeId, appData]);
+        if (activeId) fetchSectionData(activeId);
+    }, [activeId, fetchSectionData]);
 
     const dataList = useMemo(() => {
         if (!activeSection) return [];
-        let list: any[] = [];
         
-        if (activeSection.id === 'users') {
-            const au = getArrayCaseInsensitive(appData, 'users');
-            list = au.length > 0 ? au : localUsers;
-        } else if (activeSection.id === 'roles') {
-            const ar = getArrayCaseInsensitive(appData, 'roles');
-            list = ar.length > 0 ? ar : localRoles;
-        } else {
-            list = getArrayCaseInsensitive(appData, activeSection.dataKey);
-        }
+        let list = localData;
+        const appDataList = getArrayCaseInsensitive(appData, activeSection.dataKey);
+        
+        // Prefer appData if it has items
+        if (appDataList.length > 0) list = appDataList;
+
+        // If we are looking at roles, we ONLY show what's in the list (which now includes auto-generated Admin)
+        // No extra filtering needed here as App.tsx handles the Admin existence.
 
         if (searchQuery.trim()) {
             const q = searchQuery.toLowerCase();
             return list.filter(item => {
-                // Search in the display field
                 const displayVal = String(getValueCaseInsensitive(item, activeSection.displayField) || '').toLowerCase();
                 if (displayVal.includes(q)) return true;
-
-                // Also search in primary key if different
                 const pkVal = String(getValueCaseInsensitive(item, activeSection.primaryKeyField) || '').toLowerCase();
                 if (pkVal.includes(q)) return true;
-
-                // Specific case for products (Barcode)
                 if (activeSection.id === 'products') {
                     const barcode = String(getValueCaseInsensitive(item, 'Barcode') || '').toLowerCase();
                     if (barcode.includes(q)) return true;
                 }
-
                 return false;
             });
         }
 
         return list;
-    }, [activeSection, appData, localUsers, localRoles, searchQuery]);
+    }, [activeSection, appData, localData, searchQuery]);
 
     const handleDelete = async (section: ConfigSection, item: any) => {
-        if (!window.confirm(`តើអ្នកប្រាកដទេថាចង់លុប "${getValueCaseInsensitive(item, section.displayField)}"?`)) return;
+        const displayValue = getValueCaseInsensitive(item, section.displayField);
+        
+        // Prevent deleting Admin Role
+        if (section.id === 'roles' && String(displayValue || '').toLowerCase() === 'admin') {
+            showNotification("មិនអាចលុបតួនាទី Admin បានទេ (Cannot delete Admin role)", "error");
+            return;
+        }
+
+        if (!window.confirm(`តើអ្នកប្រាកដទេថាចង់លុប "${displayValue}"?`)) return;
+        
+        setIsLoading(true);
         try {
-            await fetch(`${WEB_APP_URL}/api/admin/delete-row`, {
+            const session = await CacheService.get<{ token: string }>(CACHE_KEYS.SESSION);
+            const token = session?.token;
+            const headers: HeadersInit = { 'Content-Type': 'application/json' };
+            if (token) headers['Authorization'] = `Bearer ${token}`;
+
+            const pkValue = getValueCaseInsensitive(item, section.primaryKeyField);
+            // Robust conversion for numeric IDs (like Role ID)
+            const pkValueConverted = (section.id === 'roles' && pkValue !== undefined && !isNaN(Number(pkValue))) 
+                ? Number(pkValue) 
+                : pkValue;
+
+            const res = await fetch(`${WEB_APP_URL}/api/admin/delete-row`, {
                 method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ sheetName: section.sheetName, primaryKey: { [section.primaryKeyField]: getValueCaseInsensitive(item, section.primaryKeyField) } })
+                headers,
+                body: JSON.stringify({ 
+                    sheetName: section.sheetName, 
+                    primaryKey: { [section.primaryKeyField]: pkValueConverted } 
+                })
             });
-            await refreshData();
-        } catch (err) { alert('Delete failed'); }
+            
+            const result = await res.json();
+            if (res.ok && result.status === 'success') {
+                showNotification("Deleted successfully", "success");
+                
+                // Clear local list immediately to give visual feedback
+                setLocalData(prev => prev.filter(i => getValueCaseInsensitive(i, section.primaryKeyField) !== pkValue));
+                
+                // Wait 1s for backend to fully commit (Spreadsheet latency) then global refresh
+                setTimeout(async () => {
+                    await refreshData();
+                    if (activeId) fetchSectionData(activeId);
+                }, 1000);
+            } else {
+                throw new Error(result.message || "Delete failed");
+            }
+        } catch (err: any) { 
+            console.error("Delete error:", err);
+            showNotification(`លុបមិនបានសម្រេច៖ ${err.message || 'Error'}`, "error"); 
+        } finally {
+            setIsLoading(false);
+        }
     };
 
     const handleSystemUpdate = async (message: string) => {
         setIsUpdatingSystem(true);
         try {
-            // Update a 'Settings' sheet to trigger logout for everyone
             await fetch(`${WEB_APP_URL}/api/admin/update-sheet`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
@@ -145,9 +198,7 @@ const SettingsDashboard: React.FC<SettingsDashboardProps> = ({ onBack, initialSe
                     } 
                 })
             });
-            
             await new Promise(resolve => setTimeout(resolve, 2000));
-            
             logout();
             window.location.reload();
         } catch (err) {
@@ -184,7 +235,6 @@ const SettingsDashboard: React.FC<SettingsDashboardProps> = ({ onBack, initialSe
         );
     }
 
-    // Desktop/Tablet Sidebar + Detail View
     return (
         <div className="w-full max-w-[100rem] mx-auto h-full flex flex-col p-4 lg:p-6 animate-fade-in overflow-hidden">
             {/* Header */}
@@ -200,12 +250,10 @@ const SettingsDashboard: React.FC<SettingsDashboardProps> = ({ onBack, initialSe
                     </div>
                 </div>
                 <div className="flex gap-2 w-full sm:w-auto">
-                    {/* Search Input (Standardized Design) */}
                     {activeId !== 'telegramTemplates' && activeId !== 'permissions' && activeId !== 'database' && (
                         <div className="relative flex-grow sm:flex-grow-0 sm:min-w-[240px] lg:min-w-[320px] group">
-                            <div className="absolute inset-0 bg-blue-600/5 rounded-2xl blur-md opacity-0 group-focus-within:opacity-100 transition-opacity pointer-events-none"></div>
                             <div className="relative flex items-center">
-                                <div className="absolute left-4 text-gray-500 group-focus-within:text-blue-500 transition-colors">
+                                <div className="absolute left-4 text-gray-500">
                                     <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={3}><path d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" /></svg>
                                 </div>
                                 <input 
@@ -213,62 +261,46 @@ const SettingsDashboard: React.FC<SettingsDashboardProps> = ({ onBack, initialSe
                                     placeholder={`Search ${activeSection?.title}...`}
                                     value={searchQuery}
                                     onChange={(e) => setSearchQuery(e.target.value)}
-                                    className="w-full !py-3 !pl-11 !pr-10 bg-gray-900/40 backdrop-blur-xl border border-white/5 rounded-2xl text-[13px] font-bold text-white placeholder:text-gray-600 focus:border-blue-500/50 focus:bg-gray-900/60 transition-all outline-none shadow-lg ring-0"
+                                    className="w-full !py-3 !pl-11 !pr-10 bg-gray-900/40 backdrop-blur-xl border border-white/5 rounded-2xl text-[13px] font-bold text-white placeholder:text-gray-600 focus:border-blue-500/50 outline-none transition-all shadow-lg"
                                 />
-                                {searchQuery && (
-                                    <button 
-                                        onClick={() => setSearchQuery('')} 
-                                        className="absolute right-3 w-7 h-7 bg-white/5 hover:bg-white/10 rounded-lg flex items-center justify-center text-gray-500 hover:text-white transition-all active:scale-90"
-                                    >
-                                        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={3}><path d="M6 18L18 6M6 6l12 12" /></svg>
-                                    </button>
-                                )}
                             </div>
                         </div>
                     )}
 
-                    {/* Update Version Button */}
-                    <button 
-                        onClick={() => setIsUpdateModalOpen(true)} 
-                        className="flex-1 sm:flex-none btn bg-gray-800 border border-gray-700 hover:border-red-500/50 hover:bg-red-900/10 hover:text-red-400 text-gray-400 px-4 transition-all flex items-center justify-center gap-2"
-                        title="Update Version & Force Logout"
-                    >
-                        <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" /></svg>
-                        <span className="hidden xl:inline text-xs font-bold uppercase tracking-wider">Update Version</span>
-                    </button>
-
-                    {activeId === 'pages' && <button onClick={() => setIsPdfOpen(true)} className="flex-1 sm:flex-none btn btn-secondary px-6">PDF Export</button>}
+                    <button onClick={() => setIsUpdateModalOpen(true)} className="flex-1 sm:flex-none btn bg-gray-800 border border-gray-700 hover:text-red-400 px-4 transition-all flex items-center justify-center gap-2"><svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" strokeWidth={2}/></svg></button>
+                    {activeId === 'pages' && <button onClick={() => setIsPdfOpen(true)} className="flex-1 sm:flex-none btn btn-secondary px-6">PDF</button>}
                     {activeId !== 'telegramTemplates' && activeId !== 'permissions' && activeId !== 'database' && (
-                        <button onClick={() => setModal({ isOpen: true, sectionId: activeId, item: null })} className="flex-1 sm:flex-none btn btn-primary px-10 shadow-lg shadow-blue-600/20 font-black">+ {t.add_new}</button>
+                        <button onClick={() => setModal({ isOpen: true, sectionId: activeId, item: null })} className="flex-1 sm:flex-none btn btn-primary px-10 font-black">+ {t.add_new}</button>
                     )}
                     <button onClick={onBack} className="hidden md:flex btn btn-secondary px-6">ត្រឡប់</button>
                 </div>
             </div>
 
             <div className="flex-1 flex flex-col md:flex-row gap-6 overflow-hidden">
-                {/* Desktop Sidebar */}
                 <aside className="hidden md:flex flex-col gap-2 w-72 flex-shrink-0 overflow-y-auto no-scrollbar pb-20">
                     {configSections.map(s => (
-                        <button key={s.id} onClick={() => setDesktopSection(s.id)} className={`flex items-center gap-4 p-4 rounded-2xl transition-all ${desktopSection === s.id ? 'bg-blue-600 text-white shadow-xl shadow-blue-600/20' : 'text-gray-400 hover:bg-gray-800 hover:text-gray-200'}`}>
+                        <button key={s.id} onClick={() => { setDesktopSection(s.id); setLocalData([]); }} className={`flex items-center gap-4 p-4 rounded-2xl transition-all ${desktopSection === s.id ? 'bg-blue-600 text-white shadow-xl shadow-blue-600/20' : 'text-gray-400 hover:bg-gray-800'}`}>
                             <span className="text-xl">{s.icon}</span>
                             <span className="font-black text-sm uppercase tracking-wider">{s.title}</span>
                         </button>
                     ))}
                 </aside>
 
-                {/* Content Area */}
                 <main className="flex-grow min-w-0 h-full overflow-hidden flex flex-col">
                     {activeId === 'telegramTemplates' ? (
-                        <div className="bg-gray-800/30 border border-gray-700/50 rounded-[3rem] p-8 shadow-2xl backdrop-blur-md overflow-y-auto no-scrollbar flex-grow">
-                            <TelegramTemplateManager language={language} />
-                        </div>
+                        <div className="bg-gray-800/30 border border-gray-700/50 rounded-[3rem] p-8 overflow-y-auto no-scrollbar flex-grow"><TelegramTemplateManager language={language} /></div>
                     ) : activeId === 'database' ? (
                         <div className="flex-grow overflow-y-auto no-scrollbar"><DatabaseManagement /></div>
                     ) : activeId === 'permissions' ? (
                         <div className="flex-grow overflow-y-auto no-scrollbar"><PermissionManagement /></div>
                     ) : (
-                        <div className="bg-gray-800/30 border border-gray-700/50 rounded-3xl overflow-hidden shadow-2xl flex flex-col flex-grow">
-                            {/* Desktop Table View */}
+                        <div className="bg-gray-800/30 border border-gray-700/50 rounded-3xl overflow-hidden shadow-2xl flex flex-col flex-grow relative">
+                            {isLoading && (
+                                <div className="absolute inset-0 bg-gray-950/50 backdrop-blur-sm z-50 flex items-center justify-center">
+                                    <Spinner size="lg" />
+                                </div>
+                            )}
+                            
                             <div className="hidden md:block overflow-y-auto no-scrollbar flex-grow">
                                 <table className="admin-table w-full">
                                     <thead>
@@ -298,42 +330,37 @@ const SettingsDashboard: React.FC<SettingsDashboardProps> = ({ onBack, initialSe
                                                 })}
                                                 <td className="px-4 py-4 text-center">
                                                     <div className="flex items-center justify-center gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
-                                                        <button onClick={() => setModal({ isOpen: true, sectionId: activeId, item })} className="p-2 bg-amber-500/10 text-amber-400 rounded-lg hover:bg-amber-500 hover:text-white transition-all"><svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" /></svg></button>
-                                                        <button onClick={() => handleDelete(activeSection!, item)} className="p-2 bg-red-500/10 text-red-400 rounded-lg hover:bg-red-500 hover:text-white transition-all"><svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg></button>
+                                                        <button onClick={() => setModal({ isOpen: true, sectionId: activeId, item })} className="p-2 bg-amber-500/10 text-amber-400 rounded-lg hover:bg-amber-500 hover:text-white transition-all"><svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" strokeWidth={2}/></svg></button>
+                                                        <button onClick={() => handleDelete(activeSection!, item)} className="p-2 bg-red-500/10 text-red-400 rounded-lg hover:bg-red-500 hover:text-white transition-all"><svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" strokeWidth={2}/></svg></button>
                                                     </div>
                                                 </td>
                                             </tr>
-                                        )) : (
-                                            <tr><td colSpan={10} className="py-20 text-center text-gray-500 font-bold">មិនមានទិន្នន័យត្រូវបានរកឃើញទេ</td></tr>
+                                        )) : !isLoading && (
+                                            <tr><td colSpan={10} className="py-20 text-center"><div className="text-gray-500 font-bold mb-4">មិនមានទិន្នន័យត្រូវបានរកឃើញទេ</div><button onClick={() => fetchSectionData(activeId!)} className="btn btn-secondary text-xs">ចុចដើម្បីសាកល្បងម្ដងទៀត</button></td></tr>
                                         )}
                                     </tbody>
                                 </table>
                             </div>
 
-                            {/* Mobile List View */}
                             <div className="md:hidden divide-y divide-gray-700/50 overflow-y-auto no-scrollbar flex-grow pb-20">
                                 {dataList.length > 0 ? dataList.map((item: any, idx: number) => {
                                     const title = getValueCaseInsensitive(item, activeSection?.displayField || '');
                                     const imgField = activeSection?.fields.find(f => f.type === 'image_url');
                                     const imgVal = imgField ? getValueCaseInsensitive(item, imgField.name) : null;
-
                                     return (
                                         <div key={idx} className="p-4 flex items-center justify-between">
                                             <div className="flex items-center gap-3 min-w-0">
                                                 {imgVal && <img src={convertGoogleDriveUrl(imgVal)} className="w-12 h-12 rounded-xl object-contain bg-gray-900 border border-gray-700 p-1 flex-shrink-0" alt="logo" />}
-                                                <div className="min-w-0">
-                                                    <h4 className="text-sm font-black text-white truncate">{String(title || '-')}</h4>
-                                                    <p className="text-[10px] text-gray-500 font-bold uppercase mt-0.5">Item #{idx + 1}</p>
-                                                </div>
+                                                <div className="min-w-0"><h4 className="text-sm font-black text-white truncate">{String(title || '-')}</h4><p className="text-[10px] text-gray-500 font-bold uppercase mt-0.5">Item #{idx + 1}</p></div>
                                             </div>
                                             <div className="flex gap-2">
-                                                <button onClick={() => setModal({ isOpen: true, sectionId: activeId, item })} className="p-2.5 bg-gray-800 text-blue-400 rounded-xl border border-gray-700 active:scale-95 transition-all"><svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" /></svg></button>
-                                                <button onClick={() => handleDelete(activeSection!, item)} className="p-2.5 bg-gray-800 text-red-400 rounded-xl border border-gray-700 active:scale-95 transition-all"><svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg></button>
+                                                <button onClick={() => setModal({ isOpen: true, sectionId: activeId, item })} className="p-2.5 bg-gray-800 text-blue-400 rounded-xl border border-gray-700 active:scale-95 transition-all"><svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" strokeWidth={2}/></svg></button>
+                                                <button onClick={() => handleDelete(activeSection!, item)} className="p-2.5 bg-gray-800 text-red-400 rounded-xl border border-gray-700 active:scale-95 transition-all"><svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" strokeWidth={2}/></svg></button>
                                             </div>
                                         </div>
                                     );
-                                }) : (
-                                    <div className="py-20 text-center text-gray-500 font-bold">មិនមានទិន្នន័យ</div>
+                                }) : !isLoading && (
+                                    <div className="py-20 text-center"><div className="text-gray-500 font-bold mb-4">មិនមានទិន្នន័យ</div><button onClick={() => fetchSectionData(activeId!)} className="btn btn-secondary text-xs">សាកល្បងម្ដងទៀត</button></div>
                                 )}
                             </div>
                         </div>
@@ -346,7 +373,7 @@ const SettingsDashboard: React.FC<SettingsDashboardProps> = ({ onBack, initialSe
                     section={activeSection}
                     item={modal.item}
                     onClose={() => setModal({ ...modal, isOpen: false })}
-                    onSave={() => { setModal({ ...modal, isOpen: false }); refreshData(); }}
+                    onSave={() => { setModal({ ...modal, isOpen: false }); refreshData(); fetchSectionData(activeId!); }}
                 />
             )}
 

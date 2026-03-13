@@ -79,7 +79,7 @@ const DeliveryListGeneratorModal: React.FC<DeliveryListGeneratorModalProps> = ({
             if (!o.Timestamp) return false;
             const orderDate = getSafeIsoDate(o.Timestamp); 
             return orderDate === selectedDate && 
-                   (selectedStore ? o['Fulfillment Store'] === selectedStore : false) &&
+                   (!selectedStore || o['Fulfillment Store'] === selectedStore) &&
                    (o['Internal Shipping Method'] || '').toLowerCase() === selectedShipping.toLowerCase();
         });
         const combined = [...dateFiltered, ...manualOrders];

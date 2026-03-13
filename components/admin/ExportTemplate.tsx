@@ -84,7 +84,7 @@ const ExportTemplate: React.FC<ExportTemplateProps> = ({
                         return (
                             <div key={storeName} className="w-full item-container flex flex-col mb-[70px] last:mb-0 items-center">
                                 
-                                {/* Store Header - Clean version without Cluster Node */}
+                                {/* Store Header - Clean version without Cluster Team */}
                                 <div className="flex items-center gap-[30px] mb-[60px] justify-center">
                                     <div 
                                         style={{ width: s(100), height: s(100), borderRadius: s(28), fontSize: s(50) }}

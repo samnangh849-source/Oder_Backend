@@ -82,7 +82,7 @@ const LoginPage: React.FC = () => {
             const response = await fetch(`${WEB_APP_URL}/api/login`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ username, password })
+                body: JSON.stringify({ userName: username, password })
             });
 
             if (!response.ok) {
@@ -261,7 +261,7 @@ const LoginPage: React.FC = () => {
                             </div>
                             <div className="text-[9px] font-mono text-gray-500 flex gap-4 uppercase font-bold tracking-widest">
                                 <span>v10.5.2</span>
-                                <span>Core Node Active</span>
+                                <span>Core Team Active</span>
                             </div>
                         </div>
                     </div>

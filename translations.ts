@@ -63,6 +63,8 @@ export const translations = {
     advanced_search: "ស្វែងរកកម្រិតខ្ពស់",
     operational_parameters: "ប៉ារ៉ាម៉ែត្រប្រតិបត្តិការ",
     apply_search: "អនុវត្តការស្វែងរក",
+    view_card: "បង្ហាញជា Card",
+    view_list: "បង្ហាញជាបញ្ជី (List)",
     
     // Column Labels
     col_index: "លេខរៀង",

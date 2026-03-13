@@ -109,7 +109,7 @@ const ProductSelectionConfirm: React.FC<ProductSelectionConfirmProps> = ({
         if (!file || !product) return;
         setIsUploading(true);
         try {
-            const compressedBlob = await compressImage(file, 0.7, 1024);
+            const compressedBlob = await compressImage(file, 'balanced');
             const base64Data = await fileToBase64(compressedBlob);
             const uploadRes = await fetch(`${WEB_APP_URL}/api/upload-image`, {
                 method: 'POST',

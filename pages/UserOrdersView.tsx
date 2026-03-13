@@ -162,7 +162,7 @@ const UserOrdersView: React.FC<{ team: string; onAdd: () => void }> = ({ team, o
     if (isOrdersLoading && orders.length === 0) return (
         <div className="flex flex-col justify-center items-center h-96 gap-4">
             <Spinner size="lg" />
-            <p className="text-[10px] font-bold text-blue-500 uppercase tracking-[0.3em] animate-pulse">Syncing Operational Node...</p>
+            <p className="text-[10px] font-bold text-blue-500 uppercase tracking-[0.3em] animate-pulse">Syncing Operational Team...</p>
         </div>
     );
 

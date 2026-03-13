@@ -207,7 +207,7 @@ const OrderFilters: React.FC<OrderFiltersProps> = ({
                 />
 
                 <SelectFilter 
-                    label="Merchant Node (User)" 
+                    label="Merchant Team (User)" 
                     value={filters.user} 
                     onChange={(v) => updateFilter('user', v)}
                     options={(usersList || []).map(u => ({ label: u.FullName, value: u.UserName }))}

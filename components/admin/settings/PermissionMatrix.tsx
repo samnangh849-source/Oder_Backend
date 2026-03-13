@@ -1,39 +1,18 @@
 
-import React, { useContext, useState, useEffect } from 'react';
+import React, { useContext, useState } from 'react';
 import { AppContext } from '../../../context/AppContext';
 import { FEATURES } from '../../../constants/permissions';
 import Spinner from '../../common/Spinner';
-import { WEB_APP_URL } from '../../../constants';
 
 const PermissionMatrix: React.FC = () => {
-    const { appData, updatePermission, currentUser } = useContext(AppContext);
+    const { appData, updatePermission } = useContext(AppContext);
     const [updating, setUpdating] = useState<string | null>(null); // To show loading on specific toggle
-    const [localRoles, setLocalRoles] = useState<any[]>([]);
-    const [isLoadingRoles, setIsLoadingRoles] = useState(false);
 
-    const roles = appData.roles && appData.roles.length > 0 ? appData.roles : localRoles;
+    const roles = appData.roles || [];
     const permissions = appData.permissions || [];
     
-    // Fetch roles if not present in appData
-    useEffect(() => {
-        if (!appData.roles || appData.roles.length === 0) {
-            const fetchRoles = async () => {
-                setIsLoadingRoles(true);
-                try {
-                    const res = await fetch(`${WEB_APP_URL}/api/roles`);
-                    const json = await res.json();
-                    if (json.status === 'success') {
-                        setLocalRoles(json.data || []);
-                    }
-                } catch (err) {
-                    console.error("Failed to fetch roles in matrix:", err);
-                } finally {
-                    setIsLoadingRoles(false);
-                }
-            };
-            fetchRoles();
-        }
-    }, [appData.roles]);
+    // Rely solely on appData.roles populated by App.tsx fetchData()
+    // Standalone /api/roles fetch removed to prevent stale data sync
 
     // Get all features from our constant
     const featureKeys = Object.values(FEATURES);
@@ -48,14 +27,14 @@ const PermissionMatrix: React.FC = () => {
         }
     };
 
-    if (isLoadingRoles) return (
+    if (!roles.length) return (
         <div className="flex flex-col items-center justify-center p-20 gap-4">
-            <Spinner size="lg" />
-            <p className="text-xs font-black text-blue-500 uppercase tracking-[0.3em] animate-pulse">Synchronizing Roles...</p>
+            <div className="w-16 h-16 bg-white/5 rounded-full flex items-center justify-center mb-2">
+                <svg className="w-8 h-8 text-gray-600" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path d="M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197M13 7a4 4 0 11-8 0 4 4 0 018 0z" /></svg>
+            </div>
+            <p className="text-sm font-black text-gray-500 uppercase tracking-[0.2em]">មិនមានទិន្នន័យតួនាទី (No Roles Found)</p>
         </div>
     );
-
-    if (!roles.length) return <div className="p-10 text-center text-gray-500">មិនមានទិន្នន័យ Role ឡើយ</div>;
 
     return (
         <div className="w-full max-h-[65vh] overflow-y-auto overflow-x-auto no-scrollbar rounded-[2rem] border border-white/5 bg-gray-950/40 backdrop-blur-md relative">

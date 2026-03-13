@@ -35,6 +35,7 @@ const OrdersDashboard: React.FC<OrdersDashboardProps> = ({ onBack, initialFilter
     const [sortBy, setSortBy] = useState<string>('date');
     const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>('desc');
     const [groupBy, setGroupBy] = useState<string>('none');
+    const [viewMode, setViewMode] = useUrlState<'card' | 'list'>('viewMode', 'card');
     
     // Set Mobile Title
     useEffect(() => {
@@ -331,18 +332,24 @@ const OrdersDashboard: React.FC<OrdersDashboardProps> = ({ onBack, initialFilter
                         </button>
                         <div className="flex flex-col">
                             <h1 className="hidden md:block text-xl font-black text-white italic tracking-tighter leading-none">{t.manage_orders}</h1>
-                            <div className="flex items-center gap-2 mt-1">
-                                <div className="flex items-center gap-1.5 px-2 py-0.5 bg-blue-600/10 rounded-full border border-blue-500/20">
-                                    <div className="w-1 h-1 rounded-full bg-blue-500 animate-pulse"></div>
-                                    <span className="text-[10px] font-black text-blue-400 uppercase tracking-widest">{filteredOrders.length} {t.logged}</span>
-                                </div>
-                            </div>
                         </div>
                     </div>
-                    <div className="flex items-center gap-3">
-                        <button onClick={() => window.location.hash = '#/create-order'} className="flex items-center gap-2 px-6 py-3 bg-blue-600 hover:bg-blue-500 text-white rounded-2xl text-xs font-black uppercase tracking-widest shadow-[0_10px_30px_rgba(37,99,235,0.3)] transition-all border border-blue-400/20">
-                            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={3}><path d="M12 4v16m8-8H4" /></svg>
-                            <span>{t.add_new}</span>
+                    
+                    {/* View Switcher Toggle - HIDDEN ON DESKTOP (lg:hidden) */}
+                    <div className="lg:hidden flex items-center gap-1 bg-black/40 p-1.5 rounded-2xl border border-white/5 shadow-inner">
+                        <button 
+                            onClick={() => setViewMode('card')} 
+                            className={`flex items-center gap-2 px-4 py-2 rounded-xl text-[10px] font-black uppercase transition-all ${viewMode === 'card' ? 'bg-blue-600 text-white shadow-lg' : 'text-gray-500 hover:text-white'}`}
+                        >
+                            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2.5}><path d="M4 6a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2V6zM14 6a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2V6zM4 16a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2v-2zM14 16a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2v-2z" /></svg>
+                            <span className="hidden sm:inline">{t.view_card}</span>
+                        </button>
+                        <button 
+                            onClick={() => setViewMode('list')} 
+                            className={`flex items-center gap-2 px-4 py-2 rounded-xl text-[10px] font-black uppercase transition-all ${viewMode === 'list' ? 'bg-blue-600 text-white shadow-lg' : 'text-gray-500 hover:text-white'}`}
+                        >
+                            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2.5}><path strokeLinecap="round" strokeLinejoin="round" d="M4 6h16M4 12h16M4 18h16" /></svg>
+                            <span className="hidden sm:inline">{t.view_list}</span>
                         </button>
                     </div>
                 </div>
@@ -382,7 +389,7 @@ const OrdersDashboard: React.FC<OrdersDashboardProps> = ({ onBack, initialFilter
                             </div>
                             <button onClick={() => setIsFilterModalOpen(true)} className="flex-1 lg:flex-none flex items-center justify-center gap-2.5 px-5 bg-black/40 border border-gray-800/50 text-gray-400 hover:text-white rounded-2xl text-[11px] font-black uppercase tracking-widest transition-all active:scale-95 h-12 shadow-inner">
                                 <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2.5}><path d="M3 4a1 1 0 011-1h16a1 1 0 011 1v2.586a1 1 0 01-.293.707l-6.414 6.414a1 1 0 00-.293.707V17l-4 4v-6.586a1 1 0 00-.293-.707L3.293 7.293A1 1 0 013 6.586V4z" /></svg>
-                                {t.reports}
+                                Filters
                             </button>
                             <button onClick={() => setIsPdfModalOpen(true)} className="flex-1 lg:flex-none flex items-center justify-center gap-2.5 px-5 bg-red-600/10 border border-red-500/20 text-red-500 hover:bg-red-600 hover:text-white rounded-2xl text-[11px] font-black uppercase tracking-widest transition-all h-12 shadow-lg shadow-red-900/10">
                                 <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={3}><path d="M7 21h10a2 2 0 002-2V9.414a1 1 0 00-.293-.707l-5.414-5.414A1 1 0 0012.586 3H7a2 2 0 00-2 2v14a2 2 0 002 2z" /></svg>
@@ -398,33 +405,69 @@ const OrdersDashboard: React.FC<OrdersDashboardProps> = ({ onBack, initialFilter
                 </div>
 
                 <div className="flex flex-wrap items-center gap-3 mb-2 px-1">
-                    <div className="flex items-center gap-2 bg-black/30 p-1.5 rounded-2xl border border-white/5 shadow-inner">
-                        <span className="text-[9px] font-black text-gray-600 uppercase ml-2 tracking-widest">ShortCut</span>
-                        {['today', 'yesterday', 'this_week', 'this_month'].map(p => (
-                            <button key={p} onClick={() => setFilters(prev => ({...prev, datePreset: p as any}))} className={`px-4 py-2 rounded-xl text-[10px] font-black uppercase transition-all ${filters.datePreset === p ? 'bg-blue-600 text-white shadow-lg' : 'text-gray-500 hover:text-white hover:bg-white/5'}`}>
-                                {(t as any)[p] || p.replace('_', ' ')}
-                            </button>
-                        ))}
+                    <div className="flex items-center gap-2 bg-gradient-to-br from-blue-900/20 via-black/40 to-indigo-900/20 backdrop-blur-3xl p-2 rounded-[1.5rem] border border-white/10 shadow-[0_8px_32px_rgba(0,0,0,0.4)] ring-1 ring-white/5">
+                        <div className="flex items-center gap-2 px-3 py-1 bg-white/5 rounded-xl border border-white/5 mr-1">
+                            <svg className="w-3.5 h-3.5 text-blue-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M13 10V3L4 14h7v7l9-11h-7z" /></svg>
+                            <span className="text-[10px] font-black text-gray-400 uppercase tracking-[0.2em]">Shortcuts</span>
+                        </div>
+                        <div className="flex items-center gap-1.5">
+                            {[
+                                { id: 'all', icon: <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M4 6h16M4 10h16M4 14h16M4 18h16" /></svg> },
+                                { id: 'today', icon: <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" /></svg> },
+                                { id: 'yesterday', icon: <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M11 15l-3-3m0 0l3-3m-3 3h8M3 12a9 9 0 1118 0 9 9 0 01-18 0z" /></svg> },
+                                { id: 'this_week', icon: <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" /></svg> },
+                                { id: 'this_month', icon: <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10" /></svg> }
+                            ].map(p => (
+                                <button 
+                                    key={p.id} 
+                                    onClick={() => setFilters(prev => ({ ...prev, datePreset: p.id as any, startDate: '', endDate: '' }))} 
+                                    className={`flex items-center gap-2 px-4 py-2.5 rounded-xl text-[10px] font-black uppercase transition-all duration-300 ${
+                                        filters.datePreset === p.id 
+                                        ? 'bg-gradient-to-r from-blue-600 to-indigo-600 text-white shadow-[0_0_20px_rgba(37,99,235,0.4)] scale-105 active:scale-95' 
+                                        : 'text-gray-500 hover:text-white hover:bg-white/5 active:scale-95'
+                                    }`}
+                                >
+                                    {p.icon}
+                                    {(t as any)[p.id] || p.id.replace('_', ' ')}
+                                </button>
+                            ))}
+                        </div>
                     </div>
-                    <div className="flex items-center gap-2 bg-black/30 p-1.5 rounded-2xl border border-white/5 shadow-inner">
-                        <span className="text-[9px] font-black text-gray-600 uppercase ml-2 tracking-widest">{t.warehouse}</span>
-                        {Array.from(new Set(appData.stores?.map(s => s.StoreName) || [])).slice(0, 4).map(s => {
-                            const sel = filters.fulfillmentStore.split(',').map(v => v.trim()).includes(s);
-                            return (
-                                <button key={s} onClick={() => {
-                                    const cur = filters.fulfillmentStore.split(',').map(v => v.trim()).filter(v => v);
-                                    const nxt = sel ? cur.filter(v => v !== s) : [...cur, s];
-                                    setFilters(prev => ({...prev, fulfillmentStore: nxt.join(',')}));
-                                }} className={`px-4 py-2 rounded-xl text-[10px] font-black uppercase transition-all ${sel ? 'bg-indigo-600 text-white shadow-lg' : 'text-gray-500 hover:text-white hover:bg-white/5'}`}>{s}</button>
-                            );
-                        })}
+
+                    <div className="flex items-center gap-2 bg-gradient-to-br from-purple-900/20 via-black/40 to-fuchsia-900/20 backdrop-blur-3xl p-2 rounded-[1.5rem] border border-white/10 shadow-[0_8px_32px_rgba(0,0,0,0.4)] ring-1 ring-white/5">
+                        <div className="flex items-center gap-2 px-3 py-1 bg-white/5 rounded-xl border border-white/5 mr-1">
+                            <svg className="w-3.5 h-3.5 text-indigo-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4" /></svg>
+                            <span className="text-[10px] font-black text-gray-400 uppercase tracking-[0.2em]">{t.warehouse}</span>
+                        </div>
+                        <div className="flex items-center gap-1.5">
+                            {Array.from(new Set(appData.stores?.map(s => s.StoreName) || [])).slice(0, 4).map(s => {
+                                const sel = filters.fulfillmentStore.split(',').map(v => v.trim()).includes(s);
+                                return (
+                                    <button 
+                                        key={s} 
+                                        onClick={() => {
+                                            const cur = filters.fulfillmentStore.split(',').map(v => v.trim()).filter(v => v);
+                                            const nxt = sel ? cur.filter(v => v !== s) : [...cur, s];
+                                            setFilters(prev => ({...prev, fulfillmentStore: nxt.join(',')}));
+                                        }} 
+                                        className={`px-4 py-2.5 rounded-xl text-[10px] font-black uppercase transition-all duration-300 ${
+                                            sel 
+                                            ? 'bg-gradient-to-r from-indigo-600 to-purple-600 text-white shadow-[0_0_20px_rgba(79,70,229,0.4)] scale-105 active:scale-95' 
+                                            : 'text-gray-500 hover:text-white hover:bg-white/5 active:scale-95'
+                                        }`}
+                                    >
+                                        {s}
+                                    </button>
+                                );
+                            })}
+                        </div>
                     </div>
                 </div>
             </div>
 
             <div className="flex-1 min-h-0 relative z-10 px-4 pb-4">
                 <div className="h-full bg-white/[0.02] border border-white/5 rounded-[2.5rem] overflow-hidden shadow-2xl">
-                    <OrdersList orders={filteredOrders} onEdit={o => setEditingOrderId(o['Order ID'])} onView={o => setViewingOrder(o)} showActions={true} visibleColumns={visibleColumns} selectedIds={selectedIds} onToggleSelect={toggleSelection} onToggleSelectAll={toggleSelectAll} showBorders={showBorders} groupBy={groupBy} />
+                    <OrdersList orders={filteredOrders} onEdit={o => setEditingOrderId(o['Order ID'])} onView={o => setViewingOrder(o)} showActions={true} visibleColumns={visibleColumns} selectedIds={selectedIds} onToggleSelect={toggleSelection} onToggleSelectAll={toggleSelectAll} showBorders={showBorders} groupBy={groupBy} viewMode={viewMode} />
                 </div>
             </div>
 

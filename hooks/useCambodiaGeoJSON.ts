@@ -1,6 +1,6 @@
-
 import { useState, useEffect } from 'react';
 import { GEOJSON_URLS } from '../utils/mapUtils';
+import { CacheService, CACHE_KEYS } from '../services/cacheService';
 
 export const useCambodiaGeoJSON = () => {
     const [geoJson, setGeoJson] = useState<any>(null);
@@ -11,17 +11,33 @@ export const useCambodiaGeoJSON = () => {
         let isMounted = true;
 
         const fetchGeoJSON = async () => {
-            // Try fetching from multiple sources until one succeeds
+            // 1. Try Cache First
+            try {
+                const cached = await CacheService.get<any>(CACHE_KEYS.GEOJSON);
+                if (cached && cached.type === 'FeatureCollection') {
+                    if (isMounted) {
+                        setGeoJson(cached);
+                        setLoading(false);
+                    }
+                    // Continue to revalidate in background (Stale-While-Revalidate)
+                }
+            } catch (e) {
+                console.warn("GeoJSON Cache read failed", e);
+            }
+
+            // 2. Fetch from multiple sources until one succeeds
             for (const url of GEOJSON_URLS) {
                 try {
                     const res = await fetch(url);
                     if (res.ok) {
                         const data = await res.json();
-                        // Validate that the data is actually a GeoJSON feature collection AND has features
+                        // Validate that the data is actually a GeoJSON feature collection
                         if (data && data.type === 'FeatureCollection' && Array.isArray(data.features)) {
                             if (isMounted) {
                                 setGeoJson(data);
                                 setLoading(false);
+                                // Save to Cache
+                                await CacheService.set(CACHE_KEYS.GEOJSON, data);
                             }
                             return;
                         } else {
@@ -33,13 +49,12 @@ export const useCambodiaGeoJSON = () => {
                 }
             }
 
-            if (isMounted) {
+            if (isMounted && !geoJson) {
                 setError("មិនអាចទាញយកទិន្នន័យផែនទីបានទេ");
                 setLoading(false);
             }
         };
 
-        // Catch any sync errors in the async function setup
         fetchGeoJSON().catch(err => {
             console.error("GeoJSON Fetch Fatal Error:", err);
             if (isMounted) {

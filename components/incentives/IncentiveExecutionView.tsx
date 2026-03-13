@@ -62,18 +62,21 @@ const IncentiveExecutionView: React.FC<IncentiveExecutionViewProps> = ({ project
 
     // 3. Loading
     useEffect(() => {
-        const p = getProjectById(projectId);
-        if (p) {
-            setProject(p);
-            const activeCalcs = p.calculators?.filter(c => c.status === 'Active') || [];
-            if (activeCalcs.length > 0) {
-                if (!activeMetricTab || !activeCalcs.find(c => c.id === activeMetricTab)) {
-                    setActiveMetricTab(activeCalcs[0].id);
+        const fetchProject = async () => {
+            const p = await getProjectById(Number(projectId));
+            if (p) {
+                setProject(p);
+                const activeCalcs = p.calculators?.filter(c => c.status === 'Active') || [];
+                if (activeCalcs.length > 0) {
+                    if (!activeMetricTab || !activeCalcs.find(c => String(c.id) === activeMetricTab)) {
+                        setActiveMetricTab(String(activeCalcs[0].id));
+                    }
+                } else {
+                    setActiveMetricTab('');
                 }
-            } else {
-                setActiveMetricTab('');
             }
-        }
+        };
+        fetchProject();
     }, [projectId]);
 
     useEffect(() => {

@@ -213,17 +213,38 @@ export const getValueCaseInsensitive = (item: any, key: string) => {
 export const getArrayCaseInsensitive = (data: any, key: string): any[] => {
     if (!data || typeof data !== 'object') return [];
     
-    // 1. Exact Match
-    if (Array.isArray(data[key])) return data[key];
-    
-    // 2. Case Insensitive Match
     const lowerKey = key.toLowerCase();
-    const foundKey = Object.keys(data).find(k => k.toLowerCase() === lowerKey);
-    if (foundKey && Array.isArray(data[foundKey])) return data[foundKey];
     
-    // 3. Special Case: 'pages' maps to 'TeamsPages'
+    // 1. Check all keys case-insensitively for a direct match or common variations
+    const keys = Object.keys(data);
+    
+    // Priority 1: Exact or case-insensitive match that has data
+    for (const k of keys) {
+        const lk = k.toLowerCase();
+        if ((lk === lowerKey || lk === lowerKey + 'list' || lk === lowerKey + 'data') && Array.isArray(data[k]) && data[k].length > 0) {
+            return data[k];
+        }
+    }
+    
+    // Priority 2: Exact or case-insensitive match even if empty
+    for (const k of keys) {
+        const lk = k.toLowerCase();
+        if (lk === lowerKey && Array.isArray(data[k])) {
+            return data[k];
+        }
+    }
+
+    // Priority 3: Variations even if empty
+    for (const k of keys) {
+        const lk = k.toLowerCase();
+        if ((lk === lowerKey + 'list' || lk === lowerKey + 'data') && Array.isArray(data[k])) {
+            return data[k];
+        }
+    }
+    
+    // Special Case: 'pages' maps to 'TeamsPages'
     if (key === 'pages') {
-        const altKey = Object.keys(data).find(k => k.toLowerCase().includes('teampage') || k.toLowerCase().includes('page'));
+        const altKey = keys.find(k => k.toLowerCase().includes('teampage') || k.toLowerCase().includes('page'));
         if (altKey && Array.isArray(data[altKey])) return data[altKey];
     }
     

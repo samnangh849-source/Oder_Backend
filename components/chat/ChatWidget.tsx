@@ -315,11 +315,11 @@ const ChatWidget: React.FC<ChatWidgetProps> = ({ isOpen, onClose }) => {
                     if (isDisposed) return;
                     try {
                         const data = JSON.parse(e.data);
-                        // Handle both lowercase and uppercase keys (Common in Go/JS interop)
-                        const action = data.action || data.Action;
-                        const payload = data.payload || data.Payload;
+                        // Go Backend uses "type" and "data" or "message_id"/"file_id"
+                        const type = data.type || data.Type || data.action || data.Action;
+                        const payload = data.data || data.payload || data.Payload || data;
 
-                        if (action === 'new_message' || action === 'NEW_MESSAGE') {
+                        if (type === 'new_message' || type === 'NEW_MESSAGE') {
                             const msg = handlersRef.current.transformBackendMessage(payload);
                             handlersRef.current.setAndCacheMessages(prev => {
                                 // Smart matching for optimistic messages
@@ -349,14 +349,16 @@ const ChatWidget: React.FC<ChatWidgetProps> = ({ isOpen, onClose }) => {
                             if (isUserAtBottomRef.current) setTimeout(() => scrollToBottom('smooth'), 100);
                         }
                         
-                        if (action === 'upload_complete' || action === 'UPLOAD_COMPLETE') {
-                            const p = payload;
+                        if (type === 'upload_complete' || type === 'UPLOAD_COMPLETE') {
+                            const messageId = data.message_id || data.messageId || (payload ? payload.id : null);
+                            const fileId = data.file_id || data.fileId || (payload ? payload.FileID : null);
+                            
                             handlersRef.current.setAndCacheMessages(prev => prev.map(m => {
-                                if (m.id === p.Timestamp || m.id === String(p.id) || m.id === String(p.ID)) {
+                                if (m.id === String(messageId)) {
                                     return {
                                         ...m,
-                                        content: convertGoogleDriveUrl(p.Content || p.content),
-                                        fileID: p.FileID || p.FileId || p.file_id,
+                                        content: fileId ? `${WEB_APP_URL}/api/chat/${m.type}/${fileId}` : m.content,
+                                        fileID: fileId || m.fileID,
                                         isOptimistic: false
                                     };
                                 }

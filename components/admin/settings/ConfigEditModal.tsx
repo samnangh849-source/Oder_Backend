@@ -6,6 +6,7 @@ import Spinner from '../../common/Spinner';
 import Modal from '../../common/Modal';
 import { WEB_APP_URL } from '../../../constants';
 import { fileToBase64, convertGoogleDriveUrl } from '../../../utils/fileUtils';
+import { CacheService, CACHE_KEYS } from '../../../services/cacheService';
 
 interface ConfigEditModalProps {
     section: ConfigSection;
@@ -22,9 +23,6 @@ const ConfigEditModal: React.FC<ConfigEditModalProps> = ({ section, item, onClos
     const [error, setError] = useState('');
     const fileInputRefs = useRef<Record<string, HTMLInputElement | null>>({});
     const [passwordVisibility, setPasswordVisibility] = useState<Record<string, boolean>>({});
-
-    // Suggested Roles
-    const suggestedRoles = ['Admin', 'Sales', 'Fulfillment', 'Stock', 'Driver', 'Manager', 'Accountant'];
 
     useEffect(() => {
         if (item) {
@@ -116,9 +114,14 @@ const ConfigEditModal: React.FC<ConfigEditModalProps> = ({ section, item, onClos
                 
             if (item) payload.primaryKey = { [section.primaryKeyField]: getValueCaseInsensitive(item, section.primaryKeyField) };
             
+            const session = await CacheService.get<{ token: string }>(CACHE_KEYS.SESSION);
+            const token = session?.token;
+            const headers: HeadersInit = { 'Content-Type': 'application/json' };
+            if (token) headers['Authorization'] = `Bearer ${token}`;
+
             const response = await fetch(`${WEB_APP_URL}${endpoint}`, {
                 method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
+                headers,
                 body: JSON.stringify(payload)
             });
             
@@ -148,22 +151,6 @@ const ConfigEditModal: React.FC<ConfigEditModalProps> = ({ section, item, onClos
                         <div key={field.name} className="space-y-2">
                             <label className="block text-[10px] font-black text-gray-500 uppercase tracking-[0.2em] ml-2">{field.label}</label>
                             
-                            {/* Special Recommendation for Role Name */}
-                            {section.id === 'roles' && field.name === 'roleName' && !item && (
-                                <div className="flex flex-wrap gap-2 mb-2 ml-2">
-                                    {suggestedRoles.map(role => (
-                                        <button 
-                                            key={role} 
-                                            type="button"
-                                            onClick={() => setFormData((prev: any) => ({ ...prev, roleName: role }))}
-                                            className="px-3 py-1 bg-blue-600/10 border border-blue-500/20 rounded-full text-[10px] font-black text-blue-400 hover:bg-blue-600 hover:text-white transition-all uppercase tracking-tighter"
-                                        >
-                                            + {role}
-                                        </button>
-                                    ))}
-                                </div>
-                            )}
-
                             {field.type === 'checkbox' ? (
                                 <div className="flex items-center gap-4 bg-gray-900/50 p-4 rounded-[1.5rem] border border-gray-800 transition-all hover:border-gray-700">
                                     <input type="checkbox" name={field.name} checked={!!formData[field.name]} onChange={handleChange} className="h-6 w-6 rounded-lg border-gray-600 bg-gray-700 text-blue-600 focus:ring-blue-500" />
@@ -196,15 +183,6 @@ const ConfigEditModal: React.FC<ConfigEditModalProps> = ({ section, item, onClos
                                     {(appData.roles || []).map(r => (
                                         <option key={r.id || r.roleName} value={r.roleName}>{r.roleName}</option>
                                     ))}
-                                    {(!appData.roles || appData.roles.length === 0) && (
-                                        <>
-                                            <option value="Admin">Admin</option>
-                                            <option value="Sales">Sales</option>
-                                            <option value="Fulfillment">Fulfillment</option>
-                                            <option value="Stock">Stock</option>
-                                            <option value="Driver">Driver</option>
-                                        </>
-                                    )}
                                 </select>
                             ) : (
                                 <input 

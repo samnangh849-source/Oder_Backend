@@ -17,6 +17,9 @@ export default defineConfig(({ mode }) => {
       host: '0.0.0.0',
     },
     plugins: [react()],
+    optimizeDeps: {
+      include: ['react-window'],
+    },
     // FIXED: Use relative base path to support any repository name
     base: '/Order_System/', 
     define: {

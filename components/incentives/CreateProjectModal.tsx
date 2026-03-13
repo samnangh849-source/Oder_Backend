@@ -16,47 +16,63 @@ const CreateProjectModal: React.FC<CreateProjectModalProps> = ({ isOpen, onClose
     const { language, currentUser } = useContext(AppContext);
     const t = translations[language];
 
-    const [name, setName] = useState('');
+    const [projectName, setProjectName] = useState('');
     const [colorCode, setColorCode] = useState('#3b82f6'); // default blue
     const [requirePeriod, setRequirePeriod] = useState(false);
     const [dataSource, setDataSource] = useState<'system' | 'manual'>('system');
-    const [status, setStatus] = useState<'Active' | 'Disable' | 'Draft'>('Draft');
+    const [status, setStatus] = useState<string>('Draft');
+    const [startDate, setStartDate] = useState('');
+    const [endDate, setEndDate] = useState('');
+    const [targetTeam, setTargetTeam] = useState('');
 
     useEffect(() => {
         if (initialData) {
-            setName(initialData.name);
-            setColorCode(initialData.colorCode);
-            setRequirePeriod(initialData.requirePeriodSelection);
-            setDataSource(initialData.dataSource);
-            setStatus(initialData.status);
+            setProjectName(initialData.projectName || '');
+            setColorCode(initialData.colorCode || '#3b82f6');
+            setRequirePeriod(!!initialData.requirePeriodSelection);
+            setDataSource(initialData.dataSource || 'system');
+            setStatus(initialData.status || 'Draft');
+            setStartDate(initialData.startDate || '');
+            setEndDate(initialData.endDate || '');
+            setTargetTeam(initialData.targetTeam || '');
         } else {
-            setName('');
+            setProjectName('');
             setColorCode('#3b82f6');
             setRequirePeriod(false);
             setDataSource('system');
             setStatus('Draft');
+            setStartDate('');
+            setEndDate('');
+            setTargetTeam('');
         }
     }, [initialData, isOpen]);
 
-    const handleSubmit = (e: React.FormEvent) => {
+    const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
-        if (!name.trim()) return;
+        if (!projectName.trim()) return;
 
-        if (initialData) {
-            updateProject(initialData.id, {
-                name,
+        if (initialData && initialData.id) {
+            await updateProject(initialData.id, {
+                projectName,
                 colorCode,
                 requirePeriodSelection: requirePeriod,
                 dataSource,
-                status
+                status,
+                startDate,
+                endDate,
+                targetTeam
             });
         } else {
-            createProject({
-                name,
+            await createProject({
+                projectName,
                 colorCode,
                 requirePeriodSelection: requirePeriod,
                 dataSource,
-                status
+                status,
+                startDate,
+                endDate,
+                targetTeam,
+                calculatorId: 0
             });
         }
 
@@ -64,13 +80,13 @@ const CreateProjectModal: React.FC<CreateProjectModalProps> = ({ isOpen, onClose
         onClose();
     };
 
-    const handleDelete = () => {
-        if (!initialData) return;
+    const handleDelete = async () => {
+        if (!initialData || !initialData.id) return;
         
         const pwd = prompt("សូមបញ្ចូលពាក្យសម្ងាត់របស់អ្នកដើម្បីលុប (Please enter your password to delete):");
         if (pwd === currentUser?.Password) {
-            if (window.confirm(`តើអ្នកពិតជាចង់លុបគម្រោង "${initialData.name}" មែនទេ? (Are you sure you want to delete this project?)`)) {
-                if (deleteProject(initialData.id)) {
+            if (window.confirm(`តើអ្នកពិតជាចង់លុបគម្រោង "${initialData.projectName}" មែនទេ? (Are you sure you want to delete this project?)`)) {
+                if (await deleteProject(initialData.id)) {
                     onSuccess();
                     onClose();
                 }
@@ -102,8 +118,8 @@ const CreateProjectModal: React.FC<CreateProjectModalProps> = ({ isOpen, onClose
                         <label className="block text-xs font-black text-slate-400 uppercase tracking-widest mb-2">{t.project_name}</label>
                         <input 
                             type="text" 
-                            value={name}
-                            onChange={e => setName(e.target.value)}
+                            value={projectName}
+                            onChange={e => setProjectName(e.target.value)}
                             className="w-full bg-slate-800 border border-slate-700 rounded-xl px-4 py-3 text-white font-bold focus:border-blue-500 focus:ring-1 focus:ring-blue-500/50 transition-all"
                             placeholder="e.g., Marathon Sales Campaign 2026"
                             required
@@ -173,7 +189,7 @@ const CreateProjectModal: React.FC<CreateProjectModalProps> = ({ isOpen, onClose
                     <div className="flex flex-col gap-3 pt-4">
                         <button 
                             type="submit"
-                            disabled={!name.trim()}
+                            disabled={!projectName.trim()}
                             className="w-full py-3.5 bg-blue-600 hover:bg-blue-500 disabled:opacity-50 disabled:cursor-not-allowed text-white font-black rounded-xl uppercase tracking-widest transition-all shadow-[0_0_20px_rgba(37,99,235,0.3)]"
                         >
                             {initialData ? t.save : t.create_project}

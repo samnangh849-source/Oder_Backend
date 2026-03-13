@@ -63,8 +63,8 @@ const SalesStoreTable: React.FC<SalesStoreTableProps> = ({ stats, onStatClick })
                             <tfoot className="bg-gray-900/80 font-black border-t-2 border-gray-700">
                                 <tr>
                                     <td className="px-6 py-4 uppercase tracking-widest text-gray-500 text-[10px]">សរុបរួម</td>
-                                    <td className="px-6 py-4 text-center text-blue-300 text-base">{grandTotals.orders}</td>
-                                    <td className="px-6 py-4 text-right text-green-400 text-base">
+                                    <td className="px-6 py-4 text-center text-blue-300 text-base whitespace-nowrap tabular-nums">{grandTotals.orders}</td>
+                                    <td className="px-6 py-4 text-right text-green-400 text-base whitespace-nowrap tabular-nums">
                                         ${grandTotals.revenue.toLocaleString(undefined, { minimumFractionDigits: 2 })}
                                     </td>
                                 </tr>

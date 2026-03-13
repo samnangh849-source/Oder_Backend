@@ -23,7 +23,7 @@ interface OrdersListMobileProps {
 }
 
 const OrdersListMobile: React.FC<OrdersListMobileProps> = ({
-    orders, totals, selectedIds, onToggleSelect, onEdit,
+    orders, totals, selectedIds, onToggleSelect, onEdit, onView,
     handlePrint, toggleOrderVerified, updatingIds, groupBy = 'none'
 }) => {
     const { currentUser, hasPermission } = useContext(AppContext);
@@ -102,6 +102,7 @@ const OrdersListMobile: React.FC<OrdersListMobileProps> = ({
                             return (
                                 <div 
                                     key={order['Order ID']} 
+                                    onClick={() => onView && onView(order)}
                                     className={`order-card-new relative overflow-hidden rounded-[2rem] p-5 ${isSelected ? 'ring-2 ring-blue-500 bg-blue-500/10' : ''}`}
                                 >
                                     {/* Selection Glow */}

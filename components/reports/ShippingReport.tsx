@@ -7,6 +7,7 @@ import { convertGoogleDriveUrl } from '../../utils/fileUtils';
 import { FilterState } from '../orders/OrderFilters';
 import { APP_LOGO_URL } from '../../constants';
 import Spinner from '../common/Spinner';
+import { safeParseDate, getValidDate } from '../../utils/dateUtils';
 
 interface ShippingReportProps {
     orders: ParsedOrder[];
@@ -19,10 +20,15 @@ interface ShippingReportProps {
     onBack?: () => void;
 }
 
-const ShippingReport: React.FC<ShippingReportProps> = ({ orders, appData, dateFilter, startDate, endDate, onNavigate, contextFilters, onBack }) => {
+const ShippingReport: React.FC<ShippingReportProps> = ({ orders, appData, dateFilter: initialDateFilter, startDate: initialStartDate, endDate: initialEndDate, onNavigate, contextFilters, onBack }) => {
     const [analysis, setAnalysis] = useState<string>('');
     const [loadingAnalysis, setLoadingAnalysis] = useState(false);
     const [storeFilter, setStoreFilter] = useState<string>('All');
+    
+    // Internal Date Filtering State
+    const [dateFilter, setDateFilter] = useState(initialDateFilter || 'this_month');
+    const [startDate, setStartDate] = useState(initialStartDate || new Date().toISOString().split('T')[0]);
+    const [endDate, setEndDate] = useState(initialEndDate || new Date().toISOString().split('T')[0]);
 
     // Filter Navigation Handler
     const handleFilterNavigation = (key: string, value: string) => {
@@ -56,11 +62,39 @@ const ShippingReport: React.FC<ShippingReportProps> = ({ orders, appData, dateFi
         }
     };
 
+    // --- Date Filtering Logic ---
+    const dateFilteredOrders = useMemo(() => {
+        const now = new Date();
+        const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+        let startBound: Date | null = null;
+        let endBound: Date | null = new Date();
+
+        switch (dateFilter) {
+            case 'today': startBound = today; endBound = new Date(today); endBound.setHours(23, 59, 59, 999); break;
+            case 'yesterday': startBound = new Date(today); startBound.setDate(today.getDate() - 1); endBound = new Date(today); endBound.setMilliseconds(-1); break;
+            case 'this_week': const d = now.getDay(); startBound = new Date(today); startBound.setDate(today.getDate() - (d === 0 ? 6 : d - 1)); endBound = new Date(startBound); endBound.setDate(startBound.getDate() + 6); endBound.setHours(23, 59, 59, 999); break;
+            case 'this_month': startBound = new Date(now.getFullYear(), now.getMonth(), 1); break;
+            case 'last_month': startBound = new Date(now.getFullYear(), now.getMonth() - 1, 1); endBound = new Date(now.getFullYear(), now.getMonth(), 0, 23, 59, 59, 999); break;
+            case 'all': startBound = null; endBound = null; break;
+            case 'custom': if (startDate) startBound = getValidDate(startDate + 'T00:00:00'); if (endDate) endBound = getValidDate(endDate + 'T23:59:59'); break;
+        }
+
+        return orders.filter(o => {
+            if (dateFilter === 'all') return true;
+            if (!o.Timestamp) return false;
+            const orderDate = safeParseDate(o.Timestamp);
+            if (!orderDate) return false;
+            if (startBound && orderDate < startBound) return false;
+            if (endBound && orderDate > endBound) return false;
+            return true;
+        });
+    }, [orders, dateFilter, startDate, endDate]);
+
     // 1. Filter Orders based on Store Selection
     const filteredOrders = useMemo(() => {
-        if (storeFilter === 'All') return orders;
-        return orders.filter(o => o['Fulfillment Store'] === storeFilter);
-    }, [orders, storeFilter]);
+        if (storeFilter === 'All') return dateFilteredOrders;
+        return dateFilteredOrders.filter(o => o['Fulfillment Store'] === storeFilter);
+    }, [dateFilteredOrders, storeFilter]);
 
     // 2. Calculate Stats based on Filtered Orders
     const shippingStats = useMemo(() => {
@@ -339,32 +373,72 @@ const ShippingReport: React.FC<ShippingReportProps> = ({ orders, appData, dateFi
         <div className="space-y-8 animate-fade-in pb-12">
             
             {/* Header Actions */}
-            <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 bg-gray-900/40 p-4 rounded-3xl border border-white/5">
-                <div className="flex items-center gap-4">
-                    {onBack && (
-                        <button onClick={onBack} className="bg-gray-800 p-3 rounded-2xl border border-gray-700 hover:bg-gray-700 active:scale-95 transition-all">
-                            <svg className="w-5 h-5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 19l-7-7m0 0l7-7m-7 7h18" /></svg>
+            <div className="flex flex-col gap-4 bg-gray-900/40 p-5 rounded-[2rem] border border-white/5">
+                <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
+                    <div className="flex items-center gap-4">
+                        {onBack && (
+                            <button onClick={onBack} className="bg-gray-800 p-3 rounded-2xl border border-gray-700 hover:bg-gray-700 active:scale-95 transition-all">
+                                <svg className="w-5 h-5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 19l-7-7m0 0l7-7m-7 7h18" /></svg>
+                            </button>
+                        )}
+                        <div>
+                            <h2 className="text-xl font-black text-white uppercase tracking-tight">របាយការណ៍ដឹកជញ្ជូន</h2>
+                            <p className="text-xs text-gray-500 font-bold mt-1">Shipping & Fulfillment Cost Analysis</p>
+                        </div>
+                    </div>
+                    
+                    <div className="flex flex-wrap items-center gap-2">
+                        {(['today', 'yesterday', 'this_week', 'this_month', 'last_month', 'all'] as const).map(preset => (
+                            <button
+                                key={preset}
+                                onClick={() => setDateFilter(preset)}
+                                className={`px-4 py-2 text-[10px] font-black uppercase rounded-xl transition-all ${dateFilter === preset ? 'bg-blue-600 text-white shadow-lg' : 'bg-gray-800 text-gray-500 hover:text-white border border-white/5'}`}
+                            >
+                                {preset.replace('_', ' ')}
+                            </button>
+                        ))}
+                        <button
+                            onClick={() => setDateFilter('custom')}
+                            className={`px-4 py-2 text-[10px] font-black uppercase rounded-xl transition-all ${dateFilter === 'custom' ? 'bg-blue-600 text-white shadow-lg' : 'bg-gray-800 text-gray-500 hover:text-white border border-white/5'}`}
+                        >
+                            Custom
                         </button>
-                    )}
-                    <div>
-                        <h2 className="text-xl font-black text-white uppercase tracking-tight">របាយការណ៍ដឹកជញ្ជូន</h2>
-                        <p className="text-xs text-gray-500 font-bold mt-1">Shipping & Fulfillment Cost Analysis</p>
                     </div>
                 </div>
-                <div className="flex flex-col sm:flex-row gap-3 items-center w-full sm:w-auto">
-                    {/* Store Filter Dropdown */}
-                    <div className="bg-gray-800 p-1 rounded-xl border border-white/10 flex items-center w-full sm:w-auto">
-                        <span className="text-[10px] font-bold text-gray-500 uppercase px-3 whitespace-nowrap">View:</span>
-                        <select 
-                            value={storeFilter} 
-                            onChange={(e) => setStoreFilter(e.target.value)}
-                            className="bg-transparent border-none text-xs font-black text-white focus:ring-0 cursor-pointer py-1.5 pr-8 pl-1 w-full"
-                        >
-                            <option value="All">All Stores</option>
-                            {appData.stores?.map(s => (
-                                <option key={s.StoreName} value={s.StoreName}>{s.StoreName}</option>
-                            ))}
-                        </select>
+
+                {dateFilter === 'custom' && (
+                    <div className="flex items-center gap-3 bg-white/5 p-3 rounded-2xl border border-white/5 animate-fade-in-down">
+                        <input 
+                            type="date" 
+                            value={startDate} 
+                            onChange={e => setStartDate(e.target.value)} 
+                            className="bg-gray-900 border border-white/10 rounded-xl px-4 py-2 text-white text-xs font-bold focus:ring-2 focus:ring-blue-500" 
+                        />
+                        <span className="text-gray-500 font-black text-xs uppercase tracking-widest">to</span>
+                        <input 
+                            type="date" 
+                            value={endDate} 
+                            onChange={e => setEndDate(e.target.value)} 
+                            className="bg-gray-900 border border-white/10 rounded-xl px-4 py-2 text-white text-xs font-bold focus:ring-2 focus:ring-blue-500" 
+                        />
+                    </div>
+                )}
+
+                <div className="flex flex-col sm:flex-row justify-between items-center gap-4 pt-4 border-t border-white/5">
+                    <div className="flex items-center gap-3 w-full sm:w-auto">
+                        <div className="bg-gray-800 p-1 rounded-xl border border-white/10 flex items-center w-full sm:w-auto">
+                            <span className="text-[10px] font-bold text-gray-500 uppercase px-3 whitespace-nowrap">Store:</span>
+                            <select 
+                                value={storeFilter} 
+                                onChange={(e) => setStoreFilter(e.target.value)}
+                                className="bg-transparent border-none text-xs font-black text-white focus:ring-0 cursor-pointer py-1.5 pr-8 pl-1 w-full"
+                            >
+                                <option value="All">All Stores</option>
+                                {appData.stores?.map(s => (
+                                    <option key={s.StoreName} value={s.StoreName}>{s.StoreName}</option>
+                                ))}
+                            </select>
+                        </div>
                     </div>
 
                     <div className="flex gap-2 w-full sm:w-auto">

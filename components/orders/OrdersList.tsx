@@ -20,12 +20,13 @@ interface OrdersListProps {
     onToggleSelectAll?: (ids: string[]) => void;
     showBorders?: boolean;
     groupBy?: string;
+    viewMode?: 'card' | 'list';
 }
 
 const OrdersList: React.FC<OrdersListProps> = ({ 
     orders, onEdit, onView, showActions, visibleColumns,
     selectedIds = new Set(), onToggleSelect, onToggleSelectAll,
-    showBorders = false, groupBy = 'none'
+    showBorders = false, groupBy = 'none', viewMode = 'card'
 }) => {
     const { refreshData } = useContext(AppContext);
     const [copiedId, setCopiedId] = useState<string | null>(null);
@@ -179,7 +180,7 @@ ${dateStr}
         selectedIds,
         onToggleSelect,
         onEdit,
-        onView, // បន្ថែម onView ទៅទីនេះ
+        onView,
         handlePrint,
         handleCopy,
         handleCopyTemplate,
@@ -188,7 +189,8 @@ ${dateStr}
         toggleOrderVerified,
         updatingIds,
         showBorders,
-        groupBy
+        groupBy,
+        viewMode
     };
 
     return (

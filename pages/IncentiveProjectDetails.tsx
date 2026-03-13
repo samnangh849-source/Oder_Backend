@@ -21,8 +21,8 @@ const IncentiveProjectDetails: React.FC<IncentiveProjectDetailsProps> = ({ proje
     const [isSettingsOpen, setIsSettingsOpen] = useState(false);
     const [calculatorType, setCalculatorType] = useState<'Achievement' | 'Commission'>('Achievement');
 
-    const loadProject = () => {
-        const p = getProjectById(projectId);
+    const loadProject = async () => {
+        const p = await getProjectById(Number(projectId));
         if (p) setProject(p);
     };
 
@@ -30,21 +30,21 @@ const IncentiveProjectDetails: React.FC<IncentiveProjectDetailsProps> = ({ proje
         loadProject();
     }, [projectId]);
 
-    const handleUpdateStatus = (newStatus: 'Active' | 'Disable' | 'Draft') => {
-        if (!project) return;
-        updateProject(project.id, { status: newStatus });
+    const handleUpdateStatus = async (newStatus: 'Active' | 'Disable' | 'Draft') => {
+        if (!project || !project.id) return;
+        await updateProject(project.id, { status: newStatus });
         loadProject();
     };
 
-    const handleDeleteCalc = (calcId: string) => {
+    const handleDeleteCalc = async (calcId: string) => {
         if (window.confirm('Are you sure you want to delete this calculator?')) {
-            deleteCalculator(projectId, calcId);
+            await deleteCalculator(Number(projectId), Number(calcId));
             loadProject();
         }
     };
 
-    const handleDuplicateCalc = (calcId: string) => {
-        duplicateCalculator(projectId, calcId);
+    const handleDuplicateCalc = async (calcId: string) => {
+        await duplicateCalculator(Number(projectId), Number(calcId));
         loadProject();
     };
 
