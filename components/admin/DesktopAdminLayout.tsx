@@ -32,7 +32,7 @@ const DesktopAdminLayout: React.FC<DesktopAdminLayoutProps> = ({
     setAdvancedSettingsOpen
 }) => {
     return (
-        <div className="flex h-screen overflow-hidden bg-gray-950">
+        <div className="flex h-screen w-full bg-gray-950 overflow-hidden">
             {/* Fixed Sidebar */}
             <Sidebar 
                 activeDashboard={activeDashboard}
@@ -48,7 +48,7 @@ const DesktopAdminLayout: React.FC<DesktopAdminLayoutProps> = ({
             />
             
             {/* Dynamic Content Margin based on Sidebar State */}
-            <main className={`flex-1 h-full overflow-hidden transition-all duration-300 ease-in-out ${isSidebarCollapsed ? 'pl-20' : 'pl-64'}`}>
+            <main className={`flex-1 h-screen transition-all duration-300 ease-in-out ${isSidebarCollapsed ? 'pl-20' : 'pl-64'} overflow-hidden`}>
                 {/* Ambient Background Effect for Desktop */}
                 <div className="fixed inset-0 pointer-events-none opacity-50 overflow-hidden">
                     <div className="absolute top-[-10%] right-[-10%] w-[500px] h-[500px] bg-blue-600/5 rounded-full blur-[120px]"></div>
@@ -56,9 +56,10 @@ const DesktopAdminLayout: React.FC<DesktopAdminLayoutProps> = ({
                 
                 {/* 
                     Intelligent Layout Container:
-                    - Optimized padding to prioritize data visibility
+                    - Only this inner container scrolls
+                    - Standard visible scrollbars for intuitive UX
                 */}
-                <div className="p-2 md:p-3 lg:p-4 xl:p-5 2xl:p-6 max-w-[2400px] mx-auto h-full w-full relative z-10 transition-all duration-300 flex flex-col overflow-hidden">
+                <div className="p-2 md:p-3 lg:p-4 xl:p-5 2xl:p-6 max-w-[2400px] mx-auto h-full w-full relative z-10 transition-all duration-300 flex flex-col overflow-y-auto overflow-x-hidden custom-scrollbar">
                     {children}
                 </div>
             </main>

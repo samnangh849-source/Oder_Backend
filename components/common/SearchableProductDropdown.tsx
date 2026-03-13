@@ -1,7 +1,9 @@
 
-import React, { useState, useRef, useEffect, useMemo, useCallback } from 'react';
+import React, { useState, useRef, useEffect, useMemo, useCallback, useContext } from 'react';
 import { MasterProduct } from '../../types';
 import { convertGoogleDriveUrl } from '../../utils/fileUtils';
+import ProductSelectionConfirm from '../orders/ProductSelectionConfirm';
+import { AppContext } from '../../context/AppContext';
 
 const highlightMatch = (text: string, query: string) => {
     if (!query || !text) return <span>{text}</span>;
@@ -50,9 +52,11 @@ const SearchableProductDropdown: React.FC<SearchableProductDropdownProps> = ({
     showTagEditor = true,
     allowAddNew = true
 }) => {
+    const { showNotification } = useContext(AppContext);
     const [isOpen, setIsOpen] = useState(false);
     const [searchTerm, setSearchTerm] = useState('');
     const [activeIndex, setActiveIndex] = useState(0);
+    const [previewProduct, setPreviewProduct] = useState<MasterProduct | null>(null);
     
     const dropdownRef = useRef<HTMLDivElement>(null);
     const inputRef = useRef<HTMLInputElement>(null);
@@ -101,14 +105,16 @@ const SearchableProductDropdown: React.FC<SearchableProductDropdownProps> = ({
         onSelect(productName, tags);
         setSearchTerm(productName);
         setIsOpen(false);
+        setPreviewProduct(null);
         setActiveIndex(0);
         inputRef.current?.blur();
     }, [onSelect]);
     
     const handleItemClick = (item: any) => {
-        if (item.isAddNew) confirmSelect(item.ProductName);
-        else {
-            // Directly confirm selection without modal
+        if (item.isAddNew) {
+            confirmSelect(item.ProductName);
+        } else {
+            // Directly select product without image check or confirmation modal
             confirmSelect(item.ProductName, item.Tags || '');
         }
     };
@@ -168,13 +174,23 @@ const SearchableProductDropdown: React.FC<SearchableProductDropdownProps> = ({
                                 );
                             }
                             const product = item as MasterProduct;
+                            const img = product.ImageURL || '';
+                            const hasNoImage = !img || img.includes('placehold.co') || img.includes('text=N/A');
+
                             return (
                                 <li key={product.ProductName} className={`p-2.5 rounded-2xl cursor-pointer flex items-center gap-3 transition-all ${activeIndex === index ? 'bg-blue-600 text-white shadow-lg' : 'hover:bg-white/5 text-gray-300'}`} onMouseDown={() => handleItemClick(product)}>
-                                    <img src={convertGoogleDriveUrl(product.ImageURL)} className="w-12 h-12 rounded-xl object-cover border border-white/10" alt="" />
+                                    <div className="relative">
+                                        <img src={convertGoogleDriveUrl(product.ImageURL)} className={`w-12 h-12 rounded-xl object-cover border border-white/10 ${hasNoImage ? 'opacity-30 grayscale' : ''}`} alt="" />
+                                        {hasNoImage && <div className="absolute inset-0 flex items-center justify-center"><svg className="w-5 h-5 text-red-500/80" fill="currentColor" viewBox="0 0 20 20"><path fillRule="evenodd" d="M4 3a2 2 0 00-2 2v10a2 2 0 002 2h12a2 2 0 002-2V5a2 2 0 00-2-2H4zm12 12H4l4-8 3 6 2-4 3 6z" clipRule="evenodd" /></svg></div>}
+                                    </div>
                                     <div className="min-w-0 flex-grow">
-                                        <p className="font-black text-[15px] truncate leading-tight">{highlightMatch(product.ProductName, searchTerm)}</p>
+                                        <div className="flex items-center gap-2">
+                                            <p className="font-black text-[15px] truncate leading-tight">{highlightMatch(product.ProductName, searchTerm)}</p>
+                                            {hasNoImage && <span className="flex-shrink-0 w-1.5 h-1.5 rounded-full bg-red-500 animate-pulse"></span>}
+                                        </div>
                                         <div className="flex items-center gap-2 mt-0.5">
                                             <span className="text-[10px] font-black text-blue-400 bg-blue-500/10 px-2 py-0.5 rounded-md border border-blue-500/10">${product.Price.toFixed(2)}</span>
+                                            {hasNoImage && <span className="text-[8px] font-black text-red-400 uppercase tracking-tighter italic opacity-60">No Image</span>}
                                         </div>
                                     </div>
                                 </li>
@@ -183,6 +199,14 @@ const SearchableProductDropdown: React.FC<SearchableProductDropdownProps> = ({
                     </ul>
                 </div>
             )}
+
+            <ProductSelectionConfirm 
+                product={previewProduct}
+                isOpen={!!previewProduct}
+                onClose={() => setPreviewProduct(null)}
+                onConfirm={confirmSelect}
+                showTagEditor={showTagEditor}
+            />
         </div>
     );
 };

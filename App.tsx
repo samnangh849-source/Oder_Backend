@@ -709,16 +709,16 @@ const App: React.FC = () => {
             advancedSettings, setAdvancedSettings,
             selectedTeam, setSelectedTeam
         }}>
-            <div className="h-screen relative z-10 overflow-hidden">
+            <div className="h-full w-full relative z-10 overflow-hidden">
                 <BackgroundMusic />
-                <Suspense fallback={<div className="flex h-screen items-center justify-center"><Spinner size="lg" /></div>}>
+                <Suspense fallback={<div className="flex h-full items-center justify-center"><Spinner size="lg" /></div>}>
                     {appState === 'confirm_delivery' ? (
                         <DeliveryAgentView orderIds={confirmIds} returnOrderIds={returnIds} failedOrderIds={failedIdsParam} storeName={confirmStore} />
                     ) : currentUser && appState !== 'login' ? (
                         <>
                             {originalAdminUser && <ImpersonationBanner />}
                             {shouldShowHeader && <Header appState={appState} onBackToRoleSelect={() => setAppState('role_selection')} />}
-                            <main className={`${containerClass} ${paddingClass} transition-all duration-300 ${appState === 'fulfillment' ? 'h-full overflow-hidden' : (appState === 'user_journey' || appState === 'create_order' ? 'h-full overflow-y-auto custom-scrollbar' : (appState !== 'admin_dashboard' && appState !== 'role_selection' ? 'h-full overflow-y-auto custom-scrollbar' : ''))}`}>
+                            <main className={`${containerClass} ${paddingClass} transition-all duration-300 ${appState === 'fulfillment' ? 'h-full overflow-hidden' : 'h-full overflow-y-auto custom-scrollbar'}`}>
                                 {appState === 'admin_dashboard' && <AdminDashboard />}
                                 {appState === 'user_journey' && <UserJourney onBackToRoleSelect={() => setAppState('role_selection')} />}
                                 {appState === 'create_order' && <CreateOrderPage team={selectedTeam} onSaveSuccess={() => setAppState('user_journey')} onCancel={() => setAppState('user_journey')} />}

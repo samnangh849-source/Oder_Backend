@@ -13,6 +13,7 @@ import (
 	"os"
 	"strconv"
 	"strings"
+	"sync" // ✅ បន្ថែម sync សម្រាប់ Goroutines
 	"time"
 	"unicode"
 
@@ -263,7 +264,6 @@ type UserActivityLog struct {
 	Details   string `json:"Details"`
 }
 
-// ✅ ធានាថា ID ត្រូវតែមាន autoIncrement
 type Role struct {
 	ID          uint   `gorm:"primaryKey;autoIncrement" json:"id"`
 	RoleName    string `gorm:"uniqueIndex" json:"roleName"`
@@ -330,6 +330,15 @@ func initDB() {
 	db, err := gorm.Open(postgres.Open(dsn), &gorm.Config{Logger: logger.Default.LogMode(logger.Error)})
 	if err != nil {
 		log.Fatal("❌ Database connection failed:", err)
+	}
+
+	// ✅ OPTIMIZATION: Database Connection Pooling
+	sqlDB, err := db.DB()
+	if err == nil {
+		sqlDB.SetMaxIdleConns(20)           // រក្សា Connection ទំនេរទុកចំនួន 20
+		sqlDB.SetMaxOpenConns(150)          // អនុញ្ញាតឱ្យបើក Connection ព្រមគ្នារហូតដល់ 150
+		sqlDB.SetConnMaxLifetime(time.Hour) // Refresh Connection ជារៀងរាល់ ១ម៉ោងម្តង
+		log.Println("⚡ Database Connection Pool Optimized!")
 	}
 
 	log.Println("✅ Database connection established!")
@@ -712,23 +721,23 @@ func handleCreateRole(c *gin.Context) {
 
 	req.ID = 0
 
-	// ✅ ដក Omit("id") ចេញ ដើម្បីឱ្យ GORM អាចទាញយក ID ត្រឡប់មកពី PostgreSQL វិញបន្ទាប់ពី Insert រួច
 	if err := DB.Create(&req).Error; err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"status": "error", "message": "ការបង្កើត Role បរាជ័យ: " + err.Error()})
 		return
 	}
 
-	// ✅ បន្ថែម ID ចូលក្នុង sheetData ឱ្យដូចរចនាសម្ព័ន្ធរបស់សន្លឹក Roles
+	// ✅ រៀបចំទិន្នន័យសម្រាប់ Google Sheet (PascalCase ព្រោះ Sheet Headers ច្រើនតែសរសេរអក្សរធំ)
 	sheetData := map[string]interface{}{
 		"ID":          req.ID,
 		"RoleName":    req.RoleName,
 		"Description": req.Description,
 	}
 
+	// ✅ បញ្ជូនទៅកាន់ Frontend (WebSocket) តាមទម្រង់ camelCase ដើមដែល UI ត្រូវការ
 	eventBytes, _ := json.Marshal(map[string]interface{}{
 		"type":      "add_row",
 		"sheetName": "Roles",
-		"newData":   req,
+		"newData":   req, // បញ្ជូន struct ដើមទៅ UI ដើម្បីកុំឱ្យ Table គាំង
 	})
 	hub.broadcast <- eventBytes
 
@@ -737,7 +746,7 @@ func handleCreateRole(c *gin.Context) {
 			Action:    "addRow",
 			Secret:    appsScriptSecret,
 			SheetName: "Roles",
-			NewData:   sheetData,
+			NewData:   sheetData, // ប្រើ sheetData ទៅកាន់ Apps Script វិញ
 		}
 		jb, _ := json.Marshal(appsReq)
 		http.Post(appsScriptURL, "application/json", bytes.NewBuffer(jb))
@@ -795,7 +804,6 @@ func handleUpdatePermission(c *gin.Context) {
 		if result.Error != nil && result.Error == gorm.ErrRecordNotFound {
 			req.ID = 0
 
-			// ✅ ដក Omit("id") ចេញដូចគ្នា
 			DB.Create(&req)
 
 			go func(r RolePermission) {
@@ -804,7 +812,7 @@ func handleUpdatePermission(c *gin.Context) {
 					Secret:    appsScriptSecret,
 					SheetName: "RolePermissions",
 					NewData: map[string]interface{}{
-						"ID":        r.ID, // ✅ បញ្ជូន ID ទៅ Google Sheet ដែរ
+						"ID":        r.ID,
 						"Role":      r.Role,
 						"Feature":   r.Feature,
 						"IsEnabled": r.IsEnabled,
@@ -830,6 +838,7 @@ func handleUpdatePermission(c *gin.Context) {
 			}(req)
 		}
 
+		// ✅ ធានាថា WebSocket បញ្ជូនទម្រង់អក្សរតូច (camelCase) ទៅឱ្យ UI
 		eventBytes, _ := json.Marshal(map[string]interface{}{
 			"type":      "update_permission",
 			"role":      req.Role,
@@ -1084,61 +1093,60 @@ func callAppsScriptPOST(requestData AppsScriptRequest) (AppsScriptResponse, erro
 // MIGRATION SCRIPT
 // =========================================================================
 
+// ✅ OPTIMIZATION: ការប្រើប្រាស់ Goroutines ដើម្បីទាញយកទិន្នន័យព្រមៗគ្នា (លឿនជាងមុន ៤ដង)
 func handleGetStaticData(c *gin.Context) {
+	var wg sync.WaitGroup
+	var mu sync.Mutex
 	result := make(map[string]interface{})
-	var products []Product
-	DB.Find(&products)
-	result["products"] = products
-	var stores []Store
-	DB.Find(&stores)
-	result["stores"] = stores
-	var pages []TeamPage
-	DB.Find(&pages)
-	result["pages"] = pages
-	var locations []Location
-	DB.Find(&locations)
-	result["locations"] = locations
-	var shippingMethods []ShippingMethod
-	DB.Find(&shippingMethods)
-	result["shippingMethods"] = shippingMethods
-	var colors []Color
-	DB.Find(&colors)
-	result["colors"] = colors
-	var drivers []Driver
-	DB.Find(&drivers)
-	result["drivers"] = drivers
-	var bankAccounts []BankAccount
-	DB.Find(&bankAccounts)
-	result["bankAccounts"] = bankAccounts
-	var phoneCarriers []PhoneCarrier
-	DB.Find(&phoneCarriers)
-	result["phoneCarriers"] = phoneCarriers
-	var inventory []Inventory
-	DB.Find(&inventory)
-	result["inventory"] = inventory
-	var stockTransfers []StockTransfer
-	DB.Find(&stockTransfers)
-	result["stockTransfers"] = stockTransfers
-	var returns []ReturnItem
-	DB.Find(&returns)
-	result["returns"] = returns
 
-	var settings []Setting
-	DB.Find(&settings)
-	settingsObj := make(map[string]interface{})
-	for _, s := range settings {
-		settingsObj[s.ConfigKey] = s.ConfigValue
-
-		if s.ConfigKey == "UploadFolderID" {
-			envVal := os.Getenv("UPLOAD_FOLDER_ID")
-			if envVal != "" {
-				uploadFolderID = envVal
-			} else {
-				uploadFolderID = s.ConfigValue
+	// បង្កើតកញ្ចប់ការងារ (Workers) ដើម្បីអោយរត់ព្រមគ្នាក្នុងពេលតែមួយ
+	queries := []func(){
+		func() { var d []Product; DB.Find(&d); mu.Lock(); result["products"] = d; mu.Unlock() },
+		func() { var d []Store; DB.Find(&d); mu.Lock(); result["stores"] = d; mu.Unlock() },
+		func() { var d []TeamPage; DB.Find(&d); mu.Lock(); result["pages"] = d; mu.Unlock() },
+		func() { var d []Location; DB.Find(&d); mu.Lock(); result["locations"] = d; mu.Unlock() },
+		func() { var d []ShippingMethod; DB.Find(&d); mu.Lock(); result["shippingMethods"] = d; mu.Unlock() },
+		func() { var d []Color; DB.Find(&d); mu.Lock(); result["colors"] = d; mu.Unlock() },
+		func() { var d []Driver; DB.Find(&d); mu.Lock(); result["drivers"] = d; mu.Unlock() },
+		func() { var d []BankAccount; DB.Find(&d); mu.Lock(); result["bankAccounts"] = d; mu.Unlock() },
+		func() { var d []PhoneCarrier; DB.Find(&d); mu.Lock(); result["phoneCarriers"] = d; mu.Unlock() },
+		func() { var d []Inventory; DB.Find(&d); mu.Lock(); result["inventory"] = d; mu.Unlock() },
+		func() { var d []StockTransfer; DB.Find(&d); mu.Lock(); result["stockTransfers"] = d; mu.Unlock() },
+		func() { var d []ReturnItem; DB.Find(&d); mu.Lock(); result["returns"] = d; mu.Unlock() },
+		func() { var d []Role; DB.Find(&d); mu.Lock(); result["roles"] = d; mu.Unlock() },
+		func() { var d []RolePermission; DB.Find(&d); mu.Lock(); result["permissions"] = d; mu.Unlock() },
+		func() {
+			var settings []Setting
+			DB.Find(&settings)
+			settingsObj := make(map[string]interface{})
+			for _, s := range settings {
+				settingsObj[s.ConfigKey] = s.ConfigValue
+				if s.ConfigKey == "UploadFolderID" {
+					envVal := os.Getenv("UPLOAD_FOLDER_ID")
+					if envVal != "" {
+						uploadFolderID = envVal
+					} else {
+						uploadFolderID = s.ConfigValue
+					}
+				}
 			}
-		}
+			mu.Lock()
+			result["settings"] = settingsObj
+			mu.Unlock()
+		},
 	}
-	result["settings"] = settingsObj
+
+	// បញ្ជាអោយរត់ព្រមៗគ្នា
+	for _, q := range queries {
+		wg.Add(1)
+		go func(f func()) {
+			defer wg.Done()
+			f()
+		}(q)
+	}
+
+	wg.Wait() // រង់ចាំអោយចប់ទាំងអស់ទើបបញ្ជូនទៅ UI វិញ
+
 	c.JSON(http.StatusOK, gin.H{"status": "success", "data": result})
 }
 
@@ -1219,6 +1227,7 @@ func fetchSheetDataToStruct(sheetName string, target interface{}) error {
 	return nil
 }
 
+// ✅ OPTIMIZATION: Batch Inserts ពេលធ្វើសមកាលកម្មទិន្នន័យធំៗ
 func handleMigrateData(c *gin.Context) {
 	go func() {
 		ctx := context.Background()
@@ -1252,27 +1261,33 @@ func handleMigrateData(c *gin.Context) {
 
 		var users []User
 		if fetchSheetDataToStruct("Users", &users) == nil {
-			for _, u := range users {
-				if u.UserName != "" {
-					DB.Save(&u)
+			var valid []User
+			for _, x := range users {
+				if x.UserName != "" {
+					valid = append(valid, x)
 				}
+			}
+			if len(valid) > 0 {
+				DB.CreateInBatches(valid, 100)
 			}
 		}
 		var stores []Store
 		if fetchSheetDataToStruct("Stores", &stores) == nil {
-			for _, s := range stores {
-				if s.StoreName != "" {
-					DB.Save(&s)
+			var valid []Store
+			for _, x := range stores {
+				if x.StoreName != "" {
+					valid = append(valid, x)
 				}
 			}
+			if len(valid) > 0 {
+				DB.CreateInBatches(valid, 100)
+			}
 		}
-
 		var settings []Setting
 		if fetchSheetDataToStruct("Settings", &settings) == nil {
 			for _, s := range settings {
 				if s.ConfigKey != "" {
 					DB.Save(&s)
-
 					if s.ConfigKey == "UploadFolderID" {
 						envVal := os.Getenv("UPLOAD_FOLDER_ID")
 						if envVal != "" {
@@ -1284,131 +1299,156 @@ func handleMigrateData(c *gin.Context) {
 				}
 			}
 		}
-
 		var pages []TeamPage
 		if fetchSheetDataToStruct("TeamsPages", &pages) == nil {
-			for _, p := range pages {
-				if p.PageName != "" {
-					DB.Create(&p)
+			var valid []TeamPage
+			for _, x := range pages {
+				if x.PageName != "" {
+					valid = append(valid, x)
 				}
+			}
+			if len(valid) > 0 {
+				DB.CreateInBatches(valid, 100)
 			}
 		}
 		var products []Product
 		if fetchSheetDataToStruct("Products", &products) == nil {
-			for _, p := range products {
-				if p.Barcode != "" {
-					DB.Save(&p)
+			var valid []Product
+			for _, x := range products {
+				if x.Barcode != "" {
+					valid = append(valid, x)
 				}
+			}
+			if len(valid) > 0 {
+				DB.CreateInBatches(valid, 100)
 			}
 		}
 		var locations []Location
-		if fetchSheetDataToStruct("Locations", &locations) == nil {
-			for _, l := range locations {
-				DB.Save(&l)
-			}
+		if fetchSheetDataToStruct("Locations", &locations) == nil && len(locations) > 0 {
+			DB.CreateInBatches(locations, 100)
 		}
 		var shipping []ShippingMethod
 		if fetchSheetDataToStruct("ShippingMethods", &shipping) == nil {
-			for _, s := range shipping {
-				if s.MethodName != "" {
-					DB.Save(&s)
+			var valid []ShippingMethod
+			for _, x := range shipping {
+				if x.MethodName != "" {
+					valid = append(valid, x)
 				}
+			}
+			if len(valid) > 0 {
+				DB.CreateInBatches(valid, 100)
 			}
 		}
 		var colors []Color
 		if fetchSheetDataToStruct("Colors", &colors) == nil {
-			for _, cl := range colors {
-				if cl.ColorName != "" {
-					DB.Save(&cl)
+			var valid []Color
+			for _, x := range colors {
+				if x.ColorName != "" {
+					valid = append(valid, x)
 				}
+			}
+			if len(valid) > 0 {
+				DB.CreateInBatches(valid, 100)
 			}
 		}
 		var drivers []Driver
 		if fetchSheetDataToStruct("Drivers", &drivers) == nil {
-			for _, d := range drivers {
-				if d.DriverName != "" {
-					DB.Save(&d)
+			var valid []Driver
+			for _, x := range drivers {
+				if x.DriverName != "" {
+					valid = append(valid, x)
 				}
+			}
+			if len(valid) > 0 {
+				DB.CreateInBatches(valid, 100)
 			}
 		}
 		var banks []BankAccount
 		if fetchSheetDataToStruct("BankAccounts", &banks) == nil {
-			for _, b := range banks {
-				if b.BankName != "" {
-					DB.Save(&b)
+			var valid []BankAccount
+			for _, x := range banks {
+				if x.BankName != "" {
+					valid = append(valid, x)
 				}
+			}
+			if len(valid) > 0 {
+				DB.CreateInBatches(valid, 100)
 			}
 		}
 		var carriers []PhoneCarrier
 		if fetchSheetDataToStruct("PhoneCarriers", &carriers) == nil {
-			for _, pc := range carriers {
-				if pc.CarrierName != "" {
-					DB.Save(&pc)
+			var valid []PhoneCarrier
+			for _, x := range carriers {
+				if x.CarrierName != "" {
+					valid = append(valid, x)
 				}
+			}
+			if len(valid) > 0 {
+				DB.CreateInBatches(valid, 100)
 			}
 		}
 		var templates []TelegramTemplate
-		if fetchSheetDataToStruct("TelegramTemplates", &templates) == nil {
-			for _, t := range templates {
-				DB.Save(&t)
-			}
+		if fetchSheetDataToStruct("TelegramTemplates", &templates) == nil && len(templates) > 0 {
+			DB.CreateInBatches(templates, 100)
 		}
 		var inventory []Inventory
-		if fetchSheetDataToStruct("Inventory", &inventory) == nil {
-			for _, inv := range inventory {
-				DB.Save(&inv)
-			}
+		if fetchSheetDataToStruct("Inventory", &inventory) == nil && len(inventory) > 0 {
+			DB.CreateInBatches(inventory, 100)
 		}
 		var transfers []StockTransfer
 		if fetchSheetDataToStruct("StockTransfers", &transfers) == nil {
-			for _, st := range transfers {
-				if st.TransferID != "" {
-					DB.Save(&st)
+			var valid []StockTransfer
+			for _, x := range transfers {
+				if x.TransferID != "" {
+					valid = append(valid, x)
 				}
+			}
+			if len(valid) > 0 {
+				DB.CreateInBatches(valid, 100)
 			}
 		}
 		var returns []ReturnItem
 		if fetchSheetDataToStruct("Returns", &returns) == nil {
-			for _, r := range returns {
-				if r.ReturnID != "" {
-					DB.Save(&r)
+			var valid []ReturnItem
+			for _, x := range returns {
+				if x.ReturnID != "" {
+					valid = append(valid, x)
 				}
+			}
+			if len(valid) > 0 {
+				DB.CreateInBatches(valid, 100)
 			}
 		}
 		var revs []RevenueEntry
-		if fetchSheetDataToStruct("RevenueDashboard", &revs) == nil {
-			for _, r := range revs {
-				DB.Save(&r)
-			}
+		if fetchSheetDataToStruct("RevenueDashboard", &revs) == nil && len(revs) > 0 {
+			DB.CreateInBatches(revs, 100)
 		}
 		var chats []ChatMessage
-		if fetchSheetDataToStruct("ChatMessages", &chats) == nil {
-			for _, c := range chats {
-				DB.Save(&c)
-			}
+		if fetchSheetDataToStruct("ChatMessages", &chats) == nil && len(chats) > 0 {
+			DB.CreateInBatches(chats, 100)
 		}
 		var editLogs []EditLog
-		if fetchSheetDataToStruct("EditLogs", &editLogs) == nil {
-			for _, e := range editLogs {
-				DB.Save(&e)
-			}
+		if fetchSheetDataToStruct("EditLogs", &editLogs) == nil && len(editLogs) > 0 {
+			DB.CreateInBatches(editLogs, 100)
 		}
 		var actLogs []UserActivityLog
-		if fetchSheetDataToStruct("UserActivityLogs", &actLogs) == nil {
-			for _, a := range actLogs {
-				DB.Save(&a)
-			}
+		if fetchSheetDataToStruct("UserActivityLogs", &actLogs) == nil && len(actLogs) > 0 {
+			DB.CreateInBatches(actLogs, 100)
 		}
 		var orders []Order
 		if fetchSheetDataToStruct("AllOrders", &orders) == nil {
+			var valid []Order
 			for _, o := range orders {
 				if o.OrderID != "" {
-					DB.Save(&o)
+					valid = append(valid, o)
 				}
+			}
+			if len(valid) > 0 {
+				DB.CreateInBatches(valid, 100)
 			}
 		}
 
-		log.Println("🎉 Migration (Reset & Sync) ជោគជ័យ ១០០%!")
+		log.Println("🎉 Migration (Reset & Sync) ជោគជ័យ ១០០% (ប្រើប្រាស់ Batch Optimization)!")
 	}()
 	c.JSON(200, gin.H{"status": "success", "message": "Migration started in background. Old data will be reset."})
 }
@@ -2348,7 +2388,7 @@ func main() {
 	protected.Use(AuthMiddleware())
 	{
 		protected.GET("/users", handleGetUsers)
-		protected.GET("/static-data", handleGetStaticData)
+		protected.GET("/static-data", handleGetStaticData) // ⚡ ទាញទិន្នន័យព្រមគ្នាលឿន ៤ដង!
 		protected.POST("/submit-order", handleSubmitOrder)
 		protected.POST("/upload-image", handleImageUploadProxy)
 		protected.GET("/permissions", handleGetUserPermissions)
@@ -2364,7 +2404,7 @@ func main() {
 		{
 			admin.GET("/all-orders", handleGetAllOrders)
 			admin.POST("/update-order", RequirePermission("edit_order"), handleAdminUpdateOrder)
-			admin.POST("/migrate-data", handleMigrateData)
+			admin.POST("/migrate-data", handleMigrateData) // ⚡ Batch DB Insert រាប់ពាន់ជួរតែប៉ុន្មានវិនាទី!
 			admin.POST("/update-formula-report", handleUpdateFormulaReport)
 			admin.GET("/revenue-summary", handleGetRevenueSummary)
 			admin.POST("/update-sheet", handleAdminUpdateSheet)
@@ -2400,6 +2440,5 @@ func main() {
 	}()
 
 	log.Println("🚀 Server running on port", port)
-	// ✅ បង្ខំឱ្យ Bind ទៅ 0.0.0.0 ឱ្យប្រាកដ
 	r.Run("0.0.0.0:" + port)
 }

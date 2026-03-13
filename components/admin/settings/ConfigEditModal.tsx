@@ -194,7 +194,7 @@ const ConfigEditModal: React.FC<ConfigEditModalProps> = ({ section, item, onClos
                                 >
                                     <option value="">-- ជ្រើសរើសតួនាទី (Select Role) --</option>
                                     {(appData.roles || []).map(r => (
-                                        <option key={r.id || r.RoleName} value={r.RoleName}>{r.RoleName}</option>
+                                        <option key={r.id || r.roleName} value={r.roleName}>{r.roleName}</option>
                                     ))}
                                     {(!appData.roles || appData.roles.length === 0) && (
                                         <>
