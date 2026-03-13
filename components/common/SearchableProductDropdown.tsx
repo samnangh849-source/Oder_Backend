@@ -2,7 +2,6 @@
 import React, { useState, useRef, useEffect, useMemo, useCallback } from 'react';
 import { MasterProduct } from '../../types';
 import { convertGoogleDriveUrl } from '../../utils/fileUtils';
-import ProductSelectionConfirm from '../orders/ProductSelectionConfirm';
 
 const highlightMatch = (text: string, query: string) => {
     if (!query || !text) return <span>{text}</span>;
@@ -54,7 +53,6 @@ const SearchableProductDropdown: React.FC<SearchableProductDropdownProps> = ({
     const [isOpen, setIsOpen] = useState(false);
     const [searchTerm, setSearchTerm] = useState('');
     const [activeIndex, setActiveIndex] = useState(0);
-    const [previewProduct, setPreviewProduct] = useState<MasterProduct | null>(null);
     
     const dropdownRef = useRef<HTMLDivElement>(null);
     const inputRef = useRef<HTMLInputElement>(null);
@@ -103,7 +101,6 @@ const SearchableProductDropdown: React.FC<SearchableProductDropdownProps> = ({
         onSelect(productName, tags);
         setSearchTerm(productName);
         setIsOpen(false);
-        setPreviewProduct(null);
         setActiveIndex(0);
         inputRef.current?.blur();
     }, [onSelect]);
@@ -111,8 +108,8 @@ const SearchableProductDropdown: React.FC<SearchableProductDropdownProps> = ({
     const handleItemClick = (item: any) => {
         if (item.isAddNew) confirmSelect(item.ProductName);
         else {
-            setPreviewProduct(item);
-            setIsOpen(false);
+            // Directly confirm selection without modal
+            confirmSelect(item.ProductName, item.Tags || '');
         }
     };
 
@@ -186,14 +183,6 @@ const SearchableProductDropdown: React.FC<SearchableProductDropdownProps> = ({
                     </ul>
                 </div>
             )}
-
-            <ProductSelectionConfirm 
-                product={previewProduct}
-                isOpen={!!previewProduct}
-                onClose={() => setPreviewProduct(null)}
-                onConfirm={confirmSelect}
-                showTagEditor={showTagEditor}
-            />
         </div>
     );
 };

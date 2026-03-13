@@ -2,7 +2,6 @@ package main
 
 import (
 	"bytes"
-	"compress/gzip"
 	"context"
 	"encoding/base64"
 	"encoding/json"
@@ -14,7 +13,6 @@ import (
 	"os"
 	"strconv"
 	"strings"
-	"sync"
 	"time"
 	"unicode"
 
@@ -43,7 +41,6 @@ var (
 	appsScriptSecret string
 	hub              *Hub
 	jwtSecret        []byte
-	permissionsCache sync.Map // key: role:feature (lowercase), value: bool
 )
 
 var sheetRanges = map[string]string{
@@ -266,14 +263,15 @@ type UserActivityLog struct {
 	Details   string `json:"Details"`
 }
 
+// ✅ ធានាថា ID ត្រូវតែមាន autoIncrement
 type Role struct {
-	ID          uint   `gorm:"primaryKey" json:"id"`
+	ID          uint   `gorm:"primaryKey;autoIncrement" json:"id"`
 	RoleName    string `gorm:"uniqueIndex" json:"roleName"`
 	Description string `json:"description"`
 }
 
 type RolePermission struct {
-	ID        uint   `gorm:"primaryKey" json:"id"`
+	ID        uint   `gorm:"primaryKey;autoIncrement" json:"id"`
 	Role      string `gorm:"index" json:"role"`
 	Feature   string `gorm:"index" json:"feature"`
 	IsEnabled bool   `json:"isEnabled"`
@@ -312,11 +310,10 @@ type DeleteOrderRequest struct {
 	UserName string `json:"userName"`
 }
 
-// ✅ NEW: ម៉ូដែលសម្រាប់ផ្ទុករូបភាពបណ្ដោះអាសន្នក្នុង DB (10 នាទី)
 type TempImage struct {
 	ID        string    `gorm:"primaryKey" json:"id"`
 	MimeType  string    `json:"mimeType"`
-	ImageData string    `gorm:"type:text" json:"imageData"` // ផ្ទុក Base64 String ផ្ទាល់
+	ImageData string    `gorm:"type:text" json:"imageData"`
 	ExpiresAt time.Time `gorm:"index" json:"expiresAt"`
 }
 
@@ -324,6 +321,7 @@ type TempImage struct {
 // INIT DATABASE & GOOGLE SERVICES
 // =========================================================================
 func initDB() {
+	log.Println("🔌 Initializing PostgreSQL database connection...")
 	dsn := os.Getenv("DATABASE_URL")
 	if dsn == "" {
 		log.Fatal("❌ DATABASE_URL is not set!")
@@ -334,6 +332,7 @@ func initDB() {
 		log.Fatal("❌ Database connection failed:", err)
 	}
 
+	log.Println("✅ Database connection established!")
 	log.Println("🔄 Auto-migrating ALL tables...")
 
 	if db.Migrator().HasTable(&TeamPage{}) {
@@ -352,29 +351,13 @@ func initDB() {
 		&IncentiveCalculator{},
 		&IncentiveProject{},
 		&IncentiveResult{},
-		&TempImage{}, // ✅ ដាក់បញ្ចូលតារាងរូបភាពបណ្ដោះអាសន្ន
+		&TempImage{},
 	)
 	if err != nil {
 		log.Fatal("❌ Migration failed:", err)
 	}
 
-	// Performance Optimization: Create Indexes
-	db.Exec("CREATE INDEX IF NOT EXISTS idx_orders_timestamp_desc ON orders (timestamp DESC);")
-	db.Exec("CREATE INDEX IF NOT EXISTS idx_orders_fulfillment_status ON orders (fulfillment_status);")
-	db.Exec("CREATE INDEX IF NOT EXISTS idx_orders_team ON orders (team);")
-	db.Exec("CREATE UNIQUE INDEX IF NOT EXISTS idx_role_permissions_role_feature ON role_permissions (role, feature);")
-
 	DB = db
-
-	// Populate Permissions Cache
-	var allPerms []RolePermission
-	if err := DB.Find(&allPerms).Error; err == nil {
-		for _, p := range allPerms {
-			key := strings.ToLower(p.Role + ":" + p.Feature)
-			permissionsCache.Store(key, p.IsEnabled)
-		}
-		log.Printf("✅ Preloaded %d permissions into memory cache.", len(allPerms))
-	}
 
 	var count int64
 	DB.Model(&Role{}).Count(&count)
@@ -390,7 +373,7 @@ func initDB() {
 		log.Println("✅ Created default Roles.")
 	}
 
-	log.Println("✅ Successfully connected to PostgreSQL!")
+	log.Println("✅ Successfully setup database tables!")
 }
 
 func createGoogleAPIClient(ctx context.Context) error {
@@ -471,6 +454,8 @@ func mapToDBColumn(key string) string {
 		"ProfilePictureURL":         "profile_picture_url",
 		"IsSystemAdmin":             "is_system_admin",
 		"TelegramUsername":          "telegram_username",
+		"ImageURL":                  "image_url",
+		"Image URL":                 "image_url",
 	}
 
 	for k, v := range specialCases {
@@ -517,41 +502,6 @@ func parseBase64(b64 string) ([]byte, error) {
 	cleanB64 = strings.ReplaceAll(cleanB64, "\n", "")
 	cleanB64 = strings.ReplaceAll(cleanB64, "\r", "")
 	return base64.StdEncoding.DecodeString(cleanB64)
-}
-
-func GzipMiddleware() gin.HandlerFunc {
-	return func(c *gin.Context) {
-		if !strings.Contains(c.GetHeader("Accept-Encoding"), "gzip") {
-			c.Next()
-			return
-		}
-
-		gz, err := gzip.NewWriterLevel(c.Writer, gzip.BestSpeed)
-		if err != nil {
-			c.Next()
-			return
-		}
-		defer gz.Close()
-
-		c.Header("Content-Encoding", "gzip")
-		c.Header("Vary", "Accept-Encoding")
-
-		c.Writer = &gzipWriter{c.Writer, gz}
-		c.Next()
-	}
-}
-
-type gzipWriter struct {
-	gin.ResponseWriter
-	writer *gzip.Writer
-}
-
-func (g *gzipWriter) Write(data []byte) (int, error) {
-	return g.writer.Write(data)
-}
-
-func (g *gzipWriter) WriteString(s string) (int, error) {
-	return g.writer.Write([]byte(s))
 }
 
 func ErrorHandlingMiddleware() gin.HandlerFunc {
@@ -701,27 +651,21 @@ func RequirePermission(feature string) gin.HandlerFunc {
 			return
 		}
 
-		roleStr := ""
-		if role != nil {
-			roleStr = role.(string)
-		}
-
-		if roleStr == "Admin" {
+		if role != nil && role.(string) == "Admin" {
 			c.Next()
 			return
 		}
 
-		// ⚡ High Performance Cache Check
-		key := strings.ToLower(roleStr + ":" + feature)
-		if isEnabled, ok := permissionsCache.Load(key); ok {
-			if isEnabled.(bool) {
-				c.Next()
-				return
-			}
+		var perm RolePermission
+		result := DB.Where("role = ? AND feature = ?", role, feature).First(&perm)
+
+		if result.Error != nil || !perm.IsEnabled {
+			c.JSON(http.StatusForbidden, gin.H{"status": "error", "message": "អ្នកមិនមានសិទ្ធិសម្រាប់មុខងារនេះទេ (" + feature + ")"})
+			c.Abort()
+			return
 		}
 
-		c.JSON(http.StatusForbidden, gin.H{"status": "error", "message": "អ្នកមិនមានសិទ្ធិសម្រាប់មុខងារនេះទេ (" + feature + ")"})
-		c.Abort()
+		c.Next()
 	}
 }
 
@@ -729,12 +673,9 @@ func hasPermissionInternal(role string, isSystemAdmin bool, feature string) bool
 	if isSystemAdmin || role == "Admin" {
 		return true
 	}
-	// ⚡ High Performance Cache Check
-	key := strings.ToLower(role + ":" + feature)
-	if isEnabled, ok := permissionsCache.Load(key); ok {
-		return isEnabled.(bool)
-	}
-	return false
+	var perm RolePermission
+	result := DB.Where("role = ? AND feature = ?", role, feature).First(&perm)
+	return result.Error == nil && perm.IsEnabled
 }
 
 // =========================================================================
@@ -762,9 +703,26 @@ func handleCreateRole(c *gin.Context) {
 		return
 	}
 
+	var count int64
+	DB.Model(&Role{}).Where("role_name = ?", req.RoleName).Count(&count)
+	if count > 0 {
+		c.JSON(http.StatusBadRequest, gin.H{"status": "error", "message": "ឈ្មោះតួនាទីនេះមានរួចហើយ សូមជ្រើសរើសឈ្មោះផ្សេង!"})
+		return
+	}
+
+	req.ID = 0
+
+	// ✅ ដក Omit("id") ចេញ ដើម្បីឱ្យ GORM អាចទាញយក ID ត្រឡប់មកពី PostgreSQL វិញបន្ទាប់ពី Insert រួច
 	if err := DB.Create(&req).Error; err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"status": "error", "message": "ការបង្កើត Role បរាជ័យ: " + err.Error()})
 		return
+	}
+
+	// ✅ បន្ថែម ID ចូលក្នុង sheetData ឱ្យដូចរចនាសម្ព័ន្ធរបស់សន្លឹក Roles
+	sheetData := map[string]interface{}{
+		"ID":          req.ID,
+		"RoleName":    req.RoleName,
+		"Description": req.Description,
 	}
 
 	eventBytes, _ := json.Marshal(map[string]interface{}{
@@ -779,10 +737,7 @@ func handleCreateRole(c *gin.Context) {
 			Action:    "addRow",
 			Secret:    appsScriptSecret,
 			SheetName: "Roles",
-			NewData: map[string]interface{}{
-				"RoleName":    req.RoleName,
-				"Description": req.Description,
-			},
+			NewData:   sheetData,
 		}
 		jb, _ := json.Marshal(appsReq)
 		http.Post(appsScriptURL, "application/json", bytes.NewBuffer(jb))
@@ -838,6 +793,9 @@ func handleUpdatePermission(c *gin.Context) {
 		result := DB.Where("role = ? AND feature = ?", req.Role, req.Feature).First(&existing)
 
 		if result.Error != nil && result.Error == gorm.ErrRecordNotFound {
+			req.ID = 0
+
+			// ✅ ដក Omit("id") ចេញដូចគ្នា
 			DB.Create(&req)
 
 			go func(r RolePermission) {
@@ -846,6 +804,7 @@ func handleUpdatePermission(c *gin.Context) {
 					Secret:    appsScriptSecret,
 					SheetName: "RolePermissions",
 					NewData: map[string]interface{}{
+						"ID":        r.ID, // ✅ បញ្ជូន ID ទៅ Google Sheet ដែរ
 						"Role":      r.Role,
 						"Feature":   r.Feature,
 						"IsEnabled": r.IsEnabled,
@@ -870,10 +829,6 @@ func handleUpdatePermission(c *gin.Context) {
 				http.Post(appsScriptURL, "application/json", bytes.NewBuffer(jb))
 			}(req)
 		}
-
-		// ⚡ Update Memory Cache immediately
-		key := strings.ToLower(req.Role + ":" + req.Feature)
-		permissionsCache.Store(key, req.IsEnabled)
 
 		eventBytes, _ := json.Marshal(map[string]interface{}{
 			"type":      "update_permission",
@@ -1088,10 +1043,9 @@ func startOrderWorker() {
 	}
 }
 
-// ✅ កែប្រែ Scheduler ដើម្បីអោយវាសម្អាតរូបភាពចាស់ៗចេញពីរៀងរាល់ ៥ នាទីម្តង
 func startScheduler() {
 	ticker := time.NewTicker(1 * time.Minute)
-	cleanupTicker := time.NewTicker(5 * time.Minute) // បោសសម្អាត DB រៀងរាល់ ៥ នាទី
+	cleanupTicker := time.NewTicker(5 * time.Minute)
 
 	go func() {
 		for {
@@ -1099,7 +1053,6 @@ func startScheduler() {
 			case <-ticker.C:
 				callAppsScriptPOST(AppsScriptRequest{Action: "checkScheduledOrders"})
 			case <-cleanupTicker.C:
-				// លុបរូបភាពណាដែលហួសម៉ោងកំណត់ (១០ នាទីក្រោយពេលបង្កើត)
 				result := DB.Where("expires_at < ?", time.Now()).Delete(&TempImage{})
 				if result.RowsAffected > 0 {
 					log.Printf("🧹 Cleanup: លុបរូបភាពបណ្ដោះអាសន្នចំនួន %d ឯកសារដែលហួសពេលចេញពី Database", result.RowsAffected)
@@ -1130,6 +1083,64 @@ func callAppsScriptPOST(requestData AppsScriptRequest) (AppsScriptResponse, erro
 // =========================================================================
 // MIGRATION SCRIPT
 // =========================================================================
+
+func handleGetStaticData(c *gin.Context) {
+	result := make(map[string]interface{})
+	var products []Product
+	DB.Find(&products)
+	result["products"] = products
+	var stores []Store
+	DB.Find(&stores)
+	result["stores"] = stores
+	var pages []TeamPage
+	DB.Find(&pages)
+	result["pages"] = pages
+	var locations []Location
+	DB.Find(&locations)
+	result["locations"] = locations
+	var shippingMethods []ShippingMethod
+	DB.Find(&shippingMethods)
+	result["shippingMethods"] = shippingMethods
+	var colors []Color
+	DB.Find(&colors)
+	result["colors"] = colors
+	var drivers []Driver
+	DB.Find(&drivers)
+	result["drivers"] = drivers
+	var bankAccounts []BankAccount
+	DB.Find(&bankAccounts)
+	result["bankAccounts"] = bankAccounts
+	var phoneCarriers []PhoneCarrier
+	DB.Find(&phoneCarriers)
+	result["phoneCarriers"] = phoneCarriers
+	var inventory []Inventory
+	DB.Find(&inventory)
+	result["inventory"] = inventory
+	var stockTransfers []StockTransfer
+	DB.Find(&stockTransfers)
+	result["stockTransfers"] = stockTransfers
+	var returns []ReturnItem
+	DB.Find(&returns)
+	result["returns"] = returns
+
+	var settings []Setting
+	DB.Find(&settings)
+	settingsObj := make(map[string]interface{})
+	for _, s := range settings {
+		settingsObj[s.ConfigKey] = s.ConfigValue
+
+		if s.ConfigKey == "UploadFolderID" {
+			envVal := os.Getenv("UPLOAD_FOLDER_ID")
+			if envVal != "" {
+				uploadFolderID = envVal
+			} else {
+				uploadFolderID = s.ConfigValue
+			}
+		}
+	}
+	result["settings"] = settingsObj
+	c.JSON(http.StatusOK, gin.H{"status": "success", "data": result})
+}
 
 func fetchSheetDataFromAPI(sheetName string) ([]map[string]interface{}, error) {
 	readRange, ok := sheetRanges[sheetName]
@@ -1261,8 +1272,14 @@ func handleMigrateData(c *gin.Context) {
 			for _, s := range settings {
 				if s.ConfigKey != "" {
 					DB.Save(&s)
+
 					if s.ConfigKey == "UploadFolderID" {
-						uploadFolderID = s.ConfigValue
+						envVal := os.Getenv("UPLOAD_FOLDER_ID")
+						if envVal != "" {
+							uploadFolderID = envVal
+						} else {
+							uploadFolderID = s.ConfigValue
+						}
 					}
 				}
 			}
@@ -1492,138 +1509,17 @@ func handleGetUsers(c *gin.Context) {
 	DB.Find(&users)
 	c.JSON(200, gin.H{"status": "success", "data": users})
 }
-func handleGetStaticData(c *gin.Context) {
-	result := make(map[string]interface{})
-	var mu sync.Mutex
-	var wg sync.WaitGroup
-
-	fetch := func(key string, target interface{}) {
-		defer wg.Done()
-		if err := DB.Find(target).Error; err == nil {
-			mu.Lock()
-			result[key] = target
-			mu.Unlock()
-		}
-	}
-
-	tables := map[string]interface{}{
-		"products":        &[]Product{},
-		"stores":          &[]Store{},
-		"pages":           &[]TeamPage{},
-		"locations":       &[]Location{},
-		"shippingMethods": &[]ShippingMethod{},
-		"colors":          &[]Color{},
-		"drivers":         &[]Driver{},
-		"bankAccounts":    &[]BankAccount{},
-		"phoneCarriers":   &[]PhoneCarrier{},
-		"inventory":       &[]Inventory{},
-		"stockTransfers":  &[]StockTransfer{},
-		"returns":         &[]ReturnItem{},
-		"roles":           &[]Role{},
-		"permissions":     &[]RolePermission{},
-	}
-
-	wg.Add(len(tables))
-	for k, v := range tables {
-		go fetch(k, v)
-	}
-
-	// Fetch settings separately as it needs processing
-	wg.Add(1)
-	go func() {
-		defer wg.Done()
-		var settings []Setting
-		if err := DB.Find(&settings).Error; err == nil {
-			settingsObj := make(map[string]interface{})
-			for _, s := range settings {
-				settingsObj[s.ConfigKey] = s.ConfigValue
-				if s.ConfigKey == "UploadFolderID" {
-					uploadFolderID = s.ConfigValue
-				}
-			}
-			mu.Lock()
-			result["settings"] = settingsObj
-			mu.Unlock()
-		}
-	}()
-
-	wg.Wait()
-	c.JSON(http.StatusOK, gin.H{"status": "success", "data": result})
-}
-func handleGetRevenueSummary(c *gin.Context) {
-	var revs []RevenueEntry
-	DB.Find(&revs)
-	c.JSON(200, gin.H{"status": "success", "data": revs})
-}
-
-func handleGetMyOrders(c *gin.Context) {
-	userName, _ := c.Get("userName")
-	isSystemAdmin, _ := c.Get("isSystemAdmin")
-	role, _ := c.Get("role")
-	teamStr, _ := c.Get("team")
-
-	var orders []Order
-	query := DB.Order("timestamp desc")
-
-	// If not Admin, filter by user's teams
-	if !isSystemAdmin.(bool) && role.(string) != "Admin" {
-		teams := strings.Split(teamStr.(string), ",")
-		var cleanTeams []string
-		for _, t := range teams {
-			cleanTeams = append(cleanTeams, strings.TrimSpace(t))
-		}
-		if len(cleanTeams) > 0 {
-			query = query.Where("team IN ?", cleanTeams)
-		} else {
-			// No team assigned, return nothing or filter by username if that's the logic
-			query = query.Where("user = ?", userName)
-		}
-	}
-
-	// Optional limit for performance (e.g. last 60 days by default for Sales)
-	daysParam := c.Query("days")
-	if daysParam != "" {
-		days, _ := strconv.Atoi(daysParam)
-		if days > 0 {
-			cutoff := time.Now().AddDate(0, 0, -days).Format("2006-01-02")
-			query = query.Where("timestamp >= ?", cutoff)
-		}
-	} else {
-		// Default to 60 days for non-admins to keep it fast
-		isInternalAdmin := isSystemAdmin.(bool) || role.(string) == "Admin"
-		if !isInternalAdmin {
-			cutoff := time.Now().AddDate(0, 0, -60).Format("2006-01-02")
-			query = query.Where("timestamp >= ?", cutoff)
-		}
-	}
-
-	if err := query.Find(&orders).Error; err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"status": "error", "message": err.Error()})
-		return
-	}
-
-	c.JSON(http.StatusOK, gin.H{"status": "success", "data": orders})
-}
 
 func handleGetAllOrders(c *gin.Context) {
 	monthParam := c.Query("month")
 	pageParam := c.Query("page")
 	limitParam := c.Query("limit")
-	daysParam := c.Query("days")
 
 	var orders []Order
 	query := DB.Order("timestamp desc")
 
 	if monthParam != "" {
 		query = query.Where("timestamp LIKE ?", monthParam+"%")
-	}
-
-	if daysParam != "" {
-		days, _ := strconv.Atoi(daysParam)
-		if days > 0 {
-			cutoff := time.Now().AddDate(0, 0, -days).Format("2006-01-02")
-			query = query.Where("timestamp >= ?", cutoff)
-		}
 	}
 
 	if pageParam != "" && limitParam != "" {
@@ -1644,13 +1540,6 @@ func handleGetAllOrders(c *gin.Context) {
 	countQuery := DB.Model(&Order{})
 	if monthParam != "" {
 		countQuery = countQuery.Where("timestamp LIKE ?", monthParam+"%")
-	}
-	if daysParam != "" {
-		days, _ := strconv.Atoi(daysParam)
-		if days > 0 {
-			cutoff := time.Now().AddDate(0, 0, -days).Format("2006-01-02")
-			countQuery = countQuery.Where("timestamp >= ?", cutoff)
-		}
 	}
 	countQuery.Count(&total)
 
@@ -1981,51 +1870,6 @@ func handleAdminAddRow(c *gin.Context) {
 		return
 	}
 
-	var tableName string
-	switch req.SheetName {
-	case "Users":
-		tableName = "users"
-	case "Stores":
-		tableName = "stores"
-	case "Settings":
-		tableName = "settings"
-	case "TeamsPages":
-		tableName = "team_pages"
-	case "Products":
-		tableName = "products"
-	case "Locations":
-		tableName = "locations"
-	case "ShippingMethods":
-		tableName = "shipping_methods"
-	case "Colors":
-		tableName = "colors"
-	case "Drivers":
-		tableName = "drivers"
-	case "BankAccounts":
-		tableName = "bank_accounts"
-	case "PhoneCarriers":
-		tableName = "phone_carriers"
-	case "Inventory":
-		tableName = "inventories"
-	case "Roles":
-		tableName = "roles"
-	case "RolePermissions":
-		tableName = "role_permissions"
-	default:
-		c.Error(fmt.Errorf("unknown sheet"))
-		return
-	}
-
-	mappedData := make(map[string]interface{})
-	for k, v := range req.NewData {
-		dbCol := mapToDBColumn(k)
-		mappedData[dbCol] = v
-	}
-
-	if err := DB.Table(tableName).Create(mappedData).Error; err != nil {
-		log.Printf("⚠️ PostgreSQL Create failed: %v", err)
-	}
-
 	eventBytes, _ := json.Marshal(map[string]interface{}{
 		"type":      "add_row",
 		"sheetName": req.SheetName,
@@ -2057,54 +1901,6 @@ func handleAdminDeleteRow(c *gin.Context) {
 		return
 	}
 
-	var tableName string
-	switch req.SheetName {
-	case "Users":
-		tableName = "users"
-	case "Stores":
-		tableName = "stores"
-	case "Settings":
-		tableName = "settings"
-	case "TeamsPages":
-		tableName = "team_pages"
-	case "Products":
-		tableName = "products"
-	case "Locations":
-		tableName = "locations"
-	case "ShippingMethods":
-		tableName = "shipping_methods"
-	case "Colors":
-		tableName = "colors"
-	case "Drivers":
-		tableName = "drivers"
-	case "BankAccounts":
-		tableName = "bank_accounts"
-	case "PhoneCarriers":
-		tableName = "phone_carriers"
-	case "Inventory":
-		tableName = "inventories"
-	case "Roles":
-		tableName = "roles"
-	case "RolePermissions":
-		tableName = "role_permissions"
-	default:
-		c.Error(fmt.Errorf("unknown sheet"))
-		return
-	}
-
-	pkCol := ""
-	pkVal := ""
-	for k, v := range req.PrimaryKey {
-		pkCol = mapToDBColumn(k)
-		pkVal = v
-	}
-
-	if pkCol != "" {
-		if err := DB.Table(tableName).Where(pkCol+" = ?", pkVal).Delete(nil).Error; err != nil {
-			log.Printf("⚠️ PostgreSQL Delete failed: %v", err)
-		}
-	}
-
 	eventBytes, _ := json.Marshal(map[string]interface{}{
 		"type":       "delete_row",
 		"sheetName":  req.SheetName,
@@ -2126,6 +1922,11 @@ func handleAdminDeleteRow(c *gin.Context) {
 	c.JSON(200, gin.H{"status": "success"})
 }
 
+func handleGetRevenueSummary(c *gin.Context) {
+	var revs []RevenueEntry
+	DB.Find(&revs)
+	c.JSON(200, gin.H{"status": "success", "data": revs})
+}
 func handleUpdateFormulaReport(c *gin.Context)    { c.JSON(200, gin.H{"status": "success"}) }
 func handleClearCache(c *gin.Context)             { c.JSON(200, gin.H{"status": "success"}) }
 func handleAdminUpdateProductTags(c *gin.Context) { c.JSON(200, gin.H{"status": "success"}) }
@@ -2213,7 +2014,11 @@ func uploadToGoogleDriveDirectly(base64Data string, fileName string, mimeType st
 	}
 
 	f := &drive.File{Name: finalFileName, MimeType: cleanMimeType}
-	if uploadFolderID != "" {
+
+	envFolderID := os.Getenv("UPLOAD_FOLDER_ID")
+	if envFolderID != "" {
+		f.Parents = []string{envFolderID}
+	} else if uploadFolderID != "" {
 		f.Parents = []string{uploadFolderID}
 	}
 
@@ -2231,7 +2036,6 @@ func uploadToGoogleDriveDirectly(base64Data string, fileName string, mimeType st
 	return fmt.Sprintf("https://drive.google.com/uc?id=%s", file.Id), file.Id, nil
 }
 
-// ✅ API ថ្មីសម្រាប់ទាញយករូបភាពបណ្ដោះអាសន្នមកបង្ហាញក្នុង UI
 func handleServeTempImage(c *gin.Context) {
 	id := c.Param("id")
 	var temp TempImage
@@ -2249,7 +2053,6 @@ func handleServeTempImage(c *gin.Context) {
 	c.Data(200, temp.MimeType, decodedBytes)
 }
 
-// ✅ UPGRADED: មុខងារ Upload មានភ្ជាប់ប្រព័ន្ធ Cache រូបភាពបណ្តោះអាសន្ន និង WebSocket Error
 func handleImageUploadProxy(c *gin.Context) {
 	var req AppsScriptRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
@@ -2262,10 +2065,8 @@ func handleImageUploadProxy(c *gin.Context) {
 		return
 	}
 
-	// ១. បង្កើត ID សម្រាប់រូបភាពបណ្ដោះអាសន្ន
 	tempID := generateShortID() + generateShortID()
 
-	// ២. រក្សាទុកចូលតារាង TempImage
 	tempImg := TempImage{
 		ID:        tempID,
 		MimeType:  req.MimeType,
@@ -2274,21 +2075,18 @@ func handleImageUploadProxy(c *gin.Context) {
 	}
 	DB.Create(&tempImg)
 
-	// ៣. បង្កើត URL បណ្តោះអាសន្នដើម្បីឱ្យ UI យកទៅប្រើភ្លាមៗ
 	protocol := "http"
 	if c.Request.TLS != nil || c.Request.Header.Get("X-Forwarded-Proto") == "https" {
 		protocol = "https"
 	}
 	tempURL := fmt.Sprintf("%s://%s/api/images/temp/%s", protocol, c.Request.Host, tempID)
 
-	// ៤. ឆ្លើយតបទៅ Frontend ភ្លាមៗជាមួយ Temp URL
 	c.JSON(200, gin.H{
 		"status":  "success",
 		"message": "កំពុងបញ្ជូនឯកសារ...",
 		"tempUrl": tempURL,
 	})
 
-	// ៥. ចាប់ផ្តើម Upload ទៅ Google Drive ក្នុង Background
 	go func(r AppsScriptRequest, tid string) {
 		defer func() {
 			if rec := recover(); rec != nil {
@@ -2320,7 +2118,6 @@ func handleImageUploadProxy(c *gin.Context) {
 		}
 		log.Printf("✅ Upload ជោគជ័យ: %s", driveURL)
 
-		// ៦. ពេល Upload ជាប់ Update ក្នុង DB ជាមួយ Drive URL វិញ
 		if r.OrderID != "" && r.TargetColumn != "" {
 			dbCol := mapToDBColumn(r.TargetColumn)
 			if isValidOrderColumn(dbCol) {
@@ -2333,7 +2130,6 @@ func handleImageUploadProxy(c *gin.Context) {
 					}
 					log.Printf("✅ រក្សាទុក URL ក្នុង Database ជោគជ័យសម្រាប់ Order %s", r.OrderID)
 
-					// ៧. បាញ់ WebSocket ប្រាប់ Frontend អោយដូរពី Temp URL ទៅ Drive URL
 					eventBytes, _ := json.Marshal(map[string]interface{}{
 						"type":    "update_order",
 						"orderId": r.OrderID,
@@ -2343,7 +2139,6 @@ func handleImageUploadProxy(c *gin.Context) {
 					})
 					hub.broadcast <- eventBytes
 
-					// ៨. Sync ទៅ Google Sheet
 					syncReq := AppsScriptRequest{
 						Action: "updateOrderTelegram",
 						Secret: appsScriptSecret,
@@ -2359,7 +2154,6 @@ func handleImageUploadProxy(c *gin.Context) {
 					http.Post(appsScriptURL, "application/json", bytes.NewBuffer(jb))
 					log.Printf("✅ Photo URL synced to Google Sheet for Order %s", r.OrderID)
 
-					// លុបរូបភាពបណ្តោះអាសន្នចោលភ្លាមៗ ដើម្បីសន្សំទំហំ DB
 					DB.Where("id = ?", tid).Delete(&TempImage{})
 
 				} else {
@@ -2497,6 +2291,10 @@ func handleGetAudioProxy(c *gin.Context) {
 }
 
 func main() {
+	log.Println("=======================================")
+	log.Println("🚀 Application is starting up...")
+	log.Println("=======================================")
+
 	port := os.Getenv("PORT")
 	if port == "" {
 		port = "8080"
@@ -2504,6 +2302,7 @@ func main() {
 	spreadsheetID = os.Getenv("GOOGLE_SHEET_ID")
 	appsScriptURL = os.Getenv("APPS_SCRIPT_URL")
 	appsScriptSecret = os.Getenv("APPS_SCRIPT_SECRET")
+
 	uploadFolderID = os.Getenv("UPLOAD_FOLDER_ID")
 
 	jwtSecretEnv := os.Getenv("JWT_SECRET")
@@ -2519,7 +2318,6 @@ func main() {
 	startScheduler()
 
 	r := gin.Default()
-	r.Use(GzipMiddleware())
 	r.Use(ErrorHandlingMiddleware())
 	r.MaxMultipartMemory = 100 << 20 // 100MB
 
@@ -2531,12 +2329,19 @@ func main() {
 
 	r.StaticFile("/CustomerAction.html", "./CustomerAction.html")
 
+	// ✅ បន្ថែម Health Check សម្រាប់ Render
+	r.GET("/", func(c *gin.Context) {
+		c.JSON(200, gin.H{"status": "ok", "message": "Backend is running flawlessly!"})
+	})
+	r.GET("/healthz", func(c *gin.Context) {
+		c.String(200, "OK")
+	})
+
 	api := r.Group("/api")
 	api.GET("/ping", func(c *gin.Context) { c.JSON(200, gin.H{"message": "Pong"}) })
 
 	api.POST("/login", handleLogin)
 
-	// ✅ Endpoint សាធារណៈសម្រាប់ទាញយករូបភាពបណ្ដោះអាសន្ន
 	api.GET("/images/temp/:id", handleServeTempImage)
 
 	protected := api.Group("/")
@@ -2548,7 +2353,6 @@ func main() {
 		protected.POST("/upload-image", handleImageUploadProxy)
 		protected.GET("/permissions", handleGetUserPermissions)
 		protected.GET("/roles", handleGetRoles)
-		protected.GET("/orders", RequirePermission("view_order_list"), handleGetMyOrders)
 
 		chat := protected.Group("/chat")
 		chat.GET("/messages", handleGetChatMessages)
@@ -2596,5 +2400,6 @@ func main() {
 	}()
 
 	log.Println("🚀 Server running on port", port)
-	r.Run(":" + port)
+	// ✅ បង្ខំឱ្យ Bind ទៅ 0.0.0.0 ឱ្យប្រាកដ
+	r.Run("0.0.0.0:" + port)
 }

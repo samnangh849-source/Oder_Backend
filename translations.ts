@@ -64,6 +64,37 @@ export const translations = {
     operational_parameters: "ប៉ារ៉ាម៉ែត្រប្រតិបត្តិការ",
     apply_search: "អនុវត្តការស្វែងរក",
     
+    // Column Labels
+    col_index: "លេខរៀង",
+    col_actions: "ប៊ូតុង",
+    col_customer: "អតិថិជន",
+    col_products: "ទំនិញ",
+    col_location: "ទីតាំង",
+    col_page: "Page",
+    col_store: "ហាង",
+    col_warehouse: "ឃ្លាំង",
+    col_total: "តម្លៃសរុប",
+    col_carrier: "សេវាដឹក",
+    col_agent: "អ្នកដឹក",
+    col_cost: "ថ្លៃដឹក",
+    col_status: "ស្ថានភាព",
+    col_date: "កាលបរិច្ឆេទ",
+    col_note: "ចំណាំ",
+    col_output: "ចេញទិន្នន័យ",
+    col_verify: "ផ្ទៀងផ្ទាត់",
+    col_id: "ID",
+
+    // Sorting & Grouping
+    sort_date: "កាលបរិច្ឆេទ",
+    sort_amount: "ទឹកប្រាក់",
+    sort_client: "អតិថិជន",
+    sort_id: "ID",
+    group_page: "តាម Page",
+    group_team: "តាមក្រុម",
+    group_warehouse: "តាមឃ្លាំង",
+    group_payment: "តាមការបង់ប្រាក់",
+    group_shipping: "តាមសេវាដឹក",
+    
     // Role Selection
     select_role: "ជ្រើសរើសតួនាទី",
     role_subtext: "សូមជ្រើសរើសប្រភេទគណនីដែលអ្នកចង់ចូលប្រើប្រាស់",
