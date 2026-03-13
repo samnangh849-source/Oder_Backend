@@ -410,13 +410,16 @@ const App: React.FC = () => {
     }, []);
 
     useEffect(() => {
-        if (currentUser?.IsSystemAdmin) {
+        if (currentUser) {
             fetchPermissions();
         }
     }, [currentUser, fetchPermissions]);
 
     const hasPermission = useCallback((feature: string) => {
         if (!currentUser) return false;
+        
+        // Normalize feature name
+        const targetFeature = (feature || '').trim().toLowerCase();
         
         // Features that are enabled by default for everyone (unless explicitly disabled in matrix)
         const defaultEnabled = [
@@ -425,16 +428,21 @@ const App: React.FC = () => {
             'access_fulfillment'
         ];
 
-        // Allow System Admin OR Admin Role
-        if (currentUser.IsSystemAdmin || (currentUser.Role || '').toLowerCase() === 'admin') return true;
+        // Allow System Admin OR Admin Role (case-insensitive)
+        const userRoles = (currentUser.Role || '').split(',').map(r => r.trim().toLowerCase());
+        const isInternalAdmin = currentUser.IsSystemAdmin || userRoles.includes('admin');
+        
+        if (isInternalAdmin) return true;
         
         // Check if it's a default enabled feature
-        const isDefaultEnabled = defaultEnabled.includes(feature.toLowerCase());
+        const isDefaultEnabled = defaultEnabled.includes(targetFeature);
 
-        const perm = appData.permissions?.find(p => 
-            (p.role || '').toLowerCase() === (currentUser.Role || '').toLowerCase() && 
-            (p.feature || '').toLowerCase() === (feature || '').toLowerCase()
-        );
+        // Check if ANY of the user's roles have this feature enabled
+        const perm = appData.permissions?.find(p => {
+            const permRole = (p.role || '').trim().toLowerCase();
+            const permFeature = (p.feature || '').trim().toLowerCase();
+            return userRoles.includes(permRole) && permFeature === targetFeature;
+        });
 
         if (perm) return perm.isEnabled;
         

@@ -124,11 +124,12 @@ const SelectFilter: React.FC<SelectFilterProps> = ({
         }
     }
 
-    if (isOpen) baseClass += " ring-2 ring-blue-500/20 border-blue-500/50 bg-gray-900";
+    if (isOpen) baseClass += " ring-2 ring-blue-500/20 border-blue-500/50 bg-gray-950";
 
     return (
-        <div className="w-full" ref={dropdownRef}>
+        <div className={`w-full transition-all ${isOpen ? 'relative z-[60]' : 'relative z-10'}`} ref={dropdownRef}>
             <label className="text-[10px] font-black text-gray-500 mb-2 block uppercase tracking-widest ml-2 flex items-center gap-2">
+
                 {label} 
                 {multiple && <span className="text-[8px] font-black text-blue-400 bg-blue-500/10 px-2 py-0.5 rounded-full border border-blue-500/20">MULTI</span>}
             </label>

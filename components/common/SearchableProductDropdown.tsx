@@ -136,7 +136,7 @@ const SearchableProductDropdown: React.FC<SearchableProductDropdownProps> = ({
     };
 
     return (
-        <div className="relative" ref={dropdownRef}>
+        <div className={`transition-all ${isOpen ? 'relative z-[70]' : 'relative z-10'}`} ref={dropdownRef}>
             <div className="relative group">
                 <input
                     ref={inputRef}
