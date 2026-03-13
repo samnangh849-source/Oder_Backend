@@ -415,7 +415,7 @@ const OrdersDashboard: React.FC<OrdersDashboardProps> = ({ onBack, initialFilter
             </div>
 
             {/* Header Section (Fixed Height Area) */}
-            <div className="flex-shrink-0 px-4 pt-4 pb-2">
+            <div className="flex-shrink-0 px-4 pt-4 pb-2 relative z-20">
                 <div className="flex flex-col lg:flex-row justify-between items-center mb-4 gap-4">
                     <div className="flex items-center gap-4">
                         <button onClick={onBack} className="p-2.5 bg-white/5 hover:bg-white/10 rounded-2xl transition-all active:scale-90 text-gray-400 hover:text-white border border-white/5 shadow-xl">

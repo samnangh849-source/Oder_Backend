@@ -2,6 +2,7 @@ import React, { useContext, useState, useMemo } from 'react';
 import { ParsedOrder } from '../../types';
 import { AppContext } from '../../context/AppContext';
 import Spinner from '../common/Spinner';
+import { MobileGrandTotalCard } from './OrderGrandTotal';
 
 interface OrdersListMobileProps {
     orders: ParsedOrder[];
@@ -22,7 +23,7 @@ interface OrdersListMobileProps {
 }
 
 const OrdersListMobile: React.FC<OrdersListMobileProps> = ({
-    orders, selectedIds, onToggleSelect, onEdit,
+    orders, totals, selectedIds, onToggleSelect, onEdit,
     handlePrint, toggleOrderVerified, updatingIds, groupBy = 'none'
 }) => {
     const { currentUser, hasPermission } = useContext(AppContext);
@@ -78,6 +79,10 @@ const OrdersListMobile: React.FC<OrdersListMobileProps> = ({
                 .glass-button { background: rgba(255, 255, 255, 0.03); border: 1px solid rgba(255, 255, 255, 0.05); transition: all 0.2s ease; }
                 .glass-button:active { background: rgba(255, 255, 255, 0.1); border-color: rgba(255, 255, 255, 0.2); }
             `}</style>
+
+            <div className="px-2">
+                <MobileGrandTotalCard totals={totals} />
+            </div>
 
             {groupedData.map((group, gIdx) => (
                 <div key={gIdx} className="space-y-4">
