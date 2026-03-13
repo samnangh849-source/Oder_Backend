@@ -34,7 +34,7 @@ export const DesktopGrandTotalRow: React.FC<DesktopGrandTotalRowProps> = ({ tota
     const check = isVisible;
 
     return (
-        <tr className={`bg-[#0f172a]/95 backdrop-blur-3xl border-y border-blue-500/20 sticky top-0 z-30 shadow-[0_15px_40px_rgba(0,0,0,0.4)] ${showBorders ? 'divide-x divide-white/5' : ''}`}>
+        <tr className={`bg-[#0f172a]/95 backdrop-blur-3xl border-y border-blue-500/20 shadow-[0_15px_40px_rgba(0,0,0,0.4)] ${showBorders ? 'divide-x divide-white/5' : ''}`}>
             {showSelection && <td className="px-1 py-4 w-8"></td>}
             
             {check('index') && (
