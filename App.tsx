@@ -331,15 +331,15 @@ const App: React.FC = () => {
                         setAppData(prev => {
                             const oldPerms = prev.permissions || [];
                             const foundIndex = oldPerms.findIndex(p => 
-                                (p.Role || '').toLowerCase() === (role || '').toLowerCase() && 
-                                (p.Feature || '').toLowerCase() === (feature || '').toLowerCase()
+                                (p.role || '').toLowerCase() === (role || '').toLowerCase() && 
+                                (p.feature || '').toLowerCase() === (feature || '').toLowerCase()
                             );
 
                             let nextPerms = [...oldPerms];
                             if (foundIndex >= 0) {
-                                nextPerms[foundIndex] = { ...nextPerms[foundIndex], IsEnabled: isEnabled };
+                                nextPerms[foundIndex] = { ...nextPerms[foundIndex], isEnabled: isEnabled };
                             } else {
-                                nextPerms.push({ Role: role, Feature: feature, IsEnabled: isEnabled });
+                                nextPerms.push({ role: role, feature: feature, isEnabled: isEnabled });
                             }
                             return { ...prev, permissions: nextPerms };
                         });
