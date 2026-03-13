@@ -59,7 +59,7 @@ const STEPS = [
 ];
 
 const CreateOrderPage: React.FC<CreateOrderPageProps> = ({ team, onSaveSuccess, onCancel }) => {
-    const { appData, currentUser, apiKey, previewImage } = useContext(AppContext);
+    const { appData, currentUser, apiKey, previewImage, hasPermission } = useContext(AppContext);
     const [currentStep, setCurrentStep] = useState(1);
     const [isCancelModalOpen, setIsCancelModalOpen] = useState(false);
     
@@ -72,6 +72,23 @@ const CreateOrderPage: React.FC<CreateOrderPageProps> = ({ team, onSaveSuccess, 
         sfxDriverSelect.current.volume = 0.4;
         sfxSuccess.current.volume = 0.6;
     }, []);
+
+    useEffect(() => {
+        if (window.innerWidth < 768) {
+            window.scrollTo({ top: 0, behavior: 'smooth' });
+        }
+    }, [currentStep]);
+
+    if (!hasPermission('create_order')) return (
+        <div className="flex flex-col items-center justify-center min-h-[60vh] p-6 text-center">
+            <div className="w-20 h-20 bg-red-500/10 rounded-3xl flex items-center justify-center border border-red-500/20 mb-6 shadow-2xl">
+                <svg className="w-10 h-10 text-red-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" /></svg>
+            </div>
+            <h2 className="text-2xl font-black text-white italic uppercase tracking-tight mb-4">Access Denied</h2>
+            <p className="text-gray-500 text-sm max-w-sm leading-relaxed mb-10">អ្នកមិនមានសិទ្ធិបង្កើតការកម្មង់ឡើយ។ សូមទាក់ទង Admin។</p>
+            <button onClick={onCancel} className="px-10 py-4 bg-white text-black rounded-2xl font-black uppercase text-xs tracking-[0.2em] hover:bg-gray-200 transition-all shadow-xl active:scale-95">Back to Portal</button>
+        </div>
+    );
 
     const initialOrderState = useMemo(() => ({
         page: '',

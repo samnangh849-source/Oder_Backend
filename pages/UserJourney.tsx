@@ -5,7 +5,7 @@ import { translations } from '../translations';
 import UserOrdersView from '../components/user/UserOrdersView';
 
 const UserJourney: React.FC<{ onBackToRoleSelect: () => void }> = ({ onBackToRoleSelect }) => {
-    const { currentUser, setChatVisibility, setMobilePageTitle, language, setAppState, selectedTeam, setSelectedTeam } = useContext(AppContext);
+    const { currentUser, setChatVisibility, setMobilePageTitle, language, setAppState, selectedTeam, setSelectedTeam, hasPermission } = useContext(AppContext);
     const userTeams = useMemo(() => (currentUser?.Team || '').split(',').map(t => t.trim()).filter(Boolean), [currentUser]);
     const t = translations[language];
 
@@ -19,10 +19,24 @@ const UserJourney: React.FC<{ onBackToRoleSelect: () => void }> = ({ onBackToRol
     }, [selectedTeam, setMobilePageTitle]);
 
     const handleCreateOrder = () => {
+        if (!hasPermission('create_order')) return;
         // App.tsx uses 'team' URL param for CreateOrderPage, 
         // which is already synced with selectedTeam here.
         setAppState('create_order');
     };
+
+    if (!hasPermission('access_sales_portal')) return (
+        <div className="flex items-center justify-center min-h-screen p-6">
+            <div className="text-center p-12 max-w-lg w-full bg-white/[0.02] border border-white/5 rounded-[3rem] backdrop-blur-3xl shadow-2xl animate-fade-in">
+                <div className="w-16 h-16 bg-red-500/10 rounded-2xl flex items-center justify-center border border-red-500/20 mb-6 mx-auto">
+                    <svg className="w-8 h-8 text-red-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" /></svg>
+                </div>
+                <h2 className="text-2xl font-bold text-white mb-4 italic uppercase tracking-tight">Access Denied</h2>
+                <p className="text-gray-500 text-sm leading-relaxed mb-10">អ្នកមិនមានសិទ្ធិចូលប្រើប្រាស់ផ្នែកនេះទេ។ សូមទាក់ទង Admin។</p>
+                <button onClick={onBackToRoleSelect} className="w-full py-4 bg-white text-black rounded-2xl font-bold uppercase text-xs tracking-widest hover:bg-gray-200 transition-colors shadow-xl">{t.back}</button>
+            </div>
+        </div>
+    );
 
     if (userTeams.length === 0) return (
         <div className="flex items-center justify-center min-h-screen p-6">
@@ -159,14 +173,16 @@ const UserJourney: React.FC<{ onBackToRoleSelect: () => void }> = ({ onBackToRol
                 </div>
 
                 <div className="flex items-center gap-3">
-                    <button 
-                        onClick={handleCreateOrder} 
-                        className="btn-create flex px-4 sm:px-8 py-2.5 sm:py-3 text-white rounded-2xl text-[10px] sm:text-[11px] font-black uppercase tracking-[0.15em] transition-all active:scale-95 items-center gap-2.5"
-                    >
-                        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={3}><path d="M12 4v16m8-8H4"/></svg>
-                        <span className="hidden sm:inline">Create New Order</span>
-                        <span className="sm:hidden">Create</span>
-                    </button>
+                    {hasPermission('create_order') && (
+                        <button 
+                            onClick={handleCreateOrder} 
+                            className="btn-create flex px-4 sm:px-8 py-2.5 sm:py-3 text-white rounded-2xl text-[10px] sm:text-[11px] font-black uppercase tracking-[0.15em] transition-all active:scale-95 items-center gap-2.5"
+                        >
+                            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={3}><path d="M12 4v16m8-8H4"/></svg>
+                            <span className="hidden sm:inline">Create New Order</span>
+                            <span className="sm:hidden">Create</span>
+                        </button>
+                    )}
 
                     {userTeams.length > 1 && (
                         <button 
