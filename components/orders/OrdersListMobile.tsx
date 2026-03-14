@@ -20,11 +20,12 @@ interface OrdersListMobileProps {
     toggleOrderVerified: (id: string, currentStatus: boolean) => void;
     updatingIds: Set<string>;
     groupBy?: string;
+    viewMode?: 'card' | 'list';
 }
 
 const OrdersListMobile: React.FC<OrdersListMobileProps> = ({
     orders, totals, selectedIds, onToggleSelect, onEdit, onView,
-    handlePrint, toggleOrderVerified, updatingIds, groupBy = 'none'
+    handlePrint, toggleOrderVerified, updatingIds, groupBy = 'none', viewMode = 'card'
 }) => {
     const { currentUser, hasPermission } = useContext(AppContext);
     const [displayCount, setDisplayCount] = useState(20);
@@ -70,131 +71,175 @@ const OrdersListMobile: React.FC<OrdersListMobileProps> = ({
     };
 
     return (
-        <div className="flex flex-col space-y-6">
+        <div className="flex flex-col space-y-4">
             <style>{`
-                .order-card-new { background: rgba(30, 41, 59, 0.4); border: 1px solid rgba(255, 255, 255, 0.05); backdrop-filter: blur(12px); transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1); }
-                .order-card-new:active { transform: scale(0.97); background: rgba(30, 41, 59, 0.6); }
-                .status-pill { padding: 4px 10px; border-radius: 99px; font-size: 9px; font-weight: 900; letter-spacing: 0.05em; text-transform: uppercase; }
-                .order-id-badge { background: rgba(255, 255, 255, 0.05); border: 1px solid rgba(255, 255, 255, 0.08); padding: 2px 8px; border-radius: 6px; font-family: monospace; font-size: 10px; color: rgba(255,255,255,0.4); }
-                .glass-button { background: rgba(255, 255, 255, 0.03); border: 1px solid rgba(255, 255, 255, 0.05); transition: all 0.2s ease; }
-                .glass-button:active { background: rgba(255, 255, 255, 0.1); border-color: rgba(255, 255, 255, 0.2); }
+                .order-card-v2 {
+                    background: rgba(30, 41, 59, 0.3);
+                    border: 1px solid rgba(255, 255, 255, 0.04);
+                    backdrop-filter: blur(16px);
+                    transition: all 0.4s cubic-bezier(0.23, 1, 0.32, 1);
+                }
+                .order-card-v2:active {
+                    transform: scale(0.98);
+                    background: rgba(30, 41, 59, 0.5);
+                }
+                .order-row-v2 {
+                    background: rgba(30, 41, 59, 0.2);
+                    border-bottom: 1px solid rgba(255, 255, 255, 0.03);
+                    padding: 12px 16px;
+                    transition: all 0.3s;
+                }
+                .order-row-v2:active {
+                    background: rgba(255, 255, 255, 0.05);
+                }
+                .status-pill-v2 {
+                    padding: 4px 12px;
+                    border-radius: 12px;
+                    font-size: 9px;
+                    font-weight: 900;
+                    text-transform: uppercase;
+                    letter-spacing: 0.05em;
+                }
+                .product-pill-v2 {
+                    background: rgba(255, 255, 255, 0.03);
+                    border: 1px solid rgba(255, 255, 255, 0.05);
+                    padding: 4px 10px;
+                    border-radius: 10px;
+                    font-size: 10px;
+                    font-weight: 600;
+                }
+                .action-btn-v2 {
+                    width: 38px;
+                    height: 38px;
+                    display: flex;
+                    align-items: center;
+                    justify-content: center;
+                    border-radius: 12px;
+                    background: rgba(255, 255, 255, 0.03);
+                    border: 1px solid rgba(255, 255, 255, 0.05);
+                    color: rgba(255, 255, 255, 0.4);
+                    transition: all 0.2s;
+                }
+                .action-btn-v2:active {
+                    transform: scale(0.9);
+                    background: rgba(255, 255, 255, 0.1);
+                }
             `}</style>
 
-            <div className="px-2">
-                <MobileGrandTotalCard totals={totals} />
-            </div>
-
             {groupedData.map((group, gIdx) => (
-                <div key={gIdx} className="space-y-4">
+                <div key={gIdx} className="space-y-3">
                     {group.label && (
-                        <div className="flex items-center gap-4 px-2">
-                            <span className="text-[10px] font-black text-blue-500 uppercase tracking-[0.3em]">{group.label}</span>
-                            <div className="h-px flex-1 bg-gradient-to-r from-blue-500/20 to-transparent"></div>
+                        <div className="flex items-center gap-3 px-3 mb-2">
+                            <span className="text-[9px] font-black text-blue-500/60 uppercase tracking-[0.3em]">{group.label}</span>
+                            <div className="h-px flex-1 bg-gradient-to-r from-blue-500/10 to-transparent"></div>
                         </div>
                     )}
                     
-                    <div className="grid grid-cols-1 gap-4">
-                        {group.orders.map((order) => {
+                    <div className={viewMode === 'card' ? "grid grid-cols-1 gap-3 px-2" : "flex flex-col bg-white/[0.02] border border-white/5 rounded-[2rem] overflow-hidden"}>
+                        {group.orders.map((order, idx) => {
                             const isVerified = order.IsVerified === true || String(order.IsVerified).toUpperCase() === 'TRUE' || order.IsVerified === 'A';
                             const isSelected = selectedIds.has(order['Order ID']);
                             const isPaid = order['Payment Status'] === 'Paid';
+                            const orderTotal = Number(order['Grand Total']) || 0;
+                            const displayIndex = idx + 1;
                             
+                            if (viewMode === 'list') {
+                                return (
+                                    <div 
+                                        key={order['Order ID']} 
+                                        onClick={() => onView && onView(order)}
+                                        className={`order-row-v2 flex items-center justify-between gap-3 ${isSelected ? 'bg-blue-500/10' : ''}`}
+                                    >
+                                        <div className="flex items-center gap-3 flex-1 min-w-0">
+                                            <span className="text-[10px] font-black text-blue-500/40 font-mono w-4 shrink-0">{displayIndex}</span>
+                                            <div className="flex-1 min-w-0">
+                                                <div className="flex items-center gap-2 mb-0.5">
+                                                    <h3 className="text-sm font-bold text-white truncate italic uppercase">{order['Customer Name']}</h3>
+                                                    <span className={`status-pill-v2 !py-0.5 !px-1.5 !rounded-md !text-[8px] ${isPaid ? 'bg-emerald-500/10 text-emerald-400' : 'bg-orange-500/10 text-orange-400'}`}>
+                                                        {isPaid ? 'PAID' : 'COD'}
+                                                    </span>
+                                                </div>
+                                                <div className="flex items-center gap-2 text-[9px] font-medium text-gray-500">
+                                                    <span className="text-blue-400/80 font-bold">{order['Customer Phone']}</span>
+                                                    <span>•</span>
+                                                    <span className="truncate">{order.Location || 'N/A'}</span>
+                                                </div>
+                                            </div>
+                                        </div>
+                                        <div className="text-right shrink-0">
+                                            <div className="text-base font-black text-white italic tracking-tighter leading-none">
+                                                <span className="text-[10px] text-blue-500 mr-0.5">$</span>
+                                                {orderTotal.toLocaleString(undefined, { minimumFractionDigits: 2 })}
+                                            </div>
+                                            <div className="text-[8px] font-black text-gray-600 uppercase tracking-widest mt-1">{getSafeDateString(order.Timestamp).split(',')[0]}</div>
+                                        </div>
+                                        <div onClick={(e) => e.stopPropagation()} className="flex items-center">
+                                            <button 
+                                                onClick={() => toggleOrderVerified(order['Order ID'], isVerified)}
+                                                className={`w-8 h-8 flex items-center justify-center rounded-lg transition-all ${isVerified ? 'text-emerald-500 bg-emerald-500/10' : 'text-gray-700 hover:text-white'}`}
+                                            >
+                                                {updatingIds.has(order['Order ID']) ? <Spinner size="xs" /> : <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={3}><path d="M5 13l4 4L19 7" /></svg>}
+                                            </button>
+                                        </div>
+                                    </div>
+                                );
+                            }
+
                             return (
                                 <div 
                                     key={order['Order ID']} 
                                     onClick={() => onView && onView(order)}
-                                    className={`order-card-new relative overflow-hidden rounded-[2rem] p-5 ${isSelected ? 'ring-2 ring-blue-500 bg-blue-500/10' : ''}`}
+                                    className={`order-card-v2 relative overflow-hidden rounded-[2rem] p-4 ${isSelected ? 'ring-2 ring-blue-500 bg-blue-500/10' : ''}`}
                                 >
-                                    {/* Selection Glow */}
-                                    {isSelected && <div className="absolute inset-0 bg-blue-500/5 animate-pulse pointer-events-none"></div>}
+                                    {/* Glass Highlight */}
+                                    <div className="absolute top-0 left-0 w-full h-1/2 bg-gradient-to-b from-white/[0.03] to-transparent pointer-events-none"></div>
 
-                                    {/* Top Row: Meta & Status */}
-                                    <div className="flex justify-between items-start mb-4">
-                                        <div className="flex items-center gap-3">
-                                            {onToggleSelect && (
-                                                <input 
-                                                    type="checkbox" 
-                                                    className="h-5 w-5 rounded-full border-white/10 bg-white/5 text-blue-500 focus:ring-offset-0 focus:ring-0 transition-all cursor-pointer" 
-                                                    checked={isSelected} 
-                                                    onChange={() => onToggleSelect(order['Order ID'])} 
-                                                />
-                                            )}
-                                            <div className="order-id-badge">#{order['Order ID'].substring(0, 8)}</div>
-                                        </div>
-                                        <div className={`status-pill ${isPaid ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/20' : 'bg-orange-500/10 text-orange-400 border border-orange-500/20'}`}>
-                                            {order['Payment Status']}
-                                        </div>
-                                    </div>
-
-                                    {/* Middle Row: Customer Info & Price */}
-                                    <div className="flex justify-between items-end mb-4">
-                                        <div className="flex-1 min-w-0 pr-4">
-                                            <h3 className="text-lg font-black text-white truncate leading-tight mb-1">{order['Customer Name']}</h3>
-                                            <div className="flex flex-wrap items-center gap-y-1 gap-x-3">
-                                                <span className="text-[12px] font-bold text-blue-400 tracking-tight">{order['Customer Phone']}</span>
-                                                <div className="w-1 h-1 bg-white/10 rounded-full"></div>
-                                                <span className="text-[11px] font-medium text-gray-500 uppercase tracking-wide truncate max-w-[120px]">{order.Location || 'General'}</span>
+                                    {/* Header: Index, ID & Price */}
+                                    <div className="flex justify-between items-start mb-3 relative z-10">
+                                        <div className="flex items-center gap-2">
+                                            <span className="text-[10px] font-black text-blue-500/40 font-mono italic">{displayIndex}</span>
+                                            <span className="text-[9px] font-black text-gray-600 font-mono tracking-tighter bg-white/5 px-2 py-0.5 rounded-md">#{order['Order ID'].substring(0, 8)}</span>
+                                            <div className={`status-pill-v2 !py-0.5 !px-2 !rounded-lg ${isPaid ? 'bg-emerald-500/10 text-emerald-400' : 'bg-orange-500/10 text-orange-400'}`}>
+                                                {order['Payment Status']}
                                             </div>
                                         </div>
-                                        <div className="text-right">
-                                            <div className="text-3xl font-black text-white tracking-tighter italic">
-                                                <span className="text-sm align-top mr-0.5">$</span>
-                                                {(Number(order['Grand Total']) || 0).toFixed(2)}
-                                            </div>
+                                        <div className="text-lg font-black text-white italic tracking-tighter">
+                                            <span className="text-[10px] text-blue-500 mr-0.5">$</span>
+                                            {orderTotal.toLocaleString(undefined, { minimumFractionDigits: 2 })}
                                         </div>
                                     </div>
 
-                                    {/* Product Summary */}
-                                    <div className="mb-5 p-3 rounded-2xl bg-white/[0.02] border border-white/5">
-                                        <div className="flex flex-wrap gap-2">
-                                            {order.Products.slice(0, 3).map((p, i) => (
-                                                <div key={i} className="flex items-center gap-1.5 px-2 py-1 bg-white/5 rounded-lg border border-white/5">
-                                                    <span className="text-[10px] font-bold text-blue-400">x{p.quantity}</span>
-                                                    <span className="text-[10px] font-medium text-gray-400 truncate max-w-[80px]">{p.name}</span>
-                                                </div>
-                                            ))}
-                                            {order.Products.length > 3 && (
-                                                <div className="text-[10px] font-bold text-gray-600 self-center pl-1">+{order.Products.length - 3} more</div>
-                                            )}
+                                    {/* Customer Info */}
+                                    <div className="mb-3">
+                                        <h3 className="text-base font-black text-white truncate tracking-tight mb-0.5 italic uppercase">{order['Customer Name']}</h3>
+                                        <div className="flex items-center gap-2 text-[11px]">
+                                            <span className="font-bold text-blue-400 tracking-tight">{order['Customer Phone']}</span>
+                                            <span className="w-1 h-1 bg-white/10 rounded-full"></span>
+                                            <span className="font-medium text-gray-500 truncate">{order.Location || 'N/A'}</span>
                                         </div>
                                     </div>
 
-                                    {/* Bottom Row: Date & Actions */}
-                                    <div className="flex items-center justify-between pt-4 border-t border-white/5">
+                                    {/* Compact Footer: Actions */}
+                                    <div className="flex items-center justify-between pt-3 border-t border-white/5">
                                         <div className="flex flex-col">
-                                            <span className="text-[10px] font-bold text-gray-600 uppercase tracking-widest">{getSafeDateString(order.Timestamp)}</span>
-                                            <span className="text-[9px] font-bold text-blue-500/60 uppercase tracking-tighter mt-0.5">{order.Page || 'Direct Order'}</span>
+                                            <span className="text-[8px] font-black text-gray-600 uppercase tracking-widest">{getSafeDateString(order.Timestamp)}</span>
+                                            <span className="text-[8px] font-black text-blue-400/50 uppercase truncate max-w-[100px] mt-0.5">{order.Page || 'System'}</span>
                                         </div>
                                         
-                                        <div className="flex items-center gap-2">
-                                            <button 
-                                                onClick={() => handlePrint(order)} 
-                                                className="glass-button p-3 rounded-xl text-gray-400 hover:text-white"
-                                                title="Print Label"
-                                            >
-                                                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2.5}><path d="M17 17h2a2 2 0 002-2v-4a2 2 0 00-2-2H5a2 2 0 00-2 2v4a2 2 0 002 2h2m2 4h6a2 2 0 002-2v-4a2 2 0 00-2-2H9a2 2 0 00-2 2v4a2 2 0 002 2zm8-12V5a2 2 0 00-2-2H9a2 2 0 00-2 2v4h10z" /></svg>
+                                        <div className="flex items-center gap-2" onClick={(e) => e.stopPropagation()}>
+                                            <button onClick={() => handlePrint(order)} className="action-btn-v2 !w-9 !h-9">
+                                                <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2.5}><path d="M17 17h2a2 2 0 002-2v-4a2 2 0 00-2-2H5a2 2 0 00-2 2v4a2 2 0 002 2h2m2 4h6a2 2 0 002-2v-4a2 2 0 00-2-2H9a2 2 0 00-2 2v4a2 2 0 002 2zm8-12V5a2 2 0 00-2-2H9a2 2 0 00-2 2v4h10z" /></svg>
                                             </button>
-                                            
                                             {canEditOrder(order) && (
-                                                <button 
-                                                    onClick={() => onEdit && onEdit(order)} 
-                                                    className="glass-button p-3 rounded-xl text-gray-400 hover:text-blue-400"
-                                                    title="Edit Order"
-                                                >
-                                                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2.5}><path d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" /></svg>
+                                                <button onClick={() => onEdit && onEdit(order)} className="action-btn-v2 !w-9 !h-9">
+                                                    <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2.5}><path d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" /></svg>
                                                 </button>
                                             )}
-
                                             <button 
                                                 onClick={() => toggleOrderVerified(order['Order ID'], isVerified)}
-                                                className={`glass-button p-3 rounded-xl transition-all ${isVerified ? 'text-emerald-500 bg-emerald-500/10 border-emerald-500/20' : 'text-gray-400 hover:text-white'}`}
-                                                title="Verify Order"
+                                                className={`action-btn-v2 !w-9 !h-9 transition-all ${isVerified ? 'text-emerald-500 bg-emerald-500/10 border-emerald-500/20' : ''}`}
                                             >
-                                                {updatingIds.has(order['Order ID']) ? (
-                                                    <Spinner size="xs" />
-                                                ) : (
-                                                    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={3}><path d="M5 13l4 4L19 7" /></svg>
-                                                )}
+                                                {updatingIds.has(order['Order ID']) ? <Spinner size="xs" /> : <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={3}><path d="M5 13l4 4L19 7" /></svg>}
                                             </button>
                                         </div>
                                     </div>

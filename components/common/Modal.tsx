@@ -1,5 +1,6 @@
 
 import React, { useEffect } from 'react';
+import { useSoundEffects } from '../../hooks/useSoundEffects';
 
 interface ModalProps {
     isOpen: boolean;
@@ -10,11 +11,17 @@ interface ModalProps {
 }
 
 const Modal: React.FC<ModalProps> = ({ isOpen, onClose, children, maxWidth = 'max-w-md', fullScreen = false }) => {
+    const { playPop, playClick } = useSoundEffects();
+
     useEffect(() => {
         const handleEsc = (event: KeyboardEvent) => {
-            if (event.key === 'Escape') onClose();
+            if (event.key === 'Escape') {
+                playClick();
+                onClose();
+            }
         };
         if (isOpen) {
+            playPop();
             window.addEventListener('keydown', handleEsc);
             document.body.style.overflow = 'hidden';
         }
@@ -26,10 +33,15 @@ const Modal: React.FC<ModalProps> = ({ isOpen, onClose, children, maxWidth = 'ma
 
     if (!isOpen) return null;
 
+    const handleOverlayClick = () => {
+        playClick();
+        onClose();
+    };
+
     return (
         <div 
             className={`fixed inset-0 bg-black/60 backdrop-blur-md flex items-center justify-center z-[100] transition-opacity duration-300 modal-overlay ${fullScreen ? 'p-0' : 'p-4 sm:p-6 lg:p-8'}`}
-            onClick={onClose}
+            onClick={handleOverlayClick}
         >
             <div
                 className={`${fullScreen ? 'w-screen h-screen' : `page-card w-full ${maxWidth} rounded-[2.5rem] shadow-[0_30px_100px_rgba(0,0,0,0.8)] border border-white/10`} bg-[#0f172a]/95 transform transition-all duration-300 scale-100 opacity-100 animate-modal-in max-h-[92vh] flex flex-col overflow-hidden my-auto`}

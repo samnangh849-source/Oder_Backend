@@ -22,42 +22,7 @@ const UserOrdersView: React.FC<{ onAdd: () => void }> = ({ onAdd }) => {
     const { currentUser, refreshData, appData, orders, isOrdersLoading, hasPermission, language, selectedTeam: team } = useContext(AppContext);
     const t = translations[language];
     
-    // 1. ROBUST PERMISSION & TEAM MATCHING
-    const permittedOrders = useMemo(() => {
-        if (!currentUser) return [];
-        
-        const userRoles = (currentUser.Role || '').split(',').map(r => r.trim().toLowerCase());
-        const isAdmin = currentUser.IsSystemAdmin || userRoles.includes('admin');
-        
-        // If user is Admin, show everything without filtering
-        if (isAdmin) return orders;
-
-        // If not Admin, we must filter strictly by the Selected Team (Operational Team)
-        const requestedTeam = (team || '').trim().toLowerCase();
-        if (!requestedTeam) return []; // No team selected = No data for security
-
-        return orders.filter(o => {
-            // Check direct Team field
-            let orderTeam = (o.Team || '').toString().trim().toLowerCase();
-            
-            // If Team field is empty, lookup via User or Page (Fallback Enrichment)
-            if (!orderTeam) {
-                const userMatch = appData.users?.find(u => u.UserName === o.User);
-                if (userMatch?.Team) {
-                    orderTeam = userMatch.Team.split(',')[0].trim().toLowerCase();
-                } else {
-                    const pageMatch = appData.pages?.find(p => p.PageName === o.Page);
-                    if (pageMatch?.Team) {
-                        orderTeam = pageMatch.Team.trim().toLowerCase();
-                    }
-                }
-            }
-            
-            // Final Match against the selected team
-            return orderTeam === requestedTeam;
-        });
-    }, [orders, team, currentUser, appData.users, appData.pages]);
-
+    // 1. STATE DECLARATIONS
     const [viewOrders, setViewOrders] = useState<ParsedOrder[]>([]);
     const [drilldownFilters, setDrilldownFilters] = useState<any>(null);
     const [drilldownData, setDrilldownData] = useState<ParsedOrder[]>([]);
@@ -67,24 +32,10 @@ const UserOrdersView: React.FC<{ onAdd: () => void }> = ({ onAdd }) => {
     const [showReport, setShowReport] = useState(false);
     const [showShippingReport, setShowShippingReport] = useState(false); 
     const [isDeliveryModalOpen, setIsDeliveryModalOpen] = useState(false);
-    
+    const [viewMode, setViewMode] = useState<'card' | 'list'>('card');
     const [lastSync, setLastSync] = useState<Date>(new Date());
-
-    // 2. REAL-TIME POLLING (Sync every 30s if permitted)
-    useEffect(() => {
-        if (!hasPermission('view_order_list')) return;
-        
-        const interval = setInterval(() => {
-            refreshData();
-            setLastSync(new Date());
-        }, 30000);
-        
-        return () => clearInterval(interval);
-    }, [hasPermission, refreshData]);
-
-    // 3. SET DEFAULT FILTER TO THIS MONTH (Better UX than 'today')
-    const [dateRange, setDateRange] = useState<DateRangePreset>('this_month');
     
+    const [dateRange, setDateRange] = useState<DateRangePreset>('this_month');
     const [customStart, setCustomStart] = useState(new Date().toISOString().split('T')[0]);
     const [customEnd, setCustomEnd] = useState(new Date().toISOString().split('T')[0]);
     const [reportFilters, setReportFilters] = useState<ReportFilterState>({
@@ -93,11 +44,13 @@ const UserOrdersView: React.FC<{ onAdd: () => void }> = ({ onAdd }) => {
         customEnd: new Date().toISOString().split('T')[0]
     });
 
-    const userVisibleColumns = useMemo(() => new Set([
-        'index', 'orderId', 'customerName', 'productInfo', 'location', 'pageInfo', 'total', 'shippingService', 'status', 'date', 'print', 'actions'
-    ]), []);
+    const [globalRanking, setGlobalRanking] = useState<{name: string, revenue: number}[]>([]);
+    const [isRankingLoading, setIsRankingLoading] = useState(true);
+    const [globalShippingOrders, setGlobalShippingOrders] = useState<any[]>([]);
+    const [isShippingLoading, setIsShippingLoading] = useState(false);
 
-    const getDateBounds = (preset: DateRangePreset, cStart?: string, cEnd?: string) => {
+    // 2. HELPERS
+    const getDateBounds = useCallback((preset: DateRangePreset, cStart?: string, cEnd?: string) => {
         const now = new Date();
         const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
         let start: Date | null = null;
@@ -112,7 +65,92 @@ const UserOrdersView: React.FC<{ onAdd: () => void }> = ({ onAdd }) => {
             case 'custom': if (cStart) start = getValidDate(cStart + 'T00:00:00'); if (cEnd) end = getValidDate(cEnd + 'T23:59:59'); break;
         }
         return { start, end };
-    };
+    }, []);
+
+    // 3. MEMOIZED DATA
+    const enrichedOrders = useMemo(() => {
+        if (!currentUser) return [];
+        return orders.map(o => {
+            let orderTeam = (o.Team || '').toString().trim();
+            if (!orderTeam) {
+                const userMatch = appData.users?.find(u => u.UserName === o.User);
+                if (userMatch?.Team) {
+                    orderTeam = userMatch.Team.split(',')[0].trim();
+                } else {
+                    const pageMatch = appData.pages?.find(p => p.PageName === o.Page);
+                    if (pageMatch?.Team) {
+                        orderTeam = pageMatch.Team.trim();
+                    }
+                }
+            }
+            return { ...o, Team: orderTeam };
+        });
+    }, [orders, appData.users, appData.pages, currentUser]);
+
+    const permittedOrders = useMemo(() => {
+        const requestedTeam = (team || '').trim().toLowerCase();
+        if (!requestedTeam) return [];
+        return enrichedOrders.filter(o => (o.Team || '').toLowerCase() === requestedTeam);
+    }, [enrichedOrders, team]);
+
+    const fetchRanking = useCallback(async () => {
+        try {
+            const token = localStorage.getItem('token');
+            const response = await fetch(`${translations.WEB_APP_URL || 'https://acc-order-system.onrender.com'}/api/teams/ranking`, {
+                headers: { 'Authorization': `Bearer ${token}` }
+            });
+            if (response.ok) {
+                const result = await response.json();
+                if (result.status === 'success') {
+                    setGlobalRanking((result.data || []).map((r: any) => ({ name: r.Team, revenue: r.Revenue })));
+                }
+            }
+        } catch (err) {
+            console.error("Failed to fetch team ranking:", err);
+        } finally {
+            setIsRankingLoading(false);
+        }
+    }, []);
+
+    const fetchGlobalShippingCosts = useCallback(async () => {
+        setIsShippingLoading(true);
+        try {
+            const token = localStorage.getItem('token');
+            const response = await fetch(`${translations.WEB_APP_URL || 'https://acc-order-system.onrender.com'}/api/teams/shipping-costs`, {
+                headers: { 'Authorization': `Bearer ${token}` }
+            });
+            if (response.ok) {
+                const result = await response.json();
+                if (result.status === 'success') setGlobalShippingOrders(result.data || []);
+            }
+        } catch (err) {
+            console.error("Failed to fetch global shipping costs:", err);
+        } finally {
+            setIsShippingLoading(false);
+        }
+    }, []);
+
+    useEffect(() => {
+        if (showShippingReport && globalShippingOrders.length === 0) {
+            fetchGlobalShippingCosts();
+        }
+    }, [showShippingReport, globalShippingOrders.length, fetchGlobalShippingCosts]);
+
+    // 4. EFFECTS
+    useEffect(() => {
+        if (!hasPermission('view_order_list')) return;
+        fetchRanking();
+        const interval = setInterval(() => {
+            refreshData();
+            fetchRanking();
+            setLastSync(new Date());
+        }, 30000);
+        return () => clearInterval(interval);
+    }, [hasPermission, refreshData, fetchRanking]);
+
+    const userVisibleColumns = useMemo(() => new Set([
+        'index', 'orderId', 'customerName', 'productInfo', 'location', 'pageInfo', 'total', 'shippingService', 'status', 'date', 'print', 'actions'
+    ]), []);
 
     const processDataForRange = useCallback((range: DateRangePreset) => {
         setProcessing(true);
@@ -121,13 +159,10 @@ const UserOrdersView: React.FC<{ onAdd: () => void }> = ({ onAdd }) => {
             const filtered = permittedOrders.filter(o => {
                 const orderId = (o['Order ID'] || '').toString();
                 if (orderId.includes('Opening_Balance') || orderId.includes('Opening Balance')) return false;
-                
                 if (range === 'all') return true;
-                
                 if (!o.Timestamp) return false;
                 const orderDate = safeParseDate(o.Timestamp);
                 if (!orderDate) return range === 'all'; 
-                
                 if (start && orderDate < start) return false;
                 if (end && orderDate > end) return false;
                 return true;
@@ -135,7 +170,7 @@ const UserOrdersView: React.FC<{ onAdd: () => void }> = ({ onAdd }) => {
             setViewOrders(filtered.sort((a, b) => getTimestamp(b.Timestamp) - getTimestamp(a.Timestamp)));
             setProcessing(false);
         }, 10);
-    }, [permittedOrders, customStart, customEnd]);
+    }, [permittedOrders, customStart, customEnd, getDateBounds]);
 
     useEffect(() => { processDataForRange(dateRange); }, [dateRange, processDataForRange]);
 
@@ -170,7 +205,7 @@ const UserOrdersView: React.FC<{ onAdd: () => void }> = ({ onAdd }) => {
                 setProcessing(false);
             }, 10);
         }
-    }, [drilldownFilters, permittedOrders]);
+    }, [drilldownFilters, permittedOrders, getDateBounds]);
 
     const filteredOrders = useMemo(() => {
         const source = drilldownFilters ? drilldownData : viewOrders;
@@ -194,22 +229,6 @@ const UserOrdersView: React.FC<{ onAdd: () => void }> = ({ onAdd }) => {
         }), { revenue: 0, cost: 0, paid: 0, unpaid: 0 });
     }, [filteredOrders]);
 
-    const topTeams = useMemo(() => {
-        const teamStats: Record<string, number> = {};
-        permittedOrders.forEach(o => {
-            const orderId = (o['Order ID'] || '').toString();
-            if (orderId.includes('Opening_Balance') || orderId.includes('Opening Balance')) return;
-            const tName = (o.Team || 'Unassigned').toString().trim();
-            const { start, end } = getDateBounds(dateRange, customStart, customEnd);
-            const orderDate = safeParseDate(o.Timestamp);
-            if (dateRange !== 'all') {
-                if (!orderDate || (start && orderDate < start) || (end && orderDate > end)) return;
-            }
-            teamStats[tName] = (teamStats[tName] || 0) + (Number(o['Grand Total']) || 0);
-        });
-        return Object.entries(teamStats).map(([name, revenue]) => ({ name, revenue })).sort((a, b) => b.revenue - a.revenue).slice(0, 3);
-    }, [permittedOrders, dateRange, customStart, customEnd]);
-
     const handleSaveEdit = () => { setEditingOrder(null); refreshData(); };
 
     if (!hasPermission('view_order_list')) return (
@@ -229,10 +248,10 @@ const UserOrdersView: React.FC<{ onAdd: () => void }> = ({ onAdd }) => {
         </div>
     );
 
-    if (editingOrder) return <div className="animate-fade-in"><EditOrderPage order={editingOrder} onSaveSuccess={handleSaveEdit} onCancel={() => setEditingOrder(null)} /></div>;
+    if (editingOrder) return <div className="animate-reveal"><EditOrderPage order={editingOrder} onSaveSuccess={handleSaveEdit} onCancel={() => setEditingOrder(null)} /></div>;
 
     if (drilldownFilters) return (
-        <div className="animate-fade-in min-h-screen flex flex-col space-y-6">
+        <div className="animate-reveal min-h-screen flex flex-col space-y-6">
             <div className="flex items-center justify-between bg-white/[0.03] border border-white/5 p-6 rounded-3xl backdrop-blur-xl">
                 <div>
                     <h2 className="text-xl font-bold text-white tracking-tight">Operation Drilldown</h2>
@@ -247,9 +266,20 @@ const UserOrdersView: React.FC<{ onAdd: () => void }> = ({ onAdd }) => {
         </div>
     );
 
-    if (showReport) return <div className="animate-fade-in"><UserSalesPageReport orders={permittedOrders} onBack={() => setShowReport(false)} team={team} onNavigate={(filters) => setDrilldownFilters(filters)} initialFilters={reportFilters} onFilterChange={setReportFilters} /></div>;
+    if (showReport) return <div className="animate-reveal"><UserSalesPageReport orders={permittedOrders} onBack={() => setShowReport(false)} team={team} onNavigate={(filters) => setDrilldownFilters(filters)} initialFilters={reportFilters} onFilterChange={setReportFilters} /></div>;
 
-    if (showShippingReport) return <div className="animate-fade-in min-h-screen"><ShippingReport orders={permittedOrders} appData={appData} dateFilter={dateRange} startDate={customStart} endDate={customEnd} onNavigate={(filters) => { setDrilldownFilters(filters); setShowShippingReport(false); }} onBack={() => setShowShippingReport(false)} /></div>;
+    if (showShippingReport) return (
+        <div className="animate-reveal min-h-screen">
+            {isShippingLoading ? (
+                <div className="flex flex-col items-center justify-center py-40 gap-4 bg-[#020617]">
+                    <Spinner size="lg" />
+                    <p className="text-[10px] font-black text-amber-500 uppercase tracking-[0.4em] animate-pulse">Loading Global Costs...</p>
+                </div>
+            ) : (
+                <ShippingReport orders={globalShippingOrders as any} appData={appData} dateFilter={dateRange} startDate={customStart} endDate={customEnd} onNavigate={(filters) => { setDrilldownFilters(filters); setShowShippingReport(false); }} onBack={() => setShowShippingReport(false)} />
+            )}
+        </div>
+    );
 
     return (
         <div className="flex flex-col space-y-6 pb-32">
@@ -273,64 +303,104 @@ const UserOrdersView: React.FC<{ onAdd: () => void }> = ({ onAdd }) => {
                     border-radius: 2.5rem;
                     overflow: hidden;
                 }
-                .stats-pill-new {
-                    background: rgba(255, 255, 255, 0.03);
-                    border: 1px solid rgba(255, 255, 255, 0.05);
-                    backdrop-filter: blur(10px);
-                    padding: 10px 16px;
-                    border-radius: 1.25rem;
-                    display: flex;
-                    flex-direction: column;
-                    min-width: 110px;
-                }
             `}</style>
 
-            <div className="flex items-center justify-between bg-white/[0.02] p-3 md:p-6 rounded-2xl md:rounded-[2.5rem] border border-white/5 backdrop-blur-xl mb-2">
-                <div className="flex items-center gap-3">
-                    <div className="w-1 h-8 bg-blue-600 rounded-full shadow-[0_0_10px_rgba(37,99,235,0.5)]"></div>
-                    <div className="flex flex-col">
-                        <div className="flex items-center gap-2">
-                            <h3 className="text-sm md:text-lg font-black text-white uppercase tracking-tight leading-none">Operational Portal</h3>
-                            {hasPermission('view_order_list') && (
-                                <div className="flex items-center gap-1 bg-emerald-500/10 px-2 py-0.5 rounded-full border border-emerald-500/20">
-                                    <span className="w-1 h-1 bg-emerald-500 rounded-full animate-pulse"></span>
-                                    <span className="text-[7px] font-black text-emerald-500 uppercase tracking-widest">Live</span>
-                                </div>
-                            )}
-                        </div>
-                        <div className="flex items-center gap-2 mt-0.5">
-                            <span className="text-[8px] md:text-[10px] font-bold text-blue-400/80 uppercase tracking-widest">Team: {team}</span>
-                            <span className="text-[8px] text-gray-600 font-medium">Synced {lastSync.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' })}</span>
+            <div className="hidden md:flex items-center justify-between bg-white/[0.02] p-2.5 md:p-6 rounded-2xl md:rounded-[2.5rem] border border-white/5 backdrop-blur-xl mb-2.5">
+                <div className="flex flex-col gap-0.5">
+                    <div className="flex items-center gap-2">
+                        <div className="w-1 h-3 bg-blue-600 rounded-full"></div>
+                        <h3 className="text-[10px] md:text-lg font-black text-white uppercase tracking-widest leading-none">Operational Portal</h3>
+                        <div className="flex items-center gap-1 bg-emerald-500/10 px-1.5 py-0.5 rounded border border-emerald-500/10">
+                            <span className="w-1 h-1 bg-emerald-500 rounded-full animate-pulse"></span>
+                            <span className="text-[6px] font-black text-emerald-500 uppercase tracking-widest">Live</span>
                         </div>
                     </div>
+                    <div className="flex items-center gap-2.5 ml-3.5">
+                        <div className="flex items-center gap-1">
+                            <span className="text-[8px] font-bold text-blue-400/40 uppercase tracking-tighter">Team:</span>
+                            <span className="text-[8px] font-black text-blue-400 uppercase tracking-widest">{team}</span>
+                        </div>
+                        <span className="text-[7px] text-gray-600 font-bold uppercase tracking-tight">Synced {lastSync.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' })}</span>
+                    </div>
                 </div>
-                <div className="bg-white/5 border border-white/10 px-3 py-1.5 rounded-xl shadow-xl">
-                    <span className="text-[10px] md:text-xs font-black text-blue-400">{filteredOrders.length} <span className="text-gray-500 ml-0.5">Orders</span></span>
+                <div className="flex flex-col items-end px-3 py-1 bg-white/5 border border-white/10 rounded-xl">
+                    <span className="text-[11px] font-black text-blue-400 leading-none">{filteredOrders.length}</span>
+                    <span className="text-[6px] font-bold text-gray-500 uppercase tracking-widest mt-0.5">Orders</span>
                 </div>
             </div>
 
-            {/* NEW DESIGN: Non-scrollable 2x2 Grid for Mobile Stats */}
-            <div className="md:hidden grid grid-cols-2 gap-2 mb-2">
-                <div className="stats-pill-new !min-w-0">
-                    <span className="text-[8px] font-black text-blue-500 uppercase tracking-widest mb-0.5">Revenue</span>
-                    <span className="text-sm font-black text-white tracking-tighter">
-                        {hasPermission('view_revenue') ? `$${filteredMetrics.revenue.toLocaleString(undefined, { maximumFractionDigits: 0 })}` : '••••'}
-                    </span>
+            {/* MOBILE PERFORMANCE OVERVIEW - Ultra Compact Redesign */}
+            <div className="md:hidden grid grid-cols-12 gap-2 mb-3 animate-reveal">
+                {/* My Team Revenue Card - Sleek Focal Point */}
+                <div className="col-span-7 metric-card-pro rounded-3xl p-3 flex flex-col justify-between relative overflow-hidden border-blue-500/20 bg-blue-600/5">
+                    <div className="absolute top-0 right-0 w-24 h-24 bg-blue-600/10 blur-[40px] -mr-8 -mt-8"></div>
+                    <div className="flex justify-between items-start mb-4 relative z-10">
+                        <div className="flex flex-col gap-0.5">
+                            <h2 className="text-[11px] font-black text-white uppercase tracking-widest leading-none truncate max-w-[90px] italic">{team}</h2>
+                            <span className="text-[7px] font-bold text-blue-500/60 uppercase tracking-widest">Growth Node</span>
+                        </div>
+                        <div className="flex flex-col items-end leading-none">
+                            <div className="flex items-center gap-1">
+                                <div className="w-1 h-1 rounded-full bg-emerald-500 animate-pulse"></div>
+                                <span className="text-[10px] font-black text-white">{filteredOrders.length}</span>
+                            </div>
+                            <span className="text-[6px] font-bold text-gray-600 uppercase tracking-widest mt-0.5">Orders</span>
+                        </div>
+                    </div>
+                    <div className="flex flex-col relative z-10">
+                        <span className="text-[8px] font-black text-gray-500 uppercase tracking-[0.2em] mb-1">Total Revenue</span>
+                        <div className="flex items-baseline gap-1">
+                            <span className="text-[10px] font-black text-blue-500 italic">$</span>
+                            <h3 className="text-3xl font-black text-white tracking-tighter italic leading-none drop-shadow-[0_0_10px_rgba(59,130,246,0.3)]">
+                                {hasPermission('view_revenue') ? filteredMetrics.revenue.toLocaleString(undefined, { maximumFractionDigits: 0 }) : '••••'}
+                            </h3>
+                        </div>
+                    </div>
                 </div>
-                <div className="stats-pill-new !min-w-0">
-                    <span className="text-[8px] font-black text-orange-500 uppercase tracking-widest mb-0.5">Cost</span>
-                    <span className="text-sm font-black text-white tracking-tighter">
-                        {hasPermission('view_revenue') ? `$${filteredMetrics.cost.toLocaleString(undefined, { maximumFractionDigits: 0 })}` : '••••'}
-                    </span>
+
+                {/* Top 3 Teams Leaderboard Card - Matching Slim Style */}
+                <div className="col-span-5 metric-card-pro rounded-3xl p-3 relative overflow-hidden border-amber-500/10">
+                    <div className="flex flex-col gap-2">
+                        <span className="text-[8px] font-black text-amber-500 uppercase tracking-widest leading-none pb-1 border-b border-white/5">Ranking</span>
+                        {isRankingLoading ? (
+                            <div className="py-2 flex items-center justify-center"><Spinner size="xs" /></div>
+                        ) : globalRanking.length > 0 ? globalRanking.slice(0, 3).map((t, i) => (
+                            <div key={t.name} className="flex items-center justify-between gap-2 relative z-10 leading-none">
+                                <div className="flex items-center gap-1.5 min-w-0">
+                                    <div className={`w-3.5 h-3.5 rounded-md flex items-center justify-center text-[7px] font-black italic ${
+                                        i === 0 ? 'bg-amber-500 text-black shadow-[0_0_8px_rgba(245,158,11,0.3)]' : 
+                                        i === 1 ? 'bg-slate-300 text-black' : 
+                                        'bg-orange-600/50 text-white'
+                                    }`}>{i+1}</div>
+                                    <span className="text-[9px] font-bold text-white/70 truncate uppercase tracking-tighter">{t.name}</span>
+                                </div>
+                                <span className="text-[9px] font-black text-white italic">{(t.revenue/1000).toFixed(1)}k</span>
+                            </div>
+                        )) : (
+                            <div className="py-1 text-center"><span className="text-[7px] font-bold text-gray-600 uppercase italic">Empty</span></div>
+                        )}
+                    </div>
                 </div>
-                <div className="stats-pill-new !min-w-0 !flex-row !justify-between !items-center !py-2">
-                    <span className="text-[8px] font-black text-emerald-500 uppercase tracking-widest">Paid</span>
-                    <span className="text-sm font-black text-white">{filteredMetrics.paid}</span>
-                </div>
-                <div className="stats-pill-new !min-w-0 !flex-row !justify-between !items-center !py-2">
-                    <span className="text-[8px] font-black text-red-500 uppercase tracking-widest">Unpaid</span>
-                    <span className="text-sm font-black text-white">{filteredMetrics.unpaid}</span>
-                </div>
+            </div>
+
+            {/* MOBILE ACTION BUTTONS - Compact Single Row */}
+            <div className="md:hidden flex items-center gap-2 overflow-x-auto hide-scrollbar pb-1 mb-2">
+                {hasPermission('view_revenue') && (
+                    <>
+                        <button onClick={() => setShowReport(true)} className="flex items-center gap-2 px-4 py-2.5 bg-blue-600/10 active:bg-blue-600/20 text-blue-400 rounded-xl border border-blue-500/10 transition-all shrink-0">
+                            <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2.5}><path d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" /></svg>
+                            <span className="text-[9px] font-black uppercase tracking-widest">Page Report</span>
+                        </button>
+                        <button onClick={() => setShowShippingReport(true)} className="flex items-center gap-2 px-4 py-2.5 bg-amber-600/10 active:bg-amber-600/20 text-amber-400 rounded-xl border border-amber-500/10 transition-all shrink-0">
+                            <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2.5}><path d="M13 16V6a1 1 0 00-1-1H4a1 1 0 00-1 1v10a1 1 0 001 1h8a1 1 0 001-1z"/><path d="M20 8h-2m2 4h-2m-2-4h.01M17 16h.01" /></svg>
+                            <span className="text-[9px] font-black uppercase tracking-widest">Shipping Cost</span>
+                        </button>
+                    </>
+                )}
+                <button onClick={() => setIsDeliveryModalOpen(true)} className="flex items-center gap-2 px-4 py-2.5 bg-emerald-600/10 active:bg-emerald-600/20 text-emerald-400 rounded-xl border border-emerald-500/10 transition-all shrink-0">
+                    <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2.5}><path d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" /></svg>
+                    <span className="text-[9px] font-black uppercase tracking-widest">Delivery List</span>
+                </button>
             </div>
 
             <div className="grid grid-cols-1 lg:grid-cols-12 gap-4">
@@ -338,7 +408,9 @@ const UserOrdersView: React.FC<{ onAdd: () => void }> = ({ onAdd }) => {
                     <div className="col-span-2 metric-card-pro rounded-3xl p-5 relative overflow-hidden group">
                         <div className="absolute top-0 right-0 w-32 h-32 bg-blue-600/10 blur-[50px] -mr-16 -mt-16 group-hover:bg-blue-600/20 transition-colors"></div>
                         <p className="text-[10px] font-black text-blue-500 uppercase tracking-[0.2em] mb-1">Total Revenue</p>
-                        <h3 className="text-3xl font-black text-white tracking-tighter">{hasPermission('view_revenue') ? `$${filteredMetrics.revenue.toLocaleString(undefined, { maximumFractionDigits: 0 })}` : '••••••'}</h3>
+                        <h3 className="text-3xl font-black text-white tracking-tighter italic">
+                            {hasPermission('view_revenue') ? filteredMetrics.revenue.toLocaleString(undefined, { maximumFractionDigits: 0 }) : '••••••'}
+                        </h3>
                         <div className="mt-3 flex items-center gap-2">
                             <span className="flex h-2 w-2 rounded-full bg-emerald-500 animate-pulse"></span>
                             <span className="text-[9px] font-bold text-emerald-500/80 uppercase">Live Processing</span>
@@ -352,22 +424,35 @@ const UserOrdersView: React.FC<{ onAdd: () => void }> = ({ onAdd }) => {
                     </div>
                     <div className="metric-card-pro rounded-3xl p-5 relative overflow-hidden group">
                         <div className="absolute top-0 right-0 w-24 h-24 bg-amber-600/10 blur-[40px] -mr-12 -mt-12 group-hover:bg-amber-600/20 transition-colors"></div>
-                        <p className="text-[10px] font-black text-amber-500 uppercase tracking-[0.2em] mb-1">Team Rank</p>
+                        <p className="text-[10px] font-black text-amber-500 uppercase tracking-[0.2em] mb-1">Top 3 Teams</p>
                         <div className="flex flex-col gap-1.5 mt-1">
-                            {topTeams.slice(0, 2).map((t, i) => (
+                            {globalRanking.length > 0 ? globalRanking.slice(0, 3).map((t, i) => (
                                 <div key={t.name} className="flex items-center justify-between border-l-2 border-white/10 pl-2">
                                     <span className="text-[9px] font-bold text-gray-400 uppercase truncate w-16">{t.name}</span>
                                     <span className="text-[10px] font-black text-white">${(t.revenue/1000).toFixed(1)}k</span>
                                 </div>
-                            ))}
+                            )) : (
+                                <p className="text-[9px] font-bold text-gray-600 uppercase italic">Ranking...</p>
+                            )}
                         </div>
                     </div>
                 </div>
 
                 <div className="lg:col-span-4 flex flex-col gap-2">
-                    <div className="relative group">
-                        <input type="text" placeholder="Search records..." value={searchQuery} onChange={e => setSearchQuery(e.target.value)} className="w-full bg-white/[0.03] border border-white/5 rounded-xl py-3 pl-10 pr-4 text-[12px] font-bold text-white placeholder:text-gray-600 focus:bg-white/[0.06] focus:border-blue-500/30 transition-all outline-none" />
-                        <svg className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-600 group-focus-within:text-blue-500 transition-colors" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}><path d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" /></svg>
+                    <div className="flex gap-2">
+                        <div className="relative group flex-1">
+                            <input type="text" placeholder="Search records..." value={searchQuery} onChange={e => setSearchQuery(e.target.value)} className="w-full bg-white/[0.03] border border-white/5 rounded-xl py-3 pl-10 pr-4 text-[12px] font-bold text-white placeholder:text-gray-600 focus:bg-white/[0.06] focus:border-blue-500/30 transition-all outline-none" />
+                            <svg className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-600 group-focus-within:text-blue-500 transition-colors" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}><path d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" /></svg>
+                        </div>
+                        {/* View Mode Toggle for Mobile */}
+                        <div className="md:hidden flex bg-white/5 p-1 rounded-xl border border-white/10">
+                            <button onClick={() => setViewMode('card')} className={`p-2 rounded-lg transition-all ${viewMode === 'card' ? 'bg-blue-600 text-white shadow-lg' : 'text-gray-500 hover:text-white'}`}>
+                                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M4 5a1 1 0 011-1h4a1 1 0 011 1v5a1 1 0 01-1 1H5a1 1 0 01-1-1V5zM14 5a1 1 0 011-1h4a1 1 0 011 1v5a1 1 0 01-1 1h-4a1 1 0 01-1-1V5zM4 14a1 1 0 011-1h4a1 1 0 011 1v5a1 1 0 01-1 1H5a1 1 0 01-1-1v-5zM14 14a1 1 0 011-1h4a1 1 0 011 1v5a1 1 0 01-1 1h-4a1 1 0 01-1-1v-5z" /></svg>
+                            </button>
+                            <button onClick={() => setViewMode('list')} className={`p-2 rounded-lg transition-all ${viewMode === 'list' ? 'bg-blue-600 text-white shadow-lg' : 'text-gray-500 hover:text-white'}`}>
+                                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M4 6h16M4 10h16M4 14h16M4 18h16" /></svg>
+                            </button>
+                        </div>
                     </div>
                     <div className="flex items-center gap-1.5 overflow-x-auto hide-scrollbar">
                         {(['today', 'this_week', 'this_month', 'all'] as const).map(p => (
@@ -379,7 +464,7 @@ const UserOrdersView: React.FC<{ onAdd: () => void }> = ({ onAdd }) => {
                 </div>
             </div>
 
-            <div className="flex flex-wrap items-center gap-3">
+            <div className="hidden md:flex flex-wrap items-center gap-3">
                 {hasPermission('view_revenue') && (
                     <>
                         <button onClick={() => setShowReport(true)} className="flex items-center gap-2.5 px-5 py-3 bg-blue-600/10 hover:bg-blue-600/20 text-blue-400 rounded-2xl border border-blue-500/20 transition-all active:scale-95 group">
@@ -398,7 +483,7 @@ const UserOrdersView: React.FC<{ onAdd: () => void }> = ({ onAdd }) => {
                 </button>
             </div>
 
-            <div className="relative animate-fade-in">
+            <div className="relative animate-reveal">
                 {processing ? (
                     <div className="flex flex-col items-center justify-center py-32 gap-4">
                         <Spinner size="lg" />
@@ -416,7 +501,7 @@ const UserOrdersView: React.FC<{ onAdd: () => void }> = ({ onAdd }) => {
                     </div>
                 ) : (
                     <div className="modern-table-container shadow-2xl">
-                        <OrdersList orders={filteredOrders} showActions={true} visibleColumns={userVisibleColumns} onEdit={setEditingOrder} />
+                        <OrdersList orders={filteredOrders} showActions={true} visibleColumns={userVisibleColumns} onEdit={setEditingOrder} viewMode={viewMode} />
                     </div>
                 )}
             </div>

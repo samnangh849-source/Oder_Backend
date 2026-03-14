@@ -1540,6 +1540,62 @@ func handleUpdateFormulaReport(c *gin.Context) { c.JSON(200, gin.H{"status": "su
 func handleClearCache(c *gin.Context) { c.JSON(200, gin.H{"status": "success"}) }
 func handleAdminUpdateProductTags(c *gin.Context) { c.JSON(200, gin.H{"status": "success"}) }
 
+func handleGetTeamSalesRanking(c *gin.Context) {
+	var results []struct {
+		Team    string  `gorm:"column:team" json:"Team"`
+		Revenue float64 `gorm:"column:revenue" json:"Revenue"`
+	}
+	
+	// Explicitly select columns and handle potential nulls
+	err := DB.Model(&Order{}).
+		Select("team, SUM(grand_total) as revenue").
+		Where("order_id NOT LIKE ? AND order_id NOT LIKE ?", "%Opening_Balance%", "%Opening Balance%").
+		Where("team IS NOT NULL AND team <> ?", "").
+		Group("team").
+		Order("revenue DESC").
+		Limit(10).
+		Scan(&results).Error
+
+	if err != nil {
+		c.JSON(500, gin.H{"status": "error", "message": err.Error()})
+		return
+	}
+
+	// Ensure we return an empty array instead of null if no results
+	if results == nil {
+		results = make([]struct {
+			Team    string  `gorm:"column:team" json:"Team"`
+			Revenue float64 `gorm:"column:revenue" json:"Revenue"`
+		}, 0)
+	}
+
+	c.JSON(200, gin.H{"status": "success", "data": results})
+}
+
+func handleGetGlobalShippingCosts(c *gin.Context) {
+	var results []struct {
+		OrderID      string  `json:"Order ID"`
+		Timestamp    string  `json:"Timestamp"`
+		Team         string  `json:"Team"`
+		InternalCost float64 `json:"Internal Cost"`
+		ShippingMethod string `json:"Internal Shipping Method"`
+	}
+	
+	// Select only necessary fields for all orders
+	err := DB.Model(&Order{}).
+		Select("order_id, timestamp, team, internal_cost, internal_shipping_method").
+		Where("order_id NOT LIKE ? AND order_id NOT LIKE ?", "%Opening_Balance%", "%Opening Balance%").
+		Order("timestamp DESC").
+		Scan(&results).Error
+
+	if err != nil {
+		c.JSON(500, gin.H{"status": "error", "message": err.Error()})
+		return
+	}
+
+	c.JSON(200, gin.H{"status": "success", "data": results})
+}
+
 func handleUpdateProfile(c *gin.Context) {
 	var req struct { UserName string `json:"userName"`; NewData map[string]interface{} `json:"newData"` }
 	if err := c.ShouldBindJSON(&req); err != nil { c.Error(err); return }
@@ -1686,6 +1742,8 @@ func main() {
 		protected.GET("/permissions", handleGetUserPermissions)
 		protected.GET("/roles", handleGetRoles)
 		protected.GET("/orders", RequirePermission("view_order_list"), handleGetAllOrders)
+		protected.GET("/teams/ranking", handleGetTeamSalesRanking)
+		protected.GET("/teams/shipping-costs", handleGetGlobalShippingCosts)
 		
 		chat := protected.Group("/chat")
 		chat.GET("/messages", handleGetChatMessages); chat.POST("/send", handleSendChatMessage); chat.POST("/delete", handleDeleteChatMessage)

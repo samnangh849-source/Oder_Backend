@@ -34,15 +34,15 @@ export const DesktopGrandTotalRow: React.FC<DesktopGrandTotalRowProps> = ({ tota
     const check = isVisible;
 
     return (
-        <tr className={`bg-[#0f172a]/95 backdrop-blur-3xl border-y border-blue-500/20 shadow-[0_15px_40px_rgba(0,0,0,0.4)] ${showBorders ? 'divide-x divide-white/5' : ''}`}>
-            {showSelection && <td className="px-1 py-4 w-8"></td>}
+        <tr className={`bg-[#0f172a]/95 backdrop-blur-3xl border-y border-blue-500/20 shadow-[0_15px_40px_rgba(0,0,0,0.4)] transition-all duration-500 ${showBorders ? 'divide-x divide-white/5' : ''}`}>
+            {showSelection && <td className="px-1 py-3 w-8"></td>}
             
             {check('index') && (
-                <td className="px-1 py-4 text-center">
-                    <div className="flex flex-col items-center">
-                        <span className="text-[8px] font-black text-gray-500 uppercase tracking-[0.2em]">{t.volume}</span>
-                        <div className="bg-blue-500/10 px-2 py-0.5 rounded-full border border-blue-500/20 mt-1.5 shadow-[0_0_10px_rgba(59,130,246,0.1)]">
-                            <span className="font-black text-blue-400 text-xs leading-none">
+                <td className="px-1 py-3 text-center">
+                    <div className="flex flex-col items-center justify-center h-full">
+                        <span className="text-[7px] font-black text-blue-500/50 uppercase tracking-[0.3em] mb-1">Vol</span>
+                        <div className="bg-blue-500/10 px-2 py-0.5 rounded-lg border border-blue-500/20">
+                            <span className="font-black text-blue-400 text-[11px] tabular-nums">
                                 {totals.count}
                             </span>
                         </div>
@@ -50,58 +50,58 @@ export const DesktopGrandTotalRow: React.FC<DesktopGrandTotalRowProps> = ({ tota
                 </td>
             )}
             
-            {check('actions') && <td className="px-4 py-4"></td>}
+            {check('actions') && <td className="px-4 py-3 text-center">
+                <span className="text-[8px] font-black text-gray-700 uppercase tracking-widest italic">Aggregate</span>
+            </td>}
             
             {check('customerName') && (
-                <td className="px-6 py-4">
+                <td className="px-6 py-3">
                     <div className="flex items-center gap-3">
-                        <div className="w-1.5 h-10 bg-gradient-to-b from-blue-600 to-indigo-600 rounded-full shadow-[0_0_15px_rgba(37,99,235,0.4)]"></div>
+                        <div className="w-1 h-8 bg-gradient-to-b from-blue-600 via-indigo-400 to-transparent rounded-full"></div>
                         <div className="flex flex-col">
-                            <span className="font-black text-white uppercase tracking-[0.15em] text-[13px] leading-tight">
+                            <h4 className="font-black text-white uppercase tracking-widest text-[14px] italic leading-none">
                                 {t.grand_total}
-                            </span>
-                            <div className="flex items-center gap-1.5 mt-1">
-                                <span className="w-1.5 h-1.5 rounded-full bg-blue-500 animate-pulse"></span>
-                                <span className="font-bold text-blue-400/50 text-[9px] leading-tight uppercase tracking-[0.2em]">
-                                    Active Orders
-                                </span>
+                            </h4>
+                            <div className="flex items-center gap-1.5 mt-1.5">
+                                <span className="w-1 h-1 rounded-full bg-emerald-500 shadow-[0_0_5px_#10b981]"></span>
+                                <span className="font-bold text-gray-500 text-[8px] uppercase tracking-widest">Live Flow</span>
                             </div>
                         </div>
                     </div>
                 </td>
             )}
             
-            {check('productInfo') && <td className="px-6 py-4"></td>}
-            {check('location') && <td className="px-6 py-4"></td>}
-            {check('pageInfo') && <td className="px-6 py-4"></td>}
-            {check('brandSales') && <td className="px-6 py-4"></td>}
-            {check('fulfillment') && <td className="px-6 py-4"></td>}
+            {check('productInfo') && <td className="px-6 py-3"></td>}
+            {check('location') && <td className="px-6 py-3"></td>}
+            {check('pageInfo') && <td className="px-6 py-3"></td>}
+            {check('brandSales') && <td className="px-6 py-3"></td>}
+            {check('fulfillment') && <td className="px-6 py-3"></td>}
             
             {check('total') && (
-                <td className="px-6 py-4 min-w-[160px]">
-                    <div className="flex flex-col items-start overflow-hidden">
-                        <span className="text-[8px] font-black text-emerald-500/50 uppercase tracking-[0.2em] leading-none mb-2 whitespace-nowrap">{t.total_revenue}</span>
-                        <div className="flex items-baseline gap-1">
-                            <span className="text-emerald-500 font-black text-xs">$</span>
-                            <span className="font-black text-white tracking-tighter text-2xl leading-none whitespace-nowrap tabular-nums drop-shadow-[0_0_15px_rgba(16,185,129,0.3)]">
-                                {totals.grandTotal.toLocaleString(undefined, { minimumFractionDigits: 2 })}
+                <td className="px-6 py-3">
+                    <div className="flex flex-col items-start">
+                        <span className="text-[8px] font-black text-emerald-500 uppercase tracking-widest leading-none mb-1.5 opacity-60">Revenue</span>
+                        <div className="flex items-baseline gap-0.5">
+                            <span className="text-emerald-500 font-black text-[10px] italic">$</span>
+                            <span className="font-black text-white tracking-tighter text-[22px] leading-none tabular-nums drop-shadow-[0_0_10px_rgba(16,185,129,0.2)] italic">
+                                {totals.grandTotal.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                             </span>
                         </div>
                     </div>
                 </td>
             )}
             
-            {check('shippingService') && <td className="px-6 py-4"></td>}
-            {check('driver') && <td className="px-6 py-4"></td>}
+            {check('shippingService') && <td className="px-6 py-3"></td>}
+            {check('driver') && <td className="px-6 py-3"></td>}
             
             {check('shippingCost') && (
-                <td className="px-6 py-4 min-w-[160px]">
-                    <div className="flex flex-col items-start overflow-hidden">
-                        <span className="text-[8px] font-black text-orange-500/50 uppercase tracking-[0.2em] leading-none mb-2 whitespace-nowrap">{t.total_cost}</span>
-                        <div className="flex items-baseline gap-1 opacity-90">
-                            <span className="text-orange-500 font-black text-xs">$</span>
-                            <span className="font-black text-white tracking-tighter text-xl leading-none whitespace-nowrap tabular-nums">
-                                {totals.internalCost.toLocaleString(undefined, { minimumFractionDigits: 2 })}
+                <td className="px-6 py-3">
+                    <div className="flex flex-col items-start opacity-80">
+                        <span className="text-[8px] font-black text-orange-500 uppercase tracking-widest leading-none mb-1.5 opacity-60">Logistics</span>
+                        <div className="flex items-baseline gap-0.5">
+                            <span className="text-orange-500 font-black text-[10px] italic">$</span>
+                            <span className="font-black text-white tracking-tighter text-[18px] leading-none tabular-nums italic">
+                                {totals.internalCost.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                             </span>
                         </div>
                     </div>
@@ -109,33 +109,25 @@ export const DesktopGrandTotalRow: React.FC<DesktopGrandTotalRowProps> = ({ tota
             )}
             
             {check('status') && (
-                <td className="px-6 py-4">
-                    <div className="flex items-center gap-4 justify-center">
-                        {totals.paidCount > 0 && (
-                            <div className="flex flex-col items-center">
-                                <div className="flex items-center gap-1.5 bg-emerald-500/10 px-2.5 py-1.5 rounded-lg border border-emerald-500/20 shadow-inner">
-                                    <span className="font-black text-emerald-400 text-xs leading-none">{totals.paidCount}</span>
-                                </div>
-                                <span className="text-[7px] font-black text-emerald-500/40 uppercase mt-1 tracking-widest">Paid</span>
-                            </div>
-                        )}
-                        {totals.unpaidCount > 0 && (
-                            <div className="flex flex-col items-center">
-                                <div className="flex items-center gap-1.5 bg-red-500/10 px-2.5 py-1.5 rounded-lg border border-red-500/20 shadow-inner">
-                                    <span className="font-black text-red-400 text-xs leading-none">{totals.unpaidCount}</span>
-                                </div>
-                                <span className="text-[7px] font-black text-red-500/40 uppercase mt-1 tracking-widest">Unpaid</span>
-                            </div>
-                        )}
+                <td className="px-6 py-3">
+                    <div className="flex items-center gap-3 justify-center">
+                        <div className="flex flex-col items-center bg-white/[0.02] px-3 py-1.5 rounded-2xl border border-white/5">
+                            <span className="font-black text-emerald-400 text-[13px] tabular-nums leading-none">{totals.paidCount}</span>
+                            <span className="text-[6px] font-black text-gray-600 uppercase mt-1 tracking-widest">Paid</span>
+                        </div>
+                        <div className="flex flex-col items-center bg-white/[0.02] px-3 py-1.5 rounded-2xl border border-white/5">
+                            <span className="font-black text-red-400 text-[13px] tabular-nums leading-none">{totals.unpaidCount}</span>
+                            <span className="text-[6px] font-black text-gray-600 uppercase mt-1 tracking-widest">Unpaid</span>
+                        </div>
                     </div>
                 </td>
             )}
 
-            {check('date') && <td className="px-4 py-4"></td>}
-            {check('note') && <td className="px-6 py-4"></td>}
-            {check('print') && <td className="px-4 py-4"></td>}
-            {check('check') && <td className="px-2 py-4"></td>}
-            {check('orderId') && <td className="px-2 py-4"></td>}
+            {check('date') && <td className="px-4 py-3"></td>}
+            {check('note') && <td className="px-6 py-3"></td>}
+            {check('print') && <td className="px-4 py-3"></td>}
+            {check('check') && <td className="px-2 py-3"></td>}
+            {check('orderId') && <td className="px-2 py-3"></td>}
         </tr>
     );
 };

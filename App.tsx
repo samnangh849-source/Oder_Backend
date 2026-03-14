@@ -240,11 +240,11 @@ const AppContent: React.FC = () => {
             };
             if (token) headers['Authorization'] = `Bearer ${token}`;
 
-            // Try /api/admin/orders first, then fallback to /api/orders if 404
+            // Try /api/admin/orders first, then fallback to /api/orders if not authorized or not found
             let endpoint = `${WEB_APP_URL}/api/admin/orders`;
             let response = await fetch(endpoint, { headers });
             
-            if (response.status === 404) {
+            if (response.status === 404 || response.status === 403 || response.status === 401) {
                 endpoint = `${WEB_APP_URL}/api/orders`;
                 response = await fetch(endpoint, { headers });
             }
@@ -336,15 +336,18 @@ const AppContent: React.FC = () => {
         setAppState('role_selection');
     };
 
-    const shouldShowHeader = useMemo(() => appState !== 'admin_dashboard', [appState]);
+    const shouldShowHeader = useMemo(() => {
+        if (appState === 'login') return false;
+        return true;
+    }, [appState]);
 
     const containerClass = useMemo(() => 
-        (appState === 'admin_dashboard' || appState === 'role_selection') ? 'w-full' : 'w-full px-2 sm:px-6', 
-    [appState]);
+        (appState === 'admin_dashboard' || appState === 'role_selection' || (appState === 'user_journey' && !selectedTeam)) ? 'w-full' : 'w-full px-2 sm:px-6', 
+    [appState, selectedTeam]);
 
     const paddingClass = useMemo(() => {
-        if (appState === 'role_selection' || appState === 'login') return 'pt-0 pb-0';
-        const basePadding = isMobile ? 'pt-20' : (appState === 'user_journey' || appState === 'create_order' ? 'pt-16' : 'pt-24');
+        if (appState === 'login') return 'pt-0 pb-0';
+        const basePadding = isMobile ? 'pt-20' : (appState === 'user_journey' || appState === 'create_order' || appState === 'role_selection' ? 'pt-16' : 'pt-24');
         return `${shouldShowHeader ? basePadding : 'pt-0'} pb-24 md:pb-8`;
     }, [appState, shouldShowHeader, isMobile]);
 
@@ -395,16 +398,24 @@ const AppContent: React.FC = () => {
 
     return (
         <AppContext.Provider value={legacyContextValue as any}>
-            <div className="h-full w-full relative z-10 overflow-hidden">
+            {/* GLOBAL PREMIUM BACKGROUND - Dynamic Viewport Fixed */}
+            <div className="fixed inset-0 w-screen h-[100dvh] overflow-hidden pointer-events-none z-0 bg-[#020617]">
+                <div className="absolute top-[-10%] left-[-10%] w-[100%] sm:w-[70%] h-[60%] sm:h-[70%] bg-blue-600/15 rounded-full blur-[80px] sm:blur-[120px] animate-pulse"></div>
+                <div className="absolute bottom-[-10%] right-[-10%] w-[100%] sm:w-[60%] h-[60%] bg-indigo-600/15 rounded-full blur-[80px] sm:blur-[120px]" style={{ animationDelay: '3s' }}></div>
+                <div className="absolute top-[20%] right-[10%] w-[50%] sm:w-[40%] h-[40%] bg-emerald-500/5 rounded-full blur-[60px] sm:blur-[100px]" style={{ animationDelay: '1.5s' }}></div>
+                <div className="absolute inset-0 bg-[url('https://www.transparenttextures.com/patterns/carbon-fibre.png')] opacity-[0.02] mix-blend-overlay"></div>
+            </div>
+
+            <div className="relative z-10 flex flex-col h-[100dvh] w-full overflow-hidden">
                 <BackgroundMusic />
-                <Suspense fallback={<div className="flex h-full items-center justify-center"><Spinner size="lg" /></div>}>
+                <Suspense fallback={<div className="flex h-full items-center justify-center bg-transparent"><Spinner size="lg" /></div>}>
                     {appState === 'confirm_delivery' ? (
                         <DeliveryAgentView orderIds={confirmIds} returnOrderIds={returnIds} failedOrderIds={failedIdsParam} storeName={confirmStore} />
                     ) : currentUser && appState !== 'login' ? (
                         <>
                             {originalAdminUser && <ImpersonationBanner />}
                             {shouldShowHeader && <Header appState={appState} onBackToRoleSelect={() => setAppState('role_selection')} />}
-                            <main className={`${containerClass} ${paddingClass} transition-all duration-300 ${appState === 'fulfillment' ? 'h-full overflow-hidden' : 'h-full overflow-y-auto custom-scrollbar'}`}>
+                            <main className={`${containerClass} ${paddingClass} transition-all duration-300 ${appState === 'fulfillment' ? 'h-full overflow-hidden' : 'h-full overflow-y-auto custom-scrollbar'} ${appState === 'role_selection' || (appState === 'user_journey' && !selectedTeam) ? 'bg-transparent' : ''}`}>
                                 {appState === 'admin_dashboard' && <AdminDashboard />}
                                 {appState === 'user_journey' && <UserJourney onBackToRoleSelect={() => setAppState('role_selection')} />}
                                 {appState === 'create_order' && <CreateOrderPage team={selectedTeam} onSaveSuccess={() => setAppState('user_journey')} onCancel={() => setAppState('user_journey')} />}
