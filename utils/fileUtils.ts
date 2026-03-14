@@ -40,7 +40,7 @@ export const fileToDataUrl = (file: Blob): Promise<string> => {
  * @param type The type of content, 'image' for image URLs, 'audio' for audio download links.
  * @returns A processed, directly usable URL or a fallback for images.
  */
-export const convertGoogleDriveUrl = (url?: string, type: 'image' | 'audio' = 'image'): string => {
+export const convertGoogleDriveUrl = (url?: string, type: 'image' | 'audio' | 'preview' = 'image'): string => {
     const fallbackImage = 'https://placehold.co/100x100/1f2937/4b5563?text=N/A';
     if (!url || typeof url !== 'string' || url.trim() === '') {
         return type === 'image' ? fallbackImage : '';
@@ -48,57 +48,38 @@ export const convertGoogleDriveUrl = (url?: string, type: 'image' | 'audio' = 'i
 
     const trimmedUrl = url.trim();
 
-    // If it's already a direct Google content URL, return it
-    if (trimmedUrl.includes('lh3.googleusercontent.com') || 
-        trimmedUrl.includes('googleusercontent.com/d/') || 
-        (trimmedUrl.includes('drive.google.com') && (trimmedUrl.includes('uc?') || trimmedUrl.includes('thumbnail?')))) {
-        
-        // Handle Google Auth Profile Pictures (lh3)
+    // 1. Handle direct content URLs
+    if (trimmedUrl.includes('lh3.googleusercontent.com') || trimmedUrl.includes('googleusercontent.com/d/')) {
+        if (type === 'preview') return trimmedUrl; // Direct content is its own preview
         if (trimmedUrl.includes('lh3.googleusercontent.com')) {
-            // If it already has a size parameter like =s96-c, don't append another one
             if (trimmedUrl.includes('=s')) return trimmedUrl;
             return `${trimmedUrl}=s1000`;
         }
         return trimmedUrl;
     }
 
-    // Advanced ID Extraction
+    // 2. Extract File ID
     let fileId = '';
-    
-    if (trimmedUrl.includes('drive.google.com') || trimmedUrl.includes('docs.google.com')) {
-        // 1. Standard patterns: /d/ID, id=ID, open?id=ID, file/d/ID, uc?id=ID
-        const idRegex = /(?:id=|d\/|file\/d\/|open\?id=|thumbnail\?id=|uc\?id=)([^/?&]+)/;
-        const match = trimmedUrl.match(idRegex);
-        if (match && match[1]) {
-            fileId = match[1];
-        } else {
-            // 2. Fallback: Search for any 25-50 character alphanumeric string containing underscores or hyphens
-            // Google Drive IDs are usually exactly 33 chars but can vary
-            const genericIdRegex = /[a-zA-Z0-9_-]{25,50}/;
-            const genericMatch = trimmedUrl.match(genericIdRegex);
-            if (genericMatch) {
-                fileId = genericMatch[0];
-            }
-        }
+    const idRegex = /(?:id=|d\/|file\/d\/|open\?id=|thumbnail\?id=|uc\?id=)([^/?&]+)/;
+    const match = trimmedUrl.match(idRegex);
+    if (match && match[1]) {
+        fileId = match[1];
     } else if (/^[a-zA-Z0-9_-]{25,50}$/.test(trimmedUrl)) {
-        // 3. Handle pure ID strings
         fileId = trimmedUrl;
     }
 
+    // 3. Construct URL based on type
     if (fileId) {
         if (type === 'image') {
             return `https://drive.google.com/thumbnail?id=${fileId}&sz=w1000`;
+        } else if (type === 'preview') {
+            return `https://drive.google.com/file/d/${fileId}/preview`;
         } else {
             return `https://drive.google.com/uc?export=download&id=${fileId}`;
         }
     }
 
-    // Handle non-Google URLs
-    if (trimmedUrl.startsWith('http') || trimmedUrl.startsWith('data:')) {
-        return trimmedUrl;
-    }
-
-    return type === 'image' ? fallbackImage : '';
+    return (trimmedUrl.startsWith('http') || trimmedUrl.startsWith('data:')) ? trimmedUrl : (type === 'image' ? fallbackImage : '');
 };
 
 /**

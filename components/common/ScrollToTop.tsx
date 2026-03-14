@@ -1,5 +1,5 @@
-
 import React, { useState, useEffect } from 'react';
+import { createPortal } from 'react-dom';
 
 const ScrollToTop: React.FC = () => {
     const [isVisible, setIsVisible] = useState(false);
@@ -32,7 +32,7 @@ const ScrollToTop: React.FC = () => {
         });
     };
 
-    return (
+    return createPortal(
         <div className={`fixed bottom-24 right-6 z-[100] transition-all duration-500 transform ${isVisible ? 'scale-100 opacity-100 translate-y-0' : 'scale-0 opacity-0 translate-y-10 pointer-events-none'}`}>
             <button
                 onClick={scrollToTop}
@@ -43,7 +43,8 @@ const ScrollToTop: React.FC = () => {
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 15l7-7 7 7" />
                 </svg>
             </button>
-        </div>
+        </div>,
+        document.body
     );
 };
 

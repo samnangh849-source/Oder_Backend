@@ -1,5 +1,6 @@
 
 import React, { useContext, useEffect } from 'react';
+import { createPortal } from 'react-dom';
 import { AppContext } from '../context/AppContext';
 import { translations } from '../translations';
 import UserOrdersView from '../components/user/UserOrdersView';
@@ -148,15 +149,16 @@ const MobileUserJourney: React.FC<MobileUserJourneyProps> = ({ onBackToRoleSelec
             </div>
 
             {/* Floating Create Button for Mobile */}
-            {hasPermission('create_order') && (
-                <div className="fixed bottom-24 right-6 z-40">
+            {hasPermission('create_order') && createPortal(
+                <div className="fixed bottom-24 right-6 z-[60] pointer-events-none">
                     <button 
                         onClick={handleCreateOrder}
-                        className="w-16 h-16 bg-blue-600 rounded-2xl shadow-[0_15px_30px_rgba(37,99,235,0.4)] flex items-center justify-center text-white active:scale-90 transition-all border border-white/20 animate-bounce"
+                        className="w-16 h-16 bg-blue-600 rounded-2xl shadow-[0_15px_30px_rgba(37,99,235,0.4)] flex items-center justify-center text-white active:scale-90 transition-all border border-white/20 animate-bounce pointer-events-auto"
                     >
                         <svg className="w-8 h-8" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={3}><path d="M12 4v16m8-8H4"/></svg>
                     </button>
-                </div>
+                </div>,
+                document.body
             )}
         </div>
     );

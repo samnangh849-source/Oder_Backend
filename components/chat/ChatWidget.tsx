@@ -94,7 +94,10 @@ const ChatWidget: React.FC<ChatWidgetProps> = ({ isOpen, onClose }) => {
         if (appData.users?.length) { setAllUsers(appData.users); return; }
         setIsUsersLoading(true);
         try {
-            const res = await fetch(`${WEB_APP_URL}/api/users`);
+            const token = localStorage.getItem('token');
+            const res = await fetch(`${WEB_APP_URL}/api/users`, {
+                headers: { 'Authorization': `Bearer ${token}` }
+            });
             const json = await res.json();
             if (json.status === 'success') setAllUsers(json.data);
         } catch (e) { console.warn("User fetch failed", e); }
@@ -166,9 +169,10 @@ const ChatWidget: React.FC<ChatWidgetProps> = ({ isOpen, onClose }) => {
              duration = msg.Content; 
         } else if (normalizedType === 'image') {
              if (!contentUrl && msg.FileID) {
-                 contentUrl = `https://drive.google.com/uc?id=${msg.FileID}`;
+                 // Use thumbnail API which is more reliable for public/shared files
+                 contentUrl = `https://drive.google.com/thumbnail?id=${msg.FileID}&sz=w1000`;
              }
-             contentUrl = contentUrl.startsWith('http') ? contentUrl : convertGoogleDriveUrl(contentUrl);
+             contentUrl = contentUrl.startsWith('http') ? (contentUrl.includes('drive.google.com/uc?') ? convertGoogleDriveUrl(contentUrl) : contentUrl) : convertGoogleDriveUrl(contentUrl);
         }
 
         return {
@@ -233,8 +237,11 @@ const ChatWidget: React.FC<ChatWidgetProps> = ({ isOpen, onClose }) => {
         const previousScrollHeight = container ? container.scrollHeight : 0;
         
         try {
+            const token = localStorage.getItem('token');
             const url = forceFull ? `${WEB_APP_URL}/api/chat/messages` : `${WEB_APP_URL}/api/chat/messages?limit=30`;
-            const res = await fetch(url);
+            const res = await fetch(url, {
+                headers: { 'Authorization': `Bearer ${token}` }
+            });
             const result = await res.json();
             if (result.status === 'success') {
                 const history = result.data.map(transformBackendMessage);
@@ -429,8 +436,8 @@ const ChatWidget: React.FC<ChatWidgetProps> = ({ isOpen, onClose }) => {
         setIsUploading(true);
         try {
             const compressed = await compressImage(file, 'balanced');
-            const base64 = await fileToBase64(compressed);
-            setPendingImage(base64);
+            const dataUrl = await fileToDataUrl(compressed);
+            setPendingImage(dataUrl);
         } catch (e) { alert("Image error"); } 
         finally { setIsUploading(false); }
     };
