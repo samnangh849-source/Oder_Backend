@@ -10,6 +10,7 @@ import Spinner from '../common/Spinner';
 import EditProfileModal from '../common/EditProfileModal';
 import AdvancedSettingsModal from '../common/AdvancedSettingsModal';
 import { requestNotificationPermission, sendSystemNotification } from '../../utils/notificationUtils';
+import BottomNavBar from './BottomNavBar';
 
 interface MobileAdminLayoutProps {
     children: React.ReactNode;
@@ -38,7 +39,7 @@ const MobileAdminLayout: React.FC<MobileAdminLayoutProps> = ({
     setEditProfileModalOpen,
     setAdvancedSettingsOpen
 }) => {
-    const { setIsMobileMenuOpen, currentUser, logout, language, refreshData, setAppState, originalAdminUser } = useContext(AppContext);
+    const { setIsMobileMenuOpen, currentUser, logout, language, refreshData, setAppState, originalAdminUser, isSyncing } = useContext(AppContext);
     const [dropdownOpen, setDropdownOpen] = useState(false);
     const [isRefreshing, setIsRefreshing] = useState(false);
     const dropdownRef = useRef<HTMLDivElement>(null);
@@ -69,7 +70,7 @@ const MobileAdminLayout: React.FC<MobileAdminLayoutProps> = ({
             </div>
 
             {/* Mobile Header - Styled like standard Header.tsx */}
-            <header className="flex-shrink-0 z-[60] bg-[#0f172a]/80 backdrop-blur-2xl border-b border-white/5 px-4 py-2 flex justify-between items-center shadow-lg relative">
+            <header className="flex-shrink-0 z-[60] bg-[#0f172a]/80 backdrop-blur-2xl border-b border-white/5 px-4 py-2 flex justify-between items-center shadow-lg relative" style={originalAdminUser ? { top: "40px" } : {}}>
                 <div className="flex items-center gap-3">
                     <button 
                         onClick={() => setIsMobileMenuOpen(true)}
@@ -84,7 +85,10 @@ const MobileAdminLayout: React.FC<MobileAdminLayoutProps> = ({
                         </div>
                         <div className="min-w-0">
                             <h1 className="text-xs font-black text-white italic uppercase tracking-tighter leading-none">O-System</h1>
-                            <span className="text-[7px] text-blue-500 font-black uppercase tracking-[0.2em] opacity-80">ADMIN PANEL</span>
+                            <div className="flex items-center gap-1 mt-0.5">
+                                <span className={`w-1 h-1 rounded-full ${isSyncing ? 'bg-blue-400 animate-spin' : 'bg-blue-500 opacity-50'}`}></span>
+                                <span className="text-[7px] text-blue-500 font-black uppercase tracking-[0.2em] opacity-80">{isSyncing ? 'Syncing' : 'ADMIN PANEL'}</span>
+                            </div>
                         </div>
                     </div>
                 </div>
@@ -171,14 +175,17 @@ const MobileAdminLayout: React.FC<MobileAdminLayoutProps> = ({
             />
 
             {/* Content Area */}
-            <main className="flex-1 pb-12 px-2 pt-1.5 overflow-y-auto no-scrollbar relative z-10">
+            <main className="flex-1 pb-20 px-2 pt-1.5 overflow-y-auto no-scrollbar relative z-10">
                 <div className="max-w-xl mx-auto">
                     {children}
                 </div>
             </main>
 
+            {/* Mobile Navigation Bar */}
+            <BottomNavBar activeDashboard={activeDashboard} onNavChange={onNavChange} />
+
             {/* Aesthetic Home Indicator Support */}
-            <div className="h-1 w-24 bg-white/5 rounded-full mx-auto mb-4 flex-shrink-0"></div>
+            <div className="h-1 w-24 bg-white/5 rounded-full mx-auto mb-2 flex-shrink-0 opacity-0"></div>
         </div>
     );
 };

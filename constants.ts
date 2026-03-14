@@ -9,11 +9,11 @@ export const WEB_APP_URL = "https://oder-backend-2.onrender.com";
 // Example: "https://my-printer.com/print?id="
 // If this URL is empty, the print button will not be shown.
 // សូមបញ្ចូល URL សម្រាប់ Label Printer នៅទីនេះ (Order ID នឹងត្រូវបានបន្ថែមដោយស្វ័យប្រវត្តិ)
-export const LABEL_PRINTER_URL_BASE = "https://samnangh849-source.github.io/ButtonTest/label_printer.html";
+export const LABEL_PRINTER_URL_BASE = "https://samnangh849-source.github.io/LabelPro/";
 
 // Background Music URL (MP3)
 // អ្នកអាចដាក់ Link ពី Google Drive (Anyone with the link) ឬ Direct URL ផ្សេងទៀតនៅទីនេះ
-export const BACKGROUND_MUSIC_URL = "";
+export const BACKGROUND_MUSIC_URL = "https://assets.mixkit.co/active_storage/sfx/2571/2571-preview.mp3";
 
 // APP LOGO URL
 // សូមប្ដូរ Link រូបភាព Logo របស់អ្នកនៅទីនេះ (Google Drive Link ឬ Direct URL)

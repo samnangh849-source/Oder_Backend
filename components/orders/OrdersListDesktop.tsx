@@ -458,7 +458,7 @@ const OrdersListDesktop: React.FC<OrdersListDesktopProps> = ({
     ]);
 
     return (
-        <div className="bg-[#020617] rounded-[2.5rem] border border-white/5 flex flex-col h-full min-h-[400px] overflow-hidden shadow-2xl relative">
+        <div className="bg-[#020617] rounded-none border border-white/5 flex flex-col h-full min-h-[400px] overflow-hidden shadow-2xl relative">
             <div className="flex-grow overflow-auto custom-scrollbar overscroll-contain">
                 <div style={{ minWidth: `${totalTableWidth}px`, height: '100%', display: 'flex', flexDirection: 'column' }}>
                     {/* Sticky Table Header & Total Row */}

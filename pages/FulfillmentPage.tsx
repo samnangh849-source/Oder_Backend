@@ -33,9 +33,9 @@ const FulfillmentPage: React.FC = () => {
             )}
 
             <div className="flex-1 min-h-0 animate-reveal px-1">
-                {activeSubView === 'dashboard' && <FulfillmentDashboard orders={orders} />}
+                {activeSubView === 'dashboard' && <FulfillmentDashboard orders={orders} onOpenDeliveryList={() => setIsDeliveryModalOpen(true)} />}
                 {activeSubView === 'packaging' && <PackagingView orders={orders} />}
-                {activeSubView === 'delivery' && <DriverDeliveryView />}
+                {activeSubView === 'delivery' && <DriverDeliveryView onOpenDeliveryList={() => setIsDeliveryModalOpen(true)} />}
                 {activeSubView === 'inventory' && <InventoryManagement />}
             </div>
 

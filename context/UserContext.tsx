@@ -1,5 +1,6 @@
 import React, { createContext, useState, useContext, useCallback } from 'react';
 import { User } from '../types';
+import { CacheService, CACHE_KEYS } from '../services/cacheService';
 
 interface UserContextType {
     currentUser: User | null;
@@ -18,7 +19,8 @@ export const UserProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
     const hasPermission = useCallback((feature: string) => {
         if (!currentUser) return false;
-        if (currentUser.IsSystemAdmin) return true;
+        // Superusers (SystemAdmin or Role: Admin) have all permissions
+        if (currentUser.IsSystemAdmin || (currentUser.Role && currentUser.Role.toLowerCase() === 'admin')) return true;
         if (!currentUser.Permissions) return false;
         return currentUser.Permissions.some((p: any) => p.feature === feature && p.isEnabled);
     }, [currentUser]);
@@ -26,6 +28,10 @@ export const UserProvider: React.FC<{ children: React.ReactNode }> = ({ children
     const logout = useCallback(() => {
         setCurrentUser(null);
         setOriginalAdminUser(null);
+        localStorage.removeItem('token');
+        localStorage.removeItem('user');
+        CacheService.remove(CACHE_KEYS.SESSION);
+        window.location.reload();
     }, []);
 
     return (

@@ -7,6 +7,7 @@
 /* iOS Safari Crash Fixes & Performance */
 .fixed, .absolute, .sticky {
   -webkit-transform: translate3d(0, 0, 0); /* Trigger HW Acceleration */
+  transform: translate3d(0, 0, 0);
 }
 
 /* Reduce backdrop-blur impact on mobile */
@@ -47,15 +48,6 @@ body {
     overflow-x: hidden;
     color: #f8fafc;
     min-height: 100vh;
-}
-
-/* Background Flare - Fixed to be behind everything */
-.flare-light {
-    position: fixed;
-    top: 0; left: 0; width: 100%; height: 100%;
-    pointer-events: none;
-    background: radial-gradient(circle at var(--x, 50%) var(--y, 50%), rgba(59, 130, 246, 0.12), transparent 40%);
-    z-index: 0;
 }
 
 #root {

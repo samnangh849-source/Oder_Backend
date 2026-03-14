@@ -159,7 +159,7 @@ const OrderDetailModal: React.FC<OrderDetailModalProps> = ({ order, onClose }) =
                             <div className="space-y-4">
                                 <h3 className="text-[11px] font-black uppercase tracking-[0.25em] text-gray-400 italic ml-2">Digital Proof</h3>
                                 {order['Package Photo URL'] ? (
-                                    <div className="relative group aspect-square rounded-[2.5rem] overflow-hidden border-4 border-white/5 bg-black cursor-pointer shadow-3xl" onClick={() => previewImage(convertGoogleDriveUrl(order['Package Photo URL']!))}>
+                                            <div className="relative group aspect-square rounded-[2.5rem] overflow-hidden border-4 border-white/5 bg-black cursor-pointer shadow-3xl" onClick={() => previewImage(order['Package Photo URL']!)}>
                                         <img src={convertGoogleDriveUrl(order['Package Photo URL']!)} className="w-full h-full object-cover transition-transform duration-700 group-hover:scale-110" alt="Package Proof" />
                                         <div className="absolute inset-0 bg-black/60 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center backdrop-blur-sm">
                                             <div className="w-16 h-16 rounded-full bg-blue-600/80 flex items-center justify-center text-white shadow-2xl scale-75 group-hover:scale-100 transition-transform duration-500">

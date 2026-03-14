@@ -150,6 +150,7 @@ type ChatMessage struct {
 	MessageType string `json:"MessageType"`
 	Content     string `gorm:"type:text" json:"Content"`
 	FileID      string `json:"FileID,omitempty"`
+	AudioData   string `gorm:"-" json:"AudioData,omitempty"`
 }
 
 type EditLog struct { ID uint `gorm:"primaryKey;autoIncrement"`; Timestamp string `json:"Timestamp"`; OrderID string `json:"OrderID"`; Requester string `json:"Requester"`; FieldChanged string `json:"Field Changed"`; OldValue string `json:"Old Value"`; NewValue string `json:"New Value"` }
@@ -1547,13 +1548,14 @@ func handleGetTeamSalesRanking(c *gin.Context) {
 	}
 	
 	// Advanced Query: Use the team from orders if available, otherwise fallback to the user's primary team
-	// This ensures historical data without the 'team' column is still counted
+	// Quoting "user" because it's a reserved word in many databases including PostgreSQL
+	// We also use COALESCE to ensure we don't get NULLs in the final result
 	query := `
 		SELECT 
 			LOWER(TRIM(COALESCE(NULLIF(o.team, ''), u.team, 'Unassigned'))) as team_name, 
-			SUM(o.grand_total) as total_revenue
+			SUM(COALESCE(o.grand_total, 0)) as total_revenue
 		FROM orders o
-		LEFT JOIN users u ON o.user = u.user_name
+		LEFT JOIN users u ON o."user" = u.user_name
 		WHERE o.order_id NOT LIKE '%Opening_Balance%' 
 		  AND o.order_id NOT LIKE '%Opening Balance%'
 		GROUP BY team_name
@@ -1564,23 +1566,43 @@ func handleGetTeamSalesRanking(c *gin.Context) {
 
 	rows, err := DB.Raw(query).Rows()
 	if err != nil {
-		c.JSON(500, gin.H{"status": "error", "message": err.Error()})
+		log.Printf("[ERROR] Team Ranking Query Failed: %v", err)
+		c.JSON(500, gin.H{"status": "error", "message": "Query failed"})
 		return
 	}
 	defer rows.Close()
 
 	for rows.Next() {
-		var r struct {
-			Team    string
-			Revenue float64
+		var teamName string
+		var revenue float64
+		if err := rows.Scan(&teamName, &revenue); err != nil {
+			log.Printf("[ERROR] Team Ranking Scan Failed: %v", err)
+			continue
 		}
-		if err := rows.Scan(&r.Team, &r.Revenue); err == nil {
-			// Capitalize first letter for display
-			if len(r.Team) > 0 {
-				r.Team = strings.ToUpper(string(r.Team[0])) + r.Team[1:]
+		
+		// Capitalize for display (e.g. "team a" -> "Team a", but we'll try to do better)
+		displayName := teamName
+		if len(displayName) > 0 {
+			// Find original case from users table if possible, or just capitalize
+			// For simplicity, just uppercase first letter of each word
+			words := strings.Fields(displayName)
+			for i, w := range words {
+				if len(w) > 0 {
+					runes := []rune(w)
+					runes[0] = unicode.ToUpper(runes[0])
+					words[i] = string(runes)
+				}
 			}
-			results = append(results, r)
+			displayName = strings.Join(words, " ")
 		}
+
+		results = append(results, struct {
+			Team    string  `json:"Team"`
+			Revenue float64 `json:"Revenue"`
+		}{
+			Team:    displayName,
+			Revenue: revenue,
+		})
 	}
 
 	if results == nil {
@@ -1590,7 +1612,7 @@ func handleGetTeamSalesRanking(c *gin.Context) {
 		}{}
 	}
 
-	c.JSON(200, gin.H{"status": "success", "data": results})
+	c.JSON(http.StatusOK, gin.H{"status": "success", "data": results})
 }
 
 func handleGetGlobalShippingCosts(c *gin.Context) {
@@ -1664,32 +1686,74 @@ func handleImageUploadProxy(c *gin.Context) {
 	var req AppsScriptRequest
 	if err := c.ShouldBindJSON(&req); err != nil { c.Error(err); return }
 	if req.FileData == "" { c.Error(fmt.Errorf("មិនមានទិន្នន័យឯកសារ")); return }
-	
-	tempID := generateShortID() + generateShortID()
-	DB.Create(&TempImage{ ID: tempID, MimeType: req.MimeType, ImageData: req.FileData, ExpiresAt: time.Now().Add(10 * time.Minute) })
-	
-	protocol := "http"; if c.Request.TLS != nil || c.Request.Header.Get("X-Forwarded-Proto") == "https" { protocol = "https" }
-	c.JSON(200, gin.H{ "status": "success", "message": "កំពុងបញ្ជូនឯកសារ...", "tempUrl": fmt.Sprintf("%s://%s/api/images/temp/%s", protocol, c.Request.Host, tempID) })
 
+	tempID := generateShortID() + generateShortID()
+	// Store in DB for 15 minutes to give UI instant feedback
+	DB.Create(&TempImage{ ID: tempID, MimeType: req.MimeType, ImageData: req.FileData, ExpiresAt: time.Now().Add(15 * time.Minute) })
+
+	protocol := "http"; if c.Request.TLS != nil || c.Request.Header.Get("X-Forwarded-Proto") == "https" { protocol = "https" }
+	tempUrl := fmt.Sprintf("%s://%s/api/images/temp/%s", protocol, c.Request.Host, tempID)
+
+	c.JSON(200, gin.H{ 
+		"status": "success", 
+		"message": "Processing upload...", 
+		"tempUrl": tempUrl,
+		"url": tempUrl, // Fallback for components expecting 'url'
+	})
+
+	// Perform actual upload to Google Drive in background
 	go func(r AppsScriptRequest, tid string) {
 		driveURL, _, err := uploadToGoogleDriveDirectly(r.FileData, r.FileName, r.MimeType)
-		if err == nil && r.OrderID != "" && r.TargetColumn != "" {
+		if err != nil {
+			log.Printf("❌ Background upload error: %v", err)
+			return
+		}
+
+		// 1. If it's for an Order
+		if r.OrderID != "" && r.TargetColumn != "" {
 			dbCol := mapToDBColumn(r.TargetColumn)
 			if isValidOrderColumn(dbCol) {
-				var order Order
-				if err := DB.Where("order_id = ?", r.OrderID).First(&order).Error; err == nil {
-					DB.Model(&order).UpdateColumn(dbCol, driveURL)
-					eventBytes, _ := json.Marshal(map[string]interface{}{ "type": "update_order", "orderId": r.OrderID, "newData": map[string]interface{}{ r.TargetColumn: driveURL } })
-					hub.broadcast <- eventBytes
-					syncReq := AppsScriptRequest{ Action: "updateOrderTelegram", Secret: appsScriptSecret, OrderData: map[string]interface{}{ "orderId": r.OrderID, "team": order.Team, "updatedFields": map[string]interface{}{ r.TargetColumn: driveURL } } }
-					jb, _ := json.Marshal(syncReq); http.Post(appsScriptURL, "application/json", bytes.NewBuffer(jb))
-					DB.Where("id = ?", tid).Delete(&TempImage{})
+				DB.Model(&Order{}).Where("order_id = ?", r.OrderID).UpdateColumn(dbCol, driveURL)
+
+				// Broadcast update to all clients
+				event, _ := json.Marshal(map[string]interface{}{ 
+					"type": "update_order", 
+					"orderId": r.OrderID, 
+					"newData": map[string]interface{}{ r.TargetColumn: driveURL },
+				})
+				hub.broadcast <- event
+
+				// Sync to Telegram/Sheets
+				syncReq := AppsScriptRequest{ 
+					Action: "updateOrderTelegram", 
+					Secret: appsScriptSecret, 
+					OrderData: map[string]interface{}{ 
+						"orderId": r.OrderID, 
+						"updatedFields": map[string]interface{}{ r.TargetColumn: driveURL },
+					},
 				}
+				jb, _ := json.Marshal(syncReq); http.Post(appsScriptURL, "application/json", bytes.NewBuffer(jb))
 			}
 		}
+
+		// 2. If it's for a Profile (linked by userName)
+		if r.UserName != "" {
+			DB.Model(&User{}).Where("user_name = ?", r.UserName).Update("profile_picture_url", driveURL)
+
+			// Notify this specific user via WS that their profile pic is permanent now
+			notify, _ := json.Marshal(map[string]interface{}{
+				"type": "profile_image_ready",
+				"userName": r.UserName,
+				"url": driveURL,
+			})
+			hub.broadcast <- notify
+		}
+
+		// Cleanup temp image from DB after successful permanent storage
+		DB.Where("id = ?", tid).Delete(&TempImage{})
+		log.Printf("✅ Background upload complete: %s", driveURL)
 	}(req, tempID)
 }
-
 func handleGetChatMessages(c *gin.Context) {
 	limitParam := c.Query("limit")
 	receiverParam := c.Query("receiver") 
@@ -1704,25 +1768,103 @@ func handleGetChatMessages(c *gin.Context) {
 
 func handleSendChatMessage(c *gin.Context) {
 	var msg ChatMessage
-	if err := c.ShouldBindJSON(&msg); err != nil { c.Error(fmt.Errorf("File too large or invalid format")); return }
-	if sender, exists := c.Get("userName"); exists { msg.UserName = sender.(string) }
-	msg.Timestamp = time.Now().Format(time.RFC3339)
-	if (msg.MessageType == "audio" || msg.MessageType == "image") && msg.FileID == "" && len(msg.Content) > 100 {
-		DB.Create(&msg)
-		msgBytes, _ := json.Marshal(map[string]interface{}{ "type": "new_message", "data": msg }); hub.broadcast <- msgBytes
-		c.JSON(200, gin.H{"status": "success", "data": msg})
-		go func(m ChatMessage) {
-			mimeType := "application/octet-stream"; base64Data := m.Content
-			if strings.Contains(m.Content, "data:") && strings.Contains(m.Content, ";base64,") { parts := strings.Split(m.Content, ";base64,"); mimeType = parts[0]; base64Data = parts[1] }
-			_, fileId, err := uploadToGoogleDriveDirectly(base64Data, "chat_file", mimeType)
-			if err == nil {
-				DB.Model(&ChatMessage{}).Where("id = ?", m.ID).Updates(map[string]interface{}{ "file_id": fileId, "content": "" })
-				updateMsg, _ := json.Marshal(map[string]interface{}{ "type": "upload_complete", "message_id": m.ID, "file_id": fileId, "receiver": m.Receiver }); hub.broadcast <- updateMsg
-			}
-		}(msg)
+	if err := c.ShouldBindJSON(&msg); err != nil {
+		c.JSON(400, gin.H{"status": "error", "message": "Invalid format"})
 		return
 	}
-	DB.Create(&msg); msgBytes, _ := json.Marshal(map[string]interface{}{ "type": "new_message", "data": msg }); hub.broadcast <- msgBytes
+	if sender, exists := c.Get("userName"); exists {
+		msg.UserName = sender.(string)
+	}
+	msg.Timestamp = time.Now().Format(time.RFC3339)
+
+	msgType := strings.ToLower(msg.MessageType)
+	
+	// Data to be uploaded (Base64)
+	var base64Data string
+	if msgType == "audio" && msg.AudioData != "" {
+		base64Data = msg.AudioData
+	} else if msgType == "image" {
+		base64Data = msg.Content
+	}
+
+	// Optimistic handling for Media (Audio/Image)
+	if (msgType == "audio" || msgType == "image") && msg.FileID == "" && len(base64Data) > 100 {
+		// 1. Extract Base64 and MimeType
+		mimeType := "application/octet-stream"
+		if strings.Contains(base64Data, "data:") && strings.Contains(base64Data, ";base64,") {
+			parts := strings.Split(base64Data, ";base64,")
+			mimeType = parts[0]
+			base64Data = parts[1]
+		}
+
+		// 2. Create Temp Record for instant playback/viewing
+		tempID := "chat_temp_" + generateShortID() + generateShortID()
+		DB.Create(&TempImage{
+			ID:        tempID,
+			MimeType:  mimeType,
+			ImageData: base64Data,
+			ExpiresAt: time.Now().Add(30 * time.Minute),
+		})
+
+		// 3. Generate instant proxy URL
+		protocol := "http"
+		if c.Request.TLS != nil || c.Request.Header.Get("X-Forwarded-Proto") == "https" {
+			protocol = "https"
+		}
+		tempUrl := fmt.Sprintf("%s://%s/api/images/temp/%s", protocol, c.Request.Host, tempID)
+		
+		// Preserve original content (duration for audio) but use tempUrl for broadcast
+		originalContent := msg.Content
+		msg.Content = tempUrl
+		
+		// 4. Save to DB and broadcast immediately
+		DB.Create(&msg)
+		msgBytes, _ := json.Marshal(map[string]interface{}{"type": "new_message", "data": msg})
+		hub.broadcast <- msgBytes
+		
+		c.JSON(200, gin.H{"status": "success", "data": msg})
+
+		// 5. Upload to Google Drive in background
+		go func(m ChatMessage, b64 string, mt string, tid string, oldContent string) {
+			driveURL, fileId, err := uploadToGoogleDriveDirectly(b64, "chat_file", mt)
+			if err == nil {
+				// Final content logic
+				finalContent := oldContent
+				if strings.ToLower(m.MessageType) == "image" {
+					finalContent = driveURL // Images use Drive URL as content
+				}
+
+				// Update to permanent storage
+				DB.Model(&ChatMessage{}).Where("id = ?", m.ID).Updates(map[string]interface{}{
+					"file_id": fileId,
+					"content": finalContent,
+				})
+				
+				// Notify all clients that upload is complete
+				updateMsg, _ := json.Marshal(map[string]interface{}{
+					"type":       "upload_complete",
+					"message_id": m.ID,
+					"file_id":    fileId,
+					"url":        driveURL,
+					"receiver":   m.Receiver,
+				})
+				hub.broadcast <- updateMsg
+				log.Printf("📢 Broadcasted upload_complete for Message ID: %d", m.ID)
+				
+				// Cleanup temp local record
+				DB.Where("id = ?", tid).Delete(&TempImage{})
+			} else {
+				log.Printf("❌ Chat media upload failed: %v", err)
+			}
+		}(msg, base64Data, mimeType, tempID, originalContent)
+		
+		return
+	}
+
+	// Standard text message
+	DB.Create(&msg)
+	msgBytes, _ := json.Marshal(map[string]interface{}{"type": "new_message", "data": msg})
+	hub.broadcast <- msgBytes
 	c.JSON(200, gin.H{"status": "success", "data": msg})
 }
 

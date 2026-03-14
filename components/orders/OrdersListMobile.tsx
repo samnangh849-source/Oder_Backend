@@ -1,8 +1,9 @@
-import React, { useContext, useState, useMemo } from 'react';
+import React, { useContext, useState, useMemo, useRef } from 'react';
 import { ParsedOrder } from '../../types';
 import { AppContext } from '../../context/AppContext';
 import Spinner from '../common/Spinner';
 import { MobileGrandTotalCard } from './OrderGrandTotal';
+import { useSoundEffects } from '../../hooks/useSoundEffects';
 
 interface OrdersListMobileProps {
     orders: ParsedOrder[];
@@ -24,11 +25,24 @@ interface OrdersListMobileProps {
 }
 
 const OrdersListMobile: React.FC<OrdersListMobileProps> = ({
-    orders, totals, selectedIds, onToggleSelect, onEdit, onView,
+    orders, totals, visibleColumns, selectedIds, onToggleSelect, onEdit, onView,
     handlePrint, toggleOrderVerified, updatingIds, groupBy = 'none', viewMode = 'card'
 }) => {
     const { currentUser, hasPermission } = useContext(AppContext);
+    const { playClick, playPop, playSuccess } = useSoundEffects();
     const [displayCount, setDisplayCount] = useState(20);
+    const longPressTimer = useRef<any>(null);
+    
+    const handleStartLongPress = (id: string) => {
+        longPressTimer.current = setTimeout(() => {
+            playPop();
+            onToggleSelect?.(id);
+        }, 600);
+    };
+
+    const handleEndLongPress = () => {
+        if (longPressTimer.current) clearTimeout(longPressTimer.current);
+    };
     
     const visibleOrders = useMemo(() => orders.slice(0, displayCount), [orders, displayCount]);
     
@@ -69,6 +83,8 @@ const OrdersListMobile: React.FC<OrdersListMobileProps> = ({
         const d = getSafeDateObj(dateStr);
         return d.toLocaleDateString('km-KH', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' });
     };
+
+    const showVerify = !visibleColumns || visibleColumns.has('isVerified');
 
     return (
         <div className="flex flex-col space-y-4">
@@ -147,40 +163,62 @@ const OrdersListMobile: React.FC<OrdersListMobileProps> = ({
                                 return (
                                     <div 
                                         key={order['Order ID']} 
-                                        onClick={() => onView && onView(order)}
-                                        className={`order-row-v2 flex items-center justify-between gap-3 ${isSelected ? 'bg-blue-500/10' : ''}`}
+                                        onClick={() => {
+                                            if (selectedIds.size > 0) {
+                                                playClick();
+                                                onToggleSelect?.(order['Order ID']);
+                                            } else {
+                                                onView?.(order);
+                                            }
+                                        }}
+                                        onMouseDown={() => handleStartLongPress(order['Order ID'])}
+                                        onMouseUp={handleEndLongPress}
+                                        onTouchStart={() => handleStartLongPress(order['Order ID'])}
+                                        onTouchEnd={handleEndLongPress}
+                                        className={`order-row-v2 flex items-center justify-between gap-3 ${isSelected ? 'bg-blue-600/20 border-l-4 border-blue-500' : ''}`}
                                     >
                                         <div className="flex items-center gap-3 flex-1 min-w-0">
-                                            <span className="text-[10px] font-black text-blue-500/40 font-mono w-4 shrink-0">{displayIndex}</span>
+                                            {isSelected ? (
+                                                <div className="w-5 h-5 bg-blue-600 rounded-lg flex items-center justify-center shrink-0 shadow-lg shadow-blue-900/40">
+                                                    <svg className="w-3.5 h-3.5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={4}><path d="M5 13l4 4L19 7" /></svg>
+                                                </div>
+                                            ) : (
+                                                <span className="text-[10px] font-black text-blue-500/40 font-mono w-4 shrink-0 text-center">{displayIndex}</span>
+                                            )}
                                             <div className="flex-1 min-w-0">
                                                 <div className="flex items-center gap-2 mb-0.5">
-                                                    <h3 className="text-sm font-bold text-white truncate italic uppercase">{order['Customer Name']}</h3>
-                                                    <span className={`status-pill-v2 !py-0.5 !px-1.5 !rounded-md !text-[8px] ${isPaid ? 'bg-emerald-500/10 text-emerald-400' : 'bg-orange-500/10 text-orange-400'}`}>
+                                                    <h3 className="text-sm font-black text-white truncate uppercase tracking-tight">{order['Customer Name']}</h3>
+                                                    <span className={`status-pill-v2 !py-0.5 !px-1.5 !rounded-md !text-[7px] ${isPaid ? 'bg-emerald-500/10 text-emerald-400' : 'bg-orange-500/10 text-orange-400'}`}>
                                                         {isPaid ? 'PAID' : 'COD'}
                                                     </span>
                                                 </div>
-                                                <div className="flex items-center gap-2 text-[9px] font-medium text-gray-500">
-                                                    <span className="text-blue-400/80 font-bold">{order['Customer Phone']}</span>
+                                                <div className="flex items-center gap-2 text-[9px] font-bold text-gray-500">
+                                                    <span className="text-blue-400/80">{order['Customer Phone']}</span>
                                                     <span>•</span>
-                                                    <span className="truncate">{order.Location || 'N/A'}</span>
+                                                    <span className="truncate max-w-[100px]">{order.Location || 'N/A'}</span>
                                                 </div>
                                             </div>
                                         </div>
                                         <div className="text-right shrink-0">
                                             <div className="text-base font-black text-white italic tracking-tighter leading-none">
                                                 <span className="text-[10px] text-blue-500 mr-0.5">$</span>
-                                                {orderTotal.toLocaleString(undefined, { minimumFractionDigits: 2 })}
+                                                {orderTotal.toLocaleString(undefined, { maximumFractionDigits: 0 })}
                                             </div>
-                                            <div className="text-[8px] font-black text-gray-600 uppercase tracking-widest mt-1">{getSafeDateString(order.Timestamp).split(',')[0]}</div>
+                                            <div className="text-[7px] font-black text-gray-600 uppercase tracking-widest mt-1">{getSafeDateString(order.Timestamp).split(',')[0]}</div>
                                         </div>
-                                        <div onClick={(e) => e.stopPropagation()} className="flex items-center">
-                                            <button 
-                                                onClick={() => toggleOrderVerified(order['Order ID'], isVerified)}
-                                                className={`w-8 h-8 flex items-center justify-center rounded-lg transition-all ${isVerified ? 'text-emerald-500 bg-emerald-500/10' : 'text-gray-700 hover:text-white'}`}
-                                            >
-                                                {updatingIds.has(order['Order ID']) ? <Spinner size="xs" /> : <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={3}><path d="M5 13l4 4L19 7" /></svg>}
-                                            </button>
-                                        </div>
+                                        {showVerify && (
+                                            <div onClick={(e) => e.stopPropagation()} className="flex items-center ml-1">
+                                                <button 
+                                                    onClick={() => {
+                                                        if (!isVerified) playSuccess();
+                                                        toggleOrderVerified(order['Order ID'], isVerified);
+                                                    }}
+                                                    className={`w-8 h-8 flex items-center justify-center rounded-lg transition-all ${isVerified ? 'text-emerald-500 bg-emerald-500/10 shadow-[0_0_15px_rgba(16,185,129,0.2)]' : 'text-gray-700 active:bg-white/5'}`}
+                                                >
+                                                    {updatingIds.has(order['Order ID']) ? <Spinner size="xs" /> : <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={3}><path d="M5 13l4 4L19 7" /></svg>}
+                                                </button>
+                                            </div>
+                                        )}
                                     </div>
                                 );
                             }
@@ -235,12 +273,14 @@ const OrdersListMobile: React.FC<OrdersListMobileProps> = ({
                                                     <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2.5}><path d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" /></svg>
                                                 </button>
                                             )}
-                                            <button 
-                                                onClick={() => toggleOrderVerified(order['Order ID'], isVerified)}
-                                                className={`action-btn-v2 !w-9 !h-9 transition-all ${isVerified ? 'text-emerald-500 bg-emerald-500/10 border-emerald-500/20' : ''}`}
-                                            >
-                                                {updatingIds.has(order['Order ID']) ? <Spinner size="xs" /> : <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={3}><path d="M5 13l4 4L19 7" /></svg>}
-                                            </button>
+                                            {showVerify && (
+                                                <button 
+                                                    onClick={() => toggleOrderVerified(order['Order ID'], isVerified)}
+                                                    className={`action-btn-v2 !w-9 !h-9 transition-all ${isVerified ? 'text-emerald-500 bg-emerald-500/10 border-emerald-500/20' : ''}`}
+                                                >
+                                                    {updatingIds.has(order['Order ID']) ? <Spinner size="xs" /> : <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={3}><path d="M5 13l4 4L19 7" /></svg>}
+                                                </button>
+                                            )}
                                         </div>
                                     </div>
                                 </div>

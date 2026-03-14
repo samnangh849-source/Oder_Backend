@@ -20,6 +20,7 @@ export interface AppContextType {
     appData: AppData;
     orders: ParsedOrder[];
     isOrdersLoading: boolean;
+    isSyncing: boolean;
     login: (user: User, token: string) => Promise<void>;
     logout: () => void;
     refreshData: () => Promise<void>;

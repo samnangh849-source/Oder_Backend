@@ -2,8 +2,7 @@
 import React from 'react';
 import * as ReactDOMClient from 'react-dom/client';
 import App from './App';
-// CSS is loaded via <link> in index.html to avoid import errors in some environments
-// import './index.css'; 
+import './index.css'; 
 
 const rootElement = document.getElementById('root');
 if (!rootElement) {

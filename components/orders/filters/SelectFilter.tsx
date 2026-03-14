@@ -9,7 +9,8 @@ interface SelectFilterProps {
     placeholder?: string;
     variant?: 'default' | 'payment';
     multiple?: boolean;
-    searchable?: boolean; // New prop to enable/disable search
+    searchable?: boolean; 
+    isInline?: boolean; // New prop for direct rendering
 }
 
 const SelectFilter: React.FC<SelectFilterProps> = ({ 
@@ -20,15 +21,17 @@ const SelectFilter: React.FC<SelectFilterProps> = ({
     placeholder = "All",
     variant = 'default',
     multiple = false,
-    searchable = true // Default to true
+    searchable = true,
+    isInline = false // Default to false
 }) => {
-    const [isOpen, setIsOpen] = useState(false);
+    const [isOpen, setIsOpen] = useState(isInline);
     const [searchTerm, setSearchTerm] = useState('');
     const dropdownRef = useRef<HTMLDivElement>(null);
     const searchInputRef = useRef<HTMLInputElement>(null);
 
     // Close dropdown when clicking outside
     useEffect(() => {
+        if (isInline) return;
         const handleClickOutside = (event: MouseEvent) => {
             if (dropdownRef.current && !dropdownRef.current.contains(event.target as Node)) {
                 setIsOpen(false);
@@ -37,7 +40,7 @@ const SelectFilter: React.FC<SelectFilterProps> = ({
         };
         document.addEventListener('mousedown', handleClickOutside);
         return () => document.removeEventListener('mousedown', handleClickOutside);
-    }, []);
+    }, [isInline]);
 
     // Focus input when opening
     useEffect(() => {
@@ -47,7 +50,7 @@ const SelectFilter: React.FC<SelectFilterProps> = ({
     }, [isOpen, searchable]);
 
     // Parse current values
-    const selectedValues = value ? value.split(',') : [];
+    const selectedValues = useMemo(() => value ? value.split(',') : [], [value]);
 
     // Helper to get label/value
     const getOptionLabel = (opt: string | { label: string; value: string }) => {
@@ -81,31 +84,80 @@ const SelectFilter: React.FC<SelectFilterProps> = ({
             // Keep open for multiple selection
         } else {
             onChange(optionValue);
-            setIsOpen(false);
-            setSearchTerm('');
+            if (!isInline) {
+                setIsOpen(false);
+                setSearchTerm('');
+            }
         }
     };
 
     const handleClear = (e: React.MouseEvent) => {
         e.stopPropagation();
         onChange('');
-        if (!multiple) setIsOpen(false);
+        if (!multiple && !isInline) setIsOpen(false);
     };
 
-    // Display Text Logic
+    if (isInline) {
+        return (
+            <div className="w-full flex flex-col space-y-3">
+                {searchable && (
+                    <div className="relative group px-1">
+                        <svg className="absolute left-4 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-600 group-focus-within:text-blue-500 transition-colors" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" strokeWidth={2.5}/></svg>
+                        <input
+                            type="text"
+                            className="w-full bg-black/40 border border-white/10 rounded-xl pl-11 pr-4 py-3 text-sm text-white focus:border-blue-500/50 outline-none transition-all shadow-inner"
+                            placeholder="Type to search..."
+                            value={searchTerm}
+                            onChange={(e) => setSearchTerm(e.target.value)}
+                        />
+                    </div>
+                )}
+                <div className="max-h-[320px] overflow-y-auto custom-scrollbar space-y-1 pr-1 py-1">
+                    {filteredOptions.length > 0 ? filteredOptions.map((opt, idx) => {
+                        const optValue = getOptionValue(opt);
+                        const optLabel = getOptionLabel(opt);
+                        const isSelected = selectedValues.includes(optValue);
+                        return (
+                            <div 
+                                key={`${optValue}-${idx}`}
+                                onClick={() => handleSelect(optValue)}
+                                className={`px-4 py-3.5 flex items-center justify-between cursor-pointer rounded-2xl transition-all mx-1 ${isSelected ? 'bg-blue-600 text-white shadow-lg shadow-blue-900/40' : 'bg-white/[0.03] text-gray-400 hover:bg-white/10 border border-transparent hover:border-white/10'}`}
+                            >
+                                <span className={`text-[13px] font-bold tracking-tight ${isSelected ? 'text-white' : ''}`}>{optLabel}</span>
+                                {isSelected ? (
+                                    <div className="w-5.5 h-5.5 bg-white/20 rounded-lg flex items-center justify-center shrink-0">
+                                        <svg className="w-4 h-4 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={4}><path d="M5 13l4 4L19 7" /></svg>
+                                    </div>
+                                ) : multiple && (
+                                    <div className="w-5.5 h-5.5 rounded-lg border-2 border-white/10 shrink-0"></div>
+                                )}
+                            </div>
+                        );
+                    }) : (
+                        <div className="py-14 text-center flex flex-col items-center gap-3 opacity-30 border-2 border-dashed border-white/5 rounded-[2rem] mx-1">
+                            <div className="w-12 h-12 bg-white/5 rounded-full flex items-center justify-center">
+                                <svg className="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" strokeWidth={2}/></svg>
+                            </div>
+                            <span className="text-[10px] font-black uppercase tracking-[0.2em]">No Matches Found</span>
+                        </div>
+                    )}
+                </div>
+            </div>
+        );
+    }
+
+    // Display Text Logic for dropdown mode
     let displayText = placeholder;
     if (selectedValues.length > 0) {
         if (selectedValues.length === 1) {
             const found = options.find(o => getOptionValue(o) === selectedValues[0]);
-            // If checking specifically for Customer Name, try to show just the name part if it's too long, 
-            // but usually showing the label is safer.
             displayText = found ? getOptionLabel(found) : selectedValues[0];
         } else {
             displayText = `${selectedValues.length} Selected`;
         }
     }
 
-    // Style logic
+    // Style logic for dropdown mode
     let baseClass = "relative w-full cursor-pointer bg-gray-900/50 border border-gray-800 py-3.5 px-4 rounded-2xl font-bold transition-all hover:bg-gray-900 hover:border-gray-700 flex justify-between items-center group/select";
     let textClass = "text-gray-400";
 
@@ -129,7 +181,6 @@ const SelectFilter: React.FC<SelectFilterProps> = ({
     return (
         <div className={`w-full transition-all ${isOpen ? 'relative z-[60]' : 'relative z-10'}`} ref={dropdownRef}>
             <label className="text-[10px] font-black text-gray-500 mb-2 block uppercase tracking-widest ml-2 flex items-center gap-2">
-
                 {label} 
                 {multiple && <span className="text-[8px] font-black text-blue-400 bg-blue-500/10 px-2 py-0.5 rounded-full border border-blue-500/20">MULTI</span>}
             </label>

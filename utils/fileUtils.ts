@@ -49,8 +49,14 @@ export const convertGoogleDriveUrl = (url?: string, type: 'image' | 'audio' = 'i
     const trimmedUrl = url.trim();
 
     // If it's already a direct Google content URL, return it
-    if (trimmedUrl.includes('lh3.googleusercontent.com') || trimmedUrl.includes('googleusercontent.com/d/') || trimmedUrl.includes('uc?export=')) {
-        if (trimmedUrl.includes('lh3.googleusercontent.com') && !trimmedUrl.includes('=s')) {
+    if (trimmedUrl.includes('lh3.googleusercontent.com') || 
+        trimmedUrl.includes('googleusercontent.com/d/') || 
+        (trimmedUrl.includes('drive.google.com') && (trimmedUrl.includes('uc?') || trimmedUrl.includes('thumbnail?')))) {
+        
+        // Handle Google Auth Profile Pictures (lh3)
+        if (trimmedUrl.includes('lh3.googleusercontent.com')) {
+            // If it already has a size parameter like =s96-c, don't append another one
+            if (trimmedUrl.includes('=s')) return trimmedUrl;
             return `${trimmedUrl}=s1000`;
         }
         return trimmedUrl;
@@ -60,8 +66,8 @@ export const convertGoogleDriveUrl = (url?: string, type: 'image' | 'audio' = 'i
     let fileId = '';
     
     if (trimmedUrl.includes('drive.google.com') || trimmedUrl.includes('docs.google.com')) {
-        // 1. Standard patterns: /d/ID, id=ID, open?id=ID, file/d/ID
-        const idRegex = /(?:id=|d\/|file\/d\/|open\?id=|thumbnail\?id=)([^/?&]+)/;
+        // 1. Standard patterns: /d/ID, id=ID, open?id=ID, file/d/ID, uc?id=ID
+        const idRegex = /(?:id=|d\/|file\/d\/|open\?id=|thumbnail\?id=|uc\?id=)([^/?&]+)/;
         const match = trimmedUrl.match(idRegex);
         if (match && match[1]) {
             fileId = match[1];

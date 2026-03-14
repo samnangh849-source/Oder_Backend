@@ -5,64 +5,50 @@ import { NOTIFICATION_SOUNDS } from '../constants';
 
 export const useSoundEffects = () => {
     const { advancedSettings } = useContext(AppContext);
-    const audioContextRef = useRef<AudioContext | null>(null);
     
     // Lower base volume significantly (8% of the setting for a very soft experience)
     const baseVolume = (advancedSettings.notificationVolume ?? 0.5) * 0.08;
 
-    // Cache for loaded audio buffers
-    const bufferCache = useRef<Map<string, AudioBuffer>>(new Map());
+    // Cache for Audio objects to avoid repeated creation
+    const audioCache = useRef<Map<string, HTMLAudioElement>>(new Map());
 
-    const playSound = useCallback(async (soundId: string, customVolumeMultiplier = 1) => {
+    const playSound = useCallback((soundId: string, customVolumeMultiplier = 1) => {
         if (baseVolume <= 0) return;
 
         try {
-            // Initialize AudioContext on first use
-            if (!audioContextRef.current) {
-                audioContextRef.current = new (window.AudioContext || (window as any).webkitAudioContext)();
-            }
-
-            const context = audioContextRef.current;
-            if (context.state === 'suspended') {
-                await context.resume();
-            }
-
             const sound = NOTIFICATION_SOUNDS.find(s => s.id === soundId) || NOTIFICATION_SOUNDS.find(s => s.id === 'click');
             if (!sound) return;
 
-            let buffer = bufferCache.current.get(sound.url);
+            let audio = audioCache.current.get(sound.url);
 
-            if (!buffer) {
-                const response = await fetch(sound.url);
-                const arrayBuffer = await response.arrayBuffer();
-                buffer = await context.decodeAudioData(arrayBuffer);
-                bufferCache.current.set(sound.url, buffer);
+            if (!audio) {
+                audio = new Audio(sound.url);
+                // Preload the sound
+                audio.load();
+                audioCache.current.set(sound.url, audio);
             }
 
-            const source = context.createBufferSource();
-            const gainNode = context.createGain();
-
-            source.buffer = buffer;
-            // Apply both base volume and a per-sound multiplier
-            gainNode.gain.value = baseVolume * customVolumeMultiplier;
-
-            source.connect(gainNode);
-            gainNode.connect(context.destination);
-
-            source.start(0);
+            // Create a clone to allow overlapping sounds of the same type
+            const audioClone = audio.cloneNode() as HTMLAudioElement;
+            audioClone.volume = Math.min(1, baseVolume * customVolumeMultiplier);
+            
+            audioClone.play().catch(error => {
+                // Silently ignore play errors (usually caused by browser autoplay policies)
+                // console.warn("SFX playback blocked:", error);
+            });
         } catch (error) {
             console.warn("SFX playback failed:", error);
         }
     }, [baseVolume]);
 
     return {
-        playClick: () => playSound('pop', 0.5), // Short soft pop
-        playSuccess: () => playSound('success', 0.5),
-        playError: () => playSound('alert', 0.5),
+        playClick: () => playSound('professional_3', 1.0),
+        playSuccess: () => playSound('success', 0.7),
+        playError: () => playSound('alert', 0.6),
         playTransition: () => playSound('click', 0.4), // macOS-style single short click (មួយប៉ក់)
-        playPop: () => playSound('pop', 0.3),
-        playNotify: () => playSound('notify', 0.5),
-        playHover: () => playSound('bubble', 0.1), // Extremely subtle hover
+        playPop: () => playSound('pop', 0.4),
+        playNotify: () => playSound('notify', 0.7),
+        playHover: () => playSound('bubble', 0.2), // Extremely soft bubble sound for hovering
         playSound
     };
 };

@@ -48,7 +48,7 @@ const RoleSelectionPage: React.FC<RoleSelectionPageProps> = ({ onSelect }) => {
     };
 
     return (
-        <div className="min-h-full w-full flex flex-col items-center justify-center relative font-['Kantumruy_Pro']">
+        <div className="min-h-full w-full flex flex-col items-center justify-center relative font-['Kantumruy_Pro'] py-12">
             <style>{`
                 .selection-btn {
                     background: rgba(255, 255, 255, 0.03);

@@ -279,7 +279,7 @@ const DeliveryAgentView: React.FC<DeliveryAgentViewProps> = ({ orderIds, returnO
 
     if (isExpired) {
         return (
-            <div className="min-h-screen bg-[#020617] flex flex-col items-center justify-center p-6 text-center">
+            <div className="min-h-full bg-[#020617] flex flex-col items-center justify-center p-6 text-center">
                 <div className="w-20 h-20 bg-red-500/10 rounded-2xl flex items-center justify-center mb-6 border border-red-500/20 shadow-xl">
                     <svg className="w-10 h-10 text-red-500" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
                 </div>
@@ -292,7 +292,7 @@ const DeliveryAgentView: React.FC<DeliveryAgentViewProps> = ({ orderIds, returnO
 
     if (isSubmitted) {
         return (
-            <div className="min-h-screen bg-[#020617] p-4 flex flex-col items-center justify-center animate-fade-in">
+            <div className="min-h-full bg-[#020617] p-4 flex flex-col items-center justify-center animate-fade-in">
                 <div id="summary-card" className="bg-[#0f172a] border-2 border-emerald-500/30 p-8 rounded-[2.5rem] w-full max-w-lg shadow-2xl text-center space-y-8 relative overflow-hidden">
                     <div className="absolute top-0 right-0 w-32 h-32 bg-emerald-500/5 blur-[60px] -mr-16 -mt-16 rounded-full"></div>
                     <div className="relative z-10 space-y-6">
@@ -354,7 +354,7 @@ const DeliveryAgentView: React.FC<DeliveryAgentViewProps> = ({ orderIds, returnO
     }
 
     return (
-        <div className="min-h-screen bg-[#020617] text-white flex flex-col relative overflow-x-hidden font-['Kantumruy_Pro']">
+        <div className="min-h-full bg-[#020617] text-white flex flex-col relative overflow-x-hidden font-['Kantumruy_Pro']">
             <style>{`
                 input::-webkit-outer-spin-button,
                 input::-webkit-inner-spin-button { -webkit-appearance: none; margin: 0; }

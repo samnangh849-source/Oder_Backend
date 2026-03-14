@@ -74,18 +74,28 @@ const DashboardOverview: React.FC<DashboardOverviewProps> = ({
     };
 
     return (
-        <div className="space-y-6 lg:space-y-8 animate-fade-in pb-10">
-            {/* Header */}
-            <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 bg-gray-800/10 p-4 sm:p-5 rounded-2xl sm:rounded-[2rem] border border-white/5 backdrop-blur-md">
-                <div className="flex flex-col">
-                    <h2 className="text-lg sm:text-xl lg:text-2xl font-black text-white leading-tight">សួស្តី, {currentUser?.FullName} 👋</h2>
-                    <p className="text-gray-500 text-[10px] sm:text-xs font-bold uppercase tracking-widest mt-1">
-                        {new Date().toLocaleDateString('km-KH', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })}
-                    </p>
+        <div className="space-y-4 lg:space-y-8 animate-fade-in pb-10">
+            {/* Header - More compact on mobile */}
+            <div className="flex flex-col gap-4 bg-gray-800/10 p-4 sm:p-6 rounded-[2rem] border border-white/5 backdrop-blur-md">
+                <div className="flex justify-between items-start">
+                    <div className="flex flex-col">
+                        <div className="flex items-center gap-2 mb-1">
+                            <div className="w-1.5 h-4 bg-blue-600 rounded-full"></div>
+                            <h2 className="text-lg sm:text-xl lg:text-2xl font-black text-white leading-none">សួស្តី, {currentUser?.FullName} 👋</h2>
+                        </div>
+                        <p className="text-gray-500 text-[9px] font-bold uppercase tracking-widest ml-3.5">
+                            {new Date().toLocaleDateString('km-KH', { weekday: 'long', month: 'long', day: 'numeric' })}
+                        </p>
+                    </div>
+                    <div className="hidden sm:flex bg-white/5 border border-white/10 px-3 py-1.5 rounded-xl">
+                        <span className="text-[10px] font-black text-blue-400">
+                            {metrics.orders} <span className="text-gray-500 ml-1">Processed</span>
+                        </span>
+                    </div>
                 </div>
                 
                 {/* Date Filter Component */}
-                <div className="w-full md:w-auto">
+                <div className="w-full">
                     <DateRangeFilter 
                         dateRange={dateFilter.preset as DateRangePreset}
                         onRangeChange={(r) => setDateFilter({ ...dateFilter, preset: r })}
@@ -97,29 +107,9 @@ const DashboardOverview: React.FC<DashboardOverviewProps> = ({
                 </div>
             </div>
 
-            {/* Dashboard Header Section */}
-            <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 bg-white/[0.02] p-6 rounded-[2.5rem] border border-white/5 backdrop-blur-xl mb-2">
-                <div className="flex items-center gap-4">
-                    <div className="w-2 h-10 bg-blue-600 rounded-full shadow-[0_0_15px_rgba(37,99,235,0.5)]"></div>
-                    <div className="flex flex-col">
-                        <h3 className="text-lg font-black text-white uppercase tracking-tight leading-none">
-                            System Dashboard
-                        </h3>
-                        <span className="text-[10px] font-bold text-blue-400/80 uppercase tracking-widest mt-1.5">Overview Statistics</span>
-                    </div>
-                </div>
-                <div className="flex items-center gap-3">
-                    <div className="bg-white/5 border border-white/10 px-4 py-2 rounded-2xl shadow-xl">
-                        <span className="text-xs font-black text-blue-400">
-                            {metrics.orders} <span className="text-gray-500 ml-1">Processed</span>
-                        </span>
-                    </div>
-                </div>
-            </div>
-
-            {/* Metrics - Adaptive Grid for 13" (2 cols) vs 15"+ (3 cols) */}
-            <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-4 lg:gap-6">
-                <StatCard label="ចំណូលសរុប" value={`$${metrics.revenue.toLocaleString(undefined, {minimumFractionDigits: 2})}`} icon="💰" colorClass="from-blue-600 to-blue-400" />
+            {/* Metrics - Compact on mobile */}
+            <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-3 lg:gap-6">
+                <StatCard label="ចំណូលសរុប" value={`$${metrics.revenue.toLocaleString(undefined, {maximumFractionDigits: 0})}`} icon="💰" colorClass="from-blue-600 to-blue-400" />
                 <StatCard label="ចំនួនការកម្មង់" value={metrics.orders} icon="📦" colorClass="from-emerald-600 to-emerald-400" />
                 <StatCard label="មិនទាន់ទូទាត់" value={metrics.unpaid} icon="⏳" colorClass="from-orange-500 to-yellow-400" />
             </div>

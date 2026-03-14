@@ -102,6 +102,7 @@ const OrdersListTablet: React.FC<OrdersListTabletProps> = ({
     };
 
     const checkColumnVisible = (key: string) => !visibleColumns || visibleColumns.has(key);
+    const showVerify = checkColumnVisible('isVerified') || checkColumnVisible('check');
 
     const groupedData = useMemo(() => {
         if (groupBy === 'none') return [{ label: '', orders }];
@@ -174,11 +175,13 @@ const OrdersListTablet: React.FC<OrdersListTabletProps> = ({
                                                 <p className="text-sm font-black text-white tracking-tighter italic">${(Number(order['Grand Total']) || 0).toFixed(2)}</p>
                                             </div>
                                         </div>
-                                        <div className="flex-shrink-0 flex items-center gap-2" onClick={e => e.stopPropagation()}>
-                                            <button onClick={() => toggleOrderVerified(order['Order ID'], isVerified)} className={`w-10 h-10 rounded-xl border flex items-center justify-center transition-all ${isVerified ? 'bg-emerald-500 border-emerald-400 text-white' : 'bg-gray-800 border-gray-700 text-gray-500'}`}>
-                                                {isUpdating ? <Spinner size="xs" /> : <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={3}><path d="M5 13l4 4L19 7" /></svg>}
-                                            </button>
-                                        </div>
+                                        {showVerify && (
+                                            <div className="flex-shrink-0 flex items-center gap-2" onClick={e => e.stopPropagation()}>
+                                                <button onClick={() => toggleOrderVerified(order['Order ID'], isVerified)} className={`w-10 h-10 rounded-xl border flex items-center justify-center transition-all ${isVerified ? 'bg-emerald-500 border-emerald-400 text-white' : 'bg-gray-800 border-gray-700 text-gray-500'}`}>
+                                                    {isUpdating ? <Spinner size="xs" /> : <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={3}><path d="M5 13l4 4L19 7" /></svg>}
+                                                </button>
+                                            </div>
+                                        )}
                                     </div>
                                 );
                             }
@@ -257,10 +260,12 @@ const OrdersListTablet: React.FC<OrdersListTabletProps> = ({
                                             <button onClick={() => handlePrint(order)} className="w-12 h-12 flex items-center justify-center bg-gray-800 text-gray-400 hover:text-white rounded-2xl border border-white/10 transition-all active:scale-90">
                                                 <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path d="M17 17h2a2 2 0 002-2v-4a2 2 0 00-2-2H5a2 2 0 00-2 2v4a2 2 0 002 2h2m2 4h6a2 2 0 002-2v-4a2 2 0 00-2-2H9a2 2 0 00-2 2v4a2 2 0 002 2zm8-12V5a2 2 0 00-2-2H9a2 2 0 00-2 2v4h10z" /></svg>
                                             </button>
-                                            <div className="relative">
-                                                <input type="checkbox" checked={isVerified} onChange={() => toggleOrderVerified(order['Order ID'], isVerified)} className={`w-12 h-12 rounded-2xl appearance-none border transition-all cursor-pointer ${isVerified ? 'bg-emerald-500 border-emerald-400' : 'bg-gray-800 border-gray-600'}`} />
-                                                <div className="absolute inset-0 flex items-center justify-center pointer-events-none">{isUpdating ? <Spinner size="sm" /> : isVerified ? <svg className="w-6 h-6 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={3}><path d="M5 13l4 4L19 7" /></svg> : <span className="text-[10px] font-black text-gray-500 uppercase">OK</span>}</div>
-                                            </div>
+                                            {showVerify && (
+                                                <div className="relative">
+                                                    <input type="checkbox" checked={isVerified} onChange={() => toggleOrderVerified(order['Order ID'], isVerified)} className={`w-12 h-12 rounded-2xl appearance-none border transition-all cursor-pointer ${isVerified ? 'bg-emerald-500 border-emerald-400' : 'bg-gray-800 border-gray-600'}`} />
+                                                    <div className="absolute inset-0 flex items-center justify-center pointer-events-none">{isUpdating ? <Spinner size="sm" /> : isVerified ? <svg className="w-6 h-6 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={3}><path d="M5 13l4 4L19 7" /></svg> : <span className="text-[10px] font-black text-gray-500 uppercase">OK</span>}</div>
+                                                </div>
+                                            )}
                                         </div>
                                     </div>
                                 </div>

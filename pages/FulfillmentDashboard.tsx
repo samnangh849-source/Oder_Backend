@@ -159,7 +159,7 @@ const FulfillmentCard: React.FC<{
 };
 
 // 3. Main Dashboard Component
-const FulfillmentDashboard: React.FC<{ orders: ParsedOrder[] }> = ({ orders }) => {
+const FulfillmentDashboard: React.FC<{ orders: ParsedOrder[], onOpenDeliveryList?: () => void }> = ({ orders, onOpenDeliveryList }) => {
     const { refreshData, setMobilePageTitle, appData, currentUser, previewImage } = useContext(AppContext);
     
     // 1. Core State
@@ -396,8 +396,17 @@ const FulfillmentDashboard: React.FC<{ orders: ParsedOrder[] }> = ({ orders }) =
                     <div><h1 className="text-lg font-black text-white uppercase tracking-tight flex items-center gap-2"><span>កញ្ចប់ឥវ៉ាន់</span><span className="text-[10px] bg-indigo-500/20 text-indigo-400 px-2 py-0.5 rounded-md border border-indigo-500/30">{selectedStore}</span></h1><p className="text-[8px] font-black text-gray-500 uppercase tracking-widest">Fulfillment Tracking</p></div>
                 </div>
                 <div className="flex items-center gap-2 w-full lg:w-auto">
-                    <button onClick={() => setSelectedStore('')} className="flex-1 lg:flex-none px-4 py-2 bg-gray-800/50 hover:bg-gray-800 text-gray-400 hover:text-white rounded-lg border border-white/5 active:scale-95 transition-all text-[10px] font-black uppercase tracking-widest flex items-center justify-center gap-1.5"><svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M8 7h12m0 0l-4-4m4 4l-4 4m0 6H4m0 0l4 4m-4-4l4-4" /></svg>ប្ដូរឃ្លាំង</button>
-                    <button onClick={refreshData} className="bg-gray-800 hover:bg-gray-700 text-white p-2 rounded-lg border border-white/5 active:scale-90 transition-all shadow-lg group flex justify-center"><svg className="w-4 h-4 group-hover:rotate-180 transition-transform duration-500" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2.5}><path strokeLinecap="round" strokeLinejoin="round" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" /></svg></button>
+                    {onOpenDeliveryList && (
+                        <button 
+                            onClick={() => { playClick(); onOpenDeliveryList(); }}
+                            className="flex-1 lg:flex-none px-4 py-2 bg-emerald-600 hover:bg-emerald-500 text-white rounded-lg shadow-lg transition-all active:scale-95 text-[10px] font-black uppercase tracking-widest flex items-center justify-center gap-1.5"
+                        >
+                            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={3}><path d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" /></svg>
+                            Delivery List
+                        </button>
+                    )}
+                    <button onClick={() => { playClick(); setSelectedStore(''); }} className="flex-1 lg:flex-none px-4 py-2 bg-gray-800/50 hover:bg-gray-800 text-gray-400 hover:text-white rounded-lg border border-white/5 active:scale-95 transition-all text-[10px] font-black uppercase tracking-widest flex items-center justify-center gap-1.5"><svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M8 7h12m0 0l-4-4m4 4l-4 4m0 6H4m0 0l4 4m-4-4l4-4" /></svg>ប្ដូរឃ្លាំង</button>
+                    <button onClick={() => { playPop(); refreshData(); }} className="bg-gray-800 hover:bg-gray-700 text-white p-2 rounded-lg border border-white/5 active:scale-90 transition-all shadow-lg group flex justify-center"><svg className="w-4 h-4 group-hover:rotate-180 transition-transform duration-500" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2.5}><path strokeLinecap="round" strokeLinejoin="round" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" /></svg></button>
                 </div>
             </div>
 
@@ -407,7 +416,7 @@ const FulfillmentDashboard: React.FC<{ orders: ParsedOrder[] }> = ({ orders }) =
                         <input type="text" placeholder="ស្វែងរក..." value={searchTerm} onChange={e => setSearchTerm(e.target.value)} className="form-input !pl-12 !py-2.5 bg-black/40 border-gray-800 rounded-xl text-[13px] font-bold text-white placeholder:text-gray-700 focus:border-blue-500/50 focus:bg-black/60 transition-all shadow-inner" />
                         <div className="absolute left-4 top-1/2 -translate-y-1/2 flex items-center gap-3 text-gray-700 group-focus-within:text-blue-500 transition-colors"><svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={3}><path d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" /></svg><div className="h-4 w-px bg-gray-800"></div></div>
                     </div>
-                    <button onClick={() => setIsFilterModalOpen(true)} className="w-full lg:w-auto flex items-center justify-center gap-2 px-6 py-2.5 bg-gray-900 border border-gray-800 text-gray-400 hover:text-white rounded-xl text-[10px] font-black uppercase tracking-widest transition-all active:scale-95"><svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2.5}><path d="M3 4a1 1 0 011-1h16a1 1 0 011 1v2.586a1 1 0 01-.293.707l-6.414 6.414a1 1 0 00-.293.707V17l-4 4v-6.586a1 1 0 00-.293-.707L3.293 7.293A1 1 0 013 6.586V4z" /></svg>Filters</button>
+                    <button onClick={() => { playClick(); setIsFilterModalOpen(true); }} className="w-full lg:w-auto flex items-center justify-center gap-2 px-6 py-2.5 bg-gray-900 border border-gray-800 text-gray-400 hover:text-white rounded-xl text-[10px] font-black uppercase tracking-widest transition-all active:scale-95"><svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2.5}><path d="M3 4a1 1 0 011-1h16a1 1 0 011 1v2.586a1 1 0 01-.293.707l-6.414 6.414a1 1 0 00-.293.707V17l-4 4v-6.586a1 1 0 00-.293-.707L3.293 7.293A1 1 0 013 6.586V4z" /></svg>Filters</button>
                 </div>
             </div>
 
@@ -501,7 +510,7 @@ const FulfillmentDashboard: React.FC<{ orders: ParsedOrder[] }> = ({ orders }) =
                             <OrderFilters filters={filters} setFilters={setFilters} orders={storeOrders} usersList={appData.users || []} appData={appData} calculatedRange={calculatedRange} />
                         </div>
                         <div className="mt-10 flex justify-center relative z-10 border-t border-white/5 pt-8">
-                            <button onClick={() => setIsFilterModalOpen(false)} className="btn btn-primary w-full max-w-md py-5 text-[13px] font-black uppercase tracking-[0.25em] shadow-[0_20px_50px_rgba(37,99,235,0.3)] rounded-2xl active:scale-[0.98] transition-all">Apply Parameters</button>
+                            <button onClick={() => { playPop(); setIsFilterModalOpen(false); }} className="btn btn-primary w-full max-w-md py-5 text-[13px] font-black uppercase tracking-[0.25em] shadow-[0_20px_50px_rgba(37,99,235,0.3)] rounded-2xl active:scale-[0.98] transition-all">Apply Parameters</button>
                         </div>
                     </div>
                 </Modal>

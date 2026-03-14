@@ -52,6 +52,15 @@ const EditCustomerPanel: React.FC<EditCustomerPanelProps> = ({
         });
     }, [appData.bankAccounts, formData['Fulfillment Store']]);
 
+    const carrierLogo = React.useMemo(() => {
+        const phoneNumber = formData['Customer Phone'] || '';
+        if (phoneNumber.length < 2 || !appData.phoneCarriers) return '';
+        const foundCarrier = appData.phoneCarriers.find((carrier: any) => 
+            (carrier.Prefixes || '').split(',').some((prefix: string) => phoneNumber.startsWith(prefix.trim()))
+        );
+        return foundCarrier ? convertGoogleDriveUrl(foundCarrier.CarrierLogoURL) : '';
+    }, [formData['Customer Phone'], appData.phoneCarriers]);
+
     return (
         <div className="flex flex-col gap-4 h-full overflow-y-auto custom-scrollbar pr-2 pb-20 lg:pb-2">
             {/* Customer Info Card */}
@@ -73,7 +82,12 @@ const EditCustomerPanel: React.FC<EditCustomerPanelProps> = ({
                     </div>
                     <div className="grid grid-cols-1 gap-3">
                         <input type="text" name="Customer Name" value={formData['Customer Name'] || ''} onChange={onChange} className="form-input !py-3.5 bg-gray-900/80 border-gray-700 rounded-xl font-bold text-sm text-white placeholder-gray-600 focus:border-blue-500" placeholder="ឈ្មោះអតិថិជន" required />
-                        <input type="tel" name="Customer Phone" value={formData['Customer Phone'] || ''} onChange={onChange} className="form-input !py-3.5 bg-gray-900/80 border-gray-700 rounded-xl font-mono font-black text-sm text-blue-300 placeholder-gray-600 focus:border-blue-500" placeholder="លេខទូរស័ព្ទ" required />
+                        <div className="relative">
+                            <input type="tel" name="Customer Phone" value={formData['Customer Phone'] || ''} onChange={onChange} className="form-input !py-3.5 bg-gray-900/80 border-gray-700 rounded-xl font-mono font-black text-sm text-blue-300 placeholder-gray-600 focus:border-blue-500 pr-12" placeholder="លេខទូរស័ព្ទ" required />
+                            <div className="absolute right-3 top-0 bottom-0 flex items-center justify-center pointer-events-none">
+                                {carrierLogo && <img src={carrierLogo} alt="Carrier" className="h-6 w-auto object-contain transition-all animate-fade-in" />}
+                            </div>
+                        </div>
                     </div>
                     
                     <div className="space-y-3 pt-2">

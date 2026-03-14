@@ -67,7 +67,7 @@ const TabletAdminLayout: React.FC<TabletAdminLayoutProps> = ({
             </div>
 
             {/* Tablet Header - Styled like standard Header.tsx */}
-            <header className="flex-shrink-0 z-[60] bg-[#0f172a]/80 backdrop-blur-2xl border-b border-white/5 px-4 py-2 flex justify-between items-center shadow-lg relative">
+            <header className="flex-shrink-0 z-[60] bg-[#0f172a]/80 backdrop-blur-2xl border-b border-white/5 px-4 py-2 flex justify-between items-center shadow-lg relative" style={originalAdminUser ? { top: "40px" } : {}}>
                 <div className="flex items-center gap-3">
                     <button 
                         onClick={() => setIsMobileMenuOpen(true)}

@@ -656,7 +656,12 @@ const CreateOrderPage: React.FC<CreateOrderPageProps> = ({ team, onSaveSuccess, 
                             </div>
 
                             <input type="text" name="name" value={order.customer.name} placeholder="ឈ្មោះអតិថិជន*" className="form-input !py-3 rounded-xl border-gray-700 bg-gray-900" onChange={handleCustomerChange} required />
-                            <div className="relative"><input type="tel" name="phone" value={order.customer.phone} placeholder="លេខទូរស័ព្ទ*" className="form-input !py-3 rounded-xl border-gray-700 bg-gray-900 pr-12" onChange={handleCustomerChange} required />{carrierLogo && <img src={carrierLogo} alt="Carrier" className="absolute right-2 top-1/2 -translate-y-1/2 h-8 w-auto object-contain" />}</div>
+                            <div className="relative">
+                                <input type="tel" name="phone" value={order.customer.phone} placeholder="លេខទូរស័ព្ទ*" className="form-input !py-3 rounded-xl border-gray-700 bg-gray-900 pr-12 font-mono font-black text-blue-300" onChange={handleCustomerChange} required />
+                                <div className="absolute right-3 top-0 bottom-0 flex items-center justify-center pointer-events-none">
+                                    {carrierLogo && <img src={carrierLogo} alt="Carrier" className="h-6 w-auto object-contain transition-all animate-fade-in" />}
+                                </div>
+                            </div>
                              
                              <div className="md:col-span-2 grid grid-cols-1 sm:grid-cols-3 gap-3 sm:gap-4">
                                 <SearchableProvinceDropdown 
@@ -664,10 +669,18 @@ const CreateOrderPage: React.FC<CreateOrderPageProps> = ({ team, onSaveSuccess, 
                                     selectedProvince={order.customer.province}
                                     onSelect={(val) => handleCustomerChange({ target: { name: 'province', value: val } } as any)}
                                 />
-                                <select name="district" value={order.customer.district} className="form-select" onChange={handleCustomerChange} disabled={!order.customer.province}><option value="">-- ស្រុក/ខណ្ឌ --</option>{districts.map((d: string) => <option key={d} value={d}>{d}</option>)}</select>
-                                <select name="sangkat" value={order.customer.sangkat} className="form-select" onChange={handleCustomerChange} disabled={!order.customer.district}><option value="">-- ឃុំ/សង្កាត់ --</option>{sangkats.map((s: string) => <option key={s} value={s}>{s}</option>)}</select>
+                                <select name="district" value={order.customer.district} className="form-select !py-3 rounded-xl border-gray-700 bg-gray-900" onChange={handleCustomerChange} disabled={!order.customer.province}><option value="">-- ស្រុក/ខណ្ឌ --</option>{districts.map((d: string) => <option key={d} value={d}>{d}</option>)}</select>
+                                <select name="sangkat" value={order.customer.sangkat} className="form-select !py-3 rounded-xl border-gray-700 bg-gray-900" onChange={handleCustomerChange} disabled={!order.customer.district}><option value="">-- ឃុំ/សង្កាត់ --</option>{sangkats.map((s: string) => <option key={s} value={s}>{s}</option>)}</select>
                             </div>
-                             <div className="md:col-span-2"><label className="input-label font-black text-[10px] uppercase text-gray-500 tracking-widest mb-2 block">ទីតាំងលម្អិត (ផ្ទះលេខ, ផ្លូវ)</label><div className="flex gap-2"><input type="text" name="additionalLocation" value={order.customer.additionalLocation} placeholder="បញ្ចូលទីតាំងលម្អិត..." className="form-input !py-3 rounded-xl bg-gray-900 border-gray-700" onChange={handleCustomerChange} /><button type="button" onClick={handleSearchOnMaps} className="p-3 bg-blue-600/10 text-blue-400 rounded-xl border border-blue-500/20 hover:bg-blue-600 hover:text-white transition-all active:scale-90"><svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor"><path fillRule="evenodd" d="M5.05 4.05a7 7 0 119.9 9.9L10 18.9l-4.95-4.95a7 7 0 010-9.9zM10 11a2 2 0 100-4 2 2 0 000 4z" clipRule="evenodd" /></svg></button></div></div>
+                             <div className="md:col-span-2">
+                                <label className="input-label font-black text-[10px] uppercase text-gray-500 tracking-widest mb-2 block">ទីតាំងលម្អិត (ផ្ទះលេខ, ផ្លូវ)</label>
+                                <div className="flex gap-2">
+                                    <input type="text" name="additionalLocation" value={order.customer.additionalLocation} placeholder="បញ្ចូលទីតាំងលម្អិត..." className="form-input !py-3 rounded-xl bg-gray-900 border-gray-700 flex-grow" onChange={handleCustomerChange} />
+                                    <button type="button" onClick={handleSearchOnMaps} className="flex-shrink-0 w-12 h-12 flex items-center justify-center bg-blue-600/10 text-blue-400 rounded-xl border border-blue-500/20 hover:bg-blue-600 hover:text-white transition-all active:scale-90">
+                                        <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor"><path fillRule="evenodd" d="M5.05 4.05a7 7 0 119.9 9.9L10 18.9l-4.95-4.95a7 7 0 010-9.9zM10 11a2 2 0 100-4 2 2 0 000 4z" clipRule="evenodd" /></svg>
+                                    </button>
+                                </div>
+                            </div>
                             <div className="md:col-span-2">
                                 <label className="input-label font-black text-[10px] uppercase text-gray-500 tracking-widest mb-2 block">ថ្លៃសេវាដឹកជញ្ជូន</label>
                                 <div className="flex gap-3 mb-3">
@@ -845,7 +858,7 @@ const CreateOrderPage: React.FC<CreateOrderPageProps> = ({ team, onSaveSuccess, 
                 const selectedDriver = appData.drivers?.find((d: Driver) => d.DriverName === order.shipping.details);
                 return (
                     <div className="animate-fade-in space-y-4 sm:space-y-8">
-                        <div><h3 className="text-[10px] font-black text-gray-500 uppercase tracking-widest mb-2 sm:mb-3 flex items-center gap-2"><span className="w-1.5 h-1.5 rounded-full bg-blue-500"></span> ព័ត៌មានអតិថិជន</h3><div className="grid grid-cols-1 md:grid-cols-2 gap-3 sm:gap-4 bg-gray-900/60 p-3 sm:p-5 rounded-2xl sm:rounded-3xl border border-white/5 shadow-inner"><div className="space-y-1"><p className="text-[9px] text-gray-500 font-bold uppercase">Customer Info</p><p className="text-white font-black text-base sm:text-lg">{order.customer.name}</p><div className="flex items-center gap-2"><p className="text-blue-400 font-bold font-mono text-sm">{order.customer.phone}</p>{carrierLogo && <img src={carrierLogo} className="h-4 sm:h-5 w-auto object-contain" alt="Carrier" />}</div></div><div className="space-y-2 md:text-right">
+                        <div><h3 className="text-[10px] font-black text-gray-500 uppercase tracking-widest mb-2 sm:mb-3 flex items-center gap-2"><span className="w-1.5 h-1.5 rounded-full bg-blue-500"></span> ព័ត៌មានអតិថិជន</h3><div className="grid grid-cols-1 md:grid-cols-2 gap-3 sm:gap-4 bg-gray-900/60 p-3 sm:p-5 rounded-2xl sm:rounded-3xl border border-white/5 shadow-inner"><div className="space-y-1"><p className="text-[9px] text-gray-500 font-bold uppercase">Customer Info</p><p className="text-white font-black text-base sm:text-lg">{order.customer.name}</p><div className="flex items-center gap-3"><p className="text-blue-400 font-bold font-mono text-base">{order.customer.phone}</p>{carrierLogo && <div className="h-6 flex items-center"><img src={carrierLogo} className="h-5 sm:h-6 w-auto object-contain" alt="Carrier" /></div>}</div></div><div className="space-y-2 md:text-right">
                                     <p className="text-[9px] text-gray-500 font-bold uppercase">Location / Store</p>
                                     <p className="text-gray-200 font-bold text-xs sm:text-sm leading-tight">{`${order.customer.additionalLocation}, ${order.customer.sangkat}, ${order.customer.district}, ${order.customer.province}`.replace(/^,|,$/g, '').trim()}</p>
                                     <div className="pt-1.5 border-t border-white/5 mt-1.5 inline-block md:ml-auto">
@@ -912,7 +925,7 @@ const CreateOrderPage: React.FC<CreateOrderPageProps> = ({ team, onSaveSuccess, 
     };
 
     return (
-        <div className="w-full h-full overflow-y-auto custom-scrollbar px-1 sm:px-4 pb-24">
+        <div className="w-full px-1 sm:px-4 pb-10">
             <div className="max-w-4xl mx-auto mt-2 sm:mt-10 lg:mt-14">
              <style>{`
                 @keyframes shimmer {

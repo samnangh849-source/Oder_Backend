@@ -6,7 +6,7 @@ import { ParsedOrder } from '@/types';
 import { convertGoogleDriveUrl } from '@/utils/fileUtils';
 import Modal from '@/components/common/Modal';
 
-const DriverDeliveryView: React.FC = () => {
+const DriverDeliveryView: React.FC<{ onOpenDeliveryList?: () => void }> = ({ onOpenDeliveryList }) => {
     const { setMobilePageTitle, refreshData, orders, previewImage: showFullImage, appData, previewImage: globalPreview } = useContext(AppContext);
     
     // Store Selection State
@@ -175,13 +175,24 @@ const DriverDeliveryView: React.FC = () => {
                         <span className="text-[9px] bg-purple-500/20 text-purple-400 px-2 py-1 rounded-lg border border-purple-500/30">{selectedStore}</span>
                     </h2>
                 </div>
-                <button 
-                    onClick={() => { setSelectedStore(''); setFoundOrder(null); setOrderIdInput(''); }}
-                    className="px-4 py-2.5 bg-gray-800/50 hover:bg-gray-800 text-gray-400 hover:text-white rounded-xl border border-white/5 active:scale-95 transition-all text-[10px] font-black uppercase tracking-widest flex items-center gap-2"
-                >
-                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7h12m0 0l-4-4m4 4l-4 4m0 6H4m0 0l4 4m-4-4l4-4" /></svg>
-                    ប្ដូរឃ្លាំង
-                </button>
+                <div className="flex items-center gap-2">
+                    {onOpenDeliveryList && (
+                        <button 
+                            onClick={onOpenDeliveryList}
+                            className="px-4 py-2.5 bg-emerald-600 hover:bg-emerald-500 text-white rounded-xl shadow-lg transition-all active:scale-95 text-[10px] font-black uppercase tracking-widest flex items-center gap-2 border border-emerald-400/20"
+                        >
+                            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2.5}><path d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" /></svg>
+                            Delivery List
+                        </button>
+                    )}
+                    <button 
+                        onClick={() => { setSelectedStore(''); setFoundOrder(null); setOrderIdInput(''); }}
+                        className="px-4 py-2.5 bg-gray-800/50 hover:bg-gray-800 text-gray-400 hover:text-white rounded-xl border border-white/5 active:scale-95 transition-all text-[10px] font-black uppercase tracking-widest flex items-center gap-2"
+                    >
+                        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7h12m0 0l-4-4m4 4l-4 4m0 6H4m0 0l4 4m-4-4l4-4" /></svg>
+                        ប្ដូរឃ្លាំង
+                    </button>
+                </div>
             </div>
 
             <div className="bg-[#0f172a] border border-white/10 rounded-[2rem] p-6 shadow-2xl">
@@ -262,13 +273,13 @@ const DriverDeliveryView: React.FC = () => {
                             {previewImage ? (
                                 <div className="relative group animate-reveal">
                                     <div className="w-full aspect-[4/3] rounded-[2rem] overflow-hidden border-4 border-emerald-500/30 shadow-2xl">
-                                        <img src={previewImage} className="w-full h-full object-cover" alt="POD Preview" />
+                                        <img src={convertGoogleDriveUrl(previewImage)} className="w-full h-full object-cover" alt="POD Preview" />
                                     </div>
                                     <button 
                                         onClick={() => setPreviewImage(null)}
                                         className="absolute top-4 right-4 w-12 h-12 bg-red-600 text-white rounded-full flex items-center justify-center shadow-2xl border-2 border-white/20"
                                     >
-                                        <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M6 18L18 6M6 6l12 12" /></svg>
+                                        <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={3}><path d="M6 18L18 6M6 6l12 12" /></svg>
                                     </button>
                                 </div>
                             ) : (
@@ -311,7 +322,7 @@ const DriverDeliveryView: React.FC = () => {
                         <div className="flex justify-between items-start mb-8 border-b border-white/5 pb-6">
                             <div className="flex items-center gap-4">
                                 <div className="w-14 h-14 bg-blue-600/20 rounded-2xl flex items-center justify-center border border-blue-500/30 text-blue-400">
-                                    <svg className="w-8 h-8" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" /></svg>
+                                    <svg className="w-8 h-8" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" /></svg>
                                 </div>
                                 <div>
                                     <h3 className="text-2xl font-black text-white uppercase tracking-tighter italic">ព័ត៌មានលម្អិត</h3>
