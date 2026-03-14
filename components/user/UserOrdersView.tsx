@@ -5,10 +5,10 @@ import Spinner from '../common/Spinner';
 import OrdersList from '../orders/OrdersList';
 import EditOrderPage from '../../pages/EditOrderPage'; 
 import UserSalesPageReport from '../../pages/UserSalesPageReport'; 
-import DeliveryListGeneratorModal from '../orders/DeliveryListGeneratorModal';
 import ShippingReport from '../reports/ShippingReport';
 import { safeParseDate, getValidDate, getTimestamp } from '../../utils/dateUtils';
 import { translations } from '../../translations';
+import { WEB_APP_URL } from '../../constants';
 
 type DateRangePreset = 'today' | 'yesterday' | 'this_week' | 'this_month' | 'last_month' | 'this_year' | 'last_year' | 'all' | 'custom';
 
@@ -31,7 +31,6 @@ const UserOrdersView: React.FC<{ onAdd: () => void }> = ({ onAdd }) => {
     const [searchQuery, setSearchQuery] = useState('');
     const [showReport, setShowReport] = useState(false);
     const [showShippingReport, setShowShippingReport] = useState(false); 
-    const [isDeliveryModalOpen, setIsDeliveryModalOpen] = useState(false);
     const [viewMode, setViewMode] = useState<'card' | 'list'>('card');
     const [lastSync, setLastSync] = useState<Date>(new Date());
     
@@ -96,7 +95,7 @@ const UserOrdersView: React.FC<{ onAdd: () => void }> = ({ onAdd }) => {
     const fetchRanking = useCallback(async () => {
         try {
             const token = localStorage.getItem('token');
-            const response = await fetch(`${translations.WEB_APP_URL || 'https://acc-order-system.onrender.com'}/api/teams/ranking`, {
+            const response = await fetch(`${WEB_APP_URL}/api/teams/ranking`, {
                 headers: { 'Authorization': `Bearer ${token}` }
             });
             if (response.ok) {
@@ -116,7 +115,7 @@ const UserOrdersView: React.FC<{ onAdd: () => void }> = ({ onAdd }) => {
         setIsShippingLoading(true);
         try {
             const token = localStorage.getItem('token');
-            const response = await fetch(`${translations.WEB_APP_URL || 'https://acc-order-system.onrender.com'}/api/teams/shipping-costs`, {
+            const response = await fetch(`${WEB_APP_URL}/api/teams/shipping-costs`, {
                 headers: { 'Authorization': `Bearer ${token}` }
             });
             if (response.ok) {
@@ -397,10 +396,6 @@ const UserOrdersView: React.FC<{ onAdd: () => void }> = ({ onAdd }) => {
                         </button>
                     </>
                 )}
-                <button onClick={() => setIsDeliveryModalOpen(true)} className="flex items-center gap-2 px-4 py-2.5 bg-emerald-600/10 active:bg-emerald-600/20 text-emerald-400 rounded-xl border border-emerald-500/10 transition-all shrink-0">
-                    <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2.5}><path d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" /></svg>
-                    <span className="text-[9px] font-black uppercase tracking-widest">Delivery List</span>
-                </button>
             </div>
 
             <div className="grid grid-cols-1 lg:grid-cols-12 gap-4">
@@ -477,13 +472,9 @@ const UserOrdersView: React.FC<{ onAdd: () => void }> = ({ onAdd }) => {
                         </button>
                     </>
                 )}
-                <button onClick={() => setIsDeliveryModalOpen(true)} className="flex items-center gap-2.5 px-5 py-3 bg-emerald-600/10 hover:bg-emerald-600/20 text-emerald-400 rounded-2xl border border-emerald-500/20 transition-all active:scale-95 group">
-                    <svg className="w-4 h-4 group-hover:scale-110 transition-transform" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2.5}><path d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" /></svg>
-                    <span className="text-[10px] font-black uppercase tracking-widest">Delivery List</span>
-                </button>
             </div>
 
-            <div className="relative animate-reveal">
+            <div className="relative animate-fade-in">
                 {processing ? (
                     <div className="flex flex-col items-center justify-center py-32 gap-4">
                         <Spinner size="lg" />
@@ -505,8 +496,6 @@ const UserOrdersView: React.FC<{ onAdd: () => void }> = ({ onAdd }) => {
                     </div>
                 )}
             </div>
-
-            <DeliveryListGeneratorModal isOpen={isDeliveryModalOpen} onClose={() => setIsDeliveryModalOpen(false)} orders={permittedOrders} appData={appData} team={team} />
         </div>
     );
 };

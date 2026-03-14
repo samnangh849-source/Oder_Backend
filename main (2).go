@@ -1542,31 +1542,52 @@ func handleAdminUpdateProductTags(c *gin.Context) { c.JSON(200, gin.H{"status": 
 
 func handleGetTeamSalesRanking(c *gin.Context) {
 	var results []struct {
-		Team    string  `gorm:"column:team" json:"Team"`
-		Revenue float64 `gorm:"column:revenue" json:"Revenue"`
+		Team    string  `json:"Team"`
+		Revenue float64 `json:"Revenue"`
 	}
 	
-	// Explicitly select columns and handle potential nulls
-	err := DB.Model(&Order{}).
-		Select("team, SUM(grand_total) as revenue").
-		Where("order_id NOT LIKE ? AND order_id NOT LIKE ?", "%Opening_Balance%", "%Opening Balance%").
-		Where("team IS NOT NULL AND team <> ?", "").
-		Group("team").
-		Order("revenue DESC").
-		Limit(10).
-		Scan(&results).Error
+	// Advanced Query: Use the team from orders if available, otherwise fallback to the user's primary team
+	// This ensures historical data without the 'team' column is still counted
+	query := `
+		SELECT 
+			LOWER(TRIM(COALESCE(NULLIF(o.team, ''), u.team, 'Unassigned'))) as team_name, 
+			SUM(o.grand_total) as total_revenue
+		FROM orders o
+		LEFT JOIN users u ON o.user = u.user_name
+		WHERE o.order_id NOT LIKE '%Opening_Balance%' 
+		  AND o.order_id NOT LIKE '%Opening Balance%'
+		GROUP BY team_name
+		HAVING team_name <> 'unassigned' AND team_name <> ''
+		ORDER BY total_revenue DESC
+		LIMIT 10
+	`
 
+	rows, err := DB.Raw(query).Rows()
 	if err != nil {
 		c.JSON(500, gin.H{"status": "error", "message": err.Error()})
 		return
 	}
+	defer rows.Close()
 
-	// Ensure we return an empty array instead of null if no results
+	for rows.Next() {
+		var r struct {
+			Team    string
+			Revenue float64
+		}
+		if err := rows.Scan(&r.Team, &r.Revenue); err == nil {
+			// Capitalize first letter for display
+			if len(r.Team) > 0 {
+				r.Team = strings.ToUpper(string(r.Team[0])) + r.Team[1:]
+			}
+			results = append(results, r)
+		}
+	}
+
 	if results == nil {
-		results = make([]struct {
-			Team    string  `gorm:"column:team" json:"Team"`
-			Revenue float64 `gorm:"column:revenue" json:"Revenue"`
-		}, 0)
+		results = []struct {
+			Team    string  `json:"Team"`
+			Revenue float64 `json:"Revenue"`
+		}{}
 	}
 
 	c.JSON(200, gin.H{"status": "success", "data": results})

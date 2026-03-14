@@ -1,4 +1,4 @@
-import React, { useContext, useRef, useMemo, useCallback } from 'react';
+import React, { useContext, useRef, useMemo, useCallback, useState } from 'react';
 import { List } from 'react-window';
 import { ParsedOrder } from '../../types';
 import { AppContext } from '../../context/AppContext';
@@ -66,44 +66,58 @@ const OrderRow = (props: any) => {
     return (
         <div style={style} className="group">
             <style>{`
-                .os-tooltip-trigger { position: relative; cursor: default; }
+                .os-tooltip-trigger { position: relative; }
                 .os-tooltip {
                     position: absolute;
-                    bottom: 100%;
-                    left: 0;
-                    margin-bottom: 8px;
-                    padding: 10px 14px;
-                    background: rgba(15, 23, 42, 0.95);
-                    backdrop-filter: blur(16px);
-                    border: 1px solid rgba(255, 255, 255, 0.1);
-                    border-radius: 12px;
+                    bottom: calc(100% + 5px);
+                    left: 20px;
+                    padding: 8px 12px;
+                    background: rgba(15, 23, 42, 0.98);
+                    backdrop-filter: blur(20px);
+                    border: 1px solid rgba(255, 255, 255, 0.12);
+                    border-radius: 10px;
                     color: white;
                     font-size: 11px;
-                    font-weight: 600;
+                    font-weight: 700;
                     white-space: pre-wrap;
                     width: max-content;
-                    max-width: 280px;
-                    z-index: 100;
+                    max-width: 260px;
+                    z-index: 1000;
                     opacity: 0;
                     visibility: hidden;
-                    transform: translateY(10px) scale(0.95);
-                    transition: all 0.3s cubic-bezier(0.23, 1, 0.32, 1);
-                    box-shadow: 0 20px 40px rgba(0,0,0,0.5);
+                    transform: translateY(5px);
+                    transition: all 0.2s cubic-bezier(0.23, 1, 0.32, 1);
+                    box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.6);
                     pointer-events: none;
                 }
                 .os-tooltip-trigger:hover .os-tooltip {
                     opacity: 1;
                     visibility: visible;
-                    transform: translateY(0) scale(1);
+                    transform: translateY(0);
                 }
                 .os-tooltip::after {
                     content: '';
                     position: absolute;
                     top: 100%;
-                    left: 20px;
-                    border-left: 6px solid transparent;
-                    border-right: 6px solid transparent;
-                    border-top: 6px solid rgba(15, 23, 42, 0.95);
+                    left: 15px;
+                    border-left: 5px solid transparent;
+                    border-right: 5px solid transparent;
+                    border-top: 5px solid rgba(15, 23, 42, 0.98);
+                }
+                /* Flip tooltip for top rows to avoid header conflict */
+                .os-tooltip-trigger.is-top .os-tooltip {
+                    bottom: auto;
+                    top: calc(100% + 5px);
+                    transform: translateY(-5px);
+                }
+                .os-tooltip-trigger.is-top:hover .os-tooltip {
+                    transform: translateY(0);
+                }
+                .os-tooltip-trigger.is-top .os-tooltip::after {
+                    top: auto;
+                    bottom: 100%;
+                    border-top: none;
+                    border-bottom: 5px solid rgba(15, 23, 42, 0.98);
                 }
             `}</style>
             <div className={`flex h-full transition-all duration-300 border-b border-white/[0.08] ${isVerified ? 'bg-emerald-500/[0.04]' : isSelected ? 'bg-blue-500/[0.08]' : 'hover:bg-white/[0.05]'} ${showBorders ? 'border-x border-white/10' : ''}`}>
@@ -120,6 +134,9 @@ const OrderRow = (props: any) => {
 
                 {visibleCols.map((k: string) => {
                     const width = getColWidth(k);
+                    const isTopRow = index < 5;
+                    const tooltipTriggerClass = `os-tooltip-trigger ${isTopRow ? 'is-top' : ''}`;
+
                     const content = (() => {
                         switch (k) {
                             case 'index':
@@ -133,8 +150,7 @@ const OrderRow = (props: any) => {
                                 );
                             case 'customerName':
                                 return (
-                                    <div className="px-6 py-2 w-full overflow-hidden os-tooltip-trigger">
-                                        <div className="os-tooltip">{order['Customer Name']}</div>
+                                    <div className="px-6 py-2 w-full overflow-hidden">
                                         <div className="font-black text-gray-100 truncate mb-1 text-[15px]">{order['Customer Name']}</div>
                                         <div className="flex items-center gap-2">
                                             {carrierLogo && <img src={convertGoogleDriveUrl(carrierLogo)} className="w-4 h-4 object-contain" alt="" />}
@@ -143,12 +159,9 @@ const OrderRow = (props: any) => {
                                     </div>
                                 );
                             case 'productInfo':
-                                const allProductNames = order.Products.map(p => `${p.name} (x${p.quantity})`).join('\n');
                                 return (
-                                    <div className="px-6 py-2 w-full overflow-hidden flex items-center os-tooltip-trigger">
-                                        <div className="os-tooltip">{allProductNames}</div>
+                                    <div className="px-6 py-2 w-full overflow-hidden flex items-center">
                                         <div className="flex items-center gap-3 w-full">
-                                            {/* Advanced Image Stack */}
                                             <div className="flex -space-x-4 hover:space-x-1 transition-all duration-500 items-center shrink-0">
                                                 {productThumbnails.slice(0, 3).map((p: any, i: number) => (
                                                     <div key={i} className="relative group/prod">
@@ -166,25 +179,13 @@ const OrderRow = (props: any) => {
                                                     </div>
                                                 )}
                                             </div>
-                                            
-                                            {/* Product Labeling */}
                                             <div className="flex-1 min-w-0 flex flex-col justify-center">
                                                 <div className="flex items-center gap-1.5 mb-0.5">
                                                     <span className="text-[12px] font-black text-white truncate uppercase tracking-tight leading-none italic">{order.Products[0]?.name}</span>
                                                     <div className="w-1 h-1 rounded-full bg-blue-500/40"></div>
                                                 </div>
                                                 <div className="flex items-center gap-2">
-                                                    <span className="text-[10px] font-bold text-gray-500 uppercase tracking-widest leading-none">
-                                                        {order.Products.length} {order.Products.length > 1 ? 'Items' : 'Item'}
-                                                    </span>
-                                                    {order.Products[0]?.colorInfo && (
-                                                        <>
-                                                            <div className="w-1 h-1 rounded-full bg-gray-800"></div>
-                                                            <span className="text-[10px] font-black text-blue-400/60 uppercase italic tracking-tighter truncate max-w-[80px]">
-                                                                {order.Products[0].colorInfo}
-                                                            </span>
-                                                        </>
-                                                    )}
+                                                    <span className="text-[10px] font-bold text-gray-500 uppercase tracking-widest leading-none">{order.Products.length} Items</span>
                                                 </div>
                                             </div>
                                         </div>
@@ -192,15 +193,14 @@ const OrderRow = (props: any) => {
                                 );
                             case 'location':
                                 return (
-                                    <div className="px-4 py-2 w-full overflow-hidden os-tooltip-trigger">
-                                        <div className="os-tooltip">{`${order.Location}\n${order['Address Details']}`}</div>
+                                    <div className="px-4 py-2 w-full overflow-hidden">
                                         <div className="font-black text-gray-300 text-[13px] truncate leading-tight uppercase tracking-tight">{order.Location}</div>
                                         <div className="text-[11px] text-gray-600 font-bold truncate mt-1 italic">{order['Address Details']}</div>
                                     </div>
                                 );
                             case 'pageInfo':
                                 return (
-                                    <div className="px-4 py-2 w-full overflow-hidden flex items-center gap-3 os-tooltip-trigger">
+                                    <div className={`px-4 py-2 w-full flex items-center gap-3 ${tooltipTriggerClass}`}>
                                         <div className="os-tooltip">{order.Page}</div>
                                         {pageLogoUrl && <img src={pageLogoUrl} className="w-10 h-10 rounded-xl border border-white/5 object-cover shadow-xl" alt="" />}
                                         <span className="font-black text-gray-500 text-[11px] uppercase truncate tracking-tighter">{order.Page}</span>
@@ -209,8 +209,7 @@ const OrderRow = (props: any) => {
                             case 'brandSales':
                             case 'fulfillment':
                                 return (
-                                    <div className="px-4 py-2 w-full overflow-hidden flex items-center os-tooltip-trigger">
-                                        <div className="os-tooltip">{order['Fulfillment Store']}</div>
+                                    <div className="px-4 py-2 w-full flex items-center overflow-hidden">
                                         <span className="px-3 py-2 rounded-xl bg-indigo-500/5 border border-indigo-500/10 text-indigo-400 font-black text-[11px] uppercase tracking-tighter truncate block text-center w-full">
                                             {order['Fulfillment Store']}
                                         </span>
@@ -227,7 +226,7 @@ const OrderRow = (props: any) => {
                                 );
                             case 'shippingService':
                                 return (
-                                    <div className="px-4 py-2 w-full overflow-hidden flex items-center os-tooltip-trigger">
+                                    <div className={`px-4 py-2 w-full flex items-center ${tooltipTriggerClass}`}>
                                         <div className="os-tooltip">{order['Internal Shipping Method']}</div>
                                         <div className="flex items-center gap-2 bg-black/30 p-2 rounded-xl border border-white/5 shadow-inner overflow-hidden w-full">
                                             <div className="w-8 h-8 bg-white/5 rounded-lg flex items-center justify-center flex-shrink-0">
@@ -238,7 +237,7 @@ const OrderRow = (props: any) => {
                                     </div>
                                 );
                             case 'driver':
-                                return <div className="px-4 py-2 w-full font-black text-orange-400/80 text-[12px] uppercase truncate tracking-tight flex items-center os-tooltip-trigger"><div className="os-tooltip">{order['Driver Name']}</div>{order['Driver Name'] || 'Unassigned'}</div>;
+                                return <div className="px-4 py-2 w-full font-black text-orange-400/80 text-[12px] uppercase truncate tracking-tight flex items-center">{order['Driver Name'] || 'Unassigned'}</div>;
                             case 'shippingCost':
                                 return <div className="px-4 py-2 w-full font-mono font-black text-orange-500/60 text-[14px] flex items-center">${(Number(order['Internal Cost']) || 0).toFixed(2)}</div>;
                             case 'status':
@@ -258,8 +257,7 @@ const OrderRow = (props: any) => {
                                 );
                             case 'note':
                                 return (
-                                    <div className="px-4 py-2 w-full text-[12px] text-gray-500 font-medium truncate italic flex items-center group-hover:text-gray-300 transition-colors os-tooltip-trigger">
-                                        <div className="os-tooltip">{order.Note || 'No Note'}</div>
+                                    <div className="px-4 py-2 w-full text-[12px] text-gray-500 font-medium truncate italic flex items-center group-hover:text-gray-300 transition-colors">
                                         {order.Note || '---'}
                                     </div>
                                 );

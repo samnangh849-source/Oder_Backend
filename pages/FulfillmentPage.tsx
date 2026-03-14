@@ -7,10 +7,12 @@ import FulfillmentDashboard from '@/pages/FulfillmentDashboard';
 import PackagingView from '@/pages/PackagingView';
 import DriverDeliveryView from '@/pages/DriverDeliveryView';
 import InventoryManagement from '@/components/admin/InventoryManagement';
+import DeliveryListGeneratorModal from '@/components/orders/DeliveryListGeneratorModal';
 
 const FulfillmentPage: React.FC = () => {
-    const { orders, isOrdersLoading, setMobilePageTitle } = useContext(AppContext);
+    const { orders, isOrdersLoading, setMobilePageTitle, appData } = useContext(AppContext);
     const [activeSubView, setActiveSubView] = useState<'dashboard' | 'packaging' | 'delivery' | 'inventory'>('dashboard');
+    const [isDeliveryModalOpen, setIsDeliveryModalOpen] = useState(false);
 
     if (isOrdersLoading && orders.length === 0) {
         return <div className="flex h-screen items-center justify-center bg-gray-950"><Spinner size="lg" /></div>;
@@ -18,12 +20,31 @@ const FulfillmentPage: React.FC = () => {
 
     return (
         <div className="flex flex-col h-full relative">
-            <div className="flex-1 min-h-0 animate-fade-in px-1">
+            {activeSubView === 'delivery' && (
+                <div className="fixed top-20 right-6 z-[60] animate-reveal">
+                    <button 
+                        onClick={() => setIsDeliveryModalOpen(true)}
+                        className="flex items-center gap-2.5 px-6 py-3 bg-emerald-600 hover:bg-emerald-500 text-white rounded-2xl shadow-[0_10px_20px_rgba(16,185,129,0.3)] transition-all active:scale-95 group border border-emerald-400/20"
+                    >
+                        <svg className="w-5 h-5 group-hover:scale-110 transition-transform" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2.5}><path d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" /></svg>
+                        <span className="text-[11px] font-black uppercase tracking-widest">Delivery List</span>
+                    </button>
+                </div>
+            )}
+
+            <div className="flex-1 min-h-0 animate-reveal px-1">
                 {activeSubView === 'dashboard' && <FulfillmentDashboard orders={orders} />}
                 {activeSubView === 'packaging' && <PackagingView orders={orders} />}
                 {activeSubView === 'delivery' && <DriverDeliveryView />}
                 {activeSubView === 'inventory' && <InventoryManagement />}
             </div>
+
+            <DeliveryListGeneratorModal 
+                isOpen={isDeliveryModalOpen} 
+                onClose={() => setIsDeliveryModalOpen(false)} 
+                orders={orders} 
+                appData={appData} 
+            />
 
             {/* Premium Floating Bottom Navigation */}
             <div className="fixed bottom-0 left-0 right-0 z-[70] px-4 pb-6 pointer-events-none">
