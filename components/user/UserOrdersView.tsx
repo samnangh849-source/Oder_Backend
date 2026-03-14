@@ -68,7 +68,21 @@ const UserOrdersView: React.FC<{ onAdd: () => void }> = ({ onAdd }) => {
     const [showShippingReport, setShowShippingReport] = useState(false); 
     const [isDeliveryModalOpen, setIsDeliveryModalOpen] = useState(false);
     
-    // 2. SET DEFAULT FILTER TO THIS MONTH (Better UX than 'today')
+    const [lastSync, setLastSync] = useState<Date>(new Date());
+
+    // 2. REAL-TIME POLLING (Sync every 30s if permitted)
+    useEffect(() => {
+        if (!hasPermission('view_order_list')) return;
+        
+        const interval = setInterval(() => {
+            refreshData();
+            setLastSync(new Date());
+        }, 30000);
+        
+        return () => clearInterval(interval);
+    }, [hasPermission, refreshData]);
+
+    // 3. SET DEFAULT FILTER TO THIS MONTH (Better UX than 'today')
     const [dateRange, setDateRange] = useState<DateRangePreset>('this_month');
     
     const [customStart, setCustomStart] = useState(new Date().toISOString().split('T')[0]);
@@ -275,8 +289,19 @@ const UserOrdersView: React.FC<{ onAdd: () => void }> = ({ onAdd }) => {
                 <div className="flex items-center gap-3">
                     <div className="w-1 h-8 bg-blue-600 rounded-full shadow-[0_0_10px_rgba(37,99,235,0.5)]"></div>
                     <div className="flex flex-col">
-                        <h3 className="text-sm md:text-lg font-black text-white uppercase tracking-tight leading-none">Operational Portal</h3>
-                        <span className="text-[8px] md:text-[10px] font-bold text-blue-400/80 uppercase tracking-widest mt-0.5">Team: {team}</span>
+                        <div className="flex items-center gap-2">
+                            <h3 className="text-sm md:text-lg font-black text-white uppercase tracking-tight leading-none">Operational Portal</h3>
+                            {hasPermission('view_order_list') && (
+                                <div className="flex items-center gap-1 bg-emerald-500/10 px-2 py-0.5 rounded-full border border-emerald-500/20">
+                                    <span className="w-1 h-1 bg-emerald-500 rounded-full animate-pulse"></span>
+                                    <span className="text-[7px] font-black text-emerald-500 uppercase tracking-widest">Live</span>
+                                </div>
+                            )}
+                        </div>
+                        <div className="flex items-center gap-2 mt-0.5">
+                            <span className="text-[8px] md:text-[10px] font-bold text-blue-400/80 uppercase tracking-widest">Team: {team}</span>
+                            <span className="text-[8px] text-gray-600 font-medium">Synced {lastSync.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' })}</span>
+                        </div>
                     </div>
                 </div>
                 <div className="bg-white/5 border border-white/10 px-3 py-1.5 rounded-xl shadow-xl">
