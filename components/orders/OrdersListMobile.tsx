@@ -10,6 +10,7 @@ interface OrdersListMobileProps {
     totals: { grandTotal: number; internalCost: number; count: number; paidCount: number; unpaidCount: number };
     visibleColumns?: Set<string>;
     selectedIds: Set<string>;
+    isSelectionMode?: boolean;
     onToggleSelect?: (id: string) => void;
     onEdit?: (order: ParsedOrder) => void;
     onView?: (order: ParsedOrder) => void;
@@ -25,7 +26,7 @@ interface OrdersListMobileProps {
 }
 
 const OrdersListMobile: React.FC<OrdersListMobileProps> = ({
-    orders, totals, visibleColumns, selectedIds, onToggleSelect, onEdit, onView,
+    orders, totals, visibleColumns, selectedIds, isSelectionMode, onToggleSelect, onEdit, onView,
     handlePrint, toggleOrderVerified, updatingIds, groupBy = 'none', viewMode = 'card'
 }) => {
     const { currentUser, hasPermission } = useContext(AppContext);
@@ -164,27 +165,28 @@ const OrdersListMobile: React.FC<OrdersListMobileProps> = ({
                                     <div 
                                         key={order['Order ID']} 
                                         onClick={() => {
-                                            if (selectedIds.size > 0) {
+                                            if (isSelectionMode || selectedIds.size > 0) {
                                                 playClick();
                                                 onToggleSelect?.(order['Order ID']);
                                             } else {
                                                 onView?.(order);
                                             }
                                         }}
-                                        onMouseDown={() => handleStartLongPress(order['Order ID'])}
-                                        onMouseUp={handleEndLongPress}
-                                        onTouchStart={() => handleStartLongPress(order['Order ID'])}
-                                        onTouchEnd={handleEndLongPress}
-                                        className={`order-row-v2 flex items-center justify-between gap-3 ${isSelected ? 'bg-blue-600/20 border-l-4 border-blue-500' : ''}`}
+                                        className={`order-row-v2 flex items-center justify-between gap-3 transition-all ${isSelected ? 'bg-blue-600/20 border-l-4 border-blue-500' : ''}`}
                                     >
                                         <div className="flex items-center gap-3 flex-1 min-w-0">
-                                            {isSelected ? (
-                                                <div className="w-5 h-5 bg-blue-600 rounded-lg flex items-center justify-center shrink-0 shadow-lg shadow-blue-900/40">
-                                                    <svg className="w-3.5 h-3.5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={4}><path d="M5 13l4 4L19 7" /></svg>
+                                            {/* Show checkbox ONLY when Selection Mode is active, otherwise show index */}
+                                            {isSelectionMode ? (
+                                                <div 
+                                                    onClick={(e) => { e.stopPropagation(); playPop(); onToggleSelect?.(order['Order ID']); }}
+                                                    className={`w-6 h-6 rounded-md flex items-center justify-center shrink-0 transition-all border-2 ${isSelected ? 'bg-blue-600 border-blue-500 shadow-lg shadow-blue-900/40' : 'bg-white/5 border-blue-500/40'}`}
+                                                >
+                                                    {isSelected && <svg className="w-4 h-4 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={4}><path d="M5 13l4 4L19 7" /></svg>}
                                                 </div>
                                             ) : (
                                                 <span className="text-[10px] font-black text-blue-500/40 font-mono w-4 shrink-0 text-center">{displayIndex}</span>
                                             )}
+                                            
                                             <div className="flex-1 min-w-0">
                                                 <div className="flex items-center gap-2 mb-0.5">
                                                     <h3 className="text-sm font-black text-white truncate uppercase tracking-tight">{order['Customer Name']}</h3>
@@ -206,7 +208,8 @@ const OrdersListMobile: React.FC<OrdersListMobileProps> = ({
                                             </div>
                                             <div className="text-[7px] font-black text-gray-600 uppercase tracking-widest mt-1">{getSafeDateString(order.Timestamp).split(',')[0]}</div>
                                         </div>
-                                        {showVerify && (
+                                        {/* Hide individual verify button when in selection mode to avoid confusion */}
+                                        {showVerify && !isSelectionMode && (
                                             <div onClick={(e) => e.stopPropagation()} className="flex items-center ml-1">
                                                 <button 
                                                     onClick={() => {
@@ -226,16 +229,33 @@ const OrdersListMobile: React.FC<OrdersListMobileProps> = ({
                             return (
                                 <div 
                                     key={order['Order ID']} 
-                                    onClick={() => onView && onView(order)}
-                                    className={`order-card-v2 relative overflow-hidden rounded-[2rem] p-4 ${isSelected ? 'ring-2 ring-blue-500 bg-blue-500/10' : ''}`}
+                                    onClick={() => {
+                                        if (selectedIds.size > 0 || isSelectionMode) {
+                                            playClick();
+                                            onToggleSelect?.(order['Order ID']);
+                                        } else {
+                                            onView?.(order);
+                                        }
+                                    }}
+                                    className={`order-card-v2 relative overflow-hidden rounded-[2rem] p-4 transition-all duration-300 ${isSelected ? 'ring-2 ring-blue-500 bg-blue-600/10' : ''}`}
                                 >
+                                    {/* Standard Square Checkbox for Cards - Visible ONLY in Selection Mode */}
+                                    {isSelectionMode && (
+                                        <div 
+                                            onClick={(e) => { e.stopPropagation(); playPop(); onToggleSelect?.(order['Order ID']); }}
+                                            className={`absolute top-4 left-4 z-20 w-6 h-6 rounded-md flex items-center justify-center shadow-lg transition-all border-2 ${isSelected ? 'bg-blue-600 border-blue-500' : 'bg-white/5 border-blue-500/40'}`}
+                                        >
+                                            {isSelected && <svg className="w-4 h-4 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={4}><path d="M5 13l4 4L19 7" /></svg>}
+                                        </div>
+                                    )}
+
                                     {/* Glass Highlight */}
                                     <div className="absolute top-0 left-0 w-full h-1/2 bg-gradient-to-b from-white/[0.03] to-transparent pointer-events-none"></div>
 
                                     {/* Header: Index, ID & Price */}
                                     <div className="flex justify-between items-start mb-3 relative z-10">
-                                        <div className="flex items-center gap-2">
-                                            <span className="text-[10px] font-black text-blue-500/40 font-mono italic">{displayIndex}</span>
+                                        <div className={`flex items-center gap-2 ${isSelectionMode ? 'pl-8' : ''}`}>
+                                            {!isSelectionMode && <span className="text-[10px] font-black text-blue-500/40 font-mono italic">{displayIndex}</span>}
                                             <span className="text-[9px] font-black text-gray-600 font-mono tracking-tighter bg-white/5 px-2 py-0.5 rounded-md">#{order['Order ID'].substring(0, 8)}</span>
                                             <div className={`status-pill-v2 !py-0.5 !px-2 !rounded-lg ${isPaid ? 'bg-emerald-500/10 text-emerald-400' : 'bg-orange-500/10 text-orange-400'}`}>
                                                 {order['Payment Status']}
@@ -273,7 +293,7 @@ const OrdersListMobile: React.FC<OrdersListMobileProps> = ({
                                                     <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2.5}><path d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" /></svg>
                                                 </button>
                                             )}
-                                            {showVerify && (
+                                            {showVerify && !isSelectionMode && (
                                                 <button 
                                                     onClick={() => toggleOrderVerified(order['Order ID'], isVerified)}
                                                     className={`action-btn-v2 !w-9 !h-9 transition-all ${isVerified ? 'text-emerald-500 bg-emerald-500/10 border-emerald-500/20' : ''}`}

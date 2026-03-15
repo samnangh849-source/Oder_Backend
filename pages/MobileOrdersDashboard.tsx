@@ -7,13 +7,14 @@ import OrdersList from '../components/orders/OrdersList';
 import { WEB_APP_URL } from '../constants';
 import { useUrlState } from '../hooks/useUrlState';
 import PdfExportModal from '../components/admin/PdfExportModal';
-import BulkActionBarMobile from '../components/admin/BulkActionBarMobile';
+import BulkActionManager from '../components/admin/BulkActionManager';
 import MobileFilterEngine from '../components/orders/MobileFilterEngine';
 import { FilterPanel } from '../components/orders/FilterPanel';
 import OrderDetailModal from '../components/orders/OrderDetailModal';
 import { translations } from '../translations';
 import { useSoundEffects } from '../hooks/useSoundEffects';
 import { FilterState } from '../components/orders/OrderFilters';
+import { useUI } from '../context/UIContext';
 
 interface MobileOrdersDashboardProps {
     onBack: () => void;
@@ -24,6 +25,7 @@ const MobileOrdersDashboard: React.FC<MobileOrdersDashboardProps> = ({ onBack, i
     const { 
         appData, refreshData, orders, isOrdersLoading, language, isSyncing
     } = useContext(AppContext);
+    const { setIsBottomNavHidden } = useUI();
     
     const { playClick, playTransition, playPop, playSuccess } = useSoundEffects();
     const t = useMemo(() => translations[language || 'km'] || translations['km'], [language]);
@@ -36,9 +38,33 @@ const MobileOrdersDashboard: React.FC<MobileOrdersDashboardProps> = ({ onBack, i
     
     const [isFilterModalOpen, setIsFilterModalOpen] = useState(false);
     const [isPdfModalOpen, setIsPdfModalOpen] = useState(false);
-    const [isBulkProcessing, setIsBulkProcessing] = useState(false);
     const [searchQuery, setSearchQuery] = useState('');
     const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+    const [isSelectionMode, setIsSelectionMode] = useState(false);
+
+    // Hide Bottom Nav when items are selected
+    useEffect(() => {
+        const hasSelection = selectedIds.size > 0;
+        setIsBottomNavHidden(hasSelection);
+        return () => setIsBottomNavHidden(false); // Clean up on unmount
+    }, [selectedIds.size, setIsBottomNavHidden]);
+
+    const toggleSelectionMode = () => {
+        playPop();
+        if (isSelectionMode) {
+            setSelectedIds(new Set());
+        }
+        setIsSelectionMode(!isSelectionMode);
+    };
+
+    const handleSelectAll = () => {
+        playClick();
+        if (selectedIds.size === filteredOrders.length) {
+            setSelectedIds(new Set());
+        } else {
+            setSelectedIds(new Set(filteredOrders.map(o => o['Order ID'])));
+        }
+    };
 
     // Filter State
     const [filters, setFilters] = useState<FilterState>(() => {
@@ -104,38 +130,6 @@ const MobileOrdersDashboard: React.FC<MobileOrdersDashboardProps> = ({ onBack, i
         setUrlStore(filters.fulfillmentStore);
     }, [filters, setUrlTeam, setUrlDate, setUrlLocation, setUrlStore]);
 
-    const handleBulkAction = async (action: string) => {
-        if (action === 'print') {
-            setIsPdfModalOpen(true);
-        } else if (action === 'verify') {
-            setIsBulkProcessing(true);
-            try {
-                const selectedOrders = enrichedOrders.filter(o => selectedIds.has(o['Order ID']));
-                for (const order of selectedOrders) {
-                    const isVerified = order.IsVerified === true || String(order.IsVerified).toUpperCase() === 'TRUE' || order.IsVerified === 'A';
-                    if (!isVerified) {
-                        await fetch(`${WEB_APP_URL}/api/admin/update-sheet`, {
-                            method: 'POST',
-                            headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${localStorage.getItem('token')}` },
-                            body: JSON.stringify({
-                                sheetName: 'AllOrders',
-                                primaryKey: { 'Order ID': order['Order ID'] },
-                                newData: { 'IsVerified': 'TRUE' }
-                            })
-                        });
-                    }
-                }
-                playSuccess();
-                refreshData();
-                setSelectedIds(new Set());
-            } catch (e) {
-                console.error("Bulk verify failed", e);
-            } finally {
-                setIsBulkProcessing(false);
-            }
-        }
-    };
-
     const enrichedOrders = useMemo(() => {
         return orders.map(order => {
             let team = (order.Team || '').trim();
@@ -153,13 +147,66 @@ const MobileOrdersDashboard: React.FC<MobileOrdersDashboardProps> = ({ onBack, i
 
     const filteredOrders = useMemo(() => {
         const base = enrichedOrders.filter(order => {
-            // ... Filtering logic
+            // 1. Date Filtering
+            if (filters.datePreset !== 'all') {
+                const ts = getOrderTimestamp(order);
+                const orderDate = new Date(ts);
+                const now = new Date();
+                const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+                let start: Date | null = null;
+                let end: Date | null = null;
+
+                switch (filters.datePreset) {
+                    case 'today': start = today; end = new Date(today); end.setHours(23, 59, 59, 999); break;
+                    case 'yesterday': start = new Date(today); start.setDate(today.getDate() - 1); end = new Date(today); end.setMilliseconds(-1); break;
+                    case 'this_week': const day = now.getDay(); start = new Date(today); start.setDate(today.getDate() - (day === 0 ? 6 : day - 1)); break;
+                    case 'this_month': start = new Date(now.getFullYear(), now.getMonth(), 1); break;
+                    case 'custom':
+                        if (filters.startDate) start = new Date(filters.startDate + 'T00:00:00');
+                        if (filters.endDate) end = new Date(filters.endDate + 'T23:59:59');
+                        break;
+                }
+                if (start && orderDate < start) return false;
+                if (end && orderDate > end) return false;
+            }
+
+            // 2. Helper for multi-value filters
+            const isMatch = (filterValue: string, orderValue: string) => {
+                if (!filterValue || filterValue === 'all') return true;
+                const filterItems = filterValue.split(',').map(v => v.trim().toLowerCase());
+                const val = (orderValue || '').trim().toLowerCase();
+                return filterItems.includes(val);
+            };
+
+            // 3. Apply individual filters
+            if (!isMatch(filters.team, order.Team)) return false;
+            if (!isMatch(filters.fulfillmentStore, order['Fulfillment Store'] || 'Unassigned')) return false;
+            if (!isMatch(filters.paymentStatus, order['Payment Status'])) return false;
+            if (!isMatch(filters.user, order.User)) return false;
+            if (!isMatch(filters.page, order.Page)) return false;
+            if (!isMatch(filters.shippingService, order['Internal Shipping Method'])) return false;
+            if (!isMatch(filters.driver, order['Internal Shipping Details'])) return false;
+            if (!isMatch(filters.bank, order['Payment Info'])) return false;
+
+            if (filters.isVerified !== 'All') {
+                const isV = order.IsVerified === true || String(order.IsVerified).toUpperCase() === 'TRUE' || order.IsVerified === 'A';
+                if (filters.isVerified === 'Verified' && !isV) return false;
+                if (filters.isVerified === 'Unverified' && isV) return false;
+            }
+
+            // 4. Search Query
             if (searchQuery.trim()) {
                 const q = searchQuery.toLowerCase();
-                return order['Order ID'].toLowerCase().includes(q) || (order['Customer Name'] || '').toLowerCase().includes(q);
+                return (
+                    order['Order ID'].toLowerCase().includes(q) || 
+                    (order['Customer Name'] || '').toLowerCase().includes(q) ||
+                    (order['Customer Phone'] || '').toLowerCase().includes(q)
+                );
             }
+
             return true;
         });
+
         return base.sort((a, b) => {
             let vA: any, vB: any;
             switch(sortBy) {
@@ -213,7 +260,9 @@ const MobileOrdersDashboard: React.FC<MobileOrdersDashboardProps> = ({ onBack, i
                         onChange={e => setSearchQuery(e.target.value)}
                         className="w-full bg-white/[0.03] border border-white/5 rounded-2xl py-3.5 pl-11 pr-4 text-sm font-bold text-white placeholder:text-gray-600 focus:bg-white/10 transition-all outline-none"
                     />
-                    <svg className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-600 group-focus-within:text-blue-500 transition-colors" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" strokeWidth={2.5}/></svg>
+                    <div className="absolute left-4 top-0 bottom-0 flex items-center justify-center pointer-events-none text-gray-600 group-focus-within:text-blue-500 transition-colors">
+                        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" strokeWidth={2.5}/></svg>
+                    </div>
                 </div>
 
                 <div className="flex items-center justify-between gap-3">
@@ -232,14 +281,33 @@ const MobileOrdersDashboard: React.FC<MobileOrdersDashboardProps> = ({ onBack, i
                         </button>
                     </div>
                     
-                    <button 
-                        onClick={() => { playClick(); setIsPdfModalOpen(true); }}
-                        className="flex items-center gap-2 px-4 py-2 bg-red-600/10 text-red-400 border border-red-500/20 rounded-xl active:scale-95 transition-all text-[10px] font-black uppercase tracking-widest whitespace-nowrap"
-                    >
-                        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path d="M7 21h10a2 2 0 002-2V9.414a1 1 0 00-.293-.707l-5.414-5.414A1 1 0 0012.586 3H7a2 2 0 00-2 2v14a2 2 0 002 2z" strokeWidth={2.5}/></svg>
-                        {t.export_pdf}
-                    </button>
+                    <div className="flex items-center gap-2">
+                        <button 
+                            onClick={toggleSelectionMode}
+                            className={`flex items-center justify-center w-10 h-10 rounded-xl transition-all border ${isSelectionMode ? 'bg-blue-600 border-blue-500 text-white shadow-lg shadow-blue-900/40' : 'bg-white/5 border-white/5 text-gray-400'}`}
+                            title="Select Multiple"
+                        >
+                            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-6 9l2 2 4-4" strokeWidth={2.5}/></svg>
+                        </button>
+
+                        <button 
+                            onClick={() => { playClick(); setIsPdfModalOpen(true); }}
+                            className="flex items-center justify-center w-10 h-10 bg-red-600/10 text-red-400 border border-red-500/20 rounded-xl active:scale-95 transition-all"
+                        >
+                            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path d="M7 21h10a2 2 0 002-2V9.414a1 1 0 00-.293-.707l-5.414-5.414A1 1 0 0012.586 3H7a2 2 0 00-2 2v14a2 2 0 002 2z" strokeWidth={2.5}/></svg>
+                        </button>
+                    </div>
                 </div>
+
+                {isSelectionMode && (
+                    <div className="flex items-center justify-between px-1 py-1 bg-blue-600/10 border border-blue-500/20 rounded-xl animate-reveal">
+                        <button onClick={handleSelectAll} className="px-4 py-1.5 text-[10px] font-black text-blue-400 uppercase tracking-widest">
+                            {selectedIds.size === filteredOrders.length ? 'Deselect All' : 'Select All'}
+                        </button>
+                        <span className="text-[10px] font-black text-blue-500 uppercase">{selectedIds.size} Selected</span>
+                        <button onClick={toggleSelectionMode} className="px-4 py-1.5 text-[10px] font-black text-gray-500 uppercase tracking-widest">Cancel</button>
+                    </div>
+                )}
 
                 <div className="flex items-center gap-2 overflow-x-auto no-scrollbar pb-0.5 px-0.5">
                     {[
@@ -268,12 +336,18 @@ const MobileOrdersDashboard: React.FC<MobileOrdersDashboardProps> = ({ onBack, i
                         orders={filteredOrders} viewMode={viewMode}
                         onEdit={o => setEditingOrderId(o['Order ID'])} onView={o => setViewingOrder(o)}
                         showActions={true} selectedIds={selectedIds}
+                        isSelectionMode={isSelectionMode}
                         onToggleSelect={id => setSelectedIds(prev => { const next = new Set(prev); if (next.has(id)) next.delete(id); else next.add(id); return next; })}
                     />
                 )}
             </div>
 
-            <BulkActionBarMobile selectedCount={selectedIds.size} onClear={() => setSelectedIds(new Set())} onAction={handleBulkAction} isProcessing={isBulkProcessing} />
+            <BulkActionManager 
+                orders={enrichedOrders} 
+                selectedIds={selectedIds} 
+                onComplete={() => { setSelectedIds(new Set()); refreshData(); }} 
+                onClearSelection={() => setSelectedIds(new Set())} 
+            />
 
             {isFilterModalOpen && (
                 <FilterPanel isOpen={isFilterModalOpen} onClose={() => setIsFilterModalOpen(false)}>

@@ -502,7 +502,9 @@ const UserOrdersView: React.FC<{ onAdd: () => void }> = ({ onAdd }) => {
                     <div className="flex gap-2">
                         <div className="relative group flex-1">
                             <input type="text" placeholder="Search records..." value={searchQuery} onChange={e => setSearchQuery(e.target.value)} className="w-full bg-white/[0.03] border border-white/5 rounded-xl py-3 pl-10 pr-4 text-[12px] font-bold text-white placeholder:text-gray-600 focus:bg-white/[0.06] focus:border-blue-500/30 transition-all outline-none" />
-                            <svg className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-600 group-focus-within:text-blue-500 transition-colors" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}><path d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" /></svg>
+                            <div className="absolute left-3 top-0 bottom-0 flex items-center justify-center pointer-events-none text-gray-600 group-focus-within:text-blue-500 transition-colors">
+                                <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}><path d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" /></svg>
+                            </div>
                         </div>
                         <div className="flex items-center gap-1.5">
                             <button onClick={() => { playClick(); setIsFilterPanelOpen(true); }} className="p-3 bg-blue-600/10 text-blue-400 border border-blue-500/20 rounded-xl relative active:scale-95 transition-all">

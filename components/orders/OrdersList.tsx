@@ -16,6 +16,7 @@ interface OrdersListProps {
     visibleColumns?: Set<string>;
     // Selection Props
     selectedIds?: Set<string>;
+    isSelectionMode?: boolean;
     onToggleSelect?: (id: string) => void;
     onToggleSelectAll?: (ids: string[]) => void;
     showBorders?: boolean;
@@ -25,7 +26,7 @@ interface OrdersListProps {
 
 const OrdersList: React.FC<OrdersListProps> = ({ 
     orders, onEdit, onView, showActions, visibleColumns,
-    selectedIds = new Set(), onToggleSelect, onToggleSelectAll,
+    selectedIds = new Set(), isSelectionMode = false, onToggleSelect, onToggleSelectAll,
     showBorders = false, groupBy = 'none', viewMode = 'card'
 }) => {
     const { refreshData } = useContext(AppContext);
@@ -178,6 +179,7 @@ ${dateStr}
         totals,
         visibleColumns,
         selectedIds,
+        isSelectionMode,
         onToggleSelect,
         onEdit,
         onView,

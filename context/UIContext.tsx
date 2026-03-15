@@ -30,6 +30,8 @@ interface UIContextType {
     setIsChatOpen: (isOpen: boolean) => void;
     isChatVisible: boolean;
     setChatVisibility: (visible: boolean) => void;
+    isBottomNavHidden: boolean;
+    setIsBottomNavHidden: (hidden: boolean) => void;
     showNotification: (message: string, type?: 'success' | 'info' | 'error', title?: string) => void;
     notifications: any[];
     removeNotification: (id: string) => void;
@@ -48,6 +50,7 @@ export const UIProvider: React.FC<{ children: React.ReactNode }> = ({ children }
     const [mobilePageTitle, setMobilePageTitle] = useState<string | null>(null);
     const [isChatOpen, setIsChatOpen] = useState(false);
     const [isChatVisible, setChatVisibility] = useState(true);
+    const [isBottomNavHidden, setIsBottomNavHidden] = useState(false);
     const [notifications, setNotifications] = useState<any[]>([]);
 
     const [advancedSettings, setAdvancedSettings] = useState<AdvancedSettings>(() => {
@@ -94,6 +97,7 @@ export const UIProvider: React.FC<{ children: React.ReactNode }> = ({ children }
             isMobileMenuOpen, setIsMobileMenuOpen, unreadCount, setUnreadCount,
             mobilePageTitle, setMobilePageTitle, advancedSettings, setAdvancedSettings,
             isChatOpen, setIsChatOpen, isChatVisible, setChatVisibility,
+            isBottomNavHidden, setIsBottomNavHidden,
             showNotification, notifications, removeNotification
         }}>
             {children}

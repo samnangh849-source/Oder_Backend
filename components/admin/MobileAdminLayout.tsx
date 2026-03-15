@@ -11,6 +11,7 @@ import EditProfileModal from '../common/EditProfileModal';
 import AdvancedSettingsModal from '../common/AdvancedSettingsModal';
 import { requestNotificationPermission, sendSystemNotification } from '../../utils/notificationUtils';
 import BottomNavBar from './BottomNavBar';
+import { useUI } from '../../context/UIContext';
 
 interface MobileAdminLayoutProps {
     children: React.ReactNode;
@@ -40,6 +41,7 @@ const MobileAdminLayout: React.FC<MobileAdminLayoutProps> = ({
     setAdvancedSettingsOpen
 }) => {
     const { setIsMobileMenuOpen, currentUser, logout, language, refreshData, setAppState, originalAdminUser, isSyncing } = useContext(AppContext);
+    const { isBottomNavHidden } = useUI();
     const [dropdownOpen, setDropdownOpen] = useState(false);
     const [isRefreshing, setIsRefreshing] = useState(false);
     const dropdownRef = useRef<HTMLDivElement>(null);
@@ -175,14 +177,14 @@ const MobileAdminLayout: React.FC<MobileAdminLayoutProps> = ({
             />
 
             {/* Content Area */}
-            <main className="flex-1 pb-20 px-2 pt-1.5 overflow-y-auto no-scrollbar relative z-10">
+            <main className={`flex-1 ${isBottomNavHidden ? 'pb-4' : 'pb-20'} px-2 pt-1.5 overflow-y-auto no-scrollbar relative z-10`}>
                 <div className="max-w-xl mx-auto">
                     {children}
                 </div>
             </main>
 
             {/* Mobile Navigation Bar */}
-            <BottomNavBar activeDashboard={activeDashboard} onNavChange={onNavChange} />
+            {!isBottomNavHidden && <BottomNavBar activeDashboard={activeDashboard} onNavChange={onNavChange} />}
 
             {/* Aesthetic Home Indicator Support */}
             <div className="h-1 w-24 bg-white/5 rounded-full mx-auto mb-2 flex-shrink-0 opacity-0"></div>
