@@ -20,6 +20,8 @@ import BankSelector from '../components/orders/BankSelector'; // Import the new 
 import { logUserActivity } from '../services/auditService';
 import { CacheService, CACHE_KEYS } from '../services/cacheService';
 
+import OrderGracePeriod from '../components/orders/OrderGracePeriod';
+
 interface CreateOrderPageProps {
     team: string;
     onSaveSuccess: () => void;
@@ -388,6 +390,7 @@ const CreateOrderPage: React.FC<CreateOrderPageProps> = ({ team, onSaveSuccess, 
     const prevStep = () => { if (currentStep > 1) setCurrentStep(currentStep - 1); };
 
     const [undoTimer, setUndoTimer] = useState<number | null>(null);
+    const [maxUndoTimer, setMaxUndoTimer] = useState<number>(7);
     const [isUndoing, setIsUndoing] = useState(false);
     const submitTimeoutRef = useRef<NodeJS.Timeout | null>(null);
     const submitIntervalRef = useRef<NodeJS.Timeout | null>(null);
@@ -397,9 +400,18 @@ const CreateOrderPage: React.FC<CreateOrderPageProps> = ({ team, onSaveSuccess, 
         for (const step of STEPS) { if (!validateStep(step.number)) { setCurrentStep(step.number); return; } }
         setLoading(true);
 
+        // Mobile Optimization: Scroll to Top and Close Keyboard
+        if (window.innerWidth < 768) {
+            window.scrollTo({ top: 0, behavior: 'smooth' });
+            if (document.activeElement instanceof HTMLElement) {
+                document.activeElement.blur();
+            }
+        }
+
         const gracePeriod = advancedSettings?.placingOrderGracePeriod || 5;
 
         // OPTIMISTIC UI: Start countdown
+        setMaxUndoTimer(gracePeriod);
         setUndoTimer(gracePeriod);
         
         let secondsLeft = gracePeriod;
@@ -1029,56 +1041,13 @@ const CreateOrderPage: React.FC<CreateOrderPageProps> = ({ team, onSaveSuccess, 
 
             {/* UNDO / GRACE PERIOD OVERLAY */}
             {undoTimer !== null && (
-                <div className={`fixed inset-0 z-[250] flex items-center justify-center p-4 bg-slate-950/40 backdrop-blur-md transition-all duration-500 ${isUndoing ? 'opacity-0 scale-95 pointer-events-none' : 'opacity-100 scale-100'}`}>
-                    <div className="relative bg-[#0f172a]/90 border border-white/10 rounded-[2.5rem] p-8 sm:p-12 w-full max-w-sm shadow-[0_20px_70px_rgba(0,0,0,0.5)] text-center overflow-hidden ring-1 ring-white/10">
-                        {/* Background Decorative Glow */}
-                        <div className="absolute -top-24 -left-24 w-48 h-48 bg-emerald-500/20 blur-[80px] rounded-full pointer-events-none"></div>
-                        <div className="absolute -bottom-24 -right-24 w-48 h-48 bg-blue-500/20 blur-[80px] rounded-full pointer-events-none"></div>
-
-                        {/* Circular Progress & Icon */}
-                        <div className="relative w-32 h-32 mx-auto mb-8 flex items-center justify-center">
-                            <svg className="w-full h-full -rotate-90 transform" viewBox="0 0 100 100">
-                                {/* Background Circle */}
-                                <circle
-                                    cx="50" cy="50" r="45"
-                                    className="stroke-gray-800 fill-none"
-                                    strokeWidth="6"
-                                />
-                                {/* Progress Circle */}
-                                <circle
-                                    cx="50" cy="50" r="45" 
-                                    className="stroke-emerald-500 fill-none transition-all duration-1000 ease-linear" 
-                                    strokeWidth="6" 
-                                    strokeDasharray={2 * Math.PI * 45}
-                                    strokeDashoffset={2 * Math.PI * 45 * (1 - undoTimer / 7)}
-                                    strokeLinecap="round"
-                                />
-                            </svg>
-                            <div className="absolute inset-0 flex flex-col items-center justify-center">
-                                <span className="text-3xl font-black text-white font-mono leading-none">{undoTimer}</span>
-                                <span className="text-[10px] font-black text-gray-500 uppercase tracking-widest mt-1">Seconds</span>
-                            </div>
-                        </div>
-
-                        <div className="space-y-2 mb-10">
-                            <h3 className="text-2xl font-black text-white uppercase tracking-tighter">រួចរាល់ហើយ!</h3>
-                            <p className="text-gray-400 text-sm font-medium px-4">ការកម្ម៉ង់របស់អ្នកនឹងត្រូវបានបញ្ជូនទៅកាន់ប្រព័ន្ធក្នុងពេលបន្តិចទៀតនេះ...</p>
-                        </div>
-
-                        <button 
-                            onClick={handleUndo}
-                            className="w-full py-4 bg-red-500 hover:bg-red-600 text-white rounded-2xl font-black uppercase text-[11px] tracking-[0.2em] shadow-[0_10px_25px_rgba(239,68,68,0.3)] transition-all active:scale-95 flex items-center justify-center gap-3 group relative overflow-hidden"
-                        >
-                            <div className="absolute inset-0 bg-white/10 translate-y-full group-hover:translate-y-0 transition-transform duration-300"></div>
-                            <svg className="w-5 h-5 relative z-10 group-hover:-rotate-90 transition-transform duration-500" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={3}>
-                                <path strokeLinecap="round" strokeLinejoin="round" d="M3 10h10a8 8 0 018 8v2M3 10l6 6m-6-6l6-6" />
-                            </svg>
-                            <span className="relative z-10">បញ្ឈប់ការបញ្ជូន (Undo)</span>
-                        </button>
-                        
-                        <p className="mt-6 text-[10px] font-black text-gray-600 uppercase tracking-[0.3em] animate-pulse-soft">Processing Order...</p>
-                    </div>
-                </div>
+                <OrderGracePeriod 
+                    timer={undoTimer}
+                    maxTimer={maxUndoTimer}
+                    onUndo={handleUndo}
+                    isUndoing={isUndoing}
+                    accentColor="emerald"
+                />
             )}
 
             <style>{`.animate-bounce-x { animation: bounce-x 1s infinite ease-in-out; } @keyframes bounce-x { 0%, 100% { transform: translateX(0); } 50% { transform: translateX(5px); } }`}</style>

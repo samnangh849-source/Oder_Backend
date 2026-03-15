@@ -1,6 +1,7 @@
 
-import React from 'react';
+import React, { useContext } from 'react';
 import Spinner from '../../common/Spinner';
+import { AppContext } from '../../../context/AppContext';
 
 interface EditOrderSummaryProps {
     subtotal: number;
@@ -15,6 +16,8 @@ interface EditOrderSummaryProps {
 const EditOrderSummary: React.FC<EditOrderSummaryProps> = ({
     subtotal, grandTotal, shippingFee, onShippingFeeChange, onSave, onDelete, loading
 }) => {
+    const { hasPermission } = useContext(AppContext);
+
     return (
         <div className="flex-shrink-0 bg-[#0f1523]/80 backdrop-blur-xl border border-white/5 rounded-[2.5rem] p-5 lg:p-6 flex flex-col lg:flex-row gap-6 items-center justify-between shadow-[0_-10px_40px_rgba(0,0,0,0.3)] relative z-30">
             {/* Stats Group */}
@@ -53,16 +56,18 @@ const EditOrderSummary: React.FC<EditOrderSummaryProps> = ({
 
             {/* Action Buttons */}
             <div className="flex flex-col lg:flex-row gap-3 w-full lg:w-auto items-center">
-                {/* Delete Button */}
-                <button 
-                    type="button" 
-                    onClick={onDelete} 
-                    disabled={loading}
-                    className="w-full lg:w-auto px-8 py-5 bg-red-500/10 hover:bg-red-600 text-red-500 hover:text-white rounded-[1.5rem] font-black uppercase text-xs tracking-[0.2em] transition-all flex items-center justify-center gap-3 border border-red-500/20 active:scale-95 group order-last lg:order-first"
-                >
-                    <svg className="w-4 h-4 transition-transform group-hover:rotate-12" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" strokeWidth="2.5"/></svg> 
-                    Delete
-                </button>
+                {/* Delete Button - Hidden if no permission */}
+                {hasPermission('delete_order') && (
+                    <button 
+                        type="button" 
+                        onClick={onDelete} 
+                        disabled={loading}
+                        className="w-full lg:w-auto px-8 py-5 bg-red-500/10 hover:bg-red-600 text-red-500 hover:text-white rounded-[1.5rem] font-black uppercase text-xs tracking-[0.2em] transition-all flex items-center justify-center gap-3 border border-red-500/20 active:scale-95 group order-last lg:order-first"
+                    >
+                        <svg className="w-4 h-4 transition-transform group-hover:rotate-12" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" strokeWidth="2.5"/></svg> 
+                        Delete
+                    </button>
+                )}
 
                 {/* Save Button */}
                 <button 

@@ -11,6 +11,7 @@ import { useBarcodeScanner } from '@/hooks/useBarcodeScanner';
 import { packageDetector, DetectionResult } from '@/utils/visionAlgorithm';
 import { CacheService, CACHE_KEYS } from '@/services/cacheService';
 import Modal from '@/components/common/Modal';
+import OrderGracePeriod from '@/components/orders/OrderGracePeriod';
 
 type PackStep = 'VERIFYING' | 'CAPTURING' | 'LABELING';
 
@@ -183,6 +184,7 @@ const FastPackModal: React.FC<FastPackModalProps> = ({ order, onClose, onSuccess
 
     // Undo Timer State
     const [undoTimer, setUndoTimer] = useState<number | null>(null);
+    const [maxUndoTimer, setMaxUndoTimer] = useState<number>(3);
     const [isUndoing, setIsUndoing] = useState(false);
     const submitTimeoutRef = useRef<NodeJS.Timeout | null>(null);
     const submitIntervalRef = useRef<NodeJS.Timeout | null>(null);
@@ -273,6 +275,7 @@ const FastPackModal: React.FC<FastPackModalProps> = ({ order, onClose, onSuccess
         setUploadProgress(0);
 
         const gracePeriod = advancedSettings?.packagingGracePeriod || 3;
+        setMaxUndoTimer(gracePeriod);
         setUndoTimer(gracePeriod);
 
         let secondsLeft = gracePeriod;
@@ -742,48 +745,17 @@ const FastPackModal: React.FC<FastPackModalProps> = ({ order, onClose, onSuccess
 
             {/* UNDO / GRACE PERIOD OVERLAY - Highest Z-Index */}
             {undoTimer !== null && (
-                <div className={`fixed inset-0 z-[300] flex items-center justify-center p-4 bg-slate-950/60 backdrop-blur-2xl transition-all duration-500 ${isUndoing ? 'opacity-0 scale-95 pointer-events-none' : 'opacity-100 scale-100'}`}>
-                    <div className="relative bg-[#0f172a]/95 border border-white/10 rounded-[3.5rem] p-10 sm:p-16 w-full max-w-lg shadow-[0_40px_120px_rgba(0,0,0,0.8)] text-center overflow-hidden ring-1 ring-white/20">
-                        <div className="absolute -top-32 -left-32 w-64 h-64 bg-orange-500/20 blur-[100px] rounded-full pointer-events-none"></div>
-                        <div className="absolute -bottom-32 -right-32 w-64 h-64 bg-blue-500/20 blur-[100px] rounded-full pointer-events-none"></div>
-
-                        <div className="relative w-40 h-40 mx-auto mb-10 flex items-center justify-center">
-                            <svg className="w-full h-full -rotate-90 transform drop-shadow-[0_0_20px_rgba(249,115,22,0.3)]" viewBox="0 0 100 100">
-                                <circle cx="50" cy="50" r="45" className="stroke-gray-800 fill-none" strokeWidth="8" />
-                                <circle 
-                                    cx="50" cy="50" r="45" 
-                                    className="stroke-orange-500 fill-none transition-all duration-1000 ease-linear" 
-                                    strokeWidth="8" 
-                                    strokeDasharray={2 * Math.PI * 45}
-                                    strokeDashoffset={2 * Math.PI * 45 * (1 - undoTimer / (advancedSettings?.packagingGracePeriod || 3))}
-                                    strokeLinecap="round"
-                                />
-                            </svg>
-                            <div className="absolute inset-0 flex flex-col items-center justify-center">
-                                <span className="text-5xl font-black text-white font-mono leading-none">{undoTimer}</span>
-                                <span className="text-xs font-black text-gray-500 uppercase tracking-widest mt-2">Seconds</span>
-                            </div>
-                        </div>
-
-                        <div className="space-y-3 mb-12">
-                            <h3 className="text-3xl font-black text-white uppercase tracking-tighter italic">រួចរាល់ហើយ!</h3>
-                            <p className="text-gray-400 text-base font-medium px-6 leading-relaxed">ព័ត៌មានវេចខ្ចប់នឹងត្រូវបញ្ជូនទៅកាន់ប្រព័ន្ធក្នុងពេលបន្តិចទៀតនេះ...</p>
-                        </div>
-
-                        <button 
-                            onClick={handleUndo}
-                            className="w-full py-5 bg-red-500 hover:bg-red-600 text-white rounded-[2rem] font-black uppercase text-[13px] tracking-[0.3em] shadow-[0_20px_50px_rgba(239,68,68,0.4)] transition-all active:scale-95 flex items-center justify-center gap-4 group relative overflow-hidden border border-white/20"
-                        >
-                            <div className="absolute inset-0 bg-white/10 translate-y-full group-hover:translate-y-0 transition-transform duration-300"></div>
-                            <svg className="w-6 h-6 relative z-10 group-hover:-rotate-180 transition-transform duration-500" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={3.5}>
-                                <path strokeLinecap="round" strokeLinejoin="round" d="M3 10h10a8 8 0 018 8v2M3 10l6 6m-6-6l6-6" />
-                            </svg>
-                            <span className="relative z-10">បញ្ឈប់ការបញ្ជូន (Undo)</span>
-                        </button>
-                        <p className="mt-8 text-[11px] font-black text-gray-600 uppercase tracking-[0.4em] animate-pulse-soft">Finalizing Packaging Proof Subsystem...</p>
-                    </div>
-                </div>
+                <OrderGracePeriod 
+                    timer={undoTimer}
+                    maxTimer={maxUndoTimer}
+                    onUndo={handleUndo}
+                    isUndoing={isUndoing}
+                    accentColor="orange"
+                    title="កំពុងរៀបចំ..."
+                    subtitle="ទិន្នន័យវេចខ្ចប់នឹងត្រូវបានរក្សាទុកក្នុងពេលបន្តិចទៀតនេះ។ អ្នកអាចចុចបោះបង់ ប្រសិនបើមានការភាន់ច្រឡំ។"
+                />
             )}
+
         </div>
     );
 };
