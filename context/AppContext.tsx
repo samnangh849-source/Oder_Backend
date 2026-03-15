@@ -33,6 +33,7 @@ export interface AppContextType {
     unreadCount: number;
     updateProductInData: (productName: string, newData: Partial<MasterProduct>) => void;
     apiKey: string;
+    appState: 'login' | 'role_selection' | 'admin_dashboard' | 'user_journey' | 'confirm_delivery' | 'fulfillment' | 'create_order';
     setAppState: (newState: 'login' | 'role_selection' | 'admin_dashboard' | 'user_journey' | 'confirm_delivery' | 'fulfillment' | 'create_order') => void;
     setOriginalAdminUser: React.Dispatch<React.SetStateAction<User | null>>;
     fetchData: (force?: boolean) => Promise<void>;

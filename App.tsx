@@ -194,7 +194,7 @@ const AppContent: React.FC = () => {
         originalAdminUser, returnToAdmin: () => {}, previewImage: (u: string) => setPreviewImageUrl(convertGoogleDriveUrl(u)),
         updateCurrentUser: (u: any) => setCurrentUser(prev => prev ? {...prev, ...u} : null),
         setUnreadCount, unreadCount, updateProductInData: () => {}, apiKey: '',
-        setAppState, setOriginalAdminUser, fetchData, fetchOrders, setCurrentUser, setChatVisibility,
+        appState, setAppState, setOriginalAdminUser, fetchData, fetchOrders, setCurrentUser, setChatVisibility,
         hasPermission, updatePermission: async (role: string, feature: string, isEnabled: boolean) => {
             try {
                 const session = await CacheService.get<{ token: string }>(CACHE_KEYS.SESSION);
@@ -224,7 +224,7 @@ const AppContent: React.FC = () => {
         selectedTeam, setSelectedTeam
     }), [
         currentUser, appData, orders, isOrdersLoading, isSyncing, login, logout, refreshData, refreshTimestamp,
-        originalAdminUser, setUnreadCount, unreadCount, setAppState, setOriginalAdminUser,
+        originalAdminUser, setUnreadCount, unreadCount, appState, setAppState, setOriginalAdminUser,
         fetchData, fetchOrders, setCurrentUser, setChatVisibility, hasPermission,
         isSidebarCollapsed, setIsSidebarCollapsed, setIsChatOpen, isMobileMenuOpen, 
         setIsMobileMenuOpen, language, setLanguage, showNotification, mobilePageTitle, 

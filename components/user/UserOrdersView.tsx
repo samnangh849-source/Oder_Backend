@@ -4,6 +4,7 @@ import { ParsedOrder, User } from '../../types';
 import Spinner from '../common/Spinner';
 import OrdersList from '../orders/OrdersList';
 import EditOrderPage from '../../pages/EditOrderPage'; 
+import OrderDetailModal from '../orders/OrderDetailModal';
 import UserSalesPageReport from '../../pages/UserSalesPageReport'; 
 import ShippingReport from '../reports/ShippingReport';
 import { safeParseDate, getValidDate, getTimestamp } from '../../utils/dateUtils';
@@ -32,6 +33,7 @@ const UserOrdersView: React.FC<{ onAdd: () => void }> = ({ onAdd }) => {
     const [drilldownFilters, setDrilldownFilters] = useState<any>(null);
     const [drilldownData, setDrilldownData] = useState<ParsedOrder[]>([]);
     const [editingOrder, setEditingOrder] = useState<ParsedOrder | null>(null);
+    const [viewingOrder, setViewingOrder] = useState<ParsedOrder | null>(null);
     const [processing, setProcessing] = useState(false); 
     const [searchQuery, setSearchQuery] = useState('');
     const [showReport, setShowReport] = useState(false);
@@ -324,7 +326,7 @@ const UserOrdersView: React.FC<{ onAdd: () => void }> = ({ onAdd }) => {
                 </div>
                 <button onClick={() => setDrilldownFilters(null)} className="px-6 py-2.5 bg-white/5 hover:bg-white/10 text-white rounded-2xl text-xs font-bold transition-all border border-white/10">Return to Overview</button>
             </div>
-            {processing ? <div className="flex justify-center py-20"><Spinner size="md" /></div> : <OrdersList orders={filteredOrders} showActions={true} visibleColumns={userVisibleColumns} onEdit={setEditingOrder} />}
+            {processing ? <div className="flex justify-center py-20"><Spinner size="md" /></div> : <OrdersList orders={filteredOrders} showActions={true} visibleColumns={userVisibleColumns} onEdit={setEditingOrder} onView={setViewingOrder} />}
         </div>
     );
 
@@ -593,7 +595,7 @@ const UserOrdersView: React.FC<{ onAdd: () => void }> = ({ onAdd }) => {
                         )}
                     </div>
                 ) : (
-                    <OrdersList orders={filteredOrders} showActions={true} visibleColumns={userVisibleColumns} onEdit={setEditingOrder} viewMode={viewMode} />
+                    <OrdersList orders={filteredOrders} showActions={true} visibleColumns={userVisibleColumns} onEdit={setEditingOrder} onView={setViewingOrder} viewMode={viewMode} />
                 )}
             </div>
 
@@ -609,6 +611,14 @@ const UserOrdersView: React.FC<{ onAdd: () => void }> = ({ onAdd }) => {
                         onApply={() => setIsFilterPanelOpen(false)}
                     />
                 </FilterPanel>
+            )}
+
+            {/* View Order Detail Modal */}
+            {viewingOrder && (
+                <OrderDetailModal 
+                    order={viewingOrder} 
+                    onClose={() => setViewingOrder(null)} 
+                />
             )}
         </div>
     );

@@ -11,9 +11,17 @@ export const WEB_APP_URL = "https://oder-backend-2.onrender.com";
 // សូមបញ្ចូល URL សម្រាប់ Label Printer នៅទីនេះ (Order ID នឹងត្រូវបានបន្ថែមដោយស្វ័យប្រវត្តិ)
 export const LABEL_PRINTER_URL_BASE = "https://samnangh849-source.github.io/LabelPro/";
 
-// Background Music URL (MP3)
-// អ្នកអាចដាក់ Link ពី Google Drive (Anyone with the link) ឬ Direct URL ផ្សេងទៀតនៅទីនេះ
-export const BACKGROUND_MUSIC_URL = "https://assets.mixkit.co/active_storage/sfx/2571/2571-preview.mp3";
+// Background Music URLs (7 songs for 7 days)
+// Monday to Sunday order
+export const WEEKLY_MUSIC_URLS = [
+    "https://res.cloudinary.com/dhobzwi7h/video/upload/v1773570353/1_yfhucj.mp3", // Monday
+    "https://res.cloudinary.com/dhobzwi7h/video/upload/v1773567867/Y2K_nqn9nz.mp3", // Tuesday
+    "https://res.cloudinary.com/dhobzwi7h/video/upload/v1773567867/Y2K_nqn9nz.mp3", // Wednesday
+    "https://res.cloudinary.com/dhobzwi7h/video/upload/v1773567867/Y2K_nqn9nz.mp3", // Thursday
+    "https://res.cloudinary.com/dhobzwi7h/video/upload/v1773567867/Y2K_nqn9nz.mp3", // Friday
+    "https://res.cloudinary.com/dhobzwi7h/video/upload/v1773567867/Y2K_nqn9nz.mp3", // Saturday
+    "https://res.cloudinary.com/dhobzwi7h/video/upload/v1773570531/2_kkhj42.mp3"  // Sunday
+];
 
 // APP LOGO URL
 // សូមប្ដូរ Link រូបភាព Logo របស់អ្នកនៅទីនេះ (Google Drive Link ឬ Direct URL)
