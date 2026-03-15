@@ -17,7 +17,7 @@ const BulkActionBarMobile: React.FC<BulkActionBarMobileProps> = ({
     if (selectedCount === 0) return null;
 
     return createPortal(
-        <div className="fixed bottom-[90px] left-4 right-4 z-[100] animate-slide-up pointer-events-none">
+        <div className="md:hidden fixed bottom-[90px] left-4 right-4 z-[100] animate-slide-up pointer-events-none">
             <div className="bg-[#1e293b]/95 backdrop-blur-2xl border border-blue-500/30 rounded-[2rem] p-3 shadow-[0_20px_50px_rgba(0,0,0,0.5)] flex items-center justify-between ring-1 ring-white/10 pointer-events-auto">
                 <div className="flex items-center gap-3 ml-2">
                     <button 

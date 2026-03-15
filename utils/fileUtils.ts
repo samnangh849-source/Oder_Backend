@@ -60,11 +60,11 @@ export const convertGoogleDriveUrl = (url?: string, type: 'image' | 'audio' | 'p
 
     // 2. Extract File ID
     let fileId = '';
-    const idRegex = /(?:id=|d\/|file\/d\/|open\?id=|thumbnail\?id=|uc\?id=)([^/?&]+)/;
+    const idRegex = /(?:id=|d\/|file\/d\/|open\?id=|thumbnail\?id=|uc\?id=)([a-zA-Z0-9_-]{25,45})/;
     const match = trimmedUrl.match(idRegex);
     if (match && match[1]) {
         fileId = match[1];
-    } else if (/^[a-zA-Z0-9_-]{25,50}$/.test(trimmedUrl)) {
+    } else if (/^[a-zA-Z0-9_-]{28,35}$/.test(trimmedUrl) && !trimmedUrl.includes('/') && !['product_assets', 'order_assets'].includes(trimmedUrl)) {
         fileId = trimmedUrl;
     }
 

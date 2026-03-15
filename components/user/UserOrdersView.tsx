@@ -465,7 +465,7 @@ const UserOrdersView: React.FC<{ onAdd: () => void }> = ({ onAdd }) => {
                         <div className="absolute top-0 right-0 w-32 h-32 bg-blue-600/10 blur-[50px] -mr-16 -mt-16 group-hover:bg-blue-600/20 transition-colors"></div>
                         <p className="text-[10px] font-black text-blue-500 uppercase tracking-[0.2em] mb-1">Total Revenue</p>
                         <h3 className="text-3xl font-black text-white tracking-tighter italic">
-                            {hasPermission('view_revenue') ? filteredMetrics.revenue.toLocaleString(undefined, { maximumFractionDigits: 0 }) : '••••••'}
+                            {hasPermission('view_revenue') ? `$${filteredMetrics.revenue.toLocaleString(undefined, { maximumFractionDigits: 0 })}` : '••••••'}
                         </h3>
                         <div className="mt-3 flex items-center gap-2">
                             <span className="flex h-2 w-2 rounded-full bg-emerald-500 animate-pulse"></span>
@@ -482,13 +482,17 @@ const UserOrdersView: React.FC<{ onAdd: () => void }> = ({ onAdd }) => {
                         <div className="absolute top-0 right-0 w-24 h-24 bg-amber-600/10 blur-[40px] -mr-12 -mt-12 group-hover:bg-amber-600/20 transition-colors"></div>
                         <p className="text-[10px] font-black text-amber-500 uppercase tracking-[0.2em] mb-1">Top 3 Teams</p>
                         <div className="flex flex-col gap-1.5 mt-1">
-                            {globalRanking.length > 0 ? globalRanking.slice(0, 3).map((t, i) => (
+                            {isRankingLoading ? (
+                                <div className="py-2 flex justify-center"><Spinner size="xs" /></div>
+                            ) : globalRanking.length > 0 ? globalRanking.slice(0, 3).map((t, i) => (
                                 <div key={t.name} className="flex items-center justify-between border-l-2 border-white/10 pl-2">
                                     <span className="text-[9px] font-bold text-gray-400 uppercase truncate w-16">{t.name}</span>
-                                    <span className="text-[10px] font-black text-white">${(t.revenue/1000).toFixed(1)}k</span>
+                                    <span className="text-[10px] font-black text-white">
+                                        {hasPermission('view_revenue') ? `$${(t.revenue/1000).toFixed(1)}k` : '•••'}
+                                    </span>
                                 </div>
                             )) : (
-                                <p className="text-[9px] font-bold text-gray-600 uppercase italic">Ranking...</p>
+                                <p className="text-[9px] font-bold text-gray-600 uppercase italic">No Data</p>
                             )}
                         </div>
                     </div>

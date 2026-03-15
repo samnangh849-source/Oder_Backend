@@ -419,11 +419,19 @@ const ChatWidget: React.FC<ChatWidgetProps> = ({ isOpen, onClose }) => {
         if (wasAtBottom) setTimeout(() => scrollToBottom('smooth'), 50);
 
         try {
+            const token = localStorage.getItem('token');
             const payload: any = { UserName: currentUser?.UserName, MessageType: type.charAt(0).toUpperCase() + type.slice(1), Content: content };
             if (type === 'audio' && duration) { payload.Content = duration; payload.AudioData = content; }
             if (replyingTo) payload.ReplyTo = { ID: replyingTo.id, User: replyingTo.fullName, Content: replyingTo.content, Type: replyingTo.type };
             
-            const res = await fetch(`${WEB_APP_URL}/api/chat/send`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) });
+            const res = await fetch(`${WEB_APP_URL}/api/chat/send`, { 
+                method: 'POST', 
+                headers: { 
+                    'Content-Type': 'application/json',
+                    'Authorization': `Bearer ${token}`
+                }, 
+                body: JSON.stringify(payload) 
+            });
             if (!res.ok) throw new Error("Send failed");
             if (!isMuted) { playClick(); }
         } catch (e) { 

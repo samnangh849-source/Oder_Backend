@@ -67,9 +67,10 @@ const BulkActionManager: React.FC<BulkActionManagerProps> = ({ orders, selectedI
         try {
             const idArray = Array.from(selectedIds);
             
-            for (const id of idArray) {
+            // Create an array of update promises to run in parallel
+            const updatePromises = idArray.map(async (id) => {
                 const originalOrder = orders.find(o => o['Order ID'] === id);
-                if (!originalOrder) continue;
+                if (!originalOrder) return null;
 
                 const mergedData = { ...originalOrder, ...partialUpdate };
                 
@@ -102,9 +103,12 @@ const BulkActionManager: React.FC<BulkActionManagerProps> = ({ orders, selectedI
 
                 cleanPayload['Products (JSON)'] = JSON.stringify(mergedData.Products);
 
-                await fetch(`${WEB_APP_URL}/api/admin/update-order`, {
+                const response = await fetch(`${WEB_APP_URL}/api/admin/update-order`, {
                     method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
+                    headers: { 
+                        'Content-Type': 'application/json',
+                        'Authorization': `Bearer ${localStorage.getItem('token')}`
+                    },
                     body: JSON.stringify({ 
                         orderId: id, 
                         team: mergedData.Team, 
@@ -112,6 +116,15 @@ const BulkActionManager: React.FC<BulkActionManagerProps> = ({ orders, selectedI
                         newData: cleanPayload 
                     })
                 });
+                return response.ok;
+            });
+
+            // Run all updates simultaneously
+            const results = await Promise.all(updatePromises);
+            const successCount = results.filter(r => r === true).length;
+            
+            if (successCount < idArray.length) {
+                console.warn(`Bulk update partially completed: ${successCount}/${idArray.length} succeeded.`);
             }
             
             await refreshData();
@@ -130,14 +143,15 @@ const BulkActionManager: React.FC<BulkActionManagerProps> = ({ orders, selectedI
         setIsProcessing(true);
 
         try {
+            const token = localStorage.getItem('token');
             const idArray = Array.from(selectedIds);
             
             // Parse new date components [Year, Month, Day]
             const [newYear, newMonth, newDay] = bulkDate.split('-').map(Number);
 
-            for (const id of idArray) {
+            const updatePromises = idArray.map(async (id) => {
                 const originalOrder = orders.find(o => o['Order ID'] === id);
-                if (!originalOrder) continue;
+                if (!originalOrder) return null;
 
                 // Create date object from original timestamp to preserve time
                 const originalDate = new Date(originalOrder.Timestamp);
@@ -154,7 +168,6 @@ const BulkActionManager: React.FC<BulkActionManagerProps> = ({ orders, selectedI
 
                 const mergedData = { ...originalOrder, Timestamp: newTimestamp.toISOString() };
                 
-                // Reuse existing payload structure construction
                 const cleanPayload: any = {
                     "Timestamp": mergedData.Timestamp,
                     "Order ID": mergedData['Order ID'],
@@ -183,9 +196,12 @@ const BulkActionManager: React.FC<BulkActionManagerProps> = ({ orders, selectedI
                 };
                 cleanPayload['Products (JSON)'] = JSON.stringify(mergedData.Products);
 
-                await fetch(`${WEB_APP_URL}/api/admin/update-order`, {
+                return fetch(`${WEB_APP_URL}/api/admin/update-order`, {
                     method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
+                    headers: { 
+                        'Content-Type': 'application/json',
+                        'Authorization': `Bearer ${token}`
+                    },
                     body: JSON.stringify({ 
                         orderId: id, 
                         team: mergedData.Team, 
@@ -193,8 +209,9 @@ const BulkActionManager: React.FC<BulkActionManagerProps> = ({ orders, selectedI
                         newData: cleanPayload 
                     })
                 });
-            }
-            
+            });
+
+            await Promise.all(updatePromises);
             await refreshData();
             setActiveModal(null);
             setBulkDate('');
@@ -212,7 +229,8 @@ const BulkActionManager: React.FC<BulkActionManagerProps> = ({ orders, selectedI
         
         setIsProcessing(true);
         try {
-            // 1. Verify password via API since we don't store it in currentUser for security
+            const token = localStorage.getItem('token');
+            // 1. Verify password via API
             const verifyRes = await fetch(`${WEB_APP_URL}/api/login`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
@@ -228,13 +246,16 @@ const BulkActionManager: React.FC<BulkActionManagerProps> = ({ orders, selectedI
                 return;
             }
 
-            // 2. Proceed with deletion
+            // 2. Proceed with parallel deletion
             const idArray = Array.from(selectedIds);
-            for (const id of idArray) {
+            const deletePromises = idArray.map(async (id) => {
                 const order = orders.find(o => o['Order ID'] === id);
-                await fetch(`${WEB_APP_URL}/api/admin/delete-order`, {
+                return fetch(`${WEB_APP_URL}/api/admin/delete-order`, {
                     method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
+                    headers: { 
+                        'Content-Type': 'application/json',
+                        'Authorization': `Bearer ${token}`
+                    },
                     body: JSON.stringify({
                         orderId: id,
                         team: order?.Team,
@@ -244,7 +265,9 @@ const BulkActionManager: React.FC<BulkActionManagerProps> = ({ orders, selectedI
                         telegramChatId: order?.TelegramValue
                     })
                 });
-            }
+            });
+
+            await Promise.all(deletePromises);
             await refreshData();
             setActiveModal(null);
             setDeletePassword('');

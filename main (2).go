@@ -1547,16 +1547,16 @@ func handleGetTeamSalesRanking(c *gin.Context) {
 		Revenue float64 `json:"Revenue"`
 	}
 	
-	// Advanced Query: Use the team from orders if available, otherwise fallback to the user's primary team
-	// Quoting "user" because it's a reserved word in many databases including PostgreSQL
-	// We also use COALESCE to ensure we don't get NULLs in the final result
+	// Advanced Query: focus on current month for performance and relevance
+	currentMonth := time.Now().Format("2006-01")
 	query := `
 		SELECT 
 			LOWER(TRIM(COALESCE(NULLIF(o.team, ''), u.team, 'Unassigned'))) as team_name, 
 			SUM(COALESCE(o.grand_total, 0)) as total_revenue
 		FROM orders o
 		LEFT JOIN users u ON o."user" = u.user_name
-		WHERE o.order_id NOT LIKE '%Opening_Balance%' 
+		WHERE CAST(o."timestamp" AS TEXT) LIKE ? 
+		  AND o.order_id NOT LIKE '%Opening_Balance%' 
 		  AND o.order_id NOT LIKE '%Opening Balance%'
 		GROUP BY team_name
 		HAVING team_name <> 'unassigned' AND team_name <> ''
@@ -1564,7 +1564,7 @@ func handleGetTeamSalesRanking(c *gin.Context) {
 		LIMIT 10
 	`
 
-	rows, err := DB.Raw(query).Rows()
+	rows, err := DB.Raw(query, currentMonth+"%").Rows()
 	if err != nil {
 		log.Printf("[ERROR] Team Ranking Query Failed: %v", err)
 		c.JSON(500, gin.H{"status": "error", "message": "Query failed"})
@@ -1793,7 +1793,7 @@ func handleSendChatMessage(c *gin.Context) {
 		mimeType := "application/octet-stream"
 		if strings.Contains(base64Data, "data:") && strings.Contains(base64Data, ";base64,") {
 			parts := strings.Split(base64Data, ";base64,")
-			mimeType = parts[0]
+			mimeType = strings.TrimPrefix(parts[0], "data:")
 			base64Data = parts[1]
 		}
 
