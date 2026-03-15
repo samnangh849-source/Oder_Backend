@@ -1547,15 +1547,15 @@ func handleGetTeamSalesRanking(c *gin.Context) {
 		Revenue float64 `json:"Revenue"`
 	}
 	
-	// Advanced Query: focus on current month for performance and relevance
-	currentMonth := time.Now().Format("2006-01")
+	// បង្កើនប្រសិទ្ធភាព Query ដោយប្រើ PostgreSQL Date Functions
+	// វាទាញយកតែ Orders ក្នុងខែបច្ចុប្បន្ន (ចាប់ពីថ្ងៃទី ១ ម៉ោង ០០:០០)
 	query := `
 		SELECT 
 			LOWER(TRIM(COALESCE(NULLIF(o.team, ''), u.team, 'Unassigned'))) as team_name, 
-			SUM(COALESCE(o.grand_total, 0)) as total_revenue
+			SUM(COALESCE(o.grand_total, 0))::FLOAT as total_revenue
 		FROM orders o
 		LEFT JOIN users u ON o."user" = u.user_name
-		WHERE CAST(o."timestamp" AS TEXT) LIKE ? 
+		WHERE o."timestamp" >= date_trunc('month', CURRENT_DATE)
 		  AND o.order_id NOT LIKE '%Opening_Balance%' 
 		  AND o.order_id NOT LIKE '%Opening Balance%'
 		GROUP BY team_name
@@ -1564,7 +1564,7 @@ func handleGetTeamSalesRanking(c *gin.Context) {
 		LIMIT 10
 	`
 
-	rows, err := DB.Raw(query, currentMonth+"%").Rows()
+	rows, err := DB.Raw(query).Rows()
 	if err != nil {
 		log.Printf("[ERROR] Team Ranking Query Failed: %v", err)
 		c.JSON(500, gin.H{"status": "error", "message": "Query failed"})
@@ -1580,11 +1580,9 @@ func handleGetTeamSalesRanking(c *gin.Context) {
 			continue
 		}
 		
-		// Capitalize for display (e.g. "team a" -> "Team a", but we'll try to do better)
+		// បំប្លែងអក្សរដើមឱ្យទៅជាអក្សរធំ (Capitalize) ដើម្បីឱ្យមើលទៅស្អាតក្នុង UI
 		displayName := teamName
 		if len(displayName) > 0 {
-			// Find original case from users table if possible, or just capitalize
-			// For simplicity, just uppercase first letter of each word
 			words := strings.Fields(displayName)
 			for i, w := range words {
 				if len(w) > 0 {
