@@ -14,12 +14,12 @@ export const LABEL_PRINTER_URL_BASE = "https://samnangh849-source.github.io/Labe
 // Background Music URLs (7 songs for 7 days)
 // Monday to Sunday order
 export const WEEKLY_MUSIC_URLS = [
-    "https://res.cloudinary.com/dhobzwi7h/video/upload/v1773570353/1_yfhucj.mp3", // Monday
+    "https://res.cloudinary.com/dhobzwi7h/video/upload/v1773571987/1_vnyhy7.mp3", // Monday
     "https://res.cloudinary.com/dhobzwi7h/video/upload/v1773570977/2_b1bmnx.mp3", // Tuesday
     "https://res.cloudinary.com/dhobzwi7h/video/upload/v1773567867/Y2K_nqn9nz.mp3", // Wednesday
     "https://res.cloudinary.com/dhobzwi7h/video/upload/v1773567867/Y2K_nqn9nz.mp3", // Thursday
     "https://res.cloudinary.com/dhobzwi7h/video/upload/v1773567867/Y2K_nqn9nz.mp3", // Friday
-    "https://res.cloudinary.com/dhobzwi7h/video/upload/v1773567867/Y2K_nqn9nz.mp3", // Saturday
+    "https://res.cloudinary.com/dhobzwi7h/video/upload/v1773571987/1_vnyhy7.mp3", // Saturday
     "https://res.cloudinary.com/dhobzwi7h/video/upload/v1773570977/2_b1bmnx.mp3"  // Sunday
 ];
 
