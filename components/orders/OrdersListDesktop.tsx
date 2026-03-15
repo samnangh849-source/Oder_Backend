@@ -237,7 +237,7 @@ const OrderRow = (props: any) => {
                                     </div>
                                 );
                             case 'driver':
-                                return <div className="px-4 py-2 w-full font-black text-orange-400/80 text-[12px] uppercase truncate tracking-tight flex items-center">{order['Driver Name'] || 'Unassigned'}</div>;
+                                return <div className="px-4 py-2 w-full font-black text-orange-400/80 text-[12px] uppercase truncate tracking-tight flex items-center">{order['Driver Name'] || order['Internal Shipping Details'] || 'Unassigned'}</div>;
                             case 'shippingCost':
                                 return <div className="px-4 py-2 w-full font-mono font-black text-orange-500/60 text-[14px] flex items-center">${(Number(order['Internal Cost']) || 0).toFixed(2)}</div>;
                             case 'status':
