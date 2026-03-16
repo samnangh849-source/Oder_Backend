@@ -1555,9 +1555,8 @@ func handleGetTeamSalesRanking(c *gin.Context) {
 			SUM(COALESCE(o.grand_total, 0))::FLOAT as total_revenue
 		FROM orders o
 		LEFT JOIN users u ON o."user" = u.user_name
-		WHERE o."timestamp" >= date_trunc('month', CURRENT_DATE)
-		  AND o.order_id NOT LIKE '%Opening_Balance%' 
-		  AND o.order_id NOT LIKE '%Opening Balance%'
+		WHERE (o."timestamp"::timestamp) >= date_trunc('month', now())
+		  AND o.order_id NOT LIKE '%Opening%' 
 		GROUP BY team_name
 		HAVING team_name <> 'unassigned' AND team_name <> ''
 		ORDER BY total_revenue DESC
@@ -1866,7 +1865,44 @@ func handleSendChatMessage(c *gin.Context) {
 	c.JSON(200, gin.H{"status": "success", "data": msg})
 }
 
-func handleDeleteChatMessage(c *gin.Context) { c.JSON(200, gin.H{"status": "success"}) }
+func handleDeleteChatMessage(c *gin.Context) {
+	var req struct {
+		ID       uint   `json:"id"`
+		UserName string `json:"userName"`
+	}
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"status": "error", "message": "ទិន្នន័យមិនត្រឹមត្រូវ"})
+		return
+	}
+
+	var msg ChatMessage
+	if err := DB.First(&msg, req.ID).Error; err != nil {
+		c.JSON(http.StatusNotFound, gin.H{"status": "error", "message": "រកមិនឃើញសារ"})
+		return
+	}
+
+	// Only allow the sender or a system admin to delete
+	currentUser, _ := c.Get("userName")
+	isSystemAdmin, _ := c.Get("isSystemAdmin")
+	if msg.UserName != currentUser.(string) && (isSystemAdmin == nil || !isSystemAdmin.(bool)) {
+		c.JSON(http.StatusForbidden, gin.H{"status": "error", "message": "គ្មានសិទ្ធិលុបសារនេះទេ"})
+		return
+	}
+
+	if err := DB.Delete(&msg).Error; err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"status": "error", "message": "ការលុបសារបរាជ័យ"})
+		return
+	}
+
+	// Broadcast deletion to all clients
+	eventBytes, _ := json.Marshal(map[string]interface{}{
+		"type": "delete_message",
+		"id":   req.ID,
+	})
+	hub.broadcast <- eventBytes
+
+	c.JSON(http.StatusOK, gin.H{"status": "success"})
+}
 func handleGetAudioProxy(c *gin.Context) {
 	fileID := c.Param("fileID"); resp, err := http.Get(fmt.Sprintf("https://drive.google.com/uc?id=%s&export=download", fileID))
 	if err != nil || resp.StatusCode != 200 { c.Error(fmt.Errorf("failed to fetch audio")); return }; defer resp.Body.Close()
@@ -1892,6 +1928,7 @@ func main() {
 	api := r.Group("/api")
 	api.POST("/login", handleLogin)
     api.GET("/images/temp/:id", handleServeTempImage)
+	api.GET("/teams/ranking", handleGetTeamSalesRanking)
 
 	protected := api.Group("/")
 	protected.Use(AuthMiddleware()) 
@@ -1903,8 +1940,8 @@ func main() {
 		protected.GET("/permissions", handleGetUserPermissions)
 		protected.GET("/roles", handleGetRoles)
 		protected.GET("/orders", RequirePermission("view_order_list"), handleGetAllOrders)
-		protected.GET("/teams/ranking", handleGetTeamSalesRanking)
-		protected.GET("/teams/shipping-costs", handleGetGlobalShippingCosts)
+		// protected.GET("/teams/ranking", RequirePermission("view_revenue"), handleGetTeamSalesRanking) // Moved up
+		protected.GET("/teams/shipping-costs", RequirePermission("view_revenue"), handleGetGlobalShippingCosts)
 		
 		chat := protected.Group("/chat")
 		chat.GET("/messages", handleGetChatMessages); chat.POST("/send", handleSendChatMessage); chat.POST("/delete", handleDeleteChatMessage)

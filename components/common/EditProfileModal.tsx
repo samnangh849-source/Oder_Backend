@@ -46,9 +46,14 @@ const EditProfileModal: React.FC<EditProfileModalProps> = ({ onClose }) => {
                 mimeType: compressedBlob.type,
                 userName: currentUser?.UserName || 'unknown'
             };
+            
+            const token = localStorage.getItem('token');
             const response = await fetch(`${WEB_APP_URL}/api/upload-image`, {
                 method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
+                headers: { 
+                    'Content-Type': 'application/json',
+                    ...(token ? { 'Authorization': `Bearer ${token}` } : {})
+                },
                 body: JSON.stringify(payload)
             });
             const result = await response.json();
@@ -73,13 +78,19 @@ const EditProfileModal: React.FC<EditProfileModalProps> = ({ onClose }) => {
         try {
             const profilePayload = {
                 userName: currentUser?.UserName,
-                fullName: fullName,
-                profilePictureURL: profilePicUrl
+                newData: {
+                    FullName: fullName,
+                    ProfilePictureURL: profilePicUrl
+                }
             };
 
+            const token = localStorage.getItem('token');
             const response = await fetch(`${WEB_APP_URL}/api/profile/update`, {
                 method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
+                headers: { 
+                    'Content-Type': 'application/json',
+                    ...(token ? { 'Authorization': `Bearer ${token}` } : {})
+                },
                 body: JSON.stringify(profilePayload)
             });
 
@@ -136,9 +147,14 @@ const EditProfileModal: React.FC<EditProfileModalProps> = ({ onClose }) => {
                 oldPassword: oldPassword,
                 newPassword: password,
             };
+            
+            const token = localStorage.getItem('token');
             const response = await fetch(`${WEB_APP_URL}/api/profile/change-password`, {
                 method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
+                headers: { 
+                    'Content-Type': 'application/json',
+                    ...(token ? { 'Authorization': `Bearer ${token}` } : {})
+                },
                 body: JSON.stringify(passwordPayload)
             });
             const result = await response.json();

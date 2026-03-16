@@ -119,10 +119,8 @@ const UserOrdersView: React.FC<{ onAdd: () => void }> = ({ onAdd }) => {
         setIsRankingLoading(true);
         try {
             const token = localStorage.getItem('token');
-            if (!token) return;
-            
             const response = await fetch(`${WEB_APP_URL}/api/teams/ranking`, {
-                headers: { 'Authorization': `Bearer ${token}` }
+                headers: token ? { 'Authorization': `Bearer ${token}` } : {}
             });
             
             if (response.ok) {
@@ -435,7 +433,7 @@ const UserOrdersView: React.FC<{ onAdd: () => void }> = ({ onAdd }) => {
                                     <span className="text-[10px] font-bold text-white/70 truncate uppercase tracking-tighter group-hover/rank:text-white transition-colors">{t.name}</span>
                                 </div>
                                 <span className="text-[10px] font-black text-white italic">
-                                    {hasPermission('view_revenue') ? `${(t.revenue/1000).toFixed(1)}k` : '•••'}
+                                    {`${(t.revenue/1000).toFixed(1)}k`}
                                 </span>
                             </div>
                         )) : (
