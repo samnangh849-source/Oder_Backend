@@ -78,7 +78,7 @@ const SettingsDashboard: React.FC<SettingsDashboardProps> = ({ onBack, initialSe
             if (token) headers['Authorization'] = `Bearer ${token}`;
 
             // Use section ID as endpoint (standard pattern)
-            const endpoint = sectionId === 'pages' ? 'static-data' : sectionId;
+            const endpoint = sectionId === 'pages' ? 'static-data' : (sectionId === 'systemSettings' ? 'settings' : sectionId);
             const res = await fetch(`${WEB_APP_URL}/api/${endpoint}`, { headers });
             if (res.ok) {
                 const json = await res.json();

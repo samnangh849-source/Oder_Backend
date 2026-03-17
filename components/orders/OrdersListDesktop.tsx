@@ -404,7 +404,7 @@ const OrdersListDesktop: React.FC<OrdersListDesktopProps> = ({
                     displayPhone,
                     carrierLogo: carrier?.CarrierLogoURL || '',
                     pageLogoUrl: pageInfo ? convertGoogleDriveUrl(pageInfo.PageLogoURL) : '',
-                    shippingLogo: shippingMethod?.LogosURL || '',
+                    shippingLogo: shippingMethod?.LogoURL || '',
                     orderDate: getSafeDateObj(order.Timestamp),
                     productThumbnails
                 }

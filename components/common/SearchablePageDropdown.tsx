@@ -51,7 +51,7 @@ const SearchablePageDropdown: React.FC<SearchablePageDropdownProps> = ({ pages, 
                     onChange={(e) => { setSearchTerm(e.target.value); setIsOpen(true); }}
                     onFocus={() => setIsOpen(true)}
                 />
-                <div className="absolute left-3.5 top-1/2 -translate-y-1/2">
+                <div className="absolute left-0 top-0 bottom-0 pl-3.5 flex items-center pointer-events-none">
                     <div className="w-8 h-8 rounded-full bg-gray-800 overflow-hidden border border-white/5 flex items-center justify-center">
                         {selectedPage ? (
                             <img 
@@ -64,7 +64,7 @@ const SearchablePageDropdown: React.FC<SearchablePageDropdownProps> = ({ pages, 
                         )}
                     </div>
                 </div>
-                <div className="absolute right-3.5 top-1/2 -translate-y-1/2 text-gray-600 group-focus-within:text-blue-500 transition-colors">
+                <div className="absolute right-0 top-0 bottom-0 pr-3.5 flex items-center text-gray-600 group-focus-within:text-blue-500 transition-colors pointer-events-none">
                     <svg className={`w-5 h-5 transition-transform duration-300 ${isOpen ? 'rotate-180' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24"><path d="M19 9l-7 7-7-7" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"/></svg>
                 </div>
             </div>

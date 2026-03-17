@@ -7,17 +7,18 @@ function onOpen() {
   const ui = SpreadsheetApp.getUi();
   ui.createMenu('⚙️ រៀបចំប្រព័ន្ធ (Admin)')
     .addItem('🚀 បង្កើត/ធ្វើបច្ចុប្បន្នភាព រចនាសម្ព័ន្ធ Sheet', 'initializeSystem')
+    .addItem('🔍 ពិនិត្យភាពត្រឹមត្រូវនៃ Header', 'validateSheetStructure')
     .addToUi();
 }
 
 const SYSTEM_STRUCTURE = {
   "Users": ["UserName", "Password", "Team", "FullName", "ProfilePictureURL", "Role", "IsSystemAdmin", "TelegramUsername"],
   "Stores": ["StoreName", "StoreType", "Address", "TelegramBotToken", "TelegramGroupID", "TelegramTopicID", "LabelPrinterURL", "CODAlertGroupID"],
-  "Settings": ["ConfigKey", "ConfigValue"],
+  "Settings": ["ConfigKey", "ConfigValue", "Description"],
   "TeamsPages": ["Team", "PageName", "TelegramValue", "PageLogoURL", "DefaultStore", "TelegramTopicID"],
   "Products": ["Barcode", "ProductName", "Price", "Cost", "ImageURL", "Tags"],
   "Locations": ["Province", "District", "Sangkat"],
-  "ShippingMethods": ["MethodName", "LogoURL", "AllowManualDriver", "RequireDriverSelection", "EnableCODAlert", "AlertTopicID", "InternalCost", "CostShortcuts", "EnableDriverRecommendation"],
+  "ShippingMethods": ["MethodName", "LogoURL", "AllowManualDriver", "RequireDriverSelection", "InternalCost", "CostShortcuts", "EnableDriverRecommendation"],
   "Colors": ["ColorName"],
   "Drivers": ["DriverName", "ImageURL", "Phone", "VehiclePlate"],
   "BankAccounts": ["BankName", "LogoURL", "AssignedStores"],
@@ -29,7 +30,7 @@ const SYSTEM_STRUCTURE = {
   "StockTransfers": ["TransferID", "Timestamp", "FromStore", "ToStore", "Barcode", "Quantity", "Status", "RequestedBy", "ApprovedBy", "ReceivedBy"],
   "Returns": ["ReturnID", "Timestamp", "OrderID", "StoreName", "Barcode", "Quantity", "Reason", "IsRestocked", "HandledBy"],
   
-  // ប្រព័ន្ធគ្រប់គ្រងសិទ្ធិ (RBAC) - ⚠️ បាន Update បន្ថែម ID នៅខាងមុខ
+  // ប្រព័ន្ធគ្រប់គ្រងសិទ្ធិ (RBAC)
   "Roles": ["ID", "RoleName", "Description"],
   "RolePermissions": ["ID", "Role", "Feature", "IsEnabled"],
 
@@ -108,13 +109,47 @@ function initializeSystem() {
   ui.alert('✅ ជោគជ័យ!', `បានបង្កើត Sheet ថ្មីចំនួន: ${createdCount}\nបានធ្វើបច្ចុប្បន្នភាព Sheet ចាស់ចំនួន: ${updatedCount}\n\nរចនាសម្ព័ន្ធទិន្នន័យរបស់អ្នកឥឡូវនេះស៊ីគ្នា ១០០% ជាមួយ Backend ហើយ។`, ui.ButtonSet.OK);
 }
 
+function validateSheetStructure() {
+  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  const ui = SpreadsheetApp.getUi();
+  let errors = [];
+
+  for (const sheetName in SYSTEM_STRUCTURE) {
+    const sheet = ss.getSheetByName(sheetName);
+    const requiredHeaders = SYSTEM_STRUCTURE[sheetName];
+
+    if (!sheet) {
+      errors.push(`❌ បាត់ Sheet: "${sheetName}"`);
+      continue;
+    }
+
+    const lastCol = sheet.getLastColumn();
+    let actualHeaders = [];
+    if (lastCol > 0) {
+      actualHeaders = sheet.getRange(1, 1, 1, lastCol).getValues()[0].map(h => String(h).trim().toLowerCase());
+    }
+
+    const missingHeaders = requiredHeaders.filter(h => !actualHeaders.includes(h.trim().toLowerCase()));
+    
+    if (missingHeaders.length > 0) {
+      errors.push(`⚠️ Sheet "${sheetName}" ខ្វះក្បាលតារាង: ${missingHeaders.join(", ")}`);
+    }
+  }
+
+  if (errors.length === 0) {
+    ui.alert('✅ ត្រឹមត្រូវ!', 'រចនាសម្ព័ន្ធ Sheet ទាំងអស់គឺត្រឹមត្រូវតាមស្ដង់ដារ Backend។', ui.ButtonSet.OK);
+  } else {
+    ui.alert('❌ បញ្ហាត្រូវបានរកឃើញ', errors.join("\n"), ui.ButtonSet.OK);
+  }
+}
+
 function setupDefaultSettings(ss) {
   const settingsSheet = ss.getSheetByName("Settings");
   if (!settingsSheet) return;
 
   const defaultSettings = [
-    ["UploadFolderID", "ដាក់_ID_Folder_Google_Drive_របស់អ្នកនៅទីនេះ"],
-    ["StoreName", "My Store"]
+    ["UploadFolderID", "ដាក់_ID_Folder_Google_Drive_របស់អ្នកនៅទីនេះ", "Folder សម្រាប់រក្សាទុករូបភាព"],
+    ["StoreName", "My Store", "ឈ្មោះហាងរបស់អ្នក"]
   ];
 
   const data = settingsSheet.getDataRange().getValues();

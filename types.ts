@@ -137,13 +137,11 @@ export interface TeamPage {
 
 export interface ShippingMethod {
   MethodName: string;
-  LogosURL: string; // Matches Go backend json tag
+  LogoURL: string; // Matches Go backend json tag
   AllowManualDriver: boolean;
   RequireDriverSelection: boolean;
-  EnableCODAlert: boolean;
-  AlertTopicID: string;
-  InternalCost?: number;
-  CostShortcuts?: string;
+  InternalCost: number;
+  CostShortcuts: string;
   EnableDriverRecommendation?: boolean;
 }
 

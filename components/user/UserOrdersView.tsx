@@ -41,11 +41,11 @@ const UserOrdersView: React.FC<{ onAdd: () => void }> = ({ onAdd }) => {
     const [viewMode, setViewMode] = useState<'card' | 'list'>('card');
     const [lastSync, setLastSync] = useState<Date>(new Date());
     
-    const [dateRange, setDateRange] = useState<DateRangePreset>('today');
+    const [dateRange, setDateRange] = useState<DateRangePreset>('this_month');
     const [customStart, setCustomStart] = useState(new Date().toISOString().split('T')[0]);
     const [customEnd, setCustomEnd] = useState(new Date().toISOString().split('T')[0]);
     const [reportFilters, setReportFilters] = useState<ReportFilterState>({
-        datePreset: 'today',
+        datePreset: 'this_month',
         customStart: new Date().toISOString().split('T')[0],
         customEnd: new Date().toISOString().split('T')[0]
     });
@@ -58,7 +58,7 @@ const UserOrdersView: React.FC<{ onAdd: () => void }> = ({ onAdd }) => {
     // Advanced Mobile Filtering
     const [isFilterPanelOpen, setIsFilterPanelOpen] = useState(false);
     const [advancedFilters, setAdvancedFilters] = useState<FilterState>({
-        datePreset: 'today', startDate: '', endDate: '', team: '', user: '',
+        datePreset: 'this_month', startDate: '', endDate: '', team: '', user: '',
         paymentStatus: '', shippingService: '', driver: '', product: '', bank: '',
         fulfillmentStore: '', store: '', page: '', location: '', internalCost: '',
         customerName: '', isVerified: 'All'

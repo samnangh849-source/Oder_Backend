@@ -92,7 +92,7 @@ const OrdersListTablet: React.FC<OrdersListTabletProps> = ({
     const getShippingLogo = (methodName: string) => {
         if (!methodName || !appData.shippingMethods) return null;
         const method = appData.shippingMethods.find(m => m.MethodName === methodName);
-        return method ? convertGoogleDriveUrl(method.LogosURL) : null;
+        return method ? convertGoogleDriveUrl(method.LogoURL) : null;
     };
 
     const formatPhone = (val: string) => {

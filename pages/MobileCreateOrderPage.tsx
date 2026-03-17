@@ -35,6 +35,7 @@ const MobileCreateOrderPage: React.FC<MobileCreateOrderPageProps> = ({ team, onS
     const [currentStep, setCurrentStep] = useState(1);
     const [loading, setLoading] = useState(false);
     const [error, setError] = useState<string | null>(null);
+    const [recommendationMessage, setRecommendationMessage] = useState<string>('');
 
     // Undo Timer State
     const [undoTimer, setUndoTimer] = useState<number | null>(null);
@@ -42,6 +43,37 @@ const MobileCreateOrderPage: React.FC<MobileCreateOrderPageProps> = ({ team, onS
     const [isUndoing, setIsUndoing] = useState(false);
     const submitTimeoutRef = useRef<NodeJS.Timeout | null>(null);
     const submitIntervalRef = useRef<NodeJS.Timeout | null>(null);
+
+    useEffect(() => {
+        if (order.fulfillmentStore && order.customer.location && appData.driverRecommendations) {
+            const days = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
+            const today = days[new Date().getDay()];
+            
+            const recommendation = appData.driverRecommendations.find(r => 
+                r.DayOfWeek === today && 
+                r.StoreName === order.fulfillmentStore && 
+                r.Province === order.customer.location
+            );
+
+            if (recommendation) {
+                const method = appData.shippingMethods?.find(m => m.MethodName === recommendation.ShippingMethod);
+                if (method) {
+                    setOrder(prev => ({
+                        ...prev,
+                        shipping: {
+                            ...prev.shipping,
+                            method: method.MethodName,
+                            service: recommendation.DriverName,
+                            cost: method.InternalCost || prev.shipping.cost
+                        }
+                    }));
+                    setRecommendationMessage(`នៅសាខា ${recommendation.StoreName} ថ្ងៃនេះ វេនដឹករបស់ ${recommendation.DriverName}`);
+                    return;
+                }
+            }
+        }
+        setRecommendationMessage('');
+    }, [order.fulfillmentStore, order.customer.location, appData.driverRecommendations, appData.shippingMethods]);
 
     // Order State (Simplified for initialization)
     const [order, setOrder] = useState<any>({
@@ -214,6 +246,12 @@ const MobileCreateOrderPage: React.FC<MobileCreateOrderPageProps> = ({ team, onS
                     <div className="space-y-8 animate-reveal">
                         <div className="space-y-4">
                             <label className="text-[10px] font-black text-gray-500 uppercase tracking-widest ml-2">សេវាដឹកជញ្ជូន*</label>
+                            {recommendationMessage && (
+                                <div className="mb-4 p-4 bg-blue-600/10 border border-blue-500/20 rounded-3xl flex items-center gap-3 animate-pulse">
+                                    <div className="w-2 h-2 rounded-full bg-blue-500 shadow-[0_0_10px_rgba(59,130,246,0.5)]"></div>
+                                    <span className="text-[11px] font-black text-blue-400 uppercase tracking-widest leading-relaxed">{recommendationMessage}</span>
+                                </div>
+                            )}
                             <ShippingMethodDropdown 
                                 methods={appData.shippingMethods || []} 
                                 selectedMethodName={order.shipping.method} 
@@ -258,7 +296,9 @@ const MobileCreateOrderPage: React.FC<MobileCreateOrderPageProps> = ({ team, onS
                                     value={order.shipping.cost} 
                                     onChange={e => updateOrder({ shipping: { ...order.shipping, cost: e.target.value } })}
                                 />
-                                <span className="absolute right-6 top-1/2 -translate-y-1/2 text-gray-500 font-bold text-lg">$</span>
+                                <div className="absolute right-0 top-0 bottom-0 pr-6 flex items-center pointer-events-none">
+                                    <span className="text-gray-500 font-bold text-lg">$</span>
+                                </div>
                             </div>
 
                             {/* Shortcut Buttons */}

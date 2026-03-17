@@ -106,7 +106,7 @@ export const OrderProvider: React.FC<{ children: React.ReactNode }> = ({ childre
             setIsSyncing(false);
             setIsGlobalLoading(false);
         }
-    }, [handleUnauthorized]);
+    }, [handleUnauthorized, currentUser]);
 
     const refreshData = useCallback(async () => {
         await Promise.all([fetchData(true), fetchOrders(true)]);

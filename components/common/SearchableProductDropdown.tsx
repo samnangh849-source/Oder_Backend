@@ -151,9 +151,22 @@ const SearchableProductDropdown: React.FC<SearchableProductDropdownProps> = ({
                     onFocus={() => setIsOpen(true)}
                     onKeyDown={handleKeyDown}
                 />
-                <div className="absolute right-4 top-1/2 -translate-y-1/2 flex items-center gap-2">
-                    {searchTerm && <button type="button" onClick={handleClear} className="text-gray-500 hover:text-white text-2xl">&times;</button>}
-                    <svg className="h-5 w-5 text-gray-400" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" /></svg>
+                <div className="absolute right-0 top-0 bottom-0 pr-4 flex items-center gap-2 pointer-events-none">
+                    {searchTerm && (
+                        <button 
+                            type="button" 
+                            onClick={handleClear} 
+                            className="text-gray-500 hover:text-white text-xl leading-none p-1 pointer-events-auto transition-colors"
+                            title="Clear search"
+                        >
+                            &times;
+                        </button>
+                    )}
+                    <div className="flex items-center justify-center pointer-events-none">
+                        <svg className="h-5 w-5 text-gray-400" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+                        </svg>
+                    </div>
                 </div>
             </div>
             

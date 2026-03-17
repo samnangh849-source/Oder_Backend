@@ -95,8 +95,9 @@ type Store struct {
 	CODAlertGroupID  string `gorm:"column:cod_alert_group_id" json:"CODAlertGroupID"`
 }
 type Setting struct {
-	ConfigKey   string `gorm:"primaryKey;column:config_key" json:"ConfigKey"`
-	ConfigValue string `gorm:"column:config_value" json:"ConfigValue"`
+	ConfigKey   string `gorm:"primaryKey;column:config_key" json:"Key"`
+	ConfigValue string `gorm:"column:config_value" json:"Value"`
+	Description string `gorm:"column:description" json:"Description"`
 }
 
 type TeamPage struct {
@@ -125,11 +126,9 @@ type Location struct {
 }
 type ShippingMethod struct {
 	MethodName                 string  `gorm:"primaryKey;column:method_name" json:"MethodName"`
-	LogoURL                    string  `gorm:"column:logos_url" json:"LogosURL"`
+	LogoURL                    string  `gorm:"column:logo_url" json:"LogoURL"`
 	AllowManualDriver          bool    `gorm:"column:allow_manual_driver" json:"AllowManualDriver"`
 	RequireDriverSelection     bool    `gorm:"column:require_driver_selection" json:"RequireDriverSelection"`
-	EnableCODAlert             bool    `gorm:"column:enable_cod_alert" json:"EnableCODAlert"`
-	AlertTopicID               string  `gorm:"column:alert_topic_id" json:"AlertTopicID"`
 	InternalCost               float64 `gorm:"column:internal_cost" json:"InternalCost"`
 	CostShortcuts              string  `gorm:"column:cost_shortcuts" json:"CostShortcuts"`
 	EnableDriverRecommendation bool    `gorm:"column:enable_driver_recommendation" json:"EnableDriverRecommendation"`
@@ -378,7 +377,7 @@ func initDB() {
 	
 	// Force re-migrate ShippingMethod to fix naming issues
 	if db.Migrator().HasTable(&ShippingMethod{}) {
-		if !db.Migrator().HasColumn(&ShippingMethod{}, "alert_topic_id") {
+		if !db.Migrator().HasColumn(&ShippingMethod{}, "AlertTopic") {
 			db.Migrator().DropTable(&ShippingMethod{})
 		}
 	}
@@ -537,6 +536,10 @@ func mapToDBColumn(key string) string {
 		"LogosURL":                  "logo_url",
 		"Logos URL":                 "logo_url",
 		"LogoURL":                   "logo_url",
+		"ID":                        "id",
+		"Key":                       "config_key",
+		"Value":                     "config_value",
+		"Description":               "description",
 	}
 
 	for k, v := range specialCases {
@@ -1260,6 +1263,15 @@ func handleGetStaticData(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{"status": "success", "data": result})
 }
 
+func handleGetSettings(c *gin.Context) {
+	var settings []Setting
+	if err := DB.Find(&settings).Error; err != nil {
+		c.Error(err)
+		return
+	}
+	c.JSON(http.StatusOK, gin.H{"status": "success", "data": settings})
+}
+
 func fetchSheetDataFromAPI(sheetName string) ([]map[string]interface{}, error) {
 	readRange, ok := sheetRanges[sheetName]
 	if !ok {
@@ -1273,10 +1285,15 @@ func fetchSheetDataFromAPI(sheetName string) ([]map[string]interface{}, error) {
 }
 
 func isNumericHeader(h string) bool {
-	return h == "Price" || h == "Cost" || h == "Grand Total" || h == "Subtotal" || h == "Shipping Fee (Customer)" || h == "Internal Cost" || h == "Discount ($)" || h == "Delivery Unpaid" || h == "Delivery Paid" || h == "Total Product Cost ($)" || h == "Revenue" || h == "Quantity" || h == "Part" || h == "ID"
+	return h == "Price" || h == "Cost" || h == "Grand Total" || h == "Subtotal" || h == "Shipping Fee (Customer)" || 
+		h == "Internal Cost" || h == "InternalCost" || h == "Discount ($)" || h == "Delivery Unpaid" || 
+		h == "Delivery Paid" || h == "Total Product Cost ($)" || h == "Revenue" || h == "Quantity" || 
+		h == "Part" || h == "ID"
 }
 func isBoolHeader(h string) bool {
-	return h == "IsSystemAdmin" || h == "AllowManualDriver" || h == "RequireDriverSelection" || h == "EnableCODAlert" || h == "IsRestocked" || h == "IsEnabled" || h == "EnableDriverRecommendation"
+	return h == "IsSystemAdmin" || h == "AllowManualDriver" || h == "RequireDriverSelection" || 
+		h == "IsRestocked" || h == "IsEnabled" || 
+		h == "EnableDriverRecommendation" || h == "IsVerified"
 }
 
 func convertSheetValuesToMaps(values *sheets.ValueRange) ([]map[string]interface{}, error) {
@@ -1295,9 +1312,6 @@ func convertSheetValuesToMaps(values *sheets.ValueRange) ([]map[string]interface
 			if i < len(headers) {
 				header := fmt.Sprintf("%v", headers[i])
 				if header != "" {
-					if header == "LogoURL" {
-						rowData["LogosURL"] = fmt.Sprintf("%v", cell)
-					}
 					if cellStr, ok := cell.(string); ok {
 						if isNumericHeader(header) {
 							cleanedStr := strings.ReplaceAll(strings.ReplaceAll(strings.TrimSpace(cellStr), "$", ""), ",", "")
@@ -1307,12 +1321,21 @@ func convertSheetValuesToMaps(values *sheets.ValueRange) ([]map[string]interface
 								rowData[header] = 0.0
 							}
 						} else if isBoolHeader(header) {
-							rowData[header] = strings.ToUpper(cellStr) == "TRUE"
+							rowData[header] = strings.ToUpper(strings.TrimSpace(cellStr)) == "TRUE"
 						} else {
 							rowData[header] = cellStr
 						}
 					} else {
-						rowData[header] = cell
+						// If not a string, check if it's already a boolean (sometimes happens with API)
+						if isBoolHeader(header) {
+							if b, ok := cell.(bool); ok {
+								rowData[header] = b
+							} else {
+								rowData[header] = false
+							}
+						} else {
+							rowData[header] = cell
+						}
 					}
 					if header == "Telegram Message ID 1" || header == "Telegram Message ID 2" || header == "Order ID" || header == "Customer Phone" || header == "Barcode" {
 						rowData[header] = fmt.Sprintf("%v", cell)
@@ -1344,30 +1367,38 @@ func handleMigrateData(c *gin.Context) {
 			createGoogleAPIClient(ctx)
 		}
 
-		log.Println("🗑️ លុបទិន្នន័យចាស់ (Resetting Database)...")
-		DB.Session(&gorm.Session{AllowGlobalUpdate: true}).Delete(&User{})
-		DB.Session(&gorm.Session{AllowGlobalUpdate: true}).Delete(&Store{})
-		DB.Session(&gorm.Session{AllowGlobalUpdate: true}).Delete(&Setting{})
-		DB.Session(&gorm.Session{AllowGlobalUpdate: true}).Delete(&TeamPage{})
-		DB.Session(&gorm.Session{AllowGlobalUpdate: true}).Delete(&Product{})
-		DB.Session(&gorm.Session{AllowGlobalUpdate: true}).Delete(&Location{})
-		DB.Session(&gorm.Session{AllowGlobalUpdate: true}).Delete(&ShippingMethod{})
-		DB.Session(&gorm.Session{AllowGlobalUpdate: true}).Delete(&Color{})
-		DB.Session(&gorm.Session{AllowGlobalUpdate: true}).Delete(&Driver{})
-		DB.Session(&gorm.Session{AllowGlobalUpdate: true}).Delete(&BankAccount{})
-		DB.Session(&gorm.Session{AllowGlobalUpdate: true}).Delete(&PhoneCarrier{})
-		DB.Session(&gorm.Session{AllowGlobalUpdate: true}).Delete(&TelegramTemplate{})
-		DB.Session(&gorm.Session{AllowGlobalUpdate: true}).Delete(&Inventory{})
-		DB.Session(&gorm.Session{AllowGlobalUpdate: true}).Delete(&StockTransfer{})
-		DB.Session(&gorm.Session{AllowGlobalUpdate: true}).Delete(&ReturnItem{})
-		DB.Session(&gorm.Session{AllowGlobalUpdate: true}).Delete(&RevenueEntry{})
-		DB.Session(&gorm.Session{AllowGlobalUpdate: true}).Delete(&ChatMessage{})
-		DB.Session(&gorm.Session{AllowGlobalUpdate: true}).Delete(&EditLog{})
-		DB.Session(&gorm.Session{AllowGlobalUpdate: true}).Delete(&UserActivityLog{})
-		DB.Session(&gorm.Session{AllowGlobalUpdate: true}).Delete(&Order{})
-		DB.Session(&gorm.Session{AllowGlobalUpdate: true}).Delete(&DriverRecommendation{})
-		DB.Session(&gorm.Session{AllowGlobalUpdate: true}).Delete(&Role{})
-		DB.Session(&gorm.Session{AllowGlobalUpdate: true}).Delete(&RolePermission{})
+		// Start Transaction
+		tx := DB.Begin()
+		defer func() {
+			if r := recover(); r != nil {
+				tx.Rollback()
+			}
+		}()
+
+		log.Println("🗑️ លុបទិន្នន័យចាស់ (Resetting Database within transaction)...")
+		tx.Session(&gorm.Session{AllowGlobalUpdate: true}).Delete(&User{})
+		tx.Session(&gorm.Session{AllowGlobalUpdate: true}).Delete(&Store{})
+		tx.Session(&gorm.Session{AllowGlobalUpdate: true}).Delete(&Setting{})
+		tx.Session(&gorm.Session{AllowGlobalUpdate: true}).Delete(&TeamPage{})
+		tx.Session(&gorm.Session{AllowGlobalUpdate: true}).Delete(&Product{})
+		tx.Session(&gorm.Session{AllowGlobalUpdate: true}).Delete(&Location{})
+		tx.Session(&gorm.Session{AllowGlobalUpdate: true}).Delete(&ShippingMethod{})
+		tx.Session(&gorm.Session{AllowGlobalUpdate: true}).Delete(&Color{})
+		tx.Session(&gorm.Session{AllowGlobalUpdate: true}).Delete(&Driver{})
+		tx.Session(&gorm.Session{AllowGlobalUpdate: true}).Delete(&BankAccount{})
+		tx.Session(&gorm.Session{AllowGlobalUpdate: true}).Delete(&PhoneCarrier{})
+		tx.Session(&gorm.Session{AllowGlobalUpdate: true}).Delete(&TelegramTemplate{})
+		tx.Session(&gorm.Session{AllowGlobalUpdate: true}).Delete(&Inventory{})
+		tx.Session(&gorm.Session{AllowGlobalUpdate: true}).Delete(&StockTransfer{})
+		tx.Session(&gorm.Session{AllowGlobalUpdate: true}).Delete(&ReturnItem{})
+		tx.Session(&gorm.Session{AllowGlobalUpdate: true}).Delete(&RevenueEntry{})
+		tx.Session(&gorm.Session{AllowGlobalUpdate: true}).Delete(&ChatMessage{})
+		tx.Session(&gorm.Session{AllowGlobalUpdate: true}).Delete(&EditLog{})
+		tx.Session(&gorm.Session{AllowGlobalUpdate: true}).Delete(&UserActivityLog{})
+		tx.Session(&gorm.Session{AllowGlobalUpdate: true}).Delete(&Order{})
+		tx.Session(&gorm.Session{AllowGlobalUpdate: true}).Delete(&DriverRecommendation{})
+		tx.Session(&gorm.Session{AllowGlobalUpdate: true}).Delete(&Role{})
+		tx.Session(&gorm.Session{AllowGlobalUpdate: true}).Delete(&RolePermission{})
 
 		log.Println("🔄 ចាប់ផ្តើមទាញទិន្នន័យថ្មីពី Google Sheet...")
 
@@ -1382,7 +1413,7 @@ func handleMigrateData(c *gin.Context) {
 				}
 			}
 			if len(valid) > 0 {
-				DB.CreateInBatches(valid, 100)
+				tx.CreateInBatches(valid, 100)
 			}
 		}
 
@@ -1397,7 +1428,7 @@ func handleMigrateData(c *gin.Context) {
 				}
 			}
 			if len(valid) > 0 {
-				DB.CreateInBatches(valid, 100)
+				tx.CreateInBatches(valid, 100)
 			}
 		}
 
@@ -1405,7 +1436,7 @@ func handleMigrateData(c *gin.Context) {
 		if fetchSheetDataToStruct("Settings", &settings) == nil {
 			for _, s := range settings {
 				if s.ConfigKey != "" {
-					DB.Save(&s)
+					tx.Save(&s)
 					if s.ConfigKey == "UploadFolderID" {
 						envVal := os.Getenv("UPLOAD_FOLDER_ID")
 						if envVal != "" {
@@ -1421,13 +1452,15 @@ func handleMigrateData(c *gin.Context) {
 		var pages []TeamPage
 		if fetchSheetDataToStruct("TeamsPages", &pages) == nil {
 			var valid []TeamPage
+			seen := make(map[uint]bool)
 			for _, x := range pages {
-				if x.PageName != "" {
+				if x.PageName != "" && !seen[x.ID] {
+					if x.ID != 0 { seen[x.ID] = true }
 					valid = append(valid, x)
 				}
 			}
 			if len(valid) > 0 {
-				DB.CreateInBatches(valid, 100)
+				tx.CreateInBatches(valid, 100)
 			}
 		}
 
@@ -1442,13 +1475,23 @@ func handleMigrateData(c *gin.Context) {
 				}
 			}
 			if len(valid) > 0 {
-				DB.CreateInBatches(valid, 100)
+				tx.CreateInBatches(valid, 100)
 			}
 		}
 
 		var locations []Location
 		if fetchSheetDataToStruct("Locations", &locations) == nil && len(locations) > 0 {
-			DB.CreateInBatches(locations, 100)
+			var valid []Location
+			seen := make(map[uint]bool)
+			for _, x := range locations {
+				if !seen[x.ID] {
+					if x.ID != 0 { seen[x.ID] = true }
+					valid = append(valid, x)
+				}
+			}
+			if len(valid) > 0 {
+				tx.CreateInBatches(valid, 100)
+			}
 		}
 
 		var shipping []ShippingMethod
@@ -1462,7 +1505,7 @@ func handleMigrateData(c *gin.Context) {
 				}
 			}
 			if len(valid) > 0 {
-				DB.CreateInBatches(valid, 100)
+				tx.CreateInBatches(valid, 100)
 			}
 		}
 
@@ -1477,7 +1520,7 @@ func handleMigrateData(c *gin.Context) {
 				}
 			}
 			if len(valid) > 0 {
-				DB.CreateInBatches(valid, 100)
+				tx.CreateInBatches(valid, 100)
 			}
 		}
 
@@ -1492,7 +1535,7 @@ func handleMigrateData(c *gin.Context) {
 				}
 			}
 			if len(valid) > 0 {
-				DB.CreateInBatches(valid, 100)
+				tx.CreateInBatches(valid, 100)
 			}
 		}
 
@@ -1507,7 +1550,7 @@ func handleMigrateData(c *gin.Context) {
 				}
 			}
 			if len(valid) > 0 {
-				DB.CreateInBatches(valid, 100)
+				tx.CreateInBatches(valid, 100)
 			}
 		}
 
@@ -1522,71 +1565,165 @@ func handleMigrateData(c *gin.Context) {
 				}
 			}
 			if len(valid) > 0 {
-				DB.CreateInBatches(valid, 100)
+				tx.CreateInBatches(valid, 100)
 			}
 		}
 
 		var templates []TelegramTemplate
 		if fetchSheetDataToStruct("TelegramTemplates", &templates) == nil && len(templates) > 0 {
-			DB.CreateInBatches(templates, 100)
-		}
-		var inventory []Inventory
-		if fetchSheetDataToStruct("Inventory", &inventory) == nil && len(inventory) > 0 {
-			DB.CreateInBatches(inventory, 100)
-		}
-		var transfers []StockTransfer
-		if fetchSheetDataToStruct("StockTransfers", &transfers) == nil {
-			var valid []StockTransfer
-			for _, x := range transfers {
-				if x.TransferID != "" {
+			var valid []TelegramTemplate
+			seen := make(map[uint]bool)
+			for _, x := range templates {
+				if !seen[x.ID] {
+					if x.ID != 0 { seen[x.ID] = true }
 					valid = append(valid, x)
 				}
 			}
 			if len(valid) > 0 {
-				DB.CreateInBatches(valid, 100)
+				tx.CreateInBatches(valid, 100)
+			}
+		}
+		var inventory []Inventory
+		if fetchSheetDataToStruct("Inventory", &inventory) == nil && len(inventory) > 0 {
+			var valid []Inventory
+			seen := make(map[uint]bool)
+			for _, x := range inventory {
+				if !seen[x.ID] {
+					if x.ID != 0 { seen[x.ID] = true }
+					valid = append(valid, x)
+				}
+			}
+			if len(valid) > 0 {
+				tx.CreateInBatches(valid, 100)
+			}
+		}
+		var transfers []StockTransfer
+		if fetchSheetDataToStruct("StockTransfers", &transfers) == nil {
+			var valid []StockTransfer
+			seen := make(map[string]bool)
+			for _, x := range transfers {
+				if x.TransferID != "" && !seen[x.TransferID] {
+					seen[x.TransferID] = true
+					valid = append(valid, x)
+				}
+			}
+			if len(valid) > 0 {
+				tx.CreateInBatches(valid, 100)
 			}
 		}
 		var returns []ReturnItem
 		if fetchSheetDataToStruct("Returns", &returns) == nil {
 			var valid []ReturnItem
+			seen := make(map[string]bool)
 			for _, x := range returns {
-				if x.ReturnID != "" {
+				if x.ReturnID != "" && !seen[x.ReturnID] {
+					seen[x.ReturnID] = true
 					valid = append(valid, x)
 				}
 			}
 			if len(valid) > 0 {
-				DB.CreateInBatches(valid, 100)
+				tx.CreateInBatches(valid, 100)
 			}
 		}
 		var revs []RevenueEntry
 		if fetchSheetDataToStruct("RevenueDashboard", &revs) == nil && len(revs) > 0 {
-			DB.CreateInBatches(revs, 100)
+			var valid []RevenueEntry
+			seen := make(map[uint]bool)
+			for _, x := range revs {
+				if !seen[x.ID] {
+					if x.ID != 0 { seen[x.ID] = true }
+					valid = append(valid, x)
+				}
+			}
+			if len(valid) > 0 {
+				tx.CreateInBatches(valid, 100)
+			}
 		}
 		var chats []ChatMessage
 		if fetchSheetDataToStruct("ChatMessages", &chats) == nil && len(chats) > 0 {
-			DB.CreateInBatches(chats, 100)
+			var valid []ChatMessage
+			seen := make(map[uint]bool)
+			for _, x := range chats {
+				if !seen[x.ID] {
+					if x.ID != 0 { seen[x.ID] = true }
+					valid = append(valid, x)
+				}
+			}
+			if len(valid) > 0 {
+				tx.CreateInBatches(valid, 100)
+			}
 		}
 		var editLogs []EditLog
 		if fetchSheetDataToStruct("EditLogs", &editLogs) == nil && len(editLogs) > 0 {
-			DB.CreateInBatches(editLogs, 100)
+			var valid []EditLog
+			seen := make(map[uint]bool)
+			for _, x := range editLogs {
+				if !seen[x.ID] {
+					if x.ID != 0 { seen[x.ID] = true }
+					valid = append(valid, x)
+				}
+			}
+			if len(valid) > 0 {
+				tx.CreateInBatches(valid, 100)
+			}
 		}
 		var actLogs []UserActivityLog
 		if fetchSheetDataToStruct("UserActivityLogs", &actLogs) == nil && len(actLogs) > 0 {
-			DB.CreateInBatches(actLogs, 100)
+			var valid []UserActivityLog
+			seen := make(map[uint]bool)
+			for _, x := range actLogs {
+				if !seen[x.ID] {
+					if x.ID != 0 { seen[x.ID] = true }
+					valid = append(valid, x)
+				}
+			}
+			if len(valid) > 0 {
+				tx.CreateInBatches(valid, 100)
+			}
 		}
 		var recs []DriverRecommendation
 		if fetchSheetDataToStruct("DriverRecommendations", &recs) == nil && len(recs) > 0 {
-			DB.CreateInBatches(recs, 100)
+			var valid []DriverRecommendation
+			seen := make(map[uint]bool)
+			for _, x := range recs {
+				if !seen[x.ID] {
+					if x.ID != 0 { seen[x.ID] = true }
+					valid = append(valid, x)
+				}
+			}
+			if len(valid) > 0 {
+				tx.CreateInBatches(valid, 100)
+			}
 		}
 
 		var roles []Role
 		if fetchSheetDataToStruct("Roles", &roles) == nil && len(roles) > 0 {
-			DB.CreateInBatches(roles, 100)
+			var valid []Role
+			seen := make(map[uint]bool)
+			for _, x := range roles {
+				if !seen[x.ID] {
+					if x.ID != 0 { seen[x.ID] = true }
+					valid = append(valid, x)
+				}
+			}
+			if len(valid) > 0 {
+				tx.CreateInBatches(valid, 100)
+			}
 		}
 
 		var perms []RolePermission
 		if fetchSheetDataToStruct("RolePermissions", &perms) == nil && len(perms) > 0 {
-			DB.CreateInBatches(perms, 100)
+			var valid []RolePermission
+			seen := make(map[uint]bool)
+			for _, x := range perms {
+				if !seen[x.ID] {
+					if x.ID != 0 { seen[x.ID] = true }
+					valid = append(valid, x)
+				}
+			}
+			if len(valid) > 0 {
+				tx.CreateInBatches(valid, 100)
+			}
 		}
 
 		var orders []Order
@@ -1600,11 +1737,15 @@ func handleMigrateData(c *gin.Context) {
 				}
 			}
 			if len(valid) > 0 {
-				DB.CreateInBatches(valid, 100)
+				tx.CreateInBatches(valid, 100)
 			}
 		}
 
-		log.Println("🎉 Migration ជោគជ័យ!")
+		if err := tx.Commit().Error; err != nil {
+			log.Println("❌ Migration failed on commit:", err)
+		} else {
+			log.Println("🎉 Migration ជោគជ័យ!")
+		}
 	}()
 	c.JSON(200, gin.H{"status": "success", "message": "Migration started."})
 }
@@ -2061,21 +2202,40 @@ func handleClearCache(c *gin.Context)             { c.JSON(200, gin.H{"status": 
 func handleAdminUpdateProductTags(c *gin.Context) { c.JSON(200, gin.H{"status": "success"}) }
 
 func handleGetTeamSalesRanking(c *gin.Context) {
+	period := c.DefaultQuery("period", "today")
 	var results []struct {
 		Team    string  `json:"Team"`
 		Revenue float64 `json:"Revenue"`
 	}
 
-	query := `
+	whereClause := "team IS NOT NULL AND team <> '' AND team <> 'Unassigned'"
+	now := time.Now()
+
+	switch period {
+	case "today":
+		start := time.Date(now.Year(), now.Month(), now.Day(), 0, 0, 0, 0, now.Location())
+		whereClause += fmt.Sprintf(" AND timestamp >= '%s'", start.Format("2006-01-02"))
+	case "this_week":
+		// Monday is the start of the week
+		offset := int(now.Weekday()) - 1
+		if offset < 0 { offset = 6 }
+		start := now.AddDate(0, 0, -offset)
+		whereClause += fmt.Sprintf(" AND timestamp >= '%s'", start.Format("2006-01-02"))
+	case "this_month":
+		start := time.Date(now.Year(), now.Month(), 1, 0, 0, 0, 0, now.Location())
+		whereClause += fmt.Sprintf(" AND timestamp >= '%s'", start.Format("2006-01-02"))
+	}
+
+	query := fmt.Sprintf(`
 		SELECT 
-			LOWER(TRIM(team)) as team_name, 
+			LOWER(TRIM(team)) as team_name,
 			SUM(COALESCE(revenue, 0))::FLOAT as total_revenue
 		FROM revenue_entries
-		WHERE team IS NOT NULL AND team <> '' AND team <> 'Unassigned'
+		WHERE %s
 		GROUP BY team_name
 		ORDER BY total_revenue DESC
 		LIMIT 10
-	`
+	`, whereClause)
 
 	rows, err := DB.Raw(query).Rows()
 	if err != nil {
@@ -2356,7 +2516,8 @@ func handleImageUploadProxy(c *gin.Context) {
 			}
 		}
 
-		DB.Where("id = ?", tid).Delete(&TempImage{})
+
+		// Removed immediate TempImage deletion to allow client time to load
 		log.Printf("✅ Background upload complete: %s", driveURL)
 	}(req, data, tempID)
 }
@@ -2456,7 +2617,8 @@ func handleSendChatMessage(c *gin.Context) {
 				hub.broadcast <- updateMsg
 				log.Printf("📢 Broadcasted upload_complete for Message ID: %d", m.ID)
 
-				DB.Where("id = ?", tid).Delete(&TempImage{})
+		
+		// Removed immediate TempImage deletion to allow client time to load
 			} else {
 				log.Printf("❌ Chat media upload failed: %v", err)
 			}
@@ -2550,6 +2712,7 @@ func main() {
 	api.POST("/login", handleLogin)
 	api.GET("/images/temp/:id", handleServeTempImage)
 	api.GET("/teams/ranking", handleGetTeamSalesRanking)
+	api.GET("/settings", handleGetSettings)
 
 	protected := api.Group("/")
 	protected.Use(AuthMiddleware())

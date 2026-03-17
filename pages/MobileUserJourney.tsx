@@ -29,12 +29,13 @@ const MobileUserJourney: React.FC<MobileUserJourneyProps> = ({ onBackToRoleSelec
 
     const [globalRanking, setGlobalRanking] = useState<{name: string, revenue: number}[]>([]);
     const [isRankingLoading, setIsRankingLoading] = useState(false);
+    const [rankingPeriod, setRankingPeriod] = useState<'today' | 'this_week' | 'this_month' | 'all'>('today');
 
     const fetchRanking = useCallback(async () => {
         setIsRankingLoading(true);
         try {
             const token = localStorage.getItem('token');
-            const response = await fetch(`${WEB_APP_URL}/api/teams/ranking`, {
+            const response = await fetch(`${WEB_APP_URL}/api/teams/ranking?period=${rankingPeriod}`, {
                 headers: token ? { 'Authorization': `Bearer ${token}` } : {}
             });
             
@@ -52,7 +53,7 @@ const MobileUserJourney: React.FC<MobileUserJourneyProps> = ({ onBackToRoleSelec
         } finally {
             setIsRankingLoading(false);
         }
-    }, []);
+    }, [rankingPeriod]);
 
     useEffect(() => { 
         setChatVisibility(true); 
@@ -139,7 +140,17 @@ const MobileUserJourney: React.FC<MobileUserJourneyProps> = ({ onBackToRoleSelec
                     <div className="w-full space-y-4 mt-4 animate-fade-in-up" style={{ animationDelay: '0.4s' }}>
                         <div className="flex items-center justify-between px-2">
                             <h3 className="text-[10px] font-black text-white/40 uppercase tracking-[0.3em] italic">Top Performer Teams</h3>
-                            <div className="h-[1px] flex-grow bg-white/5 ml-4"></div>
+                            <div className="flex bg-white/5 p-0.5 rounded-lg border border-white/5 scale-90 origin-right">
+                                {(['today', 'this_week', 'this_month', 'all'] as const).map(p => (
+                                    <button 
+                                        key={p} 
+                                        onClick={() => setRankingPeriod(p)}
+                                        className={`px-2 py-1 text-[8px] font-black uppercase tracking-tighter rounded-md transition-all ${rankingPeriod === p ? 'bg-blue-600 text-white shadow-lg' : 'text-gray-500'}`}
+                                    >
+                                        {p === 'today' ? 'Day' : p === 'this_week' ? 'Week' : p === 'this_month' ? 'Month' : 'All'}
+                                    </button>
+                                ))}
+                            </div>
                         </div>
                         
                         <div className="grid grid-cols-1 gap-3">

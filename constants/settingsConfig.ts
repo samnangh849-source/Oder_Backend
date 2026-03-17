@@ -105,9 +105,7 @@ export const configSections: ConfigSection[] = [
             { name: 'AllowManualDriver', label: 'អនុញ្ញាតជ្រើសរើសអ្នកដឹកដោយផ្ទាល់?', type: 'checkbox' },
             { name: 'RequireDriverSelection', label: 'តម្រូវឱ្យជ្រើសរើសអ្នកដឹក?', type: 'checkbox' }, 
             { name: 'EnableDriverRecommendation', label: 'បើកមុខងារ Recommend Driver?', type: 'checkbox' },
-            { name: 'LogosURL', label: 'URL ឡូហ្គោ', type: 'image_url' },
-            { name: 'EnableCODAlert', label: 'ផ្ញើសារ COD Alert?', type: 'checkbox' },
-            { name: 'AlertTopicID', label: 'Topic ID សម្រាប់ Alert', type: 'text' },
+            { name: 'LogoURL', label: 'URL ឡូហ្គោ', type: 'image_url' },
             { name: 'InternalCost', label: 'តម្លៃដើមសេវា ($)', type: 'number' },
             { name: 'CostShortcuts', label: 'Shortcut តម្លៃ (បំបែកដោយក្បៀស ឧ. 1,1.5,2)', type: 'text' }
         ], 

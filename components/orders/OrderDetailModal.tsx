@@ -74,7 +74,7 @@ const OrderDetailModal: React.FC<OrderDetailModalProps> = ({ order, onClose }) =
                                     <h3 className="text-[11px] font-black uppercase tracking-[0.25em] text-gray-400 italic">Logistics Team</h3>
                                     <div className="flex items-center gap-4 bg-gray-900/50 p-4 rounded-2xl border border-white/5">
                                         {shippingMethod ? (
-                                            <img src={convertGoogleDriveUrl(shippingMethod.LogosURL)} className="w-12 h-12 object-contain bg-white/5 p-2 rounded-xl border border-white/5" alt="" />
+                                            <img src={convertGoogleDriveUrl(shippingMethod.LogoURL)} className="w-12 h-12 object-contain bg-white/5 p-2 rounded-xl border border-white/5" alt="" />
                                         ) : (
                                             <div className="w-12 h-12 bg-gray-800 rounded-xl flex items-center justify-center text-gray-600">
                                                 <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path d="M13 16V6a1 1 0 00-1-1H4a1 1 0 00-1 1v10a1 1 0 001 1h1m8-1a1 1 0 01-1 1H9m4-1V8a1 1 0 011-1h2.586a1 1 0 01.707.293l3.414 3.414a1 1 0 01.293.707V16a1 1 0 01-1 1h-1m-6-1a1 1 0 001 1h1M5 17a2 2 0 104 0m-4 0a2 2 0 114 0m6 0a2 2 0 104 0m-4 0a2 2 0 114 0" strokeWidth={2} /></svg>

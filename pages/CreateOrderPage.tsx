@@ -120,12 +120,45 @@ const CreateOrderPage: React.FC<CreateOrderPageProps> = ({ team, onSaveSuccess, 
     const [isMapModalOpen, setIsMapModalOpen] = useState(false);
     const [mapSearchUrl, setMapSearchUrl] = useState('');
     const [scanMode, setScanMode] = useState<'single' | 'increment'>('increment');
-    
+    const [recommendationMessage, setRecommendationMessage] = useState<string>('');
+
     const DRAFT_KEY = useMemo(() => `createOrderDraft_${currentUser?.UserName}_${team}`, [currentUser, team]);
-    
+
     useEffect(() => {
-        if (window.innerWidth < 768) {
-            window.scrollTo({ top: 0, behavior: 'smooth' });
+        if (order.fulfillmentStore && order.customer.province && appData.driverRecommendations) {
+            const days = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
+            const today = days[new Date().getDay()];
+
+            const recommendation = appData.driverRecommendations.find(r => 
+                r.DayOfWeek === today && 
+                r.StoreName === order.fulfillmentStore && 
+                r.Province === order.customer.province
+            );
+
+            if (recommendation) {
+                const method = appData.shippingMethods?.find(m => m.MethodName === recommendation.ShippingMethod);
+                if (method) {
+                    setSelectedShippingMethod(method);
+                    setShippingLogo(convertGoogleDriveUrl(method.LogoURL));
+                    setOrder(prev => ({
+                        ...prev,
+                        shipping: {
+                            ...prev.shipping,
+                            method: method.MethodName,
+                            details: recommendation.DriverName,
+                            cost: method.InternalCost ? String(method.InternalCost) : prev.shipping.cost
+                        }
+                    }));
+                    setRecommendationMessage(`នៅសាខា ${recommendation.StoreName} ថ្ងៃនេះ វេនដឹករបស់ ${recommendation.DriverName}`);
+                    return;
+                }
+            }
+        }
+        setRecommendationMessage('');
+    }, [order.fulfillmentStore, order.customer.province, appData.driverRecommendations, appData.shippingMethods]);
+
+    useEffect(() => {
+        if (window.innerWidth < 768) {            window.scrollTo({ top: 0, behavior: 'smooth' });
         }
     }, [currentStep]);
 
@@ -148,7 +181,7 @@ const CreateOrderPage: React.FC<CreateOrderPageProps> = ({ team, onSaveSuccess, 
                 if (parsedDraft.shipping.method) {
                     const methodInfo = appData.shippingMethods?.find((s: any) => s.MethodName === parsedDraft.shipping.method);
                     setSelectedShippingMethod(methodInfo || null);
-                    setShippingLogo(methodInfo ? convertGoogleDriveUrl(methodInfo.LogosURL) : '');
+                    setShippingLogo(methodInfo ? convertGoogleDriveUrl(methodInfo.LogoURL) : '');
                 }
             }
         } catch (e) {
@@ -325,7 +358,7 @@ const CreateOrderPage: React.FC<CreateOrderPageProps> = ({ team, onSaveSuccess, 
     
     const handleShippingMethodSelect = (method: ShippingMethod) => {
         setSelectedShippingMethod(method);
-        setShippingLogo(convertGoogleDriveUrl(method.LogosURL));
+        setShippingLogo(convertGoogleDriveUrl(method.LogoURL));
 
         let recommendedDriver = '';
         if (method.EnableDriverRecommendation) {
@@ -686,9 +719,9 @@ const CreateOrderPage: React.FC<CreateOrderPageProps> = ({ team, onSaveSuccess, 
                             </div>
 
                             <input type="text" name="name" value={order.customer.name} placeholder="ឈ្មោះអតិថិជន*" className="form-input !py-3 rounded-xl border-gray-700 bg-gray-900" onChange={handleCustomerChange} required />
-                            <div className="relative">
+                            <div className="relative group">
                                 <input type="tel" name="phone" value={order.customer.phone} placeholder="លេខទូរស័ព្ទ*" className="form-input !py-3 rounded-xl border-gray-700 bg-gray-900 pr-12 font-mono font-black text-blue-300" onChange={handleCustomerChange} required />
-                                <div className="absolute right-3 top-0 bottom-0 flex items-center justify-center pointer-events-none">
+                                <div className="absolute right-0 top-0 bottom-0 pr-3 flex items-center justify-center pointer-events-none">
                                     {carrierLogo && <img src={carrierLogo} alt="Carrier" className="h-6 w-auto object-contain transition-all animate-fade-in" />}
                                 </div>
                             </div>
@@ -776,7 +809,9 @@ const CreateOrderPage: React.FC<CreateOrderPageProps> = ({ team, onSaveSuccess, 
                                  const discountValue = originalTotal - (Number(p.total) || 0);
                                  return (
                                     <div key={p.id} className="p-3 sm:p-5 bg-gray-800/40 rounded-2xl sm:rounded-3xl border border-gray-700 relative shadow-xl overflow-hidden group">
-                                        <button type="button" onClick={() => { if (order.products.length > 1) setOrder({ ...order, products: order.products.filter((_:any, i:number)=>i!==index) }); }} className="absolute top-2 right-2 sm:top-4 sm:right-4 text-red-400 bg-red-400/10 rounded-full h-6 w-6 sm:h-8 sm:w-8 flex items-center justify-center border border-red-400/20 hover:bg-red-600 hover:text-white transition-all z-10 active:scale-90" disabled={order.products.length <= 1}>&times;</button>
+                                        <button type="button" onClick={() => { if (order.products.length > 1) setOrder({ ...order, products: order.products.filter((_:any, i:number)=>i!==index) }); }} className="absolute top-2 right-2 sm:top-4 sm:right-4 text-red-400 bg-red-400/10 rounded-full h-8 w-8 sm:h-10 sm:w-10 flex items-center justify-center border border-red-400/20 hover:bg-red-600 hover:text-white transition-all z-10 active:scale-90" disabled={order.products.length <= 1}>
+                                            <span className="text-xl sm:text-2xl leading-none">&times;</span>
+                                        </button>
                                         <div className="grid grid-cols-1 md:grid-cols-12 gap-3 sm:gap-6 mb-4 sm:mb-6">
                                             <div className="md:col-span-2 flex justify-center">
                                                 <div className="w-20 h-20 sm:w-28 sm:h-28 bg-gray-900 rounded-xl sm:rounded-2xl overflow-hidden border-2 border-gray-700 shadow-inner group-hover:border-blue-500/50 transition-colors"><img src={convertGoogleDriveUrl(p.image)} className="w-full h-full object-cover" alt="" /></div>
@@ -797,7 +832,7 @@ const CreateOrderPage: React.FC<CreateOrderPageProps> = ({ team, onSaveSuccess, 
                                             <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 sm:gap-8">
                                                 <div className="space-y-3 sm:space-y-4">
                                                     <div className="flex bg-gray-900/50 p-1 rounded-xl sm:rounded-2xl border border-gray-700 shadow-inner">{(['percent', 'amount', 'custom'] as const).map(t => (<button key={t} type="button" onClick={() => handleProductUpdate(index, 'discountType', t)} className={`flex-1 flex flex-col items-center justify-center py-2 sm:py-2.5 rounded-lg sm:rounded-xl transition-all duration-300 active:scale-95 ${p.discountType === t ? 'bg-blue-600 text-white shadow-lg' : 'text-gray-500 hover:text-gray-300'}`}><span className="text-[9px] sm:text-[11px] font-black uppercase tracking-widest">{t === 'percent' ? 'បញ្ចុះ %' : t === 'amount' ? 'បញ្ចុះ $' : 'កែតម្លៃលក់'}</span></button>))}</div>
-                                                    <div className="relative animate-fade-in">{p.discountType === 'percent' && (<div className="space-y-2"><label className="text-[10px] font-bold text-gray-400 ml-1">បញ្ចូលភាគរយបញ្ចុះតម្លៃ (%)</label><div className="relative"><input type="number" min="0" max="100" placeholder="0" value={p.discountPercentInput} onChange={e=>handleProductUpdate(index, 'discountPercentInput', e.target.value)} className="form-input !text-base sm:!text-lg !font-black !py-2 sm:!py-3 pr-10 text-right text-blue-400 bg-gray-900 border-gray-700" /><span className="absolute right-4 top-1/2 -translate-y-1/2 text-gray-500 font-black">%</span></div></div>)}{p.discountType === 'amount' && (<div className="space-y-2"><label className="text-[10px] font-bold text-gray-400 ml-1">បញ្ចូលទឹកប្រាក់បញ្ចុះតម្លៃ ($)</label><div className="relative"><input type="number" min="0" placeholder="0.00" value={p.discountAmountInput} onChange={e=>handleProductUpdate(index, 'discountAmountInput', e.target.value)} className="form-input !text-base sm:!text-lg !font-black !py-2 sm:!py-3 pr-10 text-right text-red-400 bg-gray-900 border-gray-700" /><span className="absolute right-4 top-1/2 -translate-y-1/2 text-gray-500 font-black">$</span></div>{p.quantity > 1 && (<label className="flex items-center gap-2 cursor-pointer p-2 bg-black/20 rounded-lg mt-1 sm:mt-2 border border-white/5 active:scale-95 transition-transform"><input type="checkbox" checked={p.applyDiscountToTotal} onChange={e => handleProductUpdate(index, 'applyDiscountToTotal', e.target.checked)} className="w-4 h-4 rounded border-gray-600 bg-gray-800 text-blue-500" /><span className="text-[9px] sm:text-[10px] text-gray-400 uppercase font-black">បញ្ចុះលើតម្លៃសរុប</span></label>)}</div>)}{p.discountType === 'custom' && (<div className="space-y-2"><label className="text-[10px] font-bold text-gray-400 ml-1">កំណត់តម្លៃលក់ថ្មីក្នុង ១ ឯកតា ($)</label><div className="relative"><input type="text" inputMode="decimal" placeholder="0.00" value={p.finalPriceInput} onChange={e=>handleProductUpdate(index, 'finalPriceInput', e.target.value)} className="form-input !text-base sm:!text-lg !font-black !py-2 sm:!py-3 pr-10 text-right text-emerald-400 bg-gray-900 border-gray-700" /><span className="absolute right-4 top-1/2 -translate-y-1/2 text-gray-500 font-black">$</span></div></div>)}</div>
+                                                    <div className="relative animate-fade-in">{p.discountType === 'percent' && (<div className="space-y-2"><label className="text-[10px] font-bold text-gray-400 ml-1">បញ្ចូលភាគរយបញ្ចុះតម្លៃ (%)</label><div className="relative"><input type="number" min="0" max="100" placeholder="0" value={p.discountPercentInput} onChange={e=>handleProductUpdate(index, 'discountPercentInput', e.target.value)} className="form-input !text-base sm:!text-lg !font-black !py-2 sm:!py-3 pr-10 text-right text-blue-400 bg-gray-900 border-gray-700" /><div className="absolute right-0 top-0 bottom-0 pr-4 flex items-center pointer-events-none"><span className="text-gray-500 font-black">%</span></div></div></div>)}{p.discountType === 'amount' && (<><div className="space-y-2"><label className="text-[10px] font-bold text-gray-400 ml-1">បញ្ចូលទឹកប្រាក់បញ្ចុះតម្លៃ ($)</label><div className="relative"><input type="number" min="0" placeholder="0.00" value={p.discountAmountInput} onChange={e=>handleProductUpdate(index, 'discountAmountInput', e.target.value)} className="form-input !text-base sm:!text-lg !font-black !py-2 sm:!py-3 pr-10 text-right text-red-400 bg-gray-900 border-gray-700" /><div className="absolute right-0 top-0 bottom-0 pr-4 flex items-center pointer-events-none"><span className="text-gray-500 font-black">$</span></div></div></div>{p.quantity > 1 && (<label className="flex items-center gap-2 cursor-pointer p-2 bg-black/20 rounded-lg mt-1 sm:mt-2 border border-white/5 active:scale-95 transition-transform"><input type="checkbox" checked={p.applyDiscountToTotal} onChange={e => handleProductUpdate(index, 'applyDiscountToTotal', e.target.checked)} className="w-4 h-4 rounded border-gray-600 bg-gray-800 text-blue-500" /><span className="text-[9px] sm:text-[10px] text-gray-400 uppercase font-black">បញ្ចុះលើតម្លៃសរុប</span></label>)}</>)}{p.discountType === 'custom' && (<div className="space-y-2"><label className="text-[10px] font-bold text-gray-400 ml-1">កំណត់តម្លៃលក់ថ្មីក្នុង ១ ឯកតា ($)</label><div className="relative"><input type="text" inputMode="decimal" placeholder="0.00" value={p.finalPriceInput} onChange={e=>handleProductUpdate(index, 'finalPriceInput', e.target.value)} className="form-input !text-base sm:!text-lg !font-black !py-2 sm:!py-3 pr-10 text-right text-emerald-400 bg-gray-900 border-gray-700" /><div className="absolute right-0 top-0 bottom-0 pr-4 flex items-center pointer-events-none"><span className="text-gray-500 font-black">$</span></div></div></div>)}</div>
                                                 </div>
                                                 <div className="bg-gray-900/60 rounded-xl sm:rounded-[1.5rem] p-3 sm:p-5 border border-white/5 flex flex-col justify-between"><div className="space-y-2 sm:space-y-3"><div className="flex justify-between items-center text-[10px] sm:text-xs"><span className="text-gray-500 font-bold uppercase">Original Subtotal</span><span className="text-blue-400 font-black">${originalTotal.toFixed(2)}</span></div><div className="flex justify-between items-center text-[10px] sm:text-xs"><span className="text-gray-500 font-bold uppercase">Discount Applied</span><span className="text-red-400 font-black">-{discountValue > 0 ? `$${discountValue.toFixed(2)}` : '$0.00'}</span></div><div className="h-px bg-gray-700/50 my-1"></div><div className="flex justify-between items-center"><span className="text-[9px] sm:text-[10px] font-black text-gray-400 uppercase tracking-widest">Net Total</span><span className="text-xl sm:text-2xl font-black text-white tracking-tighter">${(p.total || 0).toFixed(2)}</span></div></div><div className="mt-3 sm:mt-4 pt-2 sm:pt-3 border-t border-white/5 flex justify-center"><span className="text-[8px] sm:text-[9px] bg-emerald-500/10 text-emerald-400 px-2 sm:px-3 py-1 rounded-full border border-emerald-500/20 font-black uppercase tracking-widest">Avg. ${(p.finalPrice || 0).toFixed(2)} / unit</span></div></div>
                                             </div>
@@ -833,23 +868,34 @@ const CreateOrderPage: React.FC<CreateOrderPageProps> = ({ team, onSaveSuccess, 
                                 onClick={() => setOrder({ ...order, products: [...order.products, { ...initialProductState, id: Date.now() }] })}
                                 className="w-full py-4 px-6 bg-emerald-600/10 border border-emerald-500/30 rounded-2xl text-emerald-400 font-black uppercase text-[11px] tracking-widest hover:bg-emerald-600 hover:text-white transition-all flex items-center justify-center gap-2 shadow-lg shadow-emerald-900/10 active:scale-95"
                             >
-                                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M12 4v16m8-8H4" /></svg>
+                                <svg className="w-5 h-5 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M12 4v16m8-8H4" /></svg>
                                 បន្ថែមផលិតផល (Add Item)
                             </button>
-                            <button type="button" onClick={()=>setIsScannerVisible(true)} className="w-full py-4 px-6 bg-blue-600/10 border border-blue-500/30 rounded-2xl text-blue-400 font-black uppercase text-[11px] tracking-widest hover:bg-blue-600 hover:text-white transition-all flex items-center justify-center gap-2 shadow-lg shadow-blue-900/10 active:scale-95"><svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path d="M3 7V5a2 2 0 0 1 2-2h2M17 3h2a2 2 0 0 1 2 2v2M21 17v2a2 2 0 0 1-2 2h-2M7 21H5a2 2 0 0 1-2-2v-2M7 12h10" strokeWidth="3"/></svg>Scan Barcode</button>
+                            <button type="button" onClick={()=>setIsScannerVisible(true)} className="w-full py-4 px-6 bg-blue-600/10 border border-blue-500/30 rounded-2xl text-blue-400 font-black uppercase text-[11px] tracking-widest hover:bg-blue-600 hover:text-white transition-all flex items-center justify-center gap-2 shadow-lg shadow-blue-900/10 active:scale-95"><svg className="w-5 h-5 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path d="M3 7V5a2 2 0 0 1 2-2h2M17 3h2a2 2 0 0 1 2 2v2M21 17v2a2 2 0 0 1-2 2h-2M7 21H5a2 2 0 0 1-2-2v-2M7 12h10" strokeWidth="3"/></svg>Scan Barcode</button>
                         </div>
                     </fieldset>
                 );
             case 3:
                 return (
                     <fieldset className="border border-gray-600 p-3 sm:p-4 rounded-lg animate-fade-in space-y-4 sm:space-y-6"><legend className="px-2 text-base sm:text-lg font-semibold text-blue-300">ដឹកជញ្ជូន</legend><div className="grid grid-cols-1 md:grid-cols-2 gap-4 sm:gap-6">
-                            <div className="space-y-1.5"><label className="input-label font-black text-[10px] uppercase text-gray-500 tracking-widest mb-2 block">វិធីសាស្រ្តដឹកជញ្ជូន*</label><ShippingMethodDropdown methods={appData.shippingMethods || []} selectedMethodName={order.shipping.method} onSelect={handleShippingMethodSelect} /></div>
+                            <div className="space-y-1.5">
+                                <label className="input-label font-black text-[10px] uppercase text-gray-500 tracking-widest mb-2 block">វិធីសាស្រ្តដឹកជញ្ជូន*</label>
+                                {recommendationMessage && (
+                                    <div className="mb-2 p-2 bg-blue-600/10 border border-blue-500/20 rounded-xl flex items-center gap-2 animate-pulse">
+                                        <div className="w-1.5 h-1.5 rounded-full bg-blue-500"></div>
+                                        <span className="text-[10px] font-black text-blue-400 uppercase tracking-widest">{recommendationMessage}</span>
+                                    </div>
+                                )}
+                                <ShippingMethodDropdown methods={appData.shippingMethods || []} selectedMethodName={order.shipping.method} onSelect={handleShippingMethodSelect} />
+                            </div>
                             <div className="space-y-1.5">
                                 <label className="input-label font-black text-[10px] uppercase text-gray-500 tracking-widest mb-2 block">ថ្លៃសេវាឲ្យអ្នកដឹក (Cost)*</label>
                                 <div className="space-y-3">
                                     <div className="relative">
                                         <input type="number" min="0" step="0.01" name="cost" placeholder="0.00" value={order.shipping.cost} className="form-input !py-3 rounded-xl bg-gray-900 border-gray-700 text-blue-400 font-black pr-12" onChange={handleShippingChange} required />
-                                        <span className="absolute right-4 top-1/2 -translate-y-1/2 text-gray-500 font-bold">$</span>
+                                        <div className="absolute right-0 top-0 bottom-0 pr-4 flex items-center pointer-events-none">
+                                            <span className="text-gray-500 font-bold">$</span>
+                                        </div>
                                     </div>
                                     <div className="flex flex-wrap gap-2">
                                         {(selectedShippingMethod?.CostShortcuts ? selectedShippingMethod.CostShortcuts.split(',').map((s: string) => parseFloat(s.trim())) : [1.25, 1.5, 2]).map((cost: number) => {
@@ -1047,7 +1093,7 @@ const CreateOrderPage: React.FC<CreateOrderPageProps> = ({ team, onSaveSuccess, 
                         )}
                         
                         {currentStep < STEPS.length ? (
-                            <button type="button" onClick={nextStep} className="relative flex-[2] bg-blue-600 hover:bg-blue-700 text-white rounded-2xl font-black uppercase text-[12px] sm:text-[14px] tracking-[0.2em] shadow-2xl active:scale-95 transition-all flex items-center justify-center gap-3 group overflow-hidden btn-pulse"><div className="absolute inset-0 btn-shimmer pointer-events-none"></div><span className="relative z-10">ជំហានបន្ទាប់</span><svg className="w-4 h-4 sm:w-5 sm:h-5 relative z-10 transform group-hover:translate-x-1 transition-transform" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={3}><path d="M9 5l7 7-7 7"/></svg></button>
+                            <button type="button" onClick={nextStep} className="relative flex-[2] bg-blue-600 hover:bg-blue-700 text-white rounded-2xl font-black uppercase text-[12px] sm:text-[14px] tracking-[0.2em] shadow-2xl active:scale-95 transition-all flex items-center justify-center gap-3 group overflow-hidden btn-pulse"><div className="absolute inset-0 btn-shimmer pointer-events-none"></div><span className="relative z-10">ជំហានបន្ទាប់</span><svg className="w-4 h-4 sm:w-5 sm:h-5 shrink-0 relative z-10 transform group-hover:translate-x-1 transition-transform" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={3}><path d="M9 5l7 7-7 7"/></svg></button>
                         ) : (
                              <button type="button" onClick={submitOrder} className="relative flex-[2] bg-emerald-600 hover:bg-emerald-700 text-white rounded-2xl font-black uppercase text-[12px] sm:text-[14px] tracking-[0.2em] shadow-2xl active:scale-95 transition-all flex items-center justify-center gap-3 overflow-hidden" disabled={loading}><div className="absolute inset-0 btn-shimmer pointer-events-none"></div>{loading && undoTimer === null ? <Spinner size="sm" /> : <><span className="relative z-10">បញ្ជូនកម្ម៉ង់ឥឡូវនេះ</span><svg className="w-4 h-4 sm:w-5 sm:h-5 relative z-10 animate-bounce-x" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={3}><path d="M5 13l4 4L19 7"/></svg></>}</button>
                         )}

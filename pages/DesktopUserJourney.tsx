@@ -27,15 +27,16 @@ const DesktopUserJourney: React.FC<DesktopUserJourneyProps> = ({ onBackToRoleSel
 
     const [globalRanking, setGlobalRanking] = useState<{name: string, revenue: number}[]>([]);
     const [isRankingLoading, setIsRankingLoading] = useState(false);
+    const [rankingPeriod, setRankingPeriod] = useState<'today' | 'this_week' | 'this_month' | 'all'>('today');
 
     const fetchRanking = useCallback(async () => {
         setIsRankingLoading(true);
         try {
             const token = localStorage.getItem('token');
-            const response = await fetch(`${WEB_APP_URL}/api/teams/ranking`, {
+            const response = await fetch(`${WEB_APP_URL}/api/teams/ranking?period=${rankingPeriod}`, {
                 headers: token ? { 'Authorization': `Bearer ${token}` } : {}
             });
-            
+
             if (response.ok) {
                 const result = await response.json();
                 if (result.status === 'success' && result.data) {
@@ -50,13 +51,12 @@ const DesktopUserJourney: React.FC<DesktopUserJourneyProps> = ({ onBackToRoleSel
         } finally {
             setIsRankingLoading(false);
         }
-    }, []);
+    }, [rankingPeriod]);
 
-    useEffect(() => { 
-        setChatVisibility(true); 
+    useEffect(() => {
+        setChatVisibility(true);
         if (!selectedTeam) fetchRanking();
     }, [setChatVisibility, selectedTeam, fetchRanking]);
-
     const handleCreateOrder = () => {
         if (!hasPermission('create_order')) return;
         playClick();
@@ -120,11 +120,24 @@ const DesktopUserJourney: React.FC<DesktopUserJourneyProps> = ({ onBackToRoleSel
                     </div>
 
                     <div className="lg:col-span-5 flex flex-col gap-6 pt-4 lg:pt-20">
-                        <div className="flex items-center gap-3 mb-2">
-                            <div className="w-8 h-8 rounded-xl bg-amber-500/20 flex items-center justify-center border border-amber-500/20 text-amber-500">
-                                <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}><path d="M5 3v4M3 5h4M6 17v4m-2-2h4m5-16l2.286 6.857L21 12l-7.714 2.143L11 21l-2.286-6.857L1 12l7.714-2.143L11 3z" /></svg>
+                        <div className="flex items-center justify-between mb-2">
+                            <div className="flex items-center gap-3">
+                                <div className="w-8 h-8 rounded-xl bg-amber-500/20 flex items-center justify-center border border-amber-500/20 text-amber-500">
+                                    <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}><path d="M5 3v4M3 5h4M6 17v4m-2-2h4m5-16l2.286 6.857L21 12l-7.714 2.143L11 21l-2.286-6.857L1 12l7.714-2.143L11 3z" /></svg>
+                                </div>
+                                <h3 className="text-sm font-black text-white uppercase tracking-[0.3em] italic">Top 3 Teams</h3>
                             </div>
-                            <h3 className="text-sm font-black text-white uppercase tracking-[0.3em] italic">Top 3 Teams</h3>
+                            <div className="flex bg-white/5 p-1 rounded-xl border border-white/5 scale-90 origin-right">
+                                {(['today', 'this_week', 'this_month', 'all'] as const).map(p => (
+                                    <button 
+                                        key={p} 
+                                        onClick={() => setRankingPeriod(p)}
+                                        className={`px-3 py-1.5 text-[9px] font-black uppercase tracking-wider rounded-lg transition-all ${rankingPeriod === p ? 'bg-amber-500 text-black shadow-xl' : 'text-gray-500 hover:text-gray-300'}`}
+                                    >
+                                        {p === 'today' ? 'Today' : p === 'this_week' ? 'Week' : p === 'this_month' ? 'Month' : 'All'}
+                                    </button>
+                                ))}
+                            </div>
                         </div>
 
                         <div className="space-y-4">

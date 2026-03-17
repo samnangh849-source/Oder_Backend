@@ -110,7 +110,7 @@ const ShippingReport: React.FC<ShippingReportProps> = ({ orders, appData, dateFi
             const mName = o['Internal Shipping Method'] || 'Other';
             if (!methods[mName]) {
                 const info = appData.shippingMethods?.find(sm => sm.MethodName === mName);
-                methods[mName] = { name: mName, cost: 0, orders: 0, logo: info?.LogosURL || '' };
+                methods[mName] = { name: mName, cost: 0, orders: 0, logo: info?.LogoURL || '' };
             }
             methods[mName].cost += (Number(o['Internal Cost']) || 0);
             methods[mName].orders += 1;
