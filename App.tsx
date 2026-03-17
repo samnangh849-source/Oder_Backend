@@ -79,9 +79,9 @@ const AppContent: React.FC = () => {
 
     // --- PERMISSION REFRESH ---
     useEffect(() => {
-        if (currentUser && appData.permissions) {
+        if (currentUser && appData?.permissions && Array.isArray(appData.permissions)) {
             const rolePerms = appData.permissions.filter(p => p.role === currentUser.Role);
-            if (rolePerms.length > 0) {
+            if (rolePerms && rolePerms.length > 0) {
                 // Check if perms actually changed before updating to prevent infinite loops
                 const currentPermsStr = JSON.stringify(currentUser.Permissions || []);
                 const nextPermsStr = JSON.stringify(rolePerms);
@@ -90,7 +90,7 @@ const AppContent: React.FC = () => {
                 }
             }
         }
-    }, [currentUser?.Role, appData.permissions, currentUser?.Permissions, setCurrentUser]);
+    }, [currentUser?.Role, appData?.permissions, currentUser?.Permissions, setCurrentUser]);
 
     useEffect(() => {
         if (currentUser) fetchOrders();

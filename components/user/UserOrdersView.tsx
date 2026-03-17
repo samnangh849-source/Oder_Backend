@@ -41,11 +41,11 @@ const UserOrdersView: React.FC<{ onAdd: () => void }> = ({ onAdd }) => {
     const [viewMode, setViewMode] = useState<'card' | 'list'>('card');
     const [lastSync, setLastSync] = useState<Date>(new Date());
     
-    const [dateRange, setDateRange] = useState<DateRangePreset>('this_month');
+    const [dateRange, setDateRange] = useState<DateRangePreset>('today');
     const [customStart, setCustomStart] = useState(new Date().toISOString().split('T')[0]);
     const [customEnd, setCustomEnd] = useState(new Date().toISOString().split('T')[0]);
     const [reportFilters, setReportFilters] = useState<ReportFilterState>({
-        datePreset: 'this_month',
+        datePreset: 'today',
         customStart: new Date().toISOString().split('T')[0],
         customEnd: new Date().toISOString().split('T')[0]
     });
@@ -58,7 +58,7 @@ const UserOrdersView: React.FC<{ onAdd: () => void }> = ({ onAdd }) => {
     // Advanced Mobile Filtering
     const [isFilterPanelOpen, setIsFilterPanelOpen] = useState(false);
     const [advancedFilters, setAdvancedFilters] = useState<FilterState>({
-        datePreset: 'this_month', startDate: '', endDate: '', team: '', user: '',
+        datePreset: 'today', startDate: '', endDate: '', team: '', user: '',
         paymentStatus: '', shippingService: '', driver: '', product: '', bank: '',
         fulfillmentStore: '', store: '', page: '', location: '', internalCost: '',
         customerName: '', isVerified: 'All'
@@ -297,7 +297,7 @@ const UserOrdersView: React.FC<{ onAdd: () => void }> = ({ onAdd }) => {
         </div>
     );
 
-    if (isOrdersLoading && orders.length === 0) return (
+    if (isOrdersLoading && (!orders || orders.length === 0)) return (
         <div className="flex flex-col justify-center items-center h-[60vh] gap-6 animate-reveal">
             <div className="relative">
                 <Spinner size="lg" />
@@ -422,7 +422,7 @@ const UserOrdersView: React.FC<{ onAdd: () => void }> = ({ onAdd }) => {
                         </div>
                         {isRankingLoading ? (
                             <div className="py-4 flex items-center justify-center"><Spinner size="xs" /></div>
-                        ) : globalRanking.length > 0 ? globalRanking.slice(0, 3).map((t, i) => (
+                        ) : (globalRanking && globalRanking.length > 0) ? globalRanking.slice(0, 3).map((t, i) => (
                             <div key={t.name} className="flex items-center justify-between gap-2 relative z-10 leading-none group/rank">
                                 <div className="flex items-center gap-2 min-w-0">
                                     <div className={`w-4 h-4 rounded-lg flex items-center justify-center text-[8px] font-black italic transition-all group-hover/rank:scale-110 ${
@@ -484,7 +484,7 @@ const UserOrdersView: React.FC<{ onAdd: () => void }> = ({ onAdd }) => {
                         <div className="flex flex-col gap-1.5 mt-1">
                             {isRankingLoading ? (
                                 <div className="py-2 flex justify-center"><Spinner size="xs" /></div>
-                            ) : globalRanking.length > 0 ? globalRanking.slice(0, 3).map((t, i) => (
+                            ) : (globalRanking && globalRanking.length > 0) ? globalRanking.slice(0, 3).map((t, i) => (
                                 <div key={t.name} className="flex items-center justify-between border-l-2 border-white/10 pl-2">
                                     <span className="text-[9px] font-bold text-gray-400 uppercase truncate w-16">{t.name}</span>
                                     <span className="text-[10px] font-black text-white">

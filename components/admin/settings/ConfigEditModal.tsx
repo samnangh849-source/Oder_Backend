@@ -7,6 +7,8 @@ import Modal from '../../common/Modal';
 import { WEB_APP_URL } from '../../../constants';
 import { fileToBase64, convertGoogleDriveUrl } from '../../../utils/fileUtils';
 import { CacheService, CACHE_KEYS } from '../../../services/cacheService';
+import { compressImage } from '../../../utils/imageCompressor';
+import { translations } from '../../../translations';
 
 interface ConfigEditModalProps {
     section: ConfigSection;
@@ -16,7 +18,8 @@ interface ConfigEditModalProps {
 }
 
 const ConfigEditModal: React.FC<ConfigEditModalProps> = ({ section, item, onClose, onSave }) => {
-    const { refreshData, appData } = useContext(AppContext);
+    const { refreshData, appData, language } = useContext(AppContext);
+    const t = translations[language];
     const [formData, setFormData] = useState<any>({}); 
     const [uploadingFields, setUploadingFields] = useState<Record<string, boolean>>({});
     const [isLoading, setIsLoading] = useState(false);
@@ -52,24 +55,57 @@ const ConfigEditModal: React.FC<ConfigEditModalProps> = ({ section, item, onClos
         }
     }, [item, section, appData.roles]);
 
-    const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-        const { name, value, type, checked } = e.target;
+    const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
+        const { name, value, type } = e.target;
+        const checked = (e.target as HTMLInputElement).checked;
         setFormData((prev: any) => ({ ...prev, [name]: type === 'checkbox' ? checked : value }));
+    };
+
+    const getOptions = (field: any) => {
+        if (field.options) return field.options;
+        if (field.dataRef) {
+            const data = appData[field.dataRef] || [];
+            if (field.dataRef === 'stores') return data.map((s: any) => ({ label: s.StoreName, value: s.StoreName }));
+            if (field.dataRef === 'locations') return Array.from(new Set(data.map((l: any) => l.Province))).map(p => ({ label: p as string, value: p as string }));
+            if (field.dataRef === 'drivers') return data.map((d: any) => ({ label: d.DriverName, value: d.DriverName }));
+            if (field.dataRef === 'shippingMethods') return data.map((m: any) => ({ label: m.MethodName, value: m.MethodName }));
+            if (field.dataRef === 'roles') return data.map((r: any) => ({ label: r.roleName, value: r.roleName }));
+            if (field.dataRef === 'pages') {
+                const teams = Array.from(new Set(data.map((p: any) => p.Team))).filter(Boolean);
+                return teams.map(t => ({ label: t as string, value: t as string }));
+            }
+        }
+        return [];
     };
 
     const handleImageUpload = async (fieldName: string, file: File) => {
         if (!file) return;
         setUploadingFields(prev => ({ ...prev, [fieldName]: true }));
         try {
-            const base64Data = await fileToBase64(file);
+            const compressedBlob = await compressImage(file, 'balanced');
+            const base64Data = await fileToBase64(compressedBlob);
+            const token = localStorage.getItem('token');
+            
             const response = await fetch(`${WEB_APP_URL}/api/upload-image`, {
                 method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ fileData: base64Data, fileName: file.name, mimeType: file.type })
+                headers: { 
+                    'Content-Type': 'application/json',
+                    ...(token ? { 'Authorization': `Bearer ${token}` } : {})
+                },
+                body: JSON.stringify({ 
+                    fileData: base64Data, 
+                    fileName: file.name, 
+                    mimeType: compressedBlob.type,
+                    sheetName: section.sheetName,
+                    primaryKey: item ? { [section.primaryKeyField]: item[section.primaryKeyField] } : undefined,
+                    targetColumn: fieldName
+                })
             });
             const result = await response.json();
             if (!response.ok || result.status !== 'success') throw new Error(result.message || 'Upload failed');
-            setFormData((prev: any) => ({ ...prev, [fieldName]: result.url }));
+            
+            const finalUrl = result.url || result.tempUrl;
+            setFormData((prev: any) => ({ ...prev, [fieldName]: finalUrl }));
         } catch (err: any) { setError(err.message); } finally { setUploadingFields(prev => ({ ...prev, [fieldName]: false })); }
     };
     
@@ -149,7 +185,7 @@ const ConfigEditModal: React.FC<ConfigEditModalProps> = ({ section, item, onClos
                 <div className="space-y-6 max-h-[60vh] overflow-y-auto pr-4 custom-scrollbar flex-grow">
                     {section.fields.map(field => (
                         <div key={field.name} className="space-y-2">
-                            <label className="block text-[10px] font-black text-gray-500 uppercase tracking-[0.2em] ml-2">{field.label}</label>
+                            <label className="block text-[10px] font-black text-gray-500 uppercase tracking-[0.2em] ml-2">{t[`field_${field.name}`] || field.label}</label>
                             
                             {field.type === 'checkbox' ? (
                                 <div className="flex items-center gap-4 bg-gray-900/50 p-4 rounded-[1.5rem] border border-gray-800 transition-all hover:border-gray-700">
@@ -172,18 +208,23 @@ const ConfigEditModal: React.FC<ConfigEditModalProps> = ({ section, item, onClos
                                     <input type={passwordVisibility[field.name] ? 'text' : 'password'} name={field.name} value={formData[field.name] || ''} onChange={handleChange} className="form-input !py-3.5 !px-5 pr-14" placeholder={field.placeholder || (item ? 'ទុកទទេបើមិនចង់ប្តូរ' : 'បញ្ចូលពាក្យសម្ងាត់')} />
                                     <button type="button" onClick={() => setPasswordVisibility(prev => ({ ...prev, [field.name]: !prev[field.name] }))} className="absolute inset-y-0 right-0 px-4 text-gray-500 hover:text-white transition-colors"><svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d={passwordVisibility[field.name] ? "M13.875 18.825A10.05 10.05 0 0112 19c-4.478 0-8.268-2.943-9.542-7 1.274-4.057 5.064-7 9.542-7 .847 0 1.67 .126 2.454 .364m-3.033 2.446a3 3 0 11-4.243 4.243m4.242-4.242l4.243 4.243M3 3l18 18" : "M15 12a3 3 0 11-6 0 3 3 0 016 0z M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z"} /></svg></button>
                                 </div>
-                            ) : (section.id === 'users' && field.name === 'Role') ? (
-                                <select 
-                                    name={field.name} 
-                                    value={formData[field.name] || ''} 
-                                    onChange={(e: any) => handleChange(e)}
-                                    className="form-input !py-3.5 !px-5 bg-gray-900 text-white appearance-none cursor-pointer"
-                                >
-                                    <option value="">-- ជ្រើសរើសតួនាទី (Select Role) --</option>
-                                    {(appData.roles || []).map(r => (
-                                        <option key={r.id || r.roleName} value={r.roleName}>{r.roleName}</option>
-                                    ))}
-                                </select>
+                            ) : field.type === 'select' ? (
+                                <div className="relative group">
+                                    <select 
+                                        name={field.name} 
+                                        value={formData[field.name] || ''} 
+                                        onChange={handleChange}
+                                        className="form-input !py-3.5 !pl-5 !pr-10 bg-gray-900/40 backdrop-blur-xl border border-white/5 rounded-2xl text-[13px] font-bold text-white placeholder:text-gray-600 focus:border-blue-500/50 outline-none transition-all shadow-lg appearance-none w-full cursor-pointer"
+                                    >
+                                        <option value="">-- {t.select_driver || 'Select'} --</option>
+                                        {getOptions(field).map((opt: any) => (
+                                            <option key={opt.value} value={opt.value}>{opt.label}</option>
+                                        ))}
+                                    </select>
+                                    <div className="absolute right-4 top-1/2 -translate-y-1/2 pointer-events-none text-gray-500">
+                                        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M19 9l-7 7-7-7" /></svg>
+                                    </div>
+                                </div>
                             ) : (
                                 <input 
                                     type={field.type} 
@@ -200,8 +241,8 @@ const ConfigEditModal: React.FC<ConfigEditModalProps> = ({ section, item, onClos
                 </div>
                 {error && <div className="mt-6 p-4 bg-red-500/10 text-red-400 border border-red-500/20 rounded-2xl text-sm font-bold animate-shake">{error}</div>}
                 <div className="flex justify-end gap-4 mt-8 pt-6 border-t border-white/5">
-                    <button type="button" onClick={onClose} className="px-8 py-3 text-gray-400 hover:text-white font-black uppercase text-xs tracking-widest transition-colors">បោះបង់</button>
-                    <button type="button" onClick={handleSave} className="btn btn-primary px-10 py-3 shadow-lg shadow-blue-600/20 active:scale-95 text-xs font-black uppercase tracking-widest rounded-2xl" disabled={isLoading}>{isLoading ? <Spinner size="sm" /> : 'រក្សាទុក'}</button>
+                    <button type="button" onClick={onClose} className="px-8 py-3 text-gray-400 hover:text-white font-black uppercase text-xs tracking-widest transition-colors">{t.cancel}</button>
+                    <button type="button" onClick={handleSave} className="btn btn-primary px-10 py-3 shadow-lg shadow-blue-600/20 active:scale-95 text-xs font-black uppercase tracking-widest rounded-2xl" disabled={isLoading}>{isLoading ? <Spinner size="sm" /> : t.save}</button>
                 </div>
             </div>
         </Modal>

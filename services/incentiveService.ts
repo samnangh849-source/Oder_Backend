@@ -66,7 +66,13 @@ export const getIncentiveProjects = async (): Promise<IncentiveProject[]> => {
         const headers = await getAuthHeaders();
         const response = await fetch(`${WEB_APP_URL}/api/admin/incentive/projects`, { headers });
         const result = await response.json();
-        return result.status === 'success' ? result.data : [];
+        if (result.status === 'success' && Array.isArray(result.data)) {
+            return result.data.map((p: any) => ({
+                ...p,
+                calculators: p.calculators || []
+            }));
+        }
+        return [];
     } catch (e) {
         console.error("Error loading incentive projects", e);
         return [];

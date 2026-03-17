@@ -5,6 +5,7 @@ import Spinner from '@/components/common/Spinner';
 import { ParsedOrder } from '@/types';
 import { convertGoogleDriveUrl } from '@/utils/fileUtils';
 import Modal from '@/components/common/Modal';
+import { compressImage } from '@/utils/imageCompressor';
 
 const DriverDeliveryView: React.FC<{ onOpenDeliveryList?: () => void }> = ({ onOpenDeliveryList }) => {
     const { setMobilePageTitle, refreshData, orders, previewImage: showFullImage, appData, previewImage: globalPreview } = useContext(AppContext);
@@ -18,6 +19,7 @@ const DriverDeliveryView: React.FC<{ onOpenDeliveryList?: () => void }> = ({ onO
     const [loading, setLoading] = useState(false);
     const [uploading, setUploading] = useState(false);
     const [previewImage, setPreviewImage] = useState<string | null>(null);
+    const [rawFile, setRawFile] = useState<File | null>(null);
     const fileInputRef = useRef<HTMLInputElement>(null);
 
     // Grace Period State
@@ -75,6 +77,7 @@ const DriverDeliveryView: React.FC<{ onOpenDeliveryList?: () => void }> = ({ onO
     const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
         const file = e.target.files?.[0];
         if (file) {
+            setRawFile(file);
             const reader = new FileReader();
             reader.onloadend = () => setPreviewImage(reader.result as string);
             reader.readAsDataURL(file);
@@ -82,21 +85,46 @@ const DriverDeliveryView: React.FC<{ onOpenDeliveryList?: () => void }> = ({ onO
     };
 
     const handleSubmitDelivery = async () => {
-        if (!foundOrder || !previewImage) return;
+        if (!foundOrder || !previewImage || !rawFile) return;
 
         setUploading(true);
         try {
+            const token = localStorage.getItem('token');
+            const compressedBlob = await compressImage(rawFile, 'balanced');
+            
+            // Convert blob to base64
+            const base64Data = await new Promise<string>((resolve) => {
+                const reader = new FileReader();
+                reader.onloadend = () => {
+                    const base64String = (reader.result as string).split(',')[1];
+                    resolve(base64String);
+                };
+                reader.readAsDataURL(compressedBlob);
+            });
+
             const uploadRes = await fetch(`${WEB_APP_URL}/api/upload-image`, {
                 method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ image: previewImage })
+                headers: { 
+                    'Content-Type': 'application/json',
+                    ...(token ? { 'Authorization': `Bearer ${token}` } : {})
+                },
+                body: JSON.stringify({ 
+                    fileData: base64Data,
+                    fileName: rawFile.name,
+                    mimeType: compressedBlob.type,
+                    orderId: foundOrder['Order ID'],
+                    targetColumn: 'Delivery Photo URL'
+                })
             });
             const uploadResult = await uploadRes.json();
-            if (!uploadRes.ok || !uploadResult.url) throw new Error("Upload failed");
+            if (!uploadRes.ok || !uploadResult.url) throw new Error(uploadResult.message || "Upload failed");
 
             const updateRes = await fetch(`${WEB_APP_URL}/api/admin/update-sheet`, {
                 method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
+                headers: { 
+                    'Content-Type': 'application/json',
+                    ...(token ? { 'Authorization': `Bearer ${token}` } : {})
+                },
                 body: JSON.stringify({
                     sheetName: 'AllOrders',
                     primaryKey: { 'Order ID': foundOrder['Order ID'] },

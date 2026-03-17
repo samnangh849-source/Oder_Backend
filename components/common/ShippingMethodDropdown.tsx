@@ -130,6 +130,16 @@ const ShippingMethodDropdown: React.FC<ShippingMethodDropdownProps> = ({
                                             Driver Req
                                         </div>
                                     )}
+
+                                    {method.InternalCost !== undefined && method.InternalCost > 0 && (
+                                        <div className={`
+                                            mt-1 flex items-center justify-center gap-1 text-[8px] font-black uppercase tracking-[0.1em]
+                                            ${isSelected ? 'text-blue-300' : 'text-gray-500'}
+                                        `}>
+                                            <span className="opacity-60 italic">Rec:</span>
+                                            <span className={isSelected ? 'text-blue-400' : 'text-gray-400'}>${method.InternalCost}</span>
+                                        </div>
+                                    )}
                                 </div>
                             </div>
                         </button>

@@ -149,7 +149,7 @@ const IncentiveProjectDetails: React.FC<IncentiveProjectDetailsProps> = ({ proje
                     </div>
                 </div>
 
-                {project.calculators.length === 0 ? (
+                {(!project.calculators || project.calculators.length === 0) ? (
                     <div className="bg-slate-900/40 border border-dashed border-slate-700/50 rounded-3xl p-12 text-center">
                         <p className="text-slate-500 font-bold">{t.no_calculators}</p>
                         <p className="text-xs text-slate-600 mt-2">{t.add_calculator_desc}</p>

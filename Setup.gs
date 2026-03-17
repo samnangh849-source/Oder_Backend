@@ -1,0 +1,128 @@
+/**
+ * @OnlyCurrentDoc
+ * កូដសម្រាប់រៀបចំរចនាសម្ព័ន្ធទិន្នន័យ (System Setup) ឱ្យស្របតាម Golang Backend ជំនាន់ចុងក្រោយ
+ */
+
+function onOpen() {
+  const ui = SpreadsheetApp.getUi();
+  ui.createMenu('⚙️ រៀបចំប្រព័ន្ធ (Admin)')
+    .addItem('🚀 បង្កើត/ធ្វើបច្ចុប្បន្នភាព រចនាសម្ព័ន្ធ Sheet', 'initializeSystem')
+    .addToUi();
+}
+
+const SYSTEM_STRUCTURE = {
+  "Users": ["UserName", "Password", "Team", "FullName", "ProfilePictureURL", "Role", "IsSystemAdmin", "TelegramUsername"],
+  "Stores": ["StoreName", "StoreType", "Address", "TelegramBotToken", "TelegramGroupID", "TelegramTopicID", "LabelPrinterURL", "CODAlertGroupID"],
+  "Settings": ["ConfigKey", "ConfigValue"],
+  "TeamsPages": ["Team", "PageName", "TelegramValue", "PageLogoURL", "DefaultStore", "TelegramTopicID"],
+  "Products": ["Barcode", "ProductName", "Price", "Cost", "ImageURL", "Tags"],
+  "Locations": ["Province", "District", "Sangkat"],
+  "ShippingMethods": ["MethodName", "LogoURL", "AllowManualDriver", "RequireDriverSelection", "EnableCODAlert", "AlertTopicID", "InternalCost", "CostShortcuts", "EnableDriverRecommendation"],
+  "Colors": ["ColorName"],
+  "Drivers": ["DriverName", "ImageURL", "Phone", "VehiclePlate"],
+  "BankAccounts": ["BankName", "LogoURL", "AssignedStores"],
+  "PhoneCarriers": ["CarrierName", "Prefixes", "CarrierLogoURL"],
+  "TelegramTemplates": ["Team", "Part", "Template"],
+  
+  // ប្រព័ន្ធស្តុក
+  "Inventory": ["StoreName", "Barcode", "Quantity", "LastUpdated", "UpdatedBy"],
+  "StockTransfers": ["TransferID", "Timestamp", "FromStore", "ToStore", "Barcode", "Quantity", "Status", "RequestedBy", "ApprovedBy", "ReceivedBy"],
+  "Returns": ["ReturnID", "Timestamp", "OrderID", "StoreName", "Barcode", "Quantity", "Reason", "IsRestocked", "HandledBy"],
+  
+  // ប្រព័ន្ធគ្រប់គ្រងសិទ្ធិ (RBAC) - ⚠️ បាន Update បន្ថែម ID នៅខាងមុខ
+  "Roles": ["ID", "RoleName", "Description"],
+  "RolePermissions": ["ID", "Role", "Feature", "IsEnabled"],
+
+  // Driver Recommendation Setup
+  "DriverRecommendations": ["ID", "DayOfWeek", "StoreName", "Province", "DriverName", "ShippingMethod"],
+
+  // ការកម្មង់ និងចំណូល
+  "AllOrders": [
+    "Order ID", "Timestamp", "User", "Page", "TelegramValue", "Customer Name", "Customer Phone", 
+    "Location", "Address Details", "Note", "Shipping Fee (Customer)", "Subtotal", "Grand Total", 
+    "Products (JSON)", "Internal Shipping Method", "Internal Shipping Details", "Internal Cost", 
+    "Payment Status", "Payment Info", "Discount ($)", "Delivery Unpaid", "Delivery Paid", 
+    "Total Product Cost ($)", "Telegram Message ID 1", "Telegram Message ID 2", "Scheduled Time", 
+    "Fulfillment Store", "Team", "IsVerified", "Fulfillment Status", "Packed By", 
+    "Package Photo URL", "Driver Name", "Tracking Number", "Dispatched Time", "Delivered Time", "Delivery Photo URL"
+  ],
+  "RevenueDashboard": ["Timestamp", "Team", "Page", "Revenue", "Fulfillment Store"],
+  
+  // ឯកសារយោង និង Chat
+  "ChatMessages": ["Timestamp", "UserName", "Receiver", "MessageType", "Content", "FileID"],
+  "EditLogs": ["Timestamp", "OrderID", "Requester", "Field Changed", "Old Value", "New Value"],
+  "UserActivityLogs": ["Timestamp", "User", "Action", "Details"]
+};
+
+function initializeSystem() {
+  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  let createdCount = 0;
+  let updatedCount = 0;
+
+  for (const sheetName in SYSTEM_STRUCTURE) {
+    let sheet = ss.getSheetByName(sheetName);
+    const headers = SYSTEM_STRUCTURE[sheetName];
+
+    if (!sheet) {
+      // បង្កើត Sheet ថ្មីប្រសិនបើមិនទាន់មាន
+      sheet = ss.insertSheet(sheetName);
+      createdCount++;
+      
+      // ដាក់ Headers
+      sheet.getRange(1, 1, 1, headers.length).setValues([headers]);
+      
+      // កំណត់ពណ៌ និង Format ឱ្យ Headers
+      const headerRange = sheet.getRange(1, 1, 1, headers.length);
+      headerRange.setBackground("#4CAF50")
+                 .setFontColor("white")
+                 .setFontWeight("bold")
+                 .setHorizontalAlignment("center");
+      
+      sheet.setFrozenRows(1); // Freeze ជួរទី១
+    } else {
+      // ធ្វើបច្ចុប្បន្នភាព Sheet ចាស់ (បន្ថែម Column ដែលខ្វះ)
+      const existingHeadersRange = sheet.getRange(1, 1, 1, sheet.getLastColumn() || 1);
+      const existingHeaders = existingHeadersRange.getValues()[0];
+      
+      let columnAdded = false;
+      headers.forEach(header => {
+        if (!existingHeaders.includes(header)) {
+          const newColIndex = existingHeaders.length + 1;
+          sheet.getRange(1, newColIndex).setValue(header);
+          sheet.getRange(1, newColIndex)
+               .setBackground("#FF9800") // ពណ៌ទឹកក្រូចដើម្បីចំណាំថា Column ថ្មី
+               .setFontColor("white")
+               .setFontWeight("bold");
+          existingHeaders.push(header);
+          columnAdded = true;
+        }
+      });
+      if (columnAdded) updatedCount++;
+    }
+  }
+
+  // កំណត់ទិន្នន័យចាំបាច់បឋម (Default Settings)
+  setupDefaultSettings(ss);
+
+  const ui = SpreadsheetApp.getUi();
+  ui.alert('✅ ជោគជ័យ!', `បានបង្កើត Sheet ថ្មីចំនួន: ${createdCount}\nបានធ្វើបច្ចុប្បន្នភាព Sheet ចាស់ចំនួន: ${updatedCount}\n\nរចនាសម្ព័ន្ធទិន្នន័យរបស់អ្នកឥឡូវនេះស៊ីគ្នា ១០០% ជាមួយ Backend ហើយ។`, ui.ButtonSet.OK);
+}
+
+function setupDefaultSettings(ss) {
+  const settingsSheet = ss.getSheetByName("Settings");
+  if (!settingsSheet) return;
+
+  const defaultSettings = [
+    ["UploadFolderID", "ដាក់_ID_Folder_Google_Drive_របស់អ្នកនៅទីនេះ"],
+    ["StoreName", "My Store"]
+  ];
+
+  const data = settingsSheet.getDataRange().getValues();
+  const existingKeys = data.map(row => row[0]);
+
+  defaultSettings.forEach(setting => {
+    if (!existingKeys.includes(setting[0])) {
+      settingsSheet.appendRow(setting);
+    }
+  });
+}

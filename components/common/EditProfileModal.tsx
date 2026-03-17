@@ -44,7 +44,10 @@ const EditProfileModal: React.FC<EditProfileModalProps> = ({ onClose }) => {
                 fileData: base64Data,
                 fileName: file.name,
                 mimeType: compressedBlob.type,
-                userName: currentUser?.UserName || 'unknown'
+                userName: currentUser?.UserName || 'unknown',
+                sheetName: 'Users',
+                primaryKey: { 'UserName': currentUser?.UserName || '' },
+                targetColumn: 'ProfilePictureURL'
             };
             
             const token = localStorage.getItem('token');

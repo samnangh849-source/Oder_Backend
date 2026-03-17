@@ -102,6 +102,11 @@ const SearchableShippingMethodDropdown: React.FC<SearchableShippingMethodDropdow
                                         <span className={`text-[8px] px-1.5 py-0.5 rounded-md font-black uppercase tracking-tighter ${selectedMethodName === method.MethodName ? 'bg-white/20 text-white' : 'bg-blue-500/10 text-blue-400'}`}>
                                             {method.RequireDriverSelection ? 'Driver Selection Req' : 'Standard Service'}
                                         </span>
+                                        {method.InternalCost !== undefined && method.InternalCost > 0 && (
+                                            <span className={`text-[8px] px-1.5 py-0.5 rounded-md font-black uppercase tracking-tighter ${selectedMethodName === method.MethodName ? 'bg-white/20 text-white' : 'bg-orange-500/10 text-orange-400'}`}>
+                                                Rec: ${method.InternalCost}
+                                            </span>
+                                        )}
                                     </div>
                                 </div>
                             </button>

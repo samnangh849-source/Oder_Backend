@@ -13,7 +13,7 @@ import (
 	"os"
 	"strconv"
 	"strings"
-	"sync" 
+	"sync"
 	"time"
 	"unicode"
 
@@ -45,102 +45,211 @@ var (
 )
 
 var sheetRanges = map[string]string{
-	"Users":             "Users!A:Z",
-	"Stores":            "Stores!A:Z",
-	"Settings":          "Settings!A:Z",
-	"TeamsPages":        "TeamsPages!A:Z",
-	"Products":          "Products!A:Z",
-	"Locations":         "Locations!A:Z",
-	"ShippingMethods":   "ShippingMethods!A:Z",
-	"Colors":            "Colors!A:Z",
-	"Drivers":           "Drivers!A:Z",
-	"BankAccounts":      "BankAccounts!A:Z",
-	"PhoneCarriers":     "PhoneCarriers!A:Z",
-	"TelegramTemplates": "TelegramTemplates!A:Z",
-	"Inventory":         "Inventory!A:Z",
-	"StockTransfers":    "StockTransfers!A:Z",
-	"Returns":           "Returns!A:Z",
-	"AllOrders":         "AllOrders!A:AZ",
-	"RevenueDashboard":  "RevenueDashboard!A:Z",
-	"ChatMessages":      "ChatMessages!A:Z",
-	"EditLogs":          "EditLogs!A:Z",
-	"UserActivityLogs":  "UserActivityLogs!A:Z",
-	"Roles":             "Roles!A:Z",
-	"RolePermissions":   "RolePermissions!A:Z",
+	"Users":                 "Users!A:Z",
+	"Stores":                "Stores!A:Z",
+	"Settings":               "Settings!A:Z",
+	"TeamsPages":            "TeamsPages!A:Z",
+	"Products":              "Products!A:Z",
+	"Locations":             "Locations!A:Z",
+	"ShippingMethods":       "ShippingMethods!A:Z",
+	"Colors":                "Colors!A:Z",
+	"Drivers":               "Drivers!A:Z",
+	"BankAccounts":          "BankAccounts!A:Z",
+	"PhoneCarriers":         "PhoneCarriers!A:Z",
+	"TelegramTemplates":     "TelegramTemplates!A:Z",
+	"Inventory":             "Inventory!A:Z",
+	"StockTransfers":        "StockTransfers!A:Z",
+	"Returns":               "Returns!A:Z",
+	"AllOrders":             "AllOrders!A:AZ",
+	"RevenueDashboard":      "RevenueDashboard!A:Z",
+	"ChatMessages":          "ChatMessages!A:Z",
+	"EditLogs":              "EditLogs!A:Z",
+	"UserActivityLogs":      "UserActivityLogs!A:Z",
+	"Roles":                 "Roles!A:Z",
+	"RolePermissions":       "RolePermissions!A:Z",
+	"DriverRecommendations": "DriverRecommendations!A:Z",
 }
 
 // =========================================================================
 // ម៉ូដែលទិន្នន័យ (GORM Models)
 // =========================================================================
 
-type User struct { UserName string `gorm:"primaryKey" json:"UserName"`; Password string `json:"Password"`; Team string `json:"Team"`; FullName string `json:"FullName"`; ProfilePictureURL string `json:"ProfilePictureURL"`; Role string `json:"Role"`; IsSystemAdmin bool `json:"IsSystemAdmin"`; TelegramUsername string `json:"TelegramUsername"` }
-type Store struct { StoreName string `gorm:"primaryKey" json:"StoreName"`; StoreType string `json:"StoreType"`; Address string `json:"Address"`; TelegramBotToken string `json:"TelegramBotToken"`; TelegramGroupID string `json:"TelegramGroupID"`; TelegramTopicID string `json:"TelegramTopicID"`; LabelPrinterURL string `json:"LabelPrinterURL"`; CODAlertGroupID string `json:"CODAlertGroupID"` }
-type Setting struct { ConfigKey string `gorm:"primaryKey" json:"ConfigKey"`; ConfigValue string `json:"ConfigValue"` }
-
-type TeamPage struct { 
-	ID              uint   `gorm:"primaryKey;autoIncrement" json:"ID"`
-	Team            string `json:"Team"`
-	PageName        string `json:"PageName"`
-	TelegramValue   string `json:"TelegramValue"`
-	PageLogoURL     string `json:"PageLogoURL"`
-	DefaultStore    string `json:"DefaultStore"`
-	TelegramTopicID string `json:"TelegramTopicID"`
+type User struct {
+	UserName          string `gorm:"primaryKey;column:user_name" json:"UserName"`
+	Password          string `gorm:"column:password" json:"Password"`
+	Team              string `gorm:"column:team" json:"Team"`
+	FullName          string `gorm:"column:full_name" json:"FullName"`
+	ProfilePictureURL string `gorm:"column:profile_picture_url" json:"ProfilePictureURL"`
+	Role              string `gorm:"column:role" json:"Role"`
+	IsSystemAdmin     bool   `gorm:"column:is_system_admin" json:"IsSystemAdmin"`
+	TelegramUsername  string `gorm:"column:telegram_username" json:"TelegramUsername"`
+}
+type Store struct {
+	StoreName        string `gorm:"primaryKey;column:store_name" json:"StoreName"`
+	StoreType        string `gorm:"column:store_type" json:"StoreType"`
+	Address          string `gorm:"column:address" json:"Address"`
+	TelegramBotToken string `gorm:"column:telegram_bot_token" json:"TelegramBotToken"`
+	TelegramGroupID  string `gorm:"column:telegram_group_id" json:"TelegramGroupID"`
+	TelegramTopicID  string `gorm:"column:telegram_topic_id" json:"TelegramTopicID"`
+	LabelPrinterURL  string `gorm:"column:label_printer_url" json:"LabelPrinterURL"`
+	CODAlertGroupID  string `gorm:"column:cod_alert_group_id" json:"CODAlertGroupID"`
+}
+type Setting struct {
+	ConfigKey   string `gorm:"primaryKey;column:config_key" json:"ConfigKey"`
+	ConfigValue string `gorm:"column:config_value" json:"ConfigValue"`
 }
 
-type Product struct { Barcode string `gorm:"primaryKey" json:"Barcode"`; ProductName string `json:"ProductName"`; Price float64 `json:"Price"`; Cost float64 `json:"Cost"`; ImageURL string `json:"ImageURL"`; Tags string `json:"Tags"` }
-type Location struct { ID uint `gorm:"primaryKey;autoIncrement"`; Province string `json:"Province"`; District string `json:"District"`; Sangkat string `json:"Sangkat"` }
-type ShippingMethod struct { MethodName string `gorm:"primaryKey" json:"MethodName"`; LogoURL string `json:"LogosURL"`; AllowManualDriver bool `json:"AllowManualDriver"`; RequireDriverSelection bool `json:"RequireDriverSelection"`; EnableCODAlert bool `json:"EnableCODAlert"`; AlertTopicID string `json:"AlertTopicID"` }
-type Color struct { ColorName string `gorm:"primaryKey" json:"ColorName"` }
-type Driver struct { DriverName string `gorm:"primaryKey" json:"DriverName"`; ImageURL string `json:"ImageURL"`; Phone string `json:"Phone"`; VehiclePlate string `json:"VehiclePlate"` }
-type BankAccount struct { BankName string `gorm:"primaryKey" json:"BankName"`; LogoURL string `json:"LogoURL"`; AssignedStores string `json:"AssignedStores"` }
-type PhoneCarrier struct { CarrierName string `gorm:"primaryKey" json:"CarrierName"`; Prefixes string `json:"Prefixes"`; CarrierLogoURL string `json:"CarrierLogoURL"` }
-type TelegramTemplate struct { ID uint `gorm:"primaryKey;autoIncrement"`; Team string `json:"Team"`; Part float64 `json:"Part"`; Template string `json:"Template"` }
+type TeamPage struct {
+	ID              uint   `gorm:"primaryKey;autoIncrement;column:id" json:"ID"`
+	Team            string `gorm:"column:team" json:"Team"`
+	PageName        string `gorm:"column:page_name" json:"PageName"`
+	TelegramValue   string `gorm:"column:telegram_value" json:"TelegramValue"`
+	PageLogoURL     string `gorm:"column:page_logo_url" json:"PageLogoURL"`
+	DefaultStore    string `gorm:"column:default_store" json:"DefaultStore"`
+	TelegramTopicID string `gorm:"column:telegram_topic_id" json:"TelegramTopicID"`
+}
 
-type Inventory struct { ID uint `gorm:"primaryKey;autoIncrement"`; StoreName string `gorm:"index" json:"StoreName"`; Barcode string `gorm:"index" json:"Barcode"`; Quantity float64 `json:"Quantity"`; LastUpdated string `json:"LastUpdated"`; UpdatedBy string `json:"UpdatedBy"` }
-type StockTransfer struct { TransferID string `gorm:"primaryKey" json:"TransferID"`; Timestamp string `json:"Timestamp"`; FromStore string `json:"FromStore"`; ToStore string `json:"ToStore"`; Barcode string `json:"Barcode"`; Quantity float64 `json:"Quantity"`; Status string `json:"Status"`; RequestedBy string `json:"RequestedBy"`; ApprovedBy string `json:"ApprovedBy"`; ReceivedBy string `json:"ReceivedBy"` }
-type ReturnItem struct { ReturnID string `gorm:"primaryKey" json:"ReturnID"`; Timestamp string `json:"Timestamp"`; OrderID string `json:"OrderID"`; StoreName string `json:"StoreName"`; Barcode string `json:"Barcode"`; Quantity float64 `json:"Quantity"`; Reason string `json:"Reason"`; IsRestocked bool `json:"IsRestocked"`; HandledBy string `json:"HandledBy"` }
+type Product struct {
+	Barcode     string  `gorm:"primaryKey;column:barcode" json:"Barcode"`
+	ProductName string  `gorm:"column:product_name" json:"ProductName"`
+	Price       float64 `gorm:"column:price" json:"Price"`
+	Cost        float64 `gorm:"column:cost" json:"Cost"`
+	ImageURL    string  `gorm:"column:image_url" json:"ImageURL"`
+	Tags        string  `gorm:"column:tags" json:"Tags"`
+}
+type Location struct {
+	ID       uint   `gorm:"primaryKey;autoIncrement;column:id"`
+	Province string `gorm:"column:province" json:"Province"`
+	District string `gorm:"column:district" json:"District"`
+	Sangkat  string `gorm:"column:sangkat" json:"Sangkat"`
+}
+type ShippingMethod struct {
+	MethodName                 string  `gorm:"primaryKey;column:method_name" json:"MethodName"`
+	LogoURL                    string  `gorm:"column:logos_url" json:"LogosURL"`
+	AllowManualDriver          bool    `gorm:"column:allow_manual_driver" json:"AllowManualDriver"`
+	RequireDriverSelection     bool    `gorm:"column:require_driver_selection" json:"RequireDriverSelection"`
+	EnableCODAlert             bool    `gorm:"column:enable_cod_alert" json:"EnableCODAlert"`
+	AlertTopicID               string  `gorm:"column:alert_topic_id" json:"AlertTopicID"`
+	InternalCost               float64 `gorm:"column:internal_cost" json:"InternalCost"`
+	CostShortcuts              string  `gorm:"column:cost_shortcuts" json:"CostShortcuts"`
+	EnableDriverRecommendation bool    `gorm:"column:enable_driver_recommendation" json:"EnableDriverRecommendation"`
+}
+
+type DriverRecommendation struct {
+	ID             uint   `gorm:"primaryKey;autoIncrement;column:id" json:"ID"`
+	DayOfWeek      string `gorm:"column:day_of_week" json:"DayOfWeek"`
+	StoreName      string `gorm:"column:store_name" json:"StoreName"`
+	Province       string `gorm:"column:province" json:"Province"`
+	DriverName     string `gorm:"column:driver_name" json:"DriverName"`
+	ShippingMethod string `gorm:"column:shipping_method" json:"ShippingMethod"`
+}
+
+type Color struct {
+	ColorName string `gorm:"primaryKey;column:color_name" json:"ColorName"`
+}
+type Driver struct {
+	DriverName     string `gorm:"primaryKey;column:driver_name" json:"DriverName"`
+	ImageURL       string `gorm:"column:image_url" json:"ImageURL"`
+	Phone          string `gorm:"column:phone" json:"Phone"`
+	InternalCost   string `gorm:"column:internal_cost" json:"InternalCost"`
+	AssignedStores string `gorm:"column:assigned_stores" json:"AssignedStores"`
+}
+type BankAccount struct {
+	BankName string `gorm:"primaryKey;column:bank_name" json:"BankName"`
+	LogoURL  string `gorm:"column:logo_url" json:"LogoURL"`
+}
+type PhoneCarrier struct {
+	CarrierName    string `gorm:"primaryKey;column:carrier_name" json:"CarrierName"`
+	Prefixes       string `gorm:"column:prefixes" json:"Prefixes"`
+	CarrierLogoURL string `gorm:"column:carrier_logo_url" json:"CarrierLogoURL"`
+}
+type TelegramTemplate struct {
+	ID       uint    `gorm:"primaryKey;autoIncrement"`
+	Team     string  `json:"Team"`
+	Part     float64 `json:"Part"`
+	Template string  `json:"Template"`
+}
+
+type Inventory struct {
+	ID          uint    `gorm:"primaryKey;autoIncrement"`
+	StoreName   string  `gorm:"index" json:"StoreName"`
+	Barcode     string  `gorm:"index" json:"Barcode"`
+	Quantity    float64 `json:"Quantity"`
+	LastUpdated string  `json:"LastUpdated"`
+	UpdatedBy   string  `json:"UpdatedBy"`
+}
+type StockTransfer struct {
+	TransferID  string  `gorm:"primaryKey" json:"TransferID"`
+	Timestamp   string  `json:"Timestamp"`
+	FromStore   string  `json:"FromStore"`
+	ToStore     string  `json:"ToStore"`
+	Barcode     string  `json:"Barcode"`
+	Quantity    float64 `json:"Quantity"`
+	Status      string  `json:"Status"`
+	RequestedBy string  `json:"RequestedBy"`
+	ApprovedBy  string  `json:"ApprovedBy"`
+	ReceivedBy  string  `json:"ReceivedBy"`
+}
+type ReturnItem struct {
+	ReturnID    string  `gorm:"primaryKey" json:"ReturnID"`
+	Timestamp   string  `json:"Timestamp"`
+	OrderID     string  `json:"OrderID"`
+	StoreName   string  `json:"StoreName"`
+	Barcode     string  `json:"Barcode"`
+	Quantity    float64 `json:"Quantity"`
+	Reason      string  `json:"Reason"`
+	IsRestocked bool    `json:"IsRestocked"`
+	HandledBy   string  `json:"HandledBy"`
+}
 
 type Order struct {
-	OrderID                 string  `gorm:"primaryKey" json:"Order ID"`
-	Timestamp               string  `gorm:"index" json:"Timestamp"`
-	User                    string  `json:"User"`
-	Page                    string  `json:"Page"`
-	TelegramValue           string  `json:"TelegramValue"`
-	CustomerName            string  `json:"Customer Name"`
-	CustomerPhone           string  `json:"Customer Phone"`
-	Location                string  `json:"Location"`
-	AddressDetails          string  `json:"Address Details"`
-	Note                    string  `json:"Note"`
-	ShippingFeeCustomer     float64 `json:"Shipping Fee (Customer)"`
-	Subtotal                float64 `json:"Subtotal"`
-	GrandTotal              float64 `json:"Grand Total"`
-	ProductsJSON            string  `gorm:"type:text" json:"Products (JSON)"`
-	InternalShippingMethod  string  `json:"Internal Shipping Method"` 
-	InternalShippingDetails string  `json:"Internal Shipping Details"`
-	InternalCost            float64 `json:"Internal Cost"`            
-	PaymentStatus           string  `json:"Payment Status"`           
-	PaymentInfo             string  `json:"Payment Info"`
-	DiscountUSD             float64 `json:"Discount ($)"`
-	DeliveryUnpaid          float64 `json:"Delivery Unpaid"`
-	DeliveryPaid            float64 `json:"Delivery Paid"`
-	TotalProductCost        float64 `json:"Total Product Cost ($)"`
-	TelegramMessageID1      string  `json:"Telegram Message ID 1"`
-	TelegramMessageID2      string  `json:"Telegram Message ID 2"`
-	ScheduledTime           string  `json:"Scheduled Time"`
-	FulfillmentStore        string  `json:"Fulfillment Store"`
-	Team                    string  `json:"Team"`
-	IsVerified              string  `json:"IsVerified"`
-	FulfillmentStatus       string  `json:"Fulfillment Status"`
-	PackedBy                string  `json:"Packed By"`
-	PackagePhotoURL         string  `json:"Package Photo URL"`
-	DriverName              string  `json:"Driver Name"`
-	TrackingNumber          string  `json:"Tracking Number"`
-	DispatchedTime          string  `json:"Dispatched Time"`
-	DeliveredTime           string  `json:"Delivered Time"`
-	DeliveryPhotoURL        string  `json:"Delivery Photo URL"`
+	OrderID                 string  `gorm:"primaryKey;column:order_id" json:"Order ID"`
+	Timestamp               string  `gorm:"index;column:timestamp" json:"Timestamp"`
+	User                    string  `gorm:"column:user" json:"User"`
+	Page                    string  `gorm:"column:page" json:"Page"`
+	TelegramValue           string  `gorm:"column:telegram_value" json:"TelegramValue"`
+	CustomerName            string  `gorm:"column:customer_name" json:"Customer Name"`
+	CustomerPhone           string  `gorm:"column:customer_phone" json:"Customer Phone"`
+	Location                string  `gorm:"column:location" json:"Location"`
+	AddressDetails          string  `gorm:"column:address_details" json:"Address Details"`
+	Note                    string  `gorm:"column:note" json:"Note"`
+	ShippingFeeCustomer     float64 `gorm:"column:shipping_fee_customer" json:"Shipping Fee (Customer)"`
+	Subtotal                float64 `gorm:"column:subtotal" json:"Subtotal"`
+	GrandTotal              float64 `gorm:"column:grand_total" json:"Grand Total"`
+	ProductsJSON            string  `gorm:"type:text;column:products_json" json:"Products (JSON)"`
+	InternalShippingMethod  string  `gorm:"column:internal_shipping_method" json:"Internal Shipping Method"`
+	InternalShippingDetails string  `gorm:"column:internal_shipping_details" json:"Internal Shipping Details"`
+	InternalCost            float64 `gorm:"column:internal_cost" json:"Internal Cost"`
+	PaymentStatus           string  `gorm:"column:payment_status" json:"Payment Status"`
+	PaymentInfo             string  `gorm:"column:payment_info" json:"Payment Info"`
+	DiscountUSD             float64 `gorm:"column:discount_usd" json:"Discount ($)"`
+	DeliveryUnpaid          float64 `gorm:"column:delivery_unpaid" json:"Delivery Unpaid"`
+	DeliveryPaid            float64 `gorm:"column:delivery_paid" json:"Delivery Paid"`
+	TotalProductCost        float64 `gorm:"column:total_product_cost" json:"Total Product Cost ($)"`
+	TelegramMessageID1      string  `gorm:"column:telegram_message_id1" json:"Telegram Message ID 1"`
+	TelegramMessageID2      string  `gorm:"column:telegram_message_id2" json:"Telegram Message ID 2"`
+	ScheduledTime           string  `gorm:"column:scheduled_time" json:"Scheduled Time"`
+	FulfillmentStore        string  `gorm:"column:fulfillment_store" json:"Fulfillment Store"`
+	Team                    string  `gorm:"column:team" json:"Team"`
+	IsVerified              string  `gorm:"column:is_verified" json:"IsVerified"`
+	FulfillmentStatus       string  `gorm:"column:fulfillment_status" json:"Fulfillment Status"`
+	PackedBy                string  `gorm:"column:packed_by" json:"Packed By"`
+	PackagePhotoURL         string  `gorm:"column:package_photo_url" json:"Package Photo URL"`
+	DriverName              string  `gorm:"column:driver_name" json:"Driver Name"`
+	TrackingNumber          string  `gorm:"column:tracking_number" json:"Tracking Number"`
+	DispatchedTime          string  `gorm:"column:dispatched_time" json:"Dispatched Time"`
+	DeliveredTime           string  `gorm:"column:delivered_time" json:"Delivered Time"`
+	DeliveryPhotoURL        string  `gorm:"column:delivery_photo_url" json:"Delivery Photo URL"`
 }
 
-type RevenueEntry struct { ID uint `gorm:"primaryKey;autoIncrement"`; Timestamp string `json:"Timestamp"`; Team string `json:"Team"`; Page string `json:"Page"`; Revenue float64 `json:"Revenue"`; FulfillmentStore string `json:"Fulfillment Store"` }
+type RevenueEntry struct {
+	ID               uint    `gorm:"primaryKey;autoIncrement;column:id"`
+	Timestamp        string  `gorm:"column:timestamp" json:"Timestamp"`
+	Team             string  `gorm:"column:team" json:"Team"`
+	Page             string  `gorm:"column:page" json:"Page"`
+	Revenue          float64 `gorm:"column:revenue" json:"Revenue"`
+	FulfillmentStore string  `gorm:"column:fulfillment_store" json:"Fulfillment Store"`
+}
 
 type ChatMessage struct {
 	ID          uint   `gorm:"primaryKey;autoIncrement" json:"id"`
@@ -153,8 +262,22 @@ type ChatMessage struct {
 	AudioData   string `gorm:"-" json:"AudioData,omitempty"`
 }
 
-type EditLog struct { ID uint `gorm:"primaryKey;autoIncrement"`; Timestamp string `json:"Timestamp"`; OrderID string `json:"OrderID"`; Requester string `json:"Requester"`; FieldChanged string `json:"Field Changed"`; OldValue string `json:"Old Value"`; NewValue string `json:"New Value"` }
-type UserActivityLog struct { ID uint `gorm:"primaryKey;autoIncrement"`; Timestamp string `json:"Timestamp"`; User string `json:"User"`; Action string `json:"Action"`; Details string `json:"Details"` }
+type EditLog struct {
+	ID           uint   `gorm:"primaryKey;autoIncrement"`
+	Timestamp    string `json:"Timestamp"`
+	OrderID      string `json:"OrderID"`
+	Requester    string `json:"Requester"`
+	FieldChanged string `json:"Field Changed"`
+	OldValue     string `json:"Old Value"`
+	NewValue     string `json:"New Value"`
+}
+type UserActivityLog struct {
+	ID        uint   `gorm:"primaryKey;autoIncrement"`
+	Timestamp string `json:"Timestamp"`
+	User      string `json:"User"`
+	Action    string `json:"Action"`
+	Details   string `json:"Details"`
+}
 
 type Role struct {
 	ID          uint   `gorm:"primaryKey;autoIncrement" json:"id"`
@@ -172,7 +295,7 @@ type RolePermission struct {
 type IncentiveCalculator struct {
 	ID        uint    `gorm:"primaryKey" json:"id"`
 	Name      string  `json:"name"`
-	Type      string  `json:"type"` 
+	Type      string  `json:"type"`
 	Value     float64 `json:"value"`
 	RulesJSON string  `gorm:"type:text" json:"rulesJson"`
 }
@@ -181,10 +304,10 @@ type IncentiveProject struct {
 	ID           uint   `gorm:"primaryKey" json:"id"`
 	ProjectName  string `json:"projectName"`
 	CalculatorID uint   `json:"calculatorId"`
-	StartDate    string `json:"startDate"` 
-	EndDate      string `json:"endDate"`   
+	StartDate    string `json:"startDate"`
+	EndDate      string `json:"endDate"`
 	TargetTeam   string `json:"targetTeam"`
-	Status       string `json:"status"`    
+	Status       string `json:"status"`
 }
 
 type IncentiveResult struct {
@@ -196,12 +319,16 @@ type IncentiveResult struct {
 	CalculatedValue float64 `json:"calculatedValue"`
 }
 
-type DeleteOrderRequest struct { OrderID string `json:"orderId"`; Team string `json:"team"`; UserName string `json:"userName"` }
+type DeleteOrderRequest struct {
+	OrderID  string `json:"orderId"`
+	Team     string `json:"team"`
+	UserName string `json:"userName"`
+}
 
 type TempImage struct {
 	ID        string    `gorm:"primaryKey" json:"id"`
 	MimeType  string    `json:"mimeType"`
-	ImageData string    `gorm:"type:text" json:"imageData"` 
+	ImageData string    `gorm:"type:text" json:"imageData"`
 	ExpiresAt time.Time `gorm:"index" json:"expiresAt"`
 }
 
@@ -211,7 +338,9 @@ type TempImage struct {
 func initDB() {
 	log.Println("🔌 Initializing PostgreSQL database connection...")
 	dsn := os.Getenv("DATABASE_URL")
-	if dsn == "" { log.Fatal("❌ DATABASE_URL is not set!") }
+	if dsn == "" {
+		log.Fatal("❌ DATABASE_URL is not set!")
+	}
 
 	var db *gorm.DB
 	var err error
@@ -223,7 +352,7 @@ func initDB() {
 			break
 		}
 		log.Printf("⚠️ ភ្ជាប់ Database មិនបាន (ព្យាយាមលើកទី %d/%d): %v", i+1, maxRetries, err)
-		time.Sleep(10 * time.Second) 
+		time.Sleep(10 * time.Second)
 	}
 
 	if err != nil {
@@ -232,10 +361,9 @@ func initDB() {
 
 	sqlDB, err := db.DB()
 	if err == nil {
-		sqlDB.SetMaxIdleConns(1)                   
-		sqlDB.SetMaxOpenConns(3)                   
-		sqlDB.SetMaxOpenConns(3)                   
-		sqlDB.SetConnMaxLifetime(10 * time.Minute) 
+		sqlDB.SetMaxIdleConns(1)
+		sqlDB.SetMaxOpenConns(3)
+		sqlDB.SetConnMaxLifetime(10 * time.Minute)
 		log.Println("⚡ Database Connection Pool Optimized (Minimal Limits)!")
 	}
 
@@ -247,20 +375,48 @@ func initDB() {
 			db.Migrator().DropTable(&TeamPage{})
 		}
 	}
+	
+	// Force re-migrate ShippingMethod to fix naming issues
+	if db.Migrator().HasTable(&ShippingMethod{}) {
+		if !db.Migrator().HasColumn(&ShippingMethod{}, "alert_topic_id") {
+			db.Migrator().DropTable(&ShippingMethod{})
+		}
+	}
+	if db.Migrator().HasTable(&User{}) && !db.Migrator().HasColumn(&User{}, "user_name") {
+		db.Migrator().DropTable(&User{})
+	}
+	if db.Migrator().HasTable(&Store{}) && !db.Migrator().HasColumn(&Store{}, "store_name") {
+		db.Migrator().DropTable(&Store{})
+	}
+	if db.Migrator().HasTable(&Product{}) && !db.Migrator().HasColumn(&Product{}, "product_name") {
+		db.Migrator().DropTable(&Product{})
+	}
+	if db.Migrator().HasTable(&DriverRecommendation{}) && !db.Migrator().HasColumn(&DriverRecommendation{}, "day_of_week") {
+		db.Migrator().DropTable(&DriverRecommendation{})
+	}
+	if db.Migrator().HasTable(&Order{}) && !db.Migrator().HasColumn(&Order{}, "customer_name") {
+		db.Migrator().DropTable(&Order{})
+	}
+	if db.Migrator().HasTable(&RevenueEntry{}) && !db.Migrator().HasColumn(&RevenueEntry{}, "revenue") {
+		db.Migrator().DropTable(&RevenueEntry{})
+	}
 
 	err = db.AutoMigrate(
 		&User{}, &Store{}, &Setting{}, &TeamPage{}, &Product{}, &Location{}, &ShippingMethod{},
 		&Color{}, &Driver{}, &BankAccount{}, &PhoneCarrier{}, &TelegramTemplate{},
 		&Inventory{}, &StockTransfer{}, &ReturnItem{},
 		&Order{}, &RevenueEntry{}, &ChatMessage{}, &EditLog{}, &UserActivityLog{},
-		&Role{},             
+		&Role{},
 		&RolePermission{},
-		&IncentiveCalculator{}, 
-		&IncentiveProject{},    
-		&IncentiveResult{}, 
-		&TempImage{}, 
+		&IncentiveCalculator{},
+		&IncentiveProject{},
+		&IncentiveResult{},
+		&TempImage{},
+		&DriverRecommendation{},
 	)
-	if err != nil { log.Fatal("❌ Migration failed:", err) }
+	if err != nil {
+		log.Fatal("❌ Migration failed:", err)
+	}
 
 	DB = db
 
@@ -270,16 +426,16 @@ func initDB() {
 	if result.Error != nil && result.Error == gorm.ErrRecordNotFound {
 		adminRole = Role{RoleName: "Admin", Description: "Administrator with full access"}
 		if err := DB.Create(&adminRole).Error; err == nil {
-			log.Println("✅ បង្កើតតួនាទី (Admin) ដោយស្វ័យប្រវត្តិបានជោគជ័យ!")
-			
+			log.Println("✅ បង្បង្កើតតួនាទី (Admin) ដោយស្វ័យប្រវត្តិបានជោគជ័យ!")
+
 			// បញ្ជូនទៅ Google Sheets ផងដែរ
 			go func(r Role) {
 				// រង់ចាំបន្តិចដើម្បីឱ្យ spreadsheetID និង appsScriptURL ត្រូវបានកំណត់ក្នុង main()
 				time.Sleep(2 * time.Second)
 				if appsScriptURL != "" {
 					appsReq := AppsScriptRequest{
-						Action: "addRow",
-						Secret: appsScriptSecret,
+						Action:    "addRow",
+						Secret:    appsScriptSecret,
 						SheetName: "Roles",
 						NewData: map[string]interface{}{
 							"ID":          r.ID,
@@ -300,20 +456,26 @@ func initDB() {
 
 func createGoogleAPIClient(ctx context.Context) error {
 	credentialsJSON := os.Getenv("GCP_CREDENTIALS")
-	if credentialsJSON == "" { return fmt.Errorf("GCP_CREDENTIALS not set") }
+	if credentialsJSON == "" {
+		return fmt.Errorf("GCP_CREDENTIALS not set")
+	}
 	credentialsJSON = strings.Trim(credentialsJSON, "\"")
 	credentialsJSON = strings.ReplaceAll(credentialsJSON, "\\\"", "\"")
-	
+
 	clientOptions := option.WithCredentialsJSON([]byte(credentialsJSON))
-	
+
 	sheetsSrv, err := sheets.NewService(ctx, clientOptions, option.WithScopes(sheets.SpreadsheetsScope))
-	if err != nil { return err }
+	if err != nil {
+		return err
+	}
 	sheetsService = sheetsSrv
-	
+
 	driveSrv, err := drive.NewService(ctx, clientOptions, option.WithScopes(drive.DriveFileScope))
-	if err != nil { return err }
+	if err != nil {
+		return err
+	}
 	driveService = driveSrv
-	
+
 	log.Println("✅ Google API Clients Initialized.")
 	return nil
 }
@@ -333,45 +495,48 @@ func generateShortID() string {
 
 func mapToDBColumn(key string) string {
 	specialCases := map[string]string{
-		"Order ID":                "order_id",
-		"Discount ($)":            "discount_usd",
-		"Total Product Cost ($)":  "total_product_cost",
-		"Shipping Fee (Customer)": "shipping_fee_customer",
-		"Products":                "products_json",
-		"Products (JSON)":         "products_json",
-		"Telegram Message ID 1":   "telegram_message_id1",
-		"Telegram Message ID 2":   "telegram_message_id2",
-		"Customer Name":           "customer_name",
-		"Customer Phone":          "customer_phone",
-		"Location":                "location",
-		"Address Details":         "address_details",
-		"Fulfillment Status":      "fulfillment_status",
-		"Fulfillment Store":       "fulfillment_store",
-		"Internal Shipping Method": "internal_shipping_method",
+		"Order ID":                  "order_id",
+		"Discount ($)":              "discount_usd",
+		"Total Product Cost ($)":    "total_product_cost",
+		"Shipping Fee (Customer)":   "shipping_fee_customer",
+		"Products":                  "products_json",
+		"Products (JSON)":           "products_json",
+		"Telegram Message ID 1":     "telegram_message_id1",
+		"Telegram Message ID 2":     "telegram_message_id2",
+		"Customer Name":             "customer_name",
+		"Customer Phone":            "customer_phone",
+		"Location":                  "location",
+		"Address Details":           "address_details",
+		"Fulfillment Status":        "fulfillment_status",
+		"Fulfillment Store":         "fulfillment_store",
+		"Internal Shipping Method":  "internal_shipping_method",
 		"Internal Shipping Details": "internal_shipping_details",
-		"Internal Cost":           "internal_cost",
-		"Payment Status":          "payment_status",
-		"Payment Info":            "payment_info",
-		"Scheduled Time":          "scheduled_time",
-		"Delivery Unpaid":         "delivery_unpaid",
-		"Delivery Paid":           "delivery_paid",
-		"Package Photo":           "package_photo_url", 
-		"Package Photo URL":       "package_photo_url",
-		"Delivery Photo":          "delivery_photo_url",
-		"Delivery Photo URL":      "delivery_photo_url",
-		"Driver Name":             "driver_name",
-		"Tracking Number":         "tracking_number",
-		"Dispatched Time":         "dispatched_time",
-		"Delivered Time":          "delivered_time",
-		"Packed By":               "packed_by",
-		"IsVerified":              "is_verified",
-		"UserName":                "user_name",
-		"FullName":                "full_name",
-		"ProfilePictureURL":       "profile_picture_url",
-		"IsSystemAdmin":           "is_system_admin",
-		"TelegramUsername":        "telegram_username",
-		"ImageURL":                "image_url", 
-		"Image URL":               "image_url",
+		"Internal Cost":             "internal_cost",
+		"Payment Status":            "payment_status",
+		"Payment Info":              "payment_info",
+		"Scheduled Time":            "scheduled_time",
+		"Delivery Unpaid":           "delivery_unpaid",
+		"Delivery Paid":             "delivery_paid",
+		"Package Photo":             "package_photo_url",
+		"Package Photo URL":         "package_photo_url",
+		"Delivery Photo":            "delivery_photo_url",
+		"Delivery Photo URL":        "delivery_photo_url",
+		"Driver Name":               "driver_name",
+		"Tracking Number":           "tracking_number",
+		"Dispatched Time":           "dispatched_time",
+		"Delivered Time":            "delivered_time",
+		"Packed By":                 "packed_by",
+		"IsVerified":                "is_verified",
+		"UserName":                  "user_name",
+		"FullName":                  "full_name",
+		"ProfilePictureURL":         "profile_picture_url",
+		"IsSystemAdmin":             "is_system_admin",
+		"TelegramUsername":          "telegram_username",
+		"ImageURL":                  "image_url",
+		"Image URL":                 "image_url",
+		"LogosURL":                  "logo_url",
+		"Logos URL":                 "logo_url",
+		"LogoURL":                   "logo_url",
 	}
 
 	for k, v := range specialCases {
@@ -383,11 +548,15 @@ func mapToDBColumn(key string) string {
 	var res []rune
 	for i, r := range key {
 		if i > 0 && (unicode.IsUpper(r) || r == ' ' || r == '(' || r == ')') {
-			if len(res) > 0 && res[len(res)-1] != '_' { res = append(res, '_') }
+			if len(res) > 0 && res[len(res)-1] != '_' {
+				res = append(res, '_')
+			}
 		}
-		if r != ' ' && r != '(' && r != ')' && r != '$' { res = append(res, unicode.ToLower(r)) }
+		if r != ' ' && r != '(' && r != ')' && r != '$' {
+			res = append(res, unicode.ToLower(r))
+		}
 	}
-	
+
 	final := strings.Trim(string(res), "_")
 	final = strings.ReplaceAll(final, "__", "_")
 	return final
@@ -395,23 +564,42 @@ func mapToDBColumn(key string) string {
 
 func getTableName(sheetName string) string {
 	switch sheetName {
-	case "Users": return "users"
-	case "Stores": return "stores"
-	case "Settings": return "settings"
-	case "TeamsPages": return "team_pages"
-	case "Products": return "products"
-	case "Locations": return "locations"
-	case "ShippingMethods": return "shipping_methods"
-	case "Colors": return "colors"
-	case "Drivers": return "drivers"
-	case "BankAccounts": return "bank_accounts"
-	case "PhoneCarriers": return "phone_carriers"
-	case "Inventory": return "inventories"
-	case "StockTransfers": return "stock_transfers"
-	case "Returns": return "returns"
-	case "AllOrders": return "orders"
-	case "Roles": return "roles"
-	case "RolePermissions": return "role_permissions"
+	case "Users":
+		return "users"
+	case "Stores":
+		return "stores"
+	case "Settings":
+		return "settings"
+	case "TeamsPages":
+		return "team_pages"
+	case "Products":
+		return "products"
+	case "Locations":
+		return "locations"
+	case "ShippingMethods":
+		return "shipping_methods"
+	case "Colors":
+		return "colors"
+	case "Drivers":
+		return "drivers"
+	case "BankAccounts":
+		return "bank_accounts"
+	case "PhoneCarriers":
+		return "phone_carriers"
+	case "Inventory":
+		return "inventories"
+	case "StockTransfers":
+		return "stock_transfers"
+	case "Returns":
+		return "returns"
+	case "AllOrders":
+		return "orders"
+	case "Roles":
+		return "roles"
+	case "RolePermissions":
+		return "role_permissions"
+	case "DriverRecommendations":
+		return "driver_recommendations"
 	}
 	return ""
 }
@@ -515,7 +703,7 @@ func handleLogin(c *gin.Context) {
 		return
 	}
 
-	user.Password = "" 
+	user.Password = ""
 
 	c.JSON(http.StatusOK, gin.H{
 		"status": "success",
@@ -646,7 +834,7 @@ func handleCreateRole(c *gin.Context) {
 	}
 
 	req.ID = 0
-	
+
 	if err := DB.Create(&req).Error; err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"status": "error", "message": "ការបង្កើត Role បរាជ័យ: " + err.Error()})
 		return
@@ -659,18 +847,18 @@ func handleCreateRole(c *gin.Context) {
 	}
 
 	eventBytes, _ := json.Marshal(map[string]interface{}{
-		"type": "add_row",
+		"type":      "add_row",
 		"sheetName": "Roles",
-		"newData": req, 
+		"newData":   req,
 	})
 	hub.broadcast <- eventBytes
 
 	go func() {
 		appsReq := AppsScriptRequest{
-			Action: "addRow",
-			Secret: appsScriptSecret,
+			Action:    "addRow",
+			Secret:    appsScriptSecret,
 			SheetName: "Roles",
-			NewData: sheetData,
+			NewData:   sheetData,
 		}
 		jb, _ := json.Marshal(appsReq)
 		http.Post(appsScriptURL, "application/json", bytes.NewBuffer(jb))
@@ -691,7 +879,7 @@ func handleGetAllPermissions(c *gin.Context) {
 func handleGetUserPermissions(c *gin.Context) {
 	role, _ := c.Get("role")
 	var permissions []RolePermission
-	
+
 	if err := DB.Where("role = ?", role).Find(&permissions).Error; err != nil {
 		c.Error(err)
 		return
@@ -719,24 +907,24 @@ func handleUpdatePermission(c *gin.Context) {
 
 	for _, req := range reqs {
 		if req.Role == "" || req.Feature == "" {
-			continue 
+			continue
 		}
 
 		var existing RolePermission
 		result := DB.Where("role = ? AND feature = ?", req.Role, req.Feature).First(&existing)
-		
+
 		if result.Error != nil && result.Error == gorm.ErrRecordNotFound {
 			req.ID = 0
-			
+
 			DB.Create(&req)
-			
+
 			go func(r RolePermission) {
 				appsReq := AppsScriptRequest{
-					Action: "addRow",
-					Secret: appsScriptSecret,
+					Action:    "addRow",
+					Secret:    appsScriptSecret,
 					SheetName: "RolePermissions",
 					NewData: map[string]interface{}{
-						"ID":        r.ID, 
+						"ID":        r.ID,
 						"Role":      r.Role,
 						"Feature":   r.Feature,
 						"IsEnabled": r.IsEnabled,
@@ -748,14 +936,14 @@ func handleUpdatePermission(c *gin.Context) {
 
 		} else if result.Error == nil {
 			DB.Model(&existing).Update("is_enabled", req.IsEnabled)
-			
+
 			go func(r RolePermission) {
 				appsReq := AppsScriptRequest{
-					Action: "updateSheet",
-					Secret: appsScriptSecret,
-					SheetName: "RolePermissions",
+					Action:     "updateSheet",
+					Secret:     appsScriptSecret,
+					SheetName:  "RolePermissions",
 					PrimaryKey: map[string]string{"Role": r.Role, "Feature": r.Feature},
-					NewData: map[string]interface{}{"IsEnabled": r.IsEnabled},
+					NewData:    map[string]interface{}{"IsEnabled": r.IsEnabled},
 				}
 				jb, _ := json.Marshal(appsReq)
 				http.Post(appsScriptURL, "application/json", bytes.NewBuffer(jb))
@@ -763,9 +951,9 @@ func handleUpdatePermission(c *gin.Context) {
 		}
 
 		eventBytes, _ := json.Marshal(map[string]interface{}{
-			"type": "update_permission",
-			"role": req.Role,
-			"feature": req.Feature,
+			"type":      "update_permission",
+			"role":      req.Role,
+			"feature":   req.Feature,
 			"isEnabled": req.IsEnabled,
 		})
 		hub.broadcast <- eventBytes
@@ -904,16 +1092,17 @@ func handleCalculateIncentive(c *gin.Context) {
 // ប្រព័ន្ធ BACKGROUND QUEUE & SCHEDULER
 // =========================================================================
 type AppsScriptRequest struct {
-	Action         string      `json:"action"`
-	Secret         string      `json:"secret"`
-	UploadFolderID string      `json:"uploadFolderID,omitempty"`
-	FileData       string      `json:"fileData,omitempty"`
-	FileName       string      `json:"fileName,omitempty"`
-	MimeType       string      `json:"mimeType,omitempty"`
-	UserName       string      `json:"userName,omitempty"`
-	OrderData      interface{} `json:"orderData,omitempty"`
-	OrderID        string      `json:"orderId,omitempty"`
-	TargetColumn   string      `json:"targetColumn,omitempty"`
+	Action         string                 `json:"action"`
+	Secret         string                 `json:"secret"`
+	UploadFolderID string                 `json:"uploadFolderID,omitempty"`
+	FileData       string                 `json:"fileData,omitempty"`
+	Image          string                 `json:"image,omitempty"` // Alias for fileData
+	FileName       string                 `json:"fileName,omitempty"`
+	MimeType       string                 `json:"mimeType,omitempty"`
+	UserName       string                 `json:"userName,omitempty"`
+	OrderData      interface{}            `json:"orderData,omitempty"`
+	OrderID        string                 `json:"orderId,omitempty"`
+	TargetColumn   string                 `json:"targetColumn,omitempty"`
 	SheetName      string                 `json:"sheetName,omitempty"`
 	PrimaryKey     map[string]string      `json:"primaryKey,omitempty"`
 	NewData        map[string]interface{} `json:"newData,omitempty"`
@@ -930,7 +1119,12 @@ type AppsScriptResponse struct {
 	} `json:"messageIds,omitempty"`
 }
 
-type OrderJob struct { JobID string; OrderID string; UserName string; OrderData map[string]interface{} }
+type OrderJob struct {
+	JobID     string
+	OrderID   string
+	UserName  string
+	OrderData map[string]interface{}
+}
 
 var orderChannel = make(chan OrderJob, 2000)
 
@@ -944,12 +1138,12 @@ func startOrderWorker() {
 			}()
 
 			log.Printf("☁️ Background Worker: Processing Order %s", job.OrderID)
-			reqBody := AppsScriptRequest{ Action: "submitOrder", Secret: appsScriptSecret, OrderData: job.OrderData }
+			reqBody := AppsScriptRequest{Action: "submitOrder", Secret: appsScriptSecret, OrderData: job.OrderData}
 			jsonData, _ := json.Marshal(reqBody)
-			
-			client := &http.Client{ Timeout: 45 * time.Second }
+
+			client := &http.Client{Timeout: 45 * time.Second}
 			resp, err := client.Post(appsScriptURL, "application/json", bytes.NewBuffer(jsonData))
-			
+
 			if err != nil {
 				log.Printf("❌ Worker error for %s: %v", job.OrderID, err)
 			} else {
@@ -972,7 +1166,7 @@ func startOrderWorker() {
 
 func startScheduler() {
 	ticker := time.NewTicker(1 * time.Minute)
-	cleanupTicker := time.NewTicker(5 * time.Minute) 
+	cleanupTicker := time.NewTicker(5 * time.Minute)
 
 	go func() {
 		for {
@@ -992,11 +1186,13 @@ func startScheduler() {
 func callAppsScriptPOST(requestData AppsScriptRequest) (AppsScriptResponse, error) {
 	requestData.Secret = appsScriptSecret
 	jsonData, _ := json.Marshal(requestData)
-	client := &http.Client{ Timeout: 30 * time.Second }
+	client := &http.Client{Timeout: 30 * time.Second}
 	resp, err := client.Post(appsScriptURL, "application/json", bytes.NewBuffer(jsonData))
-	if err != nil { return AppsScriptResponse{}, err }
+	if err != nil {
+		return AppsScriptResponse{}, err
+	}
 	defer resp.Body.Close()
-	
+
 	body, _ := io.ReadAll(resp.Body)
 	var scriptResponse AppsScriptResponse
 	if err := json.Unmarshal(body, &scriptResponse); err != nil {
@@ -1006,7 +1202,7 @@ func callAppsScriptPOST(requestData AppsScriptRequest) (AppsScriptResponse, erro
 }
 
 // =========================================================================
-// MIGRATION SCRIPT 
+// MIGRATION SCRIPT
 // =========================================================================
 
 func handleGetStaticData(c *gin.Context) {
@@ -1029,6 +1225,7 @@ func handleGetStaticData(c *gin.Context) {
 		func() { var d []ReturnItem; DB.Find(&d); mu.Lock(); result["returns"] = d; mu.Unlock() },
 		func() { var d []Role; DB.Find(&d); mu.Lock(); result["roles"] = d; mu.Unlock() },
 		func() { var d []RolePermission; DB.Find(&d); mu.Lock(); result["rolePermissions"] = d; mu.Unlock() },
+		func() { var d []DriverRecommendation; DB.Find(&d); mu.Lock(); result["driverRecommendations"] = d; mu.Unlock() },
 		func() {
 			var settings []Setting
 			DB.Find(&settings)
@@ -1058,44 +1255,66 @@ func handleGetStaticData(c *gin.Context) {
 		}(q)
 	}
 
-	wg.Wait() 
+	wg.Wait()
 
 	c.JSON(http.StatusOK, gin.H{"status": "success", "data": result})
 }
 
 func fetchSheetDataFromAPI(sheetName string) ([]map[string]interface{}, error) {
 	readRange, ok := sheetRanges[sheetName]
-	if !ok { return nil, fmt.Errorf("range not defined") }
+	if !ok {
+		return nil, fmt.Errorf("range not defined")
+	}
 	resp, err := sheetsService.Spreadsheets.Values.Get(spreadsheetID, readRange).Do()
-	if err != nil { return nil, err }
+	if err != nil {
+		return nil, err
+	}
 	return convertSheetValuesToMaps(resp)
 }
 
-func isNumericHeader(h string) bool { return h=="Price" || h=="Cost" || h=="Grand Total" || h=="Subtotal" || h=="Shipping Fee (Customer)" || h=="Internal Cost" || h=="Discount ($)" || h=="Delivery Unpaid" || h=="Delivery Paid" || h=="Total Product Cost ($)" || h=="Revenue" || h=="Quantity" || h=="Part" }
-func isBoolHeader(h string) bool { return h=="IsSystemAdmin" || h=="AllowManualDriver" || h=="RequireDriverSelection" || h=="EnableCODAlert" || h=="IsRestocked" }
+func isNumericHeader(h string) bool {
+	return h == "Price" || h == "Cost" || h == "Grand Total" || h == "Subtotal" || h == "Shipping Fee (Customer)" || h == "Internal Cost" || h == "Discount ($)" || h == "Delivery Unpaid" || h == "Delivery Paid" || h == "Total Product Cost ($)" || h == "Revenue" || h == "Quantity" || h == "Part" || h == "ID"
+}
+func isBoolHeader(h string) bool {
+	return h == "IsSystemAdmin" || h == "AllowManualDriver" || h == "RequireDriverSelection" || h == "EnableCODAlert" || h == "IsRestocked" || h == "IsEnabled" || h == "EnableDriverRecommendation"
+}
 
 func convertSheetValuesToMaps(values *sheets.ValueRange) ([]map[string]interface{}, error) {
-	if values == nil || len(values.Values) < 2 { return []map[string]interface{}{}, nil }
+	if values == nil || len(values.Values) < 2 {
+		return []map[string]interface{}{}, nil
+	}
 	headers := values.Values[0]
 	dataRows := values.Values[1:]
 	result := make([]map[string]interface{}, 0, len(dataRows))
 	for _, row := range dataRows {
-		if len(row) == 0 || (len(row) == 1 && row[0] == "") { continue }
+		if len(row) == 0 || (len(row) == 1 && row[0] == "") {
+			continue
+		}
 		rowData := make(map[string]interface{})
 		for i, cell := range row {
 			if i < len(headers) {
 				header := fmt.Sprintf("%v", headers[i])
 				if header != "" {
-					if header == "LogoURL" { rowData["LogosURL"] = fmt.Sprintf("%v", cell) }
+					if header == "LogoURL" {
+						rowData["LogosURL"] = fmt.Sprintf("%v", cell)
+					}
 					if cellStr, ok := cell.(string); ok {
 						if isNumericHeader(header) {
 							cleanedStr := strings.ReplaceAll(strings.ReplaceAll(strings.TrimSpace(cellStr), "$", ""), ",", "")
-							if f, err := strconv.ParseFloat(cleanedStr, 64); err == nil { rowData[header] = f } else { rowData[header] = 0.0 }
+							if f, err := strconv.ParseFloat(cleanedStr, 64); err == nil {
+								rowData[header] = f
+							} else {
+								rowData[header] = 0.0
+							}
 						} else if isBoolHeader(header) {
 							rowData[header] = strings.ToUpper(cellStr) == "TRUE"
-						} else { rowData[header] = cellStr }
-					} else { rowData[header] = cell }
-					if header=="Telegram Message ID 1" || header=="Telegram Message ID 2" || header=="Order ID" || header=="Customer Phone" || header=="Barcode" {
+						} else {
+							rowData[header] = cellStr
+						}
+					} else {
+						rowData[header] = cell
+					}
+					if header == "Telegram Message ID 1" || header == "Telegram Message ID 2" || header == "Order ID" || header == "Customer Phone" || header == "Barcode" {
 						rowData[header] = fmt.Sprintf("%v", cell)
 					}
 				}
@@ -1108,16 +1327,22 @@ func convertSheetValuesToMaps(values *sheets.ValueRange) ([]map[string]interface
 
 func fetchSheetDataToStruct(sheetName string, target interface{}) error {
 	mappedData, err := fetchSheetDataFromAPI(sheetName)
-	if err != nil { return err }
+	if err != nil {
+		return err
+	}
 	jsonData, _ := json.Marshal(mappedData)
-	if err = json.Unmarshal(jsonData, target); err != nil { return err }
+	if err = json.Unmarshal(jsonData, target); err != nil {
+		return err
+	}
 	return nil
 }
 
 func handleMigrateData(c *gin.Context) {
 	go func() {
 		ctx := context.Background()
-		if sheetsService == nil { createGoogleAPIClient(ctx) }
+		if sheetsService == nil {
+			createGoogleAPIClient(ctx)
+		}
 
 		log.Println("🗑️ លុបទិន្នន័យចាស់ (Resetting Database)...")
 		DB.Session(&gorm.Session{AllowGlobalUpdate: true}).Delete(&User{})
@@ -1140,120 +1365,303 @@ func handleMigrateData(c *gin.Context) {
 		DB.Session(&gorm.Session{AllowGlobalUpdate: true}).Delete(&EditLog{})
 		DB.Session(&gorm.Session{AllowGlobalUpdate: true}).Delete(&UserActivityLog{})
 		DB.Session(&gorm.Session{AllowGlobalUpdate: true}).Delete(&Order{})
+		DB.Session(&gorm.Session{AllowGlobalUpdate: true}).Delete(&DriverRecommendation{})
+		DB.Session(&gorm.Session{AllowGlobalUpdate: true}).Delete(&Role{})
+		DB.Session(&gorm.Session{AllowGlobalUpdate: true}).Delete(&RolePermission{})
 
 		log.Println("🔄 ចាប់ផ្តើមទាញទិន្នន័យថ្មីពី Google Sheet...")
 
-		var users []User; if fetchSheetDataToStruct("Users", &users) == nil { 
-			var valid []User; seen := make(map[string]bool)
-			for _, x := range users { if x.UserName != "" && !seen[x.UserName] { seen[x.UserName] = true; valid = append(valid, x) } }
-			if len(valid) > 0 { DB.CreateInBatches(valid, 100) } 
-		}
-		
-		var stores []Store; if fetchSheetDataToStruct("Stores", &stores) == nil { 
-			var valid []Store; seen := make(map[string]bool)
-			for _, x := range stores { if x.StoreName != "" && !seen[x.StoreName] { seen[x.StoreName] = true; valid = append(valid, x) } }
-			if len(valid) > 0 { DB.CreateInBatches(valid, 100) } 
-		}
-		
-		var settings []Setting; 
-		if fetchSheetDataToStruct("Settings", &settings) == nil { 
-			for _, s := range settings { 
-				if s.ConfigKey != "" { 
-					DB.Save(&s) 
-					if s.ConfigKey == "UploadFolderID" { 
-                        envVal := os.Getenv("UPLOAD_FOLDER_ID")
-                        if envVal != "" { uploadFolderID = envVal } else { uploadFolderID = s.ConfigValue }
-					} 
-				} 
-			} 
-		}
-		
-		var pages []TeamPage; if fetchSheetDataToStruct("TeamsPages", &pages) == nil { 
-			var valid []TeamPage; for _, x := range pages { if x.PageName != "" { valid = append(valid, x) } }
-			if len(valid) > 0 { DB.CreateInBatches(valid, 100) } 
-		}
-		
-		var products []Product; if fetchSheetDataToStruct("Products", &products) == nil { 
-			var valid []Product; seen := make(map[string]bool)
-			for _, x := range products { if x.Barcode != "" && !seen[x.Barcode] { seen[x.Barcode] = true; valid = append(valid, x) } }
-			if len(valid) > 0 { DB.CreateInBatches(valid, 100) } 
-		}
-		
-		var locations []Location; if fetchSheetDataToStruct("Locations", &locations) == nil && len(locations) > 0 { DB.CreateInBatches(locations, 100) }
-		
-		var shipping []ShippingMethod; if fetchSheetDataToStruct("ShippingMethods", &shipping) == nil { 
-			var valid []ShippingMethod; seen := make(map[string]bool)
-			for _, x := range shipping { if x.MethodName != "" && !seen[x.MethodName] { seen[x.MethodName] = true; valid = append(valid, x) } }
-			if len(valid) > 0 { DB.CreateInBatches(valid, 100) } 
-		}
-		
-		var colors []Color; if fetchSheetDataToStruct("Colors", &colors) == nil { 
-			var valid []Color; seen := make(map[string]bool)
-			for _, x := range colors { if x.ColorName != "" && !seen[x.ColorName] { seen[x.ColorName] = true; valid = append(valid, x) } }
-			if len(valid) > 0 { DB.CreateInBatches(valid, 100) } 
-		}
-		
-		var drivers []Driver; if fetchSheetDataToStruct("Drivers", &drivers) == nil { 
-			var valid []Driver; seen := make(map[string]bool)
-			for _, x := range drivers { if x.DriverName != "" && !seen[x.DriverName] { seen[x.DriverName] = true; valid = append(valid, x) } }
-			if len(valid) > 0 { DB.CreateInBatches(valid, 100) } 
-		}
-		
-		var banks []BankAccount; if fetchSheetDataToStruct("BankAccounts", &banks) == nil { 
-			var valid []BankAccount; seen := make(map[string]bool)
-			for _, x := range banks { if x.BankName != "" && !seen[x.BankName] { seen[x.BankName] = true; valid = append(valid, x) } }
-			if len(valid) > 0 { DB.CreateInBatches(valid, 100) } 
-		}
-		
-		var carriers []PhoneCarrier; if fetchSheetDataToStruct("PhoneCarriers", &carriers) == nil { 
-			var valid []PhoneCarrier; seen := make(map[string]bool)
-			for _, x := range carriers { if x.CarrierName != "" && !seen[x.CarrierName] { seen[x.CarrierName] = true; valid = append(valid, x) } }
-			if len(valid) > 0 { DB.CreateInBatches(valid, 100) } 
-		}
-		
-		var templates []TelegramTemplate; if fetchSheetDataToStruct("TelegramTemplates", &templates) == nil && len(templates) > 0 { DB.CreateInBatches(templates, 100) }
-		var inventory []Inventory; if fetchSheetDataToStruct("Inventory", &inventory) == nil && len(inventory) > 0 { DB.CreateInBatches(inventory, 100) }
-		var transfers []StockTransfer; if fetchSheetDataToStruct("StockTransfers", &transfers) == nil { var valid []StockTransfer; for _, x := range transfers { if x.TransferID != "" { valid = append(valid, x) } }; if len(valid) > 0 { DB.CreateInBatches(valid, 100) } }
-		var returns []ReturnItem; if fetchSheetDataToStruct("Returns", &returns) == nil { var valid []ReturnItem; for _, x := range returns { if x.ReturnID != "" { valid = append(valid, x) } }; if len(valid) > 0 { DB.CreateInBatches(valid, 100) } }
-		var revs []RevenueEntry; if fetchSheetDataToStruct("RevenueDashboard", &revs) == nil && len(revs) > 0 { DB.CreateInBatches(revs, 100) }
-		var chats []ChatMessage; if fetchSheetDataToStruct("ChatMessages", &chats) == nil && len(chats) > 0 { DB.CreateInBatches(chats, 100) }
-		var editLogs []EditLog; if fetchSheetDataToStruct("EditLogs", &editLogs) == nil && len(editLogs) > 0 { DB.CreateInBatches(editLogs, 100) }
-		var actLogs []UserActivityLog; if fetchSheetDataToStruct("UserActivityLogs", &actLogs) == nil && len(actLogs) > 0 { DB.CreateInBatches(actLogs, 100) }
-		
-		var orders []Order
-		if fetchSheetDataToStruct("AllOrders", &orders) == nil { 
-            var valid []Order
+		var users []User
+		if fetchSheetDataToStruct("Users", &users) == nil {
+			var valid []User
 			seen := make(map[string]bool)
-            for _, o := range orders { 
-				if o.OrderID != "" && !seen[o.OrderID] { 
-					seen[o.OrderID] = true
-					valid = append(valid, o) 
+			for _, x := range users {
+				if x.UserName != "" && !seen[x.UserName] {
+					seen[x.UserName] = true
+					valid = append(valid, x)
 				}
 			}
-            if len(valid) > 0 { DB.CreateInBatches(valid, 100) } 
-        }
-		
+			if len(valid) > 0 {
+				DB.CreateInBatches(valid, 100)
+			}
+		}
+
+		var stores []Store
+		if fetchSheetDataToStruct("Stores", &stores) == nil {
+			var valid []Store
+			seen := make(map[string]bool)
+			for _, x := range stores {
+				if x.StoreName != "" && !seen[x.StoreName] {
+					seen[x.StoreName] = true
+					valid = append(valid, x)
+				}
+			}
+			if len(valid) > 0 {
+				DB.CreateInBatches(valid, 100)
+			}
+		}
+
+		var settings []Setting
+		if fetchSheetDataToStruct("Settings", &settings) == nil {
+			for _, s := range settings {
+				if s.ConfigKey != "" {
+					DB.Save(&s)
+					if s.ConfigKey == "UploadFolderID" {
+						envVal := os.Getenv("UPLOAD_FOLDER_ID")
+						if envVal != "" {
+							uploadFolderID = envVal
+						} else {
+							uploadFolderID = s.ConfigValue
+						}
+					}
+				}
+			}
+		}
+
+		var pages []TeamPage
+		if fetchSheetDataToStruct("TeamsPages", &pages) == nil {
+			var valid []TeamPage
+			for _, x := range pages {
+				if x.PageName != "" {
+					valid = append(valid, x)
+				}
+			}
+			if len(valid) > 0 {
+				DB.CreateInBatches(valid, 100)
+			}
+		}
+
+		var products []Product
+		if fetchSheetDataToStruct("Products", &products) == nil {
+			var valid []Product
+			seen := make(map[string]bool)
+			for _, x := range products {
+				if x.Barcode != "" && !seen[x.Barcode] {
+					seen[x.Barcode] = true
+					valid = append(valid, x)
+				}
+			}
+			if len(valid) > 0 {
+				DB.CreateInBatches(valid, 100)
+			}
+		}
+
+		var locations []Location
+		if fetchSheetDataToStruct("Locations", &locations) == nil && len(locations) > 0 {
+			DB.CreateInBatches(locations, 100)
+		}
+
+		var shipping []ShippingMethod
+		if fetchSheetDataToStruct("ShippingMethods", &shipping) == nil {
+			var valid []ShippingMethod
+			seen := make(map[string]bool)
+			for _, x := range shipping {
+				if x.MethodName != "" && !seen[x.MethodName] {
+					seen[x.MethodName] = true
+					valid = append(valid, x)
+				}
+			}
+			if len(valid) > 0 {
+				DB.CreateInBatches(valid, 100)
+			}
+		}
+
+		var colors []Color
+		if fetchSheetDataToStruct("Colors", &colors) == nil {
+			var valid []Color
+			seen := make(map[string]bool)
+			for _, x := range colors {
+				if x.ColorName != "" && !seen[x.ColorName] {
+					seen[x.ColorName] = true
+					valid = append(valid, x)
+				}
+			}
+			if len(valid) > 0 {
+				DB.CreateInBatches(valid, 100)
+			}
+		}
+
+		var drivers []Driver
+		if fetchSheetDataToStruct("Drivers", &drivers) == nil {
+			var valid []Driver
+			seen := make(map[string]bool)
+			for _, x := range drivers {
+				if x.DriverName != "" && !seen[x.DriverName] {
+					seen[x.DriverName] = true
+					valid = append(valid, x)
+				}
+			}
+			if len(valid) > 0 {
+				DB.CreateInBatches(valid, 100)
+			}
+		}
+
+		var banks []BankAccount
+		if fetchSheetDataToStruct("BankAccounts", &banks) == nil {
+			var valid []BankAccount
+			seen := make(map[string]bool)
+			for _, x := range banks {
+				if x.BankName != "" && !seen[x.BankName] {
+					seen[x.BankName] = true
+					valid = append(valid, x)
+				}
+			}
+			if len(valid) > 0 {
+				DB.CreateInBatches(valid, 100)
+			}
+		}
+
+		var carriers []PhoneCarrier
+		if fetchSheetDataToStruct("PhoneCarriers", &carriers) == nil {
+			var valid []PhoneCarrier
+			seen := make(map[string]bool)
+			for _, x := range carriers {
+				if x.CarrierName != "" && !seen[x.CarrierName] {
+					seen[x.CarrierName] = true
+					valid = append(valid, x)
+				}
+			}
+			if len(valid) > 0 {
+				DB.CreateInBatches(valid, 100)
+			}
+		}
+
+		var templates []TelegramTemplate
+		if fetchSheetDataToStruct("TelegramTemplates", &templates) == nil && len(templates) > 0 {
+			DB.CreateInBatches(templates, 100)
+		}
+		var inventory []Inventory
+		if fetchSheetDataToStruct("Inventory", &inventory) == nil && len(inventory) > 0 {
+			DB.CreateInBatches(inventory, 100)
+		}
+		var transfers []StockTransfer
+		if fetchSheetDataToStruct("StockTransfers", &transfers) == nil {
+			var valid []StockTransfer
+			for _, x := range transfers {
+				if x.TransferID != "" {
+					valid = append(valid, x)
+				}
+			}
+			if len(valid) > 0 {
+				DB.CreateInBatches(valid, 100)
+			}
+		}
+		var returns []ReturnItem
+		if fetchSheetDataToStruct("Returns", &returns) == nil {
+			var valid []ReturnItem
+			for _, x := range returns {
+				if x.ReturnID != "" {
+					valid = append(valid, x)
+				}
+			}
+			if len(valid) > 0 {
+				DB.CreateInBatches(valid, 100)
+			}
+		}
+		var revs []RevenueEntry
+		if fetchSheetDataToStruct("RevenueDashboard", &revs) == nil && len(revs) > 0 {
+			DB.CreateInBatches(revs, 100)
+		}
+		var chats []ChatMessage
+		if fetchSheetDataToStruct("ChatMessages", &chats) == nil && len(chats) > 0 {
+			DB.CreateInBatches(chats, 100)
+		}
+		var editLogs []EditLog
+		if fetchSheetDataToStruct("EditLogs", &editLogs) == nil && len(editLogs) > 0 {
+			DB.CreateInBatches(editLogs, 100)
+		}
+		var actLogs []UserActivityLog
+		if fetchSheetDataToStruct("UserActivityLogs", &actLogs) == nil && len(actLogs) > 0 {
+			DB.CreateInBatches(actLogs, 100)
+		}
+		var recs []DriverRecommendation
+		if fetchSheetDataToStruct("DriverRecommendations", &recs) == nil && len(recs) > 0 {
+			DB.CreateInBatches(recs, 100)
+		}
+
+		var roles []Role
+		if fetchSheetDataToStruct("Roles", &roles) == nil && len(roles) > 0 {
+			DB.CreateInBatches(roles, 100)
+		}
+
+		var perms []RolePermission
+		if fetchSheetDataToStruct("RolePermissions", &perms) == nil && len(perms) > 0 {
+			DB.CreateInBatches(perms, 100)
+		}
+
+		var orders []Order
+		if fetchSheetDataToStruct("AllOrders", &orders) == nil {
+			var valid []Order
+			seen := make(map[string]bool)
+			for _, o := range orders {
+				if o.OrderID != "" && !seen[o.OrderID] {
+					seen[o.OrderID] = true
+					valid = append(valid, o)
+				}
+			}
+			if len(valid) > 0 {
+				DB.CreateInBatches(valid, 100)
+			}
+		}
+
 		log.Println("🎉 Migration ជោគជ័យ!")
 	}()
 	c.JSON(200, gin.H{"status": "success", "message": "Migration started."})
 }
 
 // =========================================================================
-// WEB SOCKET 
+// WEB SOCKET
 // =========================================================================
 var upgrader = websocket.Upgrader{CheckOrigin: func(r *http.Request) bool { return true }}
-type Client struct { hub *Hub; conn *websocket.Conn; send chan []byte }
-type Hub struct { clients map[*Client]bool; broadcast chan []byte; register chan *Client; unregister chan *Client }
-func NewHub() *Hub { return &Hub{broadcast: make(chan []byte), register: make(chan *Client), unregister: make(chan *Client), clients: make(map[*Client]bool)} }
-func (h *Hub) run() { for { select { case client := <-h.register: h.clients[client] = true; case client := <-h.unregister: if _, ok := h.clients[client]; ok { delete(h.clients, client); close(client.send) }; case message := <-h.broadcast: for client := range h.clients { select { case client.send <- message: default: close(client.send); delete(h.clients, client) } } } } }
 
-func (c *Client) writePump() { 
+type Client struct {
+	hub  *Hub
+	conn *websocket.Conn
+	send chan []byte
+}
+type Hub struct {
+	clients    map[*Client]bool
+	broadcast  chan []byte
+	register   chan *Client
+	unregister chan *Client
+}
+
+func NewHub() *Hub {
+	return &Hub{broadcast: make(chan []byte), register: make(chan *Client), unregister: make(chan *Client), clients: make(map[*Client]bool)}
+}
+func (h *Hub) run() {
+	for {
+		select {
+		case client := <-h.register:
+			h.clients[client] = true
+		case client := <-h.unregister:
+			if _, ok := h.clients[client]; ok {
+				delete(h.clients, client)
+				close(client.send)
+			}
+		case message := <-h.broadcast:
+			for client := range h.clients {
+				select {
+				case client.send <- message:
+				default:
+					close(client.send)
+					delete(h.clients, client)
+				}
+			}
+		}
+	}
+}
+
+func (c *Client) writePump() {
 	defer c.conn.Close()
-	for { 
+	for {
 		message, ok := <-c.send
-		if !ok { c.conn.WriteMessage(websocket.CloseMessage, []byte{}); return }
-		c.conn.WriteMessage(websocket.TextMessage, message) 
-	} 
+		if !ok {
+			c.conn.WriteMessage(websocket.CloseMessage, []byte{})
+			return
+		}
+		c.conn.WriteMessage(websocket.TextMessage, message)
+	}
 }
 
 func (c *Client) readPump() {
@@ -1263,33 +1671,42 @@ func (c *Client) readPump() {
 	}()
 	for {
 		_, message, err := c.conn.ReadMessage()
-		if err != nil { break }
-		
+		if err != nil {
+			break
+		}
+
 		var payload map[string]interface{}
 		if err := json.Unmarshal(message, &payload); err == nil {
 			if t, ok := payload["type"].(string); ok && t == "typing" {
-				c.hub.broadcast <- message 
+				c.hub.broadcast <- message
 			}
 		}
 	}
 }
 
-func serveWs(c *gin.Context) { 
+func serveWs(c *gin.Context) {
 	conn, err := upgrader.Upgrade(c.Writer, c.Request, nil)
-	if err != nil { c.Error(err); return }
+	if err != nil {
+		c.Error(err)
+		return
+	}
 	client := &Client{hub: hub, conn: conn, send: make(chan []byte, 256)}
 	client.hub.register <- client
 	go client.writePump()
-	go client.readPump() 
+	go client.readPump()
 }
 
 // =========================================================================
 // HANDLERS
 // =========================================================================
 
-func handleGetUsers(c *gin.Context) { var users []User; DB.Find(&users); c.JSON(200, gin.H{"status": "success", "data": users}) }
+func handleGetUsers(c *gin.Context) {
+	var users []User
+	DB.Find(&users)
+	c.JSON(200, gin.H{"status": "success", "data": users})
+}
 
-func handleGetAllOrders(c *gin.Context) { 
+func handleGetAllOrders(c *gin.Context) {
 	var orders []Order
 	query := DB.Order("timestamp desc")
 	countQuery := DB.Model(&Order{})
@@ -1318,76 +1735,126 @@ func handleGetAllOrders(c *gin.Context) {
 		}
 	}
 
-	if err := query.Find(&orders).Error; err != nil { c.Error(err); return }
+	if err := query.Find(&orders).Error; err != nil {
+		c.Error(err)
+		return
+	}
 	var total int64
 	countQuery.Count(&total)
-	c.JSON(200, gin.H{"status": "success", "data": orders, "total": total}) 
+	c.JSON(200, gin.H{"status": "success", "data": orders, "total": total})
 }
 
 func handleSubmitOrder(c *gin.Context) {
-	var orderRequest struct { CurrentUser User `json:"currentUser"`; SelectedTeam string `json:"selectedTeam"`; Page string `json:"page"`; Customer map[string]interface{} `json:"customer"`; Products []map[string]interface{} `json:"products"`; Payment map[string]interface{} `json:"payment"`; Shipping map[string]interface{} `json:"shipping"`; Subtotal float64 `json:"subtotal"`; GrandTotal float64 `json:"grandTotal"`; Note string `json:"note"`; FulfillmentStore string `json:"fulfillmentStore"`; ScheduledTime string `json:"scheduledTime"` }
-	if err := c.ShouldBindJSON(&orderRequest); err != nil { c.Error(err); return }
-	
+	var orderRequest struct {
+		CurrentUser      User                     `json:"currentUser"`
+		SelectedTeam     string                   `json:"selectedTeam"`
+		Page             string                   `json:"page"`
+		Customer         map[string]interface{}   `json:"customer"`
+		Products         []map[string]interface{} `json:"products"`
+		Payment          map[string]interface{}   `json:"payment"`
+		Shipping         map[string]interface{}   `json:"shipping"`
+		Subtotal         float64                  `json:"subtotal"`
+		GrandTotal       float64                  `json:"grandTotal"`
+		Note             string                   `json:"note"`
+		FulfillmentStore string                   `json:"fulfillmentStore"`
+		ScheduledTime    string                   `json:"scheduledTime"`
+	}
+	if err := c.ShouldBindJSON(&orderRequest); err != nil {
+		c.Error(err)
+		return
+	}
+
 	productsJSON, _ := json.Marshal(orderRequest.Products)
 	var locationParts []string
-	if p, ok := orderRequest.Customer["province"].(string); ok && p != "" { locationParts = append(locationParts, p) }
-	if d, ok := orderRequest.Customer["district"].(string); ok && d != "" { locationParts = append(locationParts, d) }
-	if s, ok := orderRequest.Customer["sangkat"].(string); ok && s != "" { locationParts = append(locationParts, s) }
-	
+	if p, ok := orderRequest.Customer["province"].(string); ok && p != "" {
+		locationParts = append(locationParts, p)
+	}
+	if d, ok := orderRequest.Customer["district"].(string); ok && d != "" {
+		locationParts = append(locationParts, d)
+	}
+	if s, ok := orderRequest.Customer["sangkat"].(string); ok && s != "" {
+		locationParts = append(locationParts, s)
+	}
+
 	var shippingCost float64 = 0
 	if costVal, ok := orderRequest.Shipping["cost"]; ok {
 		switch v := costVal.(type) {
-		case float64: shippingCost = v
-		case string: if parsed, err := strconv.ParseFloat(v, 64); err == nil { shippingCost = parsed }
+		case float64:
+			shippingCost = v
+		case string:
+			if parsed, err := strconv.ParseFloat(v, 64); err == nil {
+				shippingCost = parsed
+			}
 		}
 	}
 
-	var totalDiscount float64 = 0; var totalProductCost float64 = 0
+	var totalDiscount float64 = 0
+	var totalProductCost float64 = 0
 	for _, p := range orderRequest.Products {
-		op, _ := p["originalPrice"].(float64); fp, _ := p["finalPrice"].(float64); q, _ := p["quantity"].(float64); cost, _ := p["cost"].(float64)
-		if op > 0 && q > 0 { totalDiscount += (op - fp) * q }; totalProductCost += (cost * q)
+		op, _ := p["originalPrice"].(float64)
+		fp, _ := p["finalPrice"].(float64)
+		q, _ := p["quantity"].(float64)
+		cost, _ := p["cost"].(float64)
+		if op > 0 && q > 0 {
+			totalDiscount += (op - fp) * q
+		}
+		totalProductCost += (cost * q)
 	}
-	
+
 	orderID := generateShortID()
 	timestamp := time.Now().UTC().Format(time.RFC3339)
-	custName, _ := orderRequest.Customer["name"].(string); custPhone, _ := orderRequest.Customer["phone"].(string)
+	custName, _ := orderRequest.Customer["name"].(string)
+	custPhone, _ := orderRequest.Customer["phone"].(string)
 	paymentStatus, _ := orderRequest.Payment["status"].(string)
 	paymentInfo, _ := orderRequest.Payment["info"].(string)
 	addLocation, _ := orderRequest.Customer["additionalLocation"].(string)
-	
+
 	var shipFeeCustomer float64 = 0
 	if feeVal, ok := orderRequest.Customer["shippingFee"]; ok {
 		switch v := feeVal.(type) {
-		case float64: shipFeeCustomer = v
-		case string: if parsed, err := strconv.ParseFloat(v, 64); err == nil { shipFeeCustomer = parsed }
+		case float64:
+			shipFeeCustomer = v
+		case string:
+			if parsed, err := strconv.ParseFloat(v, 64); err == nil {
+				shipFeeCustomer = parsed
+			}
 		}
 	}
 
 	internalShipMethod, _ := orderRequest.Shipping["method"].(string)
 	internalShipDetails, _ := orderRequest.Shipping["details"].(string)
 
-	newOrder := Order{ 
-		OrderID: orderID, Timestamp: timestamp, User: orderRequest.CurrentUser.UserName, Team: orderRequest.SelectedTeam, 
-		Page: orderRequest.Page, CustomerName: custName, CustomerPhone: custPhone, Subtotal: orderRequest.Subtotal, 
-		GrandTotal: orderRequest.GrandTotal, ProductsJSON: string(productsJSON), Note: orderRequest.Note, 
+	newOrder := Order{
+		OrderID: orderID, Timestamp: timestamp, User: orderRequest.CurrentUser.UserName, Team: orderRequest.SelectedTeam,
+		Page: orderRequest.Page, CustomerName: custName, CustomerPhone: custPhone, Subtotal: orderRequest.Subtotal,
+		GrandTotal: orderRequest.GrandTotal, ProductsJSON: string(productsJSON), Note: orderRequest.Note,
 		FulfillmentStore: orderRequest.FulfillmentStore, ScheduledTime: orderRequest.ScheduledTime, FulfillmentStatus: "Pending",
 		PaymentStatus: paymentStatus, PaymentInfo: paymentInfo, InternalCost: shippingCost, DiscountUSD: totalDiscount,
 		TotalProductCost: totalProductCost, Location: strings.Join(locationParts, ", "), AddressDetails: addLocation,
 		ShippingFeeCustomer: shipFeeCustomer, InternalShippingMethod: internalShipMethod, InternalShippingDetails: internalShipDetails,
 	}
 
-	if err := DB.Create(&newOrder).Error; err != nil { c.Error(err); return }
+	if err := DB.Create(&newOrder).Error; err != nil {
+		c.Error(err)
+		return
+	}
 
-	eventBytes, _ := json.Marshal(map[string]interface{}{ "type": "new_order", "data": newOrder })
+	eventBytes, _ := json.Marshal(map[string]interface{}{"type": "new_order", "data": newOrder})
 	hub.broadcast <- eventBytes
 
-	orderChannel <- OrderJob{ JobID: fmt.Sprintf("job_%d", time.Now().UnixNano()), OrderID: orderID, UserName: orderRequest.CurrentUser.UserName, OrderData: map[string]interface{}{ "orderId": orderID, "timestamp": timestamp, "totalDiscount": totalDiscount, "totalProductCost": totalProductCost, "fullLocation": strings.Join(locationParts, ", "), "productsJSON": string(productsJSON), "shippingCost": shippingCost, "originalRequest": orderRequest, "scheduledTime": orderRequest.ScheduledTime } }
+	orderChannel <- OrderJob{JobID: fmt.Sprintf("job_%d", time.Now().UnixNano()), OrderID: orderID, UserName: orderRequest.CurrentUser.UserName, OrderData: map[string]interface{}{"orderId": orderID, "timestamp": timestamp, "totalDiscount": totalDiscount, "totalProductCost": totalProductCost, "fullLocation": strings.Join(locationParts, ", "), "productsJSON": string(productsJSON), "shippingCost": shippingCost, "originalRequest": orderRequest, "scheduledTime": orderRequest.ScheduledTime}}
 	c.JSON(200, gin.H{"status": "success", "orderId": orderID})
 }
 
 func handleAdminUpdateOrder(c *gin.Context) {
-	var r struct { OrderID string `json:"orderId"`; NewData map[string]interface{} `json:"newData"` }
-	if err := c.ShouldBindJSON(&r); err != nil { c.Error(err); return }
+	var r struct {
+		OrderID string                 `json:"orderId"`
+		NewData map[string]interface{} `json:"newData"`
+	}
+	if err := c.ShouldBindJSON(&r); err != nil {
+		c.Error(err)
+		return
+	}
 
 	var originalOrder Order
 	if err := DB.Where("order_id = ?", r.OrderID).First(&originalOrder).Error; err != nil {
@@ -1396,22 +1863,33 @@ func handleAdminUpdateOrder(c *gin.Context) {
 	}
 
 	mappedData := make(map[string]interface{})
-	for k, v := range r.NewData { 
+	for k, v := range r.NewData {
 		dbCol := mapToDBColumn(k)
 		if isValidOrderColumn(dbCol) && v != nil {
 			if dbCol == "discount_usd" || dbCol == "grand_total" || dbCol == "subtotal" || dbCol == "shipping_fee_customer" || dbCol == "internal_cost" || dbCol == "delivery_unpaid" || dbCol == "delivery_paid" || dbCol == "total_product_cost" {
-				if f, ok := v.(float64); ok { mappedData[dbCol] = f } else if s, ok := v.(string); ok { if fVal, err := strconv.ParseFloat(s, 64); err == nil { mappedData[dbCol] = fVal } }
-			} else { mappedData[dbCol] = fmt.Sprintf("%v", v) }
+				if f, ok := v.(float64); ok {
+					mappedData[dbCol] = f
+				} else if s, ok := v.(string); ok {
+					if fVal, err := strconv.ParseFloat(s, 64); err == nil {
+						mappedData[dbCol] = fVal
+					}
+				}
+			} else {
+				mappedData[dbCol] = fmt.Sprintf("%v", v)
+			}
 		}
 	}
-	
-	if err := DB.Model(&Order{}).Where("order_id = ?", r.OrderID).Updates(mappedData).Error; err != nil { c.Error(err); return }
 
-	eventBytes, _ := json.Marshal(map[string]interface{}{ "type": "update_order", "orderId": r.OrderID, "newData": r.NewData })
+	if err := DB.Model(&Order{}).Where("order_id = ?", r.OrderID).Updates(mappedData).Error; err != nil {
+		c.Error(err)
+		return
+	}
+
+	eventBytes, _ := json.Marshal(map[string]interface{}{"type": "update_order", "orderId": r.OrderID, "newData": r.NewData})
 	hub.broadcast <- eventBytes
 
 	go func() {
-		req := AppsScriptRequest{ Action: "updateOrderTelegram", Secret: appsScriptSecret, OrderData: map[string]interface{}{ "orderId": r.OrderID, "updatedFields": r.NewData, "team": originalOrder.Team } }
+		req := AppsScriptRequest{Action: "updateOrderTelegram", Secret: appsScriptSecret, OrderData: map[string]interface{}{"orderId": r.OrderID, "updatedFields": r.NewData, "team": originalOrder.Team}}
 		jsonData, _ := json.Marshal(req)
 		http.Post(appsScriptURL, "application/json", bytes.NewBuffer(jsonData))
 	}()
@@ -1421,48 +1899,67 @@ func handleAdminUpdateOrder(c *gin.Context) {
 
 func handleAdminDeleteOrder(c *gin.Context) {
 	var r DeleteOrderRequest
-	if err := c.ShouldBindJSON(&r); err != nil { c.Error(err); return }
-	
+	if err := c.ShouldBindJSON(&r); err != nil {
+		c.Error(err)
+		return
+	}
+
 	var order Order
 	if err := DB.Where("order_id = ?", r.OrderID).First(&order).Error; err == nil {
-		go func() { 
-			callAppsScriptPOST(AppsScriptRequest{ 
-				Action: "deleteOrderTelegram", 
-				OrderData: map[string]interface{}{ 
+		go func() {
+			callAppsScriptPOST(AppsScriptRequest{
+				Action: "deleteOrderTelegram",
+				OrderData: map[string]interface{}{
 					"orderId": r.OrderID, "team": order.Team, "messageId1": order.TelegramMessageID1, "messageId2": order.TelegramMessageID2, "fulfillmentStore": order.FulfillmentStore,
 				},
-			}) 
+			})
 		}()
 		DB.Delete(&order)
-		eventBytes, _ := json.Marshal(map[string]interface{}{ "type": "delete_order", "orderId": r.OrderID })
+		eventBytes, _ := json.Marshal(map[string]interface{}{"type": "delete_order", "orderId": r.OrderID})
 		hub.broadcast <- eventBytes
 	}
 	c.JSON(200, gin.H{"status": "success"})
 }
 
 func handleAdminUpdateSheet(c *gin.Context) {
-	var req struct { SheetName string `json:"sheetName"`; PrimaryKey map[string]interface{} `json:"primaryKey"`; NewData map[string]interface{} `json:"newData"` }
-	if err := c.ShouldBindJSON(&req); err != nil { c.Error(err); return }
+	var req struct {
+		SheetName  string                 `json:"sheetName"`
+		PrimaryKey map[string]interface{} `json:"primaryKey"`
+		NewData    map[string]interface{} `json:"newData"`
+	}
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.Error(err)
+		return
+	}
 	tableName := getTableName(req.SheetName)
-	if tableName == "" { c.Error(fmt.Errorf("unknown sheet")); return }
+	if tableName == "" {
+		c.Error(fmt.Errorf("unknown sheet"))
+		return
+	}
 
-	pkCol := ""; var pkVal interface{}
+	pkCol := ""
+	var pkVal interface{}
 	originalPKKey := ""
-	for k, v := range req.PrimaryKey { 
+	for k, v := range req.PrimaryKey {
 		pkCol = mapToDBColumn(k)
-		pkVal = v 
+		pkVal = v
 		originalPKKey = k
 	}
 	mappedData := make(map[string]interface{})
-	for k, v := range req.NewData { 
+	for k, v := range req.NewData {
 		dbCol := mapToDBColumn(k)
-		if v == nil { continue }
-		mappedData[dbCol] = v 
+		if v == nil {
+			continue
+		}
+		mappedData[dbCol] = v
 	}
-	
-	if err := DB.Table(tableName).Where(pkCol+" = ?", pkVal).Updates(mappedData).Error; err != nil { c.Error(err); return }
-	
-	eventBytes, _ := json.Marshal(map[string]interface{}{ "type": "update_sheet", "sheetName": req.SheetName, "primaryKey": req.PrimaryKey, "newData": req.NewData })
+
+	if err := DB.Table(tableName).Where(pkCol+" = ?", pkVal).Updates(mappedData).Error; err != nil {
+		c.Error(err)
+		return
+	}
+
+	eventBytes, _ := json.Marshal(map[string]interface{}{"type": "update_sheet", "sheetName": req.SheetName, "primaryKey": req.PrimaryKey, "newData": req.NewData})
 	hub.broadcast <- eventBytes
 
 	go func() {
@@ -1470,7 +1967,7 @@ func handleAdminUpdateSheet(c *gin.Context) {
 		if req.SheetName == "Roles" && strings.ToLower(originalPKKey) == "id" {
 			sheetPKKey = "ID"
 		}
-		appsReq := AppsScriptRequest{ Action: "updateSheet", Secret: appsScriptSecret, SheetName: req.SheetName, PrimaryKey: map[string]string{sheetPKKey: fmt.Sprintf("%v", pkVal)}, NewData: req.NewData }
+		appsReq := AppsScriptRequest{Action: "updateSheet", Secret: appsScriptSecret, SheetName: req.SheetName, PrimaryKey: map[string]string{sheetPKKey: fmt.Sprintf("%v", pkVal)}, NewData: req.NewData}
 		jb, _ := json.Marshal(appsReq)
 		http.Post(appsScriptURL, "application/json", bytes.NewBuffer(jb))
 	}()
@@ -1478,21 +1975,29 @@ func handleAdminUpdateSheet(c *gin.Context) {
 }
 
 func handleAdminAddRow(c *gin.Context) {
-	var req struct { SheetName string `json:"sheetName"`; NewData map[string]interface{} `json:"newData"` }
-	if err := c.ShouldBindJSON(&req); err != nil { c.Error(err); return }
-	
+	var req struct {
+		SheetName string                 `json:"sheetName"`
+		NewData   map[string]interface{} `json:"newData"`
+	}
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.Error(err)
+		return
+	}
+
 	tableName := getTableName(req.SheetName)
 	if tableName != "" {
 		mappedData := make(map[string]interface{})
-		for k, v := range req.NewData { mappedData[mapToDBColumn(k)] = v }
+		for k, v := range req.NewData {
+			mappedData[mapToDBColumn(k)] = v
+		}
 		DB.Table(tableName).Create(mappedData)
 	}
 
-	eventBytes, _ := json.Marshal(map[string]interface{}{ "type": "add_row", "sheetName": req.SheetName, "newData": req.NewData })
+	eventBytes, _ := json.Marshal(map[string]interface{}{"type": "add_row", "sheetName": req.SheetName, "newData": req.NewData})
 	hub.broadcast <- eventBytes
 
 	go func() {
-		appsReq := AppsScriptRequest{ Action: "addRow", Secret: appsScriptSecret, SheetName: req.SheetName, NewData: req.NewData }
+		appsReq := AppsScriptRequest{Action: "addRow", Secret: appsScriptSecret, SheetName: req.SheetName, NewData: req.NewData}
 		jb, _ := json.Marshal(appsReq)
 		http.Post(appsScriptURL, "application/json", bytes.NewBuffer(jb))
 	}()
@@ -1500,11 +2005,21 @@ func handleAdminAddRow(c *gin.Context) {
 }
 
 func handleAdminDeleteRow(c *gin.Context) {
-	var req struct { SheetName string `json:"sheetName"`; PrimaryKey map[string]interface{} `json:"primaryKey"` }
-	if err := c.ShouldBindJSON(&req); err != nil { c.Error(err); return }
+	var req struct {
+		SheetName  string                 `json:"sheetName"`
+		PrimaryKey map[string]interface{} `json:"primaryKey"`
+	}
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.Error(err)
+		return
+	}
 
-	pkCol := ""; var pkVal interface{}
-	for k, v := range req.PrimaryKey { pkCol = mapToDBColumn(k); pkVal = v }
+	pkCol := ""
+	var pkVal interface{}
+	for k, v := range req.PrimaryKey {
+		pkCol = mapToDBColumn(k)
+		pkVal = v
+	}
 
 	if req.SheetName == "Roles" && strings.EqualFold(fmt.Sprintf("%v", pkVal), "Admin") {
 		c.JSON(403, gin.H{"status": "error", "message": "មិនអាចលុបតួនាទី Admin បានទេ"})
@@ -1517,28 +2032,32 @@ func handleAdminDeleteRow(c *gin.Context) {
 	}
 
 	strPrimaryKey := make(map[string]string)
-	for k, v := range req.PrimaryKey { 
+	for k, v := range req.PrimaryKey {
 		sheetKey := k
 		if req.SheetName == "Roles" && strings.ToLower(k) == "id" {
 			sheetKey = "ID"
 		}
-		strPrimaryKey[sheetKey] = fmt.Sprintf("%v", v) 
+		strPrimaryKey[sheetKey] = fmt.Sprintf("%v", v)
 	}
 
-	eventBytes, _ := json.Marshal(map[string]interface{}{ "type": "delete_row", "sheetName": req.SheetName, "primaryKey": strPrimaryKey })
+	eventBytes, _ := json.Marshal(map[string]interface{}{"type": "delete_row", "sheetName": req.SheetName, "primaryKey": strPrimaryKey})
 	hub.broadcast <- eventBytes
 
 	go func() {
-		appsReq := AppsScriptRequest{ Action: "deleteRow", Secret: appsScriptSecret, SheetName: req.SheetName, PrimaryKey: strPrimaryKey }
+		appsReq := AppsScriptRequest{Action: "deleteRow", Secret: appsScriptSecret, SheetName: req.SheetName, PrimaryKey: strPrimaryKey}
 		jb, _ := json.Marshal(appsReq)
 		http.Post(appsScriptURL, "application/json", bytes.NewBuffer(jb))
 	}()
 	c.JSON(200, gin.H{"status": "success"})
 }
 
-func handleGetRevenueSummary(c *gin.Context) { var revs []RevenueEntry; DB.Find(&revs); c.JSON(200, gin.H{"status": "success", "data": revs}) }
-func handleUpdateFormulaReport(c *gin.Context) { c.JSON(200, gin.H{"status": "success"}) }
-func handleClearCache(c *gin.Context) { c.JSON(200, gin.H{"status": "success"}) }
+func handleGetRevenueSummary(c *gin.Context) {
+	var revs []RevenueEntry
+	DB.Find(&revs)
+	c.JSON(200, gin.H{"status": "success", "data": revs})
+}
+func handleUpdateFormulaReport(c *gin.Context)    { c.JSON(200, gin.H{"status": "success"}) }
+func handleClearCache(c *gin.Context)             { c.JSON(200, gin.H{"status": "success"}) }
 func handleAdminUpdateProductTags(c *gin.Context) { c.JSON(200, gin.H{"status": "success"}) }
 
 func handleGetTeamSalesRanking(c *gin.Context) {
@@ -1546,19 +2065,14 @@ func handleGetTeamSalesRanking(c *gin.Context) {
 		Team    string  `json:"Team"`
 		Revenue float64 `json:"Revenue"`
 	}
-	
-	// បង្កើនប្រសិទ្ធភាព Query ដោយប្រើ PostgreSQL Date Functions
-	// វាទាញយកតែ Orders ក្នុងខែបច្ចុប្បន្ន (ចាប់ពីថ្ងៃទី ១ ម៉ោង ០០:០០)
+
 	query := `
 		SELECT 
-			LOWER(TRIM(COALESCE(NULLIF(o.team, ''), u.team, 'Unassigned'))) as team_name, 
-			SUM(COALESCE(o.grand_total, 0))::FLOAT as total_revenue
-		FROM orders o
-		LEFT JOIN users u ON o."user" = u.user_name
-		WHERE (o."timestamp"::timestamp) >= date_trunc('month', now())
-		  AND o.order_id NOT LIKE '%Opening%' 
+			LOWER(TRIM(team)) as team_name, 
+			SUM(COALESCE(revenue, 0))::FLOAT as total_revenue
+		FROM revenue_entries
+		WHERE team IS NOT NULL AND team <> '' AND team <> 'Unassigned'
 		GROUP BY team_name
-		HAVING team_name <> 'unassigned' AND team_name <> ''
 		ORDER BY total_revenue DESC
 		LIMIT 10
 	`
@@ -1578,8 +2092,7 @@ func handleGetTeamSalesRanking(c *gin.Context) {
 			log.Printf("[ERROR] Team Ranking Scan Failed: %v", err)
 			continue
 		}
-		
-		// បំប្លែងអក្សរដើមឱ្យទៅជាអក្សរធំ (Capitalize) ដើម្បីឱ្យមើលទៅស្អាតក្នុង UI
+
 		displayName := teamName
 		if len(displayName) > 0 {
 			words := strings.Fields(displayName)
@@ -1614,14 +2127,13 @@ func handleGetTeamSalesRanking(c *gin.Context) {
 
 func handleGetGlobalShippingCosts(c *gin.Context) {
 	var results []struct {
-		OrderID      string  `json:"Order ID"`
-		Timestamp    string  `json:"Timestamp"`
-		Team         string  `json:"Team"`
-		InternalCost float64 `json:"Internal Cost"`
-		ShippingMethod string `json:"Internal Shipping Method"`
+		OrderID        string  `json:"Order ID"`
+		Timestamp      string  `json:"Timestamp"`
+		Team           string  `json:"Team"`
+		InternalCost   float64 `json:"Internal Cost"`
+		ShippingMethod string  `json:"Internal Shipping Method"`
 	}
-	
-	// Select only necessary fields for all orders
+
 	err := DB.Model(&Order{}).
 		Select("order_id, timestamp, team, internal_cost, internal_shipping_method").
 		Where("order_id NOT LIKE ? AND order_id NOT LIKE ?", "%Opening_Balance%", "%Opening Balance%").
@@ -1637,129 +2149,236 @@ func handleGetGlobalShippingCosts(c *gin.Context) {
 }
 
 func handleUpdateProfile(c *gin.Context) {
-	var req struct { UserName string `json:"userName"`; NewData map[string]interface{} `json:"newData"` }
-	if err := c.ShouldBindJSON(&req); err != nil { c.Error(err); return }
+	var req struct {
+		UserName string                 `json:"userName"`
+		NewData  map[string]interface{} `json:"newData"`
+	}
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.Error(err)
+		return
+	}
 	mappedData := make(map[string]interface{})
-	for k, v := range req.NewData { if k == "Password" { continue }; mappedData[mapToDBColumn(k)] = v }
-	if err := DB.Model(&User{}).Where("user_name = ?", req.UserName).Updates(mappedData).Error; err != nil { c.Error(err); return }
+	for k, v := range req.NewData {
+		if k == "Password" {
+			continue
+		}
+		mappedData[mapToDBColumn(k)] = v
+	}
+	if err := DB.Model(&User{}).Where("user_name = ?", req.UserName).Updates(mappedData).Error; err != nil {
+		c.Error(err)
+		return
+	}
+
+	go func() {
+		if appsScriptURL != "" {
+			appsReq := AppsScriptRequest{
+				Action:     "updateSheet",
+				Secret:     appsScriptSecret,
+				SheetName:  "Users",
+				PrimaryKey: map[string]string{"UserName": req.UserName},
+				NewData:    req.NewData,
+			}
+			jb, _ := json.Marshal(appsReq)
+			http.Post(appsScriptURL, "application/json", bytes.NewBuffer(jb))
+		}
+	}()
+
 	c.JSON(200, gin.H{"status": "success"})
 }
 
 func handleChangePassword(c *gin.Context) {
-	var req struct { UserName string `json:"userName"`; NewPassword string `json:"newPassword"` }
-	if err := c.ShouldBindJSON(&req); err != nil { c.Error(err); return }
-	if err := DB.Model(&User{}).Where("user_name = ?", req.UserName).Update("password", req.NewPassword).Error; err != nil { c.Error(err); return }
+	var req struct {
+		UserName    string `json:"userName"`
+		NewPassword string `json:"newPassword"`
+	}
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.Error(err)
+		return
+	}
+	if err := DB.Model(&User{}).Where("user_name = ?", req.UserName).Update("password", req.NewPassword).Error; err != nil {
+		c.Error(err)
+		return
+	}
+
+	go func() {
+		if appsScriptURL != "" {
+			appsReq := AppsScriptRequest{
+				Action:     "updateSheet",
+				Secret:     appsScriptSecret,
+				SheetName:  "Users",
+				PrimaryKey: map[string]string{"UserName": req.UserName},
+				NewData:    map[string]interface{}{"Password": req.NewPassword},
+			}
+			jb, _ := json.Marshal(appsReq)
+			http.Post(appsScriptURL, "application/json", bytes.NewBuffer(jb))
+		}
+	}()
+
 	c.JSON(200, gin.H{"status": "success"})
 }
 
 func uploadToGoogleDriveDirectly(base64Data string, fileName string, mimeType string) (string, string, error) {
 	if driveService == nil {
 		ctx := context.Background()
-		if err := createGoogleAPIClient(ctx); err != nil { return "", "", fmt.Errorf("failed to init drive client: %v", err) }
+		if err := createGoogleAPIClient(ctx); err != nil {
+			return "", "", fmt.Errorf("failed to init drive client: %v", err)
+		}
 	}
-	if strings.Contains(base64Data, "base64,") { base64Data = strings.Split(base64Data, "base64,")[1] }
+	if strings.Contains(base64Data, "base64,") {
+		base64Data = strings.Split(base64Data, "base64,")[1]
+	}
 	cleanMimeType := strings.Split(mimeType, ";")[0]
 	decodedBytes, err := parseBase64(base64Data)
-	if err != nil { return "", "", fmt.Errorf("failed to decode base64: %v", err) }
+	if err != nil {
+		return "", "", fmt.Errorf("failed to decode base64: %v", err)
+	}
 
-	f := &drive.File{ Name: fileName, MimeType: cleanMimeType }
-    if envFolderID := os.Getenv("UPLOAD_FOLDER_ID"); envFolderID != "" { f.Parents = []string{envFolderID} } else if uploadFolderID != "" { f.Parents = []string{uploadFolderID} }
+	f := &drive.File{Name: fileName, MimeType: cleanMimeType}
+	if envFolderID := os.Getenv("UPLOAD_FOLDER_ID"); envFolderID != "" {
+		f.Parents = []string{envFolderID}
+	} else if uploadFolderID != "" {
+		f.Parents = []string{uploadFolderID}
+	}
 
 	file, err := driveService.Files.Create(f).Media(bytes.NewReader(decodedBytes)).Do()
-	if err != nil { return "", "", fmt.Errorf("drive api error: %v", err) }
-	driveService.Permissions.Create(file.Id, &drive.Permission{ Type: "anyone", Role: "reader" }).Do()
+	if err != nil {
+		return "", "", fmt.Errorf("drive api error: %v", err)
+	}
+	driveService.Permissions.Create(file.Id, &drive.Permission{Type: "anyone", Role: "reader"}).Do()
 	return fmt.Sprintf("https://drive.google.com/uc?id=%s", file.Id), file.Id, nil
 }
 
 func handleServeTempImage(c *gin.Context) {
 	id := c.Param("id")
 	var temp TempImage
-	if err := DB.Where("id = ?", id).First(&temp).Error; err != nil { c.JSON(404, gin.H{"error": "រកមិនឃើញរូបភាព ឬផុតកំណត់"}); return }
+	if err := DB.Where("id = ?", id).First(&temp).Error; err != nil {
+		c.JSON(404, gin.H{"error": "រកមិនឃើញរូបភាព ឬផុតកំណត់"})
+		return
+	}
 	decodedBytes, _ := parseBase64(temp.ImageData)
 	c.Data(200, temp.MimeType, decodedBytes)
 }
 
 func handleImageUploadProxy(c *gin.Context) {
 	var req AppsScriptRequest
-	if err := c.ShouldBindJSON(&req); err != nil { c.Error(err); return }
-	if req.FileData == "" { c.Error(fmt.Errorf("មិនមានទិន្នន័យឯកសារ")); return }
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.Error(err)
+		return
+	}
+
+	data := req.FileData
+	if data == "" {
+		data = req.Image
+	}
+	if data == "" {
+		c.Error(fmt.Errorf("មិនមានទិន្នន័យឯកសារ"))
+		return
+	}
 
 	tempID := generateShortID() + generateShortID()
-	// Store in DB for 15 minutes to give UI instant feedback
-	DB.Create(&TempImage{ ID: tempID, MimeType: req.MimeType, ImageData: req.FileData, ExpiresAt: time.Now().Add(15 * time.Minute) })
+	DB.Create(&TempImage{ID: tempID, MimeType: req.MimeType, ImageData: data, ExpiresAt: time.Now().Add(15 * time.Minute)})
 
-	protocol := "http"; if c.Request.TLS != nil || c.Request.Header.Get("X-Forwarded-Proto") == "https" { protocol = "https" }
+	protocol := "http"
+	if c.Request.TLS != nil || c.Request.Header.Get("X-Forwarded-Proto") == "https" {
+		protocol = "https"
+	}
 	tempUrl := fmt.Sprintf("%s://%s/api/images/temp/%s", protocol, c.Request.Host, tempID)
 
-	c.JSON(200, gin.H{ 
-		"status": "success", 
-		"message": "Processing upload...", 
+	c.JSON(200, gin.H{
+		"status":  "success",
+		"message": "Processing upload...",
 		"tempUrl": tempUrl,
-		"url": tempUrl, // Fallback for components expecting 'url'
+		"url":     tempUrl,
 	})
 
-	// Perform actual upload to Google Drive in background
-	go func(r AppsScriptRequest, tid string) {
-		driveURL, _, err := uploadToGoogleDriveDirectly(r.FileData, r.FileName, r.MimeType)
+	go func(r AppsScriptRequest, rawData string, tid string) {
+		driveURL, _, err := uploadToGoogleDriveDirectly(rawData, r.FileName, r.MimeType)
 		if err != nil {
 			log.Printf("❌ Background upload error: %v", err)
 			return
 		}
 
-		// 1. If it's for an Order
 		if r.OrderID != "" && r.TargetColumn != "" {
 			dbCol := mapToDBColumn(r.TargetColumn)
 			if isValidOrderColumn(dbCol) {
 				DB.Model(&Order{}).Where("order_id = ?", r.OrderID).UpdateColumn(dbCol, driveURL)
 
-				// Broadcast update to all clients
-				event, _ := json.Marshal(map[string]interface{}{ 
-					"type": "update_order", 
-					"orderId": r.OrderID, 
-					"newData": map[string]interface{}{ r.TargetColumn: driveURL },
+				event, _ := json.Marshal(map[string]interface{}{
+					"type":    "update_order",
+					"orderId": r.OrderID,
+					"newData": map[string]interface{}{r.TargetColumn: driveURL},
 				})
 				hub.broadcast <- event
 
-				// Sync to Telegram/Sheets
-				syncReq := AppsScriptRequest{ 
-					Action: "updateOrderTelegram", 
-					Secret: appsScriptSecret, 
-					OrderData: map[string]interface{}{ 
-						"orderId": r.OrderID, 
-						"updatedFields": map[string]interface{}{ r.TargetColumn: driveURL },
+				syncReq := AppsScriptRequest{
+					Action: "updateOrderTelegram",
+					Secret: appsScriptSecret,
+					OrderData: map[string]interface{}{
+						"orderId":       r.OrderID,
+						"updatedFields": map[string]interface{}{r.TargetColumn: driveURL},
 					},
 				}
-				jb, _ := json.Marshal(syncReq); http.Post(appsScriptURL, "application/json", bytes.NewBuffer(jb))
+				jb, _ := json.Marshal(syncReq)
+				http.Post(appsScriptURL, "application/json", bytes.NewBuffer(jb))
 			}
 		}
 
-		// 2. If it's for a Profile (linked by userName)
 		if r.UserName != "" {
 			DB.Model(&User{}).Where("user_name = ?", r.UserName).Update("profile_picture_url", driveURL)
 
-			// Notify this specific user via WS that their profile pic is permanent now
 			notify, _ := json.Marshal(map[string]interface{}{
-				"type": "profile_image_ready",
+				"type":     "profile_image_ready",
 				"userName": r.UserName,
-				"url": driveURL,
+				"url":      driveURL,
 			})
 			hub.broadcast <- notify
 		}
 
-		// Cleanup temp image from DB after successful permanent storage
+		if r.SheetName != "" && r.PrimaryKey != nil && r.TargetColumn != "" {
+			syncReq := AppsScriptRequest{
+				Action:     "updateSheet",
+				Secret:     appsScriptSecret,
+				SheetName:  r.SheetName,
+				PrimaryKey: r.PrimaryKey,
+				NewData:    map[string]interface{}{r.TargetColumn: driveURL},
+			}
+			jb, _ := json.Marshal(syncReq)
+			http.Post(appsScriptURL, "application/json", bytes.NewBuffer(jb))
+
+			tableName := getTableName(r.SheetName)
+			if tableName != "" {
+				dbCol := mapToDBColumn(r.TargetColumn)
+				query := DB.Table(tableName)
+				for k, v := range r.PrimaryKey {
+					query = query.Where(mapToDBColumn(k)+" = ?", v)
+				}
+				query.UpdateColumn(dbCol, driveURL)
+			}
+		}
+
 		DB.Where("id = ?", tid).Delete(&TempImage{})
 		log.Printf("✅ Background upload complete: %s", driveURL)
-	}(req, tempID)
+	}(req, data, tempID)
 }
 func handleGetChatMessages(c *gin.Context) {
 	limitParam := c.Query("limit")
-	receiverParam := c.Query("receiver") 
-	currentUser, _ := c.Get("userName")  
+	receiverParam := c.Query("receiver")
+	currentUser, _ := c.Get("userName")
 	var messages []ChatMessage
 	query := DB.Order("timestamp desc")
-	if receiverParam != "" { query = query.Where("(user_name = ? AND receiver = ?) OR (user_name = ? AND receiver = ?)", currentUser, receiverParam, receiverParam, currentUser) } else { query = query.Where("receiver = ?", "") }
-	limit, _ := strconv.Atoi(limitParam); if limit <= 0 { limit = 100 }; query.Limit(limit).Find(&messages)
-	for i, j := 0, len(messages)-1; i < j; i, j = i+1, j-1 { messages[i], messages[j] = messages[j], messages[i] }
+	if receiverParam != "" {
+		query = query.Where("(user_name = ? AND receiver = ?) OR (user_name = ? AND receiver = ?)", currentUser, receiverParam, receiverParam, currentUser)
+	} else {
+		query = query.Where("receiver = ?", "")
+	}
+	limit, _ := strconv.Atoi(limitParam)
+	if limit <= 0 {
+		limit = 100
+	}
+	query.Limit(limit).Find(&messages)
+	for i, j := 0, len(messages)-1; i < j; i, j = i+1, j-1 {
+		messages[i], messages[j] = messages[j], messages[i]
+	}
 	c.JSON(200, gin.H{"status": "success", "data": messages})
 }
 
@@ -1775,8 +2394,7 @@ func handleSendChatMessage(c *gin.Context) {
 	msg.Timestamp = time.Now().Format(time.RFC3339)
 
 	msgType := strings.ToLower(msg.MessageType)
-	
-	// Data to be uploaded (Base64)
+
 	var base64Data string
 	if msgType == "audio" && msg.AudioData != "" {
 		base64Data = msg.AudioData
@@ -1784,9 +2402,7 @@ func handleSendChatMessage(c *gin.Context) {
 		base64Data = msg.Content
 	}
 
-	// Optimistic handling for Media (Audio/Image)
 	if (msgType == "audio" || msgType == "image") && msg.FileID == "" && len(base64Data) > 100 {
-		// 1. Extract Base64 and MimeType
 		mimeType := "application/octet-stream"
 		if strings.Contains(base64Data, "data:") && strings.Contains(base64Data, ";base64,") {
 			parts := strings.Split(base64Data, ";base64,")
@@ -1794,7 +2410,6 @@ func handleSendChatMessage(c *gin.Context) {
 			base64Data = parts[1]
 		}
 
-		// 2. Create Temp Record for instant playback/viewing
 		tempID := "chat_temp_" + generateShortID() + generateShortID()
 		DB.Create(&TempImage{
 			ID:        tempID,
@@ -1803,41 +2418,34 @@ func handleSendChatMessage(c *gin.Context) {
 			ExpiresAt: time.Now().Add(30 * time.Minute),
 		})
 
-		// 3. Generate instant proxy URL
 		protocol := "http"
 		if c.Request.TLS != nil || c.Request.Header.Get("X-Forwarded-Proto") == "https" {
 			protocol = "https"
 		}
 		tempUrl := fmt.Sprintf("%s://%s/api/images/temp/%s", protocol, c.Request.Host, tempID)
-		
-		// Preserve original content (duration for audio) but use tempUrl for broadcast
+
 		originalContent := msg.Content
 		msg.Content = tempUrl
-		
-		// 4. Save to DB and broadcast immediately
+
 		DB.Create(&msg)
 		msgBytes, _ := json.Marshal(map[string]interface{}{"type": "new_message", "data": msg})
 		hub.broadcast <- msgBytes
-		
+
 		c.JSON(200, gin.H{"status": "success", "data": msg})
 
-		// 5. Upload to Google Drive in background
 		go func(m ChatMessage, b64 string, mt string, tid string, oldContent string) {
 			driveURL, fileId, err := uploadToGoogleDriveDirectly(b64, "chat_file", mt)
 			if err == nil {
-				// Final content logic
 				finalContent := oldContent
 				if strings.ToLower(m.MessageType) == "image" {
-					finalContent = driveURL // Images use Drive URL as content
+					finalContent = driveURL
 				}
 
-				// Update to permanent storage
 				DB.Model(&ChatMessage{}).Where("id = ?", m.ID).Updates(map[string]interface{}{
 					"file_id": fileId,
 					"content": finalContent,
 				})
-				
-				// Notify all clients that upload is complete
+
 				updateMsg, _ := json.Marshal(map[string]interface{}{
 					"type":       "upload_complete",
 					"message_id": m.ID,
@@ -1847,18 +2455,16 @@ func handleSendChatMessage(c *gin.Context) {
 				})
 				hub.broadcast <- updateMsg
 				log.Printf("📢 Broadcasted upload_complete for Message ID: %d", m.ID)
-				
-				// Cleanup temp local record
+
 				DB.Where("id = ?", tid).Delete(&TempImage{})
 			} else {
 				log.Printf("❌ Chat media upload failed: %v", err)
 			}
 		}(msg, base64Data, mimeType, tempID, originalContent)
-		
+
 		return
 	}
 
-	// Standard text message
 	DB.Create(&msg)
 	msgBytes, _ := json.Marshal(map[string]interface{}{"type": "new_message", "data": msg})
 	hub.broadcast <- msgBytes
@@ -1881,7 +2487,6 @@ func handleDeleteChatMessage(c *gin.Context) {
 		return
 	}
 
-	// Only allow the sender or a system admin to delete
 	currentUser, _ := c.Get("userName")
 	isSystemAdmin, _ := c.Get("isSystemAdmin")
 	if msg.UserName != currentUser.(string) && (isSystemAdmin == nil || !isSystemAdmin.(bool)) {
@@ -1894,7 +2499,6 @@ func handleDeleteChatMessage(c *gin.Context) {
 		return
 	}
 
-	// Broadcast deletion to all clients
 	eventBytes, _ := json.Marshal(map[string]interface{}{
 		"type": "delete_message",
 		"id":   req.ID,
@@ -1904,34 +2508,51 @@ func handleDeleteChatMessage(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{"status": "success"})
 }
 func handleGetAudioProxy(c *gin.Context) {
-	fileID := c.Param("fileID"); resp, err := http.Get(fmt.Sprintf("https://drive.google.com/uc?id=%s&export=download", fileID))
-	if err != nil || resp.StatusCode != 200 { c.Error(fmt.Errorf("failed to fetch audio")); return }; defer resp.Body.Close()
-	c.Writer.Header().Set("Content-Type", resp.Header.Get("Content-Type")); io.Copy(c.Writer, resp.Body)
+	fileID := c.Param("fileID")
+	resp, err := http.Get(fmt.Sprintf("https://drive.google.com/uc?id=%s&export=download", fileID))
+	if err != nil || resp.StatusCode != 200 {
+		c.Error(fmt.Errorf("failed to fetch audio"))
+		return
+	}
+	defer resp.Body.Close()
+	c.Writer.Header().Set("Content-Type", resp.Header.Get("Content-Type"))
+	io.Copy(c.Writer, resp.Body)
 }
 
 func main() {
-	port := os.Getenv("PORT"); if port == "" { port = "8080" }
+	port := os.Getenv("PORT")
+	if port == "" {
+		port = "8080"
+	}
 	spreadsheetID = os.Getenv("GOOGLE_SHEET_ID")
 	appsScriptURL = os.Getenv("APPS_SCRIPT_URL")
 	appsScriptSecret = os.Getenv("APPS_SCRIPT_SECRET")
-	jwtSecretEnv := os.Getenv("JWT_SECRET"); if jwtSecretEnv == "" { jwtSecretEnv = "change-me-in-production" }; jwtSecret = []byte(jwtSecretEnv)
+	jwtSecretEnv := os.Getenv("JWT_SECRET")
+	if jwtSecretEnv == "" {
+		jwtSecretEnv = "change-me-in-production"
+	}
+	jwtSecret = []byte(jwtSecretEnv)
 
-	initDB(); hub = NewHub(); go hub.run(); go startOrderWorker(); startScheduler()
-	
+	initDB()
+	hub = NewHub()
+	go hub.run()
+	go startOrderWorker()
+	startScheduler()
+
 	r := gin.Default()
 	r.Use(ErrorHandlingMiddleware())
-	r.Use(cors.New(cors.Config{ AllowOrigins: []string{"*"}, AllowMethods: []string{"GET", "POST", "OPTIONS"}, AllowHeaders: []string{"Origin", "Content-Type", "Authorization"}, MaxAge: 12 * time.Hour }))
+	r.Use(cors.New(cors.Config{AllowOrigins: []string{"*"}, AllowMethods: []string{"GET", "POST", "OPTIONS"}, AllowHeaders: []string{"Origin", "Content-Type", "Authorization"}, MaxAge: 12 * time.Hour}))
 
 	r.GET("/", func(c *gin.Context) { c.JSON(200, gin.H{"status": "ok"}) })
 	r.GET("/healthz", func(c *gin.Context) { c.String(200, "OK") })
-	
+
 	api := r.Group("/api")
 	api.POST("/login", handleLogin)
-    api.GET("/images/temp/:id", handleServeTempImage)
+	api.GET("/images/temp/:id", handleServeTempImage)
 	api.GET("/teams/ranking", handleGetTeamSalesRanking)
 
 	protected := api.Group("/")
-	protected.Use(AuthMiddleware()) 
+	protected.Use(AuthMiddleware())
 	{
 		protected.GET("/users", handleGetUsers)
 		protected.GET("/static-data", handleGetStaticData)
@@ -1940,12 +2561,13 @@ func main() {
 		protected.GET("/permissions", handleGetUserPermissions)
 		protected.GET("/roles", handleGetRoles)
 		protected.GET("/orders", RequirePermission("view_order_list"), handleGetAllOrders)
-		// protected.GET("/teams/ranking", RequirePermission("view_revenue"), handleGetTeamSalesRanking) // Moved up
 		protected.GET("/teams/shipping-costs", RequirePermission("view_revenue"), handleGetGlobalShippingCosts)
-		
+
 		chat := protected.Group("/chat")
-		chat.GET("/messages", handleGetChatMessages); chat.POST("/send", handleSendChatMessage); chat.POST("/delete", handleDeleteChatMessage)
-		
+		chat.GET("/messages", handleGetChatMessages)
+		chat.POST("/send", handleSendChatMessage)
+		chat.POST("/delete", handleDeleteChatMessage)
+
 		admin := protected.Group("/admin")
 		admin.Use(AdminOnlyMiddleware())
 		{
@@ -1967,9 +2589,12 @@ func main() {
 			admin.GET("/incentive/results", handleGetIncentiveResults)
 			admin.POST("/incentive/calculate", handleCalculateIncentive)
 		}
-		profile := protected.Group("/profile"); profile.POST("/update", handleUpdateProfile); profile.POST("/change-password", handleChangePassword)
+		profile := protected.Group("/profile")
+		profile.POST("/update", handleUpdateProfile)
+		profile.POST("/change-password", handleChangePassword)
 	}
-	api.GET("/chat/ws", serveWs); api.GET("/chat/audio/:fileID", handleGetAudioProxy)
+	api.GET("/chat/ws", serveWs)
+	api.GET("/chat/audio/:fileID", handleGetAudioProxy)
 	go func() { createGoogleAPIClient(context.Background()) }()
 	r.Run("0.0.0.0:" + port)
 }

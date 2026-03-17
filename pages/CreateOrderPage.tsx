@@ -326,16 +326,34 @@ const CreateOrderPage: React.FC<CreateOrderPageProps> = ({ team, onSaveSuccess, 
     const handleShippingMethodSelect = (method: ShippingMethod) => {
         setSelectedShippingMethod(method);
         setShippingLogo(convertGoogleDriveUrl(method.LogosURL));
-        setOrder((prev: any) => ({ 
-            ...prev, 
-            shipping: { 
-                ...prev.shipping, 
-                method: method.MethodName, 
-                details: method.RequireDriverSelection ? '' : method.MethodName 
-            } 
+
+        let recommendedDriver = '';
+        if (method.EnableDriverRecommendation) {
+            const days = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
+            const today = days[new Date().getDay()];
+
+            const recommendation = appData.driverRecommendations?.find(r => 
+                r.DayOfWeek === today && 
+                r.StoreName === order.fulfillmentStore && 
+                r.Province === order.customer.province &&
+                r.ShippingMethod === method.MethodName
+            );
+
+            if (recommendation) {
+                recommendedDriver = recommendation.DriverName;
+            }
+        }
+
+        setOrder((prev: any) => ({
+            ...prev,
+            shipping: {
+                ...prev.shipping,
+                method: method.MethodName,
+                details: recommendedDriver || (method.RequireDriverSelection ? '' : method.MethodName),
+                cost: method.InternalCost ? String(method.InternalCost) : prev.shipping.cost
+            }
         }));
     };
-    
     const handleShippingChange = (e: React.ChangeEvent<HTMLInputElement>) => {
         const { name, value } = e.target;
         let sv = value;
@@ -833,15 +851,15 @@ const CreateOrderPage: React.FC<CreateOrderPageProps> = ({ team, onSaveSuccess, 
                                         <input type="number" min="0" step="0.01" name="cost" placeholder="0.00" value={order.shipping.cost} className="form-input !py-3 rounded-xl bg-gray-900 border-gray-700 text-blue-400 font-black pr-12" onChange={handleShippingChange} required />
                                         <span className="absolute right-4 top-1/2 -translate-y-1/2 text-gray-500 font-bold">$</span>
                                     </div>
-                                    <div className="flex gap-2">
-                                        {[1.25, 1.5, 2].map(cost => {
+                                    <div className="flex flex-wrap gap-2">
+                                        {(selectedShippingMethod?.CostShortcuts ? selectedShippingMethod.CostShortcuts.split(',').map((s: string) => parseFloat(s.trim())) : [1.25, 1.5, 2]).map((cost: number) => {
                                             const isActive = parseFloat(order.shipping.cost) === cost;
                                             return (
                                                 <button 
                                                     key={cost} 
                                                     type="button" 
                                                     onClick={() => handleShippingChange({ target: { name: 'cost', value: String(cost) } } as any)}
-                                                    className={`flex-1 py-2 border font-black rounded-xl text-xs transition-all active:scale-95 ${isActive ? 'bg-blue-600 border-blue-500 text-white shadow-lg shadow-blue-600/20' : 'bg-gray-800 border-gray-700 text-gray-400 hover:text-gray-200'}`}
+                                                    className={`flex-1 min-w-[60px] py-2 border font-black rounded-xl text-xs transition-all active:scale-95 ${isActive ? 'bg-blue-600 border-blue-500 text-white shadow-lg shadow-blue-600/20' : 'bg-gray-800 border-gray-700 text-gray-400 hover:text-gray-200'}`}
                                                 >
                                                     ${cost}
                                                 </button>

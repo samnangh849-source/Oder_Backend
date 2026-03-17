@@ -111,10 +111,21 @@ const ProductSelectionConfirm: React.FC<ProductSelectionConfirmProps> = ({
         try {
             const compressedBlob = await compressImage(file, 'balanced');
             const base64Data = await fileToBase64(compressedBlob);
+            const token = localStorage.getItem('token');
             const uploadRes = await fetch(`${WEB_APP_URL}/api/upload-image`, {
                 method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ fileData: base64Data, fileName: file.name, mimeType: compressedBlob.type, orderId: '', targetColumn: '' })
+                headers: { 
+                    'Content-Type': 'application/json',
+                    ...(token ? { 'Authorization': `Bearer ${token}` } : {})
+                },
+                body: JSON.stringify({ 
+                    fileData: base64Data, 
+                    fileName: file.name, 
+                    mimeType: compressedBlob.type, 
+                    sheetName: 'Products',
+                    primaryKey: { 'ProductName': product.ProductName },
+                    targetColumn: 'Image URL'
+                })
             });
             const result = await uploadRes.json();
             if (result.status === 'success') {

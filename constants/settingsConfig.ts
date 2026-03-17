@@ -1,5 +1,5 @@
 
-export type FieldType = 'text' | 'number' | 'password' | 'checkbox' | 'image_url';
+export type FieldType = 'text' | 'number' | 'password' | 'checkbox' | 'image_url' | 'select';
 
 export interface ConfigField {
     name: string;
@@ -7,6 +7,8 @@ export interface ConfigField {
     type: FieldType;
     placeholder?: string;
     readOnly?: boolean;
+    options?: { label: string; value: string }[];
+    dataRef?: string; // Reference to appData key for dynamic options
 }
 
 export interface ConfigSection {
@@ -49,8 +51,8 @@ export const configSections: ConfigSection[] = [
             { name: 'FullName', label: 'ឈ្មោះពេញ', type: 'text' }, 
             { name: 'UserName', label: 'ឈ្មោះគណនី (Login)', type: 'text' }, 
             { name: 'Password', label: 'ពាក្យសម្ងាត់', type: 'password' }, 
-            { name: 'Role', label: 'តួនាទី (Role)', type: 'text' }, 
-            { name: 'Team', label: 'ក្រុម (Team)', type: 'text' }, 
+            { name: 'Role', label: 'តួនាទី (Role)', type: 'select', dataRef: 'roles' }, 
+            { name: 'Team', label: 'ក្រុម (Team)', type: 'select', dataRef: 'pages' }, 
             { name: 'ProfilePictureURL', label: 'URL រូបភាព', type: 'image_url' }, 
             { name: 'IsSystemAdmin', label: 'System Admin?', type: 'checkbox' } 
         ], 
@@ -77,7 +79,7 @@ export const configSections: ConfigSection[] = [
     { 
         id: 'pages', 
         title: 'ក្រុម & Page', 
-        description: 'កំណត់ឈ្មោះក្រុម និងទិន្នន័យ Facebook Page',
+        description: 'គ្រប់គ្រងក្រុម និងទិន្នន័យ Facebook Page',
         icon: '👥', 
         dataKey: 'pages',
         sheetName: 'TeamsPages', 
@@ -100,10 +102,47 @@ export const configSections: ConfigSection[] = [
         primaryKeyField: 'MethodName', 
         fields: [ 
             { name: 'MethodName', label: 'ឈ្មោះសេវា', type: 'text' }, 
-            { name: 'RequireDriverSelection', label: 'ត្រូវការអ្នកដឹក?', type: 'checkbox' }, 
-            { name: 'LogosURL', label: 'URL ឡូហ្គោ', type: 'image_url' } 
+            { name: 'AllowManualDriver', label: 'អនុញ្ញាតជ្រើសរើសអ្នកដឹកដោយផ្ទាល់?', type: 'checkbox' },
+            { name: 'RequireDriverSelection', label: 'តម្រូវឱ្យជ្រើសរើសអ្នកដឹក?', type: 'checkbox' }, 
+            { name: 'EnableDriverRecommendation', label: 'បើកមុខងារ Recommend Driver?', type: 'checkbox' },
+            { name: 'LogosURL', label: 'URL ឡូហ្គោ', type: 'image_url' },
+            { name: 'EnableCODAlert', label: 'ផ្ញើសារ COD Alert?', type: 'checkbox' },
+            { name: 'AlertTopicID', label: 'Topic ID សម្រាប់ Alert', type: 'text' },
+            { name: 'InternalCost', label: 'តម្លៃដើមសេវា ($)', type: 'number' },
+            { name: 'CostShortcuts', label: 'Shortcut តម្លៃ (បំបែកដោយក្បៀស ឧ. 1,1.5,2)', type: 'text' }
         ], 
         displayField: 'MethodName' 
+    },
+    {
+        id: 'driverRecommendations',
+        title: 'កំណត់ Recommended Driver',
+        description: 'កំណត់អ្នកដឹកនាំសម្រាប់ឃ្លាំង និងខេត្តតាមថ្ងៃនីមួយៗ',
+        icon: '💡',
+        dataKey: 'driverRecommendations',
+        sheetName: 'DriverRecommendations',
+        primaryKeyField: 'ID',
+        fields: [
+            { name: 'ID', label: 'ID', type: 'text', readOnly: true, placeholder: 'ស្វ័យប្រវត្តិ (Auto)' },
+            { 
+                name: 'DayOfWeek', 
+                label: 'ថ្ងៃក្នុងសប្តាហ៍', 
+                type: 'select', 
+                options: [
+                    { label: 'Monday', value: 'Monday' },
+                    { label: 'Tuesday', value: 'Tuesday' },
+                    { label: 'Wednesday', value: 'Wednesday' },
+                    { label: 'Thursday', value: 'Thursday' },
+                    { label: 'Friday', value: 'Friday' },
+                    { label: 'Saturday', value: 'Saturday' },
+                    { label: 'Sunday', value: 'Sunday' }
+                ]
+            },
+            { name: 'StoreName', label: 'ឈ្មោះឃ្លាំង', type: 'select', dataRef: 'stores' },
+            { name: 'Province', label: 'ខេត្ត', type: 'select', dataRef: 'locations' },
+            { name: 'DriverName', label: 'ឈ្មោះអ្នកដឹក', type: 'select', dataRef: 'drivers' },
+            { name: 'ShippingMethod', label: 'សេវាដឹកជញ្ជូន', type: 'select', dataRef: 'shippingMethods' }
+        ],
+        displayField: 'DriverName'
     },
     { 
         id: 'drivers', 

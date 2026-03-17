@@ -130,7 +130,7 @@ const DesktopUserJourney: React.FC<DesktopUserJourneyProps> = ({ onBackToRoleSel
                         <div className="space-y-4">
                             {isRankingLoading ? (
                                 <div className="py-12 flex justify-center"><Spinner size="md" /></div>
-                            ) : globalRanking.length > 0 ? globalRanking.slice(0, 3).map((t, i) => (
+                            ) : (globalRanking && globalRanking.length > 0) ? globalRanking.slice(0, 3).map((t, i) => (
                                 <div key={t.name} className="rank-card group p-5 rounded-[2rem] flex items-center justify-between transition-all hover:scale-[1.02] active:scale-95 cursor-default relative overflow-hidden">
                                     <div className="flex items-center gap-4 relative z-10">
                                         <div className={`w-10 h-10 rounded-2xl flex items-center justify-center font-black italic text-sm ${
@@ -193,7 +193,7 @@ const DesktopUserJourney: React.FC<DesktopUserJourneyProps> = ({ onBackToRoleSel
                     <button onClick={onBackToRoleSelect} className="px-4 py-2 text-[9px] font-black uppercase tracking-widest text-blue-400 bg-blue-500/5 hover:bg-blue-500/10 rounded-xl border border-blue-500/10 active:scale-95 transition-all">
                         {language === 'km' ? 'ប្ដូរ Role' : 'Switch Role'}
                     </button>
-                    {userTeams.length > 1 && (
+                    {userTeams && userTeams.length > 1 && (
                         <button onClick={handleSwitchTeam} className="px-4 py-2 text-[9px] font-black uppercase tracking-widest text-gray-500 bg-white/5 hover:bg-white/10 rounded-xl border border-white/5 active:scale-95 transition-all">
                             {language === 'km' ? 'ប្ដូរក្រុម' : 'Switch Team'}
                         </button>

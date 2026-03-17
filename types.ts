@@ -142,6 +142,18 @@ export interface ShippingMethod {
   RequireDriverSelection: boolean;
   EnableCODAlert: boolean;
   AlertTopicID: string;
+  InternalCost?: number;
+  CostShortcuts?: string;
+  EnableDriverRecommendation?: boolean;
+}
+
+export interface DriverRecommendation {
+  ID: number;
+  DayOfWeek: string;
+  StoreName: string;
+  Province: string;
+  DriverName: string;
+  ShippingMethod: string;
 }
 
 export interface Driver {
@@ -259,6 +271,7 @@ export interface AppData {
     permissions?: RolePermission[];
     roles?: Role[];
     orders?: ParsedOrder[];
+    driverRecommendations?: DriverRecommendation[];
 }
 
 export interface LocationInfo {

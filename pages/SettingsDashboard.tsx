@@ -17,6 +17,7 @@ import SystemUpdateModal from '../components/admin/settings/SystemUpdateModal';
 import TelegramTemplateManager from '../components/admin/settings/TelegramTemplateManager';
 import DatabaseManagement from '../components/admin/settings/DatabaseManagement';
 import PermissionManagement from '../components/admin/settings/PermissionManagement';
+import DriverRecommendationExcel from '../components/admin/settings/DriverRecommendationExcel';
 
 import { translations } from '../translations';
 
@@ -35,6 +36,7 @@ const SettingsDashboard: React.FC<SettingsDashboardProps> = ({ onBack, initialSe
     const [localData, setLocalData] = useState<any[]>([]);
     const [isLoading, setIsLoading] = useState(false);
     const [isPdfOpen, setIsPdfOpen] = useState(false);
+    const [isExcelView, setIsExcelView] = useState(true);
     
     // System Update State
     const [isUpdateModalOpen, setIsUpdateModalOpen] = useState(false);
@@ -50,10 +52,10 @@ const SettingsDashboard: React.FC<SettingsDashboardProps> = ({ onBack, initialSe
 
     // Update Mobile Header Title
     useEffect(() => {
-        const title = activeSection ? activeSection.title : 'ការកំណត់';
+        const title = activeSection ? (t[`section_${activeSection.id}`] || activeSection.title) : (t.settings || 'ការកំណត់');
         setMobilePageTitle(title);
         return () => setMobilePageTitle(null);
-    }, [activeSection, setMobilePageTitle]);
+    }, [activeSection, setMobilePageTitle, t]);
 
     const fetchSectionData = useCallback(async (sectionId: string) => {
         const section = configSections.find(s => s.id === sectionId);
@@ -224,8 +226,8 @@ const SettingsDashboard: React.FC<SettingsDashboardProps> = ({ onBack, initialSe
                         <button key={s.id} onClick={() => setMobileSection(s.id)} className="flex items-center gap-4 bg-gray-800/40 border border-gray-700/50 p-4 rounded-2xl hover:bg-gray-700/40 active:scale-[0.98] transition-all text-left">
                             <span className="text-3xl bg-gray-800 p-3 rounded-xl shadow-inner border border-gray-700">{s.icon}</span>
                             <div className="flex-grow">
-                                <h3 className="text-base font-black text-white leading-tight">{s.title}</h3>
-                                <p className="text-xs text-gray-500 mt-0.5 line-clamp-1">{s.description}</p>
+                                <h3 className="text-base font-black text-white leading-tight">{t[`section_${s.id}`] || s.title}</h3>
+                                <p className="text-xs text-gray-500 mt-0.5 line-clamp-1">{t[`desc_${s.id}`] || s.description}</p>
                             </div>
                             <svg className="w-5 h-5 text-gray-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M9 5l7 7-7 7" /></svg>
                         </button>
@@ -244,9 +246,9 @@ const SettingsDashboard: React.FC<SettingsDashboardProps> = ({ onBack, initialSe
                     <div>
                         <h1 className="hidden sm:flex text-2xl lg:text-3xl font-black text-white items-center gap-3">
                              <span className="hidden md:inline">{activeSection?.icon}</span>
-                             {activeSection?.title}
+                             {t[`section_${activeSection?.id}`] || activeSection?.title}
                         </h1>
-                        <p className="text-xs lg:text-sm text-gray-500 font-bold uppercase tracking-[0.2em] mt-1">{activeSection?.description}</p>
+                        <p className="text-xs lg:text-sm text-gray-500 font-bold uppercase tracking-[0.2em] mt-1">{t[`desc_${activeSection?.id}`] || activeSection?.description}</p>
                     </div>
                 </div>
                 <div className="flex gap-2 w-full sm:w-auto">
@@ -258,7 +260,7 @@ const SettingsDashboard: React.FC<SettingsDashboardProps> = ({ onBack, initialSe
                                 </div>
                                 <input 
                                     type="text" 
-                                    placeholder={`Search ${activeSection?.title}...`}
+                                    placeholder={t[`search_${activeSection?.id}`] || `Search ${activeSection?.title}...`}
                                     value={searchQuery}
                                     onChange={(e) => setSearchQuery(e.target.value)}
                                     className="w-full !py-3 !pl-11 !pr-10 bg-gray-900/40 backdrop-blur-xl border border-white/5 rounded-2xl text-[13px] font-bold text-white placeholder:text-gray-600 focus:border-blue-500/50 outline-none transition-all shadow-lg"
@@ -268,6 +270,11 @@ const SettingsDashboard: React.FC<SettingsDashboardProps> = ({ onBack, initialSe
                     )}
 
                     <button onClick={() => setIsUpdateModalOpen(true)} className="flex-1 sm:flex-none btn bg-gray-800 border border-gray-700 hover:text-red-400 px-4 transition-all flex items-center justify-center gap-2"><svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" strokeWidth={2}/></svg></button>
+                    {activeId === 'driverRecommendations' && (
+                        <button onClick={() => setIsExcelView(!isExcelView)} className="flex-1 sm:flex-none btn btn-secondary px-6 font-black">
+                            {isExcelView ? t.table_view : t.excel_view}
+                        </button>
+                    )}
                     {activeId === 'pages' && <button onClick={() => setIsPdfOpen(true)} className="flex-1 sm:flex-none btn btn-secondary px-6">PDF</button>}
                     {activeId !== 'telegramTemplates' && activeId !== 'permissions' && activeId !== 'database' && (
                         <button onClick={() => setModal({ isOpen: true, sectionId: activeId, item: null })} className="flex-1 sm:flex-none btn btn-primary px-10 font-black">+ {t.add_new}</button>
@@ -281,7 +288,7 @@ const SettingsDashboard: React.FC<SettingsDashboardProps> = ({ onBack, initialSe
                     {configSections.map(s => (
                         <button key={s.id} onClick={() => { setDesktopSection(s.id); setLocalData([]); }} className={`flex items-center gap-4 p-4 rounded-2xl transition-all ${desktopSection === s.id ? 'bg-blue-600 text-white shadow-xl shadow-blue-600/20' : 'text-gray-400 hover:bg-gray-800'}`}>
                             <span className="text-xl">{s.icon}</span>
-                            <span className="font-black text-sm uppercase tracking-wider">{s.title}</span>
+                            <span className="font-black text-sm uppercase tracking-wider">{t[`section_${s.id}`] || s.title}</span>
                         </button>
                     ))}
                 </aside>
@@ -293,6 +300,8 @@ const SettingsDashboard: React.FC<SettingsDashboardProps> = ({ onBack, initialSe
                         <div className="flex-grow overflow-y-auto no-scrollbar"><DatabaseManagement /></div>
                     ) : activeId === 'permissions' ? (
                         <div className="flex-grow overflow-y-auto no-scrollbar"><PermissionManagement /></div>
+                    ) : (activeId === 'driverRecommendations' && isExcelView) ? (
+                        <div className="flex-grow overflow-hidden"><DriverRecommendationExcel /></div>
                     ) : (
                         <div className="bg-gray-800/30 border border-gray-700/50 rounded-3xl overflow-hidden shadow-2xl flex flex-col flex-grow relative">
                             {isLoading && (
@@ -306,7 +315,7 @@ const SettingsDashboard: React.FC<SettingsDashboardProps> = ({ onBack, initialSe
                                     <thead>
                                         <tr className="bg-gray-900/50 border-b border-gray-700 sticky top-0 z-10 backdrop-blur-md">
                                             <th className="w-12 text-center">#</th>
-                                            {activeSection?.fields.map(f => <th key={f.name}>{f.label}</th>)}
+                                            {activeSection?.fields.map(f => <th key={f.name}>{t[`field_${f.name}`] || f.label}</th>)}
                                             <th className="w-32 text-center uppercase tracking-widest text-[10px]">Action</th>
                                         </tr>
                                     </thead>

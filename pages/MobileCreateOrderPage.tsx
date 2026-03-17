@@ -210,10 +210,94 @@ const MobileCreateOrderPage: React.FC<MobileCreateOrderPageProps> = ({ team, onS
                     </div>
                 )}
 
-                {/* Other steps logic would go here... (Omitted for brevity in initial write) */}
-                <div className="mt-10 text-center text-gray-600 text-[10px] font-bold uppercase tracking-widest italic animate-pulse">
-                    Step {currentStep} Content Placeholder
-                </div>
+                {currentStep === 3 && (
+                    <div className="space-y-8 animate-reveal">
+                        <div className="space-y-4">
+                            <label className="text-[10px] font-black text-gray-500 uppercase tracking-widest ml-2">សេវាដឹកជញ្ជូន*</label>
+                            <ShippingMethodDropdown 
+                                methods={appData.shippingMethods || []} 
+                                selectedMethodName={order.shipping.method} 
+                                onSelect={(method) => {
+                                    let recommendedDriver = '';
+                                    if (method.EnableDriverRecommendation) {
+                                        const days = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
+                                        const today = days[new Date().getDay()];
+
+                                        // Assuming order.fulfillmentStore is added to state or derived
+                                        const recommendation = appData.driverRecommendations?.find(r => 
+                                            r.DayOfWeek === today && 
+                                            r.StoreName === (order.fulfillmentStore || '') && 
+                                            r.Province === order.customer.location &&
+                                            r.ShippingMethod === method.MethodName
+                                        );
+
+                                        if (recommendation) {
+                                            recommendedDriver = recommendation.DriverName;
+                                        }
+                                    }
+
+                                    setOrder((prev: any) => ({
+                                        ...prev,
+                                        shipping: {
+                                            ...prev.shipping,
+                                            method: method.MethodName,
+                                            cost: method.InternalCost || prev.shipping.cost,
+                                            service: recommendedDriver || (method.RequireDriverSelection ? '' : method.MethodName)
+                                        }
+                                    }));
+                                }}
+                            />
+                        </div>
+
+                        <div className="space-y-4">
+                            <label className="text-[10px] font-black text-gray-500 uppercase tracking-widest ml-2">ថ្លៃសេវាឲ្យអ្នកដឹក (Internal Cost)*</label>
+                            <div className="relative">
+                                <input 
+                                    type="number" 
+                                    className="w-full bg-white/5 border border-white/5 rounded-3xl p-5 text-white font-black text-xl pr-12 focus:border-blue-500/50 outline-none transition-all" 
+                                    value={order.shipping.cost} 
+                                    onChange={e => updateOrder({ shipping: { ...order.shipping, cost: e.target.value } })}
+                                />
+                                <span className="absolute right-6 top-1/2 -translate-y-1/2 text-gray-500 font-bold text-lg">$</span>
+                            </div>
+
+                            {/* Shortcut Buttons */}
+                            <div className="flex flex-wrap gap-2">
+                                {(() => {
+                                    const method = appData.shippingMethods?.find(m => m.MethodName === order.shipping.method);
+                                    const shortcuts = method?.CostShortcuts ? method.CostShortcuts.split(',').map(s => parseFloat(s.trim())) : [1.25, 1.5, 2];
+                                    
+                                    return shortcuts.map(cost => (
+                                        <button 
+                                            key={cost}
+                                            onClick={() => updateOrder({ shipping: { ...order.shipping, cost } })}
+                                            className={`flex-1 min-w-[70px] py-4 rounded-2xl font-black text-xs border transition-all ${parseFloat(order.shipping.cost) === cost ? 'bg-blue-600 border-blue-500 text-white shadow-lg' : 'bg-white/5 border-white/5 text-gray-400 active:bg-white/10'}`}
+                                        >
+                                            ${cost}
+                                        </button>
+                                    ));
+                                })()}
+                            </div>
+                        </div>
+
+                        {appData.shippingMethods?.find(m => m.MethodName === order.shipping.method)?.RequireDriverSelection && (
+                            <div className="space-y-4">
+                                <label className="text-[10px] font-black text-gray-500 uppercase tracking-widest ml-2">ជ្រើសរើសអ្នកដឹក*</label>
+                                <DriverSelector 
+                                    drivers={appData.drivers || []} 
+                                    selectedDriverName={order.shipping.service} 
+                                    onSelect={(val) => updateOrder({ shipping: { ...order.shipping, service: val } })}
+                                />
+                            </div>
+                        )}
+                    </div>
+                )}
+
+                {currentStep === 4 && (
+                    <div className="space-y-6 animate-reveal">
+                        {/* Summary View Omitted for brevity */}
+                    </div>
+                )}
             </div>
 
             {/* Bottom Navigation */}
