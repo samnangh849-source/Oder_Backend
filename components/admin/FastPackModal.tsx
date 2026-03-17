@@ -13,7 +13,7 @@ import { CacheService, CACHE_KEYS } from '@/services/cacheService';
 import Modal from '@/components/common/Modal';
 import OrderGracePeriod from '@/components/orders/OrderGracePeriod';
 
-type PackStep = 'VERIFYING' | 'CAPTURING' | 'LABELING';
+type PackStep = 'VERIFYING' | 'LABELING' | 'CAPTURING';
 
 interface FastPackModalProps {
     order: ParsedOrder | null;
@@ -67,10 +67,10 @@ const FastPackModal: React.FC<FastPackModalProps> = ({ order, onClose, onSuccess
         return order.Products.every(p => (verifiedItems[p.name] || 0) >= p.quantity);
     }, [order, verifiedItems]);
 
-    // Transition to CAPTURING automatically if verified
+    // Transition to LABELING automatically if verified
     useEffect(() => {
         if (isOrderVerified && step === 'VERIFYING') {
-            setTimeout(() => setStep('CAPTURING'), 800);
+            setTimeout(() => setStep('LABELING'), 800);
         }
     }, [isOrderVerified, step]);
 
@@ -86,9 +86,9 @@ const FastPackModal: React.FC<FastPackModalProps> = ({ order, onClose, onSuccess
 
     const renderStepIndicator = () => {
         const steps: { id: PackStep, label: string, icon: string }[] = [
-            { id: 'VERIFYING', label: 'Verify Items', icon: '🔍' },
-            { id: 'CAPTURING', label: 'Take Photo', icon: '📸' },
-            { id: 'LABELING', label: 'Print Label', icon: '🏷️' }
+            { id: 'VERIFYING', label: 'ពិនិត្យទំនិញ', icon: '🔍' },
+            { id: 'LABELING', label: 'បោះពុម្ពប័ណ្ណ', icon: '🏷️' },
+            { id: 'CAPTURING', label: 'ថតរូបកញ្ចប់', icon: '📸' }
         ];
 
         return (
@@ -211,7 +211,38 @@ const FastPackModal: React.FC<FastPackModalProps> = ({ order, onClose, onSuccess
         if (context) {
             canvas.width = video.videoWidth;
             canvas.height = video.videoHeight;
+            
+            // Draw video frame
             context.drawImage(video, 0, 0, canvas.width, canvas.height);
+            
+            // Add Branded Watermark (Professional look like រូបកញ្ចប់ឥវ៉ាន់.png)
+            const padding = 40;
+            const fontSize = Math.max(20, canvas.width / 40);
+            
+            // 1. Store Name (Top Left)
+            context.fillStyle = 'rgba(0, 0, 0, 0.5)';
+            const storeText = `HUB: ${order?.['Fulfillment Store'] || 'UNKNOWN'}`;
+            context.font = `black ${fontSize}px Inter, sans-serif`;
+            const storeTextWidth = context.measureText(storeText).width;
+            context.fillRect(padding - 10, padding - fontSize - 5, storeTextWidth + 20, fontSize + 15);
+            context.fillStyle = '#ffffff';
+            context.fillText(storeText, padding, padding);
+
+            // 2. Packaging Hub / Order ID (Bottom Right)
+            const idText = `ORDER ID: ${order?.['Order ID'].substring(0, 10)}`;
+            const hubText = "SMART PACKAGING HUB";
+            context.font = `black ${fontSize * 0.8}px Inter, sans-serif`;
+            const idTextWidth = context.measureText(idText).width;
+            const hubTextWidth = context.measureText(hubText).width;
+            const maxWidth = Math.max(idTextWidth, hubTextWidth);
+            
+            context.fillStyle = 'rgba(37, 99, 235, 0.8)'; // Blue-600
+            context.fillRect(canvas.width - maxWidth - padding - 20, canvas.height - (fontSize * 2) - padding - 15, maxWidth + 30, (fontSize * 2) + 25);
+            
+            context.fillStyle = '#ffffff';
+            context.fillText(hubText, canvas.width - maxWidth - padding, canvas.height - fontSize - padding - 5);
+            context.font = `bold ${fontSize * 0.6}px monospace`;
+            context.fillText(idText, canvas.width - maxWidth - padding, canvas.height - padding);
             
             canvas.toBlob(async (blob) => {
                 if (!blob) return;
@@ -618,6 +649,24 @@ const FastPackModal: React.FC<FastPackModalProps> = ({ order, onClose, onSuccess
                         <div className="flex flex-col gap-6">
                             {step === 'VERIFYING' && <FastPackScanner onScan={handleBarcodeScan} />}
 
+                            {step === 'LABELING' && (
+                                <div className="bg-[#1a2235] rounded-[2.5rem] p-8 border border-white/5 flex-grow flex flex-col shadow-inner justify-center items-center gap-10">
+                                    <div className="w-32 h-32 bg-blue-600/20 rounded-[2.5rem] flex items-center justify-center text-blue-400 border border-blue-500/30 shadow-[0_0_50px_rgba(37,99,235,0.2)]">
+                                        <svg className="w-16 h-16" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path d="M17 17h2a2 2 0 002-2v-4a2 2 0 00-2-2H5a2 2 0 00-2-2v4a2 2 0 002 2h2m2 4h6a2 2 0 002-2v-4a2 2 0 00-2-2H9a2 2 0 00-2 2v4a2 2 0 002 2zm8-12V5a2 2 0 00-2-2H9a2 2 0 00-2 2v4h10z" strokeWidth={2.5}/></svg>
+                                    </div>
+                                    <div className="text-center space-y-4">
+                                        <h3 className="text-3xl font-black text-white uppercase tracking-tighter italic">បោះពុម្ពប័ណ្ណដឹកជញ្ជូន</h3>
+                                        <p className="text-gray-500 text-sm font-bold uppercase tracking-[0.2em]">សូមបិទប័ណ្ណលើកញ្ចប់ឥវ៉ាន់ឱ្យរួចរាល់</p>
+                                    </div>
+                                    {fullPrinterURL && (
+                                        <button onClick={() => window.open(fullPrinterURL, '_blank')} className="w-full py-6 bg-indigo-600 hover:bg-indigo-700 text-white rounded-[2rem] font-black uppercase text-xs tracking-[0.3em] shadow-2xl flex justify-center items-center gap-4 border border-white/10 transition-all active:scale-95 group">
+                                            <svg className="w-6 h-6 group-hover:scale-110 transition-transform" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path d="M17 17h2a2 2 0 002-2v-4a2 2 0 00-2-2H5a2 2 0 00-2-2v4a2 2 0 002 2h2m2 4h6a2 2 0 002-2v-4a2 2 0 00-2-2H9a2 2 0 00-2 2v4a2 2 0 002 2zm8-12V5a2 2 0 00-2-2H9a2 2 0 00-2 2v4h10z" strokeWidth={2.5}/></svg>
+                                            បោះពុម្ពប័ណ្ណ (Print Label)
+                                        </button>
+                                    )}
+                                </div>
+                            )}
+
                             {step === 'CAPTURING' && (
                                 <div className="bg-[#1a2235] rounded-[2.5rem] p-6 border border-white/5 flex-grow flex flex-col shadow-inner">
                                     <div className="flex items-center justify-between mb-6 px-2">
@@ -639,11 +688,32 @@ const FastPackModal: React.FC<FastPackModalProps> = ({ order, onClose, onSuccess
                                             <div className="absolute inset-0 group rounded-[3rem] overflow-hidden border-4 border-emerald-500/40 shadow-[0_0_50px_rgba(16,185,129,0.2)] bg-black cursor-pointer" onClick={() => showFullImage(previewImage)}>
                                                 <img src={previewImage} className="w-full h-full object-cover" alt="Preview" />
                                                 <button onClick={(e) => { e.stopPropagation(); setPreviewImage(null); }} className="absolute top-6 right-6 w-12 h-12 bg-red-600 text-white rounded-2xl flex items-center justify-center shadow-2xl border-2 border-white/20 active:scale-90 z-20"><svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path d="M6 18L18 6M6 6l12 12" strokeWidth={3}/></svg></button>
-                                                <div className="absolute bottom-8 left-1/2 -translate-x-1/2 bg-emerald-600/90 backdrop-blur-md text-white px-8 py-3 rounded-2xl text-[11px] font-black uppercase tracking-[0.3em] border border-white/30 shadow-2xl z-10 animate-fade-in-up">Digital Proof Locked</div>
+                                                <div className="absolute bottom-8 left-1/2 -translate-x-1/2 bg-emerald-600/90 backdrop-blur-md text-white px-8 py-3 rounded-2xl text-[11px] font-black uppercase tracking-[0.3em] border border-white/30 shadow-2xl z-10 animate-fade-in-up">រក្សាទុករូបភាពរួចរាល់</div>
                                             </div>
                                         ) : isCameraActive ? (
                                             <div className="absolute inset-0 rounded-[3rem] overflow-hidden border-2 border-blue-500/50 shadow-[0_0_60px_rgba(37,99,235,0.15)] bg-black">
                                                 <video ref={videoRef} autoPlay playsInline className="w-full h-full object-cover" style={{ transform: `scale(${zoom})` }} />
+                                                
+                                                {/* Packaging Frame Overlay */}
+                                                <div className="absolute inset-0 pointer-events-none flex items-center justify-center">
+                                                    <div className="w-[85%] h-[80%] border-2 border-white/20 rounded-[2rem] relative">
+                                                        {/* Corners */}
+                                                        <div className="absolute top-0 left-0 w-10 h-10 border-t-4 border-l-4 border-blue-500 rounded-tl-2xl"></div>
+                                                        <div className="absolute top-0 right-0 w-10 h-10 border-t-4 border-r-4 border-blue-500 rounded-tr-2xl"></div>
+                                                        <div className="absolute bottom-0 left-0 w-10 h-10 border-b-4 border-l-4 border-blue-500 rounded-bl-2xl"></div>
+                                                        <div className="absolute bottom-0 right-0 w-10 h-10 border-b-4 border-r-4 border-blue-500 rounded-br-2xl"></div>
+                                                        
+                                                        {/* Label Placeholder Guide */}
+                                                        <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-48 h-32 border border-white/10 bg-white/5 rounded-xl flex items-center justify-center">
+                                                            <p className="text-[8px] font-black text-white/20 uppercase tracking-widest">Label Area</p>
+                                                        </div>
+                                                        
+                                                        <div className="absolute top-4 left-1/2 -translate-x-1/2 bg-blue-600/80 backdrop-blur-md px-4 py-1 rounded-full border border-white/20">
+                                                            <p className="text-[9px] font-black text-white uppercase tracking-[0.2em]">ដាក់កញ្ចប់ឥវ៉ាន់ក្នុងស៊ុម</p>
+                                                        </div>
+                                                    </div>
+                                                </div>
+
                                                 <div className="absolute inset-0 pointer-events-none overflow-hidden"><div className="w-full h-[2px] bg-blue-500/50 absolute top-0 left-0 animate-scan-y shadow-[0_0_15px_#3b82f6]"></div></div>
                                                 {countdown !== null && (
                                                     <div className="absolute inset-0 flex items-center justify-center z-50 bg-black/40 backdrop-blur-sm">
@@ -686,28 +756,10 @@ const FastPackModal: React.FC<FastPackModalProps> = ({ order, onClose, onSuccess
                                                 <div className="w-24 h-24 bg-blue-600 rounded-[2rem] flex items-center justify-center text-white shadow-2xl border border-white/10 transform transition-transform group-hover:scale-110">
                                                     <svg className="w-12 h-12" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path d="M3 9a2 2 0 012-2h.93a2 2 0 001.664-.89l.812-1.22A2 2 0 0110.07 4h3.86a2 2 0 011.664.89l.812 1.22A2 2 0 0018.07 7H19a2 2 0 012 2v9a2 2 0 01-2 2H5a2 2 0 01-2-2V9z" /><path d="M15 13a3 3 0 11-6 0 3 3 0 016 0z" strokeWidth={2.5}/></svg>
                                                 </div>
-                                                <p className="text-xl font-black text-white uppercase tracking-tighter italic">Activate Proof Cam</p>
+                                                <p className="text-xl font-black text-white uppercase tracking-tighter italic">បើកកាមេរ៉ាថតរូបកញ្ចប់</p>
                                             </button>
                                         )}
                                     </div>
-                                </div>
-                            )}
-
-                            {step === 'LABELING' && (
-                                <div className="bg-[#1a2235] rounded-[2.5rem] p-8 border border-white/5 flex-grow flex flex-col shadow-inner justify-center items-center gap-10">
-                                    <div className="w-32 h-32 bg-emerald-500/20 rounded-[2.5rem] flex items-center justify-center text-emerald-400 border border-emerald-500/30 shadow-[0_0_50px_rgba(16,185,129,0.2)]">
-                                        <svg className="w-16 h-16" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" strokeWidth={2.5}/></svg>
-                                    </div>
-                                    <div className="text-center space-y-4">
-                                        <h3 className="text-3xl font-black text-white uppercase tracking-tighter italic">Packaging Finalized</h3>
-                                        <p className="text-gray-500 text-sm font-bold uppercase tracking-[0.2em]">Ready for Label Generation</p>
-                                    </div>
-                                    {fullPrinterURL && (
-                                        <button onClick={() => window.open(fullPrinterURL, '_blank')} className="w-full py-6 bg-indigo-600 hover:bg-indigo-700 text-white rounded-[2rem] font-black uppercase text-xs tracking-[0.3em] shadow-2xl flex justify-center items-center gap-4 border border-white/10 transition-all active:scale-95 group">
-                                            <svg className="w-6 h-6 group-hover:scale-110 transition-transform" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path d="M17 17h2a2 2 0 002-2v-4a2 2 0 00-2-2H5a2 2 0 00-2-2v4a2 2 0 002 2h2m2 4h6a2 2 0 002-2v-4a2 2 0 00-2-2H9a2 2 0 00-2 2v4a2 2 0 002 2zm8-12V5a2 2 0 00-2-2H9a2 2 0 00-2 2v4h10z" strokeWidth={2.5}/></svg>
-                                            Print Shipping Label
-                                        </button>
-                                    )}
                                 </div>
                             )}
                         </div>
@@ -719,15 +771,7 @@ const FastPackModal: React.FC<FastPackModalProps> = ({ order, onClose, onSuccess
                     <button onClick={onClose} disabled={uploading} className="flex-1 py-5 bg-gray-800 hover:bg-gray-700 text-gray-400 hover:text-white rounded-3xl font-black uppercase text-xs tracking-[0.3em] transition-all active:scale-[0.98] border border-white/5 shadow-2xl">បោះបង់ (Cancel)</button>
                     
                     {step === 'VERIFYING' && (
-                        <button onClick={() => setStep('CAPTURING')} disabled={!isOrderVerified} className={`flex-[2.5] py-5 rounded-3xl font-black uppercase text-xs tracking-[0.3em] transition-all shadow-2xl flex items-center justify-center gap-4 relative overflow-hidden group ${!isOrderVerified ? 'bg-gray-800 text-gray-500 cursor-not-allowed' : 'bg-blue-600 hover:bg-blue-500 text-white shadow-blue-900/40'}`}>
-                            <div className="absolute inset-0 bg-white/10 translate-y-full group-hover:translate-y-0 transition-transform duration-300"></div>
-                            <svg className="w-7 h-7 relative z-10 group-hover:scale-110 transition-transform" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={3.5}><path d="M13 5l7 7-7 7M5 5l7 7-7 7" /></svg>
-                            <span className="relative z-10">បន្ទាប់: ថតរូបកញ្ចប់ (Next Step)</span>
-                        </button>
-                    )}
-
-                    {step === 'CAPTURING' && (
-                        <button onClick={() => setStep('LABELING')} disabled={!previewImage} className={`flex-[2.5] py-5 rounded-3xl font-black uppercase text-xs tracking-[0.3em] transition-all shadow-2xl flex items-center justify-center gap-4 relative overflow-hidden group ${!previewImage ? 'bg-gray-800 text-gray-500 cursor-not-allowed' : 'bg-blue-600 hover:bg-blue-500 text-white shadow-blue-900/40'}`}>
+                        <button onClick={() => setStep('LABELING')} disabled={!isOrderVerified} className={`flex-[2.5] py-5 rounded-3xl font-black uppercase text-xs tracking-[0.3em] transition-all shadow-2xl flex items-center justify-center gap-4 relative overflow-hidden group ${!isOrderVerified ? 'bg-gray-800 text-gray-500 cursor-not-allowed' : 'bg-blue-600 hover:bg-blue-500 text-white shadow-blue-900/40'}`}>
                             <div className="absolute inset-0 bg-white/10 translate-y-full group-hover:translate-y-0 transition-transform duration-300"></div>
                             <svg className="w-7 h-7 relative z-10 group-hover:scale-110 transition-transform" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={3.5}><path d="M13 5l7 7-7 7M5 5l7 7-7 7" /></svg>
                             <span className="relative z-10">បន្ទាប់: បោះពុម្ពប័ណ្ណ (Next Step)</span>
@@ -735,7 +779,15 @@ const FastPackModal: React.FC<FastPackModalProps> = ({ order, onClose, onSuccess
                     )}
 
                     {step === 'LABELING' && (
-                        <button onClick={handleSubmit} disabled={uploading} className={`flex-[2.5] py-5 rounded-3xl font-black uppercase text-xs tracking-[0.3em] transition-all shadow-2xl flex items-center justify-center gap-4 relative overflow-hidden group ${uploading ? 'bg-gray-800 text-gray-500' : 'bg-emerald-600 hover:bg-emerald-500 text-white shadow-emerald-900/40'}`}>
+                        <button onClick={() => setStep('CAPTURING')} className={`flex-[2.5] py-5 bg-blue-600 hover:bg-blue-500 text-white rounded-3xl font-black uppercase text-xs tracking-[0.3em] transition-all shadow-2xl shadow-blue-900/40 flex items-center justify-center gap-4 relative overflow-hidden group`}>
+                            <div className="absolute inset-0 bg-white/10 translate-y-full group-hover:translate-y-0 transition-transform duration-300"></div>
+                            <svg className="w-7 h-7 relative z-10 group-hover:scale-110 transition-transform" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={3.5}><path d="M13 5l7 7-7 7M5 5l7 7-7 7" /></svg>
+                            <span className="relative z-10">បន្ទាប់: ថតរូបកញ្ចប់ (Next Step)</span>
+                        </button>
+                    )}
+
+                    {step === 'CAPTURING' && (
+                        <button onClick={handleSubmit} disabled={uploading || !previewImage} className={`flex-[2.5] py-5 rounded-3xl font-black uppercase text-xs tracking-[0.3em] transition-all shadow-2xl flex items-center justify-center gap-4 relative overflow-hidden group ${uploading || !previewImage ? 'bg-gray-800 text-gray-500' : 'bg-emerald-600 hover:bg-emerald-500 text-white shadow-emerald-900/40'}`}>
                             <div className="absolute inset-0 bg-white/10 translate-y-full group-hover:translate-y-0 transition-transform duration-300"></div>
                             {uploading && undoTimer === null ? <Spinner size="sm" /> : <><svg className="w-7 h-7 relative z-10 group-hover:scale-110 transition-transform" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={3.5}><path d="M5 13l4 4L19 7" /></svg><span className="relative z-10">បញ្ចប់ការវេចខ្ចប់ & រក្សាទុក (Finalize)</span></>}
                         </button>

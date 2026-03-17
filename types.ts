@@ -366,10 +366,28 @@ export interface IncentiveProject {
 }
 
 export interface IncentiveResult {
-    id?: number;
+    id: number;
     projectId: number;
     userName: string;
     totalOrders: number;
     totalRevenue: number;
     calculatedValue: number;
+    isCustom?: boolean;
+}
+
+export interface IncentiveManualData {
+    id: number;
+    projectId: number;
+    month: string;
+    metricType: string;
+    dataKey: string;
+    value: number;
+}
+
+export interface IncentiveCustomPayout {
+    id: number;
+    projectId: number;
+    month: string;
+    userName: string;
+    value: number;
 }

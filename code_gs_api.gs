@@ -29,7 +29,8 @@ const CONFIG = {
   INVENTORY_SHEET: 'Inventory',
   STOCK_TRANSFERS_SHEET: 'StockTransfers',
   RETURNS_SHEET: 'Returns',
-  DRIVER_RECOMMENDATIONS_SHEET: 'DriverRecommendations'
+  DRIVER_RECOMMENDATIONS_SHEET: 'DriverRecommendations',
+  INCENTIVE_RESULTS_SHEET: 'IncentiveResults'
 };
 
 // --- មុខងារជំនួយ (Helpers) ---

@@ -101,7 +101,7 @@ const CreateOrderPage: React.FC<CreateOrderPageProps> = ({ team, onSaveSuccess, 
         customer: { name: '', phone: '', province: '', district: '', sangkat: '', additionalLocation: '', shippingFee: '' },
         products: [{...initialProductState, id: Date.now()}],
         shipping: { method: '', details: '', cost: '' },
-        payment: { status: 'Unpaid', info: '' },
+        payment: { status: 'Unpaid🔴', info: '' },
         telegram: { schedule: false, time: '' },
         subtotal: 0,
         grandTotal: 0,
@@ -1120,3 +1120,8 @@ const CreateOrderPage: React.FC<CreateOrderPageProps> = ({ team, onSaveSuccess, 
 };
 
 export default CreateOrderPage;
+
+
+
+
+

@@ -110,19 +110,91 @@ export const getIncentiveResults = async (projectId?: number): Promise<Incentive
     }
 };
 
-export const calculateIncentive = async (projectId: number): Promise<IncentiveResult[]> => {
+export const calculateIncentive = async (projectId: number, month: string): Promise<IncentiveResult[]> => {
     try {
         const headers = await getAuthHeaders();
         const response = await fetch(`${WEB_APP_URL}/api/admin/incentive/calculate`, {
             method: 'POST',
             headers,
-            body: JSON.stringify({ projectId })
+            body: JSON.stringify({ projectId, month })
         });
         const result = await response.json();
         return result.status === 'success' ? result.data : [];
     } catch (e) {
         console.error("Error calculating incentive", e);
         return [];
+    }
+};
+
+export const getIncentiveManualData = async (projectId: number, month: string) => {
+    try {
+        const headers = await getAuthHeaders();
+        const response = await fetch(`${WEB_APP_URL}/api/admin/incentive/manual-data?projectId=${projectId}&month=${month}`, { headers });
+        const result = await response.json();
+        return result.status === 'success' ? result.data : [];
+    } catch (e) {
+        console.error("Error loading incentive manual data", e);
+        return [];
+    }
+};
+
+export const saveIncentiveManualData = async (data: Omit<any, 'id'>) => {
+    try {
+        const headers = await getAuthHeaders();
+        const response = await fetch(`${WEB_APP_URL}/api/admin/incentive/manual-data`, {
+            method: 'POST',
+            headers,
+            body: JSON.stringify(data)
+        });
+        const result = await response.json();
+        return result.status === 'success';
+    } catch (e) {
+        console.error("Error saving incentive manual data", e);
+        return false;
+    }
+};
+
+export const getIncentiveCustomPayouts = async (projectId: number, month: string) => {
+    try {
+        const headers = await getAuthHeaders();
+        const response = await fetch(`${WEB_APP_URL}/api/admin/incentive/custom-payout?projectId=${projectId}&month=${month}`, { headers });
+        const result = await response.json();
+        return result.status === 'success' ? result.data : [];
+    } catch (e) {
+        console.error("Error loading incentive custom payouts", e);
+        return [];
+    }
+};
+
+export const saveIncentiveCustomPayout = async (data: Omit<any, 'id'>) => {
+    try {
+        const headers = await getAuthHeaders();
+        const response = await fetch(`${WEB_APP_URL}/api/admin/incentive/custom-payout`, {
+            method: 'POST',
+            headers,
+            body: JSON.stringify(data)
+        });
+        const result = await response.json();
+        return result.status === 'success';
+    } catch (e) {
+        console.error("Error saving incentive custom payout", e);
+        return false;
+    }
+};
+
+export const lockIncentivePayout = async (projectId: number, month: string, results: IncentiveResult[]) => {
+    try {
+        const headers = await getAuthHeaders();
+        const response = await fetch(`${WEB_APP_URL}/api/admin/incentive/lock`, {
+            method: 'POST',
+            headers,
+            body: JSON.stringify({ projectId, month, results })
+        });
+        const result = await response.json();
+        return result.status === 'success';
+    } catch (e) {
+        console.error("Error locking incentive payout", e);
+        return false;
     }
 };
 

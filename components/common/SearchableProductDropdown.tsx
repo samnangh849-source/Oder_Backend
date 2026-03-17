@@ -57,13 +57,31 @@ const SearchableProductDropdown: React.FC<SearchableProductDropdownProps> = ({
     const [searchTerm, setSearchTerm] = useState('');
     const [activeIndex, setActiveIndex] = useState(0);
     const [previewProduct, setPreviewProduct] = useState<MasterProduct | null>(null);
+    const [holdItem, setHoldItem] = useState<MasterProduct | null>(null);
+    const holdTimerRef = useRef<any>(null);
     
     const dropdownRef = useRef<HTMLDivElement>(null);
     const inputRef = useRef<HTMLInputElement>(null);
 
+    const selectedProduct = useMemo(() => 
+        products.find(p => p.ProductName === selectedProductName),
+    [products, selectedProductName]);
+
     useEffect(() => {
         setSearchTerm(selectedProductName);
     }, [selectedProductName]);
+
+    const handleHoldStart = (product: MasterProduct, delay = 500) => {
+        if (holdTimerRef.current) clearTimeout(holdTimerRef.current);
+        holdTimerRef.current = setTimeout(() => {
+            setHoldItem(product);
+        }, delay);
+    };
+
+    const handleHoldEnd = () => {
+        if (holdTimerRef.current) clearTimeout(holdTimerRef.current);
+        setHoldItem(null);
+    };
 
     useEffect(() => {
         const handleClickOutside = (event: MouseEvent) => {
@@ -114,7 +132,6 @@ const SearchableProductDropdown: React.FC<SearchableProductDropdownProps> = ({
         if (item.isAddNew) {
             confirmSelect(item.ProductName);
         } else {
-            // Directly select product without image check or confirmation modal
             confirmSelect(item.ProductName, item.Tags || '');
         }
     };
@@ -140,38 +157,53 @@ const SearchableProductDropdown: React.FC<SearchableProductDropdownProps> = ({
 
     return (
         <div className={`transition-all ${isOpen ? 'relative z-[70]' : 'relative z-10'}`} ref={dropdownRef}>
-            <div className="relative group">
-                <input
-                    ref={inputRef}
-                    type="text"
-                    className="form-input !pr-16 !py-3.5 bg-gray-900/50 border-gray-700 group-hover:border-blue-500/50 transition-all rounded-[1.25rem] font-bold text-gray-200"
-                    placeholder="ស្វែងរកផលិតផល..."
-                    value={searchTerm}
-                    onChange={e => { setSearchTerm(e.target.value); setIsOpen(true); setActiveIndex(0); }}
-                    onFocus={() => setIsOpen(true)}
-                    onKeyDown={handleKeyDown}
-                />
-                <div className="absolute right-0 top-0 bottom-0 pr-4 flex items-center gap-2 pointer-events-none">
-                    {searchTerm && (
-                        <button 
-                            type="button" 
-                            onClick={handleClear} 
-                            className="text-gray-500 hover:text-white text-xl leading-none p-1 pointer-events-auto transition-colors"
-                            title="Clear search"
-                        >
-                            &times;
-                        </button>
-                    )}
-                    <div className="flex items-center justify-center pointer-events-none">
-                        <svg className="h-5 w-5 text-gray-400" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
-                        </svg>
+            <div className="relative group flex items-center gap-2">
+                {selectedProduct && (
+                    <div 
+                        className="w-12 h-12 flex-shrink-0 bg-gray-900 rounded-xl border-2 border-gray-700 overflow-hidden cursor-pointer hover:border-blue-500 transition-all active:scale-95 shadow-lg group-hover:shadow-blue-500/10"
+                        onClick={() => setPreviewProduct(selectedProduct)}
+                        title={selectedProduct.ProductName}
+                    >
+                        <img 
+                            src={convertGoogleDriveUrl(selectedProduct.ImageURL)} 
+                            className="w-full h-full object-cover" 
+                            alt="" 
+                        />
+                    </div>
+                )}
+                <div className="relative flex-grow">
+                    <input
+                        ref={inputRef}
+                        type="text"
+                        className="form-input !pr-16 !py-3.5 bg-gray-900/50 border-gray-700 group-hover:border-blue-500/50 transition-all rounded-[1.25rem] font-bold text-gray-200"
+                        placeholder="ស្វែងរកផលិតផល..."
+                        value={searchTerm}
+                        onChange={e => { setSearchTerm(e.target.value); setIsOpen(true); setActiveIndex(0); }}
+                        onFocus={() => setIsOpen(true)}
+                        onKeyDown={handleKeyDown}
+                    />
+                    <div className="absolute right-0 top-0 bottom-0 pr-4 flex items-center gap-2 pointer-events-none">
+                        {searchTerm && (
+                            <button 
+                                type="button" 
+                                onClick={handleClear} 
+                                className="text-gray-500 hover:text-white text-xl leading-none p-1 pointer-events-auto transition-colors"
+                                title="Clear search"
+                            >
+                                &times;
+                            </button>
+                        )}
+                        <div className="flex items-center justify-center pointer-events-none">
+                            <svg className="h-5 w-5 text-gray-400" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+                            </svg>
+                        </div>
                     </div>
                 </div>
             </div>
             
             {isOpen && (
-                <div className="absolute z-[100] w-full mt-2 bg-gray-800/95 backdrop-blur-xl border border-white/10 rounded-[1.5rem] shadow-[0_20px_50px_rgba(0,0,0,0.5)] overflow-hidden animate-fade-in-down max-h-80 overflow-y-auto custom-scrollbar">
+                <div className="absolute z-[100] w-full mt-2 bg-gray-800 border border-white/10 rounded-[1.5rem] shadow-[0_20px_50px_rgba(0,0,0,0.5)] overflow-hidden animate-fade-in-down max-h-80 overflow-y-auto custom-scrollbar">
                     <ul className="p-2 space-y-1">
                         {itemsForNavigation.length === 0 ? (
                             <li className="p-4 text-center text-xs text-gray-500 font-black uppercase tracking-widest">រកមិនឃើញផលិតផលទេ</li>
@@ -191,14 +223,33 @@ const SearchableProductDropdown: React.FC<SearchableProductDropdownProps> = ({
                             const hasNoImage = !img || img.includes('placehold.co') || img.includes('text=N/A');
 
                             return (
-                                <li key={product.ProductName} className={`p-2.5 rounded-2xl cursor-pointer flex items-center gap-3 transition-all ${activeIndex === index ? 'bg-blue-600 text-white shadow-lg' : 'hover:bg-white/5 text-gray-300'}`} onMouseDown={() => handleItemClick(product)}>
+                                <li 
+                                    key={product.ProductName} 
+                                    className={`p-2.5 rounded-2xl cursor-pointer flex items-center gap-3 transition-all ${activeIndex === index ? 'bg-blue-600 text-white shadow-lg' : 'hover:bg-white/5 text-gray-300'}`} 
+                                    onMouseEnter={() => handleHoldStart(product, 400)}
+                                    onMouseLeave={handleHoldEnd}
+                                    onMouseDown={(e) => {
+                                        if (e.button === 0) { // Left click
+                                            handleHoldStart(product, 400);
+                                        }
+                                    }}
+                                    onMouseUp={() => {
+                                        handleHoldEnd();
+                                        handleItemClick(product);
+                                    }}
+                                    onTouchStart={() => handleHoldStart(product, 400)}
+                                    onTouchEnd={() => {
+                                        handleHoldEnd();
+                                        handleItemClick(product);
+                                    }}
+                                >
                                     <div className="relative">
                                         <img src={convertGoogleDriveUrl(product.ImageURL)} className={`w-12 h-12 rounded-xl object-cover border border-white/10 ${hasNoImage ? 'opacity-30 grayscale' : ''}`} alt="" />
                                         {hasNoImage && <div className="absolute inset-0 flex items-center justify-center"><svg className="w-5 h-5 text-red-500/80" fill="currentColor" viewBox="0 0 20 20"><path fillRule="evenodd" d="M4 3a2 2 0 00-2 2v10a2 2 0 002 2h12a2 2 0 002-2V5a2 2 0 00-2-2H4zm12 12H4l4-8 3 6 2-4 3 6z" clipRule="evenodd" /></svg></div>}
                                     </div>
                                     <div className="min-w-0 flex-grow">
                                         <div className="flex items-center gap-2">
-                                            <p className="font-black text-[15px] truncate leading-tight">{highlightMatch(product.ProductName, searchTerm)}</p>
+                                            <p className="font-black text-[15px] truncate leading-tight" title={product.ProductName}>{highlightMatch(product.ProductName, searchTerm)}</p>
                                             {hasNoImage && <span className="flex-shrink-0 w-1.5 h-1.5 rounded-full bg-red-500 animate-pulse"></span>}
                                         </div>
                                         <div className="flex items-center gap-2 mt-0.5">
@@ -213,6 +264,20 @@ const SearchableProductDropdown: React.FC<SearchableProductDropdownProps> = ({
                 </div>
             )}
 
+            {/* Hold Overlay (Tooltip) */}
+            {holdItem && (
+                <div className="fixed inset-0 z-[200] flex items-center justify-center p-6 animate-fade-in pointer-events-none">
+                    <div className="absolute inset-0 bg-black/60"></div>
+                    <div className="bg-gray-900 border border-blue-500/30 p-6 rounded-[2rem] shadow-2xl max-w-xs w-full text-center animate-scale-in">
+                        <div className="w-24 h-24 mx-auto mb-4 rounded-3xl overflow-hidden border-2 border-blue-500/20">
+                            <img src={convertGoogleDriveUrl(holdItem.ImageURL)} className="w-full h-full object-cover" />
+                        </div>
+                        <h3 className="text-white font-black text-lg leading-tight uppercase tracking-tighter mb-2">{holdItem.ProductName}</h3>
+                        <p className="text-blue-400 font-bold font-mono text-sm">${holdItem.Price.toFixed(2)}</p>
+                    </div>
+                </div>
+            )}
+
             <ProductSelectionConfirm 
                 product={previewProduct}
                 isOpen={!!previewProduct}
@@ -220,8 +285,33 @@ const SearchableProductDropdown: React.FC<SearchableProductDropdownProps> = ({
                 onConfirm={confirmSelect}
                 showTagEditor={showTagEditor}
             />
+
+            <style>{`
+                @keyframes fade-in {
+                    from { opacity: 0; }
+                    to { opacity: 1; }
+                }
+                .animate-fade-in {
+                    animation: fade-in 0.2s ease-out forwards;
+                }
+                @keyframes scale-in {
+                    from { transform: scale(0.9); opacity: 0; }
+                    to { transform: scale(1); opacity: 1; }
+                }
+                .animate-scale-in {
+                    animation: scale-in 0.2s cubic-bezier(0.34, 1.56, 0.64, 1) forwards;
+                }
+                @keyframes fade-in-down {
+                    from { transform: translateY(-10px); opacity: 0; }
+                    to { transform: translateY(0); opacity: 1; }
+                }
+                .animate-fade-in-down {
+                    animation: fade-in-down 0.2s ease-out forwards;
+                }
+            `}</style>
         </div>
     );
 };
 
 export default SearchableProductDropdown;
+

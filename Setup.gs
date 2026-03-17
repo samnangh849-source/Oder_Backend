@@ -49,6 +49,9 @@ const SYSTEM_STRUCTURE = {
   ],
   "RevenueDashboard": ["Timestamp", "Team", "Page", "Revenue", "Fulfillment Store"],
   
+  // ប្រព័ន្ធប្រាក់លើកទឹកចិត្ត (Incentive)
+  "IncentiveResults": ["Timestamp", "ProjectID", "UserName", "TotalOrders", "TotalRevenue", "CalculatedValue", "IsCustom"],
+
   // ឯកសារយោង និង Chat
   "ChatMessages": ["Timestamp", "UserName", "Receiver", "MessageType", "Content", "FileID"],
   "EditLogs": ["Timestamp", "OrderID", "Requester", "Field Changed", "Old Value", "New Value"],
@@ -161,3 +164,6 @@ function setupDefaultSettings(ss) {
     }
   });
 }
+
+
+ចុះបើពិនិត្យលើ File (code_gs_api.gs)វិញ?

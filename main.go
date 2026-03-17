@@ -68,6 +68,7 @@ var sheetRanges = map[string]string{
 	"Roles":                 "Roles!A:Z",
 	"RolePermissions":       "RolePermissions!A:Z",
 	"DriverRecommendations": "DriverRecommendations!A:Z",
+	"IncentiveResults":      "IncentiveResults!A:Z",
 }
 
 // =========================================================================
@@ -316,6 +317,24 @@ type IncentiveResult struct {
 	TotalOrders     int     `json:"totalOrders"`
 	TotalRevenue    float64 `json:"totalRevenue"`
 	CalculatedValue float64 `json:"calculatedValue"`
+	IsCustom        bool    `json:"isCustom"`
+}
+
+type IncentiveManualData struct {
+	ID         uint    `gorm:"primaryKey" json:"id"`
+	ProjectID  uint    `gorm:"index" json:"projectId"`
+	Month      string  `gorm:"index" json:"month"` // Format: YYYY-MM
+	MetricType string  `json:"metricType"`
+	DataKey    string  `json:"dataKey"` // Format: {period}_{targetId} e.g. "month_TeamA", "W1_user1"
+	Value      float64 `json:"value"`
+}
+
+type IncentiveCustomPayout struct {
+	ID        uint    `gorm:"primaryKey" json:"id"`
+	ProjectID uint    `gorm:"index" json:"projectId"`
+	Month     string  `gorm:"index" json:"month"` // Format: YYYY-MM
+	UserName  string  `json:"userName"`
+	Value     float64 `json:"value"`
 }
 
 type DeleteOrderRequest struct {
@@ -410,6 +429,8 @@ func initDB() {
 		&IncentiveCalculator{},
 		&IncentiveProject{},
 		&IncentiveResult{},
+		&IncentiveManualData{},
+		&IncentiveCustomPayout{},
 		&TempImage{},
 		&DriverRecommendation{},
 	)
@@ -1018,9 +1039,229 @@ func handleGetIncentiveResults(c *gin.Context) {
 	c.JSON(200, gin.H{"status": "success", "data": results})
 }
 
+func handleGetIncentiveManualData(c *gin.Context) {
+	projectId := c.Query("projectId")
+	month := c.Query("month")
+	var data []IncentiveManualData
+	query := DB.Model(&IncentiveManualData{})
+	if projectId != "" {
+		query = query.Where("project_id = ?", projectId)
+	}
+	if month != "" {
+		query = query.Where("month = ?", month)
+	}
+	query.Find(&data)
+	c.JSON(200, gin.H{"status": "success", "data": data})
+}
+
+func handleSaveIncentiveManualData(c *gin.Context) {
+	var req IncentiveManualData
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(400, gin.H{"status": "error", "message": "ទិន្នន័យមិនត្រឹមត្រូវ"})
+		return
+	}
+
+	var existing IncentiveManualData
+	err := DB.Where("project_id = ? AND month = ? AND metric_type = ? AND data_key = ?", req.ProjectID, req.Month, req.MetricType, req.DataKey).First(&existing).Error
+	if err == nil {
+		DB.Model(&existing).Update("value", req.Value)
+	} else {
+		DB.Create(&req)
+	}
+	c.JSON(200, gin.H{"status": "success"})
+}
+
+func handleGetIncentiveCustomPayouts(c *gin.Context) {
+	projectId := c.Query("projectId")
+	month := c.Query("month")
+	var payouts []IncentiveCustomPayout
+	query := DB.Model(&IncentiveCustomPayout{})
+	if projectId != "" {
+		query = query.Where("project_id = ?", projectId)
+	}
+	if month != "" {
+		query = query.Where("month = ?", month)
+	}
+	query.Find(&payouts)
+	c.JSON(200, gin.H{"status": "success", "data": payouts})
+}
+
+func handleSaveIncentiveCustomPayout(c *gin.Context) {
+	var req IncentiveCustomPayout
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(400, gin.H{"status": "error", "message": "ទិន្នន័យមិនត្រឹមត្រូវ"})
+		return
+	}
+
+	var existing IncentiveCustomPayout
+	err := DB.Where("project_id = ? AND month = ? AND user_name = ?", req.ProjectID, req.Month, req.UserName).First(&existing).Error
+	if err == nil {
+		DB.Model(&existing).Update("value", req.Value)
+	} else {
+		DB.Create(&req)
+	}
+	c.JSON(200, gin.H{"status": "success"})
+}
+
+func handleLockIncentivePayout(c *gin.Context) {
+	var req struct {
+		ProjectID uint   `json:"projectId"`
+		Month     string `json:"month"`
+		Results   []IncentiveResult `json:"results"`
+	}
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(400, gin.H{"status": "error", "message": "ទិន្នន័យមិនត្រឹមត្រូវ"})
+		return
+	}
+
+	// 1. Delete existing results for this project/month (assuming results are stored per project, but model lacks month. Let's add month if needed, or rely on Project ID if project is 1 per month. For now, just replace).
+	DB.Where("project_id = ?", req.ProjectID).Delete(&IncentiveResult{})
+
+	// 2. Save new results
+	if len(req.Results) > 0 {
+		for i := range req.Results {
+			req.Results[i].ID = 0 // Ensure auto-increment
+		}
+		DB.Create(&req.Results)
+		
+		// 3. Send to Google Sheet
+		go func() {
+			timestamp := time.Now().Format("2006-01-02 15:04:05")
+			for _, res := range req.Results {
+				sheetData := map[string]interface{}{
+					"Timestamp":       timestamp,
+					"ProjectID":       req.ProjectID,
+					"UserName":        res.UserName,
+					"TotalOrders":     res.TotalOrders,
+					"TotalRevenue":    res.TotalRevenue,
+					"CalculatedValue": res.CalculatedValue,
+					"IsCustom":        res.IsCustom,
+				}
+				appsReq := AppsScriptRequest{
+					Action:    "addRow",
+					Secret:    appsScriptSecret,
+					SheetName: "IncentiveResults",
+					NewData:   sheetData,
+				}
+				jb, _ := json.Marshal(appsReq)
+				http.Post(appsScriptURL, "application/json", bytes.NewBuffer(jb))
+			}
+		}()
+	}
+
+	c.JSON(200, gin.H{"status": "success", "message": "បានរក្សាទុករបាយការណ៍ជោគជ័យ!"})
+}
+
+type IncentiveRules struct {
+	ApplyTo           []string         `json:"applyTo"`
+	MetricType        string           `json:"metricType"`
+	CalculationPeriod string           `json:"calculationPeriod"`
+	IsMarathon        bool             `json:"isMarathon"`
+	AchievementTiers  []IncentiveTier  `json:"achievementTiers"`
+	CommissionType    string           `json:"commissionType"`
+	CommissionMethod  string           `json:"commissionMethod"`
+	CommissionRate    float64          `json:"commissionRate"`
+	TargetAmount      float64          `json:"targetAmount"`
+	CommissionTiers   []CommissionTier `json:"commissionTiers"`
+}
+
+type IncentiveTier struct {
+	Target       float64 `json:"target"`
+	RewardAmount float64 `json:"rewardAmount"`
+	RewardType   string  `json:"rewardType"` // Fixed or Percentage
+	SubPeriod    string  `json:"subPeriod"`
+}
+
+type CommissionTier struct {
+	From float64  `json:"from"`
+	To   *float64 `json:"to"`
+	Rate float64  `json:"rate"`
+}
+
+func calculatePayout(calc IncentiveCalculator, val float64, subPeriod string) float64 {
+	var rules IncentiveRules
+	if calc.RulesJSON != "" {
+		json.Unmarshal([]byte(calc.RulesJSON), &rules)
+	}
+
+	// Achievement Logic
+	if calc.Type == "Achievement" {
+		tiers := rules.AchievementTiers
+		// Filter by subPeriod if applicable
+		var activeTiers []IncentiveTier
+		for _, t := range tiers {
+			if subPeriod == "" || t.SubPeriod == "" || t.SubPeriod == subPeriod {
+				activeTiers = append(activeTiers, t)
+			}
+		}
+
+		// Sort tiers descending by target
+		for i := 0; i < len(activeTiers); i++ {
+			for j := i + 1; j < len(activeTiers); j++ {
+				if activeTiers[i].Target < activeTiers[j].Target {
+					activeTiers[i], activeTiers[j] = activeTiers[j], activeTiers[i]
+				}
+			}
+		}
+
+		for _, t := range activeTiers {
+			if val >= t.Target {
+				if t.RewardType == "Percentage" {
+					return val * (t.RewardAmount / 100.0)
+				}
+				return t.RewardAmount
+			}
+		}
+		return 0
+	}
+
+	// Commission Logic
+	if calc.Type == "Commission" {
+		cType := rules.CommissionType
+		method := rules.CommissionMethod
+		rate := rules.CommissionRate
+
+		if cType == "Flat Commission" {
+			if method == "Percentage" {
+				return val * (rate / 100.0)
+			}
+			return rate
+		}
+
+		if cType == "Above Target Commission" {
+			target := rules.TargetAmount
+			if val > target {
+				if method == "Percentage" {
+					return (val - target) * (rate / 100.0)
+				}
+				return rate
+			}
+			return 0
+		}
+
+		if cType == "Tiered Commission" {
+			for _, t := range rules.CommissionTiers {
+				if val >= t.From && (t.To == nil || val <= *t.To) {
+					return val * (t.Rate / 100.0)
+				}
+			}
+		}
+	}
+
+	// Legacy/Fallback Logic
+	if calc.Type == "Fixed Per Order" {
+		return val * calc.Value
+	} else if calc.Type == "Percentage of Revenue" {
+		return val * (calc.Value / 100.0)
+	}
+
+	return 0
+}
+
 func handleCalculateIncentive(c *gin.Context) {
 	var req struct {
-		ProjectID uint `json:"projectId"`
+		ProjectID uint   `json:"projectId"`
+		Month     string `json:"month"`
 	}
 	if err := c.ShouldBindJSON(&req); err != nil {
 		c.JSON(400, gin.H{"status": "error", "message": "ទិន្នន័យមិនត្រឹមត្រូវ"})
@@ -1039,24 +1280,52 @@ func handleCalculateIncentive(c *gin.Context) {
 		return
 	}
 
-	startDate := project.StartDate
-	if len(startDate) == 10 {
-		startDate += "T00:00:00Z"
+	var rules IncentiveRules
+	if calc.RulesJSON != "" {
+		json.Unmarshal([]byte(calc.RulesJSON), &rules)
 	}
-	endDate := project.EndDate
-	if len(endDate) == 10 {
-		endDate += "T23:59:59Z"
+
+	metricType := rules.MetricType
+	if metricType == "" {
+		metricType = "Revenue" // Default
+	}
+
+	startDate := req.Month + "-01T00:00:00Z"
+	endDate := req.Month + "-31T23:59:59Z" // Default fallback
+	
+	// Calculate end of month properly
+	parts := strings.Split(req.Month, "-")
+	if len(parts) == 2 {
+		year, _ := strconv.Atoi(parts[0])
+		month, _ := strconv.Atoi(parts[1])
+		firstDay := time.Date(year, time.Month(month), 1, 0, 0, 0, 0, time.UTC)
+		lastDay := firstDay.AddDate(0, 1, -1)
+		endDate = lastDay.Format("2006-01-02") + "T23:59:59Z"
 	}
 
 	var orders []Order
 	DB.Where("team = ? AND fulfillment_status = ? AND timestamp >= ? AND timestamp <= ?",
 		project.TargetTeam, "Delivered", startDate, endDate).Find(&orders)
 
+	// Fetch Manual Data
+	var manualData []IncentiveManualData
+	DB.Where("project_id = ? AND month = ?", req.ProjectID, req.Month).Find(&manualData)
+
+	// Fetch Custom Payouts
+	var customPayouts []IncentiveCustomPayout
+	DB.Where("project_id = ? AND month = ?", req.ProjectID, req.Month).Find(&customPayouts)
+	customPayoutMap := make(map[string]float64)
+	for _, cp := range customPayouts {
+		customPayoutMap[cp.UserName] = cp.Value
+	}
+
 	type userStats struct {
 		Orders  int
 		Revenue float64
 	}
 	stats := make(map[string]userStats)
+
+	// Process System Orders
 	for _, o := range orders {
 		s := stats[o.User]
 		s.Orders++
@@ -1064,15 +1333,36 @@ func handleCalculateIncentive(c *gin.Context) {
 		stats[o.User] = s
 	}
 
-	DB.Where("project_id = ?", project.ID).Delete(&IncentiveResult{})
+	// Process Manual Data
+	for _, md := range manualData {
+		parts := strings.Split(md.DataKey, "_")
+		if len(parts) == 2 {
+			target := parts[1]
+			s := stats[target]
+			if md.MetricType == "Revenue" || md.MetricType == "Sales Amount" {
+				s.Revenue += md.Value
+			} else {
+				s.Orders += int(md.Value)
+			}
+			stats[target] = s
+		}
+	}
 
 	var results []IncentiveResult
 	for user, s := range stats {
 		var val float64
-		if calc.Type == "Fixed Per Order" {
-			val = float64(s.Orders) * calc.Value
-		} else if calc.Type == "Percentage of Revenue" {
-			val = s.Revenue * (calc.Value / 100.0)
+		if metricType == "Revenue" || metricType == "Sales Amount" {
+			val = s.Revenue
+		} else {
+			val = float64(s.Orders)
+		}
+
+		payout := calculatePayout(calc, val, "")
+
+		isCustom := false
+		if customVal, exists := customPayoutMap[user]; exists {
+			payout = customVal
+			isCustom = true
 		}
 
 		results = append(results, IncentiveResult{
@@ -1080,15 +1370,12 @@ func handleCalculateIncentive(c *gin.Context) {
 			UserName:        user,
 			TotalOrders:     s.Orders,
 			TotalRevenue:    s.Revenue,
-			CalculatedValue: val,
+			CalculatedValue: payout,
+			IsCustom:        isCustom,
 		})
 	}
 
-	if len(results) > 0 {
-		DB.Create(&results)
-	}
-
-	c.JSON(200, gin.H{"status": "success", "message": "ការគណនាទទួលបានជោគជ័យ!", "data": results})
+	c.JSON(200, gin.H{"status": "success", "data": results})
 }
 
 // =========================================================================
@@ -1291,11 +1578,10 @@ func isNumericHeader(h string) bool {
 		h == "Part" || h == "ID"
 }
 func isBoolHeader(h string) bool {
-	return h == "IsSystemAdmin" || h == "AllowManualDriver" || h == "RequireDriverSelection" || 
-		h == "IsRestocked" || h == "IsEnabled" || 
-		h == "EnableDriverRecommendation" || h == "IsVerified"
+	return h == "IsSystemAdmin" || h == "AllowManualDriver" || h == "RequireDriverSelection" ||
+		h == "IsRestocked" || h == "IsEnabled" ||
+		h == "EnableDriverRecommendation"
 }
-
 func convertSheetValuesToMaps(values *sheets.ValueRange) ([]map[string]interface{}, error) {
 	if values == nil || len(values.Values) < 2 {
 		return []map[string]interface{}{}, nil
@@ -1331,10 +1617,21 @@ func convertSheetValuesToMaps(values *sheets.ValueRange) ([]map[string]interface
 							if b, ok := cell.(bool); ok {
 								rowData[header] = b
 							} else {
+								// Handle case where it might be a string "TRUE" in a non-string type cell
 								rowData[header] = false
 							}
 						} else {
-							rowData[header] = cell
+							// If it's a bool cell but the struct expects a string (like IsVerified)
+							// converting to string ensures json.Unmarshal doesn't fail
+							if b, ok := cell.(bool); ok {
+								if b {
+									rowData[header] = "TRUE"
+								} else {
+									rowData[header] = "FALSE"
+								}
+							} else {
+								rowData[header] = fmt.Sprintf("%v", cell)
+							}
 						}
 					}
 					if header == "Telegram Message ID 1" || header == "Telegram Message ID 2" || header == "Order ID" || header == "Customer Phone" || header == "Barcode" {
@@ -2007,6 +2304,15 @@ func handleAdminUpdateOrder(c *gin.Context) {
 	for k, v := range r.NewData {
 		dbCol := mapToDBColumn(k)
 		if isValidOrderColumn(dbCol) && v != nil {
+			// ✅ Prevent overwriting a permanent Google Drive URL with a temporary URL
+			if strVal, ok := v.(string); ok && strings.Contains(strVal, "/api/images/temp/") {
+				var currentVal string
+				DB.Model(&Order{}).Where("order_id = ?", r.OrderID).Select(dbCol).Scan(&currentVal)
+				if strings.Contains(currentVal, "drive.google.com") {
+					continue // Skip updating this column as we already have the permanent Drive URL
+				}
+			}
+
 			if dbCol == "discount_usd" || dbCol == "grand_total" || dbCol == "subtotal" || dbCol == "shipping_fee_customer" || dbCol == "internal_cost" || dbCol == "delivery_unpaid" || dbCol == "delivery_paid" || dbCol == "total_product_cost" {
 				if f, ok := v.(float64); ok {
 					mappedData[dbCol] = f
@@ -2092,6 +2398,18 @@ func handleAdminUpdateSheet(c *gin.Context) {
 		if v == nil {
 			continue
 		}
+
+		// ✅ Prevent overwriting a permanent Google Drive URL with a temporary URL
+		if strVal, ok := v.(string); ok && strings.Contains(strVal, "/api/images/temp/") {
+			var currentVal string
+			if pkCol != "" && pkVal != nil {
+				DB.Table(tableName).Where(pkCol+" = ?", pkVal).Select(dbCol).Scan(&currentVal)
+				if strings.Contains(currentVal, "drive.google.com") {
+					continue // Skip updating this column as we already have the permanent Drive URL
+				}
+			}
+		}
+
 		mappedData[dbCol] = v
 	}
 
@@ -2461,7 +2779,16 @@ func handleImageUploadProxy(c *gin.Context) {
 		if r.OrderID != "" && r.TargetColumn != "" {
 			dbCol := mapToDBColumn(r.TargetColumn)
 			if isValidOrderColumn(dbCol) {
-				DB.Model(&Order{}).Where("order_id = ?", r.OrderID).UpdateColumn(dbCol, driveURL)
+				// Fetch the order to get the Team information for Apps Script
+				var order Order
+				team := ""
+				if err := DB.Where("order_id = ?", r.OrderID).First(&order).Error; err == nil {
+					team = order.Team
+					DB.Model(&order).UpdateColumn(dbCol, driveURL)
+				} else {
+					// Fallback if order not found in DB yet
+					DB.Model(&Order{}).Where("order_id = ?", r.OrderID).UpdateColumn(dbCol, driveURL)
+				}
 
 				event, _ := json.Marshal(map[string]interface{}{
 					"type":    "update_order",
@@ -2475,6 +2802,7 @@ func handleImageUploadProxy(c *gin.Context) {
 					Secret: appsScriptSecret,
 					OrderData: map[string]interface{}{
 						"orderId":       r.OrderID,
+						"team":          team, // ✅ Added team for Apps Script to find the correct sheet
 						"updatedFields": map[string]interface{}{r.TargetColumn: driveURL},
 					},
 				}
@@ -2751,6 +3079,11 @@ func main() {
 			admin.POST("/incentive/projects", handleCreateIncentiveProject)
 			admin.GET("/incentive/results", handleGetIncentiveResults)
 			admin.POST("/incentive/calculate", handleCalculateIncentive)
+			admin.GET("/incentive/manual-data", handleGetIncentiveManualData)
+			admin.POST("/incentive/manual-data", handleSaveIncentiveManualData)
+			admin.GET("/incentive/custom-payout", handleGetIncentiveCustomPayouts)
+			admin.POST("/incentive/custom-payout", handleSaveIncentiveCustomPayout)
+			admin.POST("/incentive/lock", handleLockIncentivePayout)
 		}
 		profile := protected.Group("/profile")
 		profile.POST("/update", handleUpdateProfile)
