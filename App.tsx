@@ -10,6 +10,7 @@ import AdminDashboard from './pages/AdminDashboard';
 import CreateOrderPage from './pages/CreateOrderPage';
 import FulfillmentPage from './pages/FulfillmentPage';
 import RoleSelectionPage from './pages/RoleSelectionPage';
+import NetflixEntertainment from './components/admin/netflix/NetflixEntertainment';
 import Header from './components/common/Header';
 import Spinner from './components/common/Spinner';
 import ChatWidget from './components/chat/ChatWidget';
@@ -41,15 +42,27 @@ const AppContent: React.FC = () => {
         orders, appData, isOrdersLoading, isSyncing, refreshTimestamp, fetchData, fetchOrders, refreshData
     } = useOrder();
 
-    const [appState, setAppState] = useUrlState<'login' | 'user_journey' | 'admin_dashboard' | 'create_order' | 'fulfillment' | 'role_selection' | 'confirm_delivery'>('view', 'login');
+    const [appState, setAppState] = useUrlState<'login' | 'user_journey' | 'admin_dashboard' | 'create_order' | 'fulfillment' | 'role_selection' | 'confirm_delivery' | 'entertainment' | 'watch'>('view', 'login');
     const [selectedTeam, setSelectedTeam] = useUrlState<string>('team', '');
+    const [selectedMovieId, setSelectedMovieId] = useUrlState<string>('movie', '');
     const [mobilePageTitle, setMobilePageTitle] = useState<string | null>(null);
     const [previewImageUrl, setPreviewImageUrl] = useState<string | null>(null);
     const [isGlobalLoading, setIsGlobalLoading] = useState(true);
     const [language, setLanguage] = useState<'en' | 'km'>(() => (localStorage.getItem('language') as any) || 'km');
     const [advancedSettings, setAdvancedSettings] = useState<AdvancedSettings>(() => {
         const saved = localStorage.getItem('advancedSettings');
-        return saved ? JSON.parse(saved) : { enableFloatingAlerts: true, enablePrivacyMode: false, notificationVolume: 0.5, notificationSound: 'default' };
+        const defaultSettings: AdvancedSettings = { 
+            enableFloatingAlerts: true, 
+            enablePrivacyMode: false, 
+            notificationVolume: 0.5, 
+            notificationSound: 'default',
+            uiTheme: 'default',
+            themeMode: 'dark'
+        };
+        if (saved) {
+            try { return { ...defaultSettings, ...JSON.parse(saved) }; } catch (e) { return defaultSettings; }
+        }
+        return defaultSettings;
     });
 
     const tokenRef = useRef<string | null>(null);
@@ -61,7 +74,7 @@ const AppContent: React.FC = () => {
 
     // Handle initial state and auth
     useEffect(() => {
-        if (!currentUser && appState !== 'login' && appState !== 'confirm_delivery') {
+        if (!currentUser && appState !== 'login' && appState !== 'confirm_delivery' && appState !== 'watch') {
             setAppState('login');
         }
     }, [currentUser, appState, setAppState]);
@@ -161,16 +174,17 @@ const AppContent: React.FC = () => {
     }, []);
 
     const shouldShowHeader = useMemo(() => {
-        if (appState === 'login' || appState === 'admin_dashboard' || appState === 'confirm_delivery') return false;
+        if (appState === 'login' || appState === 'admin_dashboard' || appState === 'confirm_delivery' || appState === 'entertainment' || appState === 'watch') return false;
         return true;
     }, [appState]);
 
-    const containerClass = useMemo(() => 
-        (appState === 'admin_dashboard' || appState === 'role_selection' || (appState === 'user_journey' && !selectedTeam)) ? 'w-full' : 'w-full px-2 sm:px-6', 
-    [appState, selectedTeam]);
+    const containerClass = useMemo(() => {
+        if (appState === 'entertainment' || appState === 'watch') return 'w-full';
+        return (appState === 'admin_dashboard' || appState === 'role_selection' || (appState === 'user_journey' && !selectedTeam)) ? 'w-full' : 'w-full px-2 sm:px-6';
+    }, [appState, selectedTeam]);
 
     const paddingClass = useMemo(() => {
-        if (appState === 'login' || appState === 'confirm_delivery') return 'pt-0 pb-0';
+        if (appState === 'login' || appState === 'confirm_delivery' || appState === 'entertainment' || appState === 'watch') return 'pt-0 pb-0';
         
         // Base header padding
         let topPadding = isMobile ? 'pt-16' : 'pt-20';
@@ -235,73 +249,77 @@ const AppContent: React.FC = () => {
 
     return (
         <AppContext.Provider value={legacyContextValue as any}>
-            {/* GLOBAL PREMIUM BACKGROUND */}
-            <div className="fixed inset-0 w-screen h-[100dvh] overflow-hidden pointer-events-none z-0 bg-[#020617]">
-                <div className="absolute top-[-10%] left-[-10%] w-[100%] sm:w-[70%] h-[60%] sm:h-[70%] bg-blue-600/15 rounded-full blur-[80px] sm:blur-[120px] animate-pulse"></div>
-                <div className="absolute bottom-[-10%] right-[-10%] w-[100%] sm:w-[60%] h-[60%] bg-indigo-600/15 rounded-full blur-[80px] sm:blur-[120px]" style={{ animationDelay: '3s' }}></div>
-                <div className="absolute top-[20%] right-[10%] w-[50%] sm:w-[40%] h-[40%] bg-emerald-500/5 rounded-full blur-[60px] sm:blur-[100px]" style={{ animationDelay: '1.5s' }}></div>
-                <div className="absolute inset-0 bg-[url('https://www.transparenttextures.com/patterns/carbon-fibre.png')] opacity-[0.02] mix-blend-overlay"></div>
-            </div>
+            <div className={`theme-wrapper h-screen w-full overflow-hidden flex flex-col ${advancedSettings.uiTheme ? `ui-${advancedSettings.uiTheme}` : ''} ${advancedSettings.themeMode ? `theme-${advancedSettings.themeMode}` : 'theme-dark'}`}>
+                {/* GLOBAL PREMIUM BACKGROUND */}
+                <div className="fixed inset-0 w-screen h-[100dvh] overflow-hidden pointer-events-none z-0 bg-[#020617] dark:bg-[#020617] light:bg-slate-100">
+                    <div className="absolute top-[-10%] left-[-10%] w-[100%] sm:w-[70%] h-[60%] sm:h-[70%] bg-blue-600/15 rounded-full blur-[80px] sm:blur-[120px] animate-pulse"></div>
+                    <div className="absolute bottom-[-10%] right-[-10%] w-[100%] sm:w-[60%] h-[60%] bg-indigo-600/15 rounded-full blur-[80px] sm:blur-[120px]" style={{ animationDelay: '3s' }}></div>
+                    <div className="absolute top-[20%] right-[10%] w-[50%] sm:w-[40%] h-[40%] bg-emerald-500/5 rounded-full blur-[60px] sm:blur-[100px]" style={{ animationDelay: '1.5s' }}></div>
+                    <div className="absolute inset-0 bg-[url('https://www.transparenttextures.com/patterns/carbon-fibre.png')] opacity-[0.02] mix-blend-overlay"></div>
+                </div>
 
-            <div className="relative z-10 flex flex-col h-[100dvh] w-full overflow-hidden">
-                <BackgroundMusic />
-                <Suspense fallback={<div className="flex h-full items-center justify-center bg-transparent"><Spinner size="lg" /></div>}>
-                    {appState === 'confirm_delivery' ? (
-                        <DeliveryAgentView orderIds={confirmIds} returnOrderIds={returnIds} failedOrderIds={failedIdsParam} storeName={confirmStore} />
-                    ) : appState === 'admin_dashboard' ? (
-                        <div className="flex-grow overflow-hidden relative flex flex-col h-full w-full">
-                             {originalAdminUser && <ImpersonationBanner />}
-                             <AdminDashboard />
-                             {!isMobileMenuOpen && <ChatWidget isOpen={isChatOpen} onClose={() => setIsChatOpen(false)} />}
-                        </div>
-                    ) : currentUser && appState !== 'login' ? (
-                        <div className="flex flex-col h-full w-full overflow-hidden">
-                            {originalAdminUser && <ImpersonationBanner />}
-                            {shouldShowHeader && <Header appState={appState} onBackToRoleSelect={() => setAppState('role_selection')} />}
-                            <main className={`flex-grow overflow-hidden relative flex flex-col ${appState === 'role_selection' || (appState === 'user_journey' && !selectedTeam) ? 'bg-transparent' : ''}`}>
-                                <div className={`flex-grow overflow-y-auto custom-scrollbar ${containerClass} ${paddingClass} transition-all duration-300`}>
-                                    {appState === 'user_journey' && <UserJourney onBackToRoleSelect={() => setAppState('role_selection')} />}
-                                    {appState === 'create_order' && <CreateOrderPage team={selectedTeam} onSaveSuccess={() => setAppState('user_journey')} onCancel={() => setAppState('user_journey')} />}
-                                    {appState === 'fulfillment' && <FulfillmentPage />}
-                                    {appState === 'role_selection' && (
-                                        <RoleSelectionPage onSelect={(s) => {
-                                            if (s === 'user_journey') setSelectedTeam('');
-                                            setAppState(s as any);
-                                        }} />
-                                    )}
-                                </div>
-                            </main>
-                            {!isMobileMenuOpen && <ChatWidget isOpen={isChatOpen} onClose={() => setIsChatOpen(false)} />}
-                        </div>
-                    ) : (
-                        <LoginPage onLoginSuccess={() => setAppState('role_selection')} />
+                <div className="relative z-10 flex flex-col h-full w-full overflow-hidden">
+                    <BackgroundMusic />
+                    <Suspense fallback={<div className="flex h-full items-center justify-center bg-transparent"><Spinner size="lg" /></div>}>
+                        {appState === 'confirm_delivery' ? (
+                            <DeliveryAgentView orderIds={confirmIds} returnOrderIds={returnIds} failedOrderIds={failedIdsParam} storeName={confirmStore} />
+                        ) : appState === 'admin_dashboard' ? (
+                            <div className="flex-grow overflow-hidden relative flex flex-col h-full w-full">
+                                 {originalAdminUser && <ImpersonationBanner />}
+                                 <AdminDashboard />
+                                 {!isMobileMenuOpen && <ChatWidget isOpen={isChatOpen} onClose={() => setIsChatOpen(false)} />}
+                            </div>
+                        ) : currentUser && appState !== 'login' ? (
+                            <div className="flex flex-col h-full w-full overflow-hidden">
+                                {originalAdminUser && <ImpersonationBanner />}
+                                {shouldShowHeader && <Header appState={appState} onBackToRoleSelect={() => setAppState('role_selection')} />}
+                                <main className={`flex-grow overflow-hidden relative flex flex-col ${appState === 'role_selection' || (appState === 'user_journey' && !selectedTeam) ? 'bg-transparent' : ''}`}>
+                                    <div id="app-main-scroll-container" className={`flex-grow overflow-y-auto custom-scrollbar ${containerClass} ${paddingClass} transition-all duration-300`}>
+                                        {appState === 'user_journey' && <UserJourney onBackToRoleSelect={() => setAppState('role_selection')} />}
+                                        {appState === 'create_order' && <CreateOrderPage team={selectedTeam} onSaveSuccess={() => setAppState('user_journey')} onCancel={() => setAppState('user_journey')} />}
+                                        {appState === 'fulfillment' && <FulfillmentPage />}
+                                        {appState === 'entertainment' && <NetflixEntertainment />}
+                                        {appState === 'watch' && <NetflixEntertainment guestMovieId={selectedMovieId} />}
+                                        {appState === 'role_selection' && (
+                                            <RoleSelectionPage onSelect={(s) => {
+                                                if (s === 'user_journey') setSelectedTeam('');
+                                                setAppState(s as any);
+                                            }} />
+                                        )}
+                                    </div>
+                                </main>
+                                {!isMobileMenuOpen && <ChatWidget isOpen={isChatOpen} onClose={() => setIsChatOpen(false)} />}
+                            </div>
+                        ) : (
+                            <LoginPage onLoginSuccess={() => setAppState('role_selection')} />
+                        )}
+                    </Suspense>
+                    
+                    {advancedSettings.enableFloatingAlerts && (
+                        <NotificationStack notifications={notifications} onRemove={removeNotification} />
                     )}
-                </Suspense>
-                
-                {advancedSettings.enableFloatingAlerts && (
-                    <NotificationStack notifications={notifications} onRemove={removeNotification} />
-                )}
 
-                {previewImageUrl && (
-                    <Modal isOpen={true} onClose={() => setPreviewImageUrl(null)} maxWidth="max-w-4xl">
-                        <div className="relative p-2 h-[85vh] flex flex-col">
-                            <button onClick={() => setPreviewImageUrl(null)} className="absolute top-4 right-4 z-50 w-10 h-10 bg-red-600/80 hover:bg-red-600 text-white rounded-full flex items-center justify-center shadow-2xl transition-all border border-white/20 active:scale-90"><svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2.5}><path d="M6 18L18 6M6 6l12 12" /></svg></button>
-                            
-                            {previewImageUrl.includes('drive.google.com') ? (
-                                <iframe 
-                                    src={convertGoogleDriveUrl(previewImageUrl, 'preview')} 
-                                    className="w-full h-full rounded-xl border-0 bg-black/20"
-                                    allow="autoplay"
-                                    title="Preview"
-                                />
-                            ) : (
-                                <div className="flex-1 flex items-center justify-center overflow-hidden">
-                                    <img src={previewImageUrl} className="max-h-full max-w-full object-contain rounded-xl shadow-2xl" alt="Preview" />
-                                </div>
-                            )}
-                        </div>
-                    </Modal>
-                )}
+                    {previewImageUrl && (
+                        <Modal isOpen={true} onClose={() => setPreviewImageUrl(null)} maxWidth="max-w-4xl">
+                            <div className="relative p-2 h-[85vh] flex flex-col">
+                                <button onClick={() => setPreviewImageUrl(null)} className="absolute top-4 right-4 z-50 w-10 h-10 bg-red-600/80 hover:bg-red-600 text-white rounded-full flex items-center justify-center shadow-2xl transition-all border border-white/20 active:scale-90"><svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2.5}><path d="M6 18L18 6M6 6l12 12" /></svg></button>
+                                
+                                {previewImageUrl.includes('drive.google.com') ? (
+                                    <iframe 
+                                        src={convertGoogleDriveUrl(previewImageUrl, 'preview')} 
+                                        className="w-full h-full rounded-xl border-0 bg-black/20"
+                                        allow="autoplay"
+                                        title="Preview"
+                                    />
+                                ) : (
+                                    <div className="flex-1 flex items-center justify-center overflow-hidden">
+                                        <img src={previewImageUrl} className="max-h-full max-w-full object-contain rounded-xl shadow-2xl" alt="Preview" />
+                                    </div>
+                                )}
+                            </div>
+                        </Modal>
+                    )}
+                </div>
             </div>
         </AppContext.Provider>
     );

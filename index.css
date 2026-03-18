@@ -35,6 +35,185 @@
     --bg-dark: #020617;
     --card-bg: rgba(15, 23, 42, 0.6);
     --border-light: rgba(255, 255, 255, 0.08);
+    --radius-standard: 1rem;
+    --radius-lg: 1.5rem;
+    --radius-xl: 2rem;
+}
+
+/* --- LIGHT MODE --- */
+.theme-light {
+    --bg-dark: #f1f5f9;
+    --card-bg: rgba(255, 255, 255, 0.8);
+    --border-light: rgba(0, 0, 0, 0.05);
+    color: #1e293b;
+}
+
+.theme-light body {
+    background-color: #f1f5f9;
+    color: #1e293b;
+}
+
+/* --- NEUMORPHISM THEME --- */
+.ui-neumorphism {
+    --radius-standard: 20px;
+    --radius-lg: 30px;
+    --radius-xl: 40px;
+}
+
+.ui-neumorphism.theme-dark {
+    --bg-dark: #1a1a1a;
+    --card-bg: #1a1a1a;
+    --nm-shadow-out: 8px 8px 16px #0d0d0d, -8px -8px 16px #272727;
+    --nm-shadow-in: inset 8px 8px 16px #0d0d0d, inset -8px -8px 16px #272727;
+}
+
+.ui-neumorphism.theme-light {
+    --bg-dark: #e0e0e0;
+    --card-bg: #e0e0e0;
+    --nm-shadow-out: 8px 8px 16px #bebebe, -8px -8px 16px #ffffff;
+    --nm-shadow-in: inset 8px 8px 16px #bebebe, inset -8px -8px 16px #ffffff;
+}
+
+.ui-neumorphism .page-card, 
+.ui-neumorphism .btn,
+.ui-neumorphism .form-input,
+.ui-neumorphism .form-select,
+.ui-neumorphism .bg-gray-800\/40,
+.ui-neumorphism .bg-gray-900\/50 {
+    background: var(--card-bg) !important;
+    box-shadow: var(--nm-shadow-out) !important;
+    border: none !important;
+    backdrop-filter: none !important;
+}
+
+.ui-neumorphism .btn:active,
+.ui-neumorphism .form-input:focus {
+    box-shadow: var(--nm-shadow-in) !important;
+}
+
+/* --- SAMSUNG UI CONCEPT --- */
+.ui-samsung {
+    --radius-standard: 24px;
+    --radius-lg: 32px;
+    --radius-xl: 48px;
+    --primary: #0381fe;
+    font-family: 'Samsung One', 'Inter', sans-serif;
+}
+
+.ui-samsung.theme-light {
+    --bg-dark: #f2f2f7;
+    --card-bg: #ffffff;
+}
+
+.ui-samsung .page-card,
+.ui-samsung .bg-gray-800\/40,
+.ui-samsung .bg-gray-900\/50 {
+    border-radius: var(--radius-lg) !important;
+    border: none !important;
+    box-shadow: 0 4px 24px rgba(0,0,0,0.05) !important;
+}
+
+.ui-samsung .btn {
+    border-radius: 100px !important;
+    text-transform: none !important;
+    letter-spacing: normal !important;
+    font-weight: 600 !important;
+}
+
+.ui-samsung header {
+    background: transparent !important;
+    backdrop-filter: none !important;
+    border: none !important;
+}
+
+.ui-samsung .sidebar-item {
+    border-radius: 16px !important;
+    margin: 4px 12px !important;
+}
+
+/* --- NETFLIX UI CONCEPT --- */
+.ui-netflix {
+    --primary: #e50914;
+    --radius-standard: 4px;
+    --radius-lg: 8px;
+    --radius-xl: 12px;
+}
+
+.ui-netflix.theme-dark {
+    --bg-dark: #141414;
+    --card-bg: #181818;
+    --border-light: rgba(255, 255, 255, 0.1);
+}
+
+.ui-netflix.theme-light {
+    --bg-dark: #f5f5f1;
+    --card-bg: #ffffff;
+    --border-light: rgba(0, 0, 0, 0.1);
+}
+
+.ui-netflix .page-card,
+.ui-netflix .bg-gray-800\/40,
+.ui-netflix .bg-gray-900\/50 {
+    background: var(--card-bg) !important;
+    border-radius: var(--radius-standard) !important;
+    border: 1px solid var(--border-light) !important;
+    box-shadow: 0 4px 20px rgba(0,0,0,0.3) !important;
+    transition: transform 0.3s ease;
+}
+
+.ui-netflix .page-card:hover {
+    transform: scale(1.02);
+    z-index: 20;
+}
+
+.ui-netflix .btn {
+    border-radius: var(--radius-standard) !important;
+    font-weight: 800 !important;
+    text-transform: none !important;
+    padding: 0.6rem 2rem !important;
+}
+
+.ui-netflix .btn-primary {
+    background: #e50914 !important;
+    color: white !important;
+}
+
+.ui-netflix .btn-primary:hover {
+    background: #ff0a16 !important;
+}
+
+.ui-netflix .sidebar-item-active {
+    border-left: 4px solid #e50914 !important;
+    background: rgba(229, 9, 20, 0.1) !important;
+}
+
+.ui-netflix .ui-sidebar-netflix {
+    background: #000000 !important;
+    border-right: none !important;
+}
+
+.ui-netflix.theme-light .ui-sidebar-netflix {
+    background: #ffffff !important;
+    border-right: 1px solid #e5e5e5 !important;
+}
+
+.ui-netflix .admin-table th {
+    background: transparent !important;
+    color: #808080 !important;
+    font-weight: 700 !important;
+}
+
+.ui-netflix .admin-table tr:hover td {
+    background: rgba(255, 255, 255, 0.05) !important;
+}
+
+.ui-netflix.theme-light .admin-table tr:hover td {
+    background: rgba(0, 0, 0, 0.02) !important;
+}
+
+/* Global Transition */
+* {
+    transition: background-color 0.3s ease, color 0.3s ease, box-shadow 0.3s ease, border-radius 0.3s ease;
 }
 
 * {

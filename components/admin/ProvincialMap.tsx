@@ -1,10 +1,11 @@
 
-import React, { useEffect, useRef, useState, useMemo } from 'react';
+import React, { useEffect, useRef, useState, useMemo, useContext } from 'react';
 import { useCambodiaGeoJSON } from '../../hooks/useCambodiaGeoJSON';
 import { normalizeName } from '../../utils/mapUtils';
 import MapLegend from './map/MapLegend';
 import { useMapEngine } from '../../hooks/useMapEngine';
 import { EXTRUSION_HEIGHT_EXPRESSION, FILL_COLOR_EXPRESSION, MAP_COLORS } from './map/mapStyles';
+import { AppContext } from '../../context/AppContext';
 
 interface ProvinceStat {
     name: string;
@@ -19,6 +20,10 @@ interface ProvincialMapProps {
 }
 
 const ProvincialMap: React.FC<ProvincialMapProps> = ({ data, onProvinceClick }) => {
+    const { advancedSettings } = useContext(AppContext);
+    const isLightMode = advancedSettings?.themeMode === 'light';
+    const uiTheme = advancedSettings?.uiTheme || 'default';
+
     const mapContainerRef = useRef<HTMLDivElement>(null);
     const popupRef = useRef<any>(null);
     const markersRef = useRef<any[]>([]); 
@@ -96,6 +101,9 @@ const ProvincialMap: React.FC<ProvincialMapProps> = ({ data, onProvinceClick }) 
 
     // Colors - Solid Cyber
     const getMetricColor = () => {
+        if (uiTheme === 'netflix') return '#e50914';
+        if (uiTheme === 'samsung') return '#0381fe';
+
         switch(activeMetric) {
             case 'revenue': return '#00bcd4'; // Cyan
             case 'orders': return '#8b5cf6'; // Violet
@@ -157,11 +165,11 @@ const ProvincialMap: React.FC<ProvincialMapProps> = ({ data, onProvinceClick }) 
             if (map.setFog) {
                 map.setFog({
                     'range': [1, 10],
-                    'color': '#0f172a', // Dark Slate
+                    'color': isLightMode ? (uiTheme === 'netflix' ? '#f5f5f1' : '#f1f5f9') : (uiTheme === 'netflix' ? '#141414' : '#0f172a'),
                     'horizon-blend': 0.2,
-                    'high-color': '#1e293b',
-                    'space-color': '#0f172a',
-                    'star-intensity': 0
+                    'high-color': isLightMode ? '#ffffff' : '#1e293b',
+                    'space-color': isLightMode ? '#f8fafc' : '#0f172a',
+                    'star-intensity': isLightMode ? 0 : 0.1
                 });
             }
 
@@ -296,23 +304,25 @@ const ProvincialMap: React.FC<ProvincialMapProps> = ({ data, onProvinceClick }) 
                         let mainValue = `$${Number(realRevenue).toLocaleString()}`;
                         let ordersValue = `${orders}`;
                         
+                        const accentColor = getMetricColor();
+
                         popupRef.current
                             .setLngLat(e.lngLat)
                             .setHTML(`
-                                <div class="bg-slate-900 border border-slate-700 p-3 shadow-xl rounded-lg min-w-[160px]">
-                                    <div class="flex items-center justify-between border-b border-slate-800 pb-2 mb-2">
-                                        <h4 class="text-white font-bold text-xs uppercase">${displayName}</h4>
+                                <div class="${isLightMode ? 'bg-white border-gray-200' : 'bg-slate-900 border-slate-700'} border p-3 shadow-xl rounded-lg min-w-[160px]">
+                                    <div class="flex items-center justify-between border-b ${isLightMode ? 'border-gray-100' : 'border-slate-800'} pb-2 mb-2">
+                                        <h4 class="${isLightMode ? 'text-gray-900' : 'text-white'} font-bold text-xs uppercase">${displayName}</h4>
                                     </div>
                                     <div class="flex flex-col gap-2">
                                         <div class="flex justify-between items-center">
                                             <span class="text-[10px] text-gray-400 uppercase">ORDERS</span>
-                                            <span class="text-sm font-bold text-violet-400">${ordersValue}</span>
+                                            <span class="text-sm font-bold" style="color: ${accentColor}">${ordersValue}</span>
                                         </div>
                                         <div class="flex justify-between items-center">
                                             <span class="text-[10px] text-gray-400 uppercase">REVENUE</span>
-                                            <span class="text-sm font-bold text-cyan-400">${mainValue}</span>
+                                            <span class="text-sm font-bold" style="color: ${accentColor}">${mainValue}</span>
                                         </div>
-                                        <div class="pt-1 mt-1 border-t border-slate-800 text-[10px] text-center text-cyan-500 font-bold uppercase cursor-pointer">
+                                        <div class="pt-1 mt-1 border-t ${isLightMode ? 'border-gray-100' : 'border-slate-800'} text-[10px] text-center font-bold uppercase cursor-pointer" style="color: ${accentColor}">
                                             Click to view details
                                         </div>
                                     </div>
@@ -415,7 +425,7 @@ const ProvincialMap: React.FC<ProvincialMapProps> = ({ data, onProvinceClick }) 
 
                 const el = document.createElement('div');
                 el.className = 'province-label-marker';
-                el.innerHTML = `<span class="text-[8px] font-bold text-white/50 uppercase tracking-wider drop-shadow-md select-none hover:text-white transition-colors">${displayName}</span>`;
+                el.innerHTML = `<span class="text-[8px] font-bold ${isLightMode ? 'text-gray-500/80' : 'text-white/50'} uppercase tracking-wider drop-shadow-md select-none hover:text-current transition-colors">${displayName}</span>`;
                 
                 // Add marker
                 const marker = new maplibregl.Marker({
@@ -449,14 +459,16 @@ const ProvincialMap: React.FC<ProvincialMapProps> = ({ data, onProvinceClick }) 
                     if (activeMetric === 'orders') displayValue = `${orders}`;
                     if (activeMetric === 'shipping') displayValue = `$${(shippingCost/1000).toFixed(1)}k`;
 
+                    const accentColor = getMetricColor();
+
                     el.innerHTML = `
                         <div class="flex flex-col items-center group cursor-pointer animate-float hover:z-50">
-                            <div class="px-3 py-1 bg-slate-900/90 border border-white/20 rounded-lg flex items-center gap-2 shadow-lg mb-1 backdrop-blur-sm">
-                                <span class="text-[10px] font-black text-yellow-400">#${rank}</span>
-                                <span class="text-[9px] font-bold text-white uppercase">${displayName}</span>
+                            <div class="px-3 py-1 ${isLightMode ? 'bg-white/90' : 'bg-slate-900/90'} border ${isLightMode ? 'border-gray-200' : 'border-white/20'} rounded-lg flex items-center gap-2 shadow-lg mb-1 backdrop-blur-sm">
+                                <span class="text-[10px] font-black" style="color: ${accentColor}">#${rank}</span>
+                                <span class="text-[9px] font-bold ${isLightMode ? 'text-gray-900' : 'text-white'} uppercase">${displayName}</span>
                             </div>
-                            <div class="w-0.5 h-10 bg-white/50"></div>
-                            <div class="w-2 h-2 bg-white rounded-full"></div>
+                            <div class="w-0.5 h-10 ${isLightMode ? 'bg-gray-300' : 'bg-white/50'}"></div>
+                            <div class="w-2 h-2 ${isLightMode ? 'bg-gray-400' : 'bg-white'} rounded-full"></div>
                         </div>
                     `;
                     const marker = new maplibregl.Marker({ element: el, anchor: 'bottom', offset: [0, -10] }).setLngLat(finalCenter).addTo(map);
@@ -468,52 +480,55 @@ const ProvincialMap: React.FC<ProvincialMapProps> = ({ data, onProvinceClick }) 
             console.error("Layer Update Error:", e);
         }
         return () => { if (animationRef.current) cancelAnimationFrame(animationRef.current); };
-    }, [isMapReady, rawGeoJson, statsMap, topRanks, activeMetric, language, onProvinceClick]); 
+    }, [isMapReady, rawGeoJson, statsMap, topRanks, activeMetric, language, onProvinceClick, isLightMode, uiTheme]); 
 
     if (geoError || mapError) {
         return (
-            <div className="w-full h-[500px] flex items-center justify-center bg-gray-900/50 rounded-3xl border border-red-500/20 text-red-400">
+            <div className={`w-full h-[500px] flex items-center justify-center ${isLightMode ? 'bg-gray-50 border-red-200' : 'bg-gray-900/50 border-red-500/20'} rounded-3xl border text-red-400`}>
                 <p>Map Error: {geoError || mapError}</p>
             </div>
         );
     }
 
+    const accentColor = getMetricColor();
+
     return (
-        <div className="relative w-full h-[650px] xl:h-[750px] bg-slate-950 rounded-lg border border-slate-800 shadow-2xl overflow-hidden group">
+        <div className={`relative w-full h-[650px] xl:h-[750px] ${isLightMode ? (uiTheme === 'netflix' ? 'bg-[#f5f5f1]' : 'bg-slate-50') : (uiTheme === 'netflix' ? 'bg-[#141414]' : 'bg-slate-950')} rounded-lg border ${isLightMode ? 'border-gray-200' : 'border-slate-800'} shadow-2xl overflow-hidden group transition-colors duration-500`}>
             
             {/* Header */}
             <div className="absolute top-6 left-6 z-10 pointer-events-none">
                 <div className="flex flex-col">
                     <div className="flex items-center gap-2 mb-1">
-                        <div className="w-2 h-2 bg-cyan-500 animate-pulse rounded-full"></div>
-                        <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">3D Visualization</span>
+                        <div className="w-2 h-2 animate-pulse rounded-full" style={{ backgroundColor: accentColor }}></div>
+                        <span className={`text-[10px] font-bold ${isLightMode ? 'text-gray-500' : 'text-slate-400'} uppercase tracking-widest`}>3D Visualization</span>
                     </div>
-                    <h2 className="text-xl font-black text-white uppercase tracking-tight">Cambodia <span className="text-cyan-400">Map</span></h2>
+                    <h2 className={`text-xl font-black ${isLightMode ? 'text-gray-900' : 'text-white'} uppercase tracking-tight`}>Cambodia <span style={{ color: accentColor }}>Map</span></h2>
                 </div>
             </div>
 
             {/* CONTROL PANEL */}
             <div className="absolute top-6 right-6 flex flex-col gap-2 z-10">
                  {[
-                     { id: 'revenue', label: 'Revenue', color: 'bg-cyan-600' },
-                     { id: 'orders', label: 'Orders', color: 'bg-violet-600' },
-                     { id: 'shipping', label: 'Shipping', color: 'bg-emerald-600' }
+                     { id: 'revenue', label: 'Revenue' },
+                     { id: 'orders', label: 'Orders' },
+                     { id: 'shipping', label: 'Shipping' }
                  ].map((item) => (
                      <button 
                         key={item.id}
                         // @ts-ignore
                         onClick={() => setActiveMetric(item.id)}
-                        className={`px-3 py-1.5 rounded text-[10px] font-bold uppercase tracking-widest transition-all w-24 text-center ${activeMetric === item.id ? `${item.color} text-white shadow-lg` : 'bg-slate-800 text-slate-400 hover:bg-slate-700'}`}
+                        className={`px-3 py-1.5 rounded text-[10px] font-bold uppercase tracking-widest transition-all w-24 text-center ${activeMetric === item.id ? 'text-white shadow-lg' : (isLightMode ? 'bg-gray-100 text-gray-500 hover:bg-gray-200' : 'bg-slate-800 text-slate-400 hover:bg-slate-700')}`}
+                        style={{ backgroundColor: activeMetric === item.id ? accentColor : undefined }}
                      >
                         {item.label}
                      </button>
                  ))}
 
                  {/* Language Toggle */}
-                 <div className="mt-2 pt-2 border-t border-slate-700 flex flex-col gap-1">
+                 <div className={`mt-2 pt-2 border-t ${isLightMode ? 'border-gray-200' : 'border-slate-700'} flex flex-col gap-1`}>
                     <button 
                         onClick={() => setLanguage(l => l === 'km' ? 'en' : 'km')}
-                        className="px-3 py-1.5 rounded text-[10px] font-bold uppercase tracking-widest transition-all w-24 text-center bg-slate-800 text-slate-400 hover:bg-slate-700 hover:text-white border border-slate-700 hover:border-slate-600"
+                        className={`px-3 py-1.5 rounded text-[10px] font-bold uppercase tracking-widest transition-all w-24 text-center ${isLightMode ? 'bg-white text-gray-700 border-gray-200 hover:bg-gray-50' : 'bg-slate-800 text-slate-400 border-slate-700 hover:bg-slate-700 hover:text-white'} border`}
                     >
                         {language === 'km' ? '🇰🇭 KHM' : '🇺🇸 ENG'}
                     </button>
@@ -523,7 +538,7 @@ const ProvincialMap: React.FC<ProvincialMapProps> = ({ data, onProvinceClick }) 
             <div ref={mapContainerRef} className="w-full h-full relative z-1" />
             
             {(!isMapReady || geoLoading) && (
-                <div className="absolute inset-0 flex flex-col items-center justify-center bg-slate-950 z-20">
+                <div className={`absolute inset-0 flex flex-col items-center justify-center ${isLightMode ? 'bg-white' : 'bg-slate-950'} z-20`}>
                     <div className="text-slate-500 font-bold text-xs animate-pulse">LOADING MAP...</div>
                 </div>
             )}

@@ -1,6 +1,7 @@
 package main
 
 import (
+	"bufio"
 	"bytes"
 	"context"
 	"encoding/base64"
@@ -10,7 +11,9 @@ import (
 	"log"
 	"math/rand"
 	"net/http"
+	"net/url"
 	"os"
+	"regexp"
 	"strconv"
 	"strings"
 	"sync"
@@ -69,6 +72,7 @@ var sheetRanges = map[string]string{
 	"RolePermissions":       "RolePermissions!A:Z",
 	"DriverRecommendations": "DriverRecommendations!A:Z",
 	"IncentiveResults":      "IncentiveResults!A:Z",
+	"Movies":                "Movies!A:Z",
 }
 
 // =========================================================================
@@ -84,6 +88,19 @@ type User struct {
 	Role              string `gorm:"column:role" json:"Role"`
 	IsSystemAdmin     bool   `gorm:"column:is_system_admin" json:"IsSystemAdmin"`
 	TelegramUsername  string `gorm:"column:telegram_username" json:"TelegramUsername"`
+}
+
+type Movie struct {
+	ID          string `gorm:"primaryKey;column:id" json:"ID"`
+	Title       string `gorm:"column:title" json:"Title"`
+	Description string `gorm:"column:description" json:"Description"`
+	Thumbnail   string `gorm:"column:thumbnail" json:"Thumbnail"`
+	VideoURL    string `gorm:"column:video_url" json:"VideoURL"`
+	Type        string `gorm:"column:type" json:"Type"`
+	Language    string `gorm:"column:language" json:"Language"`
+	Country     string `gorm:"column:country" json:"Country"`
+	Category    string `gorm:"column:category" json:"Category"`
+	AddedAt     string `gorm:"column:added_at" json:"AddedAt"`
 }
 type Store struct {
 	StoreName        string `gorm:"primaryKey;column:store_name" json:"StoreName"`
@@ -294,6 +311,7 @@ type RolePermission struct {
 
 type IncentiveCalculator struct {
 	ID        uint    `gorm:"primaryKey" json:"id"`
+	ProjectID uint    `gorm:"index" json:"projectId"`
 	Name      string  `json:"name"`
 	Type      string  `json:"type"`
 	Value     float64 `json:"value"`
@@ -301,13 +319,18 @@ type IncentiveCalculator struct {
 }
 
 type IncentiveProject struct {
-	ID           uint   `gorm:"primaryKey" json:"id"`
-	ProjectName  string `json:"projectName"`
-	CalculatorID uint   `json:"calculatorId"`
-	StartDate    string `json:"startDate"`
-	EndDate      string `json:"endDate"`
-	TargetTeam   string `json:"targetTeam"`
-	Status       string `json:"status"`
+	ID                     uint                  `gorm:"primaryKey" json:"id"`
+	ProjectName            string                `json:"projectName"`
+	CalculatorID           uint                  `json:"calculatorId"`
+	StartDate              string                `json:"startDate"`
+	EndDate                string                `json:"endDate"`
+	TargetTeam             string                `json:"targetTeam"`
+	Status                 string                `json:"status"`
+	ColorCode              string                `json:"colorCode"`
+	RequirePeriodSelection bool                  `json:"requirePeriodSelection"`
+	DataSource             string                `json:"dataSource"`
+	CreatedAt              string                `json:"createdAt"`
+	Calculators            []IncentiveCalculator `gorm:"foreignKey:ProjectID" json:"calculators"`
 }
 
 type IncentiveResult struct {
@@ -433,6 +456,7 @@ func initDB() {
 		&IncentiveCustomPayout{},
 		&TempImage{},
 		&DriverRecommendation{},
+		&Movie{},
 	)
 	if err != nil {
 		log.Fatal("❌ Migration failed:", err)
@@ -624,6 +648,12 @@ func getTableName(sheetName string) string {
 		return "role_permissions"
 	case "DriverRecommendations":
 		return "driver_recommendations"
+	case "IncentiveCalculators":
+		return "incentive_calculators"
+	case "IncentiveProjects":
+		return "incentive_projects"
+	case "Movies":
+		return "movies"
 	}
 	return ""
 }
@@ -1011,7 +1041,7 @@ func handleCreateIncentiveCalculator(c *gin.Context) {
 
 func handleGetIncentiveProjects(c *gin.Context) {
 	var projects []IncentiveProject
-	DB.Find(&projects)
+	DB.Preload("Calculators").Find(&projects)
 	c.JSON(200, gin.H{"status": "success", "data": projects})
 }
 
@@ -1516,6 +1546,7 @@ func handleGetStaticData(c *gin.Context) {
 		func() { var d []Role; DB.Find(&d); mu.Lock(); result["roles"] = d; mu.Unlock() },
 		func() { var d []RolePermission; DB.Find(&d); mu.Lock(); result["rolePermissions"] = d; mu.Unlock() },
 		func() { var d []DriverRecommendation; DB.Find(&d); mu.Lock(); result["driverRecommendations"] = d; mu.Unlock() },
+		func() { var d []Movie; DB.Find(&d); mu.Lock(); result["movies"] = d; mu.Unlock() },
 		func() {
 			var settings []Setting
 			DB.Find(&settings)
@@ -2031,6 +2062,21 @@ func handleMigrateData(c *gin.Context) {
 				if o.OrderID != "" && !seen[o.OrderID] {
 					seen[o.OrderID] = true
 					valid = append(valid, o)
+				}
+			}
+			if len(valid) > 0 {
+				tx.CreateInBatches(valid, 100)
+			}
+		}
+
+		var movies []Movie
+		if fetchSheetDataToStruct("Movies", &movies) == nil && len(movies) > 0 {
+			var valid []Movie
+			seen := make(map[string]bool)
+			for _, x := range movies {
+				if x.ID != "" && !seen[x.ID] {
+					seen[x.ID] = true
+					valid = append(valid, x)
 				}
 			}
 			if len(valid) > 0 {
@@ -2695,6 +2741,25 @@ func handleChangePassword(c *gin.Context) {
 	c.JSON(200, gin.H{"status": "success"})
 }
 
+func extractDriveFolderID(idOrURL string) string {
+	idOrURL = strings.TrimSpace(idOrURL)
+	if strings.Contains(idOrURL, "drive.google.com") {
+		if strings.Contains(idOrURL, "folders/") {
+			parts := strings.Split(idOrURL, "folders/")
+			if len(parts) > 1 {
+				return strings.Split(strings.Split(parts[1], "?")[0], "/")[0]
+			}
+		}
+		if strings.Contains(idOrURL, "id=") {
+			parts := strings.Split(idOrURL, "id=")
+			if len(parts) > 1 {
+				return strings.Split(parts[1], "&")[0]
+			}
+		}
+	}
+	return idOrURL
+}
+
 func uploadToGoogleDriveDirectly(base64Data string, fileName string, mimeType string) (string, string, error) {
 	if driveService == nil {
 		ctx := context.Background()
@@ -2702,6 +2767,11 @@ func uploadToGoogleDriveDirectly(base64Data string, fileName string, mimeType st
 			return "", "", fmt.Errorf("failed to init drive client: %v", err)
 		}
 	}
+
+	if fileName == "" {
+		fileName = "upload_" + time.Now().Format("20060102_150405")
+	}
+
 	if strings.Contains(base64Data, "base64,") {
 		base64Data = strings.Split(base64Data, "base64,")[1]
 	}
@@ -2712,17 +2782,29 @@ func uploadToGoogleDriveDirectly(base64Data string, fileName string, mimeType st
 	}
 
 	f := &drive.File{Name: fileName, MimeType: cleanMimeType}
+	
+	targetFolder := ""
 	if envFolderID := os.Getenv("UPLOAD_FOLDER_ID"); envFolderID != "" {
-		f.Parents = []string{envFolderID}
+		targetFolder = extractDriveFolderID(envFolderID)
 	} else if uploadFolderID != "" {
-		f.Parents = []string{uploadFolderID}
+		targetFolder = extractDriveFolderID(uploadFolderID)
+	}
+
+	if targetFolder != "" {
+		f.Parents = []string{targetFolder}
 	}
 
 	file, err := driveService.Files.Create(f).Media(bytes.NewReader(decodedBytes)).Do()
 	if err != nil {
 		return "", "", fmt.Errorf("drive api error: %v", err)
 	}
-	driveService.Permissions.Create(file.Id, &drive.Permission{Type: "anyone", Role: "reader"}).Do()
+
+	// ✅ Ensure file is public (anyone can view)
+	_, err = driveService.Permissions.Create(file.Id, &drive.Permission{Type: "anyone", Role: "reader"}).Do()
+	if err != nil {
+		log.Printf("⚠️ Warning: Could not set public permission for file %s: %v", file.Id, err)
+	}
+
 	return fmt.Sprintf("https://drive.google.com/uc?id=%s", file.Id), file.Id, nil
 }
 
@@ -2770,6 +2852,12 @@ func handleImageUploadProxy(c *gin.Context) {
 	})
 
 	go func(r AppsScriptRequest, rawData string, tid string) {
+		defer func() {
+			if rec := recover(); rec != nil {
+				log.Printf("🔥 PANIC in background upload: %v", rec)
+			}
+		}()
+
 		driveURL, _, err := uploadToGoogleDriveDirectly(rawData, r.FileName, r.MimeType)
 		if err != nil {
 			log.Printf("❌ Background upload error: %v", err)
@@ -2922,10 +3010,17 @@ func handleSendChatMessage(c *gin.Context) {
 
 		c.JSON(200, gin.H{"status": "success", "data": msg})
 
-		go func(m ChatMessage, b64 string, mt string, tid string, oldContent string) {
+		go func(m ChatMessage, b64 string, mt string, tid string, originalContent string) {
+			defer func() {
+				if rec := recover(); rec != nil {
+					log.Printf("🔥 PANIC in chat upload: %v", rec)
+				}
+			}()
+
 			driveURL, fileId, err := uploadToGoogleDriveDirectly(b64, "chat_file", mt)
 			if err == nil {
-				finalContent := oldContent
+
+				finalContent := originalContent
 				if strings.ToLower(m.MessageType) == "image" {
 					finalContent = driveURL
 				}
@@ -3009,6 +3104,356 @@ func handleGetAudioProxy(c *gin.Context) {
 	io.Copy(c.Writer, resp.Body)
 }
 
+// =========================================================================
+// API សម្រាប់ប្រព័ន្ធ ENTERTAINMENT (HLS & Video Proxy)
+// =========================================================================
+
+func handleExtractM3U8(c *gin.Context) {
+	targetURL := c.Query("url")
+	referer := c.Query("referer")
+	if targetURL == "" {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Missing url parameter"})
+		return
+	}
+
+	u, err := url.Parse(targetURL)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid URL"})
+		return
+	}
+
+	fetchReferer := referer
+	if fetchReferer == "" {
+		fetchReferer = u.Scheme + "://" + u.Host
+	}
+
+	client := &http.Client{Timeout: 10 * time.Second}
+	req, _ := http.NewRequest("GET", targetURL, nil)
+	req.Header.Set("Referer", fetchReferer)
+	req.Header.Set("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36")
+
+	resp, err := client.Do(req)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+	defer resp.Body.Close()
+
+	body, _ := io.ReadAll(resp.Body)
+	html := string(body)
+
+	var m3u8URL string
+	// Try playlist regex
+	re := regexp.MustCompile(`(["'])(https?://[^"']+\.m3u8[^"']*)\1`)
+	match := re.FindStringSubmatch(html)
+	if len(match) > 2 {
+		m3u8URL = match[2]
+	}
+
+	// Try standard regex if not found
+	if m3u8URL == "" {
+		reSimple := regexp.MustCompile(`https?://[^\s"'<>]+?\.m3u8[^\s"'<>]*`)
+		m3u8URL = reSimple.FindString(html)
+	}
+
+	if m3u8URL != "" {
+		c.JSON(http.StatusOK, gin.H{"m3u8Url": m3u8URL})
+		return
+	}
+
+	c.JSON(http.StatusNotFound, gin.H{"error": "Could not extract .m3u8 link from the page."})
+}
+
+func handleProxyM3U8(c *gin.Context) {
+	m3u8URL := c.Query("url")
+	if m3u8URL == "" {
+		c.String(http.StatusBadRequest, "Missing url parameter")
+		return
+	}
+
+	u, err := url.Parse(m3u8URL)
+	if err != nil {
+		c.String(http.StatusBadRequest, "Invalid URL")
+		return
+	}
+
+	client := &http.Client{Timeout: 10 * time.Second}
+	req, _ := http.NewRequest("GET", m3u8URL, nil)
+	req.Header.Set("Referer", u.Scheme+"://"+u.Host)
+	req.Header.Set("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36")
+
+	resp, err := client.Do(req)
+	if err != nil {
+		c.String(http.StatusInternalServerError, err.Error())
+		return
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		c.String(resp.StatusCode, "Failed to fetch m3u8")
+		return
+	}
+
+	isMasterPlaylist := false
+	var lines []string
+	scanner := bufio.NewScanner(resp.Body)
+	for scanner.Scan() {
+		line := strings.TrimSpace(scanner.Text())
+		if strings.Contains(line, "#EXT-X-STREAM-INF") {
+			isMasterPlaylist = true
+		}
+		lines = append(lines, line)
+	}
+
+	var rewrittenLines []string
+	for _, line := range lines {
+		if line == "" {
+			rewrittenLines = append(rewrittenLines, "")
+			continue
+		}
+		if strings.HasPrefix(line, "#") {
+			// Handle URI in tags
+			if strings.Contains(line, "URI=\"") {
+				re := regexp.MustCompile(`URI="([^"]+)"`)
+				newLine := re.ReplaceAllStringFunc(line, func(match string) string {
+					subMatch := re.FindStringSubmatch(match)
+					if len(subMatch) > 1 {
+						uri := subMatch[1]
+						absURL := resolveURL(m3u8URL, uri)
+						isPlaylist := strings.Contains(absURL, ".m3u8") || isMasterPlaylist
+						endpoint := "/api/proxy-ts"
+						if isPlaylist {
+							endpoint = "/api/proxy-m3u8"
+						}
+						return fmt.Sprintf(`URI="%s?url=%s"`, endpoint, url.QueryEscape(absURL))
+					}
+					return match
+				})
+				rewrittenLines = append(rewrittenLines, newLine)
+			} else {
+				rewrittenLines = append(rewrittenLines, line)
+			}
+			continue
+		}
+
+		// URL line
+		absURL := resolveURL(m3u8URL, line)
+		if isMasterPlaylist || strings.Contains(absURL, ".m3u8") {
+			rewrittenLines = append(rewrittenLines, fmt.Sprintf("/api/proxy-m3u8?url=%s", url.QueryEscape(absURL)))
+		} else {
+			rewrittenLines = append(rewrittenLines, fmt.Sprintf("/api/proxy-ts?url=%s", url.QueryEscape(absURL)))
+		}
+	}
+
+	c.Header("Content-Type", "application/vnd.apple.mpegurl")
+	c.Header("Access-Control-Allow-Origin", "*")
+	c.String(http.StatusOK, strings.Join(rewrittenLines, "\n"))
+}
+
+func handleProxyTS(c *gin.Context) {
+	tsURL := c.Query("url")
+	if tsURL == "" {
+		c.String(http.StatusBadRequest, "Missing url parameter")
+		return
+	}
+
+	u, err := url.Parse(tsURL)
+	if err != nil {
+		c.String(http.StatusBadRequest, "Invalid URL")
+		return
+	}
+
+	client := &http.Client{Timeout: 30 * time.Second}
+	req, _ := http.NewRequest("GET", tsURL, nil)
+	req.Header.Set("Referer", u.Scheme+"://"+u.Host)
+	req.Header.Set("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36")
+
+	resp, err := client.Do(req)
+	if err != nil {
+		c.String(http.StatusInternalServerError, err.Error())
+		return
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		c.String(resp.StatusCode, "Failed to fetch segment")
+		return
+	}
+
+	c.Header("Content-Type", "video/MP2T")
+	if cl := resp.Header.Get("Content-Length"); cl != "" {
+		c.Header("Content-Length", cl)
+	}
+	c.Header("Access-Control-Allow-Origin", "*")
+
+	io.Copy(c.Writer, resp.Body)
+}
+
+func handleFetchJSON(c *gin.Context) {
+	targetURL := c.Query("url")
+	if targetURL == "" {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Missing url parameter"})
+		return
+	}
+
+	u, err := url.Parse(targetURL)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid URL"})
+		return
+	}
+
+	client := &http.Client{Timeout: 15 * time.Second}
+	var req *http.Request
+	if c.Request.Method == "POST" {
+		body, _ := io.ReadAll(c.Request.Body)
+		req, _ = http.NewRequest("POST", targetURL, bytes.NewBuffer(body))
+		req.Header.Set("Content-Type", c.Request.Header.Get("Content-Type"))
+	} else {
+		req, _ = http.NewRequest("GET", targetURL, nil)
+	}
+
+	req.Header.Set("Referer", u.Scheme+"://"+u.Host)
+	req.Header.Set("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36")
+
+	resp, err := client.Do(req)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+	defer resp.Body.Close()
+
+	body, _ := io.ReadAll(resp.Body)
+	c.Data(resp.StatusCode, resp.Header.Get("Content-Type"), body)
+}
+
+func handleProxyVideo(c *gin.Context) {
+	targetURL := c.Query("url")
+	if targetURL == "" {
+		c.String(http.StatusBadRequest, "Missing url parameter")
+		return
+	}
+
+	u, err := url.Parse(targetURL)
+	if err != nil {
+		c.String(http.StatusBadRequest, "Invalid URL")
+		return
+	}
+
+	client := &http.Client{Timeout: 30 * time.Second}
+	req, _ := http.NewRequest("GET", targetURL, nil)
+	req.Header.Set("Referer", u.Scheme+"://"+u.Host)
+	req.Header.Set("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36")
+
+	if r := c.Request.Header.Get("Range"); r != "" {
+		req.Header.Set("Range", r)
+	}
+
+	resp, err := client.Do(req)
+	if err != nil {
+		c.String(http.StatusInternalServerError, err.Error())
+		return
+	}
+	defer resp.Body.Close()
+
+	for k, v := range resp.Header {
+		if k == "Content-Type" || k == "Content-Length" || k == "Accept-Ranges" || k == "Content-Range" {
+			c.Header(k, v[0])
+		}
+	}
+	c.Header("Access-Control-Allow-Origin", "*")
+
+	c.Status(resp.StatusCode)
+	io.Copy(c.Writer, resp.Body)
+}
+
+func resolveURL(base, ref string) string {
+	baseURL, _ := url.Parse(base)
+	refURL, _ := url.Parse(ref)
+	return baseURL.ResolveReference(refURL).String()
+}
+
+// =========================================================================
+// API សម្រាប់ប្រព័ន្ធ ENTERTAINMENT
+// =========================================================================
+
+func handleGetMovies(c *gin.Context) {
+	var movies []Movie
+	DB.Order("added_at desc").Find(&movies)
+	c.JSON(http.StatusOK, gin.H{"status": "success", "data": movies})
+}
+
+func handleCreateMovie(c *gin.Context) {
+	var movie Movie
+	if err := c.ShouldBindJSON(&movie); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"status": "error", "message": "ទិន្នន័យមិនត្រឹមត្រូវ: " + err.Error()})
+		return
+	}
+
+	if movie.ID == "" {
+		movie.ID = generateShortID()
+	}
+	if movie.AddedAt == "" {
+		movie.AddedAt = time.Now().Format(time.RFC3339)
+	}
+
+	if err := DB.Create(&movie).Error; err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"status": "error", "message": "ការរក្សាទុកភាពយន្តបរាជ័យ: " + err.Error()})
+		return
+	}
+
+	// Send to Google Sheets
+	go func(m Movie) {
+		appsReq := AppsScriptRequest{
+			Action:    "addRow",
+			Secret:    appsScriptSecret,
+			SheetName: "Movies",
+			NewData: map[string]interface{}{
+				"ID":          m.ID,
+				"Title":       m.Title,
+				"Description": m.Description,
+				"Thumbnail":   m.Thumbnail,
+				"VideoURL":    m.VideoURL,
+				"Type":        m.Type,
+				"Language":    m.Language,
+				"Country":     m.Country,
+				"Category":    m.Category,
+				"AddedAt":     m.AddedAt,
+			},
+		}
+		jb, _ := json.Marshal(appsReq)
+		http.Post(appsScriptURL, "application/json", bytes.NewBuffer(jb))
+	}(movie)
+
+	c.JSON(http.StatusOK, gin.H{"status": "success", "data": movie})
+}
+
+func handleDeleteMovie(c *gin.Context) {
+	id := c.Param("id")
+	if id == "" {
+		c.JSON(http.StatusBadRequest, gin.H{"status": "error", "message": "ID មិនអាចទទេរបានទេ"})
+		return
+	}
+
+	if err := DB.Where("id = ?", id).Delete(&Movie{}).Error; err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"status": "error", "message": "ការលុបភាពយន្តបរាជ័យ: " + err.Error()})
+		return
+	}
+
+	// Delete from Google Sheets
+	go func(movieID string) {
+		appsReq := AppsScriptRequest{
+			Action:     "deleteRow",
+			Secret:     appsScriptSecret,
+			SheetName:  "Movies",
+			PrimaryKey: map[string]string{"ID": movieID},
+		}
+		jb, _ := json.Marshal(appsReq)
+		http.Post(appsScriptURL, "application/json", bytes.NewBuffer(jb))
+	}(id)
+
+	c.JSON(http.StatusOK, gin.H{"status": "success", "message": "បានលុបភាពយន្តដោយជោគជ័យ"})
+}
+
 func main() {
 	port := os.Getenv("PORT")
 	if port == "" {
@@ -3041,6 +3486,12 @@ func main() {
 	api.GET("/images/temp/:id", handleServeTempImage)
 	api.GET("/teams/ranking", handleGetTeamSalesRanking)
 	api.GET("/settings", handleGetSettings)
+	api.GET("/movies", handleGetMovies)
+	api.GET("/extract-m3u8", handleExtractM3U8)
+	api.GET("/proxy-m3u8", handleProxyM3U8)
+	api.GET("/proxy-ts", handleProxyTS)
+	api.GET("/proxy-video", handleProxyVideo)
+	api.Any("/fetch-json", handleFetchJSON)
 
 	protected := api.Group("/")
 	protected.Use(AuthMiddleware())
@@ -3084,6 +3535,8 @@ func main() {
 			admin.GET("/incentive/custom-payout", handleGetIncentiveCustomPayouts)
 			admin.POST("/incentive/custom-payout", handleSaveIncentiveCustomPayout)
 			admin.POST("/incentive/lock", handleLockIncentivePayout)
+			admin.POST("/movies", handleCreateMovie)
+			admin.DELETE("/movies/:id", handleDeleteMovie)
 		}
 		profile := protected.Group("/profile")
 		profile.POST("/update", handleUpdateProfile)

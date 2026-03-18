@@ -52,6 +52,9 @@ const SYSTEM_STRUCTURE = {
   // ប្រព័ន្ធប្រាក់លើកទឹកចិត្ត (Incentive)
   "IncentiveResults": ["Timestamp", "ProjectID", "UserName", "TotalOrders", "TotalRevenue", "CalculatedValue", "IsCustom"],
 
+  // ប្រព័ន្ធកម្សាន្ត (Entertainment)
+  "Movies": ["ID", "Title", "Description", "Thumbnail", "VideoURL", "Type", "Language", "Country", "Category", "AddedAt"],
+
   // ឯកសារយោង និង Chat
   "ChatMessages": ["Timestamp", "UserName", "Receiver", "MessageType", "Content", "FileID"],
   "EditLogs": ["Timestamp", "OrderID", "Requester", "Field Changed", "Old Value", "New Value"],

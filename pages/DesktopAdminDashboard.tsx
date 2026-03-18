@@ -2,6 +2,7 @@
 import React, { useState, useContext, useEffect, useMemo } from 'react';
 import { AppContext } from '../context/AppContext';
 import DesktopAdminLayout from '../components/admin/DesktopAdminLayout';
+import NetflixLayout from '../components/admin/netflix/NetflixLayout';
 import TabletAdminLayout from '../components/admin/TabletAdminLayout';
 import DashboardOverview from '../components/admin/DashboardOverview';
 import PerformanceTrackingPage from './PerformanceTrackingPage';
@@ -26,7 +27,7 @@ type ReportType = 'overview' | 'performance' | 'profitability' | 'forecasting' |
 
 const DesktopAdminDashboard: React.FC<{ isTablet?: boolean }> = ({ isTablet }) => {
     const { 
-        appData, currentUser, refreshTimestamp, orders, isSidebarCollapsed, hasPermission
+        appData, currentUser, refreshTimestamp, orders, isSidebarCollapsed, hasPermission, advancedSettings
     } = useContext(AppContext);
     
     // --- Navigation State ---
@@ -275,15 +276,24 @@ const DesktopAdminDashboard: React.FC<{ isTablet?: boolean }> = ({ isTablet }) =
         setAdvancedSettingsOpen,
         onNavChange: handleNavChange,
         onReportSubNav: handleReportSubNav,
-        children: renderContent()
+        children: renderContent(),
+        isSidebarCollapsed
     };
+
+    if (isTablet) return (
+        <>
+            <TabletAdminLayout {...layoutProps} />
+            {editProfileModalOpen && <EditProfileModal onClose={() => setEditProfileModalOpen(false)} />}
+            {advancedSettingsOpen && <AdvancedSettingsModal onClose={() => setAdvancedSettingsOpen(false)} />}
+        </>
+    );
 
     return (
         <>
-            {isTablet ? (
-                <TabletAdminLayout {...layoutProps} />
+            {advancedSettings?.uiTheme === 'netflix' ? (
+                <NetflixLayout {...layoutProps} />
             ) : (
-                <DesktopAdminLayout {...layoutProps} isSidebarCollapsed={isSidebarCollapsed} />
+                <DesktopAdminLayout {...layoutProps} />
             )}
             {editProfileModalOpen && <EditProfileModal onClose={() => setEditProfileModalOpen(false)} />}
             {advancedSettingsOpen && <AdvancedSettingsModal onClose={() => setAdvancedSettingsOpen(false)} />}

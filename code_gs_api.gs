@@ -30,7 +30,8 @@ const CONFIG = {
   STOCK_TRANSFERS_SHEET: 'StockTransfers',
   RETURNS_SHEET: 'Returns',
   DRIVER_RECOMMENDATIONS_SHEET: 'DriverRecommendations',
-  INCENTIVE_RESULTS_SHEET: 'IncentiveResults'
+  INCENTIVE_RESULTS_SHEET: 'IncentiveResults',
+  MOVIES_SHEET: 'Movies'
 };
 
 // --- មុខងារជំនួយ (Helpers) ---
@@ -708,12 +709,32 @@ function getTeamTopicId(team, store) {
   return null;
 }
 
+function extractDriveFolderID(idOrURL) {
+  if (!idOrURL) return "root";
+  idOrURL = String(idOrURL).trim();
+  if (idOrURL.indexOf("drive.google.com") !== -1) {
+    if (idOrURL.indexOf("folders/") !== -1) {
+      return idOrURL.split("folders/")[1].split("?")[0].split("/")[0];
+    }
+    if (idOrURL.indexOf("id=") !== -1) {
+      return idOrURL.split("id=")[1].split("&")[0];
+    }
+  }
+  return idOrURL;
+}
+
 function uploadImageToDrive(base64, name, mime, folderId, user) {
-  const folder = DriveApp.getFolderById(folderId || "root");
-  const decoded = Utilities.base64Decode(base64.includes("base64,") ? base64.split("base64,")[1] : base64);
-  const file = folder.createFile(Utilities.newBlob(decoded, mime, name));
-  file.setSharing(DriveApp.Access.ANYONE, DriveApp.Permission.VIEW);
-  return { url: `https://drive.google.com/uc?id=${file.getId()}`, fileID: file.getId() };
+  try {
+    const targetFolderId = extractDriveFolderID(folderId);
+    const folder = DriveApp.getFolderById(targetFolderId);
+    const decoded = Utilities.base64Decode(base64.includes("base64,") ? base64.split("base64,")[1] : base64);
+    const file = folder.createFile(Utilities.newBlob(decoded, mime, name || "upload_" + new Date().getTime()));
+    file.setSharing(DriveApp.Access.ANYONE, DriveApp.Permission.VIEW);
+    return { url: `https://drive.google.com/uc?id=${file.getId()}`, fileID: file.getId() };
+  } catch (e) {
+    console.error("Upload Error: " + e.message);
+    throw new Error("ការ Upload រូបភាពទៅ Google Drive បានបរាជ័យ: " + e.message);
+  }
 }
 
 function logUserActivity(user, action, details) {

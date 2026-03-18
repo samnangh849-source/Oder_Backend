@@ -270,6 +270,7 @@ export interface AppData {
     roles?: Role[];
     orders?: ParsedOrder[];
     driverRecommendations?: DriverRecommendation[];
+    movies?: Movie[];
 }
 
 export interface LocationInfo {
@@ -373,6 +374,19 @@ export interface IncentiveResult {
     totalRevenue: number;
     calculatedValue: number;
     isCustom?: boolean;
+}
+
+export interface Movie {
+    ID: string;
+    Title: string;
+    Description: string;
+    Thumbnail: string;
+    VideoURL: string; // .m3u8 link
+    Type: 'short' | 'long' | 'series';
+    Language: string;
+    Country: string;
+    Category: string;
+    AddedAt: string;
 }
 
 export interface IncentiveManualData {

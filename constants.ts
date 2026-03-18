@@ -14,7 +14,7 @@ export const LABEL_PRINTER_URL_BASE = "https://samnangh849-source.github.io/Labe
 // Background Music URLs (7 songs for 7 days)
 // Monday to Sunday order
 export const WEEKLY_MUSIC_URLS = [
-    "https://res.cloudinary.com/dhobzwi7h/video/upload/v1773657887/%E1%9E%85%E1%9F%86%E1%9E%8E%E1%9F%81%E1%9F%87%E1%9E%8A%E1%9E%B9%E1%9E%84%E1%9E%A0%E1%9E%B7%E1%9E%9A%E1%9E%89%E1%9F%92%E1%9E%89%E1%9E%9C%E1%9E%8F%E1%9F%92%E1%9E%90%E1%9E%BB_%E1%9E%8A%E1%9F%82%E1%9E%9B%E1%9E%98%E1%9E%93%E1%9E%BB%E1%9E%9F%E1%9F%92%E1%9E%9F%E1%9E%82%E1%9F%92%E1%9E%9A%E1%9E%94%E1%9F%8B%E1%9E%82%E1%9F%92%E1%9E%93%E1%9E%B6%E1%9E%82%E1%9E%BD%E1%9E%9A%E1%9E%8A%E1%9E%B9%E1%9E%84___%E1%9E%82%E1%9E%B8%E1%9E%98_%E1%9E%8A%E1%9E%B6%E1%9E%9A%E1%9F%89%E1%9E%B6_l1SU6y13MV4_y9eexh.mp3", // Monday
+    // "https://res.cloudinary.com/dhobzwi7h/video/upload/v1773657887/%E1%9E%85%E1%9F%86%E1%9E%8E%E1%9F%81%E1%9F%87%E1%9E%8A%E1%9E%B9%E1%9E%84%E1%9E%A0%E1%9E%B7%E1%9E%9A%E1%9E%89%E1%9F%92%E1%9E%89%E1%9E%9C%E1%9E%8F%E1%9F%92%E1%9E%90%E1%9E%BB_%E1%9E%8A%E1%9F%82%E1%9E%9B%E1%9E%98%E1%9E%93%E1%9E%BB%E1%9E%9F%E1%9F%92%E1%9E%9F%E1%9E%82%E1%9F%92%E1%9E%9A%E1%9E%94%E1%9F%8B%E1%9E%82%E1%9F%92%E1%9E%93%E1%9E%B6%E1%9E%82%E1%9E%BD%E1%9E%9A%E1%9E%8A%E1%9E%B9%E1%9E%84___%E1%9E%82%E1%9E%B8%E1%9E%98_%E1%9E%8A%E1%9E%B6%E1%9E%9A%E1%9F%89%E1%9E%B6_l1SU6y13MV4_y9eexh.mp3", // Monday
     // "https://res.cloudinary.com/dhobzwi7h/video/upload/v1773570977/2_b1bmnx.mp3", // Tuesday
     // "https://res.cloudinary.com/dhobzwi7h/video/upload/v1773567867/Y2K_nqn9nz.mp3", // Wednesday
     // "https://res.cloudinary.com/dhobzwi7h/video/upload/v1773567867/Y2K_nqn9nz.mp3", // Thursday

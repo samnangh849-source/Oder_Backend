@@ -35,16 +35,17 @@ export const getIncentiveCalculators = async (): Promise<IncentiveCalculator[]> 
     }
 };
 
-export const createIncentiveCalculator = async (calc: Omit<IncentiveCalculator, 'id'>): Promise<IncentiveCalculator | null> => {
+export const createIncentiveCalculator = async (calc: Omit<IncentiveCalculator, 'id'> & { projectId?: number }): Promise<IncentiveCalculator | null> => {
     try {
         const headers = await getAuthHeaders();
         
         // Serialize extra fields into rulesJson for Go backend
-        const { name, type, value, rulesJson: _, ...extraFields } = calc as any;
+        const { name, type, value, projectId, rulesJson: _, ...extraFields } = calc as any;
         const serializedCalc = {
             name,
             type,
             value: Number(value) || 0,
+            projectId: Number(projectId) || 0,
             rulesJson: JSON.stringify(extraFields)
         };
 
@@ -239,10 +240,7 @@ export const deleteProject = async (id: number): Promise<boolean> => {
 };
 
 export const addCalculatorToProject = async (projectId: number, calculator: Omit<IncentiveCalculator, 'id'>): Promise<IncentiveCalculator | null> => {
-    // This is more complex because it involves linking. 
-    // For now, let's just create the calculator. 
-    // In Go backend, we'd need an endpoint to link them if they are separate.
-    return createIncentiveCalculator(calculator);
+    return createIncentiveCalculator({ ...calculator, projectId });
 };
 
 export const updateCalculator = async (projectId: number, calculatorId: number, updates: Partial<IncentiveCalculator>): Promise<IncentiveCalculator | null> => {

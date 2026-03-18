@@ -37,6 +37,10 @@ const DashboardOverview: React.FC<DashboardOverviewProps> = ({
     // Note: We intentionally do NOT set a mobile page title here.
     // The requirement is to show the App Logo for the Dashboard view.
     
+    const { advancedSettings } = useContext(AppContext);
+    const isLightMode = advancedSettings?.themeMode === 'light';
+    const uiTheme = advancedSettings?.uiTheme || 'default';
+
     const getOrderDate = (o: ParsedOrder) => new Date(o.Timestamp);
     
     const filteredMetricsOrders = parsedOrders.filter(o => {
@@ -73,23 +77,129 @@ const DashboardOverview: React.FC<DashboardOverviewProps> = ({
         unpaid: filteredMetricsOrders.filter(o => o['Payment Status'] === 'Unpaid').length
     };
 
+    if (uiTheme === 'netflix') {
+        return (
+            <div className="space-y-12 animate-fade-in pb-20">
+                {/* Netflix Hero Header */}
+                <div className="relative -mt-8 pt-8">
+                    <div className="flex flex-col gap-6 max-w-2xl relative z-10">
+                        <div className="flex items-center gap-3">
+                            <span className="bg-[#e50914] text-white text-[10px] font-black px-2 py-0.5 rounded shadow-lg uppercase tracking-widest">Live Report</span>
+                            <span className={`${isLightMode ? 'text-gray-500' : 'text-gray-400'} text-xs font-bold uppercase tracking-[0.2em]`}>Dashboard / Overview</span>
+                        </div>
+                        <h1 className={`text-5xl md:text-7xl font-black ${isLightMode ? 'text-black' : 'text-white'} leading-none tracking-tighter uppercase italic`}>
+                            O-SYSTEM <span className="text-[#e50914]">PRO</span>
+                        </h1>
+                        <p className={`text-lg ${isLightMode ? 'text-gray-700' : 'text-gray-300'} font-medium leading-relaxed`}>
+                            Welcome back, <span className={`${isLightMode ? 'text-black' : 'text-white'} font-bold`}>{currentUser?.FullName}</span>. 
+                            The system is monitoring <span className="text-[#e50914] font-black">{metrics.orders}</span> active orders across all channels.
+                        </p>
+                        
+                        <div className="flex flex-wrap gap-4 mt-4">
+                            <button onClick={() => onTeamClick('')} className={`${isLightMode ? 'bg-black text-white hover:bg-gray-800' : 'bg-white text-black hover:bg-gray-200'} px-8 py-3 rounded font-black uppercase text-sm flex items-center gap-3 transition-all active:scale-95 shadow-xl`}>
+                                <svg className="w-5 h-5 fill-current" viewBox="0 0 24 24"><path d="M7 6v10l10-5z"/></svg>
+                                Analyze Performance
+                            </button>
+                            <button onClick={() => setDateFilter({ ...dateFilter, preset: 'today' })} className={`${isLightMode ? 'bg-gray-200 text-black border-gray-300' : 'bg-gray-500/40 text-white border-white/20'} border px-8 py-3 rounded font-black uppercase text-sm flex items-center gap-3 backdrop-blur-md hover:bg-opacity-80 transition-all active:scale-95 shadow-xl`}>
+                                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2.5}><path d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
+                                Today's Feed
+                            </button>
+                        </div>
+                    </div>
+                </div>
+
+                {/* Filter Section - Styled as Netflix Category Row */}
+                <div className="relative z-20">
+                    <div className="mb-4">
+                        <h3 className={`text-xl font-black ${isLightMode ? 'text-black' : 'text-white'} uppercase tracking-tight flex items-center gap-3`}>
+                            <span className="w-1 h-6 bg-[#e50914]"></span>
+                            Time Selection
+                        </h3>
+                    </div>
+                    <div className={`${isLightMode ? 'bg-white border-gray-200 shadow-lg' : 'bg-black/20 border-white/5 backdrop-blur-sm'} border p-6 rounded-lg`}>
+                        <DateRangeFilter 
+                            dateRange={dateFilter.preset as DateRangePreset}
+                            onRangeChange={(r) => setDateFilter({ ...dateFilter, preset: r })}
+                            customStart={dateFilter.start}
+                            onCustomStartChange={(v) => setDateFilter({ ...dateFilter, start: v })}
+                            customEnd={dateFilter.end}
+                            onCustomEndChange={(v) => setDateFilter({ ...dateFilter, end: v })}
+                        />
+                    </div>
+                </div>
+
+                {/* Metrics Row - Netflix Card Style */}
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                    {[
+                        { label: 'Total Revenue', value: `$${metrics.revenue.toLocaleString()}`, icon: '💰', trend: '+12.5%', color: 'from-[#e50914] to-[#ff0a16]' },
+                        { label: 'Active Orders', value: metrics.orders, icon: '📦', trend: '+5.2%', color: isLightMode ? 'from-gray-100 to-gray-200' : 'from-gray-800 to-gray-900' },
+                        { label: 'Pending Payments', value: metrics.unpaid, icon: '⏳', trend: '-2.1%', color: isLightMode ? 'from-gray-100 to-gray-200' : 'from-gray-800 to-gray-900' }
+                    ].map((m, i) => (
+                        <div key={i} className={`group relative aspect-[16/9] overflow-hidden rounded-lg border ${isLightMode ? 'border-gray-200 shadow-md' : 'border-white/5 shadow-2xl'} transition-all duration-500 hover:scale-105 hover:z-30 hover:border-[#e50914]/50`}>
+                            <div className={`absolute inset-0 bg-gradient-to-br ${m.color} ${isLightMode && i > 0 ? 'opacity-100' : 'opacity-80'} transition-opacity group-hover:opacity-100`}></div>
+                            {!isLightMode && <div className="absolute inset-0 bg-black/40"></div>}
+                            <div className="absolute bottom-0 left-0 p-6 w-full transform translate-y-2 group-hover:translate-y-0 transition-transform">
+                                <div className="flex items-center gap-2 mb-1">
+                                    <span className="text-2xl">{m.icon}</span>
+                                    <span className={`text-xs font-black ${isLightMode && i > 0 ? 'text-gray-600' : 'text-[#e50914]'} uppercase tracking-widest`}>{m.trend}</span>
+                                </div>
+                                <h4 className={`text-4xl font-black ${isLightMode && i > 0 ? 'text-black' : 'text-white'} mb-1`}>{m.value}</h4>
+                                <p className={`text-xs ${isLightMode && i > 0 ? 'text-gray-500' : 'text-gray-400'} font-bold uppercase tracking-[0.2em]`}>{m.label}</p>
+                            </div>
+                        </div>
+                    ))}
+                </div>
+
+                {/* Rows Area */}
+                <div className="space-y-16">
+                    <section>
+                        <h3 className={`text-2xl font-black ${isLightMode ? 'text-black' : 'text-white'} uppercase tracking-tighter mb-6 flex items-center gap-4`}>
+                            <span className="w-1.5 h-8 bg-[#e50914]"></span>
+                            Performance Breakdown
+                        </h3>
+                        <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
+                            <TeamRevenueTable stats={teamRevenueStats} onStatClick={onTeamClick} />
+                            <SalesStoreTable stats={brandStats} onStatClick={onBrandClick} />
+                            <FulfillmentStoreTable stats={storeStats} onStatClick={onStoreClick} />
+                        </div>
+                    </section>
+
+                    <section>
+                        <h3 className={`text-2xl font-black ${isLightMode ? 'text-black' : 'text-white'} uppercase tracking-tighter mb-6 flex items-center gap-4`}>
+                            <span className="w-1.5 h-8 bg-[#e50914]"></span>
+                            Regional Distribution
+                        </h3>
+                        <div className="grid grid-cols-1 xl:grid-cols-12 gap-8">
+                            <div className="xl:col-span-8">
+                                <ProvincialMap data={provinceStats} onProvinceClick={onProvinceClick} />
+                            </div>
+                            <div className="xl:col-span-4">
+                                <ProvincialSummaryList stats={provinceStats} onProvinceClick={onProvinceClick} />
+                            </div>
+                        </div>
+                    </section>
+                </div>
+            </div>
+        );
+    }
+
     return (
         <div className="space-y-4 lg:space-y-8 animate-fade-in pb-10">
             {/* Header - More compact on mobile */}
-            <div className="flex flex-col gap-4 bg-gray-800/10 p-4 sm:p-6 rounded-[2rem] border border-white/5 backdrop-blur-md">
+            <div className={`flex flex-col gap-4 ${isLightMode ? 'bg-white shadow-md border-gray-100' : 'bg-gray-800/10 border-white/5 backdrop-blur-md'} p-4 sm:p-6 rounded-[2rem] border`}>
                 <div className="flex justify-between items-start">
                     <div className="flex flex-col">
                         <div className="flex items-center gap-2 mb-1">
                             <div className="w-1.5 h-4 bg-blue-600 rounded-full"></div>
-                            <h2 className="text-lg sm:text-xl lg:text-2xl font-black text-white leading-none">សួស្តី, {currentUser?.FullName} 👋</h2>
+                            <h2 className={`text-lg sm:text-xl lg:text-2xl font-black ${isLightMode ? 'text-gray-900' : 'text-white'} leading-none`}>សួស្តី, {currentUser?.FullName} 👋</h2>
                         </div>
                         <p className="text-gray-500 text-[9px] font-bold uppercase tracking-widest ml-3.5">
                             {new Date().toLocaleDateString('km-KH', { weekday: 'long', month: 'long', day: 'numeric' })}
                         </p>
                     </div>
-                    <div className="hidden sm:flex bg-white/5 border border-white/10 px-3 py-1.5 rounded-xl">
+                    <div className={`${isLightMode ? 'bg-blue-50 border-blue-100' : 'bg-white/5 border-white/10'} border px-3 py-1.5 rounded-xl hidden sm:flex`}>
                         <span className="text-[10px] font-black text-blue-400">
-                            {metrics.orders} <span className="text-gray-500 ml-1">Processed</span>
+                            {metrics.orders} <span className={`${isLightMode ? 'text-blue-600/50' : 'text-gray-500'} ml-1`}>Processed</span>
                         </span>
                     </div>
                 </div>

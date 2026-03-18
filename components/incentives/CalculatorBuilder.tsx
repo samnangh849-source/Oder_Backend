@@ -72,10 +72,10 @@ const CalculatorBuilder: React.FC<CalculatorBuilderProps> = ({ projectId, initia
         setStep(2); // Jump to metrics
     };
 
-    const handleSave = () => {
+    const handleSave = async () => {
         if (!calcData.name) return alert("Please provide a name.");
-        if (initialData?.id) updateCalculator(projectId, initialData.id, calcData);
-        else addCalculatorToProject(projectId, calcData as Omit<IncentiveCalculator, 'id'>);
+        if (initialData?.id) await updateCalculator(projectId, initialData.id, calcData);
+        else await addCalculatorToProject(projectId, calcData as Omit<IncentiveCalculator, 'id'>);
         onSave();
     };
 

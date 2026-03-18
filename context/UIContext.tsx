@@ -11,6 +11,8 @@ export interface AdvancedSettings {
     orderEditGracePeriod?: number;
     placingOrderGracePeriod?: number;
     packagingGracePeriod?: number;
+    uiTheme?: 'default' | 'neumorphism' | 'samsung' | 'netflix';
+    themeMode?: 'light' | 'dark';
 }
 
 interface UIContextType {
@@ -61,7 +63,9 @@ export const UIProvider: React.FC<{ children: React.ReactNode }> = ({ children }
             notificationVolume: 1.0,
             orderEditGracePeriod: 43200,
             placingOrderGracePeriod: 5,
-            packagingGracePeriod: 3
+            packagingGracePeriod: 3,
+            uiTheme: 'default',
+            themeMode: 'dark'
         };
         if (saved) {
             try { return { ...defaultSettings, ...JSON.parse(saved) }; } catch (e) { return defaultSettings; }

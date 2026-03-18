@@ -29,8 +29,9 @@ const RoleSelectionPage: React.FC<RoleSelectionPageProps> = ({ onSelect }) => {
     const showAdmin = isInternalAdmin;
     const showFulfillment = hasPermission('access_fulfillment');
     const showSales = hasPermission('access_sales_portal');
+    const showEntertainment = true; // Always visible as requested
 
-    const visibleCount = (showAdmin ? 1 : 0) + (showFulfillment ? 1 : 0) + (showSales ? 1 : 0);
+    const visibleCount = (showAdmin ? 1 : 0) + (showFulfillment ? 1 : 0) + (showSales ? 1 : 0) + (showEntertainment ? 1 : 0);
 
     const handleUserPortalClick = () => {
         playTransition();
@@ -45,6 +46,11 @@ const RoleSelectionPage: React.FC<RoleSelectionPageProps> = ({ onSelect }) => {
     const handleFulfillmentClick = () => {
         playTransition();
         onSelect('fulfillment');
+    };
+
+    const handleEntertainmentClick = () => {
+        playTransition();
+        onSelect('entertainment' as any);
     };
 
     return (
@@ -185,6 +191,28 @@ const RoleSelectionPage: React.FC<RoleSelectionPageProps> = ({ onSelect }) => {
                                     <p className="text-[10px] text-white/30 font-bold uppercase tracking-widest truncate">{t.user_desc}</p>
                                 </div>
                                 <div className="w-10 h-10 rounded-xl bg-white/5 flex items-center justify-center group-hover:bg-emerald-600 transition-all">
+                                    <svg className="w-4 h-4 text-white/20 group-hover:text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={3}><path d="M9 5l7 7-7 7" /></svg>
+                                </div>
+                            </div>
+                        </button>
+                    )}
+
+                    {showEntertainment && (
+                        <button 
+                            onClick={handleEntertainmentClick}
+                            onMouseEnter={playHover}
+                            className="selection-btn group p-1 rounded-[2rem] relative overflow-hidden"
+                        >
+                            <div className="shimmer"></div>
+                            <div className="flex items-center gap-4 p-4 sm:p-5 rounded-[1.9rem] bg-[#020617]/40 backdrop-blur-2xl border border-white/5 relative z-10">
+                                <div className="w-14 h-14 shrink-0 rounded-2xl bg-red-600/20 flex items-center justify-center border border-white/10 group-hover:bg-red-600 transition-all duration-500 shadow-2xl">
+                                    <svg className="w-7 h-7 text-red-400 group-hover:text-white transition-colors" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2}><path d="M7 4v16M17 4v16M3 8h4m10 0h4M3 12h18M3 16h4m10 0h4M4 20h16a2 2 0 002-2V6a2 2 0 00-2-2H4a2 2 0 00-2 2v12a2 2 0 002 2z" /></svg>
+                                </div>
+                                <div className="text-left min-w-0 flex-grow">
+                                    <h3 className="text-base font-black text-white group-hover:text-red-400 transition-colors uppercase italic tracking-tight">{t.entertainment}</h3>
+                                    <p className="text-[10px] text-white/30 font-bold uppercase tracking-widest truncate">{t.entertainment_desc}</p>
+                                </div>
+                                <div className="w-10 h-10 rounded-xl bg-white/5 flex items-center justify-center group-hover:bg-red-600 transition-all">
                                     <svg className="w-4 h-4 text-white/20 group-hover:text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={3}><path d="M9 5l7 7-7 7" /></svg>
                                 </div>
                             </div>

@@ -7,7 +7,6 @@ import { ParsedOrder } from '@/types';
 import { compressImage } from '@/utils/imageCompressor';
 import { convertGoogleDriveUrl } from '@/utils/fileUtils';
 import { useSmartZoom } from '@/hooks/useSmartZoom';
-import { useBarcodeScanner } from '@/hooks/useBarcodeScanner';
 import { packageDetector, DetectionResult } from '@/utils/visionAlgorithm';
 import { CacheService, CACHE_KEYS } from '@/services/cacheService';
 import Modal from '@/components/common/Modal';
@@ -20,40 +19,6 @@ interface FastPackModalProps {
     onClose: () => void;
     onSuccess: (tempUrl?: string) => void;
 }
-
-interface FastPackScannerProps {
-    onScan: (code: string) => void;
-}
-
-const FastPackScanner: React.FC<FastPackScannerProps> = ({ onScan }) => {
-    const { isInitializing, error, switchCamera } = useBarcodeScanner("barcode-reader-container", onScan, 'increment');
-
-    return (
-        <div className="bg-[#1a2235] rounded-[2.5rem] p-6 border border-white/5 flex-grow flex flex-col shadow-inner min-h-[500px] relative overflow-hidden">
-            <div id="barcode-reader-container" className="absolute inset-0 rounded-[2.5rem] overflow-hidden"></div>
-            {isInitializing && (
-                <div className="absolute inset-0 bg-black/90 z-10 flex flex-col items-center justify-center gap-6">
-                    <Spinner size="lg" /><p className="text-[10px] font-black text-blue-400 uppercase tracking-[0.4em] animate-pulse">Initializing Barcode Neural Subsystem...</p>
-                </div>
-            )}
-            {error && (
-                <div className="absolute inset-0 bg-red-950/20 z-10 flex flex-col items-center justify-center p-10 text-center">
-                    <p className="text-red-400 font-black text-sm uppercase tracking-widest mb-4">Scanner Error: {error}</p>
-                    <button onClick={() => window.location.reload()} className="px-8 py-3 bg-red-600 text-white rounded-xl text-xs font-black uppercase tracking-widest">Retry Subsystem</button>
-                </div>
-            )}
-            <div className="absolute top-6 right-6 z-20 flex gap-3">
-                <button onClick={switchCamera} className="w-12 h-12 bg-black/60 backdrop-blur-xl text-white rounded-2xl flex items-center justify-center border border-white/10 shadow-2xl active:scale-90"><svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path d="M3 10h10a8 8 0 018 8v2M3 10l6 6m-6-6l6-6" strokeWidth={2.5}/></svg></button>
-            </div>
-            <div className="absolute inset-0 pointer-events-none flex flex-col items-center justify-center z-10">
-                <div className="w-64 h-64 border-2 border-dashed border-blue-500/40 rounded-[3rem] animate-pulse flex items-center justify-center">
-                    <div className="w-full h-0.5 bg-blue-500/30 animate-scan-y"></div>
-                </div>
-                <p className="text-[10px] font-black text-blue-400/60 uppercase tracking-[0.5em] mt-8 bg-black/40 px-6 py-2 rounded-full backdrop-blur-md">Position Barcode in Frame</p>
-            </div>
-        </div>
-    );
-};
 
 const FastPackModal: React.FC<FastPackModalProps> = ({ order, onClose, onSuccess }) => {
     const { currentUser, appData, previewImage: showFullImage, advancedSettings } = useContext(AppContext);
@@ -92,20 +57,20 @@ const FastPackModal: React.FC<FastPackModalProps> = ({ order, onClose, onSuccess
         ];
 
         return (
-            <div className="flex items-center justify-center gap-4 mb-8">
+            <div className="flex items-center justify-center gap-4 mb-10">
                 {steps.map((s, idx) => {
                     const isActive = step === s.id;
                     const isPast = steps.findIndex(st => st.id === step) > idx;
                     return (
                         <React.Fragment key={s.id}>
                             <div className="flex flex-col items-center gap-2">
-                                <div className={`w-10 h-10 rounded-full flex items-center justify-center text-sm font-black transition-all duration-500 ${isActive ? 'bg-blue-600 text-white shadow-[0_0_20px_rgba(37,99,235,0.5)] scale-110' : isPast ? 'bg-emerald-500 text-white' : 'bg-gray-800 text-gray-500 border border-white/5'}`}>
-                                    {isPast ? <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path d="M5 13l4 4L19 7" strokeWidth={4}/></svg> : s.icon}
+                                <div className={`w-14 h-14 rounded-full flex items-center justify-center text-sm font-black transition-all duration-500 ${isActive ? 'bg-[#1DB954] text-black shadow-[0_0_30px_rgba(29,185,84,0.4)] scale-110 ring-4 ring-[#1DB954]/20' : isPast ? 'bg-[#1DB954] text-black' : 'bg-white/5 text-gray-500 border border-white/10'}`}>
+                                    {isPast ? <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path d="M5 13l4 4L19 7" strokeWidth={4}/></svg> : s.icon}
                                 </div>
-                                <span className={`text-[9px] font-black uppercase tracking-widest ${isActive ? 'text-blue-400' : 'text-gray-600'}`}>{s.label}</span>
+                                <span className={`text-[10px] font-black uppercase tracking-[0.4em] ${isActive ? 'text-[#1DB954]' : 'text-gray-500'}`}>{s.label}</span>
                             </div>
                             {idx < steps.length - 1 && (
-                                <div className={`w-12 h-0.5 rounded-full ${isPast ? 'bg-emerald-500' : 'bg-gray-800'}`}></div>
+                                <div className={`w-20 h-1 rounded-full ${isPast ? 'bg-[#1DB954]' : 'bg-white/5'}`}></div>
                             )}
                         </React.Fragment>
                     );
@@ -115,35 +80,63 @@ const FastPackModal: React.FC<FastPackModalProps> = ({ order, onClose, onSuccess
     };
 
     const renderChecklist = () => (
-        <div className="space-y-4 max-h-[400px] overflow-y-auto pr-2 custom-scrollbar">
+        <div className="space-y-6 max-h-[500px] overflow-y-auto pr-2 custom-scrollbar spotify-scroll">
             {order?.Products.map((p, i) => {
                 const verified = verifiedItems[p.name] || 0;
                 const isComplete = verified >= p.quantity;
+                const masterP = appData.products?.find(mp => mp.ProductName === p.name);
+                
                 return (
-                    <div key={i} className={`group flex items-center gap-5 p-5 rounded-[2rem] border-2 transition-all duration-500 ${isComplete ? 'bg-emerald-500/10 border-emerald-500/20 shadow-[0_10px_30px_rgba(16,185,129,0.1)]' : 'bg-white/[0.03] border-white/5 hover:border-blue-500/30 shadow-inner'}`}>
-                        <div className="relative">
-                            <img src={convertGoogleDriveUrl(p.image)} className="w-16 h-16 rounded-2xl object-cover border border-white/10 shadow-xl" alt={p.name} />
-                            {isComplete && (
-                                <div className="absolute -top-2 -right-2 w-6 h-6 bg-emerald-500 rounded-full flex items-center justify-center text-white shadow-lg border-2 border-[#0f172a] animate-pop-in">
-                                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path d="M5 13l4 4L19 7" strokeWidth={4}/></svg>
+                    <div key={i} className={`group flex flex-col gap-6 p-8 rounded-[3rem] border ring-1 ring-white/5 transition-all duration-500 ${isComplete ? 'bg-[#1DB954]/5 border-[#1DB954]/30 shadow-[0_20px_60px_rgba(29,185,84,0.1)]' : 'bg-white/5 border-white/10 hover:border-white/20 shadow-2xl'}`}>
+                        <div className="flex items-center gap-8">
+                            <div className="relative flex-shrink-0">
+                                <img src={convertGoogleDriveUrl(p.image)} className="w-28 h-28 rounded-[2rem] object-cover border-2 border-white/10 shadow-2xl group-hover:scale-105 transition-transform" alt={p.name} onClick={() => showFullImage(convertGoogleDriveUrl(p.image))} />
+                                {isComplete && (
+                                    <div className="absolute -top-2 -right-2 w-10 h-10 bg-[#1DB954] rounded-full flex items-center justify-center text-black shadow-lg border-4 border-[#121212] animate-pop-in">
+                                        <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path d="M5 13l4 4L19 7" strokeWidth={4}/></svg>
+                                    </div>
+                                )}
+                            </div>
+                            <div className="flex-grow min-w-0 space-y-3">
+                                <p className={`font-black text-2xl truncate tracking-tighter transition-colors uppercase italic ${isComplete ? 'text-[#1DB954]' : 'text-white'}`}>{p.name}</p>
+                                {masterP?.Barcode && (
+                                    <div className="flex items-center gap-2">
+                                        <span className="text-[10px] font-black text-gray-500 uppercase tracking-[0.4em]">Barcode:</span>
+                                        <span className="text-sm font-mono font-bold text-[#1DB954] bg-[#1DB954]/10 px-4 py-1 rounded-full border border-[#1DB954]/20">{masterP.Barcode}</span>
+                                    </div>
+                                )}
+                                <div className="flex items-center gap-8 pt-2">
+                                    <div className="flex flex-col">
+                                        <span className="text-[10px] font-black text-gray-500 uppercase tracking-[0.4em]">Cost</span>
+                                        <span className="text-lg font-black text-gray-500 font-mono line-through opacity-50">${(Number(p.cost) || 0).toFixed(2)}</span>
+                                    </div>
+                                    <div className="flex flex-col">
+                                        <span className="text-[10px] font-black text-[#1DB954] uppercase tracking-[0.4em]">Final</span>
+                                        <span className="text-2xl font-black text-white font-mono">${(Number(p.finalPrice) || 0).toFixed(2)}</span>
+                                    </div>
+                                    <div className="ml-auto flex flex-col items-end">
+                                        <span className="text-[10px] font-black text-[#1DB954] uppercase tracking-[0.4em]">Quantity</span>
+                                        <span className="text-4xl font-black text-white font-mono leading-none">{p.quantity}</span>
+                                    </div>
                                 </div>
-                            )}
-                        </div>
-                        <div className="flex-grow min-w-0">
-                            <p className={`font-black text-sm truncate tracking-tight transition-colors ${isComplete ? 'text-emerald-400' : 'text-white'}`}>{p.name}</p>
-                            <div className="flex items-center gap-3 mt-1">
-                                <span className="text-[10px] font-black uppercase tracking-widest text-gray-500">Pick Progress</span>
-                                <div className="flex-grow h-1.5 bg-black/40 rounded-full overflow-hidden border border-white/5 max-w-[100px]">
-                                    <div className={`h-full transition-all duration-700 ${isComplete ? 'bg-emerald-500' : 'bg-blue-600'}`} style={{ width: `${(verified / p.quantity) * 100}%` }}></div>
-                                </div>
-                                <span className={`text-[10px] font-black font-mono ${isComplete ? 'text-emerald-500' : 'text-blue-400'}`}>{verified}/{p.quantity}</span>
                             </div>
                         </div>
-                        {!isComplete && (
-                            <button onClick={() => verifyItem(p.name)} className="w-12 h-12 bg-blue-600 hover:bg-blue-500 text-white rounded-2xl flex items-center justify-center shadow-lg active:scale-90 transition-all group-hover:scale-110">
-                                <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path d="M12 4v16m8-8H4" strokeWidth={3}/></svg>
-                            </button>
-                        )}
+                        
+                        <div className="flex items-center gap-6 bg-black/40 p-5 rounded-[2rem] ring-1 ring-white/5 shadow-inner">
+                            <div className="flex-grow h-4 bg-white/5 rounded-full overflow-hidden p-1">
+                                <div className={`h-full transition-all duration-1000 ease-out rounded-full shadow-[0_0_20px_rgba(29,185,84,0.4)] ${isComplete ? 'bg-[#1DB954]' : 'bg-[#1DB954]/70'}`} style={{ width: `${(verified / p.quantity) * 100}%` }}></div>
+                            </div>
+                            <div className="flex items-center gap-4">
+                                <span className={`text-xs font-black font-mono px-5 py-2 rounded-full border transition-all ${isComplete ? 'bg-[#1DB954]/20 text-[#1DB954] border-[#1DB954]/30' : 'bg-white/5 text-gray-400 border-white/10'}`}>
+                                    {verified} / {p.quantity} Verified
+                                </span>
+                                {!isComplete && (
+                                    <button onClick={() => verifyItem(p.name)} className="w-14 h-14 bg-[#1DB954] hover:bg-[#1ed760] text-black rounded-[1.5rem] flex items-center justify-center shadow-xl active:scale-90 transition-all transform hover:rotate-90 group">
+                                        <svg className="w-7 h-7" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path d="M12 4v16m8-8H4" strokeWidth={3}/></svg>
+                                    </button>
+                                )}
+                            </div>
+                        </div>
                     </div>
                 );
             })}
@@ -172,15 +165,6 @@ const FastPackModal: React.FC<FastPackModalProps> = ({ order, onClose, onSuccess
 
     const { zoom, applyZoom } = useSmartZoom();
     const [rawFile, setRawFile] = useState<File | null>(null);
-
-    // Barcode Integration
-    const handleBarcodeScan = useCallback((code: string) => {
-        const foundProduct = order?.Products.find(p => {
-            const masterP = appData.masterProducts?.find(mp => mp.ProductName === p.name);
-            return masterP?.Barcode && masterP.Barcode.trim() === code.trim();
-        });
-        if (foundProduct) verifyItem(foundProduct.name);
-    }, [order, appData.masterProducts, verifyItem]);
 
     // Undo Timer State
     const [undoTimer, setUndoTimer] = useState<number | null>(null);
@@ -236,10 +220,10 @@ const FastPackModal: React.FC<FastPackModalProps> = ({ order, onClose, onSuccess
             const hubTextWidth = context.measureText(hubText).width;
             const maxWidth = Math.max(idTextWidth, hubTextWidth);
             
-            context.fillStyle = 'rgba(37, 99, 235, 0.8)'; // Blue-600
+            context.fillStyle = 'rgba(29, 185, 84, 0.9)'; // Spotify Green
             context.fillRect(canvas.width - maxWidth - padding - 20, canvas.height - (fontSize * 2) - padding - 15, maxWidth + 30, (fontSize * 2) + 25);
             
-            context.fillStyle = '#ffffff';
+            context.fillStyle = '#000000';
             context.fillText(hubText, canvas.width - maxWidth - padding, canvas.height - fontSize - padding - 5);
             context.font = `bold ${fontSize * 0.6}px monospace`;
             context.fillText(idText, canvas.width - maxWidth - padding, canvas.height - padding);
@@ -259,7 +243,7 @@ const FastPackModal: React.FC<FastPackModalProps> = ({ order, onClose, onSuccess
                 reader.readAsDataURL(compressedBlob);
             }, 'image/jpeg', 0.9);
         }
-    }, [stopCamera, uploading]);
+    }, [stopCamera, uploading, order]);
 
     // Helper function for robust upload with progress
     const uploadWithProgress = async (base64Data: string, fileName: string): Promise<any> => {
@@ -518,8 +502,13 @@ const FastPackModal: React.FC<FastPackModalProps> = ({ order, onClose, onSuccess
     const phone = order?.['Customer Phone'] || '';
     const phoneCarrier = appData.phoneCarriers?.find(c => (c.Prefixes || '').split(',').some(p => phone.startsWith(p.trim())));
 
-    const handleCopyName = () => { if (order) navigator.clipboard.writeText(order['Customer Name']).then(() => alert('ចម្លងឈ្មោះបានជោគជ័យ')); };
-    const handleCopyPhone = () => { if (order) navigator.clipboard.writeText(order['Customer Phone']).then(() => alert('ចម្លងលេខទូរស័ព្ទបានជោគជ័យ')); };
+    const handleCopy = (text: string, label: string) => {
+        if (!text) return;
+        navigator.clipboard.writeText(text).then(() => alert(`ចម្លង${label}បានជោគជ័យ`));
+    };
+
+    const handleCopyName = () => { if (order) handleCopy(order['Customer Name'], 'ឈ្មោះ'); };
+    const handleCopyPhone = () => { if (order) handleCopy(order['Customer Phone'], 'លេខទូរស័ព្ទ'); };
 
     const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
         const file = e.target.files?.[0];
@@ -538,10 +527,78 @@ const FastPackModal: React.FC<FastPackModalProps> = ({ order, onClose, onSuccess
         }
     };
 
+    const renderVerificationSummary = () => (
+        <div className="bg-white/5 rounded-[3rem] p-10 border border-white/10 ring-1 ring-white/5 flex-grow flex flex-col shadow-2xl overflow-y-auto custom-scrollbar gap-10">
+            <div className="flex items-center justify-between">
+                <h3 className="text-3xl font-black text-white uppercase tracking-tighter italic">Order Summary</h3>
+                <div className="flex items-center gap-3 px-6 py-2.5 bg-[#1DB954]/10 border border-[#1DB954]/20 rounded-full">
+                    <span className="text-[10px] font-black text-[#1DB954] uppercase tracking-[0.4em]">រៀបចំដោយ:</span>
+                    <span className="text-sm font-black text-white">{order?.User || 'N/A'}</span>
+                </div>
+            </div>
+
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-10">
+                {/* Logistics Section */}
+                <div className="space-y-6">
+                    <p className="text-[11px] font-black text-gray-500 uppercase tracking-[0.5em]">Logistics Details</p>
+                    <div className="bg-black/40 p-8 rounded-[2.5rem] ring-1 ring-white/5 space-y-6 shadow-inner">
+                        <div className="flex justify-between items-center">
+                            <span className="text-[10px] text-gray-400 font-bold uppercase tracking-widest">Shipping Method</span>
+                            <span className="text-sm font-black text-white uppercase tracking-tight">{order?.['Internal Shipping Method'] || 'N/A'}</span>
+                        </div>
+                        <div className="flex justify-between items-center">
+                            <span className="text-[10px] text-gray-400 font-bold uppercase tracking-widest">Assigned Driver</span>
+                            <span className="text-sm font-black text-white uppercase tracking-tight">{order?.['Driver Name'] || order?.['Internal Shipping Details'] || 'N/A'}</span>
+                        </div>
+                        <div className="flex justify-between items-center pt-6 border-t border-white/5">
+                            <span className="text-[10px] text-gray-400 font-bold uppercase tracking-widest">Driver Cost</span>
+                            <span className="text-2xl font-black text-[#1DB954] font-mono tracking-tighter italic">${(Number(order?.['Internal Cost']) || 0).toFixed(2)}</span>
+                        </div>
+                    </div>
+                </div>
+
+                {/* Financial Section */}
+                <div className="space-y-6">
+                    <p className="text-[11px] font-black text-gray-500 uppercase tracking-[0.5em]">Financial Metrics</p>
+                    <div className="bg-black/40 p-8 rounded-[2.5rem] ring-1 ring-white/5 space-y-6 shadow-inner">
+                        <div className="flex justify-between items-center">
+                            <span className="text-[10px] text-gray-400 font-bold uppercase tracking-widest">Payment Provider</span>
+                            <span className="text-sm font-black text-white uppercase tracking-tight">{order?.['Payment Info'] || 'N/A'}</span>
+                        </div>
+                        <div className="flex justify-between items-center">
+                            <span className="text-[10px] text-gray-400 font-bold uppercase tracking-widest">Transaction Status</span>
+                            <span className={`text-[10px] font-black px-4 py-1.5 rounded-full uppercase tracking-widest transition-all ${order?.['Payment Status'] === 'Paid' ? 'bg-[#1DB954]/20 text-[#1DB954] border border-[#1DB954]/30' : 'bg-amber-500/20 text-amber-400 border border-amber-500/30'}`}>
+                                {order?.['Payment Status'] || 'Unpaid'}
+                            </span>
+                        </div>
+                        <div className="flex justify-between items-center pt-6 border-t border-white/5">
+                            <span className="text-[10px] text-gray-400 font-bold uppercase tracking-widest">Grand Total</span>
+                            <span className="text-4xl font-black text-[#1DB954] font-mono tracking-tighter italic">${(Number(order?.['Grand Total']) || 0).toFixed(2)}</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            {/* Note Section */}
+            {order?.Note && (
+                <div className="space-y-6">
+                    <p className="text-[11px] font-black text-gray-500 uppercase tracking-[0.5em]">Special Instructions</p>
+                    <div className="bg-white/5 p-8 rounded-[2.5rem] ring-1 ring-white/5 shadow-inner border-l-[6px] border-[#1DB954]/40">
+                        <p className="text-lg text-gray-300 leading-relaxed italic font-medium">"{order.Note}"</p>
+                    </div>
+                </div>
+            )}
+
+            <div className="mt-auto pt-10 border-t border-white/5 text-center">
+                <p className="text-[11px] font-black text-gray-600 uppercase tracking-[0.6em] animate-pulse">Neural verification in progress... please confirm all items</p>
+            </div>
+        </div>
+    );
+
     if (!order) return null;
 
     return (
-        <div className="fixed inset-0 z-[150] flex items-center justify-center p-4 bg-black/80 backdrop-blur-xl animate-fade-in overflow-y-auto">
+        <div className="fixed inset-0 z-[200] bg-[#121212] flex flex-col animate-fade-in overflow-hidden font-sans selection:bg-[#1DB954]/30">
             <style>{`
                 @keyframes scan-y { 0% { top: 0; opacity: 0; } 50% { opacity: 1; } 100% { top: 100%; opacity: 0; } }
                 .animate-scan-y { position: absolute; animation: scan-y 3s linear infinite; }
@@ -549,176 +606,195 @@ const FastPackModal: React.FC<FastPackModalProps> = ({ order, onClose, onSuccess
                 .animate-bounce-slow { animation: bounce-slow 2s infinite ease-in-out; }
                 @keyframes pulse-soft { 0%, 100% { opacity: 1; } 50% { opacity: 0.6; } }
                 .animate-pulse-soft { animation: pulse-soft 2s ease-in-out infinite; }
+                .spotify-scroll::-webkit-scrollbar { width: 12px; }
+                .spotify-scroll::-webkit-scrollbar-track { background: transparent; }
+                .spotify-scroll::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.1); border-radius: 10px; border: 3px solid #121212; }
+                .spotify-scroll::-webkit-scrollbar-thumb:hover { background: rgba(255,255,255,0.2); }
             `}</style>
             
-            <div className="bg-[#0f172a] border border-white/10 rounded-[2.5rem] w-full max-w-6xl shadow-[0_30px_100px_rgba(0,0,0,0.8)] overflow-hidden flex flex-col my-auto relative max-h-none md:max-h-[95vh]">
-                
-                {/* Detailed Header */}
-                <div className="p-6 md:p-8 border-b border-white/5 flex justify-between items-center relative bg-gradient-to-r from-blue-600/10 via-transparent to-transparent flex-shrink-0">
-                    <div className="flex items-center gap-5">
+            {/* Immersive Background Elements */}
+            <div className="absolute inset-0 pointer-events-none overflow-hidden">
+                <div className="absolute top-[-10%] left-[-10%] w-[50%] h-[50%] bg-[#1DB954]/10 rounded-full blur-[120px] animate-pulse-soft"></div>
+                <div className="absolute bottom-[-10%] right-[-10%] w-[40%] h-[40%] bg-blue-600/5 rounded-full blur-[100px]"></div>
+            </div>
+
+            {/* FIXED HEADER: Refined Spotify Aesthetic */}
+            <header className="relative z-30 px-8 py-6 bg-black/40 backdrop-blur-md border-b border-white/5 flex justify-between items-center flex-shrink-0">
+                <div className="flex items-center gap-8">
+                    <button onClick={onClose} className="w-12 h-12 rounded-full bg-black/60 text-white flex items-center justify-center hover:bg-white/10 transition-all active:scale-90 border border-white/10 group">
+                        <svg className="w-6 h-6 transform group-hover:-translate-x-1 transition-transform" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={3}><path d="M15 19l-7-7 7-7" /></svg>
+                    </button>
+                    <div className="flex items-center gap-6">
                         {page ? (
                             <img 
                                 src={convertGoogleDriveUrl(page.PageLogoURL)} 
-                                className="w-14 h-14 rounded-2xl border border-white/10 shadow-2xl object-cover" 
+                                className="w-14 h-14 rounded-2xl border border-white/10 shadow-2xl object-cover ring-4 ring-black" 
                                 alt="Page Logo" 
                             />
                         ) : (
-                            <div className="w-14 h-14 rounded-2xl bg-blue-600/20 flex items-center justify-center text-blue-400 border border-blue-500/20 shadow-xl">
-                                <svg className="w-8 h-8" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4" strokeWidth={2}/></svg>
+                            <div className="w-14 h-14 rounded-2xl bg-[#1DB954] flex items-center justify-center text-black border-4 border-black shadow-xl">
+                                <span className="text-2xl">📦</span>
                             </div>
                         )}
                         <div>
                             <div className="flex items-center gap-3">
-                                <h3 className="text-2xl font-black text-white uppercase tracking-tighter italic leading-none">Smart Packaging Hub</h3>
-                                <div className="px-2 py-0.5 bg-blue-500/20 border border-blue-500/30 rounded text-[8px] font-black text-blue-400 uppercase tracking-widest">AI Core v2.0</div>
+                                <h1 className="text-3xl font-black text-white uppercase tracking-tighter italic leading-none">Smart Packaging Hub</h1>
+                                <span className="px-2 py-0.5 bg-[#1DB954] text-black text-[8px] font-black rounded uppercase tracking-widest">v4.2</span>
                             </div>
-                            <div className="flex flex-wrap items-center gap-x-4 gap-y-1 mt-2">
-                                <button onClick={() => navigator.clipboard.writeText(order['Order ID']).then(() => alert('Copied ID'))} className="text-blue-400 font-mono text-xs font-bold hover:text-white transition-colors flex items-center gap-1 group/id bg-blue-500/5 px-2 py-0.5 rounded-lg border border-blue-500/10">
-                                    #{order['Order ID'].substring(0, 15)}
-                                    <svg className="w-3.5 h-3.5 opacity-0 group-hover/id:opacity-100 transition-opacity" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path d="M8 5H6a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2v-1M8 5a2 2 0 002 2h2a2 2 0 002-2M8 5a2 2 0 012-2h2a2 2 0 012 2" strokeWidth={2}/></svg>
-                                </button>
-                                <div className="flex items-center gap-2">
-                                    <span className="px-2 py-1 bg-blue-600 text-white text-[10px] font-black uppercase rounded-lg shadow-lg tracking-wider">Team: {order.Team}</span>
-                                    <span className="px-2 py-1 bg-purple-500/10 text-purple-400 text-[10px] font-black uppercase rounded-lg border border-purple-500/20">{order.Page}</span>
-                                </div>
+                            <div className="flex items-center gap-4 mt-2">
+                                <span className="text-[#1DB954] font-mono text-sm font-bold tracking-widest">#{order['Order ID'].substring(0, 15)}</span>
+                                <div className="h-3 w-px bg-white/10"></div>
+                                <span className="text-[10px] font-black text-gray-500 uppercase tracking-[0.3em]">{order.Page} • {order.Team} Team</span>
                             </div>
                         </div>
                     </div>
-                    <button onClick={onClose} disabled={uploading} className="w-12 h-12 bg-white/5 hover:bg-red-500/20 text-gray-400 hover:text-red-500 rounded-2xl flex items-center justify-center transition-all border border-white/5 shadow-xl active:scale-90 flex-shrink-0">
-                        <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={3}><path d="M6 18L18 6M6 6l12 12" /></svg>
-                    </button>
                 </div>
 
-                <div className="p-4 md:p-6 overflow-y-auto no-scrollbar space-y-6 flex-grow custom-scrollbar">
-                    {renderStepIndicator()}
-                    
-                    {uploading && undoTimer === null && (
-                        <div className="bg-blue-600/10 border border-blue-500/20 rounded-[2rem] p-4 animate-pulse mb-4 shadow-inner">
-                            <div className="flex justify-between items-center mb-2">
-                                <div className="flex items-center gap-3">
-                                    <Spinner size="sm" />
-                                    <span className="text-[10px] font-black text-blue-400 uppercase tracking-[0.2em]">Synchronizing Proof with Global Stream...</span>
-                                </div>
-                                <span className="text-xs font-mono font-black text-blue-400">{uploadProgress}%</span>
-                            </div>
-                            <div className="w-full h-1.5 bg-gray-950 rounded-full overflow-hidden border border-white/5">
-                                <div className="h-full bg-gradient-to-r from-blue-600 to-indigo-500 transition-all duration-300 shadow-[0_0_15px_rgba(37,99,235,0.5)]" style={{ width: `${uploadProgress}%` }}></div>
-                            </div>
-                        </div>
-                    )}
+                <div className="flex items-center gap-6">
+                    <div className="hidden md:flex items-center gap-3 bg-white/5 px-5 py-2.5 rounded-full border border-white/5 ring-1 ring-white/5">
+                        {bank && <img src={convertGoogleDriveUrl(bank.LogoURL)} className="w-6 h-6 object-contain" title={bank.BankName} alt="" />}
+                        {shippingMethod && <img src={convertGoogleDriveUrl(shippingMethod.LogoURL)} className="w-6 h-6 object-contain" title={shippingMethod.MethodName} alt="" />}
+                        {driver && <img src={convertGoogleDriveUrl(driver.ImageURL)} className="w-6 h-6 object-cover rounded-full ring-2 ring-black" title={driver.DriverName} alt="" />}
+                    </div>
+                    <button onClick={onClose} className="w-12 h-12 bg-red-600/10 hover:bg-red-600 text-red-500 hover:text-white rounded-2xl flex items-center justify-center transition-all border border-red-500/20 active:scale-90">
+                        <svg className="w-7 h-7" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={3.5}><path d="M6 18L18 6M6 6l12 12" /></svg>
+                    </button>
+                </div>
+            </header>
 
-                    <div className="grid grid-cols-1 xl:grid-cols-2 gap-8 h-full">
-                        {/* LEFT COLUMN: Order Details & Checklist */}
-                        <div className="flex flex-col gap-6">
-                            <div className="bg-white/[0.03] rounded-[2.5rem] p-8 border border-white/5 space-y-8 shadow-inner relative overflow-hidden flex-shrink-0">
-                                <div className="absolute top-0 right-0 w-40 h-40 bg-blue-600/5 rounded-full blur-3xl -mr-20 -mt-20"></div>
-                                <div className="flex items-start gap-6 relative z-10">
-                                    <div className="w-16 h-16 bg-blue-600/20 rounded-[1.5rem] flex items-center justify-center text-blue-500 border border-blue-500/20 flex-shrink-0 shadow-2xl">
-                                        <svg className="w-8 h-8" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2.5}><path d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" /></svg>
-                                    </div>
-                                    <div className="min-w-0 flex-grow space-y-3">
-                                        <div className="flex items-center justify-between gap-4">
-                                            <p className="text-white font-black text-2xl truncate tracking-tight">{order['Customer Name']}</p>
-                                            <div className="flex gap-2">
-                                                <button onClick={handleCopyName} className="p-2.5 bg-white/5 hover:bg-blue-600 text-gray-500 hover:text-white rounded-xl transition-all border border-white/5 shadow-lg active:scale-90"><svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2.5}><path d="M8 5H6a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2v-1M8 5a2 2 0 002 2h2a2 2 0 002-2M8 5a2 2 0 012-2h2a2 2 0 012 2" /></svg></button>
-                                            </div>
-                                        </div>
-                                        <div className="flex items-center gap-3">
-                                            {phoneCarrier && <img src={convertGoogleDriveUrl(phoneCarrier.CarrierLogoURL)} className="w-6 h-6 object-contain" alt="Carrier" />}
-                                            <p className="text-blue-400 font-mono text-lg font-black tracking-tight">{order['Customer Phone']}</p>
-                                        </div>
+            {/* MAIN CONTENT: Split View */}
+            <main className="flex-grow flex overflow-hidden relative z-10">
+                {/* LEFT SIDEBAR: Order Info & Items */}
+                <div className="w-full xl:w-[40%] flex flex-col border-r border-white/5 bg-black/20">
+                    <div className="p-8 spotify-scroll overflow-y-auto space-y-10 flex-grow">
+                        {renderStepIndicator()}
+
+                        <div className="bg-gradient-to-br from-white/10 to-transparent p-10 rounded-[3rem] border border-white/10 ring-1 ring-white/5 shadow-3xl space-y-8 relative overflow-hidden">
+                            <div className="absolute top-[-20%] right-[-20%] w-64 h-64 bg-[#1DB954]/10 rounded-full blur-[80px]"></div>
+                            <div className="flex items-start gap-8 relative z-10">
+                                <div className="w-24 h-24 bg-white/5 rounded-[2.5rem] flex items-center justify-center text-[#1DB954] border border-white/10 shadow-2xl flex-shrink-0">
+                                    <svg className="w-12 h-12" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2.5}><path d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" /></svg>
+                                </div>
+                                <div className="min-w-0 space-y-4">
+                                    <h2 className="text-5xl font-black text-white tracking-tighter italic leading-none truncate uppercase">{order['Customer Name']}</h2>
+                                    <div className="flex items-center gap-4">
+                                        {phoneCarrier && <img src={convertGoogleDriveUrl(phoneCarrier.CarrierLogoURL)} className="w-8 h-8 object-contain" alt="" />}
+                                        <p className="text-[#1DB954] font-mono text-2xl font-black tracking-[0.1em]">{order['Customer Phone']}</p>
+                                        <button onClick={handleCopyPhone} className="p-2.5 bg-white/5 hover:bg-[#1DB954] text-gray-500 hover:text-black rounded-xl transition-all border border-white/10 active:scale-90"><svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={3}><path d="M8 5H6a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2v-1M8 5a2 2 0 002 2h2a2 2 0 002-2M8 5a2 2 0 012-2h2a2 2 0 012 2" /></svg></button>
                                     </div>
                                 </div>
-                                <div className="bg-gray-900/80 p-5 rounded-3xl border border-white/5 shadow-inner">
-                                    <p className="text-white text-base font-black tracking-tight leading-snug">{order.Location}</p>
-                                </div>
                             </div>
-
-                            <div className="flex-grow">
-                                <div className="flex items-center justify-between mb-4 px-2">
-                                    <h4 className="text-[11px] font-black text-gray-500 uppercase tracking-[0.3em]">Items Manifest</h4>
-                                    <span className={`px-4 py-1.5 rounded-full text-[9px] font-black uppercase tracking-widest ${isOrderVerified ? 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/30' : 'bg-amber-500/20 text-amber-400 border border-amber-500/30'}`}>
-                                        {isOrderVerified ? 'All Items Verified' : 'Awaiting Verification'}
-                                    </span>
+                            
+                            <div className="space-y-6 relative z-10">
+                                <div className="bg-black/60 p-8 rounded-[2.5rem] ring-1 ring-white/5 shadow-inner flex justify-between items-center group">
+                                    <p className="text-white text-xl font-black tracking-tight uppercase italic flex-grow">{order.Location}</p>
+                                    <button onClick={() => handleCopy(order.Location, 'ទីតាំង')} className="p-4 bg-white/5 hover:bg-[#1DB954] text-gray-500 hover:text-black rounded-2xl transition-all border border-white/10 shadow-2xl active:scale-90 opacity-0 group-hover:opacity-100 transition-opacity"><svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={3}><path d="M8 5H6a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2v-1M8 5a2 2 0 002 2h2a2 2 0 002-2M8 5a2 2 0 012-2h2a2 2 0 012 2" /></svg></button>
                                 </div>
-                                {renderChecklist()}
+                                <div className="flex justify-between items-center px-6">
+                                    <span className="text-[11px] font-black text-gray-500 uppercase tracking-[0.5em]">Customer Logistic Fee</span>
+                                    <span className="text-3xl font-black text-white font-mono tracking-tighter italic">${(Number(order['Shipping Fee (Customer)']) || 0).toFixed(2)}</span>
+                                </div>
                             </div>
                         </div>
 
-                        {/* RIGHT COLUMN: Camera / Proof / Labels */}
-                        <div className="flex flex-col gap-6">
-                            {step === 'VERIFYING' && <FastPackScanner onScan={handleBarcodeScan} />}
+                        <div className="space-y-6">
+                            <div className="flex items-center justify-between px-4">
+                                <h4 className="text-[11px] font-black text-gray-500 uppercase tracking-[0.5em]">Inventory Checklist</h4>
+                                <span className={`px-5 py-2 rounded-full text-[10px] font-black uppercase tracking-[0.2em] transition-all duration-500 ${isOrderVerified ? 'bg-[#1DB954] text-black shadow-lg shadow-[#1DB954]/20' : 'bg-white/5 text-gray-500 border border-white/10'}`}>
+                                    {isOrderVerified ? 'Secured' : 'Pending'}
+                                </span>
+                            </div>
+                            {renderChecklist()}
+                        </div>
+                    </div>
+                </div>
+
+                {/* RIGHT CONTENT: Dynamic Stages */}
+                <div className="flex-grow flex flex-col bg-gradient-to-b from-[#181818] to-[#121212] p-10 spotify-scroll overflow-y-auto">
+                    <div className="max-w-5xl mx-auto w-full h-full flex flex-col">
+                        {uploading && undoTimer === null && (
+                            <div className="bg-[#1DB954]/10 border border-[#1DB954]/20 rounded-[3rem] p-8 animate-pulse mb-10 shadow-3xl">
+                                <div className="flex justify-between items-center mb-4">
+                                    <div className="flex items-center gap-5">
+                                        <Spinner size="lg" />
+                                        <span className="text-xs font-black text-[#1DB954] uppercase tracking-[0.5em]">Uploading Secure Proof to Neural Stream...</span>
+                                    </div>
+                                    <span className="text-2xl font-mono font-black text-[#1DB954]">{uploadProgress}%</span>
+                                </div>
+                                <div className="w-full h-3 bg-black/60 rounded-full overflow-hidden p-1 border border-white/5">
+                                    <div className="h-full bg-[#1DB954] transition-all duration-300 rounded-full shadow-[0_0_30px_#1DB954]" style={{ width: `${uploadProgress}%` }}></div>
+                                </div>
+                            </div>
+                        )}
+
+                        <div className="flex-grow flex flex-col">
+                            {step === 'VERIFYING' && renderVerificationSummary()}
 
                             {step === 'LABELING' && (
-                                <div className="bg-[#1a2235] rounded-[2.5rem] p-8 border border-white/5 flex-grow flex flex-col shadow-inner justify-center items-center gap-10">
-                                    <div className="w-32 h-32 bg-blue-600/20 rounded-[2.5rem] flex items-center justify-center text-blue-400 border border-blue-500/30 shadow-[0_0_50px_rgba(37,99,235,0.2)]">
-                                        <svg className="w-16 h-16" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path d="M17 17h2a2 2 0 002-2v-4a2 2 0 00-2-2H5a2 2 0 00-2-2v4a2 2 0 002 2h2m2 4h6a2 2 0 002-2v-4a2 2 0 00-2-2H9a2 2 0 00-2 2v4a2 2 0 002 2zm8-12V5a2 2 0 00-2-2H9a2 2 0 00-2 2v4h10z" strokeWidth={2.5}/></svg>
+                                <div className="bg-white/5 rounded-[4rem] p-16 border border-white/10 ring-1 ring-white/5 flex-grow flex flex-col shadow-3xl items-center justify-center gap-16 relative overflow-hidden group">
+                                    <div className="absolute inset-0 bg-[#1DB954]/5 opacity-0 group-hover:opacity-100 transition-opacity duration-1000"></div>
+                                    <div className="w-56 h-56 bg-[#1DB954]/10 rounded-[4rem] flex items-center justify-center text-[#1DB954] border-2 border-[#1DB954]/30 shadow-[0_0_100px_rgba(29,185,84,0.2)] transform -rotate-6 group-hover:rotate-0 transition-transform duration-700">
+                                        <svg className="w-32 h-32" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path d="M17 17h2a2 2 0 002-2v-4a2 2 0 00-2-2H5a2 2 0 00-2-2v4a2 2 0 002 2h2m2 4h6a2 2 0 002-2v-4a2 2 0 00-2-2H9a2 2 0 00-2 2v4a2 2 0 002 2zm8-12V5a2 2 0 00-2-2H9a2 2 0 00-2 2v4h10z" strokeWidth={2.5}/></svg>
                                     </div>
-                                    <div className="text-center space-y-4">
-                                        <h3 className="text-3xl font-black text-white uppercase tracking-tighter italic">បោះពុម្ពប័ណ្ណដឹកជញ្ជូន</h3>
-                                        <p className="text-gray-500 text-sm font-bold uppercase tracking-[0.2em]">សូមបិទប័ណ្ណលើកញ្ចប់ឥវ៉ាន់ឱ្យរួចរាល់</p>
+                                    <div className="text-center space-y-6">
+                                        <h3 className="text-6xl font-black text-white uppercase tracking-tighter italic">បោះពុម្ពប័ណ្ណដឹកជញ្ជូន</h3>
+                                        <p className="text-gray-500 text-sm font-black uppercase tracking-[0.6em]">Verify label attachment before final capture</p>
                                     </div>
                                     {fullPrinterURL && (
-                                        <button onClick={() => window.open(fullPrinterURL, '_blank')} className="w-full py-6 bg-indigo-600 hover:bg-indigo-700 text-white rounded-[2rem] font-black uppercase text-xs tracking-[0.3em] shadow-2xl flex justify-center items-center gap-4 border border-white/10 transition-all active:scale-95 group">
-                                            <svg className="w-6 h-6 group-hover:scale-110 transition-transform" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path d="M17 17h2a2 2 0 002-2v-4a2 2 0 00-2-2H5a2 2 0 00-2-2v4a2 2 0 002 2h2m2 4h6a2 2 0 002-2v-4a2 2 0 00-2-2H9a2 2 0 00-2 2v4a2 2 0 002 2zm8-12V5a2 2 0 00-2-2H9a2 2 0 00-2 2v4h10z" strokeWidth={2.5}/></svg>
-                                            បោះពុម្ពប័ណ្ណ (Print Label)
+                                        <button onClick={() => window.open(fullPrinterURL, '_blank')} className="px-20 py-10 bg-[#1DB954] hover:bg-[#1ed760] text-black rounded-full font-black uppercase text-xl tracking-[0.5em] shadow-3xl shadow-[#1DB954]/20 flex items-center gap-8 border-[6px] border-black transition-all active:scale-95 group">
+                                            <svg className="w-10 h-10 group-hover:scale-110 transition-transform" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path d="M17 17h2a2 2 0 002-2v-4a2 2 0 00-2-2H5a2 2 0 00-2-2v4a2 2 0 002 2h2m2 4h6a2 2 0 002-2v-4a2 2 0 00-2-2H9a2 2 0 00-2 2v4a2 2 0 002 2zm8-12V5a2 2 0 00-2-2H9a2 2 0 00-2 2v4h10z" strokeWidth={3}/></svg>
+                                            PRINT LABEL
                                         </button>
                                     )}
                                 </div>
                             )}
 
                             {step === 'CAPTURING' && (
-                                <div className="bg-[#1a2235] rounded-[2.5rem] p-6 border border-white/5 flex-grow flex flex-col shadow-inner">
-                                    <div className="flex items-center justify-between mb-6 px-2">
-                                        <div className="flex items-center gap-3">
-                                            <div className="w-2.5 h-2.5 rounded-full bg-blue-500 shadow-[0_0_15px_#3b82f6] animate-pulse"></div>
-                                            <p className="text-[11px] font-black text-white uppercase tracking-[0.25em]">Neural Visual Tracking</p>
+                                <div className="bg-white/5 rounded-[4rem] p-10 border border-white/10 ring-1 ring-white/5 flex-grow flex flex-col shadow-3xl relative overflow-hidden">
+                                    <div className="flex items-center justify-between mb-10 px-6 relative z-20">
+                                        <div className="flex items-center gap-5">
+                                            <div className="w-4 h-4 rounded-full bg-[#1DB954] shadow-[0_0_25px_#1DB954] animate-pulse"></div>
+                                            <p className="text-xs font-black text-white uppercase tracking-[0.5em]">Neural Visual Matrix Active</p>
                                         </div>
-                                        <button onClick={() => setIsAiEnabled(!isAiEnabled)} className={`px-4 py-2 rounded-2xl text-[9px] font-black uppercase tracking-widest transition-all border flex items-center gap-3 shadow-xl active:scale-95 ${isAiEnabled ? 'bg-blue-600 text-white border-blue-400/50 shadow-blue-900/40' : 'bg-gray-800 text-gray-500 border-white/10'}`}>
-                                            <div className={`w-2 h-2 rounded-full ${isAiEnabled ? (isAiLoading ? 'bg-amber-400 animate-pulse' : 'bg-emerald-400') : 'bg-gray-600'}`}></div>
-                                            {isAiLoading ? 'Warming Up...' : (isAiEnabled ? 'AI Active' : 'AI Offline')}
+                                        <button onClick={() => setIsAiEnabled(!isAiEnabled)} className={`px-8 py-3.5 rounded-full text-xs font-black uppercase tracking-[0.3em] transition-all border ring-2 flex items-center gap-5 shadow-3xl active:scale-95 ${isAiEnabled ? 'bg-[#1DB954] text-black border-black/20 ring-[#1DB954]/30' : 'bg-white/5 text-gray-500 border-white/10 ring-white/5'}`}>
+                                            <div className={`w-3 h-3 rounded-full ${isAiEnabled ? (isAiLoading ? 'bg-black/40 animate-pulse' : 'bg-black/60') : 'bg-gray-600'}`}></div>
+                                            {isAiLoading ? 'SYNCING...' : (isAiEnabled ? 'AI CORE ACTIVE' : 'AI OFFLINE')}
                                         </button>
                                     </div>
                                     
                                     <input type="file" accept="image/*" ref={fileInputRef} onChange={handleFileChange} className="hidden" />
                                     <canvas ref={canvasRef} className="hidden" />
 
-                                    <div className="relative flex-grow min-h-[400px] group/cam">
+                                    <div className="relative flex-grow min-h-[500px] group/cam">
                                         {previewImage ? (
-                                            <div className="absolute inset-0 group rounded-[3rem] overflow-hidden border-4 border-emerald-500/40 shadow-[0_0_50px_rgba(16,185,129,0.2)] bg-black cursor-pointer" onClick={() => showFullImage(previewImage)}>
+                                            <div className="absolute inset-0 group rounded-[4rem] overflow-hidden border-[6px] border-[#1DB954]/40 shadow-3xl bg-black cursor-pointer ring-[12px] ring-black" onClick={() => showFullImage(previewImage)}>
                                                 <img src={previewImage} className="w-full h-full object-cover" alt="Preview" />
-                                                <button onClick={(e) => { e.stopPropagation(); setPreviewImage(null); }} className="absolute top-6 right-6 w-12 h-12 bg-red-600 text-white rounded-2xl flex items-center justify-center shadow-2xl border-2 border-white/20 active:scale-90 z-20"><svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path d="M6 18L18 6M6 6l12 12" strokeWidth={3}/></svg></button>
-                                                <div className="absolute bottom-8 left-1/2 -translate-x-1/2 bg-emerald-600/90 backdrop-blur-md text-white px-8 py-3 rounded-2xl text-[11px] font-black uppercase tracking-[0.3em] border border-white/30 shadow-2xl z-10 animate-fade-in-up">រក្សាទុករូបភាពរួចរាល់</div>
+                                                <button onClick={(e) => { e.stopPropagation(); setPreviewImage(null); }} className="absolute top-10 right-10 w-20 h-20 bg-red-600 text-white rounded-full flex items-center justify-center shadow-3xl border-8 border-black active:scale-90 z-20 transition-all hover:scale-110"><svg className="w-10 h-10" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path d="M6 18L18 6M6 6l12 12" strokeWidth={4}/></svg></button>
+                                                <div className="absolute bottom-12 left-1/2 -translate-x-1/2 bg-[#1DB954] text-black px-16 py-6 rounded-full text-sm font-black uppercase tracking-[0.6em] border-8 border-black shadow-3xl z-10 animate-fade-in-up">PROOF SECURED</div>
                                             </div>
                                         ) : isCameraActive ? (
-                                            <div className="absolute inset-0 rounded-[3rem] overflow-hidden border-2 border-blue-500/50 shadow-[0_0_60px_rgba(37,99,235,0.15)] bg-black">
+                                            <div className="absolute inset-0 rounded-[4rem] overflow-hidden border-2 border-white/10 ring-[12px] ring-black shadow-inner bg-black">
                                                 <video ref={videoRef} autoPlay playsInline className="w-full h-full object-cover" style={{ transform: `scale(${zoom})` }} />
                                                 
-                                                {/* Packaging Frame Overlay */}
                                                 <div className="absolute inset-0 pointer-events-none flex items-center justify-center">
-                                                    <div className="w-[85%] h-[80%] border-2 border-white/20 rounded-[2rem] relative">
-                                                        {/* Corners */}
-                                                        <div className="absolute top-0 left-0 w-10 h-10 border-t-4 border-l-4 border-blue-500 rounded-tl-2xl"></div>
-                                                        <div className="absolute top-0 right-0 w-10 h-10 border-t-4 border-r-4 border-blue-500 rounded-tr-2xl"></div>
-                                                        <div className="absolute bottom-0 left-0 w-10 h-10 border-b-4 border-l-4 border-blue-500 rounded-bl-2xl"></div>
-                                                        <div className="absolute bottom-0 right-0 w-10 h-10 border-b-4 border-r-4 border-blue-500 rounded-br-2xl"></div>
+                                                    <div className="w-[85%] h-[80%] border-2 border-white/10 rounded-[3.5rem] relative">
+                                                        <div className="absolute top-0 left-0 w-20 h-20 border-t-[8px] border-l-[8px] border-[#1DB954] rounded-tl-[2rem] shadow-[0_0_30px_#1DB954]"></div>
+                                                        <div className="absolute top-0 right-0 w-20 h-20 border-t-[8px] border-r-[8px] border-[#1DB954] rounded-tr-[2rem] shadow-[0_0_30px_#1DB954]"></div>
+                                                        <div className="absolute bottom-0 left-0 w-20 h-20 border-b-[8px] border-l-[8px] border-[#1DB954] rounded-bl-[2rem] shadow-[0_0_30px_#1DB954]"></div>
+                                                        <div className="absolute bottom-0 right-0 w-20 h-20 border-b-[8px] border-r-[8px] border-[#1DB954] rounded-br-[2rem] shadow-[0_0_30px_#1DB954]"></div>
                                                         
-                                                        {/* Label Placeholder Guide */}
-                                                        <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-48 h-32 border border-white/10 bg-white/5 rounded-xl flex items-center justify-center">
-                                                            <p className="text-[8px] font-black text-white/20 uppercase tracking-widest">Label Area</p>
-                                                        </div>
-                                                        
-                                                        <div className="absolute top-4 left-1/2 -translate-x-1/2 bg-blue-600/80 backdrop-blur-md px-4 py-1 rounded-full border border-white/20">
-                                                            <p className="text-[9px] font-black text-white uppercase tracking-[0.2em]">ដាក់កញ្ចប់ឥវ៉ាន់ក្នុងស៊ុម</p>
+                                                        <div className="absolute top-10 left-1/2 -translate-x-1/2 bg-[#1DB954] px-10 py-3 rounded-full border-[6px] border-black shadow-3xl">
+                                                            <p className="text-xs font-black text-black uppercase tracking-[0.5em]">POSITION PACKAGE IN FRAME</p>
                                                         </div>
                                                     </div>
                                                 </div>
 
-                                                <div className="absolute inset-0 pointer-events-none overflow-hidden"><div className="w-full h-[2px] bg-blue-500/50 absolute top-0 left-0 animate-scan-y shadow-[0_0_15px_#3b82f6]"></div></div>
+                                                <div className="absolute inset-0 pointer-events-none overflow-hidden"><div className="w-full h-1 bg-[#1DB954]/50 absolute top-0 left-0 animate-scan-y shadow-[0_0_30px_#1DB954]"></div></div>
+                                                
                                                 {countdown !== null && (
-                                                    <div className="absolute inset-0 flex items-center justify-center z-50 bg-black/40 backdrop-blur-sm">
-                                                        <div className="w-32 h-32 rounded-full border-8 border-emerald-500 flex items-center justify-center bg-black/60 shadow-[0_0_80px_rgba(16,185,129,0.6)]">
-                                                            <span className="text-7xl font-black text-white">{countdown}</span>
+                                                    <div className="absolute inset-0 flex items-center justify-center z-50 bg-black/60 backdrop-blur-xl">
+                                                        <div className="w-64 h-64 rounded-full border-[20px] border-[#1DB954] flex items-center justify-center bg-black/60 shadow-[0_0_150px_rgba(29,185,84,0.6)] scale-125">
+                                                            <span className="text-[10rem] font-black text-white italic">{countdown}</span>
                                                         </div>
                                                     </div>
                                                 )}
@@ -730,33 +806,42 @@ const FastPackModal: React.FC<FastPackModalProps> = ({ order, onClose, onSuccess
                                                         width: `${(detection.box.w / (videoRef.current?.videoWidth || 1)) * 100}%`,
                                                         height: `${(detection.box.h / (videoRef.current?.videoHeight || 1)) * 100}%`,
                                                     }}>
-                                                        <div className={`absolute inset-0 border-4 rounded-[2.5rem] transition-all duration-500 ${detection.isHand ? 'border-amber-500 shadow-[0_0_40px_rgba(245,158,11,0.6)]' : 'border-blue-500/60 shadow-[0_0_25px_rgba(59,130,246,0.3)]'}`}>
-                                                            <div className={`absolute -top-10 left-1/2 -translate-x-1/2 px-3 py-1 rounded-full text-[8px] font-black uppercase tracking-widest whitespace-nowrap border shadow-xl ${detection.isHand ? 'bg-amber-600 text-white border-white/20' : 'bg-blue-600 text-white border-white/20'}`}>
-                                                                {detection.isHand ? '✋ Hands in Frame' : '📦 Target Locked'}
+                                                        <div className={`absolute inset-0 border-[6px] rounded-[4rem] transition-all duration-500 ${detection.isHand ? 'border-amber-500 shadow-[0_0_80px_rgba(245,158,11,0.6)]' : 'border-[#1DB954] shadow-[0_0_50px_rgba(29,185,84,0.5)]'}`}>
+                                                            <div className={`absolute -top-16 left-1/2 -translate-x-1/2 px-8 py-3 rounded-full text-xs font-black uppercase tracking-[0.4em] whitespace-nowrap border-[6px] border-black shadow-3xl ${detection.isHand ? 'bg-amber-600 text-white' : 'bg-[#1DB954] text-black'}`}>
+                                                                {detection.isHand ? '✋ HANDS DETECTED' : '📦 TARGET SECURED'}
                                                             </div>
                                                         </div>
                                                     </div>
                                                 )}
 
-                                                {/* Auto-Capture Progress Overlay */}
                                                 {autoCaptureProgress > 0 && (
-                                                    <div className="absolute top-10 left-1/2 -translate-x-1/2 w-48 h-2 bg-black/60 rounded-full border border-white/10 overflow-hidden z-20">
-                                                        <div className="h-full bg-emerald-500 transition-all duration-100" style={{ width: `${autoCaptureProgress}%` }}></div>
+                                                    <div className="absolute top-16 left-1/2 -translate-x-1/2 w-80 h-4 bg-black/60 rounded-full border-[3px] border-white/10 overflow-hidden z-20">
+                                                        <div className="h-full bg-[#1DB954] transition-all duration-100 shadow-[0_0_20px_#1DB954]" style={{ width: `${autoCaptureProgress}%` }}></div>
                                                     </div>
                                                 )}
 
-                                                <div className="absolute bottom-8 left-0 right-0 flex justify-center items-center gap-10 z-40 px-6">
-                                                    <button onClick={stopCamera} className="w-14 h-14 bg-black/60 backdrop-blur-xl text-white rounded-2xl flex items-center justify-center border border-white/10 active:scale-90"><svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path d="M6 18L18 6M6 6l12 12" strokeWidth={3}/></svg></button>
-                                                    <button onClick={capturePhoto} className="w-24 h-24 bg-white rounded-full flex items-center justify-center border-[8px] border-blue-600/30 shadow-2xl active:scale-95"><div className="w-16 h-16 bg-blue-600 rounded-full" /></button>
-                                                    <div className="w-14 h-14 bg-black/40 backdrop-blur-xl rounded-2xl flex items-center justify-center border border-white/10"><span className="text-[10px] font-black text-blue-400 font-mono">{zoom.toFixed(1)}x</span></div>
+                                                <div className="absolute bottom-12 left-0 right-0 flex justify-center items-center gap-16 z-40 px-10">
+                                                    <button onClick={stopCamera} className="w-20 h-20 bg-black/60 backdrop-blur-3xl text-white rounded-full flex items-center justify-center border-[4px] border-white/10 shadow-3xl active:scale-90 hover:bg-white/10 transition-all"><svg className="w-10 h-10" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={3}><path d="M6 18L18 6M6 6l12 12" /></svg></button>
+                                                    
+                                                    <button onClick={capturePhoto} className="w-36 h-36 bg-white rounded-full p-3 border-[12px] border-[#1DB954]/30 shadow-[0_0_80px_rgba(29,185,84,0.5)] active:scale-95 group transition-all">
+                                                        <div className="w-full h-full bg-white rounded-full border-[6px] border-black/10 flex items-center justify-center shadow-inner">
+                                                            <div className="w-16 h-16 bg-black/5 rounded-full border-[4px] border-black/10 group-active:scale-90 transition-transform"></div>
+                                                        </div>
+                                                    </button>
+                                                    
+                                                    <div className="w-20 h-20 bg-black/60 backdrop-blur-3xl rounded-full flex items-center justify-center border-[4px] border-white/10 shadow-3xl"><span className="text-lg font-black text-[#1DB954] font-mono italic">{zoom.toFixed(1)}x</span></div>
                                                 </div>
                                             </div>
                                         ) : (
-                                            <button onClick={startCamera} className="w-full h-full border-4 border-dashed border-blue-500/20 rounded-[3rem] flex flex-col items-center justify-center gap-6 hover:border-blue-500/40 hover:bg-blue-500/5 transition-all group shadow-inner">
-                                                <div className="w-24 h-24 bg-blue-600 rounded-[2rem] flex items-center justify-center text-white shadow-2xl border border-white/10 transform transition-transform group-hover:scale-110">
-                                                    <svg className="w-12 h-12" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path d="M3 9a2 2 0 012-2h.93a2 2 0 001.664-.89l.812-1.22A2 2 0 0110.07 4h3.86a2 2 0 011.664.89l.812 1.22A2 2 0 0018.07 7H19a2 2 0 012 2v9a2 2 0 01-2 2H5a2 2 0 01-2-2V9z" /><path d="M15 13a3 3 0 11-6 0 3 3 0 016 0z" strokeWidth={2.5}/></svg>
+                                            <button onClick={startCamera} className="w-full h-full border-[6px] border-dashed border-white/5 rounded-[4rem] flex flex-col items-center justify-center gap-10 hover:border-[#1DB954]/40 hover:bg-[#1DB954]/5 transition-all group shadow-inner relative overflow-hidden">
+                                                <div className="absolute inset-0 bg-gradient-to-br from-[#1DB954]/5 to-transparent opacity-0 group-hover:opacity-100 transition-opacity"></div>
+                                                <div className="w-40 h-40 bg-[#1DB954] rounded-[3.5rem] flex items-center justify-center text-black shadow-[0_0_80px_rgba(29,185,84,0.4)] border-[10px] border-black transform transition-all group-hover:scale-110 group-hover:rotate-6 relative z-10">
+                                                    <svg className="w-20 h-20" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path d="M3 9a2 2 0 012-2h.93a2 2 0 001.664-.89l.812-1.22A2 2 0 0110.07 4h3.86a2 2 0 011.664.89l.812 1.22A2 2 0 0018.07 7H19a2 2 0 012 2v9a2 2 0 01-2 2H5a2 2 0 01-2-2V9z" /><path d="M15 13a3 3 0 11-6 0 3 3 0 016 0z" strokeWidth={2.5}/></svg>
                                                 </div>
-                                                <p className="text-xl font-black text-white uppercase tracking-tighter italic">បើកកាមេរ៉ាថតរូបកញ្ចប់</p>
+                                                <div className="text-center space-y-4 relative z-10">
+                                                    <p className="text-5xl font-black text-white uppercase tracking-tighter italic">ACTIVATE NEURAL CAM</p>
+                                                    <p className="text-gray-500 text-xs font-black uppercase tracking-[0.8em]">System Ready for Secure Capture</p>
+                                                </div>
                                             </button>
                                         )}
                                     </div>
@@ -765,35 +850,35 @@ const FastPackModal: React.FC<FastPackModalProps> = ({ order, onClose, onSuccess
                         </div>
                     </div>
                 </div>
+            </main>
 
-                {/* Aesthetic Footer with Sticky Actions */}
-                <div className="p-8 md:p-10 bg-[#0f172a] border-t border-white/10 flex flex-col md:flex-row gap-6 flex-shrink-0 relative z-20 shadow-[0_-20px_50px_rgba(0,0,0,0.5)]">
-                    <button onClick={onClose} disabled={uploading} className="flex-1 py-5 bg-gray-800 hover:bg-gray-700 text-gray-400 hover:text-white rounded-3xl font-black uppercase text-xs tracking-[0.3em] transition-all active:scale-[0.98] border border-white/5 shadow-2xl">បោះបង់ (Cancel)</button>
-                    
-                    {step === 'VERIFYING' && (
-                        <button onClick={() => setStep('LABELING')} disabled={!isOrderVerified} className={`flex-[2.5] py-5 rounded-3xl font-black uppercase text-xs tracking-[0.3em] transition-all shadow-2xl flex items-center justify-center gap-4 relative overflow-hidden group ${!isOrderVerified ? 'bg-gray-800 text-gray-500 cursor-not-allowed' : 'bg-blue-600 hover:bg-blue-500 text-white shadow-blue-900/40'}`}>
-                            <div className="absolute inset-0 bg-white/10 translate-y-full group-hover:translate-y-0 transition-transform duration-300"></div>
-                            <svg className="w-7 h-7 relative z-10 group-hover:scale-110 transition-transform" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={3.5}><path d="M13 5l7 7-7 7M5 5l7 7-7 7" /></svg>
-                            <span className="relative z-10">បន្ទាប់: បោះពុម្ពប័ណ្ណ (Next Step)</span>
-                        </button>
-                    )}
+            {/* STICKY FOOTER: Action Bar */}
+            <footer className="relative z-30 px-12 py-10 bg-black border-t border-white/10 flex flex-col md:flex-row gap-10 flex-shrink-0 shadow-[0_-50px_100px_rgba(0,0,0,0.9)]">
+                <button onClick={onClose} disabled={uploading} className="flex-1 py-8 bg-white/5 hover:bg-white/10 text-gray-400 hover:text-white rounded-full font-black uppercase text-sm tracking-[0.6em] transition-all active:scale-[0.98] border border-white/10 shadow-2xl">DISCARD</button>
+                
+                {step === 'VERIFYING' && (
+                    <button onClick={() => setStep('LABELING')} disabled={!isOrderVerified} className={`flex-[3] py-8 rounded-full font-black uppercase text-sm tracking-[0.6em] transition-all shadow-3xl flex items-center justify-center gap-8 relative overflow-hidden group ${!isOrderVerified ? 'bg-white/5 text-gray-600 cursor-not-allowed border border-white/5 opacity-50' : 'bg-[#1DB954] hover:bg-[#1ed760] text-black shadow-[#1DB954]/20 border-[6px] border-black'}`}>
+                        <div className="absolute inset-0 bg-white/20 translate-y-full group-hover:translate-y-0 transition-transform duration-300"></div>
+                        <span className="relative z-10">NEXT: LABEL PRINTING</span>
+                        <svg className="w-10 h-10 relative z-10 group-hover:translate-x-3 transition-transform" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={4}><path d="M13 5l7 7-7 7M5 5l7 7-7 7" /></svg>
+                    </button>
+                )}
 
-                    {step === 'LABELING' && (
-                        <button onClick={() => setStep('CAPTURING')} className={`flex-[2.5] py-5 bg-blue-600 hover:bg-blue-500 text-white rounded-3xl font-black uppercase text-xs tracking-[0.3em] transition-all shadow-2xl shadow-blue-900/40 flex items-center justify-center gap-4 relative overflow-hidden group`}>
-                            <div className="absolute inset-0 bg-white/10 translate-y-full group-hover:translate-y-0 transition-transform duration-300"></div>
-                            <svg className="w-7 h-7 relative z-10 group-hover:scale-110 transition-transform" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={3.5}><path d="M13 5l7 7-7 7M5 5l7 7-7 7" /></svg>
-                            <span className="relative z-10">បន្ទាប់: ថតរូបកញ្ចប់ (Next Step)</span>
-                        </button>
-                    )}
+                {step === 'LABELING' && (
+                    <button onClick={() => setStep('CAPTURING')} className={`flex-[3] py-8 bg-[#1DB954] hover:bg-[#1ed760] text-black rounded-full font-black uppercase text-sm tracking-[0.6em] transition-all shadow-3xl shadow-[#1DB954]/20 border-[6px] border-black flex items-center justify-center gap-8 relative overflow-hidden group`}>
+                        <div className="absolute inset-0 bg-white/20 translate-y-full group-hover:translate-y-0 transition-transform duration-300"></div>
+                        <span className="relative z-10">NEXT: SECURE CAPTURE</span>
+                        <svg className="w-10 h-10 relative z-10 group-hover:translate-x-3 transition-transform" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={4}><path d="M13 5l7 7-7 7M5 5l7 7-7 7" /></svg>
+                    </button>
+                )}
 
-                    {step === 'CAPTURING' && (
-                        <button onClick={handleSubmit} disabled={uploading || !previewImage} className={`flex-[2.5] py-5 rounded-3xl font-black uppercase text-xs tracking-[0.3em] transition-all shadow-2xl flex items-center justify-center gap-4 relative overflow-hidden group ${uploading || !previewImage ? 'bg-gray-800 text-gray-500' : 'bg-emerald-600 hover:bg-emerald-500 text-white shadow-emerald-900/40'}`}>
-                            <div className="absolute inset-0 bg-white/10 translate-y-full group-hover:translate-y-0 transition-transform duration-300"></div>
-                            {uploading && undoTimer === null ? <Spinner size="sm" /> : <><svg className="w-7 h-7 relative z-10 group-hover:scale-110 transition-transform" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={3.5}><path d="M5 13l4 4L19 7" /></svg><span className="relative z-10">បញ្ចប់ការវេចខ្ចប់ & រក្សាទុក (Finalize)</span></>}
-                        </button>
-                    )}
-                </div>
-            </div>
+                {step === 'CAPTURING' && (
+                    <button onClick={handleSubmit} disabled={uploading || !previewImage} className={`flex-[3] py-8 rounded-full font-black uppercase text-sm tracking-[0.6em] transition-all shadow-3xl flex items-center justify-center gap-8 relative overflow-hidden group ${uploading || !previewImage ? 'bg-white/5 text-gray-600 border border-white/5 opacity-50' : 'bg-[#1DB954] hover:bg-[#1ed760] text-black shadow-[#1DB954]/30 border-[6px] border-black'}`}>
+                        <div className="absolute inset-0 bg-white/20 translate-y-full group-hover:translate-y-0 transition-transform duration-300"></div>
+                        {uploading && undoTimer === null ? <Spinner size="lg" /> : <><span className="relative z-10">FINALIZE PACKAGING</span><svg className="w-10 h-10 relative z-10 group-hover:scale-125 transition-transform" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={4}><path d="M5 13l4 4L19 7" /></svg></>}
+                    </button>
+                )}
+            </footer>
 
             {/* UNDO / GRACE PERIOD OVERLAY - Highest Z-Index */}
             {undoTimer !== null && (
@@ -802,9 +887,9 @@ const FastPackModal: React.FC<FastPackModalProps> = ({ order, onClose, onSuccess
                     maxTimer={maxUndoTimer}
                     onUndo={handleUndo}
                     isUndoing={isUndoing}
-                    accentColor="orange"
-                    title="កំពុងរៀបចំ..."
-                    subtitle="ទិន្នន័យវេចខ្ចប់នឹងត្រូវបានរក្សាទុកក្នុងពេលបន្តិចទៀតនេះ។ អ្នកអាចចុចបោះបង់ ប្រសិនបើមានការភាន់ច្រឡំ។"
+                    accentColor="#1DB954"
+                    title="SYNCHRONIZING..."
+                    subtitle="Packaging data is being committed to the secure stream. Discard now to prevent sync."
                 />
             )}
 
