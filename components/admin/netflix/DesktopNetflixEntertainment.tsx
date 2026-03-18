@@ -8,6 +8,11 @@ import { Movie } from '../../../types';
 import { translations } from '../../../translations';
 import { WEB_APP_URL } from '../../../constants';
 import Modal from '../../common/Modal';
+import { fileToBase64, convertGoogleDriveUrl } from '../../../utils/fileUtils';
+import { compressImage } from '../../../utils/imageCompressor';
+
+import MoviePlayer from './MoviePlayer';
+import SeriesPlayerView from './SeriesPlayerView';
 
 interface DesktopNetflixEntertainmentProps {
   guestMovieId?: string;
@@ -59,17 +64,21 @@ const DesktopNetflixEntertainment: React.FC<DesktopNetflixEntertainmentProps> = 
     return saved ? JSON.parse(saved) : {};
   });
 
+  const saveProgress = (id: string, time: number, duration: number) => {
+    setWatchProgress(prev => {
+      const updated = {
+        ...prev,
+        [id]: { time, duration }
+      };
+      localStorage.setItem('movie_progress', JSON.stringify(updated));
+      return updated;
+    });
+  };
+
   useEffect(() => {
     const handleMessage = (event: MessageEvent) => {
       if (event.data?.type === 'movie_progress' && event.data?.id) {
-        setWatchProgress(prev => {
-          const updated = {
-            ...prev,
-            [event.data.id]: { time: event.data.time, duration: event.data.duration }
-          };
-          localStorage.setItem('movie_progress', JSON.stringify(updated));
-          return updated;
-        });
+        saveProgress(event.data.id, event.data.time, event.data.duration);
       }
     };
     window.addEventListener('message', handleMessage);
@@ -98,6 +107,15 @@ const DesktopNetflixEntertainment: React.FC<DesktopNetflixEntertainmentProps> = 
   }, [guestMovieId, movies]);
 
   const [searchQuery, setSearchQuery] = useState('');
+  const [showSearchInput, setShowSearchInput] = useState(false);
+  const searchInputRef = useRef<HTMLInputElement>(null);
+
+  useEffect(() => {
+    if (showSearchInput && searchInputRef.current) {
+      searchInputRef.current.focus();
+    }
+  }, [showSearchInput]);
+
   const [scrolled, setScrolled] = useState(false);
 
   useEffect(() => {
@@ -124,13 +142,48 @@ const DesktopNetflixEntertainment: React.FC<DesktopNetflixEntertainmentProps> = 
   // Modal for Adding Movie
   const [showAddModal, setShowAddModal] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [isUploading, setIsUploading] = useState(false);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+
+  const handleImageUpload = async (file: File) => {
+    if (!file) return;
+    setIsUploading(true);
+    try {
+      const compressedBlob = await compressImage(file, 'balanced');
+      const base64Data = await fileToBase64(compressedBlob);
+      const token = localStorage.getItem('token');
+      
+      const response = await fetch(`${WEB_APP_URL}/api/upload-image`, {
+        method: 'POST',
+        headers: { 
+          'Content-Type': 'application/json',
+          ...(token ? { 'Authorization': `Bearer ${token}` } : {})
+        },
+        body: JSON.stringify({ 
+          fileData: base64Data, 
+          fileName: file.name, 
+          mimeType: compressedBlob.type,
+          sheetName: 'Movies'
+        })
+      });
+      const result = await response.json();
+      if (!response.ok || result.status !== 'success') throw new Error(result.message || 'Upload failed');
+      
+      const finalUrl = result.url || result.tempUrl;
+      setNewMovie(prev => ({ ...prev, Thumbnail: finalUrl }));
+      showNotification("Image uploaded successfully!", "success");
+    } catch (err: any) { 
+      showNotification(err.message, "error"); 
+    } finally { 
+      setIsUploading(false); 
+    }
+  };
   const [newMovie, setNewMovie] = useState<Partial<Movie>>({
     Type: 'long',
     Language: 'Khmer',
     Country: 'Cambodia'
   });
 
-  const iframeContainerRef = useRef<HTMLDivElement>(null);
 
   const handleCopy = (text: string) => {
     navigator.clipboard.writeText(text);
@@ -140,8 +193,8 @@ const DesktopNetflixEntertainment: React.FC<DesktopNetflixEntertainmentProps> = 
 
   const handleShare = (movie: Movie) => {
     const shareUrl = `${window.location.origin}${window.location.pathname}?view=watch&movie=${movie.ID}`;
-    handleCopy(shareUrl);
-    alert('Link shared to clipboard!');
+    navigator.clipboard.writeText(shareUrl);
+    showNotification("Link copied! Guests can watch this movie without login.", "success");
   };
 
   const handleFetchVideo = async () => {
@@ -152,10 +205,11 @@ const DesktopNetflixEntertainment: React.FC<DesktopNetflixEntertainmentProps> = 
     try {
       let htmlContent = '';
       if (inputType === 'url') {
+        const targetUrl = inputUrl;
         const proxies = [
-          `${WEB_APP_URL}/api/fetch-json?url=${encodeURIComponent(inputUrl)}`,
-          `https://api.allorigins.win/get?url=${encodeURIComponent(inputUrl)}`,
-          `https://api.codetabs.com/v1/proxy?quest=${encodeURIComponent(inputUrl)}`
+          `${WEB_APP_URL}/api/fetch-json?url=${encodeURIComponent(targetUrl)}`,
+          `https://api.allorigins.win/get?url=${encodeURIComponent(targetUrl)}`,
+          `https://api.codetabs.com/v1/proxy?quest=${encodeURIComponent(targetUrl)}`
         ];
 
         let fetchSuccess = false;
@@ -163,8 +217,15 @@ const DesktopNetflixEntertainment: React.FC<DesktopNetflixEntertainmentProps> = 
           try {
             const response = await fetch(proxyUrl);
             if (!response.ok) continue;
-            const data = await response.json();
-            htmlContent = data.contents || await response.text();
+            
+            const contentType = response.headers.get("content-type");
+            if (contentType && contentType.includes("application/json")) {
+              const data = await response.json();
+              htmlContent = data.contents;
+            } else {
+              htmlContent = await response.text();
+            }
+            
             if (htmlContent) { fetchSuccess = true; break; }
           } catch (e) { console.warn(e); }
         }
@@ -174,9 +235,10 @@ const DesktopNetflixEntertainment: React.FC<DesktopNetflixEntertainmentProps> = 
         if (!htmlContent.trim()) throw new Error("សូមបញ្ចូលកូដដើម (Page Source) ជាមុនសិន។");
       }
 
+      // 1. Check for playlists array (zip model)
       const playlistsMatch = htmlContent.match(/const playlists = (\[.*?\]);/s);
       if (playlistsMatch) {
-        const fileMatches = [...playlistsMatch[1].matchAll(/file:\s*["']([^"']+)["']/g)];
+        const fileMatches = [...playlistsMatch[1].matchAll(/file:\s*["']([^"']+(\.m3u8|\/hlsplaylist\/|\/hls\/)[^"']*)["']/g)];
         if (fileMatches.length > 0) {
           let url = fileMatches[0][1];
           if (url.startsWith('//')) url = 'https:' + url;
@@ -186,6 +248,7 @@ const DesktopNetflixEntertainment: React.FC<DesktopNetflixEntertainmentProps> = 
         }
       }
 
+      // 2. Check for dooplay_player_option (zip model)
       const parser = new DOMParser();
       const doc = parser.parseFromString(htmlContent, "text/html");
       const playerOptions = doc.querySelectorAll('.dooplay_player_option');
@@ -215,36 +278,44 @@ const DesktopNetflixEntertainment: React.FC<DesktopNetflixEntertainmentProps> = 
           const type = firstOption.getAttribute('data-type');
           
           if (postId && nume && type) {
-            const fetchUrl = playerApi ? `${playerApi}${postId}/${type}/${nume}` : `${ajaxUrlBase}?action=doo_player_ajax&post=${postId}&nume=${nume}&type=${type}`;
-            const res = await fetch(`${WEB_APP_URL}/api/fetch-json?url=${encodeURIComponent(fetchUrl)}`, {
-                method: (ajaxUrlBase && !playerApi) ? 'POST' : 'GET'
-            });
-            if (res.ok) {
-              const embedData = await res.json();
-              let embedUrl = embedData.embed_url || '';
-              if (embedUrl.includes('<iframe')) {
-                const iframeMatch = embedUrl.match(/src=["']([^"']+)["']/);
-                if (iframeMatch) embedUrl = iframeMatch[1];
-              }
-              if (embedUrl) {
-                const extractRes = await fetch(`${WEB_APP_URL}/api/extract-m3u8?url=${encodeURIComponent(embedUrl)}`);
-                if (extractRes.ok) {
-                  const extractData = await extractRes.json();
-                  if (extractData.m3u8Url) {
-                    setExtractedM3u8(extractData.m3u8Url);
-                    setStatus('success');
-                    return;
+            const tryFetch = async (url: string, isAjax: boolean = false) => {
+                try {
+                  const fetchUrl = `${WEB_APP_URL}/api/fetch-json?url=${encodeURIComponent(url)}`;
+                  const res = await fetch(fetchUrl, { method: isAjax ? 'POST' : 'GET' });
+                  if (res.ok) {
+                    const embedData = await res.json();
+                    let embedUrl = embedData.embed_url || '';
+                    if (embedUrl.includes('<iframe')) {
+                      const iframeMatch = embedUrl.match(/src=["']([^"']+)["']/);
+                      if (iframeMatch) embedUrl = iframeMatch[1];
+                    }
+                    if (embedUrl) {
+                      const extractRes = await fetch(`${WEB_APP_URL}/api/extract-m3u8?url=${encodeURIComponent(embedUrl)}`);
+                      if (extractRes.ok) {
+                        const extractData = await extractRes.json();
+                        if (extractData.m3u8Url) {
+                          setExtractedM3u8(extractData.m3u8Url);
+                          return true;
+                        }
+                      }
+                      setExtractedM3u8(embedUrl);
+                      return true;
+                    }
                   }
-                }
-                setExtractedM3u8(embedUrl);
-                setStatus('success');
-                return;
-              }
-            }
+                } catch (e) { console.warn(e); }
+                return false;
+            };
+
+            let success = false;
+            if (playerApi) success = await tryFetch(`${playerApi}${postId}/${type}/${nume}`);
+            if (!success && ajaxUrlBase) success = await tryFetch(`${ajaxUrlBase}?action=doo_player_ajax&post=${postId}&nume=${nume}&type=${type}`, true);
+            
+            if (success) { setStatus('success'); return; }
           }
         }
       }
 
+      // 3. Fallback to Iframe search
       const iframes = doc.querySelectorAll('.movieplay iframe, iframe, .embed-container iframe');
       if (iframes.length > 0) {
         let src = '';
@@ -271,7 +342,8 @@ const DesktopNetflixEntertainment: React.FC<DesktopNetflixEntertainmentProps> = 
         }
       }
 
-      const m3u8Matches = [...htmlContent.matchAll(/(https?:\/\/[^\s"'<>]+?\.m3u8[^\s"'<>]*)/gi)];
+      // 4. Direct m3u8 search
+      const m3u8Matches = [...htmlContent.matchAll(/(https?:\/\/[^\s"'<>]+?(\.m3u8|\.mp4|\/hlsplaylist\/|\/hls\/)[^\s"'<>]*)/gi)];
       let foundM3u8 = null;
       for (const match of m3u8Matches) {
         const url = match[1];
@@ -299,9 +371,9 @@ const DesktopNetflixEntertainment: React.FC<DesktopNetflixEntertainmentProps> = 
         const token = localStorage.getItem('token');
         const response = await fetch(`${WEB_APP_URL}/api/admin/movies`, {
             method: 'POST',
-            headers: {
-                'Content-Type': 'application/json',
-                'Authorization': `Bearer ${token}`
+            headers: { 
+              'Content-Type': 'application/json',
+              ...(token ? { 'Authorization': `Bearer ${token}` } : {})
             },
             body: JSON.stringify(newMovie)
         });
@@ -320,7 +392,9 @@ const DesktopNetflixEntertainment: React.FC<DesktopNetflixEntertainmentProps> = 
             const token = localStorage.getItem('token');
             const response = await fetch(`${WEB_APP_URL}/api/admin/movies/${id}`, {
                 method: 'DELETE',
-                headers: { 'Authorization': `Bearer ${token}` }
+                headers: {
+                  ...(token ? { 'Authorization': `Bearer ${token}` } : {})
+                }
             });
             if (response.ok) {
                 await refreshData();
@@ -377,106 +451,6 @@ const DesktopNetflixEntertainment: React.FC<DesktopNetflixEntertainmentProps> = 
     ? filteredMovies.filter(m => m.Category === selectedCategory)
     : filteredMovies;
 
-  useEffect(() => {
-    if (activeMovie && iframeContainerRef.current) {
-      const container = iframeContainerRef.current;
-      container.innerHTML = '';
-      const isM3u8 = activeMovie.VideoURL.includes('.m3u8');
-      const proxyM3u8Url = `${WEB_APP_URL}/api/proxy-m3u8?url=${encodeURIComponent(activeMovie.VideoURL)}`;
-      const proxyUrl = `${WEB_APP_URL}/api/proxy-video?url=${encodeURIComponent(activeMovie.VideoURL)}`;
-      
-      let playerHtml = '';
-      const savedProgressStr = localStorage.getItem('movie_progress');
-      const savedProgress = savedProgressStr ? JSON.parse(savedProgressStr) : {};
-      const startTime = savedProgress[activeMovie.ID]?.time || 0;
-
-      if (isM3u8) {
-        playerHtml = `
-          <!DOCTYPE html>
-          <html>
-          <head>
-            <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=0">
-            <meta name="referrer" content="no-referrer">
-            <link rel="stylesheet" href="https://cdn.plyr.io/3.7.8/plyr.css" />
-            <style>
-              :root { --plyr-color-main: #e50914; }
-              body { margin: 0; background: #000; display: flex; align-items: center; justify-content: center; height: 100vh; overflow: hidden; font-family: sans-serif; }
-              video { width: 100%; height: 100%; outline: none; background: #000; }
-            </style>
-          </head>
-          <body>
-            <video id="video" controls playsinline></video>
-            <script src="https://cdn.jsdelivr.net/npm/hls.js@1.5.7/dist/hls.min.js"></script>
-            <script src="https://cdn.plyr.io/3.7.8/plyr.polyfilled.js"></script>
-            <script>
-              document.addEventListener('DOMContentLoaded', () => {
-                const video = document.getElementById('video');
-                const url = '${proxyM3u8Url}';
-                const defaultOptions = {};
-                let player;
-
-                function initPlayer() {
-                  player = new Plyr(video, {
-                    autoplay: true,
-                    settings: ['quality', 'speed', 'loop'],
-                    quality: { default: 720, options: [1080, 720, 480, 360] }
-                  });
-                  
-                  // Resume playback
-                  player.on('ready', () => {
-                     if (${startTime} > 0) {
-                         player.currentTime = ${startTime};
-                     }
-                  });
-
-                  // Sync progress to parent
-                  player.on('timeupdate', () => {
-                    if(player.currentTime > 0) {
-                      window.parent.postMessage({ type: 'movie_progress', id: '${activeMovie.ID}', time: player.currentTime, duration: player.duration }, '*');
-                    }
-                  });
-                }
-
-                if (Hls.isSupported()) {
-                  const hls = new Hls();
-                  hls.loadSource(url);
-                  hls.attachMedia(video);
-                  hls.on(Hls.Events.MANIFEST_PARSED, function (event, data) {
-                    const availableQualities = hls.levels.map((l) => l.height);
-                    defaultOptions.quality = {
-                      default: availableQualities[0],
-                      options: availableQualities,
-                      forced: true,
-                      onChange: (e) => updateQuality(e),
-                    };
-                    initPlayer();
-                  });
-                  window.hls = hls;
-                } else if (video.canPlayType('application/vnd.apple.mpegurl')) {
-                  video.src = url;
-                  initPlayer();
-                }
-              });
-            </script>
-          </body>
-          </html>
-        `;
-      } else if (activeMovie.VideoURL.includes('<iframe')) {
-        playerHtml = `<!DOCTYPE html><html><head><meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=0"><style>body{margin:0;background:#000;display:flex;align-items:center;justify-content:center;height:100vh;overflow:hidden;}iframe{width:100%;height:100%;border:none;}</style></head><body>${activeMovie.VideoURL}</body></html>`;
-      } else {
-        playerHtml = `<!DOCTYPE html><html><head><meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=0"><style>body{margin:0;background:#000;display:flex;align-items:center;justify-content:center;height:100vh;overflow:hidden;}iframe{width:100%;height:100%;border:none;}</style></head><body><iframe src="${proxyUrl}" allowfullscreen="true" frameborder="0"></iframe></body></html>`;
-      }
-
-      const iframe = document.createElement('iframe');
-      iframe.style.width = '100%';
-      iframe.style.height = '100%';
-      iframe.style.border = 'none';
-      iframe.allowFullscreen = true;
-      iframe.srcdoc = playerHtml;
-      container.appendChild(iframe);
-    }
-  }, [activeMovie]);
-
   const MovieRow = ({ title, items }: { title: string, items: Movie[] }) => {
     if (items.length === 0) return null;
     return (
@@ -526,16 +500,42 @@ const DesktopNetflixEntertainment: React.FC<DesktopNetflixEntertainmentProps> = 
             <h1 className="text-2xl font-black italic">O-<span className="text-red-600">ENTERTAINMENT</span></h1>
             <span className="text-[8px] opacity-30 uppercase tracking-widest">Premium System</span>
           </div>
-          <div className="hidden lg:flex gap-8 text-[11px] font-black uppercase opacity-40">
-            {['home', 'tv', 'movies', 'mylist'].map(tab => (
-              <button key={tab} onClick={() => { setActiveTab(tab as any); setSelectedCategory(null); }} className={`transition-colors ${activeTab === tab ? 'text-white opacity-100 font-bold' : 'hover:opacity-100'}`}>{tab}</button>
+          <div className="hidden lg:flex gap-7 text-[13px] font-bold uppercase tracking-wide opacity-50 mt-1">
+            {[
+              { id: 'home', label: t.today || 'Home' },
+              { id: 'tv', label: t.series || 'TV' },
+              { id: 'movies', label: t.movies || 'Movies' },
+              { id: 'mylist', label: 'My List' }
+            ].map(tab => (
+              <button key={tab.id} onClick={() => { setActiveTab(tab.id as any); setSelectedCategory(null); }} className={`transition-all ${activeTab === tab.id ? 'text-white opacity-100' : 'hover:opacity-100 hover:text-white'}`}>{tab.label}</button>
             ))}
           </div>
         </div>
-        <div className="flex items-center gap-4">
-          <div className="relative">
-            <Search className="w-5 h-5 absolute left-3 top-1/2 -translate-y-1/2 opacity-40" />
-            <input type="text" value={searchQuery} onChange={(e) => setSearchQuery(e.target.value)} placeholder="Search titles..." className="bg-white/5 border border-white/10 rounded-full py-2 pl-10 pr-4 text-xs outline-none focus:bg-white/10 focus:border-white/30 transition-all w-48" />
+        <div className="flex items-center gap-6">
+          <div className={`flex items-center transition-all duration-300 relative ${showSearchInput || searchQuery ? 'w-64 bg-black/40 border-white/20' : 'w-10 bg-transparent border-transparent'} border rounded-sm h-9`}>
+            <button 
+              onClick={() => setShowSearchInput(!showSearchInput)}
+              className="p-2 text-white/70 hover:text-white transition-colors"
+            >
+              <Search className="w-5 h-5" />
+            </button>
+            <input 
+              ref={searchInputRef}
+              type="text" 
+              value={searchQuery} 
+              onChange={(e) => setSearchQuery(e.target.value)} 
+              onBlur={() => { if (!searchQuery) setShowSearchInput(false); }}
+              placeholder={t.search_placeholder || "Titles, people, genres"} 
+              className={`bg-transparent text-white text-xs outline-none transition-all duration-300 w-full ${showSearchInput || searchQuery ? 'opacity-100 px-1' : 'opacity-0 w-0'}`}
+            />
+            {(searchQuery) && (
+              <button 
+                onClick={() => { setSearchQuery(''); setShowSearchInput(false); }}
+                className="p-2 text-white/40 hover:text-white/80"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            )}
           </div>
           {isAdmin && (
             <>
@@ -620,26 +620,25 @@ const DesktopNetflixEntertainment: React.FC<DesktopNetflixEntertainmentProps> = 
       </main>
 
       {activeMovie && (
-        <div className="fixed inset-0 z-[100] bg-black flex flex-col animate-[fade-in_0.3s_ease-out]">
-          <div className="p-10 flex items-center justify-between bg-gradient-to-b from-black via-black/80 to-transparent relative z-10">
-            <button onClick={() => setActiveMovie(null)} className="text-white hover:scale-110 hover:text-red-500 transition-all bg-black/50 p-3 rounded-full backdrop-blur-md"><X className="w-8 h-8" /></button>
-            <h2 className="text-3xl font-black italic drop-shadow-xl">{activeMovie.Title}</h2>
-            <button onClick={() => handleShare(activeMovie)} className="bg-white/10 hover:bg-white/20 transition-colors px-6 py-3 rounded-full text-xs font-black uppercase tracking-widest flex items-center gap-2"><Share2 className="w-4 h-4" /> Share</button>
-          </div>
-          <div className="flex-1 w-full max-w-[1600px] mx-auto relative rounded-xl overflow-hidden shadow-2xl mb-10" ref={iframeContainerRef}></div>
-          
-          {/* Similar Movies in Player View */}
-          <div className="px-10 pb-10">
-            <h3 className="text-xl font-bold mb-4 uppercase opacity-50">More Like This</h3>
-            <div className="flex gap-4 overflow-x-auto pb-4 no-scrollbar">
-              {movies.filter(m => m.ID !== activeMovie.ID && (m.Category === activeMovie.Category || m.Type === activeMovie.Type)).slice(0, 10).map(movie => (
-                <div key={movie.ID} className="min-w-[160px] aspect-[2/3] cursor-pointer hover:scale-105 transition-transform" onClick={() => setActiveMovie(movie)}>
-                  <img src={movie.Thumbnail} className="w-full h-full object-cover rounded-md" />
-                </div>
-              ))}
-            </div>
-          </div>
-        </div>
+        activeMovie.Type === 'series' ? (
+          <SeriesPlayerView 
+            movie={activeMovie}
+            allMovies={movies}
+            onBack={() => setActiveMovie(null)}
+            onSelectMovie={setActiveMovie}
+          />
+        ) : (
+          <MoviePlayer 
+            movie={activeMovie}
+            isMobile={false}
+            onClose={() => setActiveMovie(null)}
+            onShare={handleShare}
+            watchProgress={watchProgress}
+            onSaveProgress={saveProgress}
+            relatedMovies={movies.filter(m => m.ID !== activeMovie.ID && (m.Category === activeMovie.Category || m.Type === activeMovie.Type)).slice(0, 10)}
+            onSelectMovie={setActiveMovie}
+          />
+        )
       )}
 
       {showDetails && (
@@ -659,19 +658,38 @@ const DesktopNetflixEntertainment: React.FC<DesktopNetflixEntertainmentProps> = 
       )}
 
       {showAddModal && (
-        <Modal isOpen={showAddModal} onClose={() => setShowAddModal(false)} title={t.add_movie}>
-          <div className="space-y-4 text-white p-2 max-h-[70vh] overflow-y-auto no-scrollbar">
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+        <Modal isOpen={showAddModal} onClose={() => setShowAddModal(false)}>
+          <div className="flex flex-col h-full bg-[#141414] text-white">
+            {/* Modal Header */}
+            <div className="flex items-center justify-between p-4 border-b border-white/10 sticky top-0 bg-[#141414] z-10">
+              <h2 className="text-lg font-black italic uppercase tracking-wider px-2">
+                {t.add_movie || "Add New Movie"}
+              </h2>
+              <button 
+                onClick={() => setShowAddModal(false)}
+                className="p-2 hover:bg-white/10 rounded-full transition-colors"
+              >
+                <X className="w-6 h-6" />
+              </button>
+            </div>
+
+            <div className="space-y-6 p-6 overflow-y-auto no-scrollbar">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
               <div className="col-span-1 md:col-span-2 relative">
-                <label className="text-[10px] text-gray-500 font-black uppercase mb-1 block">{t.title}</label>
-                <div className="flex gap-2">
-                  <input type="text" value={newMovie.Title || ''} onChange={(e) => setNewMovie({ ...newMovie, Title: e.target.value })} className="flex-1 bg-white/5 border border-white/10 rounded-xl p-3 outline-none focus:border-red-600 transition-colors" placeholder="Movie Title" />
+                <label className="text-[11px] text-gray-400 font-black uppercase mb-2 block tracking-widest">{t.title}</label>
+                <div className="flex gap-3">
+                  <input 
+                    type="text" 
+                    value={newMovie.Title || ''} 
+                    onChange={(e) => setNewMovie({ ...newMovie, Title: e.target.value })} 
+                    className="flex-1 bg-white/[0.03] border border-white/10 rounded-xl p-4 outline-none focus:border-red-600 focus:ring-1 focus:ring-red-600/30 transition-all placeholder:text-gray-600 shadow-inner" 
+                    placeholder="Movie Title" 
+                  />
                   <button 
                     onClick={async () => {
                       if(!newMovie.Title) return;
                       setIsSubmitting(true);
                       try {
-                        // Smart Fetch using TVMaze API as a free public alternative for series/movies
                         const res = await fetch(`https://api.tvmaze.com/search/shows?q=${encodeURIComponent(newMovie.Title)}`);
                         const data = await res.json();
                         if(data && data.length > 0) {
@@ -694,63 +712,189 @@ const DesktopNetflixEntertainment: React.FC<DesktopNetflixEntertainmentProps> = 
                       }
                       setIsSubmitting(false);
                     }}
-                    className="bg-blue-600 hover:bg-blue-700 px-4 rounded-xl font-bold text-xs flex items-center gap-2 transition-colors disabled:opacity-50"
+                    className="bg-gradient-to-br from-blue-600 to-indigo-700 hover:from-blue-500 hover:to-indigo-600 px-6 rounded-xl font-bold text-xs flex items-center gap-2 transition-all active:scale-95 shadow-lg shadow-blue-900/20 disabled:opacity-50"
                     disabled={!newMovie.Title || isSubmitting}
                   >
-                    <Search className="w-4 h-4" /> Smart Fetch
+                    <Search className="w-4 h-4" /> {isSubmitting ? 'Fetching...' : 'Smart Fetch'}
                   </button>
                 </div>
               </div>
               
               <div className="col-span-1 md:col-span-2">
-                <label className="text-[10px] text-gray-500 font-black uppercase mb-1 block">Description</label>
-                <textarea value={newMovie.Description || ''} onChange={(e) => setNewMovie({ ...newMovie, Description: e.target.value })} className="w-full bg-white/5 border border-white/10 rounded-xl p-3 outline-none focus:border-red-600 transition-colors h-24 resize-none" placeholder="Movie description..." />
+                <label className="text-[11px] text-gray-400 font-black uppercase mb-2 block tracking-widest">Description</label>
+                <textarea 
+                  value={newMovie.Description || ''} 
+                  onChange={(e) => setNewMovie({ ...newMovie, Description: e.target.value })} 
+                  className="w-full bg-white/[0.03] border border-white/10 rounded-xl p-4 outline-none focus:border-red-600 focus:ring-1 focus:ring-red-600/30 transition-all h-28 resize-none placeholder:text-gray-600 shadow-inner" 
+                  placeholder="Movie description..." 
+                />
               </div>
 
               <div>
-                <label className="text-[10px] text-gray-500 font-black uppercase mb-1 block">Type</label>
-                <select value={newMovie.Type || 'long'} onChange={(e) => setNewMovie({ ...newMovie, Type: e.target.value as any })} className="w-full bg-white/5 border border-white/10 rounded-xl p-3 outline-none focus:border-red-600 transition-colors appearance-none">
-                  <option value="long" className="bg-[#1a1a1a]">Feature Movie</option>
-                  <option value="short" className="bg-[#1a1a1a]">Short Film</option>
-                  <option value="series" className="bg-[#1a1a1a]">TV Series</option>
-                </select>
+                <label className="text-[11px] text-gray-400 font-black uppercase mb-2 block tracking-widest">Type</label>
+                <div className="relative">
+                  <select 
+                    value={newMovie.Type || 'long'} 
+                    onChange={(e) => setNewMovie({ ...newMovie, Type: e.target.value as any })} 
+                    className="w-full bg-white/[0.03] border border-white/10 rounded-xl p-4 outline-none focus:border-red-600 focus:ring-1 focus:ring-red-600/30 transition-all appearance-none cursor-pointer"
+                  >
+                    <option value="long" className="bg-[#1a1a1a]">Feature Movie</option>
+                    <option value="short" className="bg-[#1a1a1a]">Short Film</option>
+                    <option value="series" className="bg-[#1a1a1a]">TV Series</option>
+                  </select>
+                  <ChevronLeft className="w-4 h-4 absolute right-4 top-1/2 -translate-y-1/2 -rotate-90 pointer-events-none opacity-50" />
+                </div>
               </div>
 
               <div>
-                <label className="text-[10px] text-gray-500 font-black uppercase mb-1 block">Category</label>
-                <input type="text" value={newMovie.Category || ''} onChange={(e) => setNewMovie({ ...newMovie, Category: e.target.value })} className="w-full bg-white/5 border border-white/10 rounded-xl p-3 outline-none focus:border-red-600 transition-colors" placeholder="e.g. Action, Drama" />
+                <label className="text-[11px] text-gray-400 font-black uppercase mb-2 block tracking-widest">Category</label>
+                <div className="flex flex-col gap-2">
+                  <div className="relative">
+                    <select 
+                      value={['Action', 'Comedy', 'Drama', 'Horror', 'Sci-Fi', 'Romance', 'Animation', 'Documentary', 'Adventure', 'Fantasy', 'Mystery', 'Thriller'].includes(newMovie.Category || '') ? newMovie.Category : 'Other'} 
+                      onChange={(e) => {
+                        if (e.target.value !== 'Other') {
+                          setNewMovie({ ...newMovie, Category: e.target.value });
+                        } else {
+                          setNewMovie({ ...newMovie, Category: '' });
+                        }
+                      }} 
+                      className="w-full bg-white/[0.03] border border-white/10 rounded-xl p-4 outline-none focus:border-red-600 focus:ring-1 focus:ring-red-600/30 transition-all appearance-none cursor-pointer"
+                    >
+                      <option value="Action" className="bg-[#1a1a1a]">Action</option>
+                      <option value="Adventure" className="bg-[#1a1a1a]">Adventure</option>
+                      <option value="Animation" className="bg-[#1a1a1a]">Animation</option>
+                      <option value="Comedy" className="bg-[#1a1a1a]">Comedy</option>
+                      <option value="Documentary" className="bg-[#1a1a1a]">Documentary</option>
+                      <option value="Drama" className="bg-[#1a1a1a]">Drama</option>
+                      <option value="Fantasy" className="bg-[#1a1a1a]">Fantasy</option>
+                      <option value="Horror" className="bg-[#1a1a1a]">Horror</option>
+                      <option value="Mystery" className="bg-[#1a1a1a]">Mystery</option>
+                      <option value="Romance" className="bg-[#1a1a1a]">Romance</option>
+                      <option value="Sci-Fi" className="bg-[#1a1a1a]">Sci-Fi</option>
+                      <option value="Thriller" className="bg-[#1a1a1a]">Thriller</option>
+                      <option value="Other" className="bg-[#1a1a1a]">Other (Custom)</option>
+                    </select>
+                    <ChevronLeft className="w-4 h-4 absolute right-4 top-1/2 -translate-y-1/2 -rotate-90 pointer-events-none opacity-50" />
+                  </div>
+                  {!['Action', 'Adventure', 'Animation', 'Comedy', 'Documentary', 'Drama', 'Fantasy', 'Horror', 'Mystery', 'Romance', 'Sci-Fi', 'Thriller'].includes(newMovie.Category || '') && (
+                    <input 
+                      type="text" 
+                      value={newMovie.Category || ''} 
+                      onChange={(e) => setNewMovie({ ...newMovie, Category: e.target.value })} 
+                      className="w-full bg-white/[0.05] border border-red-600/30 rounded-xl p-4 outline-none focus:border-red-600 transition-all animate-[slide-down_0.2s_ease-out]" 
+                      placeholder="Enter genre..." 
+                      autoFocus
+                    />
+                  )}
+                </div>
               </div>
 
               <div>
-                <label className="text-[10px] text-gray-500 font-black uppercase mb-1 block">Language</label>
-                <input type="text" value={newMovie.Language || 'Khmer'} onChange={(e) => setNewMovie({ ...newMovie, Language: e.target.value })} className="w-full bg-white/5 border border-white/10 rounded-xl p-3 outline-none focus:border-red-600 transition-colors" placeholder="Language" />
+                <label className="text-[11px] text-gray-400 font-black uppercase mb-2 block tracking-widest">Language</label>
+                <input 
+                  type="text" 
+                  value={newMovie.Language || 'Khmer'} 
+                  onChange={(e) => setNewMovie({ ...newMovie, Language: e.target.value })} 
+                  className="w-full bg-white/[0.03] border border-white/10 rounded-xl p-4 outline-none focus:border-red-600 focus:ring-1 focus:ring-red-600/30 transition-all placeholder:text-gray-600" 
+                  placeholder="Language" 
+                />
               </div>
 
               <div>
-                <label className="text-[10px] text-gray-500 font-black uppercase mb-1 block">Country</label>
-                <input type="text" value={newMovie.Country || 'Cambodia'} onChange={(e) => setNewMovie({ ...newMovie, Country: e.target.value })} className="w-full bg-white/5 border border-white/10 rounded-xl p-3 outline-none focus:border-red-600 transition-colors" placeholder="Country" />
+                <label className="text-[11px] text-gray-400 font-black uppercase mb-2 block tracking-widest">Country</label>
+                <input 
+                  type="text" 
+                  value={newMovie.Country || 'Cambodia'} 
+                  onChange={(e) => setNewMovie({ ...newMovie, Country: e.target.value })} 
+                  className="w-full bg-white/[0.03] border border-white/10 rounded-xl p-4 outline-none focus:border-red-600 focus:ring-1 focus:ring-red-600/30 transition-all placeholder:text-gray-600" 
+                  placeholder="Country" 
+                />
               </div>
 
               <div className="col-span-1 md:col-span-2">
-                <label className="text-[10px] text-gray-500 font-black uppercase mb-1 block">{t.m3u8_link}</label>
-                <input type="text" value={newMovie.VideoURL || ''} onChange={(e) => setNewMovie({ ...newMovie, VideoURL: e.target.value })} className="w-full bg-white/5 border border-white/10 rounded-xl p-3 outline-none focus:border-red-600 transition-colors" placeholder="HLS/M3U8 or Embed URL" />
+                <label className="text-[11px] text-gray-400 font-black uppercase mb-2 block tracking-widest">{t.m3u8_link}</label>
+                <div className="relative group">
+                  <input 
+                    type="text" 
+                    value={newMovie.VideoURL || ''} 
+                    onChange={(e) => setNewMovie({ ...newMovie, VideoURL: e.target.value })} 
+                    className="w-full bg-white/[0.03] border border-white/10 rounded-xl p-4 pl-12 outline-none focus:border-red-600 focus:ring-1 focus:ring-red-600/30 transition-all placeholder:text-gray-600" 
+                    placeholder="HLS/M3U8 or Embed URL" 
+                  />
+                  <Film className="w-5 h-5 absolute left-4 top-1/2 -translate-y-1/2 text-gray-600 group-focus-within:text-red-500 transition-colors" />
+                </div>
               </div>
               
               <div className="col-span-1 md:col-span-2">
-                <label className="text-[10px] text-gray-500 font-black uppercase mb-1 block">{t.thumbnail_url}</label>
-                <input type="text" value={newMovie.Thumbnail || ''} onChange={(e) => setNewMovie({ ...newMovie, Thumbnail: e.target.value })} className="w-full bg-white/5 border border-white/10 rounded-xl p-3 outline-none focus:border-red-600 transition-colors" placeholder="Image URL" />
+                <label className="text-[11px] text-gray-400 font-black uppercase mb-2 block tracking-widest">{t.thumbnail_url}</label>
+                <div className="flex gap-4">
+                  <div 
+                    className="w-24 h-32 bg-white/5 rounded-xl border border-white/10 overflow-hidden flex-shrink-0 shadow-lg cursor-pointer flex items-center justify-center"
+                    onClick={() => fileInputRef.current?.click()}
+                  >
+                    {isUploading ? (
+                      <Loader2 className="w-8 h-8 animate-spin text-blue-500" />
+                    ) : newMovie.Thumbnail ? (
+                      <img src={convertGoogleDriveUrl(newMovie.Thumbnail)} className="w-full h-full object-cover" />
+                    ) : (
+                      <div className="w-full h-full flex items-center justify-center text-gray-600">
+                        <Plus className="w-8 h-8 opacity-20" />
+                      </div>
+                    )}
+                  </div>
+                  <div className="flex-1 flex flex-col gap-3 self-center">
+                    <div className="flex gap-3">
+                      <input 
+                        type="text" 
+                        value={newMovie.Thumbnail || ''} 
+                        onChange={(e) => setNewMovie({ ...newMovie, Thumbnail: e.target.value })} 
+                        className="flex-1 bg-white/[0.03] border border-white/10 rounded-xl p-4 outline-none focus:border-red-600 focus:ring-1 focus:ring-red-600/30 transition-all placeholder:text-gray-600" 
+                        placeholder="Image URL" 
+                      />
+                      <input 
+                        type="file" 
+                        accept="image/*" 
+                        ref={fileInputRef} 
+                        className="hidden" 
+                        onChange={(e) => e.target.files && handleImageUpload(e.target.files[0])} 
+                      />
+                      <button 
+                        type="button"
+                        onClick={() => fileInputRef.current?.click()}
+                        disabled={isUploading}
+                        className="px-6 bg-blue-600/10 text-blue-500 border border-blue-500/20 rounded-xl hover:bg-blue-600 hover:text-white transition-all disabled:opacity-50 flex items-center gap-2 font-bold text-xs"
+                      >
+                        <Plus className="w-4 h-4" /> {isUploading ? "Uploading..." : "Upload Image"}
+                      </button>
+                    </div>
+                  </div>
+                </div>
               </div>
             </div>
 
-            <div className="pt-4">
+            <div className="pt-8 flex gap-4">
+              <button 
+                onClick={() => setShowAddModal(false)} 
+                className="flex-1 py-4 px-6 rounded-2xl bg-white/5 hover:bg-white/10 text-white font-bold transition-all active:scale-95 tracking-wide"
+              >
+                Cancel
+              </button>
               <button 
                 onClick={addMovieToStore} 
                 disabled={isSubmitting}
-                className="w-full bg-red-600 font-black py-4 rounded-xl shadow-xl transition-all hover:bg-red-700 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+                className="flex-[2] py-4 px-6 rounded-2xl bg-gradient-to-r from-red-600 to-red-700 hover:from-red-500 hover:to-red-600 text-white font-black transition-all active:scale-[0.98] shadow-lg shadow-red-900/40 flex items-center justify-center gap-2 group tracking-widest uppercase text-sm"
               >
-                {isSubmitting ? <Loader2 className="w-5 h-5 animate-spin" /> : <Plus className="w-5 h-5" />}
-                {isSubmitting ? 'Saving...' : 'Save Movie'}
+                {isSubmitting ? (
+                  <Loader2 className="w-5 h-5 animate-spin" />
+                ) : (
+                  <>
+                    <CheckCircle2 className="w-5 h-5 group-hover:scale-110 transition-transform" />
+                    Save Movie
+                  </>
+                )}
               </button>
+            </div>
             </div>
           </div>
         </Modal>

@@ -73,6 +73,10 @@ var sheetRanges = map[string]string{
 	"DriverRecommendations": "DriverRecommendations!A:Z",
 	"IncentiveResults":      "IncentiveResults!A:Z",
 	"Movies":                "Movies!A:Z",
+	"IncentiveProjects":     "IncentiveProjects!A:Z",
+	"IncentiveCalculators":  "IncentiveCalculators!A:Z",
+	"IncentiveManualData":   "IncentiveManualData!A:Z",
+	"IncentiveCustomPayouts": "IncentiveCustomPayouts!A:Z",
 }
 
 // =========================================================================
@@ -314,7 +318,7 @@ type IncentiveCalculator struct {
 	ProjectID uint    `gorm:"index" json:"projectId"`
 	Name      string  `json:"name"`
 	Type      string  `json:"type"`
-	Value     float64 `json:"value"`
+	Value     float64 `json:"value,string"`
 	RulesJSON string  `gorm:"type:text" json:"rulesJson"`
 }
 
@@ -349,7 +353,7 @@ type IncentiveManualData struct {
 	Month      string  `gorm:"index" json:"month"` // Format: YYYY-MM
 	MetricType string  `json:"metricType"`
 	DataKey    string  `json:"dataKey"` // Format: {period}_{targetId} e.g. "month_TeamA", "W1_user1"
-	Value      float64 `json:"value"`
+	Value      float64 `json:"value,string"`
 }
 
 type IncentiveCustomPayout struct {
@@ -357,7 +361,7 @@ type IncentiveCustomPayout struct {
 	ProjectID uint    `gorm:"index" json:"projectId"`
 	Month     string  `gorm:"index" json:"month"` // Format: YYYY-MM
 	UserName  string  `json:"userName"`
-	Value     float64 `json:"value"`
+	Value     float64 `json:"value,string"`
 }
 
 type DeleteOrderRequest struct {
@@ -1603,15 +1607,19 @@ func fetchSheetDataFromAPI(sheetName string) ([]map[string]interface{}, error) {
 }
 
 func isNumericHeader(h string) bool {
-	return h == "Price" || h == "Cost" || h == "Grand Total" || h == "Subtotal" || h == "Shipping Fee (Customer)" || 
-		h == "Internal Cost" || h == "InternalCost" || h == "Discount ($)" || h == "Delivery Unpaid" || 
-		h == "Delivery Paid" || h == "Total Product Cost ($)" || h == "Revenue" || h == "Quantity" || 
-		h == "Part" || h == "ID"
+	h = strings.ToLower(h)
+	return h == "price" || h == "cost" || h == "grand total" || h == "subtotal" || h == "shipping fee (customer)" || 
+		h == "internal cost" || h == "internalcost" || h == "discount ($)" || h == "delivery unpaid" || 
+		h == "delivery paid" || h == "total product cost ($)" || h == "revenue" || h == "quantity" || 
+		h == "part" || h == "id" || h == "projectid" || 
+		h == "totalorders" || h == "totalrevenue" || h == "calculatedvalue" ||
+		h == "calculatorid"
 }
 func isBoolHeader(h string) bool {
-	return h == "IsSystemAdmin" || h == "AllowManualDriver" || h == "RequireDriverSelection" ||
-		h == "IsRestocked" || h == "IsEnabled" ||
-		h == "EnableDriverRecommendation"
+	h = strings.ToLower(h)
+	return h == "issystemadmin" || h == "allowmanualdriver" || h == "requiredriverselection" ||
+		h == "isrestocked" || h == "isenabled" ||
+		h == "enabledriverrecommendation"
 }
 func convertSheetValuesToMaps(values *sheets.ValueRange) ([]map[string]interface{}, error) {
 	if values == nil || len(values.Values) < 2 {
@@ -1635,7 +1643,7 @@ func convertSheetValuesToMaps(values *sheets.ValueRange) ([]map[string]interface
 							if f, err := strconv.ParseFloat(cleanedStr, 64); err == nil {
 								rowData[header] = f
 							} else {
-								rowData[header] = 0.0
+								rowData[header] = cellStr
 							}
 						} else if isBoolHeader(header) {
 							rowData[header] = strings.ToUpper(strings.TrimSpace(cellStr)) == "TRUE"
@@ -1648,12 +1656,9 @@ func convertSheetValuesToMaps(values *sheets.ValueRange) ([]map[string]interface
 							if b, ok := cell.(bool); ok {
 								rowData[header] = b
 							} else {
-								// Handle case where it might be a string "TRUE" in a non-string type cell
 								rowData[header] = false
 							}
 						} else {
-							// If it's a bool cell but the struct expects a string (like IsVerified)
-							// converting to string ensures json.Unmarshal doesn't fail
 							if b, ok := cell.(bool); ok {
 								if b {
 									rowData[header] = "TRUE"
@@ -1665,7 +1670,9 @@ func convertSheetValuesToMaps(values *sheets.ValueRange) ([]map[string]interface
 							}
 						}
 					}
-					if header == "Telegram Message ID 1" || header == "Telegram Message ID 2" || header == "Order ID" || header == "Customer Phone" || header == "Barcode" {
+					// Ensure critical IDs are always strings to avoid scientific notation or rounding issues
+					lowHeader := strings.ToLower(header)
+					if lowHeader == "telegram message id 1" || lowHeader == "telegram message id 2" || lowHeader == "order id" || lowHeader == "customer phone" || lowHeader == "barcode" {
 						rowData[header] = fmt.Sprintf("%v", cell)
 					}
 				}
@@ -1727,6 +1734,12 @@ func handleMigrateData(c *gin.Context) {
 		tx.Session(&gorm.Session{AllowGlobalUpdate: true}).Delete(&DriverRecommendation{})
 		tx.Session(&gorm.Session{AllowGlobalUpdate: true}).Delete(&Role{})
 		tx.Session(&gorm.Session{AllowGlobalUpdate: true}).Delete(&RolePermission{})
+		tx.Session(&gorm.Session{AllowGlobalUpdate: true}).Delete(&IncentiveProject{})
+		tx.Session(&gorm.Session{AllowGlobalUpdate: true}).Delete(&IncentiveCalculator{})
+		tx.Session(&gorm.Session{AllowGlobalUpdate: true}).Delete(&IncentiveResult{})
+		tx.Session(&gorm.Session{AllowGlobalUpdate: true}).Delete(&IncentiveManualData{})
+		tx.Session(&gorm.Session{AllowGlobalUpdate: true}).Delete(&IncentiveCustomPayout{})
+		tx.Session(&gorm.Session{AllowGlobalUpdate: true}).Delete(&Movie{})
 
 		log.Println("🔄 ចាប់ផ្តើមទាញទិន្នន័យថ្មីពី Google Sheet...")
 
@@ -2082,6 +2095,28 @@ func handleMigrateData(c *gin.Context) {
 			if len(valid) > 0 {
 				tx.CreateInBatches(valid, 100)
 			}
+		}
+
+		// Incentive Sheets
+		var incProjects []IncentiveProject
+		if fetchSheetDataToStruct("IncentiveProjects", &incProjects) == nil && len(incProjects) > 0 {
+			tx.CreateInBatches(incProjects, 100)
+		}
+		var incCalcs []IncentiveCalculator
+		if fetchSheetDataToStruct("IncentiveCalculators", &incCalcs) == nil && len(incCalcs) > 0 {
+			tx.CreateInBatches(incCalcs, 100)
+		}
+		var incResults []IncentiveResult
+		if fetchSheetDataToStruct("IncentiveResults", &incResults) == nil && len(incResults) > 0 {
+			tx.CreateInBatches(incResults, 100)
+		}
+		var incManual []IncentiveManualData
+		if fetchSheetDataToStruct("IncentiveManualData", &incManual) == nil && len(incManual) > 0 {
+			tx.CreateInBatches(incManual, 100)
+		}
+		var incCustom []IncentiveCustomPayout
+		if fetchSheetDataToStruct("IncentiveCustomPayouts", &incCustom) == nil && len(incCustom) > 0 {
+			tx.CreateInBatches(incCustom, 100)
 		}
 
 		if err := tx.Commit().Error; err != nil {
@@ -3127,7 +3162,7 @@ func handleExtractM3U8(c *gin.Context) {
 		fetchReferer = u.Scheme + "://" + u.Host
 	}
 
-	client := &http.Client{Timeout: 10 * time.Second}
+	client := &http.Client{Timeout: 15 * time.Second}
 	req, _ := http.NewRequest("GET", targetURL, nil)
 	req.Header.Set("Referer", fetchReferer)
 	req.Header.Set("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36")
@@ -3143,25 +3178,46 @@ func handleExtractM3U8(c *gin.Context) {
 	html := string(body)
 
 	var m3u8URL string
-	// Try playlist regex
-	re := regexp.MustCompile(`(["'])(https?://[^"']+\.m3u8[^"']*)\1`)
-	match := re.FindStringSubmatch(html)
-	if len(match) > 2 {
-		m3u8URL = match[2]
+
+	// Advanced Scraping: Look for playlist variables (model from zip)
+	playlistRe := regexp.MustCompile(`var playlist = (\[.*?\]);`)
+	playlistMatch := playlistRe.FindStringSubmatch(html)
+	if len(playlistMatch) > 1 {
+		// Try to find file in the JS array
+		fileRe := regexp.MustCompile(`file:\s*["']([^"']+(\.m3u8|\.mp4|/hlsplaylist/|/hls/)[^"']*)["']`)
+		fileMatch := fileRe.FindStringSubmatch(playlistMatch[1])
+		if len(fileMatch) > 1 {
+			m3u8URL = fileMatch[1]
+		}
 	}
 
-	// Try standard regex if not found
 	if m3u8URL == "" {
-		reSimple := regexp.MustCompile(`https?://[^\s"'<>]+?\.m3u8[^\s"'<>]*`)
+		// Try playlist regex with broad HLS patterns
+		re := regexp.MustCompile(`(["'])(https?://[^"']+(\.m3u8|\.mp4|/hlsplaylist/|/hls/)[^"']*)\1`)
+		match := re.FindStringSubmatch(html)
+		if len(match) > 2 {
+			m3u8URL = match[2]
+		}
+	}
+
+	if m3u8URL == "" {
+		// Try simple regex as fallback
+		reSimple := regexp.MustCompile(`https?://[^\s"'<>]+?(\.m3u8|\.mp4|/hlsplaylist/|/hls/)[^\s"'<>]*`)
 		m3u8URL = reSimple.FindString(html)
 	}
 
 	if m3u8URL != "" {
+		if strings.HasPrefix(m3u8URL, "//") {
+			m3u8URL = "https:" + m3u8URL
+		} else if !strings.HasPrefix(m3u8URL, "http") {
+			// Resolve relative URL
+			m3u8URL = resolveURL(targetURL, m3u8URL)
+		}
 		c.JSON(http.StatusOK, gin.H{"m3u8Url": m3u8URL})
 		return
 	}
 
-	c.JSON(http.StatusNotFound, gin.H{"error": "Could not extract .m3u8 link from the page."})
+	c.JSON(http.StatusNotFound, gin.H{"error": "Could not extract HLS link from the page."})
 }
 
 func handleProxyM3U8(c *gin.Context) {
@@ -3197,7 +3253,12 @@ func handleProxyM3U8(c *gin.Context) {
 	var rewrittenLines []string
 	var lines []string
 	isMasterPlaylist := false
+	
+	// Increase scanner buffer to handle long lines in M3U8 files
 	scanner := bufio.NewScanner(resp.Body)
+	buf := make([]byte, 0, 1024*1024) // 1MB buffer
+	scanner.Buffer(buf, 1024*1024)
+
 	for scanner.Scan() {
 		line := strings.TrimSpace(scanner.Text())
 		if line == "" {
@@ -3227,7 +3288,7 @@ func handleProxyM3U8(c *gin.Context) {
 						absURL := resolveURL(m3u8URL, uri)
 						
 						// Check if it's a playlist or a segment
-						isPlaylist := strings.Contains(absURL, ".m3u8")
+						isPlaylist := strings.Contains(strings.ToLower(absURL), ".m3u8") || strings.Contains(absURL, "/hlsplaylist/") || strings.Contains(absURL, "/hls/")
 						endpoint := "/api/proxy-ts"
 						if isPlaylist {
 							endpoint = "/api/proxy-m3u8"
@@ -3245,7 +3306,7 @@ func handleProxyM3U8(c *gin.Context) {
 
 		// It's a URL line (segment or sub-playlist)
 		absURL := resolveURL(m3u8URL, line)
-		if isMasterPlaylist || strings.Contains(absURL, ".m3u8") {
+		if isMasterPlaylist || strings.Contains(strings.ToLower(absURL), ".m3u8") || strings.Contains(absURL, "/hlsplaylist/") || strings.Contains(absURL, "/hls/") {
 			rewrittenLines = append(rewrittenLines, fmt.Sprintf("/api/proxy-m3u8?url=%s", url.QueryEscape(absURL)))
 		} else {
 			rewrittenLines = append(rewrittenLines, fmt.Sprintf("/api/proxy-ts?url=%s", url.QueryEscape(absURL)))
@@ -3270,8 +3331,14 @@ func handleProxyTS(c *gin.Context) {
 		return
 	}
 
-	client := &http.Client{Timeout: 30 * time.Second}
+	client := &http.Client{Timeout: 60 * time.Second}
 	req, _ := http.NewRequest("GET", tsURL, nil)
+	
+	// Copy Range header for fragmented MP4 support
+	if rangeHeader := c.Request.Header.Get("Range"); rangeHeader != "" {
+		req.Header.Set("Range", rangeHeader)
+	}
+
 	req.Header.Set("Referer", u.Scheme+"://"+u.Host)
 	req.Header.Set("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36")
 
@@ -3282,17 +3349,25 @@ func handleProxyTS(c *gin.Context) {
 	}
 	defer resp.Body.Close()
 
-	if resp.StatusCode != http.StatusOK {
+	if resp.StatusCode != http.StatusOK && resp.StatusCode != http.StatusPartialContent {
 		c.String(resp.StatusCode, "Failed to fetch segment")
 		return
 	}
 
-	c.Header("Content-Type", "video/MP2T")
-	if cl := resp.Header.Get("Content-Length"); cl != "" {
-		c.Header("Content-Length", cl)
+	// Forward response headers
+	for k, v := range resp.Header {
+		if k == "Content-Type" || k == "Content-Length" || k == "Content-Range" || k == "Accept-Ranges" {
+			c.Header(k, v[0])
+		}
 	}
+	
+	// Default Content-Type if missing
+	if c.Writer.Header().Get("Content-Type") == "" {
+		c.Header("Content-Type", "video/MP2T")
+	}
+	
 	c.Header("Access-Control-Allow-Origin", "*")
-
+	c.Status(resp.StatusCode)
 	io.Copy(c.Writer, resp.Body)
 }
 
@@ -3390,12 +3465,35 @@ func resolveURL(base, ref string) string {
 }
 
 // =========================================================================
-// API សម្រាប់ប្រព័ន្ធ ENTERTAINMENT
+// API សម្រាប់ប្រព័ន្ធ ENTERTAINMENT & VIDEO PROXY
 // =========================================================================
 
 func handleGetMovies(c *gin.Context) {
 	var movies []Movie
 	DB.Order("added_at desc").Find(&movies)
+
+	// Inject sample series data for testing UX
+	sampleSeries := []Movie{
+		{ID: "series-1-ep1", Title: "Squid Game - Ep 1", Description: "Red Light, Green Light.", Thumbnail: "https://image.tmdb.org/t/p/original/dDlEmu3EZ0Pgg93K2SVNLCjCSvE.jpg", VideoURL: "https://test-streams.mux.dev/x36xhzz/x36xhzz.m3u8", Type: "series", Language: "Korean", Country: "South Korea", Category: "Thriller", AddedAt: time.Now().Format(time.RFC3339)},
+		{ID: "series-1-ep2", Title: "Squid Game - Ep 2", Description: "Hell.", Thumbnail: "https://image.tmdb.org/t/p/original/dDlEmu3EZ0Pgg93K2SVNLCjCSvE.jpg", VideoURL: "https://test-streams.mux.dev/x36xhzz/x36xhzz.m3u8", Type: "series", Language: "Korean", Country: "South Korea", Category: "Thriller", AddedAt: time.Now().Format(time.RFC3339)},
+		{ID: "series-1-ep3", Title: "Squid Game - Ep 3", Description: "The Man with the Umbrella.", Thumbnail: "https://image.tmdb.org/t/p/original/dDlEmu3EZ0Pgg93K2SVNLCjCSvE.jpg", VideoURL: "https://test-streams.mux.dev/x36xhzz/x36xhzz.m3u8", Type: "series", Language: "Korean", Country: "South Korea", Category: "Thriller", AddedAt: time.Now().Format(time.RFC3339)},
+		{ID: "series-2-ep1", Title: "Stranger Things - Ep 1", Description: "The Vanishing of Will Byers.", Thumbnail: "https://image.tmdb.org/t/p/original/x2LSRK2Cm7MZhjluni1msVJ3wDF.jpg", VideoURL: "https://test-streams.mux.dev/x36xhzz/x36xhzz.m3u8", Type: "series", Language: "English", Country: "USA", Category: "Sci-Fi", AddedAt: time.Now().Format(time.RFC3339)},
+		{ID: "series-2-ep2", Title: "Stranger Things - Ep 2", Description: "The Weirdo on Maple Street.", Thumbnail: "https://image.tmdb.org/t/p/original/x2LSRK2Cm7MZhjluni1msVJ3wDF.jpg", VideoURL: "https://test-streams.mux.dev/x36xhzz/x36xhzz.m3u8", Type: "series", Language: "English", Country: "USA", Category: "Sci-Fi", AddedAt: time.Now().Format(time.RFC3339)},
+	}
+
+	// Only add sample series if the database has none or very few
+	hasSeries := false
+	for _, m := range movies {
+		if m.Type == "series" {
+			hasSeries = true
+			break
+		}
+	}
+
+	if !hasSeries {
+		movies = append(sampleSeries, movies...)
+	}
+
 	c.JSON(http.StatusOK, gin.H{"status": "success", "data": movies})
 }
 
@@ -3605,7 +3703,12 @@ func main() {
 
 	r := gin.Default()
 	r.Use(ErrorHandlingMiddleware())
-	r.Use(cors.New(cors.Config{AllowOrigins: []string{"*"}, AllowMethods: []string{"GET", "POST", "OPTIONS"}, AllowHeaders: []string{"Origin", "Content-Type", "Authorization"}, MaxAge: 12 * time.Hour}))
+	r.Use(cors.New(cors.Config{
+		AllowOrigins: []string{"*"},
+		AllowMethods: []string{"GET", "POST", "PUT", "DELETE", "OPTIONS"},
+		AllowHeaders: []string{"Origin", "Content-Type", "Authorization"},
+		MaxAge:       12 * time.Hour,
+	}))
 
 	r.GET("/", func(c *gin.Context) { c.JSON(200, gin.H{"status": "ok"}) })
 	r.GET("/healthz", func(c *gin.Context) { c.String(200, "OK") })

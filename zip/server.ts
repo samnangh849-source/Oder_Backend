@@ -10,10 +10,11 @@ const __dirname = path.dirname(__filename);
 
 async function startServer() {
   const app = express();
-  const PORT = 3000;
+  const PORT = 3001;
 
   // 1. Endpoint to scrape the actual .m3u8 link from the iframe page
   app.get('/api/extract-m3u8', async (req, res) => {
+    console.log(`[DEBUG] Received request for /api/extract-m3u8: ${req.query.url}`);
     const iframeUrl = req.query.url as string;
     const referer = req.query.referer as string;
 
@@ -51,7 +52,7 @@ async function startServer() {
         try {
           const playlist = JSON.parse(playlistMatch[1]);
           if (playlist && playlist.length > 0 && playlist[0].sources) {
-            const hlsSource = playlist[0].sources.find((s: any) => s.type === 'hls' || s.file.includes('.m3u8'));
+            const hlsSource = playlist[0].sources.find((s: any) => s.type === 'hls' || s.file.toLowerCase().includes('.m3u8') || s.file.includes('/hlsplaylist/') || s.file.includes('/hls/'));
             if (hlsSource) {
               m3u8Url = hlsSource.file;
             } else if (playlist[0].sources.length > 0) {
@@ -65,7 +66,7 @@ async function startServer() {
 
       // Fallback: Regex to find typical JW Player setup or source arrays
       if (!m3u8Url) {
-        const m3u8Regex = /(["'])(https?:\/\/[^"']+\.m3u8[^"']*)\1/i;
+        const m3u8Regex = /(["'])(https?:\/\/[^"']+(\.m3u8|\/hlsplaylist\/|\/hls\/)[^"']*)\1/i;
         const match = html.match(m3u8Regex);
         if (match && match[2]) {
           m3u8Url = match[2];
@@ -108,16 +109,19 @@ async function startServer() {
   // 2. Endpoint to proxy the .m3u8 playlist file
   app.get('/api/proxy-m3u8', async (req, res) => {
     const m3u8Url = req.query.url as string;
+    const referer = req.query.referer as string;
 
     if (!m3u8Url) {
       return res.status(400).send('Missing url parameter');
     }
 
     try {
-      const targetOrigin = new URL(m3u8Url).origin;
+      const targetUrl = new URL(m3u8Url);
+      const fetchReferer = referer || targetUrl.origin;
+      
       const response = await fetch(m3u8Url, {
         headers: {
-          'Referer': targetOrigin,
+          'Referer': fetchReferer,
           'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
         },
       });
@@ -127,62 +131,38 @@ async function startServer() {
       }
 
       const m3u8Content = await response.text();
-      
-      // Parse the m3u8 file
-      const parser = new Parser();
-      parser.push(m3u8Content);
-      parser.end();
-      
-      const parsedManifest = parser.manifest;
       const baseUrl = new URL(m3u8Url);
-      
-      // Rewrite the URLs in the m3u8 file to point to our proxy
-      let rewrittenContent = m3u8Content;
-      
-      // Determine if this is a master playlist (contains other playlists) 
-      // or a media playlist (contains video segments)
       const isMasterPlaylist = m3u8Content.includes('#EXT-X-STREAM-INF');
       
-      // Simple regex replacement for URLs in the m3u8 file
-      // This handles both absolute and relative URLs
-      const lines = m3u8Content.split('\n');
+      // Handle both LF and CRLF line endings
+      const lines = m3u8Content.split(/\r?\n/);
       const rewrittenLines = lines.map(line => {
-        line = line.trim();
-        if (!line || line.startsWith('#')) {
-          // It's a comment or tag, leave it mostly alone
-          // Exception: URI in tags like #EXT-X-KEY or #EXT-X-MEDIA
-          if (line.includes('URI="')) {
-             return line.replace(/URI="([^"]+)"/g, (match, uri) => {
+        const trimmedLine = line.trim();
+        if (!trimmedLine || trimmedLine.startsWith('#')) {
+          if (trimmedLine.includes('URI="')) {
+             return trimmedLine.replace(/URI="([^"]+)"/g, (match, uri) => {
                 const absoluteUri = new URL(uri, baseUrl.href).href;
-                // If it's a media playlist (like audio tracks), proxy as m3u8, else as ts
-                const isPlaylist = absoluteUri.includes('.m3u8') || isMasterPlaylist;
+                const isPlaylist = absoluteUri.toLowerCase().includes('.m3u8') || absoluteUri.includes('/hlsplaylist/') || absoluteUri.includes('/hls/') || isMasterPlaylist;
                 const endpoint = isPlaylist ? '/api/proxy-m3u8' : '/api/proxy-ts';
-                return `URI="${endpoint}?url=${encodeURIComponent(absoluteUri)}"`;
+                return `URI="${endpoint}?url=${encodeURIComponent(absoluteUri)}&referer=${encodeURIComponent(fetchReferer)}"`;
              });
           }
           return line;
         }
         
-        // It's a URL line (either a .ts segment or a nested .m3u8 playlist)
         try {
-          const absoluteUrl = new URL(line, baseUrl.href).href;
-          
-          // If it's a master playlist, the URLs are nested playlists.
-          // If it explicitly has .m3u8, it's a playlist.
-          // Otherwise, assume it's a segment.
-          if (isMasterPlaylist || absoluteUrl.includes('.m3u8')) {
-             return `/api/proxy-m3u8?url=${encodeURIComponent(absoluteUrl)}`;
+          const absoluteUrl = new URL(trimmedLine, baseUrl.href).href;
+          if (isMasterPlaylist || absoluteUrl.toLowerCase().includes('.m3u8') || absoluteUrl.includes('/hlsplaylist/') || absoluteUrl.includes('/hls/')) {
+             return `/api/proxy-m3u8?url=${encodeURIComponent(absoluteUrl)}&referer=${encodeURIComponent(fetchReferer)}`;
           } else {
-             // It's a segment (.ts, .mp4, etc.), proxy it to the ts endpoint
-             return `/api/proxy-ts?url=${encodeURIComponent(absoluteUrl)}`;
+             return `/api/proxy-ts?url=${encodeURIComponent(absoluteUrl)}&referer=${encodeURIComponent(fetchReferer)}`;
           }
         } catch (e) {
-          return line; // Fallback if URL parsing fails
+          return line;
         }
       });
 
       res.setHeader('Content-Type', 'application/vnd.apple.mpegurl');
-      // Add CORS headers so the browser player can read it
       res.setHeader('Access-Control-Allow-Origin', '*');
       res.send(rewrittenLines.join('\n'));
 
@@ -195,16 +175,19 @@ async function startServer() {
   // 3. Endpoint to proxy the actual video segments (.ts files)
   app.get('/api/proxy-ts', async (req, res) => {
     const tsUrl = req.query.url as string;
+    const referer = req.query.referer as string;
 
     if (!tsUrl) {
       return res.status(400).send('Missing url parameter');
     }
 
     try {
-      const targetOrigin = new URL(tsUrl).origin;
+      const targetUrl = new URL(tsUrl);
+      const fetchReferer = referer || targetUrl.origin;
+
       const response = await fetch(tsUrl, {
         headers: {
-          'Referer': targetOrigin,
+          'Referer': fetchReferer,
           'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
         },
       });
@@ -213,19 +196,22 @@ async function startServer() {
         return res.status(response.status).send(`Failed to fetch segment: ${response.statusText}`);
       }
 
-      // Forward necessary headers
-      // Force video/MP2T content type since some hosts disguise .ts as .png
-      res.setHeader('Content-Type', 'video/MP2T');
+      // Forward content type or default to video/MP2T
+      const contentType = response.headers.get('content-type') || 'video/MP2T';
+      res.setHeader('Content-Type', contentType);
       
       const contentLength = response.headers.get('content-length');
       if (contentLength) res.setHeader('Content-Length', contentLength);
       
       res.setHeader('Access-Control-Allow-Origin', '*');
 
-      // Stream the segment data
       if (response.body) {
         // @ts-ignore
         const reader = response.body.getReader();
+        res.on('close', () => {
+            reader.cancel();
+        });
+
         const pump = async () => {
           try {
             while (true) {
@@ -234,11 +220,15 @@ async function startServer() {
                 res.end();
                 break;
               }
-              res.write(value);
+              if (!res.writableEnded) {
+                res.write(value);
+              } else {
+                break;
+              }
             }
           } catch (err) {
             console.error('Error streaming segment:', err);
-            res.end();
+            if (!res.writableEnded) res.end();
           }
         };
         pump();
@@ -329,42 +319,55 @@ async function startServer() {
     }
   });
 
-  // Original proxy endpoint (kept for fallback/reference)
+  // Original proxy endpoint (Improved for MP4/Direct videos with Range support)
   app.get('/api/proxy-video', async (req, res) => {
-    // ... (keep existing implementation)
     const targetUrl = req.query.url as string;
+    const referer = req.query.referer as string;
 
     if (!targetUrl) {
       return res.status(400).send('Missing url parameter');
     }
 
     try {
-      const targetOrigin = new URL(targetUrl).origin;
-      const response = await fetch(targetUrl, {
-        headers: {
-          'Referer': targetOrigin,
-        },
-      });
+      const targetUri = new URL(targetUrl);
+      const fetchReferer = referer || targetUri.origin;
+      
+      const headers: Record<string, string> = {
+        'Referer': fetchReferer,
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+      };
 
-      if (!response.ok) {
-        return res.status(response.status).send(`Failed to fetch video: ${response.statusText}`);
+      // Forward Range header from the browser to the target server
+      if (req.headers.range) {
+        headers['Range'] = req.headers.range;
       }
 
-      const contentType = response.headers.get('content-type');
-      if (contentType) res.setHeader('Content-Type', contentType);
+      const response = await fetch(targetUrl, { headers });
+
+      // Forward status code (especially 206 Partial Content)
+      res.status(response.status);
+
+      // Forward essential headers
+      const headersToForward = [
+        'content-type',
+        'content-length',
+        'content-range',
+        'accept-ranges',
+        'cache-control'
+      ];
+
+      headersToForward.forEach(h => {
+        const val = response.headers.get(h);
+        if (val) res.setHeader(h, val);
+      });
       
-      const contentLength = response.headers.get('content-length');
-      if (contentLength) res.setHeader('Content-Length', contentLength);
-      
-      const acceptRanges = response.headers.get('accept-ranges');
-      if (acceptRanges) res.setHeader('Accept-Ranges', acceptRanges);
-      
-      const contentRange = response.headers.get('content-range');
-      if (contentRange) res.setHeader('Content-Range', contentRange);
+      res.setHeader('Access-Control-Allow-Origin', '*');
 
       if (response.body) {
         // @ts-ignore
         const reader = response.body.getReader();
+        res.on('close', () => reader.cancel());
+
         const pump = async () => {
           try {
             while (true) {
@@ -373,11 +376,15 @@ async function startServer() {
                 res.end();
                 break;
               }
-              res.write(value);
+              if (!res.writableEnded) {
+                res.write(value);
+              } else {
+                break;
+              }
             }
           } catch (err) {
             console.error('Error streaming video:', err);
-            res.end();
+            if (!res.writableEnded) res.end();
           }
         };
         pump();
@@ -385,9 +392,9 @@ async function startServer() {
         res.status(500).send('No response body from video server');
       }
 
-    } catch (error) {
+    } catch (error: any) {
       console.error('Proxy error:', error);
-      res.status(500).send('Internal Server Error during proxying');
+      res.status(500).send(`Internal Server Error: ${error.message}`);
     }
   });
 
@@ -396,6 +403,7 @@ async function startServer() {
     const vite = await createViteServer({
       server: { middlewareMode: true },
       appType: 'spa',
+      configFile: path.resolve(__dirname, 'vite.config.ts'),
     });
     app.use(vite.middlewares);
   } else {

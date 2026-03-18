@@ -263,6 +263,10 @@ const AppContent: React.FC = () => {
                     <Suspense fallback={<div className="flex h-full items-center justify-center bg-transparent"><Spinner size="lg" /></div>}>
                         {appState === 'confirm_delivery' ? (
                             <DeliveryAgentView orderIds={confirmIds} returnOrderIds={returnIds} failedOrderIds={failedIdsParam} storeName={confirmStore} />
+                        ) : appState === 'watch' ? (
+                            <div id="app-main-scroll-container" className="flex-grow overflow-y-auto w-full h-full">
+                                <NetflixEntertainment guestMovieId={selectedMovieId} />
+                            </div>
                         ) : appState === 'admin_dashboard' ? (
                             <div className="flex-grow overflow-hidden relative flex flex-col h-full w-full">
                                  {originalAdminUser && <ImpersonationBanner />}

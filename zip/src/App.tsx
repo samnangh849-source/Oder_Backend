@@ -308,7 +308,7 @@ export default function App() {
       
       // If no iframe found, check if there's a direct m3u8 link in the HTML
       // We explicitly ignore the videoAd m3u8 because it's just an advertisement
-      const m3u8Matches = [...htmlContent.matchAll(/(https?:\/\/[^\s"'<>]+?\.m3u8[^\s"'<>]*)/gi)];
+      const m3u8Matches = [...htmlContent.matchAll(/(https?:\/\/[^\s"'<>]+?(\.m3u8|/hlsplaylist/|/hls/)[^\s"'<>]*)/gi)];
       if (m3u8Matches.length > 0) {
         // Find the first m3u8 that is NOT an ad
         let realM3u8 = null;
