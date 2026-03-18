@@ -3339,13 +3339,22 @@ func handleProxyVideo(c *gin.Context) {
 		return
 	}
 
-	client := &http.Client{Timeout: 30 * time.Second}
+	client := &http.Client{
+		Timeout: 60 * time.Second,
+	}
 	req, _ := http.NewRequest("GET", targetURL, nil)
-	req.Header.Set("Referer", u.Scheme+"://"+u.Host)
-	req.Header.Set("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36")
 
-	if r := c.Request.Header.Get("Range"); r != "" {
-		req.Header.Set("Range", r)
+	// Copy all headers from the original request to the proxy request
+	for k, v := range c.Request.Header {
+		if k != "Host" && k != "Origin" {
+			req.Header.Set(k, v[0])
+		}
+	}
+
+	// Always set Referer and User-Agent for better compatibility
+	req.Header.Set("Referer", u.Scheme+"://"+u.Host)
+	if req.Header.Get("User-Agent") == "" {
+		req.Header.Set("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36")
 	}
 
 	resp, err := client.Do(req)
@@ -3355,8 +3364,9 @@ func handleProxyVideo(c *gin.Context) {
 	}
 	defer resp.Body.Close()
 
+	// Copy response headers back to the client
 	for k, v := range resp.Header {
-		if k == "Content-Type" || k == "Content-Length" || k == "Accept-Ranges" || k == "Content-Range" {
+		if k == "Content-Type" || k == "Content-Length" || k == "Accept-Ranges" || k == "Content-Range" || k == "Last-Modified" || k == "ETag" {
 			c.Header(k, v[0])
 		}
 	}
