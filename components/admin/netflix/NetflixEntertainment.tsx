@@ -129,6 +129,7 @@ const NetflixEntertainment: React.FC<NetflixEntertainmentProps> = ({ guestMovieI
       let htmlContent = '';
       if (inputType === 'url') {
         const proxies = [
+          `/api/fetch-json?url=${encodeURIComponent(inputUrl)}`,
           `https://api.allorigins.win/get?url=${encodeURIComponent(inputUrl)}`,
           `https://api.codetabs.com/v1/proxy?quest=${encodeURIComponent(inputUrl)}`
         ];
@@ -143,11 +144,116 @@ const NetflixEntertainment: React.FC<NetflixEntertainmentProps> = ({ guestMovieI
             if (htmlContent) { fetchSuccess = true; break; }
           } catch (e) { console.warn(e); }
         }
-        if (!fetchSuccess) throw new Error("Failed to fetch page source.");
+        if (!fetchSuccess) throw new Error("មិនអាចទាញយកបានទេ។ អាចមកពី Network របស់អ្នកមានបញ្ហា។");
       } else {
         htmlContent = inputSource;
+        if (!htmlContent.trim()) throw new Error("សូមបញ្ចូលកូដដើម (Page Source) ជាមុនសិន។");
       }
 
+      // Check for playlists array in the HTML
+      const playlistsMatch = htmlContent.match(/const playlists = (\[.*?\]);/s);
+      if (playlistsMatch) {
+        const fileMatches = [...playlistsMatch[1].matchAll(/file:\s*["']([^"']+)["']/g)];
+        if (fileMatches.length > 0) {
+          let url = fileMatches[0][1];
+          if (url.startsWith('//')) url = 'https:' + url;
+          setExtractedM3u8(url);
+          setStatus('success');
+          return;
+        }
+      }
+
+      // Check for dooplay_player_option elements
+      const parser = new DOMParser();
+      const doc = parser.parseFromString(htmlContent, "text/html");
+      const playerOptions = doc.querySelectorAll('.dooplay_player_option');
+      
+      if (playerOptions.length > 0) {
+        let playerApi = '';
+        let ajaxUrlBase = '';
+        const dtAjaxMatch = htmlContent.match(/var dtAjax = (\{.*?\});/);
+        if (dtAjaxMatch) {
+          try {
+            const dtAjax = JSON.parse(dtAjaxMatch[1]);
+            playerApi = dtAjax.player_api || '';
+            ajaxUrlBase = dtAjax.url || '';
+          } catch (e) {}
+        }
+
+        if (playerApi || ajaxUrlBase) {
+          let firstOption = playerOptions[0];
+          for (let i = 0; i < playerOptions.length; i++) {
+            if (playerOptions[i].getAttribute('data-nume') !== 'trailer') {
+              firstOption = playerOptions[i];
+              break;
+            }
+          }
+          
+          const postId = firstOption.getAttribute('data-post');
+          const nume = firstOption.getAttribute('data-nume');
+          const type = firstOption.getAttribute('data-type');
+          
+          if (postId && nume && type) {
+            const fetchUrl = playerApi ? `${playerApi}${postId}/${type}/${nume}` : `${ajaxUrlBase}?action=doo_player_ajax&post=${postId}&nume=${nume}&type=${type}`;
+            const res = await fetch(`${WEB_APP_URL}/api/fetch-json?url=${encodeURIComponent(fetchUrl)}`, {
+                method: (ajaxUrlBase && !playerApi) ? 'POST' : 'GET'
+            });
+            
+            if (res.ok) {
+              const embedData = await res.json();
+              let embedUrl = embedData.embed_url || '';
+              if (embedUrl.includes('<iframe')) {
+                const iframeMatch = embedUrl.match(/src=["']([^"']+)["']/);
+                if (iframeMatch) embedUrl = iframeMatch[1];
+              }
+              
+              if (embedUrl) {
+                const extractRes = await fetch(`${WEB_APP_URL}/api/extract-m3u8?url=${encodeURIComponent(embedUrl)}`);
+                if (extractRes.ok) {
+                  const extractData = await extractRes.json();
+                  if (extractData.m3u8Url) {
+                    setExtractedM3u8(extractData.m3u8Url);
+                    setStatus('success');
+                    return;
+                  }
+                }
+                setExtractedM3u8(embedUrl); // Fallback to embed URL
+                setStatus('success');
+                return;
+              }
+            }
+          }
+        }
+      }
+
+      // Fallback: Direct iframe check
+      const iframes = doc.querySelectorAll('.movieplay iframe, iframe, .embed-container iframe');
+      if (iframes.length > 0) {
+        let src = '';
+        for (let i = 0; i < iframes.length; i++) {
+          const iframeSrc = (iframes[i] as HTMLIFrameElement).src;
+          if (iframeSrc && !iframeSrc.includes('googletagmanager') && !iframeSrc.includes('facebook')) {
+            src = iframeSrc;
+            break;
+          }
+        }
+        if (src) {
+          const extractRes = await fetch(`${WEB_APP_URL}/api/extract-m3u8?url=${encodeURIComponent(src)}`);
+          if (extractRes.ok) {
+            const data = await extractRes.json();
+            if (data.m3u8Url) {
+              setExtractedM3u8(data.m3u8Url);
+              setStatus('success');
+              return;
+            }
+          }
+          setExtractedM3u8(src);
+          setStatus('success');
+          return;
+        }
+      }
+
+      // Final Fallback: Regex for .m3u8
       const m3u8Matches = [...htmlContent.matchAll(/(https?:\/\/[^\s"'<>]+?\.m3u8[^\s"'<>]*)/gi)];
       let foundM3u8 = null;
       for (const match of m3u8Matches) {
@@ -162,7 +268,7 @@ const NetflixEntertainment: React.FC<NetflixEntertainmentProps> = ({ guestMovieI
         setExtractedM3u8(foundM3u8);
         setStatus('success');
       } else {
-        throw new Error("No .m3u8 found in source.");
+        throw new Error("រកមិនឃើញលីងវីដេអូ ឬ Iframe នៅក្នុងកូដនេះទេ។");
       }
     } catch (err: any) {
       setErrorMessage(err.message);
@@ -239,108 +345,143 @@ const NetflixEntertainment: React.FC<NetflixEntertainmentProps> = ({ guestMovieI
     if (activeMovie && iframeContainerRef.current) {
       const container = iframeContainerRef.current;
       container.innerHTML = '';
-      const playerHtml = `
-        <!DOCTYPE html>
-        <html>
-        <head>
-          <script src="https://cdn.jsdelivr.net/npm/hls.js@1.5.7/dist/hls.min.js"></script>
-          <style>
-            body { margin: 0; background: #000; display: flex; align-items: center; justify-content: center; height: 100vh; overflow: hidden; }
-            video { width: 100%; height: 100%; outline: none; background: #000; }
-            #error-overlay { 
-              position: absolute; top: 0; left: 0; width: 100%; height: 100%; 
-              background: rgba(0,0,0,0.8); color: white; display: none; 
-              flex-direction: column; align-items: center; justify-content: center; 
-              font-family: sans-serif; text-align: center; padding: 20px;
-            }
-            button { 
-              background: #e50914; color: white; border: none; padding: 10px 20px; 
-              margin-top: 15px; border-radius: 4px; cursor: pointer; font-weight: bold;
-            }
-          </style>
-        </head>
-        <body>
-          <video id="video" controls autoplay playsinline></video>
-          <div id="error-overlay">
-            <h3 id="error-msg">Video Load Failed</h3>
-            <p>We are having trouble playing this stream. It might be blocked or expired.</p>
-            <button onclick="retry()">Retry Playback</button>
-          </div>
-          <script>
-            var video = document.getElementById('video');
-            var errorOverlay = document.getElementById('error-overlay');
-            var errorMsg = document.getElementById('error-msg');
-            var videoSrc = '${activeMovie.VideoURL.replace(/'/g, "\\'")}';
-            var hls = null;
-            
-            function retry() {
-              errorOverlay.style.display = 'none';
-              initHls(videoSrc);
-            }
+      
+      const isM3u8 = activeMovie.VideoURL.includes('.m3u8');
+      const isIframe = activeMovie.VideoURL.includes('<iframe') || activeMovie.VideoURL.includes('//') && !isM3u8;
 
-            function initHls(url) {
-              if (hls) { hls.destroy(); }
-              
-              if (Hls.isSupported()) {
-                hls = new Hls({
-                  debug: false,
-                  enableWorker: true,
-                  lowLatencyMode: true,
-                  backBufferLength: 90,
-                  capLevelToPlayerSize: true,
-                  autoStartLoad: true,
-                  xhrSetup: function(xhr, url) {
-                    xhr.withCredentials = false;
-                  }
-                });
-                
-                hls.loadSource(url);
-                hls.attachMedia(video);
-                
-                hls.on(Hls.Events.ERROR, function (event, data) {
-                  if (data.fatal) {
-                    switch (data.type) {
-                      case Hls.ErrorTypes.NETWORK_ERROR:
-                        console.log("fatal network error encountered, try to recover");
-                        if (!url.includes('allorigins')) {
-                           console.log("Attempting proxy fallback...");
-                           var proxyUrl = 'https://api.allorigins.win/raw?url=' + encodeURIComponent(videoSrc);
-                           initHls(proxyUrl);
-                        } else {
-                           errorOverlay.style.display = 'flex';
-                           errorMsg.innerText = "Network Error: Link may be broken or blocked.";
-                        }
-                        break;
-                      case Hls.ErrorTypes.MEDIA_ERROR:
-                        console.log("fatal media error encountered, try to recover");
-                        hls.recoverMediaError();
-                        break;
-                      default:
-                        hls.destroy();
-                        errorOverlay.style.display = 'flex';
-                        errorMsg.innerText = "Critical Error: " + data.details;
-                        break;
-                    }
-                  }
-                });
-              } else if (video.canPlayType('application/vnd.apple.mpegurl')) {
-                // For Safari/iOS native support
-                video.src = url;
-                video.addEventListener('error', function() {
-                   if (!url.includes('allorigins')) {
-                      initHls('https://api.allorigins.win/raw?url=' + encodeURIComponent(videoSrc));
-                   } else {
-                      errorOverlay.style.display = 'flex';
-                   }
-                });
+      let playerHtml = '';
+      
+      if (isM3u8) {
+        const proxyM3u8Url = `${WEB_APP_URL}/api/proxy-m3u8?url=${encodeURIComponent(activeMovie.VideoURL)}`;
+        playerHtml = `
+          <!DOCTYPE html>
+          <html>
+          <head>
+            <meta name="referrer" content="no-referrer">
+            <script src="https://cdn.jsdelivr.net/npm/hls.js@1.5.7/dist/hls.min.js"></script>
+            <style>
+              body { margin: 0; background: #000; display: flex; align-items: center; justify-content: center; height: 100vh; overflow: hidden; }
+              video { width: 100%; height: 100%; outline: none; background: #000; }
+              #error-overlay { 
+                position: absolute; top: 0; left: 0; width: 100%; height: 100%; 
+                background: rgba(0,0,0,0.8); color: white; display: none; 
+                flex-direction: column; align-items: center; justify-content: center; 
+                font-family: sans-serif; text-align: center; padding: 20px;
               }
-            }
+              button { 
+                background: #e50914; color: white; border: none; padding: 10px 20px; 
+                margin-top: 15px; border-radius: 4px; cursor: pointer; font-weight: bold;
+              }
+            </style>
+          </head>
+          <body>
+            <video id="video" controls autoplay playsinline></video>
+            <div id="error-overlay">
+              <h3 id="error-msg">Video Load Failed</h3>
+              <p>We are having trouble playing this stream. It might be blocked or expired.</p>
+              <button onclick="retry()">Retry Playback</button>
+            </div>
+            <script>
+              var video = document.getElementById('video');
+              var errorOverlay = document.getElementById('error-overlay');
+              var errorMsg = document.getElementById('error-msg');
+              var hls = null;
+              
+              function retry() {
+                errorOverlay.style.display = 'none';
+                initHls('${proxyM3u8Url}');
+              }
 
-            initHls(videoSrc);
-          </script>
-        </body>
-        </html>
-      `;
+              function initHls(url) {
+                if (hls) { hls.destroy(); }
+                
+                if (Hls.isSupported()) {
+                  hls = new Hls({
+                    debug: false,
+                    enableWorker: true,
+                    lowLatencyMode: true,
+                    backBufferLength: 90,
+                    capLevelToPlayerSize: true,
+                    autoStartLoad: true
+                  });
+                  
+                  hls.loadSource(url);
+                  hls.attachMedia(video);
+                  
+                  hls.on(Hls.Events.ERROR, function (event, data) {
+                    if (data.fatal) {
+                      switch (data.type) {
+                        case Hls.ErrorTypes.NETWORK_ERROR:
+                          if (!url.includes('allorigins')) {
+                             var fallback = 'https://api.allorigins.win/raw?url=' + encodeURIComponent('${activeMovie.VideoURL}');
+                             initHls(fallback);
+                          } else {
+                             errorOverlay.style.display = 'flex';
+                          }
+                          break;
+                        case Hls.ErrorTypes.MEDIA_ERROR:
+                          hls.recoverMediaError();
+                          break;
+                        default:
+                          hls.destroy();
+                          errorOverlay.style.display = 'flex';
+                          break;
+                      }
+                    }
+                  });
+                } else if (video.canPlayType('application/vnd.apple.mpegurl')) {
+                  video.src = url;
+                  video.addEventListener('error', function() {
+                     if (!url.includes('allorigins')) {
+                        initHls('https://api.allorigins.win/raw?url=' + encodeURIComponent('${activeMovie.VideoURL}'));
+                     } else {
+                        errorOverlay.style.display = 'flex';
+                     }
+                  });
+                }
+              }
+
+              initHls('${proxyM3u8Url}');
+            </script>
+          </body>
+          </html>
+        `;
+      } else if (activeMovie.VideoURL.includes('<iframe')) {
+        playerHtml = `
+          <!DOCTYPE html>
+          <html>
+          <head>
+            <meta name="referrer" content="no-referrer">
+            <style>
+              body { margin: 0; background: #000; display: flex; align-items: center; justify-content: center; height: 100vh; overflow: hidden; }
+              iframe { width: 100%; height: 100%; border: none; }
+            </style>
+          </head>
+          <body>
+            ${activeMovie.VideoURL}
+          </body>
+          </html>
+        `;
+      } else {
+        // Fallback: Proxy the URL in an iframe
+        const proxyUrl = `${WEB_APP_URL}/api/proxy-video?url=${encodeURIComponent(activeMovie.VideoURL)}`;
+        playerHtml = `
+          <!DOCTYPE html>
+          <html>
+          <head>
+            <meta name="referrer" content="no-referrer">
+            <style>
+              body { margin: 0; background: #000; display: flex; align-items: center; justify-content: center; height: 100vh; overflow: hidden; }
+              iframe { width: 100%; height: 100%; border: none; }
+            </style>
+          </head>
+          <body>
+            <iframe src="${proxyUrl}" allowfullscreen="true" frameborder="0" referrerpolicy="no-referrer"></iframe>
+          </body>
+          </html>
+        `;
+      }
+
       const iframe = document.createElement('iframe');
       iframe.style.width = '100%';
       iframe.style.height = '100%';
