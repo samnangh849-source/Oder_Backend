@@ -2,7 +2,8 @@ import React, { useState, useMemo } from 'react';
 import { Movie } from '../../../types';
 import HLSPlayer from '../../common/HLSPlayer';
 import EpisodeSelector from './EpisodeSelector';
-import { ChevronLeft, SkipBack, SkipForward, Info, Calendar, Globe, Tag, CheckCircle2, Play } from 'lucide-react';
+import AdvancedSeriesPlayer from './AdvancedSeriesPlayer';
+import { ChevronLeft, SkipBack, SkipForward, Info, Calendar, Globe, Tag, CheckCircle2, Play, Maximize } from 'lucide-react';
 
 interface SeriesPlayerViewProps {
   movie: Movie;
@@ -13,18 +14,21 @@ interface SeriesPlayerViewProps {
 
 const SeriesPlayerView: React.FC<SeriesPlayerViewProps> = ({ movie, allMovies, onBack, onSelectMovie }) => {
   const [autoPlay, setAutoPlay] = useState(true);
+  const [showFullscreenPlayer, setShowFullscreenPlayer] = useState(false);
 
   // Filter episodes that belong to the same series/collection
-  // Logic: Movies with the same Category and Country (or similar title pattern)
   const episodes = useMemo(() => {
-    return allMovies.filter(m => 
-      m.Category === movie.Category && 
-      m.Country === movie.Country &&
-      m.Type === 'series'
-    );
+    return allMovies.filter(m => {
+      if (movie.SeriesKey && m.SeriesKey) {
+        return m.SeriesKey === movie.SeriesKey && m.Type === 'series';
+      }
+      // Fallback to title matching or category if SeriesKey is missing
+      return m.Category === movie.Category && 
+             m.Country === movie.Country &&
+             m.Type === 'series';
+    });
   }, [allMovies, movie]);
 
-  // Find current index, next and previous episodes
   const currentIndex = episodes.findIndex(e => e.ID === movie.ID);
   const nextEpisode = currentIndex < episodes.length - 1 ? episodes[currentIndex + 1] : null;
   const prevEpisode = currentIndex > 0 ? episodes[currentIndex - 1] : null;
@@ -39,18 +43,32 @@ const SeriesPlayerView: React.FC<SeriesPlayerViewProps> = ({ movie, allMovies, o
 
   return (
     <div className="min-h-screen bg-[#080808] text-white pb-24 font-['Kantumruy_Pro']">
-      {/* Header / Navigation with subtle gradient */}
+      {/* Fullscreen Player Overlay */}
+      {showFullscreenPlayer && (
+        <AdvancedSeriesPlayer 
+          movie={movie}
+          nextEpisode={nextEpisode}
+          prevEpisode={prevEpisode}
+          onClose={() => setShowFullscreenPlayer(false)}
+          onNext={handleNext}
+          onPrev={handlePrev}
+          onSelectMovie={onSelectMovie}
+          autoPlayNext={autoPlay}
+        />
+      )}
+
+      {/* Header / Navigation */}
       <div className="sticky top-0 z-50 bg-gradient-to-b from-black/90 via-black/60 to-transparent pt-4 pb-6 px-6 flex items-center justify-between pointer-events-none">
         <button 
           onClick={onBack}
-          className="flex items-center gap-3 text-white/70 hover:text-white transition-all group pointer-events-auto bg-black/40 backdrop-blur-md px-4 py-2 rounded-full border border-white/10 hover:border-white/30 hover:shadow-[0_0_15px_rgba(255,255,255,0.1)]"
+          className="flex items-center gap-3 text-white/70 hover:text-white transition-all group pointer-events-auto bg-black/40 backdrop-blur-md px-4 py-2 rounded-full border border-white/10 hover:border-white/30"
         >
           <ChevronLeft className="w-5 h-5 group-hover:-translate-x-1 transition-transform" />
           <span className="font-bold text-sm tracking-wide uppercase">ត្រឡប់ក្រោយ</span>
         </button>
         
         <div className="flex-1 px-8 text-center hidden md:block">
-            <h2 className="text-xl font-black truncate max-w-2xl mx-auto tracking-widest uppercase drop-shadow-[0_2px_10px_rgba(0,0,0,0.8)]">
+            <h2 className="text-xl font-black truncate max-w-2xl mx-auto tracking-widest uppercase italic">
                 {movie.Title}
             </h2>
         </div>
@@ -70,19 +88,30 @@ const SeriesPlayerView: React.FC<SeriesPlayerViewProps> = ({ movie, allMovies, o
       </div>
 
       <div className="max-w-[1600px] mx-auto px-6 -mt-8 relative z-10">
-        {/* Main Player Section with deep shadow */}
-        <div className="relative group shadow-[0_20px_50px_rgba(0,0,0,0.7)] rounded-2xl overflow-hidden border border-white/10 bg-black transition-transform duration-500 hover:shadow-[0_20px_60px_rgba(229,9,20,0.15)] ring-1 ring-white/5">
-            <div className="aspect-video w-full">
+        {/* Main Player Preview Area */}
+        <div className="relative group shadow-[0_20px_50px_rgba(0,0,0,0.7)] rounded-2xl overflow-hidden border border-white/10 bg-black transition-transform duration-500">
+            <div className="aspect-video w-full relative">
                 <HLSPlayer 
                     url={movie.VideoURL} 
                     onReady={(player) => {
                         player.on('ended', () => {
                             if (autoPlay && nextEpisode) {
-                                setTimeout(() => onSelectMovie(nextEpisode), 2000); // 2 second delay before next
+                                setTimeout(() => onSelectMovie(nextEpisode), 2000);
                             }
                         });
                     }}
                 />
+                
+                {/* Fullscreen Trigger Overlay */}
+                <div className="absolute inset-0 z-20 flex items-center justify-center bg-black/20 opacity-0 group-hover:opacity-100 transition-opacity">
+                   <button 
+                    onClick={() => setShowFullscreenPlayer(true)}
+                    className="bg-red-600 text-white p-6 rounded-full shadow-2xl hover:scale-110 transition-transform flex items-center gap-3 font-black uppercase tracking-widest text-sm"
+                   >
+                      <Maximize className="w-8 h-8" />
+                      បើក Full Screen
+                   </button>
+                </div>
             </div>
             
             {/* Elegant Controls Overlay */}

@@ -139,15 +139,19 @@ function handleDeleteRow(data) {
   
   const values = sheet.getDataRange().getValues();
   const headers = values[0];
-  const pkIdx = headers.indexOf(pkColName);
+  const normalizedHeaders = headers.map(h => normalizeKey(h));
+  const pkIdx = normalizedHeaders.indexOf(normalizeKey(pkColName));
+
   if (pkIdx === -1) return createJsonResponse({ status: "error", message: "រកជួរឈរ (Column) មិនឃើញ" }, 400);
 
+  let deletedCount = 0;
   for (let i = values.length - 1; i >= 1; i--) {
     if (String(values[i][pkIdx]) === String(pkValue)) {
       sheet.deleteRow(i + 1);
+      deletedCount++;
     }
   }
-  return createJsonResponse({ status: "success" });
+  return createJsonResponse({ status: "success", deletedCount: deletedCount });
 }
 
 function handleUpdateSheet(data) {
@@ -157,12 +161,13 @@ function handleUpdateSheet(data) {
 
   const values = sheet.getDataRange().getValues();
   const headers = values[0];
+  const normalizedHeaders = headers.map(h => normalizeKey(h));
   
   let rowIndex = -1;
   for (let i = 1; i < values.length; i++) {
     let match = true;
     for (const [pkKey, pkVal] of Object.entries(data.primaryKey)) {
-      const colIdx = headers.indexOf(pkKey);
+      const colIdx = normalizedHeaders.indexOf(normalizeKey(pkKey));
       if (colIdx === -1 || String(values[i][colIdx]) !== String(pkVal)) {
         match = false; break;
       }
@@ -172,7 +177,7 @@ function handleUpdateSheet(data) {
 
   if (rowIndex !== -1) {
     for (const [key, val] of Object.entries(data.newData)) {
-      const colIdx = headers.indexOf(key);
+      const colIdx = normalizedHeaders.indexOf(normalizeKey(key));
       if (colIdx !== -1) {
         let v = val;
         if (typeof v === 'string') {

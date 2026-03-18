@@ -127,6 +127,129 @@ const MobileNetflixEntertainment: React.FC<MobileNetflixEntertainmentProps> = ({
     Country: 'Cambodia'
   });
 
+  // Admin HLS Proxy State
+  const [showProxy, setShowProxy] = useState(false);
+  const [inputUrl, setInputUrl] = useState('');
+  const [inputType, setInputType] = useState<'url' | 'source'>('url');
+  const [inputSource, setInputSource] = useState('');
+  const [status, setStatus] = useState<'idle' | 'loading' | 'success' | 'error'>('idle');
+  const [extractedM3u8, setExtractedM3u8] = useState<string | null>(null);
+  const [errorMessage, setErrorMessage] = useState<string | null>(null);
+
+  const [episodes, setEpisodes] = useState<{title: string, url: string}[]>([]);
+
+  useEffect(() => {
+    if (newMovie.Type === 'series' && episodes.length === 0) {
+      setEpisodes([{ title: `${newMovie.Title || 'Series'} - Ep 1`, url: '' }]);
+    }
+  }, [newMovie.Type]);
+
+  const handleAddEpisode = () => {
+    setEpisodes(prev => [...prev, { title: `${newMovie.Title || 'Series'} - Ep ${prev.length + 1}`, url: '' }]);
+  };
+
+  const handleRemoveEpisode = (index: number) => {
+    setEpisodes(prev => prev.filter((_, i) => i !== index));
+  };
+
+  const handleEpisodeChange = (index: number, field: 'title' | 'url', value: string) => {
+    setEpisodes(prev => prev.map((ep, i) => i === index ? { ...ep, [field]: value } : ep));
+  };
+
+  const handleFetchVideo = async () => {
+    setStatus('loading');
+    setExtractedM3u8(null);
+    setErrorMessage(null);
+
+    try {
+      let htmlContent = '';
+      if (inputType === 'url') {
+        const targetUrl = inputUrl;
+        const proxies = [
+          `${WEB_APP_URL}/api/fetch-json?url=${encodeURIComponent(targetUrl)}`,
+          `https://api.allorigins.win/get?url=${encodeURIComponent(targetUrl)}`,
+          `https://api.codetabs.com/v1/proxy?quest=${encodeURIComponent(targetUrl)}`
+        ];
+
+        let fetchSuccess = false;
+        for (const proxyUrl of proxies) {
+          try {
+            const response = await fetch(proxyUrl);
+            if (!response.ok) continue;
+            
+            const contentType = response.headers.get("content-type");
+            if (contentType && contentType.includes("application/json")) {
+              const data = await response.json();
+              htmlContent = data.contents;
+            } else {
+              htmlContent = await response.text();
+            }
+            
+            if (htmlContent) { fetchSuccess = true; break; }
+          } catch (e) { console.warn(e); }
+        }
+        if (!fetchSuccess) throw new Error("មិនអាចទាញយកបានទេ។ អាចមកពី Network របស់អ្នកមានបញ្ហា។");
+      } else {
+        htmlContent = inputSource;
+        if (!htmlContent.trim()) throw new Error("សូមបញ្ចូលកូដដើម (Page Source) ជាមុនសិន។");
+      }
+
+      // Check for iframes or direct m3u8 using the backend extractor
+      const parser = new DOMParser();
+      const doc = parser.parseFromString(htmlContent, "text/html");
+      const iframes = doc.querySelectorAll('.movieplay iframe, iframe, .embed-container iframe');
+      
+      let src = '';
+      if (iframes.length > 0) {
+        for (let i = 0; i < iframes.length; i++) {
+          const iframeSrc = (iframes[i] as HTMLIFrameElement).src;
+          if (iframeSrc && !iframeSrc.includes('googletagmanager') && !iframeSrc.includes('facebook')) {
+            src = iframeSrc;
+            break;
+          }
+        }
+      }
+
+      const targetExtractionUrl = src || (inputType === 'url' ? inputUrl : '');
+      if (targetExtractionUrl) {
+          const extractRes = await fetch(`${WEB_APP_URL}/api/extract-m3u8?url=${encodeURIComponent(targetExtractionUrl)}`);
+          if (extractRes.ok) {
+            const data = await extractRes.json();
+            if (data.m3u8Url) {
+              setExtractedM3u8(data.m3u8Url);
+              setStatus('success');
+              return;
+            }
+          }
+          if (src) {
+            setExtractedM3u8(src);
+            setStatus('success');
+            return;
+          }
+      }
+
+      // Direct m3u8 search
+      const m3u8Matches = [...htmlContent.matchAll(/(https?:\/\/[^\s"'<>]+?(\.m3u8|\.mp4|\/hlsplaylist\/|\/hls\/)[^\s"'<>]*)/gi)];
+      let foundM3u8 = null;
+      for (const match of m3u8Matches) {
+        const url = match[1];
+        if (!url.includes('ads') && !url.includes('videoAd')) {
+          foundM3u8 = url;
+          break;
+        }
+      }
+      if (foundM3u8) {
+        setExtractedM3u8(foundM3u8);
+        setStatus('success');
+      } else {
+        throw new Error("រកមិនឃើញលីងវីដេអូ ឬ Iframe នៅក្នុងកូដនេះទេ។");
+      }
+    } catch (err: any) {
+      setErrorMessage(err.message);
+      setStatus('error');
+    }
+  };
+
   useEffect(() => { localStorage.setItem('entertainment_mylist', JSON.stringify(myList)); }, [myList]);
 
   const toggleMyList = (id: string) => {
@@ -134,28 +257,67 @@ const MobileNetflixEntertainment: React.FC<MobileNetflixEntertainmentProps> = ({
   };
 
   const addMovieToStore = async () => {
-    if (!newMovie.Title || !newMovie.VideoURL) return;
+    if (!newMovie.Title) return;
     setIsSubmitting(true);
     try {
-        const response = await fetch(`${WEB_APP_URL}/api/movies`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify(newMovie)
-        });
-        if (response.ok) {
-            await refreshData();
-            setShowAddModal(false);
-            setNewMovie({ Type: 'long', Language: 'Khmer', Country: 'Cambodia' });
-            showNotification("ភាពយន្តត្រូវបានបន្ថែម", "success");
+        const token = localStorage.getItem('token');
+        
+        if (newMovie.Type === 'series') {
+          const validEpisodes = episodes.filter(ep => ep.title && ep.url);
+          if (validEpisodes.length === 0) {
+            showNotification("Please add at least one episode", "error");
+            setIsSubmitting(false);
+            return;
+          }
+
+          for (const ep of validEpisodes) {
+            const payload = { ...newMovie, Title: ep.title, VideoURL: ep.url };
+            await fetch(`${WEB_APP_URL}/api/admin/movies`, {
+                method: 'POST',
+                headers: { 
+                  'Content-Type': 'application/json',
+                  ...(token ? { 'Authorization': `Bearer ${token}` } : {})
+                },
+                body: JSON.stringify(payload)
+            });
+          }
+          showNotification("Episodes added successfully", "success");
+        } else {
+          if (!newMovie.VideoURL) {
+            showNotification("Please enter Video URL", "error");
+            setIsSubmitting(false);
+            return;
+          }
+          const response = await fetch(`${WEB_APP_URL}/api/admin/movies`, {
+              method: 'POST',
+              headers: { 
+                'Content-Type': 'application/json',
+                ...(token ? { 'Authorization': `Bearer ${token}` } : {})
+              },
+              body: JSON.stringify(newMovie)
+          });
+          if (response.ok) showNotification("Movie added successfully", "success");
         }
-    } catch (e) { console.error(e); } finally { setIsSubmitting(false); }
+        
+        await refreshData();
+        setShowAddModal(false);
+        setNewMovie({ Type: 'long', Language: 'Khmer', Country: 'Cambodia' });
+        setEpisodes([]);
+    } catch (e) { 
+      console.error(e); 
+      showNotification("Failed to add movies", "error");
+    } finally { 
+      setIsSubmitting(false); 
+    }
   };
 
   const deleteMovie = async (id: string) => {
     if (confirm('Delete this movie?')) {
         try {
-            const response = await fetch(`${WEB_APP_URL}/api/movies/${id}`, {
-                method: 'DELETE'
+            const token = localStorage.getItem('token');
+            const response = await fetch(`${WEB_APP_URL}/api/admin/movies/${id}`, {
+                method: 'DELETE',
+                headers: { ...(token ? { 'Authorization': `Bearer ${token}` } : {}) }
             });
             if (response.ok) {
                 await refreshData();
@@ -275,9 +437,14 @@ const MobileNetflixEntertainment: React.FC<MobileNetflixEntertainmentProps> = ({
            )}
            <button onClick={() => setShowSearch(!showSearch)} className="p-1.5"><Search className="w-5 h-5 opacity-40" /></button>
            {isAdmin && (
-              <button onClick={() => setShowAddModal(true)} className="p-1.5 bg-white/10 rounded-full border border-white/20">
-                <Plus className="w-5 h-5" />
-              </button>
+              <>
+                <button onClick={() => setShowProxy(!showProxy)} className={`p-1.5 rounded-full border transition-colors ${showProxy ? 'bg-red-600 border-red-500' : 'bg-white/10 border-white/20'}`}>
+                  <Server className="w-5 h-5" />
+                </button>
+                <button onClick={() => setShowAddModal(true)} className="p-1.5 bg-white/10 rounded-full border border-white/20">
+                  <Plus className="w-5 h-5" />
+                </button>
+              </>
            )}
            {!showSearch && (
              <div className="w-7 h-7 rounded-full bg-red-600 flex items-center justify-center text-[10px] font-bold">
@@ -286,6 +453,35 @@ const MobileNetflixEntertainment: React.FC<MobileNetflixEntertainmentProps> = ({
            )}
         </div>
       </nav>
+
+      {showProxy && isAdmin && (
+          <div className="m-4 bg-black/80 border border-red-600/30 rounded-2xl p-6 backdrop-blur-xl animate-[fade-in_0.3s_ease-out]">
+            <h2 className="text-xl font-black mb-4 flex items-center gap-3 italic"><Server className="w-6 h-6 text-red-600" /> HLS Proxy</h2>
+            <div className="grid grid-cols-2 gap-3 mb-4">
+              <button onClick={() => setInputType('url')} className={`p-3 rounded-xl border-2 transition-all font-black text-[10px] uppercase ${inputType === 'url' ? 'border-red-600 bg-red-600/10 text-red-600' : 'border-white/10'}`}>Direct URL</button>
+              <button onClick={() => setInputType('source')} className={`p-3 rounded-xl border-2 transition-all font-black text-[10px] uppercase ${inputType === 'source' ? 'border-red-600 bg-red-600/10 text-red-600' : 'border-white/10'}`}>HTML Source</button>
+            </div>
+            {inputType === 'url' ? (
+              <input type="text" value={inputUrl} onChange={(e) => setInputUrl(e.target.value)} className="w-full bg-white/5 border border-white/10 rounded-xl p-3 mb-4 outline-none focus:border-red-600 text-xs" placeholder="Paste link..." />
+            ) : (
+              <textarea value={inputSource} onChange={(e) => setInputSource(e.target.value)} className="w-full bg-white/5 border border-white/10 rounded-xl p-3 mb-4 outline-none focus:border-red-600 h-32 font-mono text-[10px]" placeholder="Paste HTML..." />
+            )}
+            <button onClick={handleFetchVideo} disabled={status === 'loading'} className="w-full bg-red-600 font-black py-3 rounded-xl transition-all shadow-xl active:scale-[0.98] text-xs uppercase tracking-widest">
+              {status === 'loading' ? <Loader2 className="w-5 h-5 animate-spin mx-auto" /> : 'Extract & Bypass'}
+            </button>
+            {extractedM3u8 && (
+              <div className="mt-6 p-4 bg-green-500/5 border border-green-500/20 rounded-xl">
+                <div className="flex justify-between mb-2 text-green-400 font-black text-[10px] uppercase tracking-widest">
+                   <span className="flex items-center gap-2"><CheckCircle2 className="w-4 h-4" /> Decrypted</span>
+                   <button onClick={() => { navigator.clipboard.writeText(extractedM3u8); showNotification("Copied!", "success"); }}><Copy className="w-4 h-4" /></button>
+                </div>
+                <div className="text-[9px] break-all font-mono text-gray-500 bg-black/40 p-3 rounded-lg mb-4 line-clamp-2">{extractedM3u8}</div>
+                <button onClick={() => { setNewMovie({ ...newMovie, VideoURL: extractedM3u8 }); setShowAddModal(true); setShowProxy(false); }} className="w-full bg-green-600 text-white font-black py-3 rounded-xl uppercase tracking-widest text-[10px]">Create Entry</button>
+              </div>
+            )}
+            {status === 'error' && <div className="mt-4 text-red-400 text-[10px] flex items-center gap-3 bg-red-600/10 p-3 rounded-xl"><AlertCircle className="w-4 h-4" /> {errorMessage}</div>}
+          </div>
+      )}
 
       {!searchQuery && (
         <div className="flex gap-6 px-4 py-4 text-xs font-bold uppercase opacity-60 overflow-x-auto no-scrollbar">
@@ -507,17 +703,48 @@ const MobileNetflixEntertainment: React.FC<MobileNetflixEntertainmentProps> = ({
               </div>
 
               <div>
-                <label className="text-[11px] text-gray-400 font-black uppercase mb-2 block tracking-widest">Video URL / iFrame</label>
-                <div className="relative">
-                  <input 
-                    type="text" 
-                    value={newMovie.VideoURL || ''} 
-                    onChange={(e) => setNewMovie({ ...newMovie, VideoURL: e.target.value })} 
-                    className="w-full bg-white/[0.03] border border-white/10 rounded-xl p-4 pl-12 outline-none focus:border-red-600 text-sm" 
-                    placeholder="m3u8 link or iframe"
-                  />
-                  <Film className="w-5 h-5 absolute left-4 top-1/2 -translate-y-1/2 text-gray-600" />
-                </div>
+                <label className="text-[11px] text-gray-400 font-black uppercase mb-2 block tracking-widest">Video URL / Episodes</label>
+                {newMovie.Type === 'series' ? (
+                  <div className="space-y-3">
+                    <div className="max-h-60 overflow-y-auto space-y-2 no-scrollbar">
+                      {episodes.map((ep, idx) => (
+                        <div key={idx} className="flex gap-2">
+                          <input 
+                            type="text" 
+                            value={ep.title} 
+                            onChange={(e) => handleEpisodeChange(idx, 'title', e.target.value)}
+                            className="w-1/3 bg-white/[0.03] border border-white/10 rounded-xl p-3 text-[10px] outline-none focus:border-red-600"
+                            placeholder="Ep Title"
+                          />
+                          <input 
+                            type="text" 
+                            value={ep.url} 
+                            onChange={(e) => handleEpisodeChange(idx, 'url', e.target.value)}
+                            className="flex-1 bg-white/[0.03] border border-white/10 rounded-xl p-3 text-[10px] outline-none focus:border-red-600"
+                            placeholder="Video URL"
+                          />
+                          <button onClick={() => handleRemoveEpisode(idx)} className="p-3 text-red-500 bg-red-500/10 rounded-xl">
+                            <Trash2 className="w-4 h-4" />
+                          </button>
+                        </div>
+                      ))}
+                    </div>
+                    <button onClick={handleAddEpisode} className="w-full py-3 border-2 border-dashed border-white/10 rounded-xl text-gray-400 text-[10px] font-bold uppercase tracking-widest">
+                      + Add Episode
+                    </button>
+                  </div>
+                ) : (
+                  <div className="relative group">
+                    <input 
+                      type="text" 
+                      value={newMovie.VideoURL || ''} 
+                      onChange={(e) => setNewMovie({ ...newMovie, VideoURL: e.target.value })} 
+                      className="w-full bg-white/[0.03] border border-white/10 rounded-xl p-4 pl-12 outline-none focus:border-red-600 text-sm" 
+                      placeholder="m3u8 link or iframe"
+                    />
+                    <Film className="w-5 h-5 absolute left-4 top-1/2 -translate-y-1/2 text-gray-600" />
+                  </div>
+                )}
               </div>
               
               <div>

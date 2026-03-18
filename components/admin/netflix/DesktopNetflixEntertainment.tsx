@@ -184,6 +184,25 @@ const DesktopNetflixEntertainment: React.FC<DesktopNetflixEntertainmentProps> = 
     Country: 'Cambodia'
   });
 
+  const [episodes, setEpisodes] = useState<{title: string, url: string}[]>([]);
+
+  useEffect(() => {
+    if (newMovie.Type === 'series' && episodes.length === 0) {
+      setEpisodes([{ title: `${newMovie.Title || 'Series'} - Ep 1`, url: '' }]);
+    }
+  }, [newMovie.Type]);
+
+  const handleAddEpisode = () => {
+    setEpisodes(prev => [...prev, { title: `${newMovie.Title || 'Series'} - Ep ${prev.length + 1}`, url: '' }]);
+  };
+
+  const handleRemoveEpisode = (index: number) => {
+    setEpisodes(prev => prev.filter((_, i) => i !== index));
+  };
+
+  const handleEpisodeChange = (index: number, field: 'title' | 'url', value: string) => {
+    setEpisodes(prev => prev.map((ep, i) => i === index ? { ...ep, [field]: value } : ep));
+  };
 
   const handleCopy = (text: string) => {
     navigator.clipboard.writeText(text);
@@ -365,25 +384,74 @@ const DesktopNetflixEntertainment: React.FC<DesktopNetflixEntertainmentProps> = 
   };
 
   const addMovieToStore = async () => {
-    if (!newMovie.Title || !newMovie.VideoURL) return;
+    if (!newMovie.Title) {
+      showNotification("Please enter a title", "error");
+      return;
+    }
+
     setIsSubmitting(true);
     try {
         const token = localStorage.getItem('token');
-        const response = await fetch(`${WEB_APP_URL}/api/admin/movies`, {
-            method: 'POST',
-            headers: { 
-              'Content-Type': 'application/json',
-              ...(token ? { 'Authorization': `Bearer ${token}` } : {})
-            },
-            body: JSON.stringify(newMovie)
-        });
-        if (response.ok) {
-            await refreshData();
-            setShowAddModal(false);
-            setNewMovie({ Type: 'long', Language: 'Khmer', Country: 'Cambodia' });
-            showNotification("ភាពយន្តត្រូវបានបន្ថែម", "success");
+        
+        if (newMovie.Type === 'series') {
+          // Validate episodes
+          const validEpisodes = episodes.filter(ep => ep.title && ep.url);
+          if (validEpisodes.length === 0) {
+            showNotification("Please add at least one episode with a URL", "error");
+            setIsSubmitting(false);
+            return;
+          }
+
+          // Bulk upload episodes
+          let successCount = 0;
+          for (const ep of validEpisodes) {
+            const payload = {
+              ...newMovie,
+              Title: ep.title,
+              VideoURL: ep.url,
+              SeriesKey: newMovie.SeriesKey || newMovie.Title // Use Title as default SeriesKey if empty
+            };
+            const response = await fetch(`${WEB_APP_URL}/api/admin/movies`, {
+                method: 'POST',
+                headers: { 
+                  'Content-Type': 'application/json',
+                  ...(token ? { 'Authorization': `Bearer ${token}` } : {})
+                },
+                body: JSON.stringify(payload)
+            });
+            if (response.ok) successCount++;
+          }
+          showNotification(`${successCount} episodes added successfully`, "success");
+        } else {
+          // Single movie upload
+          if (!newMovie.VideoURL) {
+            showNotification("Please enter a Video URL", "error");
+            setIsSubmitting(false);
+            return;
+          }
+          const response = await fetch(`${WEB_APP_URL}/api/admin/movies`, {
+              method: 'POST',
+              headers: { 
+                'Content-Type': 'application/json',
+                ...(token ? { 'Authorization': `Bearer ${token}` } : {})
+              },
+              body: JSON.stringify(newMovie)
+          });
+          if (response.ok) {
+              showNotification("Movie added successfully", "success");
+          }
         }
-    } catch (e) { console.error(e); } finally { setIsSubmitting(false); }
+        
+        await refreshData();
+        setShowAddModal(false);
+        setNewMovie({ Type: 'long', Language: 'Khmer', Country: 'Cambodia' });
+        setEpisodes([]);
+    } catch (e) { 
+      console.error(e); 
+      showNotification("Failed to add movies", "error");
+    } finally { 
+      setIsSubmitting(false); 
+    }
   };
 
   const deleteMovie = async (id: string) => {
@@ -609,13 +677,22 @@ const DesktopNetflixEntertainment: React.FC<DesktopNetflixEntertainmentProps> = 
         {continueWatchingMovies.length > 0 && !searchQuery && !selectedCategory && activeTab === 'home' && (
           <MovieRow title="Continue Watching" items={continueWatchingMovies} />
         )}
-        <MovieRow title={selectedCategory ? `${selectedCategory} Movies` : "Trending Now"} items={selectedCategory ? finalFilteredMovies : trendingMovies} />
-        {!selectedCategory && (
+        
+        {activeTab === 'home' && !selectedCategory && !searchQuery && (
           <>
-            <MovieRow title="Khmer Series" items={series} />
-            <MovieRow title="Feature Movies" items={longFilms} />
-            <MovieRow title="Short Films" items={shortFilms} />
+            <MovieRow title="Trending Now" items={trendingMovies} />
+            <MovieRow title="Khmer Series" items={series.filter(m => m.Country === 'Cambodia').slice(0, 10)} />
+            <MovieRow title="Trending Series" items={series.filter(m => m.Country !== 'Cambodia').slice(0, 10)} />
+            <MovieRow title="Feature Movies" items={longFilms.slice(0, 10)} />
+            <MovieRow title="Short Films" items={shortFilms.slice(0, 10)} />
           </>
+        )}
+
+        {(selectedCategory || searchQuery || activeTab !== 'home') && (
+          <MovieRow 
+            title={selectedCategory ? `${selectedCategory} Movies` : activeTab === 'tv' ? 'TV Series' : activeTab === 'movies' ? 'Feature Movies' : 'Results'} 
+            items={finalFilteredMovies} 
+          />
         )}
       </main>
 
@@ -812,18 +889,69 @@ const DesktopNetflixEntertainment: React.FC<DesktopNetflixEntertainmentProps> = 
                 />
               </div>
 
-              <div className="col-span-1 md:col-span-2">
-                <label className="text-[11px] text-gray-400 font-black uppercase mb-2 block tracking-widest">{t.m3u8_link}</label>
-                <div className="relative group">
+              {newMovie.Type === 'series' && (
+                <div className="col-span-1 md:col-span-2">
+                  <label className="text-[11px] text-gray-400 font-black uppercase mb-2 block tracking-widest text-red-500">Series ID / Group Key (បង្រួមភាគរឿង)</label>
                   <input 
                     type="text" 
-                    value={newMovie.VideoURL || ''} 
-                    onChange={(e) => setNewMovie({ ...newMovie, VideoURL: e.target.value })} 
-                    className="w-full bg-white/[0.03] border border-white/10 rounded-xl p-4 pl-12 outline-none focus:border-red-600 focus:ring-1 focus:ring-red-600/30 transition-all placeholder:text-gray-600" 
-                    placeholder="HLS/M3U8 or Embed URL" 
+                    value={newMovie.SeriesKey || ''} 
+                    onChange={(e) => setNewMovie({ ...newMovie, SeriesKey: e.target.value })} 
+                    className="w-full bg-red-600/5 border border-red-600/30 rounded-xl p-4 outline-none focus:border-red-600 transition-all placeholder:text-gray-700 font-bold" 
+                    placeholder="ឧទាហរណ៍៖ SQUID_GAME_S1" 
                   />
-                  <Film className="w-5 h-5 absolute left-4 top-1/2 -translate-y-1/2 text-gray-600 group-focus-within:text-red-500 transition-colors" />
+                  <p className="text-[9px] text-gray-500 mt-2 italic font-bold uppercase tracking-tighter">ចំណាំ៖ រាល់ភាគទាំងអស់នៃរឿងតែមួយ ត្រូវតែមាន Group Key ដូចគ្នាដើម្បីឱ្យប្រព័ន្ធស្គាល់ថាជាភាគបន្តគ្នា។</p>
                 </div>
+              )}
+
+              <div className="col-span-1 md:col-span-2">
+                <label className="text-[11px] text-gray-400 font-black uppercase mb-2 block tracking-widest">{t.m3u8_link}</label>
+                {newMovie.Type === 'series' ? (
+                  <div className="space-y-4">
+                    <div className="max-h-60 overflow-y-auto pr-2 space-y-3 no-scrollbar">
+                      {episodes.map((ep, idx) => (
+                        <div key={idx} className="flex gap-3 animate-[slide-in_0.2s_ease-out]">
+                          <input 
+                            type="text" 
+                            value={ep.title} 
+                            onChange={(e) => handleEpisodeChange(idx, 'title', e.target.value)}
+                            className="w-1/3 bg-white/[0.03] border border-white/10 rounded-xl p-3 text-xs outline-none focus:border-red-600 transition-all"
+                            placeholder="Ep Title"
+                          />
+                          <input 
+                            type="text" 
+                            value={ep.url} 
+                            onChange={(e) => handleEpisodeChange(idx, 'url', e.target.value)}
+                            className="flex-1 bg-white/[0.03] border border-white/10 rounded-xl p-3 text-xs outline-none focus:border-red-600 transition-all"
+                            placeholder="Video URL"
+                          />
+                          <button 
+                            onClick={() => handleRemoveEpisode(idx)}
+                            className="p-3 text-red-500 hover:bg-red-500/10 rounded-xl transition-colors"
+                          >
+                            <Trash2 className="w-4 h-4" />
+                          </button>
+                        </div>
+                      ))}
+                    </div>
+                    <button 
+                      onClick={handleAddEpisode}
+                      className="w-full py-3 border-2 border-dashed border-white/10 rounded-xl text-gray-400 hover:text-white hover:border-white/20 transition-all flex items-center justify-center gap-2 font-bold text-xs"
+                    >
+                      <Plus className="w-4 h-4" /> Add More Episode
+                    </button>
+                  </div>
+                ) : (
+                  <div className="relative group">
+                    <input 
+                      type="text" 
+                      value={newMovie.VideoURL || ''} 
+                      onChange={(e) => setNewMovie({ ...newMovie, VideoURL: e.target.value })} 
+                      className="w-full bg-white/[0.03] border border-white/10 rounded-xl p-4 pl-12 outline-none focus:border-red-600 focus:ring-1 focus:ring-red-600/30 transition-all placeholder:text-gray-600" 
+                      placeholder="HLS/M3U8 or Embed URL" 
+                    />
+                    <Film className="w-5 h-5 absolute left-4 top-1/2 -translate-y-1/2 text-gray-600 group-focus-within:text-red-500 transition-colors" />
+                  </div>
+                )}
               </div>
               
               <div className="col-span-1 md:col-span-2">

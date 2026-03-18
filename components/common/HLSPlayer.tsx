@@ -19,7 +19,9 @@ const HLSPlayer: React.FC<HLSPlayerProps> = ({ url, startTime = 0, onProgress, o
   
   const [finalUrl, setFinalUrl] = useState<string | null>(null);
   const [isExtracting, setIsExtracting] = useState(false);
+  const [extractStatus, setExtractStatus] = useState<string>('');
   const [error, setError] = useState<string | null>(null);
+  const [useIframeFallback, setUseIframeFallback] = useState<string | null>(null);
 
   useEffect(() => {
     const proxyBaseUrl = window.location.hostname === 'localhost' 
@@ -39,6 +41,10 @@ const HLSPlayer: React.FC<HLSPlayerProps> = ({ url, startTime = 0, onProgress, o
                           lowerUrl.includes('.mov') ||
                           lowerUrl.includes('.m4v');
     
+    // Reset states
+    setUseIframeFallback(null);
+    setError(null);
+
     // If it's already a proxy URL, use it directly
     if (url.includes('/api/proxy-')) {
         setFinalUrl(url.startsWith('http') ? url : `${proxyBaseUrl}${url}`);
@@ -60,9 +66,9 @@ const HLSPlayer: React.FC<HLSPlayerProps> = ({ url, startTime = 0, onProgress, o
         return;
     }
 
-    // Otherwise, try to extract it (Assume it might be an iframe or a page containing a video)
+    // Otherwise, try to extract it (Advanced Scraping)
     setIsExtracting(true);
-    setError(null);
+    setExtractStatus('កំពុងទម្លុះយកលីងវីដេអូ (Scraping)...');
     
     let urlToExtract = url;
     if (url.includes('<iframe')) {
@@ -82,14 +88,24 @@ const HLSPlayer: React.FC<HLSPlayerProps> = ({ url, startTime = 0, onProgress, o
         })
         .then(data => {
             if (data.m3u8Url) {
-                setFinalUrl(`${proxyBaseUrl}/api/proxy-m3u8?url=${encodeURIComponent(data.m3u8Url)}`);
+                const extracted = data.m3u8Url;
+                // Check if extracted is actually an m3u8 or video
+                const isStream = extracted.includes('.m3u8') || extracted.includes('.mp4') || extracted.includes('/hls/') || extracted.includes('/hlsplaylist/');
+                
+                if (isStream) {
+                    setExtractStatus('កំពុងរៀបចំការចាក់វីដេអូ (HLS Proxying)...');
+                    setFinalUrl(`${proxyBaseUrl}/api/proxy-m3u8?url=${encodeURIComponent(extracted)}`);
+                } else {
+                    // It's likely an iframe or player page, use fallback
+                    setUseIframeFallback(extracted);
+                }
             } else {
-                setError("Could not extract video stream.");
+                setError("មិនអាចទាញយកលីងវីដេអូបានទេ។");
             }
         })
         .catch(err => {
             console.error("Extraction error:", err);
-            setError("Failed to connect to video extractor.");
+            setError("ការតភ្ជាប់ទៅកាន់ប្រព័ន្ធ Scraper បរាជ័យ។");
         })
         .finally(() => {
             setIsExtracting(false);
@@ -97,10 +113,11 @@ const HLSPlayer: React.FC<HLSPlayerProps> = ({ url, startTime = 0, onProgress, o
   }, [url]);
 
   useEffect(() => {
-    if (!videoRef.current || !finalUrl) return;
+    if (!videoRef.current || !finalUrl || useIframeFallback) return;
 
     const video = videoRef.current;
-    const isM3u8 = finalUrl.includes('/api/proxy-m3u8');
+    // ... rest of HLS logic remains same ...
+
 
     const initPlyr = () => {
       if (playerRef.current) {
@@ -181,16 +198,36 @@ const HLSPlayer: React.FC<HLSPlayerProps> = ({ url, startTime = 0, onProgress, o
     return (
         <div className="w-full h-full bg-black flex flex-col items-center justify-center rounded-xl shadow-2xl">
             <Loader2 className="w-12 h-12 text-red-600 animate-spin mb-4" />
-            <p className="text-white font-medium">កំពុងរៀបចំវីដេអូ...</p>
+            <p className="text-white font-medium mb-1">{extractStatus}</p>
+            <p className="text-white/40 text-[10px] uppercase tracking-widest animate-pulse">Advanced Web Scraping Active</p>
         </div>
+    );
+  }
+
+  if (useIframeFallback) {
+    return (
+      <div className="w-full h-full bg-black flex items-center justify-center overflow-hidden rounded-xl shadow-2xl relative">
+        <iframe 
+          src={useIframeFallback} 
+          className="w-full h-full border-none" 
+          allowFullScreen 
+          sandbox="allow-scripts allow-same-origin allow-presentation"
+          referrerPolicy="no-referrer"
+        />
+        <div className="absolute bottom-4 left-4 flex items-center gap-2 bg-black/60 backdrop-blur-md px-3 py-1.5 rounded-full border border-white/10">
+           <div className="w-2 h-2 bg-yellow-500 rounded-full animate-pulse"></div>
+           <span className="text-[10px] font-bold text-white/80 uppercase tracking-widest">Iframe Fallback Mode</span>
+        </div>
+      </div>
     );
   }
 
   if (error && !finalUrl) {
     return (
         <div className="w-full h-full bg-black flex flex-col items-center justify-center rounded-xl shadow-2xl p-6 text-center">
-            <p className="text-red-500 mb-4">{error}</p>
-            <p className="text-gray-400 text-sm">សូមព្យាយាមម្ដងទៀត ឬប្រើ Link ផ្សេង។</p>
+            <AlertCircle className="w-10 h-10 text-red-600 mb-4" />
+            <p className="text-red-500 mb-2 font-bold">{error}</p>
+            <p className="text-gray-400 text-sm">សូមព្យាយាមម្ដងទៀត ឬប្រើប្រាស់ Link ផ្សេង។</p>
         </div>
     );
   }

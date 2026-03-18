@@ -53,7 +53,7 @@ const SYSTEM_STRUCTURE = {
   "IncentiveResults": ["Timestamp", "ProjectID", "UserName", "TotalOrders", "TotalRevenue", "CalculatedValue", "IsCustom"],
 
   // ប្រព័ន្ធកម្សាន្ត (Entertainment)
-  "Movies": ["ID", "Title", "Description", "Thumbnail", "VideoURL", "Type", "Language", "Country", "Category", "AddedAt"],
+  "Movies": ["ID", "Title", "Description", "Thumbnail", "VideoURL", "Type", "Language", "Country", "Category", "SeriesKey", "AddedAt"],
 
   // ឯកសារយោង និង Chat
   "ChatMessages": ["Timestamp", "UserName", "Receiver", "MessageType", "Content", "FileID"],
@@ -167,6 +167,3 @@ function setupDefaultSettings(ss) {
     }
   });
 }
-
-
-ចុះបើពិនិត្យលើ File (code_gs_api.gs)វិញ?

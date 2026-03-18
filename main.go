@@ -104,6 +104,7 @@ type Movie struct {
 	Language    string `gorm:"column:language" json:"Language"`
 	Country     string `gorm:"column:country" json:"Country"`
 	Category    string `gorm:"column:category" json:"Category"`
+	SeriesKey   string `gorm:"column:series_key" json:"SeriesKey"`
 	AddedAt     string `gorm:"column:added_at" json:"AddedAt"`
 }
 type Store struct {
@@ -3179,38 +3180,152 @@ func handleExtractM3U8(c *gin.Context) {
 
 	var m3u8URL string
 
-	// Advanced Scraping: Look for playlist variables (model from zip)
-	playlistRe := regexp.MustCompile(`var playlist = (\[.*?\]);`)
-	playlistMatch := playlistRe.FindStringSubmatch(html)
-	if len(playlistMatch) > 1 {
-		// Try to find file in the JS array
+	// 1. Check for playlists array (model from zip)
+	constPlaylistsRe := regexp.MustCompile(`const playlists = (\[.*?\]);`)
+	constPlaylistsMatch := constPlaylistsRe.FindStringSubmatch(html)
+	if len(constPlaylistsMatch) > 1 {
 		fileRe := regexp.MustCompile(`file:\s*["']([^"']+(\.m3u8|\.mp4|/hlsplaylist/|/hls/)[^"']*)["']`)
-		fileMatch := fileRe.FindStringSubmatch(playlistMatch[1])
+		fileMatch := fileRe.FindStringSubmatch(constPlaylistsMatch[1])
 		if len(fileMatch) > 1 {
 			m3u8URL = fileMatch[1]
 		}
 	}
 
+	// 2. Advanced Scraping: Look for playlist variables (model from zip)
 	if m3u8URL == "" {
-		// Try playlist regex with broad HLS patterns
+		playlistRe := regexp.MustCompile(`var playlist = (\[.*?\]);`)
+		playlistMatch := playlistRe.FindStringSubmatch(html)
+		if len(playlistMatch) > 1 {
+			fileRe := regexp.MustCompile(`file:\s*["']([^"']+(\.m3u8|\.mp4|/hlsplaylist/|/hls/)[^"']*)["']`)
+			fileMatch := fileRe.FindStringSubmatch(playlistMatch[1])
+			if len(fileMatch) > 1 {
+				m3u8URL = fileMatch[1]
+			}
+		}
+	}
+
+	// 3. Dooplay Player Option Extraction
+	if m3u8URL == "" && strings.Contains(html, "dooplay_player_option") {
+		// Look for dtAjax
+		dtAjaxRe := regexp.MustCompile(`var dtAjax = (\{.*?\});`)
+		dtAjaxMatch := dtAjaxRe.FindStringSubmatch(html)
+		if len(dtAjaxMatch) > 1 {
+			var dtAjax struct {
+				PlayerAPI string `json:"player_api"`
+				URL       string `json:"url"`
+			}
+			json.Unmarshal([]byte(dtAjaxMatch[1]), &dtAjax)
+
+			// Look for player options
+			optionRe := regexp.MustCompile(`class=['"]dooplay_player_option['"].*?data-post=['"](\d+)['"].*?data-nume=['"](\w+)['"].*?data-type=['"](\w+)['"]`)
+			options := optionRe.FindAllStringSubmatch(html, -1)
+
+			for _, opt := range options {
+				if opt[2] == "trailer" {
+					continue
+				}
+				postID, nume, dtype := opt[1], opt[2], opt[3]
+				var apiURL string
+				isAjax := false
+
+				if dtAjax.PlayerAPI != "" {
+					apiURL = dtAjax.PlayerAPI + postID + "/" + dtype + "/" + nume
+				} else if dtAjax.URL != "" {
+					apiURL = dtAjax.URL + "?action=doo_player_ajax&post=" + postID + "&nume=" + nume + "&type=" + dtype
+					isAjax = true
+				}
+
+				if apiURL != "" {
+					if strings.HasPrefix(apiURL, "/") {
+						apiURL = u.Scheme + "://" + u.Host + apiURL
+					}
+
+					var apiReq *http.Request
+					if isAjax {
+						apiReq, _ = http.NewRequest("POST", apiURL, nil)
+					} else {
+						apiReq, _ = http.NewRequest("GET", apiURL, nil)
+					}
+					apiReq.Header.Set("Referer", targetURL)
+					apiReq.Header.Set("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36")
+					apiReq.Header.Set("X-Requested-With", "XMLHttpRequest")
+
+					apiResp, err := client.Do(apiReq)
+					if err == nil {
+						apiBody, _ := io.ReadAll(apiResp.Body)
+						apiResp.Body.Close()
+						var result struct {
+							EmbedURL string `json:"embed_url"`
+						}
+						json.Unmarshal(apiBody, &result)
+						if result.EmbedURL != "" {
+							// If it's an iframe, extract src
+							iframeSrcRe := regexp.MustCompile(`src=['"]([^'"]+)['"]`)
+							iframeSrcMatch := iframeSrcRe.FindStringSubmatch(result.EmbedURL)
+							if len(iframeSrcMatch) > 1 {
+								m3u8URL = iframeSrcMatch[1]
+							} else {
+								m3u8URL = result.EmbedURL
+							}
+							break
+						}
+					}
+				}
+			}
+		}
+	}
+
+	// 4. Iframe Extraction (Recursive-like search)
+	if m3u8URL == "" {
+		iframeRe := regexp.MustCompile(`(?i)<iframe.*?src=["']([^"']+)["']`)
+		iframes := iframeRe.FindAllStringSubmatch(html, -1)
+		for _, iframe := range iframes {
+			src := iframe[1]
+			if strings.Contains(src, "googletagmanager") || strings.Contains(src, "facebook") || strings.Contains(src, "plugins") {
+				continue
+			}
+			// If it's already a .m3u8, we found it
+			if strings.Contains(src, ".m3u8") || strings.Contains(src, "/hlsplaylist/") || strings.Contains(src, "/hls/") {
+				m3u8URL = src
+				break
+			}
+			// Otherwise, this is a potential candidate for further extraction
+			// But for now, let's just use it as the result and let the client-side HLSPlayer handle the next level if needed
+			m3u8URL = src
+			break
+		}
+	}
+
+	// 5. Final Regex Search (Improved)
+	if m3u8URL == "" {
+		// Try playlist regex with broad HLS patterns, ignoring ads
 		re := regexp.MustCompile(`(["'])(https?://[^"']+(\.m3u8|\.mp4|/hlsplaylist/|/hls/)[^"']*)\1`)
-		match := re.FindStringSubmatch(html)
-		if len(match) > 2 {
-			m3u8URL = match[2]
+		matches := re.FindAllStringSubmatch(html, -1)
+		for _, match := range matches {
+			found := match[2]
+			if !strings.Contains(found, "ads") && !strings.Contains(found, "videoAd") {
+				m3u8URL = found
+				break
+			}
 		}
 	}
 
 	if m3u8URL == "" {
 		// Try simple regex as fallback
 		reSimple := regexp.MustCompile(`https?://[^\s"'<>]+?(\.m3u8|\.mp4|/hlsplaylist/|/hls/)[^\s"'<>]*`)
-		m3u8URL = reSimple.FindString(html)
+		matches := reSimple.FindAllString(html, -1)
+		for _, found := range matches {
+			if !strings.Contains(found, "ads") && !strings.Contains(found, "videoAd") {
+				m3u8URL = found
+				break
+			}
+		}
 	}
 
 	if m3u8URL != "" {
 		if strings.HasPrefix(m3u8URL, "//") {
 			m3u8URL = "https:" + m3u8URL
 		} else if !strings.HasPrefix(m3u8URL, "http") {
-			// Resolve relative URL
 			m3u8URL = resolveURL(targetURL, m3u8URL)
 		}
 		c.JSON(http.StatusOK, gin.H{"m3u8Url": m3u8URL})
@@ -3532,6 +3647,7 @@ func handleCreateMovie(c *gin.Context) {
 				"Language":    m.Language,
 				"Country":     m.Country,
 				"Category":    m.Category,
+				"SeriesKey":   m.SeriesKey,
 				"AddedAt":     m.AddedAt,
 			},
 		}
