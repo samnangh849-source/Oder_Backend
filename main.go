@@ -3194,33 +3194,40 @@ func handleProxyM3U8(c *gin.Context) {
 		return
 	}
 
-	isMasterPlaylist := false
+	var rewrittenLines []string
 	var lines []string
+	isMasterPlaylist := false
 	scanner := bufio.NewScanner(resp.Body)
 	for scanner.Scan() {
 		line := strings.TrimSpace(scanner.Text())
+		if line == "" {
+			rewrittenLines = append(rewrittenLines, "")
+			continue
+		}
 		if strings.Contains(line, "#EXT-X-STREAM-INF") {
 			isMasterPlaylist = true
 		}
 		lines = append(lines, line)
 	}
 
-	var rewrittenLines []string
 	for _, line := range lines {
 		if line == "" {
 			rewrittenLines = append(rewrittenLines, "")
 			continue
 		}
+
 		if strings.HasPrefix(line, "#") {
-			// Handle URI in tags
-			if strings.Contains(line, "URI=\"") {
-				re := regexp.MustCompile(`URI="([^"]+)"`)
+			// Rewrite URIs in tags like #EXT-X-KEY:URI="...", #EXT-X-MEDIA:URI="...", etc.
+			if strings.Contains(line, "URI=") {
+				re := regexp.MustCompile(`URI="?([^",\s]+)"?`)
 				newLine := re.ReplaceAllStringFunc(line, func(match string) string {
 					subMatch := re.FindStringSubmatch(match)
 					if len(subMatch) > 1 {
 						uri := subMatch[1]
 						absURL := resolveURL(m3u8URL, uri)
-						isPlaylist := strings.Contains(absURL, ".m3u8") || isMasterPlaylist
+						
+						// Check if it's a playlist or a segment
+						isPlaylist := strings.Contains(absURL, ".m3u8")
 						endpoint := "/api/proxy-ts"
 						if isPlaylist {
 							endpoint = "/api/proxy-m3u8"
@@ -3236,7 +3243,7 @@ func handleProxyM3U8(c *gin.Context) {
 			continue
 		}
 
-		// URL line
+		// It's a URL line (segment or sub-playlist)
 		absURL := resolveURL(m3u8URL, line)
 		if isMasterPlaylist || strings.Contains(absURL, ".m3u8") {
 			rewrittenLines = append(rewrittenLines, fmt.Sprintf("/api/proxy-m3u8?url=%s", url.QueryEscape(absURL)))
@@ -3464,6 +3471,118 @@ func handleDeleteMovie(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{"status": "success", "message": "បានលុបភាពយន្តដោយជោគជ័យ"})
 }
 
+// =========================================================================
+// GOOGLE SHEETS WEBHOOK (Real-time Sync Sheet -> DB)
+// =========================================================================
+
+func handleSheetsWebhook(c *gin.Context) {
+	var req struct {
+		Secret    string                 `json:"secret"`
+		SheetName string                 `json:"sheetName"`
+		RowData   map[string]interface{} `json:"rowData"`
+		Action    string                 `json:"action"` // "update" or "delete"
+	}
+
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(400, gin.H{"status": "error", "message": "Invalid format"})
+		return
+	}
+
+	if req.Secret != appsScriptSecret {
+		c.JSON(401, gin.H{"status": "error", "message": "Unauthorized"})
+		return
+	}
+
+	tableName := getTableName(req.SheetName)
+	if tableName == "" {
+		c.JSON(400, gin.H{"status": "error", "message": "Unknown sheet"})
+		return
+	}
+
+	mappedData := make(map[string]interface{})
+	var pkCol string
+	var pkVal interface{}
+
+	// Identify Primary Key based on SheetName
+	pkName := "ID"
+	if req.SheetName == "Users" {
+		pkName = "UserName"
+	} else if req.SheetName == "Stores" {
+		pkName = "StoreName"
+	} else if req.SheetName == "Products" {
+		pkName = "Barcode"
+	} else if req.SheetName == "ShippingMethods" {
+		pkName = "MethodName"
+	} else if req.SheetName == "Movies" {
+		pkName = "ID"
+	} else if req.SheetName == "AllOrders" {
+		pkName = "Order ID"
+	}
+
+	for k, v := range req.RowData {
+		dbCol := mapToDBColumn(k)
+		if k == pkName {
+			pkCol = dbCol
+			pkVal = v
+			continue
+		}
+		
+		// Skip empty or nil values to avoid overwriting with blanks
+		if v == nil || v == "" {
+			continue
+		}
+
+		// Handle Numeric fields
+		if isNumericHeader(k) {
+			if s, ok := v.(string); ok {
+				if f, err := strconv.ParseFloat(s, 64); err == nil {
+					mappedData[dbCol] = f
+				}
+			} else {
+				mappedData[dbCol] = v
+			}
+		} else if isBoolHeader(k) {
+			if s, ok := v.(string); ok {
+				mappedData[dbCol] = strings.ToUpper(s) == "TRUE"
+			} else {
+				mappedData[dbCol] = v
+			}
+		} else {
+			mappedData[dbCol] = fmt.Sprintf("%v", v)
+		}
+	}
+
+	if pkCol == "" || pkVal == nil {
+		c.JSON(400, gin.H{"status": "error", "message": "Missing primary key"})
+		return
+	}
+
+	if req.Action == "delete" {
+		DB.Table(tableName).Where(pkCol+" = ?", pkVal).Delete(nil)
+	} else {
+		// UPSERT logic: Try to update, if not found (or affected rows 0), could potentially create
+		result := DB.Table(tableName).Where(pkCol+" = ?", pkVal).Updates(mappedData)
+		if result.Error != nil {
+			c.JSON(500, gin.H{"status": "error", "message": result.Error.Error()})
+			return
+		}
+		
+		// If it's a new row (not found), we could Create it here, 
+		// but typically we'll rely on the existing migration for bulk or wait for specific trigger.
+	}
+
+	// Broadcast update to all connected clients
+	event, _ := json.Marshal(map[string]interface{}{
+		"type": "sheet_webhook_sync",
+		"sheetName": req.SheetName,
+		"action": req.Action,
+		"pk": pkVal,
+	})
+	hub.broadcast <- event
+
+	c.JSON(200, gin.H{"status": "success"})
+}
+
 func main() {
 	port := os.Getenv("PORT")
 	if port == "" {
@@ -3502,6 +3621,7 @@ func main() {
 	api.GET("/proxy-ts", handleProxyTS)
 	api.GET("/proxy-video", handleProxyVideo)
 	api.Any("/fetch-json", handleFetchJSON)
+	api.POST("/webhook/sheets-sync", handleSheetsWebhook)
 
 	protected := api.Group("/")
 	protected.Use(AuthMiddleware())

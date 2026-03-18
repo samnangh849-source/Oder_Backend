@@ -1,4 +1,4 @@
-package main
+package tools
 
 import (
 	"fmt"
@@ -10,12 +10,12 @@ import (
 	"gorm.io/gorm"
 )
 
-type Order struct {
+type PerformanceOrder struct {
 	OrderID   string `gorm:"primaryKey;column:order_id"`
 	Timestamp string `gorm:"index;column:timestamp"`
 }
 
-func main() {
+func CheckDBPerformance() {
 	dsn := os.Getenv("DATABASE_URL")
 	if dsn == "" {
 		// Try to find DSN in main.go or environment
@@ -28,11 +28,11 @@ func main() {
 	}
 
 	var count int64
-	db.Model(&Order{}).Count(&count)
+	db.Model(&PerformanceOrder{}).Count(&count)
 	fmt.Printf("Total orders: %d\n", count)
 
 	start := time.Now()
-	var orders []Order
+	var orders []PerformanceOrder
 	result := db.Order("timestamp desc").Find(&orders)
 	elapsed := time.Since(start)
 

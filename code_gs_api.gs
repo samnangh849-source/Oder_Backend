@@ -753,7 +753,7 @@ function createJsonResponse(data, code = 200) {
 
 function appendRowMapped(sheet, dataMap) {
   const headers = sheet.getRange(1, 1, 1, sheet.getLastColumn()).getValues()[0];
-  
+
   // ✅ FIX: បំប្លែង Key ទាំងអស់ពី Backend ឱ្យទៅជាអក្សរតូច (Normalize) មុននឹងទាញយក
   const normalizedData = {};
   for (const k in dataMap) {
@@ -766,4 +766,72 @@ function appendRowMapped(sheet, dataMap) {
     return key.includes("phone") ? "'" + (val || "") : (val !== undefined ? val : "");
   });
   sheet.appendRow(row);
+}
+
+// =========================================================================
+// REAL-TIME SYNC: SHEET -> DB (WEBHOOK)
+// =========================================================================
+
+/**
+ * មុខងារសម្រាប់កំណត់ URL របស់ Backend (ត្រូវរត់មុខងារនេះម្ដងសិន)
+ */
+function setupWebhook() {
+  const ui = SpreadsheetApp.getUi();
+  const response = ui.prompt('🔗 កំណត់ URL របស់ Backend', 'សូមបញ្ចូល URL របស់ Backend របស់អ្នក (ឧទាហរណ៍: https://your-app.com):', ui.ButtonSet.OK_CANCEL);
+
+  if (response.getSelectedButton() == ui.Button.OK) {
+    const url = response.getResponseText().replace(/\/$/, ""); // លុប / នៅខាងចុង
+    PropertiesService.getScriptProperties().setProperty('BACKEND_URL', url);
+    ui.alert('✅ បានរក្សាទុក URL ជោគជ័យ!');
+  }
+}
+
+/**
+ * Trigger ពេលមានការកែប្រែលើ Sheet (ប្រើ Installable Trigger "onChange" ឬ "onEdit")
+ * សម្គាល់៖ onEdit ធម្មតាមិនអាចប្រើ UrlFetchApp បានទេ ត្រូវបង្កើត "Installable Trigger" ក្នុង Apps Script Console
+ */
+function handleSheetEdit(e) {
+  const sheet = e.range.getSheet();
+  const sheetName = sheet.getName();
+  const row = e.range.getRow();
+
+  // បញ្ជី Sheet ដែលអនុញ្ញាតឱ្យ Sync ទៅ Database វិញ
+  const syncSheets = [
+    CONFIG.MOVIES_SHEET, 
+    CONFIG.USERS_SHEET, 
+    CONFIG.STORES_SHEET, 
+    CONFIG.PRODUCTS_SHEET,
+    CONFIG.SHIPPING_METHODS_SHEET
+  ];
+
+  if (!syncSheets.includes(sheetName) || row === 1) return;
+
+  const backendUrl = PropertiesService.getScriptProperties().getProperty('BACKEND_URL');
+  if (!backendUrl) return;
+
+  const headers = sheet.getRange(1, 1, 1, sheet.getLastColumn()).getValues()[0];
+  const rowDataValues = sheet.getRange(row, 1, 1, sheet.getLastColumn()).getValues()[0];
+
+  const rowData = {};
+  headers.forEach((h, i) => {
+    if (h) rowData[h] = rowDataValues[i];
+  });
+
+  const payload = {
+    secret: SCRIPT_SECRET_KEY,
+    sheetName: sheetName,
+    rowData: rowData,
+    action: "update"
+  };
+
+  try {
+    UrlFetchApp.fetch(`${backendUrl}/api/webhook/sheets-sync`, {
+      method: "post",
+      contentType: "application/json",
+      payload: JSON.stringify(payload),
+      muteHttpExceptions: true
+    });
+  } catch (err) {
+    console.error("Webhook Error: " + err.message);
+  }
 }
