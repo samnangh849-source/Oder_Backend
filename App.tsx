@@ -143,7 +143,11 @@ const AppContent: React.FC = () => {
                     }
                     setCurrentUser(userWithPerms);
                     fetchData(false);
-                    setAppState('role_selection');
+                    
+                    const currentView = new URLSearchParams(window.location.search).get('view');
+                    if (currentView !== 'series_player' && currentView !== 'watch' && currentView !== 'confirm_delivery' && currentView !== 'entertainment') {
+                        setAppState('role_selection');
+                    }
                 } else {
                     await fetchData(false);
                 }

@@ -46,6 +46,24 @@ const HLSPlayer: React.FC<HLSPlayerProps> = ({ url, startTime = 0, onProgress, o
 
     if (!url) return;
 
+    // Google Drive direct iframe support
+    if (url.includes('drive.google.com') || url.includes('docs.google.com/file')) {
+        let fileId = null;
+        if (url.includes('/file/d/')) {
+            const match = url.match(/\/d\/([a-zA-Z0-9_-]+)/);
+            if (match) fileId = match[1];
+        } else if (url.includes('id=')) {
+            const match = url.match(/[?&]id=([a-zA-Z0-9_-]+)/);
+            if (match) fileId = match[1];
+        }
+        
+        if (fileId) {
+            setUseIframeFallback(`https://drive.google.com/file/d/${fileId}/preview`);
+            setIsExtracting(false);
+            return;
+        }
+    }
+
     // If it's already a proxy URL, use it directly
     if (url.includes('/api/proxy-')) {
         setFinalUrl(url.startsWith('http') ? url : `${proxyBaseUrl}${url}`);
@@ -90,12 +108,13 @@ const HLSPlayer: React.FC<HLSPlayerProps> = ({ url, startTime = 0, onProgress, o
         .then(data => {
             if (data.m3u8Url) {
                 const extracted = data.m3u8Url;
+                const referer = data.referer ? `&referer=${encodeURIComponent(data.referer)}` : '';
                 // Check if extracted is actually an m3u8 or video
                 const isStream = extracted.includes('.m3u8') || extracted.includes('.mp4') || extracted.includes('/hls/') || extracted.includes('/hlsplaylist/');
                 
                 if (isStream) {
                     setExtractStatus('កំពុងរៀបចំការចាក់វីដេអូ (HLS Proxying)...');
-                    setFinalUrl(`${proxyBaseUrl}/api/proxy-m3u8?url=${encodeURIComponent(extracted)}`);
+                    setFinalUrl(`${proxyBaseUrl}/api/proxy-m3u8?url=${encodeURIComponent(extracted)}${referer}`);
                 } else {
                     // It's likely an iframe or player page, use fallback
                     setUseIframeFallback(extracted);

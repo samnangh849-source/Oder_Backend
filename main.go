@@ -3327,8 +3327,59 @@ func handleExtractM3U8(c *gin.Context) {
 				m3u8URL = src
 				break
 			}
-			// Otherwise, this is a potential candidate for further extraction
-			// But for now, let's just use it as the result and let the client-side HLSPlayer handle the next level if needed
+			
+			// Deep scrape the iframe (Advanced iframe extraction)
+			iframeReq, _ := http.NewRequest("GET", src, nil)
+			iframeReq.Header.Set("Referer", targetURL)
+			iframeReq.Header.Set("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36")
+			
+			iframeResp, err := client.Do(iframeReq)
+			if err == nil {
+				iframeBody, _ := io.ReadAll(iframeResp.Body)
+				iframeResp.Body.Close()
+				iframeHtml := string(iframeBody)
+				
+				// Standard URL regex
+				re := regexp.MustCompile(`(["'])(https?://[^"']+(\.m3u8|\.mp4|/hlsplaylist/|/hls/)[^"']*)\1`)
+				matches := re.FindAllStringSubmatch(iframeHtml, -1)
+				for _, match := range matches {
+					found := strings.ReplaceAll(match[2], "\\/", "/")
+					if !strings.Contains(found, "ads") && !strings.Contains(found, "videoAd") {
+						m3u8URL = found
+						targetURL = src // Update referer for the proxy to use the iframe's URL
+						break
+					}
+				}
+				
+				// Special JS file variables
+				if m3u8URL == "" {
+					fileRe := regexp.MustCompile(`file:\s*["']([^"']+(\.m3u8|\.mp4)[^"']*)["']`)
+					fileMatch := fileRe.FindStringSubmatch(iframeHtml)
+					if len(fileMatch) > 1 {
+						m3u8URL = strings.ReplaceAll(fileMatch[1], "\\/", "/")
+						targetURL = src
+					}
+				}
+                
+                // HTML5 Source tag
+                if m3u8URL == "" {
+                    sourceRe := regexp.MustCompile(`(?i)<source.*?src=["']([^"']+(\.m3u8|\.mp4)[^"']*)["']`)
+                    sourceMatch := sourceRe.FindStringSubmatch(iframeHtml)
+                    if len(sourceMatch) > 1 {
+                        m3u8URL = strings.ReplaceAll(sourceMatch[1], "\\/", "/")
+                        targetURL = src
+                    }
+                }
+			}
+			
+			if m3u8URL != "" {
+				if !strings.HasPrefix(m3u8URL, "http") {
+					m3u8URL = resolveURL(src, m3u8URL)
+				}
+				break
+			}
+			
+			// Ultimately, fallback to iframe src
 			m3u8URL = src
 			break
 		}
@@ -3366,7 +3417,10 @@ func handleExtractM3U8(c *gin.Context) {
 		} else if !strings.HasPrefix(m3u8URL, "http") {
 			m3u8URL = resolveURL(targetURL, m3u8URL)
 		}
-		c.JSON(http.StatusOK, gin.H{"m3u8Url": m3u8URL})
+		c.JSON(http.StatusOK, gin.H{
+			"m3u8Url": m3u8URL,
+			"referer": targetURL,
+		})
 		return
 	}
 
@@ -3388,7 +3442,14 @@ func handleProxyM3U8(c *gin.Context) {
 
 	client := &http.Client{Timeout: 10 * time.Second}
 	req, _ := http.NewRequest("GET", m3u8URL, nil)
-	req.Header.Set("Referer", u.Scheme+"://"+u.Host)
+	
+	targetReferer := c.Query("referer")
+	if targetReferer != "" {
+		req.Header.Set("Referer", targetReferer)
+	} else {
+		req.Header.Set("Referer", u.Scheme+"://"+u.Host)
+	}
+	
 	req.Header.Set("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36")
 
 	resp, err := client.Do(req)
@@ -3446,7 +3507,12 @@ func handleProxyM3U8(c *gin.Context) {
 						if isPlaylist {
 							endpoint = "/api/proxy-m3u8"
 						}
-						return fmt.Sprintf(`URI="%s?url=%s"`, endpoint, url.QueryEscape(absURL))
+						
+						refererParam := ""
+						if targetReferer != "" {
+							refererParam = fmt.Sprintf("&referer=%s", url.QueryEscape(targetReferer))
+						}
+						return fmt.Sprintf(`URI="%s?url=%s%s"`, endpoint, url.QueryEscape(absURL), refererParam)
 					}
 					return match
 				})
@@ -3459,10 +3525,16 @@ func handleProxyM3U8(c *gin.Context) {
 
 		// It's a URL line (segment or sub-playlist)
 		absURL := resolveURL(m3u8URL, line)
+		
+		refererParam := ""
+		if targetReferer != "" {
+			refererParam = fmt.Sprintf("&referer=%s", url.QueryEscape(targetReferer))
+		}
+		
 		if isMasterPlaylist || strings.Contains(strings.ToLower(absURL), ".m3u8") || strings.Contains(absURL, "/hlsplaylist/") || strings.Contains(absURL, "/hls/") {
-			rewrittenLines = append(rewrittenLines, fmt.Sprintf("/api/proxy-m3u8?url=%s", url.QueryEscape(absURL)))
+			rewrittenLines = append(rewrittenLines, fmt.Sprintf("/api/proxy-m3u8?url=%s%s", url.QueryEscape(absURL), refererParam))
 		} else {
-			rewrittenLines = append(rewrittenLines, fmt.Sprintf("/api/proxy-ts?url=%s", url.QueryEscape(absURL)))
+			rewrittenLines = append(rewrittenLines, fmt.Sprintf("/api/proxy-ts?url=%s%s", url.QueryEscape(absURL), refererParam))
 		}
 	}
 
@@ -3492,7 +3564,13 @@ func handleProxyTS(c *gin.Context) {
 		req.Header.Set("Range", rangeHeader)
 	}
 
-	req.Header.Set("Referer", u.Scheme+"://"+u.Host)
+	targetReferer := c.Query("referer")
+	if targetReferer != "" {
+		req.Header.Set("Referer", targetReferer)
+	} else {
+		req.Header.Set("Referer", u.Scheme+"://"+u.Host)
+	}
+	
 	req.Header.Set("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36")
 
 	resp, err := client.Do(req)
