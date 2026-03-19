@@ -65,9 +65,13 @@ const LongFilmPlayerPage: React.FC = () => {
 
   const handleShare = () => {
     if (!currentMovie) return;
-    const shareUrl = `${window.location.origin}${window.location.pathname}?view=watch&movie=${currentMovie.ID}`;
-    navigator.clipboard.writeText(shareUrl);
-    showNotification("Link copied! Guests can watch this movie without login.", "success");
+    const shareUrl = `${window.location.origin}${window.location.pathname}?view=long_player&movie=${currentMovie.ID}`;
+    if (navigator.share) {
+      navigator.share({ title: currentMovie.Title, url: shareUrl }).catch(() => {});
+    } else {
+      navigator.clipboard.writeText(shareUrl);
+      showNotification("Link copied! Guests can watch this movie without login.", "success");
+    }
   };
 
   if (!currentMovie) {
@@ -114,6 +118,7 @@ const LongFilmPlayerPage: React.FC = () => {
             url={currentMovie.VideoURL} 
             startTime={startTime} 
             onProgress={(time, duration) => saveProgress(currentMovie.ID, time, duration)}
+            hideStatusBar={true}
           />
         </div>
 
@@ -121,9 +126,9 @@ const LongFilmPlayerPage: React.FC = () => {
         <div className="grid grid-cols-1 lg:grid-cols-12 gap-10">
           <div className="lg:col-span-8 space-y-8">
             <div className="flex flex-wrap gap-4 items-center">
-               <div className="bg-red-600 px-3 py-1 rounded text-[10px] font-black uppercase">New</div>
-               <div className="flex items-center gap-2 text-green-400 font-bold text-sm"><Star className="w-4 h-4 fill-current" /> 9.8 Score</div>
-               <div className="text-gray-400 text-sm font-bold">{currentMovie.AddedAt ? new Date(currentMovie.AddedAt).getFullYear() : '2024'}</div>
+               <div className="bg-red-600 px-3 py-1 rounded text-[10px] font-black uppercase">{currentMovie.Category || 'Movie'}</div>
+               <div className="flex items-center gap-2 text-green-400 font-bold text-sm"><Star className="w-4 h-4 fill-current" /> {currentMovie.Score || 'N/A'} Score</div>
+               <div className="text-gray-400 text-sm font-bold">{currentMovie.AddedAt ? new Date(currentMovie.AddedAt).getFullYear() : '—'}</div>
                <div className="border border-white/20 px-2 py-0.5 rounded text-[10px] uppercase font-bold text-gray-400">{currentMovie.Country || 'World'}</div>
             </div>
 
@@ -138,8 +143,8 @@ const LongFilmPlayerPage: React.FC = () => {
                 {[
                   { icon: Globe, label: 'Country', value: currentMovie.Country },
                   { icon: Tag, label: 'Category', value: currentMovie.Category },
-                  { icon: Clock, label: 'Quality', value: '4K Ultra HD' },
-                  { icon: Eye, label: 'Views', value: '1.2M+' }
+                  { icon: Clock, label: 'Language', value: currentMovie.Language },
+                  { icon: Calendar, label: 'Year', value: currentMovie.AddedAt ? new Date(currentMovie.AddedAt).getFullYear().toString() : undefined }
                 ].map((item, i) => (
                   <div key={i} className="space-y-1">
                     <div className="flex items-center gap-2 text-gray-500">
@@ -167,9 +172,8 @@ const LongFilmPlayerPage: React.FC = () => {
                     alt={movie.Title} 
                     onError={(e) => {
                       const target = e.target as HTMLImageElement;
-                      if (!target.src.includes('placeholder')) {
-                        target.src = 'https://via.placeholder.com/300x450?text=No+Image';
-                      }
+                      target.onerror = null;
+                      target.src = `data:image/svg+xml;charset=utf-8,<svg xmlns='http://www.w3.org/2000/svg' width='300' height='450' viewBox='0 0 300 450'><rect width='300' height='450' fill='%23111'/><text x='50%25' y='50%25' dominant-baseline='middle' text-anchor='middle' fill='%23444' font-size='14' font-family='sans-serif'>No Image</text></svg>`;
                     }}
                   />
                   <div className="absolute inset-0 bg-gradient-to-t from-black via-transparent to-transparent opacity-0 group-hover:opacity-100 transition-opacity p-4 flex flex-col justify-end">

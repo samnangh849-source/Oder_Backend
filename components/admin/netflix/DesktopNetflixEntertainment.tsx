@@ -1,7 +1,7 @@
 import React, { useState, useRef, useEffect, useContext, useMemo } from 'react';
 import { 
   Play, Loader2, AlertCircle, CheckCircle2, Server, Film, Copy, 
-  Check, Code, Share2, Plus, X, Search, Info, ChevronLeft, Trash2
+  Check, Code, Share2, Plus, X, Search, Info, ChevronLeft, Trash2, Camera
 } from 'lucide-react';
 import { AppContext } from '../../../context/AppContext';
 import { Movie } from '../../../types';
@@ -166,6 +166,45 @@ const DesktopNetflixEntertainment: React.FC<DesktopNetflixEntertainmentProps> = 
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isUploading, setIsUploading] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
+
+  // Thumbnail change for existing movies (admin)
+  const changeThumbnailInputRef = useRef<HTMLInputElement>(null);
+  const [changeThumbnailTargetId, setChangeThumbnailTargetId] = useState<string | null>(null);
+  const [isChangingThumbnail, setIsChangingThumbnail] = useState(false);
+
+  const handleChangeThumbnail = async (file: File, movieId: string) => {
+    if (!file) return;
+    setIsChangingThumbnail(true);
+    try {
+      const compressedBlob = await compressImage(file, 'balanced');
+      const base64Data = await fileToBase64(compressedBlob);
+      const token = localStorage.getItem('token');
+      const response = await fetch(`${WEB_APP_URL}/api/upload-image`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          ...(token ? { 'Authorization': `Bearer ${token}` } : {})
+        },
+        body: JSON.stringify({
+          fileData: base64Data,
+          fileName: file.name,
+          mimeType: compressedBlob.type,
+          sheetName: 'Movies',
+          movieId: movieId,
+          targetColumn: 'Thumbnail'
+        })
+      });
+      const result = await response.json();
+      if (!response.ok || result.status !== 'success') throw new Error(result.message || 'Upload failed');
+      showNotification('Thumbnail updated!', 'success');
+      await refreshData();
+    } catch (err: any) {
+      showNotification(err.message || 'Thumbnail update failed', 'error');
+    } finally {
+      setIsChangingThumbnail(false);
+      setChangeThumbnailTargetId(null);
+    }
+  };
 
   const handleImageUpload = async (file: File) => {
     if (!file) return;
@@ -527,7 +566,24 @@ const DesktopNetflixEntertainment: React.FC<DesktopNetflixEntertainmentProps> = 
                   <div className="flex gap-2">
                     <button className="bg-white text-black p-2 rounded-full"><Play className="w-3 h-3 fill-current" /></button>
                     <button onClick={(e) => { e.stopPropagation(); toggleMyList(movie.ID); }} className="bg-white/20 p-2 rounded-full">{myList.includes(movie.ID) ? <Check className="w-3 h-3" /> : <Plus className="w-3 h-3" />}</button>
-                    {isAdmin && <button onClick={(e) => { e.stopPropagation(); deleteMovie(movie.ID); }} className="bg-red-500/20 p-2 rounded-full ml-auto hover:bg-red-500/50 transition-colors"><Trash2 className="w-3 h-3" /></button>}
+                    {isAdmin && (
+                      <>
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setChangeThumbnailTargetId(movie.ID);
+                            changeThumbnailInputRef.current?.click();
+                          }}
+                          className="bg-blue-500/20 p-2 rounded-full hover:bg-blue-500/50 transition-colors"
+                          title="Change Thumbnail"
+                        >
+                          {isChangingThumbnail && changeThumbnailTargetId === movie.ID
+                            ? <Loader2 className="w-3 h-3 animate-spin" />
+                            : <Camera className="w-3 h-3" />}
+                        </button>
+                        <button onClick={(e) => { e.stopPropagation(); deleteMovie(movie.ID); }} className="bg-red-500/20 p-2 rounded-full ml-auto hover:bg-red-500/50 transition-colors" title="Delete"><Trash2 className="w-3 h-3" /></button>
+                      </>
+                    )}
                   </div>
                 </div>
               </div>
@@ -540,6 +596,20 @@ const DesktopNetflixEntertainment: React.FC<DesktopNetflixEntertainmentProps> = 
 
   return (
     <div className="min-h-screen bg-[#080808] text-white font-['Kantumruy_Pro']">
+      {/* Hidden file input for thumbnail change */}
+      <input
+        ref={changeThumbnailInputRef}
+        type="file"
+        accept="image/*"
+        className="hidden"
+        onChange={(e) => {
+          const file = e.target.files?.[0];
+          if (file && changeThumbnailTargetId) {
+            handleChangeThumbnail(file, changeThumbnailTargetId);
+          }
+          e.target.value = ''; // Reset so same file can be re-selected
+        }}
+      />
       <nav className={`fixed w-full z-[60] px-10 py-4 flex items-center justify-between transition-all ${scrolled ? 'bg-black/80 backdrop-blur-md' : 'bg-gradient-to-b from-black to-transparent'}`} style={{ top: hasBanner ? '44px' : '0' }}>
         <div className="flex items-center gap-10">
           <button onClick={() => setAppState('role_selection')} className="p-2 bg-white/5 rounded-full hover:bg-white/10 transition-all"><ChevronLeft className="w-6 h-6" /></button>

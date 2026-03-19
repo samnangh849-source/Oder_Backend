@@ -3138,68 +3138,46 @@ func extractDriveFolderID(idOrURL string) string {
 }
 
 func uploadToGoogleDriveDirectly(base64Data string, fileName string, mimeType string) (string, string, error) {
-	log.Printf("📤 [Drive Upload] Starting upload: file=%q mime=%q dataLen=%d", fileName, mimeType, len(base64Data))
-
-	if driveService == nil {
-		log.Println("⚙️ [Drive Upload] driveService is nil — attempting to init Google API client...")
-		ctx := context.Background()
-		if err := createGoogleAPIClient(ctx); err != nil {
-			log.Printf("❌ [Drive Upload] Failed to init Google API client: %v", err)
-			return "", "", fmt.Errorf("failed to init drive client: %v", err)
-		}
-		log.Println("✅ [Drive Upload] Google API client initialized.")
-	}
+	log.Printf("📤 [Drive Upload via AppsScript] file=%q mime=%q dataLen=%d", fileName, mimeType, len(base64Data))
 
 	if fileName == "" {
 		fileName = "upload_" + time.Now().Format("20060102_150405")
 	}
 
-	if strings.Contains(base64Data, "base64,") {
-		base64Data = strings.Split(base64Data, "base64,")[1]
-	}
-	cleanMimeType := strings.Split(mimeType, ";")[0]
-	decodedBytes, err := parseBase64(base64Data)
-	if err != nil {
-		log.Printf("❌ [Drive Upload] Base64 decode failed: %v", err)
-		return "", "", fmt.Errorf("failed to decode base64: %v", err)
-	}
-	log.Printf("✅ [Drive Upload] Base64 decoded: %d bytes", len(decodedBytes))
-
-	f := &drive.File{Name: fileName, MimeType: cleanMimeType}
-	
+	// Resolve target folder ID (env > DB setting)
 	targetFolder := ""
-	envFolderID := os.Getenv("UPLOAD_FOLDER_ID")
-	if envFolderID != "" {
+	if envFolderID := os.Getenv("UPLOAD_FOLDER_ID"); envFolderID != "" {
 		targetFolder = extractDriveFolderID(envFolderID)
-		log.Printf("📁 [Drive Upload] Using UPLOAD_FOLDER_ID env: %q → folderID=%q", envFolderID, targetFolder)
+		log.Printf("📁 [Drive Upload] Folder from UPLOAD_FOLDER_ID env: %q", targetFolder)
 	} else if uploadFolderID != "" {
 		targetFolder = extractDriveFolderID(uploadFolderID)
-		log.Printf("📁 [Drive Upload] Using DB uploadFolderID: %q → folderID=%q", uploadFolderID, targetFolder)
+		log.Printf("📁 [Drive Upload] Folder from DB setting: %q", targetFolder)
 	} else {
-		log.Println("⚠️ [Drive Upload] No folder ID found — file will be uploaded to Drive root (not UPLOAD_FOLDER_ID)!")
+		log.Println("⚠️ [Drive Upload] No UPLOAD_FOLDER_ID set — uploading to Drive root")
 	}
 
-	if targetFolder != "" {
-		f.Parents = []string{targetFolder}
+	// Call Apps Script to upload via Google user quota (not Service Account quota)
+	req := AppsScriptRequest{
+		Action:         "uploadImage",
+		FileData:       base64Data,
+		FileName:       fileName,
+		MimeType:       mimeType,
+		UploadFolderID: targetFolder,
 	}
 
-	log.Printf("🚀 [Drive Upload] Calling Drive API to create file %q in folder %q...", fileName, targetFolder)
-	file, err := driveService.Files.Create(f).Media(bytes.NewReader(decodedBytes)).Do()
+	log.Printf("🚀 [Drive Upload] Calling Apps Script uploadImage action...")
+	resp, err := callAppsScriptPOST(req)
 	if err != nil {
-		log.Printf("❌ [Drive Upload] Drive API create error: %v", err)
-		return "", "", fmt.Errorf("drive api error: %v", err)
+		log.Printf("❌ [Drive Upload] Apps Script call error: %v", err)
+		return "", "", fmt.Errorf("apps script upload error: %v", err)
 	}
-	log.Printf("✅ [Drive Upload] File created: ID=%s", file.Id)
-
-	// Ensure file is public (anyone with link can view)
-	_, err = driveService.Permissions.Create(file.Id, &drive.Permission{Type: "anyone", Role: "reader"}).Do()
-	if err != nil {
-		log.Printf("⚠️ [Drive Upload] Could not set public permission for file %s: %v", file.Id, err)
-	} else {
-		log.Printf("🔓 [Drive Upload] File made public: https://drive.google.com/uc?id=%s", file.Id)
+	if resp.Status != "success" || resp.URL == "" {
+		log.Printf("❌ [Drive Upload] Apps Script returned error: %s", resp.Message)
+		return "", "", fmt.Errorf("apps script upload failed: %s", resp.Message)
 	}
 
-	return fmt.Sprintf("https://drive.google.com/uc?id=%s", file.Id), file.Id, nil
+	log.Printf("✅ [Drive Upload] SUCCESS via Apps Script: fileID=%s url=%s", resp.FileID, resp.URL)
+	return resp.URL, resp.FileID, nil
 }
 
 func handleServeTempImage(c *gin.Context) {

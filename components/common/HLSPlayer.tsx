@@ -12,71 +12,77 @@ import { WEB_APP_URL } from '../../constants';
 //                    challenge runs and sets cookies for the source domain.
 //  Phase 2 (play):   Visible iframe loads the clean embed URL, now with CF
 //                    cookies already in place → video plays even in fresh tabs.
-const IframeFallbackPlayer: React.FC<{ src: string; warmupSrc?: string }> = ({ src, warmupSrc }) => {
-  // warm-up phase: true = still warming up, false = ready to show video
+const IframeFallbackPlayer: React.FC<{
+  src: string;
+  warmupSrc?: string;
+  hideStatusBar?: boolean;
+  containerRef?: React.RefObject<HTMLDivElement>;
+}> = ({ src, warmupSrc, hideStatusBar, containerRef }) => {
   const [warming, setWarming] = useState(!!warmupSrc);
   const [warmupDone, setWarmupDone] = useState(!warmupSrc);
+  const localRef = useRef<HTMLDivElement>(null);
+  const wrapperRef = containerRef || localRef;
 
   useEffect(() => {
     if (!warmupSrc) return;
-    // Give the hidden iframe ~4.5 s to run Cloudflare's JS challenge & set cookies
-    const timer = setTimeout(() => {
-      setWarming(false);
-      setWarmupDone(true);
-    }, 4500);
+    const timer = setTimeout(() => { setWarming(false); setWarmupDone(true); }, 4500);
     return () => clearTimeout(timer);
   }, [warmupSrc]);
 
+  // Auto-landscape fullscreen for iframe mode
+  useEffect(() => {
+    const handleOrient = () => {
+      const isMobile = /iPhone|iPad|iPod|Android/i.test(navigator.userAgent);
+      if (!isMobile) return;
+      const orientation = window.screen?.orientation?.type || (window as any).orientation;
+      const isLandscape = orientation === 'landscape-primary' || orientation === 'landscape-secondary' || orientation === 90 || orientation === -90;
+      if (isLandscape) {
+        wrapperRef.current?.requestFullscreen?.().catch(() => {});
+      } else if (document.fullscreenElement) {
+        document.exitFullscreen?.().catch(() => {});
+      }
+    };
+    window.addEventListener('orientationchange', handleOrient);
+    screen.orientation?.addEventListener('change', handleOrient);
+    return () => {
+      window.removeEventListener('orientationchange', handleOrient);
+      screen.orientation?.removeEventListener('change', handleOrient);
+    };
+  }, [wrapperRef]);
+
   return (
-    <div className="w-full h-full bg-black flex items-center justify-center overflow-hidden relative">
+    <div ref={wrapperRef} className="w-full h-full bg-black flex items-center justify-center overflow-hidden relative">
 
-      {/* Phase 1 — Hidden warm-up iframe (loads article page for CF cookie) */}
       {warmupSrc && (
-        <iframe
-          src={warmupSrc}
-          style={{ position: 'absolute', width: 1, height: 1, opacity: 0, pointerEvents: 'none', zIndex: -1 }}
-          aria-hidden="true"
-          title="warmup"
-        />
+        <iframe src={warmupSrc} style={{ position: 'absolute', width: 1, height: 1, opacity: 0, pointerEvents: 'none', zIndex: -1 }} aria-hidden="true" title="warmup" />
       )}
 
-      {/* Phase 2 — Visible video embed (shown only after warm-up) */}
       {warmupDone && (
-        <iframe
-          src={src}
-          className="w-full h-full border-none"
-          allowFullScreen
-          allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
-        />
+        <iframe src={src} className="w-full h-full border-none" allowFullScreen allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share" />
       )}
 
-      {/* Warm-up Loading overlay */}
       {warming && (
         <div className="absolute inset-0 bg-black flex flex-col items-center justify-center gap-3 z-10">
           <Loader2 className="w-10 h-10 text-yellow-500 animate-spin" />
-          <p className="text-white/80 font-bold text-sm">កំពុងរៀបចំ Video...</p>
-          <p className="text-white/40 text-[10px] uppercase tracking-widest animate-pulse">Initializing Secure Session</p>
+          {!hideStatusBar && <p className="text-white/80 font-bold text-sm">កំពុងរៀបចំ Video...</p>}
+          {!hideStatusBar && <p className="text-white/40 text-[10px] uppercase tracking-widest animate-pulse">Initializing Secure Session</p>}
         </div>
       )}
 
-      {/* Always-visible bottom status bar */}
-      <div className="absolute bottom-4 left-4 right-4 flex items-center justify-between z-20 pointer-events-none">
-        <div className="flex items-center gap-2 bg-black/60 backdrop-blur-md px-3 py-1.5 rounded-full border border-white/10">
-          <div className={`w-2 h-2 rounded-full animate-pulse ${warming ? 'bg-yellow-500' : 'bg-green-500'}`}></div>
-          <span className="text-[10px] font-bold text-white/80 uppercase tracking-widest">
-            {warming ? 'Warming Up Session...' : 'Iframe Fallback Mode'}
-          </span>
+      {!hideStatusBar && (
+        <div className="absolute bottom-4 left-4 right-4 flex items-center justify-between z-20 pointer-events-none">
+          <div className="flex items-center gap-2 bg-black/60 backdrop-blur-md px-3 py-1.5 rounded-full border border-white/10">
+            <div className={`w-2 h-2 rounded-full animate-pulse ${warming ? 'bg-yellow-500' : 'bg-green-500'}`}></div>
+            <span className="text-[10px] font-bold text-white/80 uppercase tracking-widest">
+              {warming ? 'Warming Up Session...' : 'Iframe Fallback Mode'}
+            </span>
+          </div>
+          <a href={src} target="_blank" rel="noopener noreferrer" className="pointer-events-auto flex items-center gap-1.5 bg-white/10 hover:bg-white/20 backdrop-blur-md px-3 py-1.5 rounded-full border border-white/10 transition-all">
+            <ExternalLink className="w-3 h-3 text-white/70" />
+            <span className="text-[10px] font-bold text-white/70 uppercase tracking-widest">Open in Tab</span>
+          </a>
         </div>
-        <a
-          href={src}
-          target="_blank"
-          rel="noopener noreferrer"
-          className="pointer-events-auto flex items-center gap-1.5 bg-white/10 hover:bg-white/20 backdrop-blur-md px-3 py-1.5 rounded-full border border-white/10 transition-all"
-        >
-          <ExternalLink className="w-3 h-3 text-white/70" />
-          <span className="text-[10px] font-bold text-white/70 uppercase tracking-widest">Open in Tab</span>
-        </a>
-      </div>
+      )}
     </div>
   );
 };
@@ -87,12 +93,14 @@ interface HLSPlayerProps {
   startTime?: number;
   onProgress?: (time: number, duration: number) => void;
   onReady?: (player: any) => void;
+  hideStatusBar?: boolean;
 }
 
-const HLSPlayer: React.FC<HLSPlayerProps> = ({ url, startTime = 0, onProgress, onReady }) => {
+const HLSPlayer: React.FC<HLSPlayerProps> = ({ url, startTime = 0, onProgress, onReady, hideStatusBar }) => {
   const videoRef = useRef<HTMLVideoElement>(null);
   const playerRef = useRef<any>(null);
   const hlsRef = useRef<Hls | null>(null);
+  const containerRef = useRef<HTMLDivElement>(null);   // For native fullscreen fallback
   
   const [finalUrl, setFinalUrl] = useState<string | null>(null);
   const [isExtracting, setIsExtracting] = useState(false);
@@ -366,19 +374,29 @@ const HLSPlayer: React.FC<HLSPlayerProps> = ({ url, startTime = 0, onProgress, o
       playerRef.current = player;
     };
 
-    // --- Auto-Rotate Logic (Mobile Only) ---
+    // --- Auto-Rotate to Fullscreen Logic (Mobile Only) ---
     const handleOrientationChange = () => {
       const isMobile = /iPhone|iPad|iPod|Android/i.test(navigator.userAgent);
-      if (!isMobile || !playerRef.current) return;
+      if (!isMobile) return;
 
       const orientation = window.screen?.orientation?.type || (window as any).orientation;
       const isLandscape = orientation === 'landscape-primary' || orientation === 'landscape-secondary' || orientation === 90 || orientation === -90;
 
       if (isLandscape) {
-        playerRef.current.fullscreen.enter();
+        // Try Plyr fullscreen first; fall back to native container fullscreen
+        if (playerRef.current?.fullscreen) {
+          playerRef.current.fullscreen.enter();
+        } else if (containerRef.current && !document.fullscreenElement) {
+          containerRef.current.requestFullscreen?.().catch(() => {});
+          // Also try HTML5 video element for iOS
+          (videoRef.current as any)?.webkitEnterFullscreen?.();
+        }
       } else {
-        if (playerRef.current.fullscreen.active) {
-            playerRef.current.fullscreen.exit();
+        // Exit fullscreen on portrait
+        if (playerRef.current?.fullscreen?.active) {
+          playerRef.current.fullscreen.exit();
+        } else if (document.fullscreenElement) {
+          document.exitFullscreen?.().catch(() => {});
         }
       }
     };
@@ -494,7 +512,7 @@ const HLSPlayer: React.FC<HLSPlayerProps> = ({ url, startTime = 0, onProgress, o
 
   if (useIframeFallback) {
     return (
-      <IframeFallbackPlayer src={useIframeFallback} warmupSrc={url} />
+      <IframeFallbackPlayer src={useIframeFallback} warmupSrc={url} hideStatusBar={hideStatusBar} containerRef={containerRef} />
     );
   }
 
@@ -509,7 +527,7 @@ const HLSPlayer: React.FC<HLSPlayerProps> = ({ url, startTime = 0, onProgress, o
   }
 
   return (
-    <div className="w-full h-full bg-black flex items-center justify-center overflow-hidden relative">
+    <div ref={containerRef} className="w-full h-full bg-black flex items-center justify-center overflow-hidden relative">
       <video
         ref={videoRef}
         controls
