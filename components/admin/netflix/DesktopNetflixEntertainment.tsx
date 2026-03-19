@@ -203,6 +203,7 @@ const DesktopNetflixEntertainment: React.FC<DesktopNetflixEntertainmentProps> = 
     }
   };
   const [newMovie, setNewMovie] = useState<Partial<Movie>>({
+    ID: generateShortID(),
     Type: 'long',
     Language: 'Khmer',
     Country: 'Cambodia'
@@ -238,9 +239,7 @@ const DesktopNetflixEntertainment: React.FC<DesktopNetflixEntertainmentProps> = 
     const shareUrl = `${window.location.origin}${window.location.pathname}?view=watch&movie=${movie.ID}`;
     navigator.clipboard.writeText(shareUrl);
     showNotification("Link copied! Guests can watch this movie without login.", "success");
-  };
-
-  const handleFetchVideo = async () => {
+  };  const handleFetchVideo = async () => {
     setStatus('loading');
     setExtractedM3u8(null);
     setErrorMessage(null);
@@ -248,35 +247,19 @@ const DesktopNetflixEntertainment: React.FC<DesktopNetflixEntertainmentProps> = 
     try {
       let htmlContent = '';
       if (inputType === 'url') {
-        const targetUrl = inputUrl;
-        const proxies = [
-          `${WEB_APP_URL}/api/fetch-json?url=${encodeURIComponent(targetUrl)}`,
-          `https://api.allorigins.win/get?url=${encodeURIComponent(targetUrl)}`,
-          `https://api.codetabs.com/v1/proxy?quest=${encodeURIComponent(targetUrl)}`
-        ];
-
-        let fetchSuccess = false;
-        for (const proxyUrl of proxies) {
-          try {
-            const response = await fetch(proxyUrl);
-            if (!response.ok) continue;
-            
-            const contentType = response.headers.get("content-type");
-            if (contentType && contentType.includes("application/json")) {
-              const data = await response.json();
-              htmlContent = data.contents;
-            } else {
-              htmlContent = await response.text();
-            }
-            
-            if (htmlContent) { fetchSuccess = true; break; }
-          } catch (e) { console.warn(e); }
-        }
-        if (!fetchSuccess) throw new Error("មិនអាចទាញយកបានទេ។ អាចមកពី Network របស់អ្នកមានបញ្ហា។");
+        const bypassUrl = `https://api.allorigins.win/raw?url=${encodeURIComponent(inputUrl)}`;
+        const res = await fetch(bypassUrl);
+        if (!res.ok) throw new Error("Could not fetch page from URL.");
+        htmlContent = await res.text();
       } else {
         htmlContent = inputSource;
         if (!htmlContent.trim()) throw new Error("សូមបញ្ចូលកូដដើម (Page Source) ជាមុនសិន។");
       }
+
+      if (!htmlContent) throw new Error("Empty content.");
+
+      const parser = new DOMParser();
+      const doc = parser.parseFromString(htmlContent, "text/html");
 
       // 1. Check for playlists array (zip model)
       const playlistsMatch = htmlContent.match(/const playlists = (\[.*?\]);/s);
@@ -291,74 +274,7 @@ const DesktopNetflixEntertainment: React.FC<DesktopNetflixEntertainmentProps> = 
         }
       }
 
-      // 2. Check for dooplay_player_option (zip model)
-      const parser = new DOMParser();
-      const doc = parser.parseFromString(htmlContent, "text/html");
-      const playerOptions = doc.querySelectorAll('.dooplay_player_option');
-      
-      if (playerOptions.length > 0) {
-        let playerApi = '';
-        let ajaxUrlBase = '';
-        const dtAjaxMatch = htmlContent.match(/var dtAjax = (\{.*?\});/);
-        if (dtAjaxMatch) {
-          try {
-            const dtAjax = JSON.parse(dtAjaxMatch[1]);
-            playerApi = dtAjax.player_api || '';
-            ajaxUrlBase = dtAjax.url || '';
-          } catch (e) {}
-        }
-
-        if (playerApi || ajaxUrlBase) {
-          let firstOption = playerOptions[0];
-          for (let i = 0; i < playerOptions.length; i++) {
-            if (playerOptions[i].getAttribute('data-nume') !== 'trailer') {
-              firstOption = playerOptions[i];
-              break;
-            }
-          }
-          const postId = firstOption.getAttribute('data-post');
-          const nume = firstOption.getAttribute('data-nume');
-          const type = firstOption.getAttribute('data-type');
-          
-          if (postId && nume && type) {
-            const tryFetch = async (url: string, isAjax: boolean = false) => {
-                try {
-                  const fetchUrl = `${WEB_APP_URL}/api/fetch-json?url=${encodeURIComponent(url)}`;
-                  const res = await fetch(fetchUrl, { method: isAjax ? 'POST' : 'GET' });
-                  if (res.ok) {
-                    const embedData = await res.json();
-                    let embedUrl = embedData.embed_url || '';
-                    if (embedUrl.includes('<iframe')) {
-                      const iframeMatch = embedUrl.match(/src=["']([^"']+)["']/);
-                      if (iframeMatch) embedUrl = iframeMatch[1];
-                    }
-                    if (embedUrl) {
-                      const extractRes = await fetch(`${WEB_APP_URL}/api/extract-m3u8?url=${encodeURIComponent(embedUrl)}`);
-                      if (extractRes.ok) {
-                        const extractData = await extractRes.json();
-                        if (extractData.m3u8Url) {
-                          setExtractedM3u8(extractData.m3u8Url);
-                          return true;
-                        }
-                      }
-                      setExtractedM3u8(embedUrl);
-                      return true;
-                    }
-                  }
-                } catch (e) { console.warn(e); }
-                return false;
-            };
-
-            let success = false;
-            if (playerApi) success = await tryFetch(`${playerApi}${postId}/${type}/${nume}`);
-            if (!success && ajaxUrlBase) success = await tryFetch(`${ajaxUrlBase}?action=doo_player_ajax&post=${postId}&nume=${nume}&type=${type}`, true);
-            
-            if (success) { setStatus('success'); return; }
-          }
-        }
-      }
-
-      // 3. Fallback to Iframe search
+      // 2. Iframe search
       const iframes = doc.querySelectorAll('.movieplay iframe, iframe, .embed-container iframe');
       if (iframes.length > 0) {
         let src = '';
@@ -370,22 +286,29 @@ const DesktopNetflixEntertainment: React.FC<DesktopNetflixEntertainmentProps> = 
           }
         }
         if (src) {
-          const extractRes = await fetch(`${WEB_APP_URL}/api/extract-m3u8?url=${encodeURIComponent(src)}`);
-          if (extractRes.ok) {
-            const data = await extractRes.json();
-            if (data.m3u8Url) {
-              setExtractedM3u8(data.m3u8Url);
-              setStatus('success');
-              return;
-            }
-          }
-          setExtractedM3u8(src);
-          setStatus('success');
-          return;
+           // Recursive fetch for the iframe source to extract m3u8
+           try {
+             const iframeBypass = `https://api.allorigins.win/raw?url=${encodeURIComponent(src)}`;
+             const iframeRes = await fetch(iframeBypass);
+             if (iframeRes.ok) {
+               const iframeHtml = await iframeRes.text();
+               const m3u8Regex = /(["'])(https?:\/\/[^"']+(\.m3u8|\/hlsplaylist\/|\/hls\/)[^"']*)\1/i;
+               const match = iframeHtml.match(m3u8Regex);
+               if (match && match[2]) {
+                 setExtractedM3u8(match[2]);
+                 setStatus('success');
+                 return;
+               }
+             }
+           } catch (e) {}
+           
+           setExtractedM3u8(src);
+           setStatus('success');
+           return;
         }
       }
 
-      // 4. Direct m3u8 search
+      // 3. Direct m3u8 search
       const m3u8Matches = [...htmlContent.matchAll(/(https?:\/\/[^\s"'<>]+?(\.m3u8|\.mp4|\/hlsplaylist\/|\/hls\/)[^\s"'<>]*)/gi)];
       let foundM3u8 = null;
       for (const match of m3u8Matches) {
@@ -395,6 +318,7 @@ const DesktopNetflixEntertainment: React.FC<DesktopNetflixEntertainmentProps> = 
           break;
         }
       }
+
       if (foundM3u8) {
         setExtractedM3u8(foundM3u8);
         setStatus('success');
@@ -729,7 +653,14 @@ const DesktopNetflixEntertainment: React.FC<DesktopNetflixEntertainmentProps> = 
               <div className="mt-8 p-6 bg-green-500/5 border border-green-500/20 rounded-xl">
                 <div className="flex justify-between mb-4"><span className="text-green-400 font-black flex items-center gap-3"><CheckCircle2 className="w-5 h-5" /> Decrypted</span><button onClick={() => handleCopy(extractedM3u8)}><Copy className="w-5 h-5" /></button></div>
                 <div className="text-[10px] break-all font-mono text-gray-500 bg-black/40 p-4 rounded-lg mb-6">{extractedM3u8}</div>
-                <button onClick={() => { setNewMovie({ ...newMovie, VideoURL: extractedM3u8 }); setShowAddModal(true); }} className="w-full bg-green-600 text-white font-black py-3 rounded-xl uppercase tracking-widest">Create Entry</button>
+                <button onClick={() => { 
+                  setNewMovie(prev => ({ 
+                    ...prev, 
+                    ID: prev.ID || generateShortID(),
+                    VideoURL: extractedM3u8 
+                  })); 
+                  setShowAddModal(true); 
+                }} className="w-full bg-green-600 text-white font-black py-3 rounded-xl uppercase tracking-widest">Create Entry</button>
               </div>
             )}
             {status === 'error' && <div className="mt-6 text-red-400 text-sm flex items-center gap-3 bg-red-600/10 p-4 rounded-xl"><AlertCircle className="w-5 h-5" /> {errorMessage}</div>}

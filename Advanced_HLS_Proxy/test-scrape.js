@@ -21,7 +21,7 @@ async function test() {
     const playlistMatch = html2.match(/var playlist = (\[.*?\]);/s);
     if (playlistMatch) {
       const playlist = JSON.parse(playlistMatch[1]);
-      const hlsSource = playlist[0].sources.find((s) => s.type === 'hls' || s.file.toLowerCase().includes('.m3u8') || s.file.includes('/hlsplaylist/') || s.file.includes('/hls/'));
+      const hlsSource = playlist[0].sources.find((s) => s.type === 'hls' || s.file.includes('.m3u8'));
       if (hlsSource) m3u8Url = hlsSource.file;
     }
     

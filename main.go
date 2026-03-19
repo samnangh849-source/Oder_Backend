@@ -448,10 +448,11 @@ func initDB() {
 
 	sqlDB, err := db.DB()
 	if err == nil {
-		sqlDB.SetMaxIdleConns(1)
-		sqlDB.SetMaxOpenConns(3)
+		// Optimized pool for 3 Sync workers + 1 Order worker + HTTP traffic
+		sqlDB.SetMaxIdleConns(5)
+		sqlDB.SetMaxOpenConns(15)
 		sqlDB.SetConnMaxLifetime(10 * time.Minute)
-		log.Println("⚡ Database Connection Pool Optimized (Minimal Limits)!")
+		log.Println("⚡ Database Connection Pool Optimized (Balanced for Workers)!")
 	}
 
 	log.Println("✅ Database connection established!")
@@ -523,18 +524,12 @@ func initDB() {
 				// រង់ចាំបន្តិចដើម្បីឱ្យ spreadsheetID និង appsScriptURL ត្រូវបានកំណត់ក្នុង main()
 				time.Sleep(2 * time.Second)
 				if appsScriptURL != "" {
-					appsReq := AppsScriptRequest{
-						Action:    "addRow",
-						Secret:    appsScriptSecret,
-						SheetName: "Roles",
-						NewData: map[string]interface{}{
-							"ID":          r.ID,
-							"RoleName":    r.RoleName,
-							"Description": r.Description,
-						},
-					}
-					jb, _ := json.Marshal(appsReq)
-					http.Post(appsScriptURL, "application/json", bytes.NewBuffer(jb))
+					// Sync with Google Sheets via managed queue
+					enqueueSync("addRow", map[string]interface{}{
+						"ID":          r.ID,
+						"RoleName":    r.RoleName,
+						"Description": r.Description,
+					}, "Roles", nil)
 					log.Println("✅ បញ្ជូន Role Admin ទៅ Google Sheets រួចរាល់!")
 				}
 			}(adminRole)
@@ -700,6 +695,25 @@ func getTableName(sheetName string) string {
 		return "incentive_projects"
 	case "Movies":
 		return "movies"
+	case "RevenueDashboard":
+		return "revenue_entries"
+	case "ChatMessages":
+		return "chat_messages"
+	case "EditLogs":
+		return "edit_logs"
+	case "UserActivityLogs":
+		return "user_activity_logs"
+	case "IncentiveResults":
+		return "incentive_results"
+	case "IncentiveManualData":
+		return "incentive_manual_data"
+	case "IncentiveCustomPayouts":
+		return "incentive_custom_payouts"
+	case "TelegramTemplates":
+		return "telegram_templates"
+	}
+	if strings.HasPrefix(sheetName, "Orders_") {
+		return "orders"
 	}
 	return ""
 }
@@ -954,14 +968,8 @@ func handleCreateRole(c *gin.Context) {
 	hub.broadcast <- eventBytes
 
 	go func() {
-		appsReq := AppsScriptRequest{
-			Action:    "addRow",
-			Secret:    appsScriptSecret,
-			SheetName: "Roles",
-			NewData:   sheetData,
-		}
-		jb, _ := json.Marshal(appsReq)
-		http.Post(appsScriptURL, "application/json", bytes.NewBuffer(jb))
+		// Sync with Google Sheets via managed queue
+		enqueueSync("addRow", sheetData, "Roles", nil)
 	}()
 
 	c.JSON(http.StatusOK, gin.H{"status": "success", "data": req})
@@ -1019,34 +1027,21 @@ func handleUpdatePermission(c *gin.Context) {
 			DB.Create(&req)
 
 			go func(r RolePermission) {
-				appsReq := AppsScriptRequest{
-					Action:    "addRow",
-					Secret:    appsScriptSecret,
-					SheetName: "RolePermissions",
-					NewData: map[string]interface{}{
-						"ID":        r.ID,
-						"Role":      r.Role,
-						"Feature":   r.Feature,
-						"IsEnabled": r.IsEnabled,
-					},
-				}
-				jb, _ := json.Marshal(appsReq)
-				http.Post(appsScriptURL, "application/json", bytes.NewBuffer(jb))
+				// Sync with Google Sheets via managed queue
+				enqueueSync("addRow", map[string]interface{}{
+					"ID":        r.ID,
+					"Role":      r.Role,
+					"Feature":   r.Feature,
+					"IsEnabled": r.IsEnabled,
+				}, "RolePermissions", nil)
 			}(req)
 
 		} else if result.Error == nil {
 			DB.Model(&existing).Update("is_enabled", req.IsEnabled)
 
 			go func(r RolePermission) {
-				appsReq := AppsScriptRequest{
-					Action:     "updateSheet",
-					Secret:     appsScriptSecret,
-					SheetName:  "RolePermissions",
-					PrimaryKey: map[string]string{"Role": r.Role, "Feature": r.Feature},
-					NewData:    map[string]interface{}{"IsEnabled": r.IsEnabled},
-				}
-				jb, _ := json.Marshal(appsReq)
-				http.Post(appsScriptURL, "application/json", bytes.NewBuffer(jb))
+				// Sync with Google Sheets via managed queue
+				enqueueSync("updateSheet", map[string]interface{}{"IsEnabled": r.IsEnabled}, "RolePermissions", map[string]string{"Role": r.Role, "Feature": r.Feature})
 			}(req)
 		}
 
@@ -1213,14 +1208,8 @@ func handleLockIncentivePayout(c *gin.Context) {
 					"CalculatedValue": res.CalculatedValue,
 					"IsCustom":        res.IsCustom,
 				}
-				appsReq := AppsScriptRequest{
-					Action:    "addRow",
-					Secret:    appsScriptSecret,
-					SheetName: "IncentiveResults",
-					NewData:   sheetData,
-				}
-				jb, _ := json.Marshal(appsReq)
-				http.Post(appsScriptURL, "application/json", bytes.NewBuffer(jb))
+				// Sync with Google Sheets via managed queue
+				enqueueSync("addRow", sheetData, "IncentiveResults", nil)
 			}
 		}()
 	}
@@ -1486,6 +1475,25 @@ type AppsScriptResponse struct {
 	} `json:"messageIds,omitempty"`
 }
 
+// SyncTask represents a synchronization task for the background worker
+type SyncTask struct {
+	Request    AppsScriptRequest
+	RetryCount int
+	MaxRetries int
+}
+
+var (
+	syncQueue = make(chan SyncTask, 1000)
+	httpClient = &http.Client{
+		Timeout: 45 * time.Second,
+		Transport: &http.Transport{
+			MaxIdleConns:        100,
+			IdleConnTimeout:    90 * time.Second,
+			MaxIdleConnsPerHost: 20,
+		},
+	}
+)
+
 type OrderJob struct {
 	JobID     string
 	OrderID   string
@@ -1539,7 +1547,8 @@ func startScheduler() {
 		for {
 			select {
 			case <-ticker.C:
-				callAppsScriptPOST(AppsScriptRequest{Action: "checkScheduledOrders"})
+				// Sync with Google Sheets via managed queue
+				enqueueSync("checkScheduledOrders", nil, "", nil)
 			case <-cleanupTicker.C:
 				result := DB.Where("expires_at < ?", time.Now()).Delete(&TempImage{})
 				if result.RowsAffected > 0 {
@@ -1553,8 +1562,7 @@ func startScheduler() {
 func callAppsScriptPOST(requestData AppsScriptRequest) (AppsScriptResponse, error) {
 	requestData.Secret = appsScriptSecret
 	jsonData, _ := json.Marshal(requestData)
-	client := &http.Client{Timeout: 30 * time.Second}
-	resp, err := client.Post(appsScriptURL, "application/json", bytes.NewBuffer(jsonData))
+	resp, err := httpClient.Post(appsScriptURL, "application/json", bytes.NewBuffer(jsonData))
 	if err != nil {
 		return AppsScriptResponse{}, err
 	}
@@ -1566,6 +1574,53 @@ func callAppsScriptPOST(requestData AppsScriptRequest) (AppsScriptResponse, erro
 		return AppsScriptResponse{}, fmt.Errorf("invalid response from apps script")
 	}
 	return scriptResponse, nil
+}
+
+// enqueueSync adds a task to the background synchronization queue
+func enqueueSync(action string, data map[string]interface{}, sheetName string, pk map[string]string) {
+	req := AppsScriptRequest{
+		Action:     action,
+		SheetName:  sheetName,
+		PrimaryKey: pk,
+		NewData:    data,
+	}
+	syncQueue <- SyncTask{Request: req, MaxRetries: 3}
+}
+
+// startSyncManager runs background workers for Google Sheets synchronization
+func startSyncManager(workerCount int) {
+	for i := 0; i < workerCount; i++ {
+		go func(workerID int) {
+			log.Printf("🔄 SyncManager: Worker %d started", workerID)
+			for task := range syncQueue {
+				resp, err := callAppsScriptPOST(task.Request)
+				if err != nil || resp.Status == "error" {
+					errorMessage := "Unknown error"
+					if err != nil {
+						errorMessage = err.Error()
+					} else {
+						errorMessage = resp.Message
+					}
+
+					log.Printf("❌ SyncManager [Worker %d]: Task %s failed: %v", workerID, task.Request.Action, errorMessage)
+					
+					if task.RetryCount < task.MaxRetries {
+						task.RetryCount++
+						backoff := time.Duration(task.RetryCount*task.RetryCount) * time.Second
+						log.Printf("⏳ SyncManager: Retrying task %s in %v (Attempt %d/%d)", task.Request.Action, backoff, task.RetryCount, task.MaxRetries)
+						go func(t SyncTask, d time.Duration) {
+							time.Sleep(d)
+							syncQueue <- t
+						}(task, backoff)
+					} else {
+						log.Printf("🔥 SyncManager: Task %s reached max retries. Dropping.", task.Request.Action)
+					}
+				} else {
+					log.Printf("✅ SyncManager [Worker %d]: Task %s success on %s", workerID, task.Request.Action, task.Request.SheetName)
+				}
+			}
+		}(i)
+	}
 }
 
 // =========================================================================
@@ -1594,6 +1649,10 @@ func handleGetStaticData(c *gin.Context) {
 		func() { var d []RolePermission; DB.Find(&d); mu.Lock(); result["rolePermissions"] = d; mu.Unlock() },
 		func() { var d []DriverRecommendation; DB.Find(&d); mu.Lock(); result["driverRecommendations"] = d; mu.Unlock() },
 		func() { var d []Movie; DB.Find(&d); mu.Lock(); result["movies"] = d; mu.Unlock() },
+		func() { var d []TelegramTemplate; DB.Find(&d); mu.Lock(); result["telegramTemplates"] = d; mu.Unlock() },
+		func() { var d []RevenueEntry; DB.Find(&d); mu.Lock(); result["revenueEntries"] = d; mu.Unlock() },
+		func() { var d []EditLog; DB.Limit(500).Order("timestamp desc").Find(&d); mu.Lock(); result["editLogs"] = d; mu.Unlock() },
+		func() { var d []UserActivityLog; DB.Limit(500).Order("timestamp desc").Find(&d); mu.Lock(); result["actLogs"] = d; mu.Unlock() },
 		func() {
 			var settings []Setting
 			DB.Find(&settings)
@@ -1646,7 +1705,7 @@ func fetchSheetDataFromAPI(sheetName string) ([]map[string]interface{}, error) {
 	if err != nil {
 		return nil, err
 	}
-	return convertSheetValuesToMaps(resp)
+	return convertSheetValuesToMaps(sheetName, resp)
 }
 
 func isNumericHeader(h string) bool {
@@ -1662,9 +1721,9 @@ func isBoolHeader(h string) bool {
 	h = strings.ToLower(h)
 	return h == "issystemadmin" || h == "allowmanualdriver" || h == "requiredriverselection" ||
 		h == "isrestocked" || h == "isenabled" ||
-		h == "enabledriverrecommendation"
+		h == "enabledriverrecommendation" || h == "requireperiodselection" || h == "iscustom"
 }
-func convertSheetValuesToMaps(values *sheets.ValueRange) ([]map[string]interface{}, error) {
+func convertSheetValuesToMaps(sheetName string, values *sheets.ValueRange) ([]map[string]interface{}, error) {
 	if values == nil || len(values.Values) < 2 {
 		return []map[string]interface{}{}, nil
 	}
@@ -1686,12 +1745,20 @@ func convertSheetValuesToMaps(values *sheets.ValueRange) ([]map[string]interface
 							if f, err := strconv.ParseFloat(cleanedStr, 64); err == nil {
 								rowData[header] = f
 							} else {
-								rowData[header] = cellStr
+								if cleanedStr == "" || cleanedStr == "-" {
+									rowData[header] = 0.0
+								} else {
+									rowData[header] = cellStr
+								}
 							}
 						} else if isBoolHeader(header) {
 							rowData[header] = strings.ToUpper(strings.TrimSpace(cellStr)) == "TRUE"
 						} else {
-							rowData[header] = cellStr
+							if strings.ToLower(header) == "value" && (strings.TrimSpace(cellStr) == "" || strings.TrimSpace(cellStr) == "-") {
+								rowData[header] = "0"
+							} else {
+								rowData[header] = cellStr
+							}
 						}
 					} else {
 						// If not a string, check if it's already a boolean (sometimes happens with API)
@@ -1715,7 +1782,7 @@ func convertSheetValuesToMaps(values *sheets.ValueRange) ([]map[string]interface
 					}
 					// Ensure critical IDs are always strings to avoid scientific notation or rounding issues
 					lowHeader := strings.ToLower(header)
-					if lowHeader == "telegram message id 1" || lowHeader == "telegram message id 2" || lowHeader == "order id" || lowHeader == "customer phone" || lowHeader == "barcode" {
+					if lowHeader == "telegram message id 1" || lowHeader == "telegram message id 2" || lowHeader == "order id" || lowHeader == "customer phone" || lowHeader == "barcode" || (sheetName == "Movies" && lowHeader == "id") {
 						rowData[header] = fmt.Sprintf("%v", cell)
 					}
 				}
@@ -1787,379 +1854,618 @@ func handleMigrateData(c *gin.Context) {
 		log.Println("🔄 ចាប់ផ្តើមទាញទិន្នន័យថ្មីពី Google Sheet...")
 
 		var users []User
-		if fetchSheetDataToStruct("Users", &users) == nil {
-			var valid []User
-			seen := make(map[string]bool)
-			for _, x := range users {
-				if x.UserName != "" && !seen[x.UserName] {
-					seen[x.UserName] = true
-					valid = append(valid, x)
-				}
+		if err := fetchSheetDataToStruct("Users", &users); err != nil {
+			tx.Rollback()
+			log.Println("❌ Migration failed for Users:", err)
+			return
+		}
+		var validUsers []User
+		seenUsers := make(map[string]bool)
+		for _, x := range users {
+			if x.UserName != "" && !seenUsers[x.UserName] {
+				seenUsers[x.UserName] = true
+				validUsers = append(validUsers, x)
 			}
-			if len(valid) > 0 {
-				tx.CreateInBatches(valid, 100)
+		}
+		if len(validUsers) > 0 {
+			if err := tx.CreateInBatches(validUsers, 100).Error; err != nil {
+				tx.Rollback()
+				log.Println("❌ Migration failed to save Users:", err)
+				return
 			}
 		}
 
 		var stores []Store
-		if fetchSheetDataToStruct("Stores", &stores) == nil {
-			var valid []Store
-			seen := make(map[string]bool)
-			for _, x := range stores {
-				if x.StoreName != "" && !seen[x.StoreName] {
-					seen[x.StoreName] = true
-					valid = append(valid, x)
-				}
+		if err := fetchSheetDataToStruct("Stores", &stores); err != nil {
+			tx.Rollback()
+			log.Println("❌ Migration failed for Stores:", err)
+			return
+		}
+		var validStores []Store
+		seenStores := make(map[string]bool)
+		for _, x := range stores {
+			if x.StoreName != "" && !seenStores[x.StoreName] {
+				seenStores[x.StoreName] = true
+				validStores = append(validStores, x)
 			}
-			if len(valid) > 0 {
-				tx.CreateInBatches(valid, 100)
+		}
+		if len(validStores) > 0 {
+			if err := tx.CreateInBatches(validStores, 100).Error; err != nil {
+				tx.Rollback()
+				log.Println("❌ Migration failed to save Stores:", err)
+				return
 			}
 		}
 
 		var settings []Setting
-		if fetchSheetDataToStruct("Settings", &settings) == nil {
-			for _, s := range settings {
-				if s.ConfigKey != "" {
-					tx.Save(&s)
-					if s.ConfigKey == "UploadFolderID" {
-						envVal := os.Getenv("UPLOAD_FOLDER_ID")
-						if envVal != "" {
-							uploadFolderID = envVal
-						} else {
-							uploadFolderID = s.ConfigValue
-						}
+		if err := fetchSheetDataToStruct("Settings", &settings); err != nil {
+			tx.Rollback()
+			log.Println("❌ Migration failed for Settings:", err)
+			return
+		}
+		for _, s := range settings {
+			if s.ConfigKey != "" {
+				if err := tx.Save(&s).Error; err != nil {
+					tx.Rollback()
+					log.Println("❌ Migration failed to save Setting:", s.ConfigKey, err)
+					return
+				}
+				if s.ConfigKey == "UploadFolderID" {
+					envVal := os.Getenv("UPLOAD_FOLDER_ID")
+					if envVal != "" {
+						uploadFolderID = envVal
+					} else {
+						uploadFolderID = s.ConfigValue
 					}
 				}
 			}
 		}
 
 		var pages []TeamPage
-		if fetchSheetDataToStruct("TeamsPages", &pages) == nil {
-			var valid []TeamPage
-			seen := make(map[uint]bool)
-			for _, x := range pages {
-				if x.PageName != "" && !seen[x.ID] {
-					if x.ID != 0 { seen[x.ID] = true }
-					valid = append(valid, x)
+		if err := fetchSheetDataToStruct("TeamsPages", &pages); err != nil {
+			tx.Rollback()
+			log.Println("❌ Migration failed for TeamsPages:", err)
+			return
+		}
+		var validPages []TeamPage
+		seenPages := make(map[uint]bool)
+		for _, x := range pages {
+			if x.PageName != "" && !seenPages[x.ID] {
+				if x.ID != 0 {
+					seenPages[x.ID] = true
 				}
+				validPages = append(validPages, x)
 			}
-			if len(valid) > 0 {
-				tx.CreateInBatches(valid, 100)
+		}
+		if len(validPages) > 0 {
+			if err := tx.CreateInBatches(validPages, 100).Error; err != nil {
+				tx.Rollback()
+				log.Println("❌ Migration failed to save TeamsPages:", err)
+				return
 			}
 		}
 
 		var products []Product
-		if fetchSheetDataToStruct("Products", &products) == nil {
-			var valid []Product
-			seen := make(map[string]bool)
-			for _, x := range products {
-				if x.Barcode != "" && !seen[x.Barcode] {
-					seen[x.Barcode] = true
-					valid = append(valid, x)
-				}
+		if err := fetchSheetDataToStruct("Products", &products); err != nil {
+			tx.Rollback()
+			log.Println("❌ Migration failed for Products:", err)
+			return
+		}
+		var validProducts []Product
+		seenProducts := make(map[string]bool)
+		for _, x := range products {
+			if x.Barcode != "" && !seenProducts[x.Barcode] {
+				seenProducts[x.Barcode] = true
+				validProducts = append(validProducts, x)
 			}
-			if len(valid) > 0 {
-				tx.CreateInBatches(valid, 100)
+		}
+		if len(validProducts) > 0 {
+			if err := tx.CreateInBatches(validProducts, 100).Error; err != nil {
+				tx.Rollback()
+				log.Println("❌ Migration failed to save Products:", err)
+				return
 			}
 		}
 
 		var locations []Location
-		if fetchSheetDataToStruct("Locations", &locations) == nil && len(locations) > 0 {
-			var valid []Location
-			seen := make(map[uint]bool)
-			for _, x := range locations {
-				if !seen[x.ID] {
-					if x.ID != 0 { seen[x.ID] = true }
-					valid = append(valid, x)
+		if err := fetchSheetDataToStruct("Locations", &locations); err != nil {
+			tx.Rollback()
+			log.Println("❌ Migration failed for Locations:", err)
+			return
+		}
+		var validLocations []Location
+		seenLocations := make(map[uint]bool)
+		for _, x := range locations {
+			if !seenLocations[x.ID] {
+				if x.ID != 0 {
+					seenLocations[x.ID] = true
 				}
+				validLocations = append(validLocations, x)
 			}
-			if len(valid) > 0 {
-				tx.CreateInBatches(valid, 100)
+		}
+		if len(validLocations) > 0 {
+			if err := tx.CreateInBatches(validLocations, 100).Error; err != nil {
+				tx.Rollback()
+				log.Println("❌ Migration failed to save Locations:", err)
+				return
 			}
 		}
 
 		var shipping []ShippingMethod
-		if fetchSheetDataToStruct("ShippingMethods", &shipping) == nil {
-			var valid []ShippingMethod
-			seen := make(map[string]bool)
-			for _, x := range shipping {
-				if x.MethodName != "" && !seen[x.MethodName] {
-					seen[x.MethodName] = true
-					valid = append(valid, x)
-				}
+		if err := fetchSheetDataToStruct("ShippingMethods", &shipping); err != nil {
+			tx.Rollback()
+			log.Println("❌ Migration failed for ShippingMethods:", err)
+			return
+		}
+		var validShipping []ShippingMethod
+		seenShipping := make(map[string]bool)
+		for _, x := range shipping {
+			if x.MethodName != "" && !seenShipping[x.MethodName] {
+				seenShipping[x.MethodName] = true
+				validShipping = append(validShipping, x)
 			}
-			if len(valid) > 0 {
-				tx.CreateInBatches(valid, 100)
+		}
+		if len(validShipping) > 0 {
+			if err := tx.CreateInBatches(validShipping, 100).Error; err != nil {
+				tx.Rollback()
+				log.Println("❌ Migration failed to save ShippingMethods:", err)
+				return
 			}
 		}
 
 		var colors []Color
-		if fetchSheetDataToStruct("Colors", &colors) == nil {
-			var valid []Color
-			seen := make(map[string]bool)
-			for _, x := range colors {
-				if x.ColorName != "" && !seen[x.ColorName] {
-					seen[x.ColorName] = true
-					valid = append(valid, x)
-				}
+		if err := fetchSheetDataToStruct("Colors", &colors); err != nil {
+			tx.Rollback()
+			log.Println("❌ Migration failed for Colors:", err)
+			return
+		}
+		var validColors []Color
+		seenColors := make(map[string]bool)
+		for _, x := range colors {
+			if x.ColorName != "" && !seenColors[x.ColorName] {
+				seenColors[x.ColorName] = true
+				validColors = append(validColors, x)
 			}
-			if len(valid) > 0 {
-				tx.CreateInBatches(valid, 100)
+		}
+		if len(validColors) > 0 {
+			if err := tx.CreateInBatches(validColors, 100).Error; err != nil {
+				tx.Rollback()
+				log.Println("❌ Migration failed to save Colors:", err)
+				return
 			}
 		}
 
 		var drivers []Driver
-		if fetchSheetDataToStruct("Drivers", &drivers) == nil {
-			var valid []Driver
-			seen := make(map[string]bool)
-			for _, x := range drivers {
-				if x.DriverName != "" && !seen[x.DriverName] {
-					seen[x.DriverName] = true
-					valid = append(valid, x)
-				}
+		if err := fetchSheetDataToStruct("Drivers", &drivers); err != nil {
+			tx.Rollback()
+			log.Println("❌ Migration failed for Drivers:", err)
+			return
+		}
+		var validDrivers []Driver
+		seenDrivers := make(map[string]bool)
+		for _, x := range drivers {
+			if x.DriverName != "" && !seenDrivers[x.DriverName] {
+				seenDrivers[x.DriverName] = true
+				validDrivers = append(validDrivers, x)
 			}
-			if len(valid) > 0 {
-				tx.CreateInBatches(valid, 100)
+		}
+		if len(validDrivers) > 0 {
+			if err := tx.CreateInBatches(validDrivers, 100).Error; err != nil {
+				tx.Rollback()
+				log.Println("❌ Migration failed to save Drivers:", err)
+				return
 			}
 		}
 
 		var banks []BankAccount
-		if fetchSheetDataToStruct("BankAccounts", &banks) == nil {
-			var valid []BankAccount
-			seen := make(map[string]bool)
-			for _, x := range banks {
-				if x.BankName != "" && !seen[x.BankName] {
-					seen[x.BankName] = true
-					valid = append(valid, x)
-				}
+		if err := fetchSheetDataToStruct("BankAccounts", &banks); err != nil {
+			tx.Rollback()
+			log.Println("❌ Migration failed for BankAccounts:", err)
+			return
+		}
+		var validBanks []BankAccount
+		seenBanks := make(map[string]bool)
+		for _, x := range banks {
+			if x.BankName != "" && !seenBanks[x.BankName] {
+				seenBanks[x.BankName] = true
+				validBanks = append(validBanks, x)
 			}
-			if len(valid) > 0 {
-				tx.CreateInBatches(valid, 100)
+		}
+		if len(validBanks) > 0 {
+			if err := tx.CreateInBatches(validBanks, 100).Error; err != nil {
+				tx.Rollback()
+				log.Println("❌ Migration failed to save BankAccounts:", err)
+				return
 			}
 		}
 
 		var carriers []PhoneCarrier
-		if fetchSheetDataToStruct("PhoneCarriers", &carriers) == nil {
-			var valid []PhoneCarrier
-			seen := make(map[string]bool)
-			for _, x := range carriers {
-				if x.CarrierName != "" && !seen[x.CarrierName] {
-					seen[x.CarrierName] = true
-					valid = append(valid, x)
-				}
+		if err := fetchSheetDataToStruct("PhoneCarriers", &carriers); err != nil {
+			tx.Rollback()
+			log.Println("❌ Migration failed for PhoneCarriers:", err)
+			return
+		}
+		var validCarriers []PhoneCarrier
+		seenCarriers := make(map[string]bool)
+		for _, x := range carriers {
+			if x.CarrierName != "" && !seenCarriers[x.CarrierName] {
+				seenCarriers[x.CarrierName] = true
+				validCarriers = append(validCarriers, x)
 			}
-			if len(valid) > 0 {
-				tx.CreateInBatches(valid, 100)
+		}
+		if len(validCarriers) > 0 {
+			if err := tx.CreateInBatches(validCarriers, 100).Error; err != nil {
+				tx.Rollback()
+				log.Println("❌ Migration failed to save PhoneCarriers:", err)
+				return
 			}
 		}
 
 		var templates []TelegramTemplate
-		if fetchSheetDataToStruct("TelegramTemplates", &templates) == nil && len(templates) > 0 {
-			var valid []TelegramTemplate
-			seen := make(map[uint]bool)
-			for _, x := range templates {
-				if !seen[x.ID] {
-					if x.ID != 0 { seen[x.ID] = true }
-					valid = append(valid, x)
+		if err := fetchSheetDataToStruct("TelegramTemplates", &templates); err != nil {
+			tx.Rollback()
+			log.Println("❌ Migration failed for TelegramTemplates:", err)
+			return
+		}
+		var validTemplates []TelegramTemplate
+		seenTemplates := make(map[uint]bool)
+		for _, x := range templates {
+			if !seenTemplates[x.ID] {
+				if x.ID != 0 {
+					seenTemplates[x.ID] = true
 				}
+				validTemplates = append(validTemplates, x)
 			}
-			if len(valid) > 0 {
-				tx.CreateInBatches(valid, 100)
+		}
+		if len(validTemplates) > 0 {
+			if err := tx.CreateInBatches(validTemplates, 100).Error; err != nil {
+				tx.Rollback()
+				log.Println("❌ Migration failed to save TelegramTemplates:", err)
+				return
 			}
 		}
 		var inventory []Inventory
-		if fetchSheetDataToStruct("Inventory", &inventory) == nil && len(inventory) > 0 {
-			var valid []Inventory
-			seen := make(map[uint]bool)
-			for _, x := range inventory {
-				if !seen[x.ID] {
-					if x.ID != 0 { seen[x.ID] = true }
-					valid = append(valid, x)
+		if err := fetchSheetDataToStruct("Inventory", &inventory); err != nil {
+			tx.Rollback()
+			log.Println("❌ Migration failed for Inventory:", err)
+			return
+		}
+		var validInventory []Inventory
+		seenInventory := make(map[uint]bool)
+		for _, x := range inventory {
+			if !seenInventory[x.ID] {
+				if x.ID != 0 {
+					seenInventory[x.ID] = true
 				}
+				validInventory = append(validInventory, x)
 			}
-			if len(valid) > 0 {
-				tx.CreateInBatches(valid, 100)
+		}
+		if len(validInventory) > 0 {
+			if err := tx.CreateInBatches(validInventory, 100).Error; err != nil {
+				tx.Rollback()
+				log.Println("❌ Migration failed to save Inventory:", err)
+				return
 			}
 		}
 		var transfers []StockTransfer
-		if fetchSheetDataToStruct("StockTransfers", &transfers) == nil {
-			var valid []StockTransfer
-			seen := make(map[string]bool)
-			for _, x := range transfers {
-				if x.TransferID != "" && !seen[x.TransferID] {
-					seen[x.TransferID] = true
-					valid = append(valid, x)
-				}
+		if err := fetchSheetDataToStruct("StockTransfers", &transfers); err != nil {
+			tx.Rollback()
+			log.Println("❌ Migration failed for StockTransfers:", err)
+			return
+		}
+		var validTransfers []StockTransfer
+		seenTransfers := make(map[string]bool)
+		for _, x := range transfers {
+			if x.TransferID != "" && !seenTransfers[x.TransferID] {
+				seenTransfers[x.TransferID] = true
+				validTransfers = append(validTransfers, x)
 			}
-			if len(valid) > 0 {
-				tx.CreateInBatches(valid, 100)
+		}
+		if len(validTransfers) > 0 {
+			if err := tx.CreateInBatches(validTransfers, 100).Error; err != nil {
+				tx.Rollback()
+				log.Println("❌ Migration failed to save StockTransfers:", err)
+				return
 			}
 		}
 		var returns []ReturnItem
-		if fetchSheetDataToStruct("Returns", &returns) == nil {
-			var valid []ReturnItem
-			seen := make(map[string]bool)
-			for _, x := range returns {
-				if x.ReturnID != "" && !seen[x.ReturnID] {
-					seen[x.ReturnID] = true
-					valid = append(valid, x)
-				}
+		if err := fetchSheetDataToStruct("Returns", &returns); err != nil {
+			tx.Rollback()
+			log.Println("❌ Migration failed for Returns:", err)
+			return
+		}
+		var validReturns []ReturnItem
+		seenReturns := make(map[string]bool)
+		for _, x := range returns {
+			if x.ReturnID != "" && !seenReturns[x.ReturnID] {
+				seenReturns[x.ReturnID] = true
+				validReturns = append(validReturns, x)
 			}
-			if len(valid) > 0 {
-				tx.CreateInBatches(valid, 100)
+		}
+		if len(validReturns) > 0 {
+			if err := tx.CreateInBatches(validReturns, 100).Error; err != nil {
+				tx.Rollback()
+				log.Println("❌ Migration failed to save Returns:", err)
+				return
 			}
 		}
 		var revs []RevenueEntry
-		if fetchSheetDataToStruct("RevenueDashboard", &revs) == nil && len(revs) > 0 {
-			var valid []RevenueEntry
-			seen := make(map[uint]bool)
-			for _, x := range revs {
-				if !seen[x.ID] {
-					if x.ID != 0 { seen[x.ID] = true }
-					valid = append(valid, x)
+		if err := fetchSheetDataToStruct("RevenueDashboard", &revs); err != nil {
+			tx.Rollback()
+			log.Println("❌ Migration failed for RevenueDashboard:", err)
+			return
+		}
+		var validRevs []RevenueEntry
+		seenRevs := make(map[uint]bool)
+		for _, x := range revs {
+			if !seenRevs[x.ID] {
+				if x.ID != 0 {
+					seenRevs[x.ID] = true
 				}
+				validRevs = append(validRevs, x)
 			}
-			if len(valid) > 0 {
-				tx.CreateInBatches(valid, 100)
+		}
+		if len(validRevs) > 0 {
+			if err := tx.CreateInBatches(validRevs, 100).Error; err != nil {
+				tx.Rollback()
+				log.Println("❌ Migration failed to save RevenueDashboard:", err)
+				return
 			}
 		}
 		var chats []ChatMessage
-		if fetchSheetDataToStruct("ChatMessages", &chats) == nil && len(chats) > 0 {
-			var valid []ChatMessage
-			seen := make(map[uint]bool)
-			for _, x := range chats {
-				if !seen[x.ID] {
-					if x.ID != 0 { seen[x.ID] = true }
-					valid = append(valid, x)
+		if err := fetchSheetDataToStruct("ChatMessages", &chats); err != nil {
+			tx.Rollback()
+			log.Println("❌ Migration failed for ChatMessages:", err)
+			return
+		}
+		var validChats []ChatMessage
+		seenChats := make(map[uint]bool)
+		for _, x := range chats {
+			if !seenChats[x.ID] {
+				if x.ID != 0 {
+					seenChats[x.ID] = true
 				}
+				validChats = append(validChats, x)
 			}
-			if len(valid) > 0 {
-				tx.CreateInBatches(valid, 100)
+		}
+		if len(validChats) > 0 {
+			if err := tx.CreateInBatches(validChats, 100).Error; err != nil {
+				tx.Rollback()
+				log.Println("❌ Migration failed to save ChatMessages:", err)
+				return
 			}
 		}
 		var editLogs []EditLog
-		if fetchSheetDataToStruct("EditLogs", &editLogs) == nil && len(editLogs) > 0 {
-			var valid []EditLog
-			seen := make(map[uint]bool)
-			for _, x := range editLogs {
-				if !seen[x.ID] {
-					if x.ID != 0 { seen[x.ID] = true }
-					valid = append(valid, x)
+		if err := fetchSheetDataToStruct("EditLogs", &editLogs); err != nil {
+			tx.Rollback()
+			log.Println("❌ Migration failed for EditLogs:", err)
+			return
+		}
+		var validEditLogs []EditLog
+		seenEditLogs := make(map[uint]bool)
+		for _, x := range editLogs {
+			if !seenEditLogs[x.ID] {
+				if x.ID != 0 {
+					seenEditLogs[x.ID] = true
 				}
+				validEditLogs = append(validEditLogs, x)
 			}
-			if len(valid) > 0 {
-				tx.CreateInBatches(valid, 100)
+		}
+		if len(validEditLogs) > 0 {
+			if err := tx.CreateInBatches(validEditLogs, 100).Error; err != nil {
+				tx.Rollback()
+				log.Println("❌ Migration failed to save EditLogs:", err)
+				return
 			}
 		}
 		var actLogs []UserActivityLog
-		if fetchSheetDataToStruct("UserActivityLogs", &actLogs) == nil && len(actLogs) > 0 {
-			var valid []UserActivityLog
-			seen := make(map[uint]bool)
-			for _, x := range actLogs {
-				if !seen[x.ID] {
-					if x.ID != 0 { seen[x.ID] = true }
-					valid = append(valid, x)
+		if err := fetchSheetDataToStruct("UserActivityLogs", &actLogs); err != nil {
+			tx.Rollback()
+			log.Println("❌ Migration failed for UserActivityLogs:", err)
+			return
+		}
+		var validActLogs []UserActivityLog
+		seenActLogs := make(map[uint]bool)
+		for _, x := range actLogs {
+			if !seenActLogs[x.ID] {
+				if x.ID != 0 {
+					seenActLogs[x.ID] = true
 				}
+				validActLogs = append(validActLogs, x)
 			}
-			if len(valid) > 0 {
-				tx.CreateInBatches(valid, 100)
+		}
+		if len(validActLogs) > 0 {
+			if err := tx.CreateInBatches(validActLogs, 100).Error; err != nil {
+				tx.Rollback()
+				log.Println("❌ Migration failed to save UserActivityLogs:", err)
+				return
 			}
 		}
 		var recs []DriverRecommendation
-		if fetchSheetDataToStruct("DriverRecommendations", &recs) == nil && len(recs) > 0 {
-			var valid []DriverRecommendation
-			seen := make(map[uint]bool)
-			for _, x := range recs {
-				if !seen[x.ID] {
-					if x.ID != 0 { seen[x.ID] = true }
-					valid = append(valid, x)
+		if err := fetchSheetDataToStruct("DriverRecommendations", &recs); err != nil {
+			tx.Rollback()
+			log.Println("❌ Migration failed for DriverRecommendations:", err)
+			return
+		}
+		var validRecs []DriverRecommendation
+		seenRecs := make(map[uint]bool)
+		for _, x := range recs {
+			if !seenRecs[x.ID] {
+				if x.ID != 0 {
+					seenRecs[x.ID] = true
 				}
+				validRecs = append(validRecs, x)
 			}
-			if len(valid) > 0 {
-				tx.CreateInBatches(valid, 100)
+		}
+		if len(validRecs) > 0 {
+			if err := tx.CreateInBatches(validRecs, 100).Error; err != nil {
+				tx.Rollback()
+				log.Println("❌ Migration failed to save DriverRecommendations:", err)
+				return
 			}
 		}
 
 		var roles []Role
-		if fetchSheetDataToStruct("Roles", &roles) == nil && len(roles) > 0 {
-			var valid []Role
-			seen := make(map[uint]bool)
-			for _, x := range roles {
-				if !seen[x.ID] {
-					if x.ID != 0 { seen[x.ID] = true }
-					valid = append(valid, x)
+		if err := fetchSheetDataToStruct("Roles", &roles); err != nil {
+			tx.Rollback()
+			log.Println("❌ Migration failed for Roles:", err)
+			return
+		}
+		var validRoles []Role
+		seenRoles := make(map[uint]bool)
+		for _, x := range roles {
+			if !seenRoles[x.ID] {
+				if x.ID != 0 {
+					seenRoles[x.ID] = true
 				}
+				validRoles = append(validRoles, x)
 			}
-			if len(valid) > 0 {
-				tx.CreateInBatches(valid, 100)
+		}
+		if len(validRoles) > 0 {
+			if err := tx.CreateInBatches(validRoles, 100).Error; err != nil {
+				tx.Rollback()
+				log.Println("❌ Migration failed to save Roles:", err)
+				return
 			}
 		}
 
 		var perms []RolePermission
-		if fetchSheetDataToStruct("RolePermissions", &perms) == nil && len(perms) > 0 {
-			var valid []RolePermission
-			seen := make(map[uint]bool)
-			for _, x := range perms {
-				if !seen[x.ID] {
-					if x.ID != 0 { seen[x.ID] = true }
-					valid = append(valid, x)
+		if err := fetchSheetDataToStruct("RolePermissions", &perms); err != nil {
+			tx.Rollback()
+			log.Println("❌ Migration failed for RolePermissions:", err)
+			return
+		}
+		var validPerms []RolePermission
+		seenPerms := make(map[uint]bool)
+		for _, x := range perms {
+			if !seenPerms[x.ID] {
+				if x.ID != 0 {
+					seenPerms[x.ID] = true
 				}
+				validPerms = append(validPerms, x)
 			}
-			if len(valid) > 0 {
-				tx.CreateInBatches(valid, 100)
+		}
+		if len(validPerms) > 0 {
+			if err := tx.CreateInBatches(validPerms, 100).Error; err != nil {
+				tx.Rollback()
+				log.Println("❌ Migration failed to save RolePermissions:", err)
+				return
 			}
 		}
 
 		var orders []Order
-		if fetchSheetDataToStruct("AllOrders", &orders) == nil {
-			var valid []Order
-			seen := make(map[string]bool)
-			for _, o := range orders {
-				if o.OrderID != "" && !seen[o.OrderID] {
-					seen[o.OrderID] = true
-					valid = append(valid, o)
-				}
+		if err := fetchSheetDataToStruct("AllOrders", &orders); err != nil {
+			tx.Rollback()
+			log.Println("❌ Migration failed for AllOrders:", err)
+			return
+		}
+		var validOrders []Order
+		seenOrderIDs := make(map[string]bool)
+		for _, o := range orders {
+			if o.OrderID != "" && !seenOrderIDs[o.OrderID] {
+				seenOrderIDs[o.OrderID] = true
+				validOrders = append(validOrders, o)
 			}
-			if len(valid) > 0 {
-				tx.CreateInBatches(valid, 100)
+		}
+		if len(validOrders) > 0 {
+			if err := tx.CreateInBatches(validOrders, 100).Error; err != nil {
+				tx.Rollback()
+				log.Println("❌ Migration failed to save AllOrders:", err)
+				return
 			}
 		}
 
 		var movies []Movie
-		if fetchSheetDataToStruct("Movies", &movies) == nil && len(movies) > 0 {
-			var valid []Movie
-			seen := make(map[string]bool)
-			for _, x := range movies {
-				if x.ID != "" && !seen[x.ID] {
-					seen[x.ID] = true
-					valid = append(valid, x)
-				}
+		if err := fetchSheetDataToStruct("Movies", &movies); err != nil {
+			tx.Rollback()
+			log.Println("❌ Migration failed for Movies:", err)
+			return
+		}
+		var validMovies []Movie
+		seenMovieIDs := make(map[string]bool)
+		for _, x := range movies {
+			if x.ID != "" && !seenMovieIDs[x.ID] {
+				seenMovieIDs[x.ID] = true
+				validMovies = append(validMovies, x)
 			}
-			if len(valid) > 0 {
-				tx.CreateInBatches(valid, 100)
+		}
+		if len(validMovies) > 0 {
+			if err := tx.CreateInBatches(validMovies, 100).Error; err != nil {
+				tx.Rollback()
+				log.Println("❌ Migration failed to save Movies:", err)
+				return
 			}
 		}
 
 		// Incentive Sheets
 		var incProjects []IncentiveProject
-		if fetchSheetDataToStruct("IncentiveProjects", &incProjects) == nil && len(incProjects) > 0 {
-			tx.CreateInBatches(incProjects, 100)
+		if err := fetchSheetDataToStruct("IncentiveProjects", &incProjects); err != nil {
+			tx.Rollback()
+			log.Println("❌ Migration failed for IncentiveProjects:", err)
+			return
 		}
+		if len(incProjects) > 0 {
+			if err := tx.CreateInBatches(incProjects, 100).Error; err != nil {
+				tx.Rollback()
+				log.Println("❌ Migration failed to save IncentiveProjects:", err)
+				return
+			}
+		}
+
 		var incCalcs []IncentiveCalculator
-		if fetchSheetDataToStruct("IncentiveCalculators", &incCalcs) == nil && len(incCalcs) > 0 {
-			tx.CreateInBatches(incCalcs, 100)
+		if err := fetchSheetDataToStruct("IncentiveCalculators", &incCalcs); err != nil {
+			tx.Rollback()
+			log.Println("❌ Migration failed for IncentiveCalculators:", err)
+			return
 		}
+		if len(incCalcs) > 0 {
+			if err := tx.CreateInBatches(incCalcs, 100).Error; err != nil {
+				tx.Rollback()
+				log.Println("❌ Migration failed to save IncentiveCalculators:", err)
+				return
+			}
+		}
+
 		var incResults []IncentiveResult
-		if fetchSheetDataToStruct("IncentiveResults", &incResults) == nil && len(incResults) > 0 {
-			tx.CreateInBatches(incResults, 100)
+		if err := fetchSheetDataToStruct("IncentiveResults", &incResults); err != nil {
+			tx.Rollback()
+			log.Println("❌ Migration failed for IncentiveResults:", err)
+			return
 		}
+		if len(incResults) > 0 {
+			if err := tx.CreateInBatches(incResults, 100).Error; err != nil {
+				tx.Rollback()
+				log.Println("❌ Migration failed to save IncentiveResults:", err)
+				return
+			}
+		}
+
 		var incManual []IncentiveManualData
-		if fetchSheetDataToStruct("IncentiveManualData", &incManual) == nil && len(incManual) > 0 {
-			tx.CreateInBatches(incManual, 100)
+		if err := fetchSheetDataToStruct("IncentiveManualData", &incManual); err != nil {
+			tx.Rollback()
+			log.Println("❌ Migration failed for IncentiveManualData:", err)
+			return
 		}
+		if len(incManual) > 0 {
+			if err := tx.CreateInBatches(incManual, 100).Error; err != nil {
+				tx.Rollback()
+				log.Println("❌ Migration failed to save IncentiveManualData:", err)
+				return
+			}
+		}
+
 		var incCustom []IncentiveCustomPayout
-		if fetchSheetDataToStruct("IncentiveCustomPayouts", &incCustom) == nil && len(incCustom) > 0 {
-			tx.CreateInBatches(incCustom, 100)
+		if err := fetchSheetDataToStruct("IncentiveCustomPayouts", &incCustom); err != nil {
+			tx.Rollback()
+			log.Println("❌ Migration failed for IncentiveCustomPayouts:", err)
+			return
+		}
+		if len(incCustom) > 0 {
+			if err := tx.CreateInBatches(incCustom, 100).Error; err != nil {
+				tx.Rollback()
+				log.Println("❌ Migration failed to save IncentiveCustomPayouts:", err)
+				return
+			}
 		}
 
 		if err := tx.Commit().Error; err != nil {
@@ -2460,9 +2766,18 @@ func handleAdminUpdateOrder(c *gin.Context) {
 	hub.broadcast <- eventBytes
 
 	go func() {
-		req := AppsScriptRequest{Action: "updateOrderTelegram", Secret: appsScriptSecret, OrderData: map[string]interface{}{"orderId": r.OrderID, "updatedFields": r.NewData, "team": originalOrder.Team}}
-		jsonData, _ := json.Marshal(req)
-		http.Post(appsScriptURL, "application/json", bytes.NewBuffer(jsonData))
+		// Sync with Google Sheets via managed queue
+		// Note: "AllOrders" is the sheet name for orders.
+		// The primary key for an order in the sheet is "Order ID".
+		enqueueSync("updateSheet", r.NewData, "AllOrders", map[string]string{"Order ID": r.OrderID})
+
+		// Also send to Telegram via Apps Script (this is a separate action)
+		// Sync with Telegram via Apps Script (keep separate for now)
+		enqueueSync("updateOrderTelegram", map[string]interface{}{
+			"orderId":       r.OrderID,
+			"updatedFields": r.NewData,
+			"team":          originalOrder.Team,
+		}, "", nil) // SheetName and PrimaryKey are not directly applicable for Telegram update action
 	}()
 
 	c.JSON(200, gin.H{"status": "success"})
@@ -2478,12 +2793,13 @@ func handleAdminDeleteOrder(c *gin.Context) {
 	var order Order
 	if err := DB.Where("order_id = ?", r.OrderID).First(&order).Error; err == nil {
 		go func() {
-			callAppsScriptPOST(AppsScriptRequest{
-				Action: "deleteOrderTelegram",
-				OrderData: map[string]interface{}{
-					"orderId": r.OrderID, "team": order.Team, "messageId1": order.TelegramMessageID1, "messageId2": order.TelegramMessageID2, "fulfillmentStore": order.FulfillmentStore,
-				},
-			})
+			// Sync with Google Sheets via managed queue
+			enqueueSync("deleteRow", nil, "AllOrders", map[string]string{"Order ID": r.OrderID})
+
+			// Also send to Telegram via Apps Script (this is a separate action)
+			enqueueSync("deleteOrderTelegram", map[string]interface{}{
+				"orderId": r.OrderID, "team": order.Team, "messageId1": order.TelegramMessageID1, "messageId2": order.TelegramMessageID2, "fulfillmentStore": order.FulfillmentStore,
+			}, "", nil) // SheetName and PrimaryKey are not directly applicable for Telegram delete action
 		}()
 		DB.Delete(&order)
 		eventBytes, _ := json.Marshal(map[string]interface{}{"type": "delete_order", "orderId": r.OrderID})
@@ -2550,9 +2866,8 @@ func handleAdminUpdateSheet(c *gin.Context) {
 		if req.SheetName == "Roles" && strings.ToLower(originalPKKey) == "id" {
 			sheetPKKey = "ID"
 		}
-		appsReq := AppsScriptRequest{Action: "updateSheet", Secret: appsScriptSecret, SheetName: req.SheetName, PrimaryKey: map[string]string{sheetPKKey: fmt.Sprintf("%v", pkVal)}, NewData: req.NewData}
-		jb, _ := json.Marshal(appsReq)
-		http.Post(appsScriptURL, "application/json", bytes.NewBuffer(jb))
+		// Sync with Google Sheets via managed queue
+		enqueueSync("updateSheet", req.NewData, req.SheetName, map[string]string{sheetPKKey: fmt.Sprintf("%v", pkVal)})
 	}()
 	c.JSON(200, gin.H{"status": "success"})
 }
@@ -2580,9 +2895,8 @@ func handleAdminAddRow(c *gin.Context) {
 	hub.broadcast <- eventBytes
 
 	go func() {
-		appsReq := AppsScriptRequest{Action: "addRow", Secret: appsScriptSecret, SheetName: req.SheetName, NewData: req.NewData}
-		jb, _ := json.Marshal(appsReq)
-		http.Post(appsScriptURL, "application/json", bytes.NewBuffer(jb))
+		// Sync with Google Sheets via managed queue
+		enqueueSync("addRow", req.NewData, req.SheetName, nil)
 	}()
 	c.JSON(200, gin.H{"status": "success"})
 }
@@ -2627,9 +2941,8 @@ func handleAdminDeleteRow(c *gin.Context) {
 	hub.broadcast <- eventBytes
 
 	go func() {
-		appsReq := AppsScriptRequest{Action: "deleteRow", Secret: appsScriptSecret, SheetName: req.SheetName, PrimaryKey: strPrimaryKey}
-		jb, _ := json.Marshal(appsReq)
-		http.Post(appsScriptURL, "application/json", bytes.NewBuffer(jb))
+		// Sync with Google Sheets via managed queue
+		enqueueSync("deleteRow", nil, req.SheetName, strPrimaryKey)
 	}()
 	c.JSON(200, gin.H{"status": "success"})
 }
@@ -2773,15 +3086,8 @@ func handleUpdateProfile(c *gin.Context) {
 
 	go func() {
 		if appsScriptURL != "" {
-			appsReq := AppsScriptRequest{
-				Action:     "updateSheet",
-				Secret:     appsScriptSecret,
-				SheetName:  "Users",
-				PrimaryKey: map[string]string{"UserName": req.UserName},
-				NewData:    req.NewData,
-			}
-			jb, _ := json.Marshal(appsReq)
-			http.Post(appsScriptURL, "application/json", bytes.NewBuffer(jb))
+			// Sync with Google Sheets via managed queue
+			enqueueSync("updateSheet", req.NewData, "Users", map[string]string{"UserName": req.UserName})
 		}
 	}()
 
@@ -2804,15 +3110,8 @@ func handleChangePassword(c *gin.Context) {
 
 	go func() {
 		if appsScriptURL != "" {
-			appsReq := AppsScriptRequest{
-				Action:     "updateSheet",
-				Secret:     appsScriptSecret,
-				SheetName:  "Users",
-				PrimaryKey: map[string]string{"UserName": req.UserName},
-				NewData:    map[string]interface{}{"Password": req.NewPassword},
-			}
-			jb, _ := json.Marshal(appsReq)
-			http.Post(appsScriptURL, "application/json", bytes.NewBuffer(jb))
+			// Sync with Google Sheets via managed queue
+			enqueueSync("updateSheet", map[string]interface{}{"Password": req.NewPassword}, "Users", map[string]string{"UserName": req.UserName})
 		}
 	}()
 
@@ -2966,34 +3265,29 @@ func handleImageUploadProxy(c *gin.Context) {
 				})
 				hub.broadcast <- event
 
-				syncReq := AppsScriptRequest{
-					Action: "updateOrderTelegram",
-					Secret: appsScriptSecret,
-					OrderData: map[string]interface{}{
-						"orderId":       r.OrderID,
-						"team":          team, // ✅ Added team for Apps Script to find the correct sheet
-						"updatedFields": map[string]interface{}{r.TargetColumn: driveURL},
-					},
-				}
-				jb, _ := json.Marshal(syncReq)
-				http.Post(appsScriptURL, "application/json", bytes.NewBuffer(jb))
+				// Sync with Google Sheets & Telegram via managed queue
+				enqueueSync("updateOrderTelegram", map[string]interface{}{
+					"orderId":       r.OrderID,
+					"team":          team,
+					"updatedFields": map[string]interface{}{r.TargetColumn: driveURL},
+				}, "", nil)
 			}
 		}
 
+		// Support Movie Thumbnail Background Update
 		if r.MovieID != "" && r.TargetColumn != "" {
 			dbCol := mapToDBColumn(r.TargetColumn)
-			DB.Model(&Movie{}).Where("id = ?", r.MovieID).UpdateColumn(dbCol, driveURL)
+			var movie Movie
+			if err := DB.Where("id = ?", r.MovieID).First(&movie).Error; err == nil {
+				DB.Model(&movie).Update(dbCol, driveURL)
+				log.Printf("🎬 Background update for Movie %s (%s): %s", r.MovieID, r.TargetColumn, driveURL)
 
-			// Sync to Sheets
-			syncReq := AppsScriptRequest{
-				Action:     "updateSheet",
-				Secret:     appsScriptSecret,
-				SheetName:  "Movies",
-				PrimaryKey: map[string]string{"ID": r.MovieID},
-				NewData:    map[string]interface{}{r.TargetColumn: driveURL},
+				// Sync with Google Sheets via managed queue
+				enqueueSync("updateSheet", map[string]interface{}{r.TargetColumn: driveURL}, "Movies", map[string]string{"ID": r.MovieID})
+			} else {
+				// Fallback if movie not found in DB yet
+				DB.Model(&Movie{}).Where("id = ?", r.MovieID).UpdateColumn(dbCol, driveURL)
 			}
-			jb, _ := json.Marshal(syncReq)
-			http.Post(appsScriptURL, "application/json", bytes.NewBuffer(jb))
 		}
 
 		if r.UserName != "" {
@@ -3008,15 +3302,8 @@ func handleImageUploadProxy(c *gin.Context) {
 		}
 
 		if r.SheetName != "" && r.PrimaryKey != nil && r.TargetColumn != "" {
-			syncReq := AppsScriptRequest{
-				Action:     "updateSheet",
-				Secret:     appsScriptSecret,
-				SheetName:  r.SheetName,
-				PrimaryKey: r.PrimaryKey,
-				NewData:    map[string]interface{}{r.TargetColumn: driveURL},
-			}
-			jb, _ := json.Marshal(syncReq)
-			http.Post(appsScriptURL, "application/json", bytes.NewBuffer(jb))
+			// Sync with Google Sheets via managed queue
+			enqueueSync("updateSheet", map[string]interface{}{r.TargetColumn: driveURL}, r.SheetName, r.PrimaryKey)
 
 			tableName := getTableName(r.SheetName)
 			if tableName != "" {
@@ -3542,6 +3829,13 @@ func handleProxyM3U8(c *gin.Context) {
 		lines = append(lines, line)
 	}
 
+	// Determine absolute backend host URL
+	scheme := "http"
+	if c.Request.TLS != nil || c.Request.Header.Get("X-Forwarded-Proto") == "https" {
+		scheme = "https"
+	}
+	backendBaseURL := fmt.Sprintf("%s://%s", scheme, c.Request.Host)
+
 	for _, line := range lines {
 		if line == "" {
 			rewrittenLines = append(rewrittenLines, "")
@@ -3562,9 +3856,9 @@ func handleProxyM3U8(c *gin.Context) {
 						isPlaylist := strings.Contains(strings.ToLower(absURL), ".m3u8") || 
 									 strings.Contains(absURL, "/hlsplaylist/") || 
 									 strings.Contains(absURL, "/hls/")
-						endpoint := "/api/proxy-ts"
+						endpoint := backendBaseURL + "/api/proxy-ts"
 						if isPlaylist {
-							endpoint = "/api/proxy-m3u8"
+							endpoint = backendBaseURL + "/api/proxy-m3u8"
 						}
 						
 						refererParam := ""
@@ -3591,9 +3885,9 @@ func handleProxyM3U8(c *gin.Context) {
 		}
 		
 		if isMasterPlaylist || strings.Contains(strings.ToLower(absURL), ".m3u8") || strings.Contains(absURL, "/hlsplaylist/") || strings.Contains(absURL, "/hls/") {
-			rewrittenLines = append(rewrittenLines, fmt.Sprintf("/api/proxy-m3u8?url=%s%s", url.QueryEscape(absURL), refererParam))
+			rewrittenLines = append(rewrittenLines, fmt.Sprintf("%s/api/proxy-m3u8?url=%s%s", backendBaseURL, url.QueryEscape(absURL), refererParam))
 		} else {
-			rewrittenLines = append(rewrittenLines, fmt.Sprintf("/api/proxy-ts?url=%s%s", url.QueryEscape(absURL), refererParam))
+			rewrittenLines = append(rewrittenLines, fmt.Sprintf("%s/api/proxy-ts?url=%s%s", backendBaseURL, url.QueryEscape(absURL), refererParam))
 		}
 	}
 
@@ -3646,21 +3940,20 @@ func handleProxyTS(c *gin.Context) {
 
 	// Forward response headers
 	for k, v := range resp.Header {
-		if k == "Content-Type" || k == "Content-Length" || k == "Content-Range" || k == "Accept-Ranges" {
+		if k == "Content-Length" || k == "Content-Range" || k == "Accept-Ranges" {
 			c.Header(k, v[0])
 		}
 	}
 	
-	// Default Content-Type if missing, but try to be smart
-	if c.Writer.Header().Get("Content-Type") == "" {
-		ext := strings.ToLower(filepath.Ext(tsURL))
-		if ext == ".m4s" || ext == ".mp4" {
-			c.Header("Content-Type", "video/mp4")
-		} else if ext == ".m3u8" {
-			c.Header("Content-Type", "application/vnd.apple.mpegurl")
-		} else {
-			c.Header("Content-Type", "video/MP2T")
-		}
+	// Force Content-Type to match expected video segments and ignore origin obfuscation
+	ext := strings.ToLower(filepath.Ext(tsURL))
+	if ext == ".m4s" || ext == ".mp4" || strings.Contains(tsURL, ".m4s") || strings.Contains(tsURL, ".mp4") {
+		c.Header("Content-Type", "video/mp4")
+	} else if ext == ".m3u8" || strings.Contains(tsURL, ".m3u8") {
+		c.Header("Content-Type", "application/vnd.apple.mpegurl")
+	} else {
+		// Force MP2T for any other stream chunk (Overrides things like image/png)
+		c.Header("Content-Type", "video/MP2T")
 	}
 	
 	c.Header("Access-Control-Allow-Origin", "*")
@@ -3713,7 +4006,12 @@ func handleFetchJSON(c *gin.Context) {
 		req, _ = http.NewRequest("GET", targetURL, nil)
 	}
 
-	req.Header.Set("Referer", u.Scheme+"://"+u.Host)
+	referer := c.Query("referer")
+	if referer != "" {
+		req.Header.Set("Referer", referer)
+	} else {
+		req.Header.Set("Referer", u.Scheme+"://"+u.Host)
+	}
 	req.Header.Set("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36")
 	req.Header.Set("X-Requested-With", "XMLHttpRequest")
 
@@ -3857,28 +4155,21 @@ func handleCreateMovie(c *gin.Context) {
 		return
 	}
 
-	// Send to Google Sheets
+	// Send to Google Sheets via managed queue
 	go func(m Movie) {
-		appsReq := AppsScriptRequest{
-			Action:    "addRow",
-			Secret:    appsScriptSecret,
-			SheetName: "Movies",
-			NewData: map[string]interface{}{
-				"ID":          m.ID,
-				"Title":       m.Title,
-				"Description": m.Description,
-				"Thumbnail":   m.Thumbnail,
-				"VideoURL":    m.VideoURL,
-				"Type":        m.Type,
-				"Language":    m.Language,
-				"Country":     m.Country,
-				"Category":    m.Category,
-				"SeriesKey":   m.SeriesKey,
-				"AddedAt":     m.AddedAt,
-			},
-		}
-		jb, _ := json.Marshal(appsReq)
-		http.Post(appsScriptURL, "application/json", bytes.NewBuffer(jb))
+		enqueueSync("addRow", map[string]interface{}{
+			"ID":          m.ID,
+			"Title":       m.Title,
+			"Description": m.Description,
+			"Thumbnail":   m.Thumbnail,
+			"VideoURL":    m.VideoURL,
+			"Type":        m.Type,
+			"Language":    m.Language,
+			"Country":     m.Country,
+			"Category":    m.Category,
+			"SeriesKey":   m.SeriesKey,
+			"AddedAt":     m.AddedAt,
+		}, "Movies", nil)
 	}(movie)
 
 	c.JSON(http.StatusOK, gin.H{"status": "success", "data": movie})
@@ -3896,16 +4187,9 @@ func handleDeleteMovie(c *gin.Context) {
 		return
 	}
 
-	// Delete from Google Sheets
+	// Delete from Google Sheets via managed queue
 	go func(movieID string) {
-		appsReq := AppsScriptRequest{
-			Action:     "deleteRow",
-			Secret:     appsScriptSecret,
-			SheetName:  "Movies",
-			PrimaryKey: map[string]string{"ID": movieID},
-		}
-		jb, _ := json.Marshal(appsReq)
-		http.Post(appsScriptURL, "application/json", bytes.NewBuffer(jb))
+		enqueueSync("deleteRow", nil, "Movies", map[string]string{"ID": movieID})
 	}(id)
 
 	c.JSON(http.StatusOK, gin.H{"status": "success", "message": "បានលុបភាពយន្តដោយជោគជ័យ"})
@@ -3949,14 +4233,34 @@ func handleSheetsWebhook(c *gin.Context) {
 		pkName = "UserName"
 	} else if req.SheetName == "Stores" {
 		pkName = "StoreName"
+	} else if req.SheetName == "Settings" {
+		pkName = "Key"
 	} else if req.SheetName == "Products" {
 		pkName = "Barcode"
 	} else if req.SheetName == "ShippingMethods" {
 		pkName = "MethodName"
-	} else if req.SheetName == "Movies" {
-		pkName = "ID"
-	} else if req.SheetName == "AllOrders" {
+	} else if req.SheetName == "Colors" {
+		pkName = "ColorName"
+	} else if req.SheetName == "Drivers" {
+		pkName = "DriverName"
+	} else if req.SheetName == "BankAccounts" {
+		pkName = "BankName"
+	} else if req.SheetName == "PhoneCarriers" {
+		pkName = "CarrierName"
+	} else if req.SheetName == "StockTransfers" {
+		pkName = "TransferID"
+	} else if req.SheetName == "Returns" {
+		pkName = "ReturnID"
+	} else if req.SheetName == "AllOrders" || strings.HasPrefix(req.SheetName, "Orders_") {
 		pkName = "Order ID"
+	} else {
+		// Default to "id" (lowercase) for Roles, Permissions, Incentive, etc. 
+		// if "ID" (uppercase) doesn't find a match in RowData.
+		if _, exists := req.RowData["ID"]; !exists {
+			if _, lowerExists := req.RowData["id"]; lowerExists {
+				pkName = "id"
+			}
+		}
 	}
 
 	for k, v := range req.RowData {
@@ -4000,15 +4304,22 @@ func handleSheetsWebhook(c *gin.Context) {
 	if req.Action == "delete" {
 		DB.Table(tableName).Where(pkCol+" = ?", pkVal).Delete(nil)
 	} else {
-		// UPSERT logic: Try to update, if not found (or affected rows 0), could potentially create
+		// UPSERT logic: Try to update first
 		result := DB.Table(tableName).Where(pkCol+" = ?", pkVal).Updates(mappedData)
 		if result.Error != nil {
 			c.JSON(500, gin.H{"status": "error", "message": result.Error.Error()})
 			return
 		}
 		
-		// If it's a new row (not found), we could Create it here, 
-		// but typically we'll rely on the existing migration for bulk or wait for specific trigger.
+		// If no rows were updated, it's likely a new record. Attempt to Create.
+		if result.RowsAffected == 0 {
+			// Ensure PK is in mappedData for creation
+			mappedData[pkCol] = pkVal
+			if err := DB.Table(tableName).Create(mappedData).Error; err != nil {
+				// Log but don't fail, as it might have been created by another process/worker
+				log.Printf("⚠️ SyncManager: Upsert/Create failed for %s PK %v: %v", tableName, pkVal, err)
+			}
+		}
 	}
 
 	// Broadcast update to all connected clients
@@ -4040,7 +4351,9 @@ func main() {
 	initDB()
 	hub = NewHub()
 	go hub.run()
-	go startOrderWorker()
+	// Start Background Workers
+	startSyncManager(3)        // Standard Google Sheets sync workers
+	go startOrderWorker()       // Specialized Order workers
 	startScheduler()
 
 	r := gin.Default()

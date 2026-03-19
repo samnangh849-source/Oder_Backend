@@ -14,19 +14,19 @@ function onOpen() {
 const SYSTEM_STRUCTURE = {
   "Users": ["UserName", "Password", "Team", "FullName", "ProfilePictureURL", "Role", "IsSystemAdmin", "TelegramUsername"],
   "Stores": ["StoreName", "StoreType", "Address", "TelegramBotToken", "TelegramGroupID", "TelegramTopicID", "LabelPrinterURL", "CODAlertGroupID"],
-  "Settings": ["ConfigKey", "ConfigValue", "Description"],
-  "TeamsPages": ["Team", "PageName", "TelegramValue", "PageLogoURL", "DefaultStore", "TelegramTopicID"],
+  "Settings": ["Key", "Value", "Description"],
+  "TeamsPages": ["ID", "Team", "PageName", "TelegramValue", "PageLogoURL", "DefaultStore", "TelegramTopicID"],
   "Products": ["Barcode", "ProductName", "Price", "Cost", "ImageURL", "Tags"],
-  "Locations": ["Province", "District", "Sangkat"],
+  "Locations": ["ID", "Province", "District", "Sangkat"],
   "ShippingMethods": ["MethodName", "LogoURL", "AllowManualDriver", "RequireDriverSelection", "InternalCost", "CostShortcuts", "EnableDriverRecommendation"],
   "Colors": ["ColorName"],
-  "Drivers": ["DriverName", "ImageURL", "Phone", "VehiclePlate"],
+  "Drivers": ["DriverName", "ImageURL", "Phone", "InternalCost", "AssignedStores"],
   "BankAccounts": ["BankName", "LogoURL", "AssignedStores"],
   "PhoneCarriers": ["CarrierName", "Prefixes", "CarrierLogoURL"],
-  "TelegramTemplates": ["Team", "Part", "Template"],
+  "TelegramTemplates": ["ID", "Team", "Part", "Template"],
   
   // ប្រព័ន្ធស្តុក
-  "Inventory": ["StoreName", "Barcode", "Quantity", "LastUpdated", "UpdatedBy"],
+  "Inventory": ["ID", "StoreName", "Barcode", "Quantity", "LastUpdated", "UpdatedBy"],
   "StockTransfers": ["TransferID", "Timestamp", "FromStore", "ToStore", "Barcode", "Quantity", "Status", "RequestedBy", "ApprovedBy", "ReceivedBy"],
   "Returns": ["ReturnID", "Timestamp", "OrderID", "StoreName", "Barcode", "Quantity", "Reason", "IsRestocked", "HandledBy"],
   
@@ -47,18 +47,22 @@ const SYSTEM_STRUCTURE = {
     "Fulfillment Store", "Team", "IsVerified", "Fulfillment Status", "Packed By", 
     "Package Photo URL", "Driver Name", "Tracking Number", "Dispatched Time", "Delivered Time", "Delivery Photo URL"
   ],
-  "RevenueDashboard": ["Timestamp", "Team", "Page", "Revenue", "Fulfillment Store"],
+  "RevenueDashboard": ["ID", "Timestamp", "Team", "Page", "Revenue", "FulfillmentStore"],
   
   // ប្រព័ន្ធប្រាក់លើកទឹកចិត្ត (Incentive)
-  "IncentiveResults": ["Timestamp", "ProjectID", "UserName", "TotalOrders", "TotalRevenue", "CalculatedValue", "IsCustom"],
+  "IncentiveProjects": ["ID", "ProjectName", "CalculatorID", "StartDate", "EndDate", "TargetTeam", "Status", "ColorCode", "RequirePeriodSelection", "DataSource", "CreatedAt"],
+  "IncentiveCalculators": ["ID", "ProjectID", "Name", "Type", "Value", "RulesJSON"],
+  "IncentiveResults": ["ID", "Timestamp", "ProjectID", "UserName", "TotalOrders", "TotalRevenue", "CalculatedValue", "IsCustom"],
+  "IncentiveManualData": ["ID", "ProjectID", "Month", "MetricType", "DataKey", "Value"],
+  "IncentiveCustomPayouts": ["ID", "ProjectID", "Period", "TargetID", "Value"],
 
   // ប្រព័ន្ធកម្សាន្ត (Entertainment)
   "Movies": ["ID", "Title", "Description", "Thumbnail", "VideoURL", "Type", "Language", "Country", "Category", "SeriesKey", "AddedAt"],
 
   // ឯកសារយោង និង Chat
-  "ChatMessages": ["Timestamp", "UserName", "Receiver", "MessageType", "Content", "FileID"],
-  "EditLogs": ["Timestamp", "OrderID", "Requester", "Field Changed", "Old Value", "New Value"],
-  "UserActivityLogs": ["Timestamp", "User", "Action", "Details"]
+  "ChatMessages": ["ID", "Timestamp", "UserName", "Receiver", "MessageType", "Content", "FileID"],
+  "EditLogs": ["ID", "Timestamp", "OrderID", "Requester", "Field Changed", "Old Value", "New Value"],
+  "UserActivityLogs": ["ID", "Timestamp", "User", "Action", "Details"]
 };
 
 function initializeSystem() {

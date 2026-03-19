@@ -147,6 +147,7 @@ const MobileNetflixEntertainment: React.FC<MobileNetflixEntertainmentProps> = ({
     }
   };
   const [newMovie, setNewMovie] = useState<Partial<Movie>>({
+    ID: generateShortID(),
     Type: 'long',
     Language: 'Khmer',
     Country: 'Cambodia'
@@ -189,43 +190,37 @@ const MobileNetflixEntertainment: React.FC<MobileNetflixEntertainmentProps> = ({
     try {
       let htmlContent = '';
       if (inputType === 'url') {
-        const targetUrl = inputUrl;
-        const proxies = [
-          `${WEB_APP_URL}/api/fetch-json?url=${encodeURIComponent(targetUrl)}`,
-          `https://api.allorigins.win/get?url=${encodeURIComponent(targetUrl)}`,
-          `https://api.codetabs.com/v1/proxy?quest=${encodeURIComponent(targetUrl)}`
-        ];
-
-        let fetchSuccess = false;
-        for (const proxyUrl of proxies) {
-          try {
-            const response = await fetch(proxyUrl);
-            if (!response.ok) continue;
-            
-            const contentType = response.headers.get("content-type");
-            if (contentType && contentType.includes("application/json")) {
-              const data = await response.json();
-              htmlContent = data.contents;
-            } else {
-              htmlContent = await response.text();
-            }
-            
-            if (htmlContent) { fetchSuccess = true; break; }
-          } catch (e) { console.warn(e); }
-        }
-        if (!fetchSuccess) throw new Error("មិនអាចទាញយកបានទេ។ អាចមកពី Network របស់អ្នកមានបញ្ហា។");
+        const bypassUrl = `https://api.allorigins.win/raw?url=${encodeURIComponent(inputUrl)}`;
+        const res = await fetch(bypassUrl);
+        if (!res.ok) throw new Error("Could not fetch page from URL.");
+        htmlContent = await res.text();
       } else {
         htmlContent = inputSource;
         if (!htmlContent.trim()) throw new Error("សូមបញ្ចូលកូដដើម (Page Source) ជាមុនសិន។");
       }
 
-      // Check for iframes or direct m3u8 using the backend extractor
+      if (!htmlContent) throw new Error("Empty content.");
+
       const parser = new DOMParser();
       const doc = parser.parseFromString(htmlContent, "text/html");
+
+      // 1. Check for playlists array (zip model)
+      const playlistsMatch = htmlContent.match(/const playlists = (\[.*?\]);/s);
+      if (playlistsMatch) {
+        const fileMatches = [...playlistsMatch[1].matchAll(/file:\s*["']([^"']+(\.m3u8|\/hlsplaylist\/|\/hls\/)[^"']*)["']/g)];
+        if (fileMatches.length > 0) {
+          let url = fileMatches[0][1];
+          if (url.startsWith('//')) url = 'https:' + url;
+          setExtractedM3u8(url);
+          setStatus('success');
+          return;
+        }
+      }
+
+      // 2. Iframe search
       const iframes = doc.querySelectorAll('.movieplay iframe, iframe, .embed-container iframe');
-      
-      let src = '';
       if (iframes.length > 0) {
+        let src = '';
         for (let i = 0; i < iframes.length; i++) {
           const iframeSrc = (iframes[i] as HTMLIFrameElement).src;
           if (iframeSrc && !iframeSrc.includes('googletagmanager') && !iframeSrc.includes('facebook')) {
@@ -233,27 +228,30 @@ const MobileNetflixEntertainment: React.FC<MobileNetflixEntertainmentProps> = ({
             break;
           }
         }
+        if (src) {
+           // Recursive fetch for the iframe source to extract m3u8
+           try {
+             const iframeBypass = `https://api.allorigins.win/raw?url=${encodeURIComponent(src)}`;
+             const iframeRes = await fetch(iframeBypass);
+             if (iframeRes.ok) {
+               const iframeHtml = await iframeRes.text();
+               const m3u8Regex = /(["'])(https?:\/\/[^"']+(\.m3u8|\/hlsplaylist\/|\/hls\/)[^"']*)\1/i;
+               const match = iframeHtml.match(m3u8Regex);
+               if (match && match[2]) {
+                 setExtractedM3u8(match[2]);
+                 setStatus('success');
+                 return;
+               }
+             }
+           } catch (e) {}
+           
+           setExtractedM3u8(src);
+           setStatus('success');
+           return;
+        }
       }
 
-      const targetExtractionUrl = src || (inputType === 'url' ? inputUrl : '');
-      if (targetExtractionUrl) {
-          const extractRes = await fetch(`${WEB_APP_URL}/api/extract-m3u8?url=${encodeURIComponent(targetExtractionUrl)}`);
-          if (extractRes.ok) {
-            const data = await extractRes.json();
-            if (data.m3u8Url) {
-              setExtractedM3u8(data.m3u8Url);
-              setStatus('success');
-              return;
-            }
-          }
-          if (src) {
-            setExtractedM3u8(src);
-            setStatus('success');
-            return;
-          }
-      }
-
-      // Direct m3u8 search
+      // 3. Direct m3u8 search
       const m3u8Matches = [...htmlContent.matchAll(/(https?:\/\/[^\s"'<>]+?(\.m3u8|\.mp4|\/hlsplaylist\/|\/hls\/)[^\s"'<>]*)/gi)];
       let foundM3u8 = null;
       for (const match of m3u8Matches) {
@@ -263,6 +261,7 @@ const MobileNetflixEntertainment: React.FC<MobileNetflixEntertainmentProps> = ({
           break;
         }
       }
+
       if (foundM3u8) {
         setExtractedM3u8(foundM3u8);
         setStatus('success');
@@ -548,7 +547,14 @@ const MobileNetflixEntertainment: React.FC<MobileNetflixEntertainmentProps> = ({
                    <button onClick={() => { navigator.clipboard.writeText(extractedM3u8); showNotification("Copied!", "success"); }}><Copy className="w-4 h-4" /></button>
                 </div>
                 <div className="text-[9px] break-all font-mono text-gray-500 bg-black/40 p-3 rounded-lg mb-4 line-clamp-2">{extractedM3u8}</div>
-                <button onClick={() => { setNewMovie({ ...newMovie, VideoURL: extractedM3u8 }); setShowAddModal(true); setShowProxy(false); }} className="w-full bg-green-600 text-white font-black py-3 rounded-xl uppercase tracking-widest text-[10px]">Create Entry</button>
+                <button onClick={() => { 
+                  setNewMovie(prev => ({ 
+                    ...prev, 
+                    ID: prev.ID || generateShortID(),
+                    VideoURL: extractedM3u8 
+                  })); 
+                  setShowAddModal(true); 
+                }} className="w-full bg-green-600 text-white font-black py-3 rounded-xl uppercase tracking-widest mt-4">Create Entry</button>
               </div>
             )}
             {status === 'error' && <div className="mt-4 text-red-400 text-[10px] flex items-center gap-3 bg-red-600/10 p-3 rounded-xl"><AlertCircle className="w-4 h-4" /> {errorMessage}</div>}

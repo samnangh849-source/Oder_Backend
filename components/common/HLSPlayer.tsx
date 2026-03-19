@@ -28,7 +28,7 @@ const HLSPlayer: React.FC<HLSPlayerProps> = ({ url, startTime = 0, onProgress, o
   // Register Service Worker
   useEffect(() => {
     if ('serviceWorker' in navigator) {
-      navigator.serviceWorker.register('/sw.js')
+      navigator.serviceWorker.register(import.meta.env.BASE_URL + 'sw.js')
         .then(reg => {
           console.log('SW Registered:', reg.scope);
           // Wait for SW to be active and controlling the page
@@ -66,7 +66,7 @@ const HLSPlayer: React.FC<HLSPlayerProps> = ({ url, startTime = 0, onProgress, o
     // We only proceed if SW is ready (for local proxy)
     if (!swReady) return;
 
-    const proxyBaseUrl = '/local-proxy'; // Use local SW proxy
+    const proxyBaseUrl = `${import.meta.env.BASE_URL}local-proxy`; // Use local SW proxy
 
     // Reset all states immediately when URL changes
     setFinalUrl(null);
@@ -95,30 +95,30 @@ const HLSPlayer: React.FC<HLSPlayerProps> = ({ url, startTime = 0, onProgress, o
         }
     }
 
-    // If it's already a local proxy URL, use it directly
-    if (url.includes('/local-proxy/')) {
+    // If it's already a local proxy URL, use it directly (Backward compatibility)
+    if (url.includes('/local-proxy/') || url.includes('/api/proxy-')) {
         setFinalUrl(url);
         setIsExtracting(false);
         return;
     }
 
-    // If it's a direct M3U8, wrap it in our local proxy
+    // If it's a direct M3U8, wrap it in our robust Golang backend proxy
     if (isM3u8) {
-        setFinalUrl(`${proxyBaseUrl}/m3u8?url=${encodeURIComponent(url)}`);
+        setFinalUrl(`${WEB_APP_URL}/api/proxy-m3u8?url=${encodeURIComponent(url)}`);
         setIsExtracting(false);
         return;
     }
 
-    // If it's a direct Video file (MP4, etc.), wrap it in our local proxy (mapped to ts for now)
+    // If it's a direct Video file (MP4, etc.), wrap it in our Golang backend proxy
     if (isDirectVideo) {
-        setFinalUrl(`${proxyBaseUrl}/ts?url=${encodeURIComponent(url)}`);
+        setFinalUrl(`${WEB_APP_URL}/api/proxy-ts?url=${encodeURIComponent(url)}`);
         setIsExtracting(false);
         return;
     }
 
     // Otherwise, try to extract it (Client-Side scraping with CORS Proxies)
     setIsExtracting(true);
-    setExtractStatus('កំពុងទម្លុះយកលីងវីដេអូ (Local Scraping)...');
+    setExtractStatus('កំពុងទម្លុះយកលីងវីដេអូ (Scraping)...');
     
     let urlToExtract = url;
     if (url.includes('<iframe')) {
@@ -126,56 +126,81 @@ const HLSPlayer: React.FC<HLSPlayerProps> = ({ url, startTime = 0, onProgress, o
         if (srcMatch) urlToExtract = srcMatch[1];
     }
 
-    // Client-Side Scraping using AllOrigins as a primary bypass
-    const bypassUrl = `https://api.allorigins.win/raw?url=${encodeURIComponent(urlToExtract)}`;
-    
-    fetch(bypassUrl)
-        .then(async res => {
-            if (!res.ok) throw new Error(`Scraper failed: ${res.status}`);
-            return res.text();
-        })
-        .then(html => {
-            // Advanced Scraping logic (moved from backend to frontend)
-            let m3u8Url = null;
-            
-            // JW Player playlist match
-            const playlistMatch = html.match(/var playlist = (\[.*?\]);/s);
-            if (playlistMatch) {
-              try {
-                // Regex matches are often safer than JSON.parse for lenient JS objects
+    const scrapeForM3U8 = async (targetUrl: string, depth = 0): Promise<{m3u8Url: string | null, fallbackIframe: string | null}> => {
+        if (depth > 2) throw new Error("Max recursion depth reached");
+        
+        let origin = "";
+        try { origin = new URL(targetUrl).origin; } catch(e) {}
+        
+        const bypassUrl = `${WEB_APP_URL}/api/fetch-json?url=${encodeURIComponent(targetUrl)}&referer=${encodeURIComponent(origin)}`;
+        
+        const res = await fetch(bypassUrl);
+        if (!res.ok) throw new Error(`Scraper failed: ${res.status}`);
+        const html = await res.text();
+
+        let m3u8Url = null;
+        
+        // Match 1: JW Player playlist
+        const playlistMatch = html.match(/var playlist = (\[.*?\]);/s);
+        if (playlistMatch) {
+            try {
                 const fileMatches = [...playlistMatch[1].matchAll(/file:\s*["']([^"']+)["']/g)];
                 if (fileMatches.length > 0) m3u8Url = fileMatches[0][1];
-              } catch (e) {}
+            } catch (e) {}
+        }
+        
+        // Match 2: Direct m3u8 regex
+        if (!m3u8Url) {
+            const m3u8Regex = /(["'])(https?:\/\/[^"']+(\.m3u8|\/hlsplaylist\/|\/hls\/)[^"']*)\1/i;
+            const match = html.match(m3u8Regex);
+            if (match && match[2]) m3u8Url = match[2];
+        }
+
+        if (m3u8Url) {
+            return { m3u8Url, fallbackIframe: null };
+        }
+
+        // Match 3: Look for iframe to recurse
+        const iframeMatch = html.match(/<iframe[^>]+src=["']([^"']+)["']/i);
+        if (iframeMatch) {
+            let iframeSrc = iframeMatch[1];
+            if (iframeSrc.startsWith('//')) iframeSrc = 'https:' + iframeSrc;
+            else if (iframeSrc.startsWith('/') && origin) iframeSrc = origin + iframeSrc;
+            return { m3u8Url: null, fallbackIframe: iframeSrc };
+        }
+
+        return { m3u8Url: null, fallbackIframe: null };
+    };
+
+    const executeScraping = async () => {
+        try {
+            let result = await scrapeForM3U8(urlToExtract, 0);
+            
+            // Nested Iframe Logic
+            if (!result.m3u8Url && result.fallbackIframe) {
+                 setExtractStatus('កំពុងទម្លុះកូដ Iframe (Deep Scraping)...');
+                 result = await scrapeForM3U8(result.fallbackIframe, 1);
             }
 
-            // General m3u8 regex
-            if (!m3u8Url) {
-                const m3u8Regex = /(["'])(https?:\/\/[^"']+(\.m3u8|\/hlsplaylist\/|\/hls\/)[^"']*)\1/i;
-                const match = html.match(m3u8Regex);
-                if (match && match[2]) m3u8Url = match[2];
-            }
-
-            if (m3u8Url) {
-                if (m3u8Url.startsWith('//')) m3u8Url = 'https:' + m3u8Url;
-                setExtractStatus('កំពុងរៀបចំការចាក់វីដេអូ (Local Proxying)...');
-                setFinalUrl(`${proxyBaseUrl}/m3u8?url=${encodeURIComponent(m3u8Url)}`);
+            if (result.m3u8Url) {
+                let finalM3u8 = result.m3u8Url;
+                if (finalM3u8.startsWith('//')) finalM3u8 = 'https:' + finalM3u8;
+                setExtractStatus('កំពុងរៀបចំការចាក់វីដេអូ (Backend Proxying)...');
+                setFinalUrl(`${WEB_APP_URL}/api/proxy-m3u8?url=${encodeURIComponent(finalM3u8)}`);
+            } else if (result.fallbackIframe) {
+                setUseIframeFallback(result.fallbackIframe);
             } else {
-                // Check for embedded iframes as fallback
-                const iframeMatch = html.match(/<iframe.*?src=["']([^"']+)["']/i);
-                if (iframeMatch) {
-                    setUseIframeFallback(iframeMatch[1]);
-                } else {
-                    setError("មិនអាចទាញយកលីងវីដេអូបានទេ។");
-                }
+                setError("មិនអាចទាញយកលីងវីដេអូបានទេ។");
             }
-        })
-        .catch(err => {
+        } catch (err) {
             console.error("Local extraction error:", err);
             setError("ការតភ្ជាប់ទៅកាន់ប្រព័ន្ធ Scraper បរាជ័យ។");
-        })
-        .finally(() => {
+        } finally {
             setIsExtracting(false);
-        });
+        }
+    };
+    
+    executeScraping();
   }, [url, swReady]);
 
   useEffect(() => {
@@ -252,7 +277,9 @@ const HLSPlayer: React.FC<HLSPlayerProps> = ({ url, startTime = 0, onProgress, o
     }
 
     // If it's HLS (m3u8 proxy), use Hls.js
-    if (isM3u8 && Hls.isSupported()) {
+    const finalIsM3u8 = isM3u8 || finalUrl.toLowerCase().includes('.m3u8') || finalUrl.includes('proxy-m3u8');
+    
+    if (finalIsM3u8 && Hls.isSupported()) {
       if (hlsRef.current) {
         hlsRef.current.destroy();
       }
@@ -294,7 +321,7 @@ const HLSPlayer: React.FC<HLSPlayerProps> = ({ url, startTime = 0, onProgress, o
       hlsRef.current = hls;
     } 
     // If it's HLS on Safari (native support)
-    else if (isM3u8 && video.canPlayType('application/vnd.apple.mpegurl')) {
+    else if (finalIsM3u8 && video.canPlayType('application/vnd.apple.mpegurl')) {
       video.src = finalUrl;
       video.addEventListener('loadedmetadata', () => {
         initPlyr();

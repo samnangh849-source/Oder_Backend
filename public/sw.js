@@ -31,9 +31,12 @@ self.addEventListener('activate', (event) => {
 });
 
 // --- Local HLS Proxy Logic ---
-const PROXY_PREFIX = '/local-proxy/';
+function getProxyPrefix() {
+  return new URL('local-proxy/', self.registration.scope).pathname;
+}
 
 async function handleHLSProxy(request) {
+  const proxyPrefix = getProxyPrefix();
   const urlObj = new URL(request.url);
   const path = urlObj.pathname;
   const targetUrlStr = urlObj.searchParams.get('url');
@@ -72,16 +75,16 @@ async function handleHLSProxy(request) {
         // Fallback to direct fetch if allorigins fails (some sources might have CORS)
         const directResponse = await fetch(targetUrlStr, { headers });
         if (!directResponse.ok) return directResponse;
-        return processResponse(directResponse, targetUrl, path, referer);
+        return processResponse(directResponse, targetUrl, path, referer, proxyPrefix);
     }
 
-    return processResponse(response, targetUrl, path, referer);
+    return processResponse(response, targetUrl, path, referer, proxyPrefix);
   } catch (error) {
     return new Response(`Proxy Error: ${error.message}`, { status: 500 });
   }
 }
 
-async function processResponse(response, targetUrl, path, referer) {
+async function processResponse(response, targetUrl, path, referer, proxyPrefix) {
     if (path.includes('/m3u8')) {
         let content = await response.text();
         const isMaster = content.includes('#EXT-X-STREAM-INF');
@@ -95,7 +98,7 @@ async function processResponse(response, targetUrl, path, referer) {
                         const absUri = new URL(uri, targetUrl.href).href;
                         const isPlaylist = absUri.toLowerCase().includes('.m3u8') || isMaster;
                         const type = isPlaylist ? 'm3u8' : 'ts';
-                        return `URI="${PROXY_PREFIX}${type}?url=${encodeURIComponent(absUri)}&referer=${encodeURIComponent(referer || '')}"`;
+                        return `URI="${proxyPrefix}${type}?url=${encodeURIComponent(absUri)}&referer=${encodeURIComponent(referer || '')}"`;
                     });
                 }
                 return line;
@@ -104,7 +107,7 @@ async function processResponse(response, targetUrl, path, referer) {
             const absUrl = new URL(trimmed, targetUrl.href).href;
             const isPlaylist = absUrl.toLowerCase().includes('.m3u8') || isMaster;
             const type = isPlaylist ? 'm3u8' : 'ts';
-            return `${PROXY_PREFIX}${type}?url=${encodeURIComponent(absUrl)}&referer=${encodeURIComponent(referer || '')}`;
+            return `${proxyPrefix}${type}?url=${encodeURIComponent(absUrl)}&referer=${encodeURIComponent(referer || '')}`;
         });
 
         return new Response(rewrittenLines.join('\n'), {
@@ -123,9 +126,10 @@ async function processResponse(response, targetUrl, path, referer) {
 
 self.addEventListener('fetch', (event) => {
   const url = new URL(event.request.url);
+  const proxyPrefix = getProxyPrefix();
   
   // Handle local proxy requests
-  if (url.pathname.startsWith(PROXY_PREFIX)) {
+  if (url.pathname.startsWith(proxyPrefix)) {
     event.respondWith(handleHLSProxy(event.request));
     return;
   }

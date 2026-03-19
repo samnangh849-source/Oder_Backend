@@ -78,7 +78,7 @@ const AppContent: React.FC = () => {
 
     // Handle initial state and auth
     useEffect(() => {
-        if (!currentUser && appState !== 'login' && appState !== 'confirm_delivery' && appState !== 'watch' && appState !== 'series_player') {
+        if (!currentUser && appState !== 'login' && appState !== 'confirm_delivery' && appState !== 'watch' && appState !== 'series_player' && appState !== 'short_player' && appState !== 'long_player' && appState !== 'entertainment') {
             setAppState('login');
         }
     }, [currentUser, appState, setAppState]);
@@ -148,7 +148,7 @@ const AppContent: React.FC = () => {
                     fetchData(false);
                     
                     const currentView = new URLSearchParams(window.location.search).get('view');
-                    if (currentView !== 'series_player' && currentView !== 'watch' && currentView !== 'confirm_delivery' && currentView !== 'entertainment') {
+                    if (currentView !== 'series_player' && currentView !== 'watch' && currentView !== 'confirm_delivery' && currentView !== 'entertainment' && currentView !== 'short_player' && currentView !== 'long_player') {
                         setAppState('role_selection');
                     }
                 } else {

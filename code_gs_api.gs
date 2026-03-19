@@ -104,6 +104,58 @@ function doPost(e) {
   }
 }
 
+/**
+ * មុខងារសម្រាប់ឆែក និងរុញការកម្មង់ដែលបានកំណត់ម៉ោង (Scheduled Orders)
+ */
+function processScheduledOrders() {
+  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  const sheet = ss.getSheetByName(CONFIG.ALL_ORDERS_SHEET);
+  if (!sheet) return;
+
+  const data = sheet.getDataRange().getValues();
+  if (data.length <= 1) return;
+
+  const headers = data[0].map(h => normalizeKey(h));
+  const statusIdx = headers.indexOf(normalizeKey("Fulfillment Status"));
+  const timeIdx = headers.indexOf(normalizeKey("Scheduled Time"));
+  const idCol = headers.indexOf(normalizeKey("Order ID"));
+  const teamCol = headers.indexOf(normalizeKey("Team"));
+
+  if (statusIdx === -1 || timeIdx === -1) return;
+
+  const now = new Date();
+  let processedCount = 0;
+
+  for (let i = 1; i < data.length; i++) {
+    const status = String(data[i][statusIdx]);
+    const scheduledTimeValue = data[i][timeIdx];
+    const orderId = data[i][idCol];
+    const team = data[i][teamCol];
+
+    if (status === "Scheduled" && scheduledTimeValue) {
+      const scheduledDate = new Date(scheduledTimeValue);
+      // ប្រសិនបើដល់ពេល ឬហួសពេលកំណត់
+      if (scheduledDate <= now) {
+        Logger.log(`⏰ ដល់ពេលបញ្ចេញការកម្មង់ដែលកំណត់ម៉ោង: ${orderId}`);
+        
+        // 1. ប្តូរ Status ទៅជា Pending ក្នុង Sheet
+        sheet.getRange(i + 1, statusIdx + 1).setValue("Pending");
+        
+        // 2. ទាញទិន្នន័យពេញលេញ និងដំណើរការផ្ញើទៅ Telegram
+        const orderData = fetchOrderDataFromSheet(orderId, team);
+        if (orderData) {
+           processOrder(orderData);
+           processedCount++;
+        }
+      }
+    }
+  }
+  
+  if (processedCount > 0) {
+    Logger.log(`✅ បានរុញការកម្មង់ចំនួន ${processedCount} ទៅកាន់ Telegram`);
+  }
+}
+
 // --- ការគ្រប់គ្រងជួរទិន្នន័យទូទៅ (Global Row Management) ---
 
 function handleAddRow(data) {
@@ -846,3 +898,4 @@ function handleSheetEdit(e) {
     console.error("Webhook Error: " + err.message);
   }
 }
+
