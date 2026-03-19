@@ -739,7 +739,43 @@ const DesktopNetflixEntertainment: React.FC<DesktopNetflixEntertainmentProps> = 
         
         {/* Rows */}
         {continueWatchingMovies.length > 0 && !searchQuery && !selectedCategory && activeTab === 'home' && (
-          <MovieRow title="Continue Watching" items={continueWatchingMovies} />
+          <div className="mb-8 px-10">
+            <div className="flex items-center gap-2 mb-3">
+              <div className="w-1 h-4 bg-red-600 rounded-full" />
+              <h3 className="text-xs font-black uppercase tracking-widest text-white/60">Continue Watching</h3>
+              <div className="flex-1 h-px bg-white/5 ml-2" />
+              <span className="text-[9px] text-white/20 font-bold">{continueWatchingMovies.length}</span>
+            </div>
+            <div className="flex gap-3 overflow-x-auto pb-2 no-scrollbar">
+              {continueWatchingMovies.map(movie => {
+                const prog = watchProgress[movie.ID];
+                const pct = prog ? (prog.time / prog.duration) * 100 : 0;
+                return (
+                  <div
+                    key={movie.ID}
+                    className="relative flex-shrink-0 w-[200px] aspect-video rounded-xl overflow-hidden cursor-pointer bg-[#111] border border-white/5 hover:border-white/20 hover:scale-[1.03] transition-all shadow-xl group"
+                    onClick={() => handleMovieClick(movie)}
+                  >
+                    <img
+                      src={convertGoogleDriveUrl(movie.Thumbnail)}
+                      alt={movie.Title}
+                      className="w-full h-full object-cover group-hover:scale-105 transition-transform"
+                      onError={(e) => {
+                        const t = e.currentTarget as HTMLImageElement;
+                        t.src = `data:image/svg+xml;charset=utf-8,<svg xmlns='http://www.w3.org/2000/svg' width='200' height='113' viewBox='0 0 200 113'><rect width='200' height='113' fill='%23111'/><text x='50%' y='50%' dominant-baseline='middle' text-anchor='middle' fill='%23444' font-size='11' font-family='sans-serif'>No Image</text></svg>`;
+                      }}
+                    />
+                    <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-transparent to-transparent flex items-end p-2">
+                      <p className="text-[9px] font-black uppercase truncate text-white">{movie.Title}</p>
+                    </div>
+                    <div className="absolute bottom-0 left-0 right-0 h-0.5 bg-white/10">
+                      <div className="h-full bg-red-600 rounded-r-full" style={{ width: `${pct}%` }} />
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
         )}
         
         {activeTab === 'home' && !selectedCategory && !searchQuery && (

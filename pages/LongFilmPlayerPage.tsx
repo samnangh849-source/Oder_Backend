@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useContext, useMemo, useRef } from 'react';
 import { 
   ChevronLeft, Share2, Play, Info, Calendar, Globe, Tag,
-  Clock, Star, Eye, Zap, Volume2, Settings, Monitor, X
+  Clock, Star, Eye, Zap, Volume2, Settings, Monitor, X, RotateCw
 } from 'lucide-react';
 import { AppContext } from '../context/AppContext';
 import { Movie } from '../types';
@@ -63,6 +63,29 @@ const LongFilmPlayerPage: React.FC = () => {
 
   const startTime = useMemo(() => watchProgress[selectedMovieId]?.time || 0, [selectedMovieId, watchProgress]);
 
+  // Rotate / Landscape toggle
+  const [isLandscape, setIsLandscape] = useState(false);
+  const toggleLandscape = async () => {
+    if (!isLandscape) {
+      try {
+        const el = document.documentElement;
+        if (el.requestFullscreen) await el.requestFullscreen().catch(() => {});
+        if (screen?.orientation && typeof (screen.orientation as any).lock === 'function') {
+          await (screen.orientation as any).lock('landscape').catch(() => {});
+        }
+      } catch (_) {}
+      setIsLandscape(true);
+    } else {
+      try {
+        if (screen?.orientation && typeof (screen.orientation as any).unlock === 'function') {
+          (screen.orientation as any).unlock();
+        }
+        if (document.fullscreenElement) await document.exitFullscreen().catch(() => {});
+      } catch (_) {}
+      setIsLandscape(false);
+    }
+  };
+
   const handleShare = () => {
     if (!currentMovie) return;
     const shareUrl = `${window.location.origin}${window.location.pathname}?view=long_player&movie=${currentMovie.ID}`;
@@ -103,12 +126,26 @@ const LongFilmPlayerPage: React.FC = () => {
             </div>
           </div>
         </div>
-        <button 
-          onClick={handleShare}
-          className="px-6 py-2 bg-white/5 hover:bg-white/10 rounded-xl border border-white/5 flex items-center gap-2 text-[11px] font-black uppercase tracking-widest transition-all"
-        >
-          <Share2 className="w-4 h-4" /> Share
-        </button>
+        <div className="flex items-center gap-3">
+          <button
+            onClick={toggleLandscape}
+            title={isLandscape ? 'Exit Landscape' : 'Rotate to Landscape'}
+            className={`p-3 rounded-xl border transition-all flex items-center gap-2 text-[11px] font-black uppercase tracking-widest ${
+              isLandscape 
+                ? 'bg-red-600 border-red-500 text-white' 
+                : 'bg-white/5 border-white/5 hover:bg-white/10'
+            }`}
+          >
+            <RotateCw className={`w-4 h-4 transition-transform duration-500 ${isLandscape ? 'rotate-90' : ''}`} />
+            {isLandscape ? 'Exit' : 'Rotate'}
+          </button>
+          <button 
+            onClick={handleShare}
+            className="px-6 py-2 bg-white/5 hover:bg-white/10 rounded-xl border border-white/5 flex items-center gap-2 text-[11px] font-black uppercase tracking-widest transition-all"
+          >
+            <Share2 className="w-4 h-4" /> Share
+          </button>
+        </div>
       </div>
 
       <main className="flex-grow w-full max-w-[1800px] mx-auto px-4 sm:px-8 py-6 flex flex-col gap-8">

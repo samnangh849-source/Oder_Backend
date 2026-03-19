@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useContext, useMemo } from 'react';
-import { ChevronLeft, Share2, Play, Globe, Tv, Film, Loader2 } from 'lucide-react';
+import { ChevronLeft, Share2, Play, Globe, Tv, Film, Loader2, RotateCw } from 'lucide-react';
 import { AppContext } from '../context/AppContext';
 import { Movie } from '../types';
 import HLSPlayer from '../components/common/HLSPlayer';
@@ -184,6 +184,29 @@ const ShortFilmPlayerPage: React.FC = () => {
     else window.scrollTo({ top: 0, behavior: 'smooth' });
   };
 
+  // Rotate / Landscape toggle
+  const [isLandscape, setIsLandscape] = useState(false);
+  const toggleLandscape = async () => {
+    if (!isLandscape) {
+      try {
+        const el = document.documentElement;
+        if (el.requestFullscreen) await el.requestFullscreen().catch(() => {});
+        if (screen?.orientation && typeof (screen.orientation as any).lock === 'function') {
+          await (screen.orientation as any).lock('landscape').catch(() => {});
+        }
+      } catch (_) {}
+      setIsLandscape(true);
+    } else {
+      try {
+        if (screen?.orientation && typeof (screen.orientation as any).unlock === 'function') {
+          (screen.orientation as any).unlock();
+        }
+        if (document.fullscreenElement) await document.exitFullscreen().catch(() => {});
+      } catch (_) {}
+      setIsLandscape(false);
+    }
+  };
+
   // Handlers for each type
   const handleSelectShort = (movie: Movie) => { setSelectedMovieId(movie.ID); scrollToTop(); };
   const handleSelectLong = (movie: Movie) => { setSelectedMovieId(movie.ID); setAppState('long_player'); };
@@ -214,9 +237,18 @@ const ShortFilmPlayerPage: React.FC = () => {
             <span className="text-[9px] text-blue-500 font-black uppercase tracking-[0.2em]">Short Film</span>
           </div>
         </div>
-        <button onClick={handleShare} className="p-2.5 bg-white/5 hover:bg-white/10 rounded-full transition-all">
-          <Share2 className="w-5 h-5 opacity-60" />
-        </button>
+        <div className="flex items-center gap-2">
+          <button
+            onClick={toggleLandscape}
+            title={isLandscape ? 'Exit Landscape' : 'Rotate to Landscape'}
+            className={`p-2.5 rounded-full transition-all ${isLandscape ? 'bg-blue-600 text-white' : 'bg-white/5 hover:bg-white/10'}`}
+          >
+            <RotateCw className={`w-5 h-5 transition-transform duration-500 ${isLandscape ? 'rotate-90' : ''}`} />
+          </button>
+          <button onClick={handleShare} className="p-2.5 bg-white/5 hover:bg-white/10 rounded-full transition-all">
+            <Share2 className="w-5 h-5 opacity-60" />
+          </button>
+        </div>
       </div>
 
       <main className="flex-grow w-full max-w-[1400px] mx-auto px-4 sm:px-6 py-6 space-y-10">
