@@ -19,6 +19,16 @@ interface DesktopNetflixEntertainmentProps {
   isTablet?: boolean;
 }
 
+// --- Utils ---
+const generateShortID = () => {
+    const chars = 'ABCDEFGHJKMNPQRSTUVWXYZ23456789';
+    let result = '';
+    for (let i = 0; i < 6; i++) {
+        result += chars.charAt(Math.floor(Math.random() * chars.length));
+    }
+    return result;
+};
+
 const DesktopNetflixEntertainment: React.FC<DesktopNetflixEntertainmentProps> = ({ guestMovieId, isTablet }) => {
   const { currentUser, language, appState, setAppState, setSelectedMovieId, originalAdminUser, appData, refreshData, showNotification } = useContext(AppContext);
   const t = translations[language];
@@ -175,7 +185,9 @@ const DesktopNetflixEntertainment: React.FC<DesktopNetflixEntertainmentProps> = 
           fileData: base64Data, 
           fileName: file.name, 
           mimeType: compressedBlob.type,
-          sheetName: 'Movies'
+          sheetName: 'Movies',
+          movieId: newMovie.ID, // ✅ Pass ID for background update
+          targetColumn: 'Thumbnail'
         })
       });
       const result = await response.json();
@@ -400,6 +412,10 @@ const DesktopNetflixEntertainment: React.FC<DesktopNetflixEntertainmentProps> = 
       showNotification("Please enter a title", "error");
       return;
     }
+    if (!newMovie.ID) { // Ensure ID is present before submission
+      showNotification("Movie ID is missing. Please try again.", "error");
+      return;
+    }
 
     setIsSubmitting(true);
     try {
@@ -456,7 +472,12 @@ const DesktopNetflixEntertainment: React.FC<DesktopNetflixEntertainmentProps> = 
         
         await refreshData();
         setShowAddModal(false);
-        setNewMovie({ Type: 'long', Language: 'Khmer', Country: 'Cambodia' });
+        setNewMovie({ 
+          ID: generateShortID(), 
+          Type: 'long', 
+          Language: 'Khmer', 
+          Country: 'Cambodia' 
+        }); // Pre-generate for next add
         setEpisodes([]);
     } catch (e) { 
       console.error(e); 
@@ -532,12 +553,14 @@ const DesktopNetflixEntertainment: React.FC<DesktopNetflixEntertainmentProps> = 
     : filteredMovies;
 
   const handleMovieClick = (movie: Movie) => {
+    setActiveMovie(null);
+    setSelectedMovieId(movie.ID);
     if (movie.Type === 'series') {
-      setActiveMovie(null);
-      setSelectedMovieId(movie.ID);
       setAppState('series_player');
+    } else if (movie.Type === 'short') {
+      setAppState('short_player');
     } else {
-      setActiveMovie(movie);
+      setAppState('long_player');
     }
   };
 
@@ -552,7 +575,17 @@ const DesktopNetflixEntertainment: React.FC<DesktopNetflixEntertainmentProps> = 
             const progressPercent = progress ? (progress.time / progress.duration) * 100 : 0;
             return (
               <div key={movie.ID} className="relative min-w-[240px] aspect-[2/3] group cursor-pointer transition-all hover:scale-105" onClick={() => handleMovieClick(movie)}>
-                <img src={movie.Thumbnail} alt={movie.Title} className="w-full h-full object-cover rounded-md shadow-lg" />
+                <img 
+                  src={convertGoogleDriveUrl(movie.Thumbnail)} 
+                  alt={movie.Title} 
+                  className="w-full h-full object-cover rounded-md shadow-lg" 
+                  onError={(e) => {
+                    const target = e.target as HTMLImageElement;
+                    if (!target.src.includes('placeholder')) {
+                      target.src = 'https://via.placeholder.com/300x450?text=No+Image';
+                    }
+                  }}
+                />
                 
                 {/* Progress Bar */}
                 {progressPercent > 0 && progressPercent < 95 && (
@@ -629,7 +662,15 @@ const DesktopNetflixEntertainment: React.FC<DesktopNetflixEntertainmentProps> = 
           </div>
           {isAdmin && (
             <>
-              <button onClick={() => setShowAddModal(true)} className="p-2 bg-white/5 rounded-full border border-white/10 hover:bg-red-600 hover:border-red-600 transition-colors"><Plus className="w-4 h-4" /></button>
+              <button onClick={() => {
+                setNewMovie({ 
+                  ID: generateShortID(), // Pre-generate ID
+                  Type: 'long', 
+                  Language: 'Khmer', 
+                  Country: 'Cambodia' 
+                });
+                setShowAddModal(true);
+              }} className="p-2 bg-white/5 rounded-full border border-white/10 hover:bg-red-600 hover:border-red-600 transition-colors"><Plus className="w-4 h-4" /></button>
               <button onClick={() => setShowProxy(!showProxy)} className={`p-2 rounded-full border transition-colors ${showProxy ? 'bg-red-600 border-red-500' : 'bg-white/5 border-white/10 hover:bg-white/10'}`}><Server className="w-4 h-4" /></button>
             </>
           )}
@@ -718,18 +759,7 @@ const DesktopNetflixEntertainment: React.FC<DesktopNetflixEntertainmentProps> = 
         )}
       </main>
 
-      {activeMovie && (
-        <MoviePlayer 
-          movie={activeMovie}
-          isMobile={false}
-          onClose={() => setActiveMovie(null)}
-          onShare={handleShare}
-          watchProgress={watchProgress}
-          onSaveProgress={saveProgress}
-          relatedMovies={movies.filter(m => m.ID !== activeMovie.ID && (m.Category === activeMovie.Category || m.Type === activeMovie.Type)).slice(0, 10)}
-          onSelectMovie={handleMovieClick}
-        />
-      )}
+      {/* Deprecated activeMovie modal - now using standalone pages */}
 
       {showDetails && (
          <Modal isOpen={!!showDetails} onClose={() => setShowDetails(null)} title="Movie Details">

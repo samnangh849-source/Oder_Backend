@@ -13,6 +13,7 @@ import (
 	"net/http"
 	"net/url"
 	"os"
+	"path/filepath"
 	"regexp"
 	"strconv"
 	"strings"
@@ -177,8 +178,9 @@ type Driver struct {
 	AssignedStores string `gorm:"column:assigned_stores" json:"AssignedStores"`
 }
 type BankAccount struct {
-	BankName string `gorm:"primaryKey;column:bank_name" json:"BankName"`
-	LogoURL  string `gorm:"column:logo_url" json:"LogoURL"`
+	BankName       string `gorm:"primaryKey;column:bank_name" json:"BankName"`
+	LogoURL        string `gorm:"column:logo_url" json:"LogoURL"`
+	AssignedStores string `gorm:"column:assigned_stores" json:"AssignedStores"`
 }
 type PhoneCarrier struct {
 	CarrierName    string `gorm:"primaryKey;column:carrier_name" json:"CarrierName"`
@@ -375,6 +377,7 @@ type TempImage struct {
 	ID        string    `gorm:"primaryKey" json:"id"`
 	MimeType  string    `json:"mimeType"`
 	ImageData string    `gorm:"type:text" json:"imageData"`
+	DriveURL  string    `gorm:"column:drive_url" json:"driveUrl"` // Permanent URL resolved later
 	ExpiresAt time.Time `gorm:"index" json:"expiresAt"`
 }
 
@@ -1465,6 +1468,7 @@ type AppsScriptRequest struct {
 	UserName       string                 `json:"userName,omitempty"`
 	OrderData      interface{}            `json:"orderData,omitempty"`
 	OrderID        string                 `json:"orderId,omitempty"`
+	MovieID        string                 `json:"movieId,omitempty"`
 	TargetColumn   string                 `json:"targetColumn,omitempty"`
 	SheetName      string                 `json:"sheetName,omitempty"`
 	PrimaryKey     map[string]string      `json:"primaryKey,omitempty"`
@@ -2938,6 +2942,9 @@ func handleImageUploadProxy(c *gin.Context) {
 			return
 		}
 
+		// Save the resolved DriveURL in TempImage for later retrieval (if needed by CreateMovie)
+		DB.Model(&TempImage{}).Where("id = ?", tid).Update("drive_url", driveURL)
+
 		if r.OrderID != "" && r.TargetColumn != "" {
 			dbCol := mapToDBColumn(r.TargetColumn)
 			if isValidOrderColumn(dbCol) {
@@ -2971,6 +2978,22 @@ func handleImageUploadProxy(c *gin.Context) {
 				jb, _ := json.Marshal(syncReq)
 				http.Post(appsScriptURL, "application/json", bytes.NewBuffer(jb))
 			}
+		}
+
+		if r.MovieID != "" && r.TargetColumn != "" {
+			dbCol := mapToDBColumn(r.TargetColumn)
+			DB.Model(&Movie{}).Where("id = ?", r.MovieID).UpdateColumn(dbCol, driveURL)
+
+			// Sync to Sheets
+			syncReq := AppsScriptRequest{
+				Action:     "updateSheet",
+				Secret:     appsScriptSecret,
+				SheetName:  "Movies",
+				PrimaryKey: map[string]string{"ID": r.MovieID},
+				NewData:    map[string]interface{}{r.TargetColumn: driveURL},
+			}
+			jb, _ := json.Marshal(syncReq)
+			http.Post(appsScriptURL, "application/json", bytes.NewBuffer(jb))
 		}
 
 		if r.UserName != "" {
@@ -3183,12 +3206,21 @@ func handleGetAudioProxy(c *gin.Context) {
 // =========================================================================
 
 func handleExtractM3U8(c *gin.Context) {
+	defer func() {
+		if r := recover(); r != nil {
+			log.Printf("🔥 PANIC in handleExtractM3U8: %v", r)
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "Internal Server Error during extraction"})
+		}
+	}()
+
 	targetURL := c.Query("url")
 	referer := c.Query("referer")
 	if targetURL == "" {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "Missing url parameter"})
 		return
 	}
+
+	log.Printf("🔍 Extracting M3U8 from: %s", targetURL)
 
 	u, err := url.Parse(targetURL)
 	if err != nil {
@@ -3218,14 +3250,29 @@ func handleExtractM3U8(c *gin.Context) {
 
 	var m3u8URL string
 
-	// 1. Check for playlists array (model from zip)
-	constPlaylistsRe := regexp.MustCompile(`const playlists = (\[.*?\]);`)
-	constPlaylistsMatch := constPlaylistsRe.FindStringSubmatch(html)
-	if len(constPlaylistsMatch) > 1 {
-		fileRe := regexp.MustCompile(`file:\s*["']([^"']+(\.m3u8|\.mp4|/hlsplaylist/|/hls/)[^"']*)["']`)
-		fileMatch := fileRe.FindStringSubmatch(constPlaylistsMatch[1])
-		if len(fileMatch) > 1 {
-			m3u8URL = fileMatch[1]
+	// 1. Check for sitewise specific logic (e.g., khfullhd.co)
+	if strings.Contains(targetURL, "khfullhd.co") {
+		iframeRe := regexp.MustCompile(`(?i)<iframe.*?src=["']([^"']+)["']`)
+		iframes := iframeRe.FindAllStringSubmatch(html, -1)
+		for _, iframe := range iframes {
+			src := iframe[1]
+			if strings.Contains(src, "player.php") || strings.Contains(src, "v.php") {
+				playerURL := resolveURL(targetURL, src)
+				// Fetch the iframe content
+				pReq, _ := http.NewRequest("GET", playerURL, nil)
+				pReq.Header.Set("Referer", targetURL)
+				pReq.Header.Set("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36")
+				pResp, pErr := client.Do(pReq)
+				if pErr == nil && pResp != nil {
+					pBody, _ := io.ReadAll(pResp.Body)
+					pResp.Body.Close()
+					if len(pBody) > 0 {
+						html = string(pBody)
+						targetURL = playerURL
+					}
+				}
+				break 
+			}
 		}
 	}
 
@@ -3329,7 +3376,17 @@ func handleExtractM3U8(c *gin.Context) {
 			}
 			
 			// Deep scrape the iframe (Advanced iframe extraction)
-			iframeReq, _ := http.NewRequest("GET", src, nil)
+			if strings.HasPrefix(src, "//") {
+				src = "https:" + src
+			} else if !strings.HasPrefix(src, "http") {
+				src = resolveURL(targetURL, src)
+			}
+			
+			iframeReq, errReq := http.NewRequest("GET", src, nil)
+			if errReq != nil || iframeReq == nil {
+				continue
+			}
+			
 			iframeReq.Header.Set("Referer", targetURL)
 			iframeReq.Header.Set("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36")
 			
@@ -3494,7 +3551,7 @@ func handleProxyM3U8(c *gin.Context) {
 		if strings.HasPrefix(line, "#") {
 			// Rewrite URIs in tags like #EXT-X-KEY:URI="...", #EXT-X-MEDIA:URI="...", etc.
 			if strings.Contains(line, "URI=") {
-				re := regexp.MustCompile(`URI="?([^",\s]+)"?`)
+				re := regexp.MustCompile(`URI="([^"]+)"`)
 				newLine := re.ReplaceAllStringFunc(line, func(match string) string {
 					subMatch := re.FindStringSubmatch(match)
 					if len(subMatch) > 1 {
@@ -3502,7 +3559,9 @@ func handleProxyM3U8(c *gin.Context) {
 						absURL := resolveURL(m3u8URL, uri)
 						
 						// Check if it's a playlist or a segment
-						isPlaylist := strings.Contains(strings.ToLower(absURL), ".m3u8") || strings.Contains(absURL, "/hlsplaylist/") || strings.Contains(absURL, "/hls/")
+						isPlaylist := strings.Contains(strings.ToLower(absURL), ".m3u8") || 
+									 strings.Contains(absURL, "/hlsplaylist/") || 
+									 strings.Contains(absURL, "/hls/")
 						endpoint := "/api/proxy-ts"
 						if isPlaylist {
 							endpoint = "/api/proxy-m3u8"
@@ -3592,9 +3651,16 @@ func handleProxyTS(c *gin.Context) {
 		}
 	}
 	
-	// Default Content-Type if missing
+	// Default Content-Type if missing, but try to be smart
 	if c.Writer.Header().Get("Content-Type") == "" {
-		c.Header("Content-Type", "video/MP2T")
+		ext := strings.ToLower(filepath.Ext(tsURL))
+		if ext == ".m4s" || ext == ".mp4" {
+			c.Header("Content-Type", "video/mp4")
+		} else if ext == ".m3u8" {
+			c.Header("Content-Type", "application/vnd.apple.mpegurl")
+		} else {
+			c.Header("Content-Type", "video/MP2T")
+		}
 	}
 	
 	c.Header("Access-Control-Allow-Origin", "*")
@@ -3615,18 +3681,41 @@ func handleFetchJSON(c *gin.Context) {
 		return
 	}
 
-	client := &http.Client{Timeout: 15 * time.Second}
+	client := &http.Client{Timeout: 30 * time.Second}
 	var req *http.Request
-	if c.Request.Method == "POST" {
-		body, _ := io.ReadAll(c.Request.Body)
-		req, _ = http.NewRequest("POST", targetURL, bytes.NewBuffer(body))
-		req.Header.Set("Content-Type", c.Request.Header.Get("Content-Type"))
+	
+	// Complex Fetch Logic for AJAX
+	if c.Request.Method == "POST" || (u.RawQuery != "" && strings.Contains(targetURL, "admin-ajax.php")) {
+		var bodyReader io.Reader
+		contentType := "application/x-www-form-urlencoded"
+		
+		if u.RawQuery != "" && strings.Contains(targetURL, "admin-ajax.php") {
+			// Convert query params to form body for admin-ajax requests
+			form := url.Values{}
+			for k, v := range u.Query() {
+				form.Set(k, v[0])
+			}
+			bodyReader = strings.NewReader(form.Encode())
+			// Clear query from URL
+			u.RawQuery = ""
+			targetURL = u.String()
+		} else {
+			body, _ := io.ReadAll(c.Request.Body)
+			bodyReader = bytes.NewBuffer(body)
+			if ct := c.Request.Header.Get("Content-Type"); ct != "" {
+				contentType = ct
+			}
+		}
+		
+		req, _ = http.NewRequest("POST", targetURL, bodyReader)
+		req.Header.Set("Content-Type", contentType)
 	} else {
 		req, _ = http.NewRequest("GET", targetURL, nil)
 	}
 
 	req.Header.Set("Referer", u.Scheme+"://"+u.Host)
 	req.Header.Set("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36")
+	req.Header.Set("X-Requested-With", "XMLHttpRequest")
 
 	resp, err := client.Do(req)
 	if err != nil {
@@ -3636,6 +3725,13 @@ func handleFetchJSON(c *gin.Context) {
 	defer resp.Body.Close()
 
 	body, _ := io.ReadAll(resp.Body)
+	
+	// Forward Content-Type from target
+	respContentType := resp.Header.Get("Content-Type")
+	if respContentType == "" {
+		respContentType = "application/json"
+	}
+	
 	c.Data(resp.StatusCode, resp.Header.Get("Content-Type"), body)
 }
 
@@ -3653,21 +3749,22 @@ func handleProxyVideo(c *gin.Context) {
 	}
 
 	client := &http.Client{
-		Timeout: 60 * time.Second,
+		Timeout: 300 * time.Second, // Longer timeout for video streaming
 	}
 	req, _ := http.NewRequest("GET", targetURL, nil)
 
-	// Copy all headers from the original request to the proxy request
+	// Forward Range header and others
 	for k, v := range c.Request.Header {
-		if k != "Host" && k != "Origin" {
+		if k == "Range" || k == "User-Agent" || k == "Accept" {
 			req.Header.Set(k, v[0])
 		}
 	}
 
-	// Always set Referer and User-Agent for better compatibility
-	req.Header.Set("Referer", u.Scheme+"://"+u.Host)
-	if req.Header.Get("User-Agent") == "" {
-		req.Header.Set("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36")
+	referer := c.Query("referer")
+	if referer != "" {
+		req.Header.Set("Referer", referer)
+	} else {
+		req.Header.Set("Referer", u.Scheme+"://"+u.Host)
 	}
 
 	resp, err := client.Do(req)
@@ -3677,7 +3774,7 @@ func handleProxyVideo(c *gin.Context) {
 	}
 	defer resp.Body.Close()
 
-	// Copy response headers back to the client
+	// Forward response headers back to the client
 	for k, v := range resp.Header {
 		if k == "Content-Type" || k == "Content-Length" || k == "Accept-Ranges" || k == "Content-Range" || k == "Last-Modified" || k == "ETag" {
 			c.Header(k, v[0])
@@ -3733,6 +3830,19 @@ func handleCreateMovie(c *gin.Context) {
 	if err := c.ShouldBindJSON(&movie); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"status": "error", "message": "ទិន្នន័យមិនត្រឹមត្រូវ: " + err.Error()})
 		return
+	}
+
+	// Smart Image Resolution: If Thumbnail is a temp URL, resolve it to permanent DriveURL
+	if strings.Contains(movie.Thumbnail, "/api/images/temp/") {
+		parts := strings.Split(movie.Thumbnail, "/api/images/temp/")
+		if len(parts) > 1 {
+			tempID := parts[1]
+			var tempImg TempImage
+			if err := DB.Where("id = ?", tempID).First(&tempImg).Error; err == nil && tempImg.DriveURL != "" {
+				movie.Thumbnail = tempImg.DriveURL
+				log.Printf("✨ Resolved temp image %s to permanent URL: %s", tempID, movie.Thumbnail)
+			}
+		}
 	}
 
 	if movie.ID == "" {

@@ -1,6 +1,7 @@
 import React, { useEffect, useRef, useState } from 'react';
 import Hls from 'hls.js';
-import Plyr from 'plyr';
+import * as PlyrModule from 'plyr';
+const Plyr = (PlyrModule as any).default || PlyrModule;
 import 'plyr/dist/plyr.css';
 import { Loader2, AlertCircle } from 'lucide-react';
 import { WEB_APP_URL } from '../../constants';
@@ -22,6 +23,33 @@ const HLSPlayer: React.FC<HLSPlayerProps> = ({ url, startTime = 0, onProgress, o
   const [extractStatus, setExtractStatus] = useState<string>('');
   const [error, setError] = useState<string | null>(null);
   const [useIframeFallback, setUseIframeFallback] = useState<string | null>(null);
+  const [swReady, setSwReady] = useState(false);
+
+  // Register Service Worker
+  useEffect(() => {
+    if ('serviceWorker' in navigator) {
+      navigator.serviceWorker.register('/sw.js')
+        .then(reg => {
+          console.log('SW Registered:', reg.scope);
+          // Wait for SW to be active and controlling the page
+          if (navigator.serviceWorker.controller) {
+            setSwReady(true);
+          } else {
+            navigator.serviceWorker.ready.then(() => {
+                setSwReady(true);
+                // Force reload if needed or just wait
+                if (!navigator.serviceWorker.controller) {
+                    window.location.reload();
+                }
+            });
+          }
+        })
+        .catch(err => console.error('SW Registration failing:', err));
+    } else {
+        // Fallback for browsers without SW
+        setSwReady(true);
+    }
+  }, []);
 
   const lowerUrl = url.toLowerCase();
   const isM3u8 = lowerUrl.includes('.m3u8') || 
@@ -35,7 +63,10 @@ const HLSPlayer: React.FC<HLSPlayerProps> = ({ url, startTime = 0, onProgress, o
                         lowerUrl.includes('.m4v');
 
   useEffect(() => {
-    const proxyBaseUrl = WEB_APP_URL;
+    // We only proceed if SW is ready (for local proxy)
+    if (!swReady) return;
+
+    const proxyBaseUrl = '/local-proxy'; // Use local SW proxy
 
     // Reset all states immediately when URL changes
     setFinalUrl(null);
@@ -64,30 +95,30 @@ const HLSPlayer: React.FC<HLSPlayerProps> = ({ url, startTime = 0, onProgress, o
         }
     }
 
-    // If it's already a proxy URL, use it directly
-    if (url.includes('/api/proxy-')) {
-        setFinalUrl(url.startsWith('http') ? url : `${proxyBaseUrl}${url}`);
+    // If it's already a local proxy URL, use it directly
+    if (url.includes('/local-proxy/')) {
+        setFinalUrl(url);
         setIsExtracting(false);
         return;
     }
 
-    // If it's a direct M3U8, wrap it in our M3U8 proxy
+    // If it's a direct M3U8, wrap it in our local proxy
     if (isM3u8) {
-        setFinalUrl(`${proxyBaseUrl}/api/proxy-m3u8?url=${encodeURIComponent(url)}`);
+        setFinalUrl(`${proxyBaseUrl}/m3u8?url=${encodeURIComponent(url)}`);
         setIsExtracting(false);
         return;
     }
 
-    // If it's a direct Video file (MP4, etc.), wrap it in our Video proxy
+    // If it's a direct Video file (MP4, etc.), wrap it in our local proxy (mapped to ts for now)
     if (isDirectVideo) {
-        setFinalUrl(`${proxyBaseUrl}/api/proxy-video?url=${encodeURIComponent(url)}`);
+        setFinalUrl(`${proxyBaseUrl}/ts?url=${encodeURIComponent(url)}`);
         setIsExtracting(false);
         return;
     }
 
-    // Otherwise, try to extract it (Advanced Scraping)
+    // Otherwise, try to extract it (Client-Side scraping with CORS Proxies)
     setIsExtracting(true);
-    setExtractStatus('កំពុងទម្លុះយកលីងវីដេអូ (Scraping)...');
+    setExtractStatus('កំពុងទម្លុះយកលីងវីដេអូ (Local Scraping)...');
     
     let urlToExtract = url;
     if (url.includes('<iframe')) {
@@ -95,42 +126,57 @@ const HLSPlayer: React.FC<HLSPlayerProps> = ({ url, startTime = 0, onProgress, o
         if (srcMatch) urlToExtract = srcMatch[1];
     }
 
-    const apiUrl = `${proxyBaseUrl}/api/extract-m3u8?url=${encodeURIComponent(urlToExtract)}`;
+    // Client-Side Scraping using AllOrigins as a primary bypass
+    const bypassUrl = `https://api.allorigins.win/raw?url=${encodeURIComponent(urlToExtract)}`;
     
-    fetch(apiUrl)
+    fetch(bypassUrl)
         .then(async res => {
-            if (!res.ok) {
-                const text = await res.text();
-                throw new Error(text || `Server error: ${res.status}`);
-            }
-            return res.json();
+            if (!res.ok) throw new Error(`Scraper failed: ${res.status}`);
+            return res.text();
         })
-        .then(data => {
-            if (data.m3u8Url) {
-                const extracted = data.m3u8Url;
-                const referer = data.referer ? `&referer=${encodeURIComponent(data.referer)}` : '';
-                // Check if extracted is actually an m3u8 or video
-                const isStream = extracted.includes('.m3u8') || extracted.includes('.mp4') || extracted.includes('/hls/') || extracted.includes('/hlsplaylist/');
-                
-                if (isStream) {
-                    setExtractStatus('កំពុងរៀបចំការចាក់វីដេអូ (HLS Proxying)...');
-                    setFinalUrl(`${proxyBaseUrl}/api/proxy-m3u8?url=${encodeURIComponent(extracted)}${referer}`);
-                } else {
-                    // It's likely an iframe or player page, use fallback
-                    setUseIframeFallback(extracted);
-                }
+        .then(html => {
+            // Advanced Scraping logic (moved from backend to frontend)
+            let m3u8Url = null;
+            
+            // JW Player playlist match
+            const playlistMatch = html.match(/var playlist = (\[.*?\]);/s);
+            if (playlistMatch) {
+              try {
+                // Regex matches are often safer than JSON.parse for lenient JS objects
+                const fileMatches = [...playlistMatch[1].matchAll(/file:\s*["']([^"']+)["']/g)];
+                if (fileMatches.length > 0) m3u8Url = fileMatches[0][1];
+              } catch (e) {}
+            }
+
+            // General m3u8 regex
+            if (!m3u8Url) {
+                const m3u8Regex = /(["'])(https?:\/\/[^"']+(\.m3u8|\/hlsplaylist\/|\/hls\/)[^"']*)\1/i;
+                const match = html.match(m3u8Regex);
+                if (match && match[2]) m3u8Url = match[2];
+            }
+
+            if (m3u8Url) {
+                if (m3u8Url.startsWith('//')) m3u8Url = 'https:' + m3u8Url;
+                setExtractStatus('កំពុងរៀបចំការចាក់វីដេអូ (Local Proxying)...');
+                setFinalUrl(`${proxyBaseUrl}/m3u8?url=${encodeURIComponent(m3u8Url)}`);
             } else {
-                setError("មិនអាចទាញយកលីងវីដេអូបានទេ។");
+                // Check for embedded iframes as fallback
+                const iframeMatch = html.match(/<iframe.*?src=["']([^"']+)["']/i);
+                if (iframeMatch) {
+                    setUseIframeFallback(iframeMatch[1]);
+                } else {
+                    setError("មិនអាចទាញយកលីងវីដេអូបានទេ។");
+                }
             }
         })
         .catch(err => {
-            console.error("Extraction error:", err);
+            console.error("Local extraction error:", err);
             setError("ការតភ្ជាប់ទៅកាន់ប្រព័ន្ធ Scraper បរាជ័យ។");
         })
         .finally(() => {
             setIsExtracting(false);
         });
-  }, [url]);
+  }, [url, swReady]);
 
   useEffect(() => {
     if (!videoRef.current || !finalUrl || useIframeFallback) return;
@@ -183,6 +229,28 @@ const HLSPlayer: React.FC<HLSPlayerProps> = ({ url, startTime = 0, onProgress, o
       playerRef.current = player;
     };
 
+    // --- Auto-Rotate Logic (Mobile Only) ---
+    const handleOrientationChange = () => {
+      const isMobile = /iPhone|iPad|iPod|Android/i.test(navigator.userAgent);
+      if (!isMobile || !playerRef.current) return;
+
+      const orientation = window.screen?.orientation?.type || (window as any).orientation;
+      const isLandscape = orientation === 'landscape-primary' || orientation === 'landscape-secondary' || orientation === 90 || orientation === -90;
+
+      if (isLandscape) {
+        playerRef.current.fullscreen.enter();
+      } else {
+        if (playerRef.current.fullscreen.active) {
+            playerRef.current.fullscreen.exit();
+        }
+      }
+    };
+
+    window.addEventListener('orientationchange', handleOrientationChange);
+    if (screen.orientation) {
+      screen.orientation.addEventListener('change', handleOrientationChange);
+    }
+
     // If it's HLS (m3u8 proxy), use Hls.js
     if (isM3u8 && Hls.isSupported()) {
       if (hlsRef.current) {
@@ -190,9 +258,31 @@ const HLSPlayer: React.FC<HLSPlayerProps> = ({ url, startTime = 0, onProgress, o
       }
 
       const hls = new Hls({
-        maxBufferSize: 0,
+        maxBufferSize: 30 * 1024 * 1024, // 30MB
         maxBufferLength: 30,
         enableWorker: true,
+        backBufferLength: 60,
+        lowLatencyMode: true,
+      });
+
+      hls.on(Hls.Events.ERROR, (event, data) => {
+        if (data.fatal) {
+          switch (data.type) {
+            case Hls.ErrorTypes.NETWORK_ERROR:
+              console.error("HLS Network Error:", data);
+              hls.startLoad();
+              break;
+            case Hls.ErrorTypes.MEDIA_ERROR:
+              console.error("HLS Media Error:", data);
+              hls.recoverMediaError();
+              break;
+            default:
+              console.error("HLS Fatal Error:", data);
+              setError(`HLS Fatal Error: ${data.details}`);
+              hls.destroy();
+              break;
+          }
+        }
       });
 
       hls.loadSource(finalUrl);
@@ -218,12 +308,24 @@ const HLSPlayer: React.FC<HLSPlayerProps> = ({ url, startTime = 0, onProgress, o
 
     return () => {
       if (hlsRef.current) {
+        hlsRef.current.detachMedia();
         hlsRef.current.destroy();
         hlsRef.current = null;
       }
       if (playerRef.current) {
         playerRef.current.destroy();
         playerRef.current = null;
+      }
+      
+      window.removeEventListener('orientationchange', handleOrientationChange);
+      if (screen.orientation) {
+        screen.orientation.removeEventListener('change', handleOrientationChange);
+      }
+      
+      // Prevent fetching destroyed blob URLs after unmount (Fix ERR_FILE_NOT_FOUND)
+      if (video) {
+        video.removeAttribute('src');
+        video.load();
       }
     };
   }, [finalUrl, startTime, isM3u8]);

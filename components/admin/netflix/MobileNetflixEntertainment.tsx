@@ -15,6 +15,16 @@ import SeriesPlayerView from './SeriesPlayerView';
 import { fileToBase64, convertGoogleDriveUrl } from '../../../utils/fileUtils';
 import { compressImage } from '../../../utils/imageCompressor';
 
+// --- Utils ---
+const generateShortID = () => {
+    const chars = 'ABCDEFGHJKMNPQRSTUVWXYZ23456789';
+    let result = '';
+    for (let i = 0; i < 6; i++) {
+        result += chars.charAt(Math.floor(Math.random() * chars.length));
+    }
+    return result;
+};
+
 interface MobileNetflixEntertainmentProps {
   guestMovieId?: string;
 }
@@ -119,7 +129,9 @@ const MobileNetflixEntertainment: React.FC<MobileNetflixEntertainmentProps> = ({
           fileData: base64Data, 
           fileName: file.name, 
           mimeType: compressedBlob.type,
-          sheetName: 'Movies'
+          sheetName: 'Movies',
+          movieId: newMovie.ID, // ✅ Pass ID for background update
+          targetColumn: 'Thumbnail'
         })
       });
       const result = await response.json();
@@ -296,8 +308,14 @@ const MobileNetflixEntertainment: React.FC<MobileNetflixEntertainmentProps> = ({
           }
           showNotification("Episodes added successfully", "success");
         } else {
+          // Single movie upload
           if (!newMovie.VideoURL) {
             showNotification("Please enter Video URL", "error");
+            setIsSubmitting(false);
+            return;
+          }
+          if (!newMovie.ID) { // Ensure ID is present
+            showNotification("Movie ID is missing. Please try again.", "error");
             setIsSubmitting(false);
             return;
           }
@@ -314,7 +332,12 @@ const MobileNetflixEntertainment: React.FC<MobileNetflixEntertainmentProps> = ({
         
         await refreshData();
         setShowAddModal(false);
-        setNewMovie({ Type: 'long', Language: 'Khmer', Country: 'Cambodia' });
+        setNewMovie({ 
+          ID: generateShortID(), 
+          Type: 'long', 
+          Language: 'Khmer', 
+          Country: 'Cambodia' 
+        }); // Reset for next add
         setEpisodes([]);
     } catch (e) { 
       console.error(e); 
@@ -407,12 +430,14 @@ const MobileNetflixEntertainment: React.FC<MobileNetflixEntertainmentProps> = ({
   };
 
   const handleMovieClick = (movie: Movie) => {
+    setActiveMovie(null);
+    setSelectedMovieId(movie.ID);
     if (movie.Type === 'series') {
-      setActiveMovie(null);
-      setSelectedMovieId(movie.ID);
       setAppState('series_player');
+    } else if (movie.Type === 'short') {
+      setAppState('short_player');
     } else {
-      setActiveMovie(movie);
+      setAppState('long_player');
     }
   };
 
@@ -427,7 +452,17 @@ const MobileNetflixEntertainment: React.FC<MobileNetflixEntertainmentProps> = ({
             const progressPercent = progress ? (progress.time / progress.duration) * 100 : 0;
             return (
               <div key={movie.ID} className="relative min-w-[120px] aspect-[2/3] cursor-pointer" onClick={() => handleMovieClick(movie)}>
-                <img src={movie.Thumbnail} alt={movie.Title} className="w-full h-full object-cover rounded-md shadow-lg" />
+                <img 
+                  src={convertGoogleDriveUrl(movie.Thumbnail)} 
+                  alt={movie.Title} 
+                  className="w-full h-full object-cover rounded-md shadow-lg" 
+                  onError={(e) => {
+                    const target = e.target as HTMLImageElement;
+                    if (!target.src.includes('placeholder')) {
+                      target.src = 'https://via.placeholder.com/300x450?text=No+Image';
+                    }
+                  }}
+                />
                 
                 {progressPercent > 0 && progressPercent < 95 && (
                   <div className="absolute bottom-0 left-0 w-full h-1 bg-gray-700/50 rounded-b-md overflow-hidden">
@@ -467,11 +502,19 @@ const MobileNetflixEntertainment: React.FC<MobileNetflixEntertainmentProps> = ({
            <button onClick={() => setShowSearch(!showSearch)} className="p-1.5"><Search className="w-5 h-5 opacity-40" /></button>
            {isAdmin && (
               <>
+                <button onClick={() => {
+                  setNewMovie({ 
+                    ID: generateShortID(), // Pre-generate ID
+                    Type: 'long', 
+                    Language: 'Khmer', 
+                    Country: 'Cambodia' 
+                  });
+                  setShowAddModal(true);
+                }} className="p-1.5 bg-white/10 rounded-full border border-white/20">
+                  <Plus className="w-5 h-5" />
+                </button>
                 <button onClick={() => setShowProxy(!showProxy)} className={`p-1.5 rounded-full border transition-colors ${showProxy ? 'bg-red-600 border-red-500' : 'bg-white/10 border-white/20'}`}>
                   <Server className="w-5 h-5" />
-                </button>
-                <button onClick={() => setShowAddModal(true)} className="p-1.5 bg-white/10 rounded-full border border-white/20">
-                  <Plus className="w-5 h-5" />
                 </button>
               </>
            )}
@@ -532,7 +575,17 @@ const MobileNetflixEntertainment: React.FC<MobileNetflixEntertainmentProps> = ({
 
       {billboardMovie && activeTab === 'home' && !searchQuery && !selectedCategory && (
         <div className="relative w-full aspect-[4/5] mb-6 animate-[fade-in_1s_ease-out]" onClick={() => handleMovieClick(billboardMovie)}>
-           <img key={billboardMovie.ID} src={billboardMovie.Thumbnail} className="w-full h-full object-cover animate-[fade-in_1s_ease-out]" />
+           <img 
+             key={billboardMovie.ID} 
+             src={convertGoogleDriveUrl(billboardMovie.Thumbnail)} 
+             className="w-full h-full object-cover animate-[fade-in_1s_ease-out]" 
+             onError={(e) => {
+               const target = e.target as HTMLImageElement;
+               if (!target.src.includes('placeholder')) {
+                 target.src = 'https://via.placeholder.com/600x800?text=No+Preview';
+               }
+             }}
+           />
            <div className="absolute inset-0 bg-gradient-to-t from-[#080808] via-black/40 to-transparent flex flex-col justify-end p-6 items-center text-center">
               <h2 className="text-4xl font-black italic uppercase mb-2 drop-shadow-lg">{billboardMovie.Title}</h2>
               <div className="flex gap-2 text-[10px] text-gray-300 font-bold mb-4">
@@ -569,18 +622,7 @@ const MobileNetflixEntertainment: React.FC<MobileNetflixEntertainmentProps> = ({
          )}
       </main>
 
-      {activeMovie && (
-        <MoviePlayer 
-          movie={activeMovie}
-          isMobile={true}
-          onClose={() => setActiveMovie(null)}
-          onShare={handleShare}
-          watchProgress={watchProgress}
-          onSaveProgress={saveProgress}
-          relatedMovies={movies.filter(m => m.ID !== activeMovie.ID && (m.Category === activeMovie.Category || m.Type === activeMovie.Type)).slice(0, 6)}
-          onSelectMovie={handleMovieClick}
-        />
-      )}
+      {/* Deprecated activeMovie modal - now using standalone pages */}
 
       {showAddModal && (
         <Modal isOpen={showAddModal} onClose={() => setShowAddModal(false)}>

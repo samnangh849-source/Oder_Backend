@@ -731,7 +731,12 @@ function extractDriveFolderID(idOrURL) {
 function uploadImageToDrive(base64, name, mime, folderId, user) {
   try {
     const targetFolderId = extractDriveFolderID(folderId);
-    const folder = DriveApp.getFolderById(targetFolderId);
+    let folder;
+    if (targetFolderId === "root") {
+      folder = DriveApp.getRootFolder();
+    } else {
+      folder = DriveApp.getFolderById(targetFolderId);
+    }
     const decoded = Utilities.base64Decode(base64.includes("base64,") ? base64.split("base64,")[1] : base64);
     const file = folder.createFile(Utilities.newBlob(decoded, mime, name || "upload_" + new Date().getTime()));
     file.setSharing(DriveApp.Access.ANYONE, DriveApp.Permission.VIEW);
@@ -806,7 +811,8 @@ function handleSheetEdit(e) {
     CONFIG.USERS_SHEET, 
     CONFIG.STORES_SHEET, 
     CONFIG.PRODUCTS_SHEET,
-    CONFIG.SHIPPING_METHODS_SHEET
+    CONFIG.SHIPPING_METHODS_SHEET,
+    CONFIG.ALL_ORDERS_SHEET
   ];
 
   if (!syncSheets.includes(sheetName) || row === 1) return;
