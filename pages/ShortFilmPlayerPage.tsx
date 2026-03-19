@@ -167,6 +167,8 @@ const ShortFilmPlayerPage: React.FC = () => {
     };
   }, [currentMovie?.ID]);
 
+  const [isDescriptionExpanded, setIsDescriptionExpanded] = useState(false);
+
   const handleShare = () => {
     if (!currentMovie) return;
     const shareUrl = `${window.location.origin}${window.location.pathname}?view=short_player&movie=${currentMovie.ID}`;
@@ -275,9 +277,20 @@ const ShortFilmPlayerPage: React.FC = () => {
             <div className="text-gray-400 text-xs font-bold">{currentMovie.Category || 'General'}</div>
           </div>
           <h2 className="text-2xl font-black italic uppercase tracking-tight">{currentMovie.Title}</h2>
-          <p className="text-gray-400 leading-relaxed text-sm">
-            {currentMovie.Description || 'Enjoy this premium short film selection. Focused on high-quality storytelling in a concise format.'}
-          </p>
+          <div className="relative">
+            <p className={`text-gray-400 leading-relaxed text-sm transition-all duration-500 ${!isDescriptionExpanded ? 'line-clamp-2 overflow-hidden' : ''}`}>
+              {currentMovie.Description || 'Enjoy this premium short film selection. Focused on high-quality storytelling in a concise format.'}
+            </p>
+            {currentMovie.Description && currentMovie.Description.length > 100 && (
+              <button 
+                onClick={() => setIsDescriptionExpanded(!isDescriptionExpanded)}
+                className="mt-1 text-blue-500 text-[9px] font-black uppercase tracking-widest hover:text-blue-400 transition-colors flex items-center gap-1 group"
+              >
+                {isDescriptionExpanded ? 'Show Less' : 'Read More'}
+                <ChevronLeft className={`w-3 h-3 transition-transform duration-300 ${isDescriptionExpanded ? 'rotate-90' : '-rotate-90'}`} />
+              </button>
+            )}
+          </div>
           <div className="pt-4 border-t border-white/5 flex gap-8">
             <div className="space-y-1">
               <span className="text-[10px] text-gray-500 uppercase font-black tracking-widest">Language</span>

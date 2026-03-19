@@ -1023,11 +1023,12 @@ func handleUpdatePermission(c *gin.Context) {
 
 		if result.Error != nil && result.Error == gorm.ErrRecordNotFound {
 			req.ID = 0
-
-			DB.Create(&req)
+			if err := DB.Create(&req).Error; err != nil {
+				log.Printf("❌ Failed to create permission [%s:%s]: %v", req.Role, req.Feature, err)
+				continue
+			}
 
 			go func(r RolePermission) {
-				// Sync with Google Sheets via managed queue
 				enqueueSync("addRow", map[string]interface{}{
 					"ID":        r.ID,
 					"Role":      r.Role,
@@ -1037,10 +1038,12 @@ func handleUpdatePermission(c *gin.Context) {
 			}(req)
 
 		} else if result.Error == nil {
-			DB.Model(&existing).Update("is_enabled", req.IsEnabled)
+			if err := DB.Model(&existing).Update("is_enabled", req.IsEnabled).Error; err != nil {
+				log.Printf("❌ Failed to update permission [%s:%s]: %v", req.Role, req.Feature, err)
+				continue
+			}
 
 			go func(r RolePermission) {
-				// Sync with Google Sheets via managed queue
 				enqueueSync("updateSheet", map[string]interface{}{"IsEnabled": r.IsEnabled}, "RolePermissions", map[string]string{"Role": r.Role, "Feature": r.Feature})
 			}(req)
 		}
@@ -2336,19 +2339,20 @@ func handleMigrateData(c *gin.Context) {
 			return
 		}
 		var validPerms []RolePermission
-		seenPerms := make(map[uint]bool)
+		seenPermKeys := make(map[string]bool)
 		for _, x := range perms {
-			if !seenPerms[x.ID] {
-				if x.ID != 0 {
-					seenPerms[x.ID] = true
-				}
+			// Deduplicate by Role + Feature (normalized) to be robust
+			key := strings.ToLower(x.Role + "|" + x.Feature)
+			if x.Role != "" && x.Feature != "" && !seenPermKeys[key] {
+				seenPermKeys[key] = true
+				x.ID = 0 // Zero out ID to let local DB auto-increment manage it, avoiding PK conflicts
 				validPerms = append(validPerms, x)
 			}
 		}
 		if len(validPerms) > 0 {
 			if err := tx.CreateInBatches(validPerms, 100).Error; err != nil {
 				tx.Rollback()
-				log.Println("❌ Migration failed to save RolePermissions:", err)
+				log.Printf("❌ Migration failed to save RolePermissions: %v", err)
 				return
 			}
 		}
