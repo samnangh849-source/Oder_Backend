@@ -655,7 +655,41 @@ const MobileNetflixEntertainment: React.FC<MobileNetflixEntertainmentProps> = ({
          {searchQuery && <MovieRow title="Search Results" items={filteredMovies} />}
          
          {!searchQuery && continueWatchingMovies.length > 0 && activeTab === 'home' && !selectedCategory && (
-           <MovieRow title="Continue Watching" items={continueWatchingMovies} />
+           <div className="mb-8 px-4">
+             <div className="flex items-center gap-2 mb-3">
+               <div className="w-1 h-4 bg-red-600 rounded-full" />
+               <h3 className="text-xs font-black uppercase tracking-widest text-white/70">Continue Watching</h3>
+               <div className="flex-1 h-px bg-white/5 ml-1" />
+               <span className="text-[9px] text-white/20 font-bold">{continueWatchingMovies.length}</span>
+             </div>
+             <div className="flex gap-2.5 overflow-x-auto pb-2 no-scrollbar">
+               {continueWatchingMovies.map(movie => {
+                 const prog = watchProgress[movie.ID];
+                 const pct = prog ? (prog.time / prog.duration) * 100 : 0;
+                 return (
+                   <div
+                     key={movie.ID}
+                     className="relative flex-shrink-0 w-[140px] aspect-video rounded-lg overflow-hidden cursor-pointer bg-[#111] border border-white/5 active:scale-95 transition-transform"
+                     onClick={() => handleMovieClick(movie)}
+                   >
+                     <img
+                       src={convertGoogleDriveUrl(movie.Thumbnail) || FALLBACK_IMG}
+                       alt={movie.Title}
+                       className="w-full h-full object-cover"
+                       onError={(e) => { (e.currentTarget as HTMLImageElement).src = FALLBACK_IMG; }}
+                     />
+                     <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-transparent to-transparent flex items-end p-1.5">
+                       <p className="text-[8px] font-black uppercase truncate text-white leading-tight">{movie.Title}</p>
+                     </div>
+                     {/* Red progress bar */}
+                     <div className="absolute bottom-0 left-0 right-0 h-0.5 bg-white/10">
+                       <div className="h-full bg-red-600 rounded-r-full" style={{ width: `${pct}%` }} />
+                     </div>
+                   </div>
+                 );
+               })}
+             </div>
+           </div>
          )}
 
          {!searchQuery && (
