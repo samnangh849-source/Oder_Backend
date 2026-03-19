@@ -440,45 +440,88 @@ const MobileNetflixEntertainment: React.FC<MobileNetflixEntertainmentProps> = ({
     }
   };
 
-  const MovieRow = ({ title, items }: { title: string, items: Movie[] }) => {
+  const FALLBACK_IMG = "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='300' height='450' viewBox='0 0 300 450'%3E%3Crect width='300' height='450' fill='%23141414'/%3E%3Ccircle cx='150' cy='225' r='36' fill='%23222'/%3E%3Cpolygon points='140,208 140,242 172,225' fill='%23444'/%3E%3C/svg%3E";
+
+  const TypeBadge = ({ type }: { type: string }) => {
+    const map: Record<string, { label: string; cls: string }> = {
+      series: { label: 'Series', cls: 'bg-red-600/80 text-white' },
+      short:  { label: 'Short',  cls: 'bg-blue-600/80 text-white' },
+      long:   { label: 'Movie',  cls: 'bg-yellow-600/80 text-white' },
+    };
+    const style = map[type] || { label: type, cls: 'bg-gray-600/80 text-white' };
+    return (
+      <span className={`text-[7px] font-black uppercase tracking-widest px-1.5 py-0.5 rounded-full ${style.cls}`}>
+        {style.label}
+      </span>
+    );
+  };
+
+  const MovieRow = ({ title, items }: { title: string; items: Movie[] }) => {
     if (items.length === 0) return null;
     return (
-      <div className="mb-6 px-4">
-        <h3 className="text-sm font-bold mb-3 uppercase tracking-wider opacity-60">{title}</h3>
-        <div className="flex gap-3 overflow-x-auto pb-4 no-scrollbar">
+      <div className="mb-8 px-4">
+        {/* Section Header */}
+        <div className="flex items-center gap-2 mb-3">
+          <div className="w-1 h-4 bg-red-600 rounded-full" />
+          <h3 className="text-xs font-black uppercase tracking-widest text-white/70">{title}</h3>
+          <div className="flex-1 h-px bg-white/5 ml-1" />
+          <span className="text-[9px] text-white/20 font-bold">{items.length}</span>
+        </div>
+        {/* 3-column portrait grid */}
+        <div className="grid grid-cols-3 gap-2.5">
           {items.map(movie => {
             const progress = watchProgress[movie.ID];
             const progressPercent = progress ? (progress.time / progress.duration) * 100 : 0;
             return (
-              <div key={movie.ID} className="relative min-w-[120px] aspect-[2/3] cursor-pointer" onClick={() => handleMovieClick(movie)}>
-                <img 
-                  src={convertGoogleDriveUrl(movie.Thumbnail)} 
-                  alt={movie.Title} 
-                  className="w-full h-full object-cover rounded-md shadow-lg" 
-                  onError={(e) => {
-                    const target = e.target as HTMLImageElement;
-                    if (!target.src.includes('placeholder')) {
-                      target.src = 'data:image/svg+xml;charset=UTF-8,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20width%3D%22300%22%20height%3D%22450%22%20viewBox%3D%220%200%20300%20450%22%3E%3Crect%20fill%3D%22%23222222%22%20width%3D%22300%22%20height%3D%22450%22%2F%3E%3Ctext%20fill%3D%22%23555555%22%20font-family%3D%22sans-serif%22%20font-size%3D%2220%22%20dy%3D%2210.5%22%20font-weight%3D%22bold%22%20x%3D%2250%25%22%20y%3D%2250%25%22%20text-anchor%3D%22middle%22%3ENo%20Image%3C%2Ftext%3E%3C%2Fsvg%3E';
-                    }
-                  }}
+              <div
+                key={movie.ID}
+                className="relative aspect-[2/3] rounded-xl overflow-hidden cursor-pointer bg-[#111] shadow-xl border border-white/5 active:scale-95 transition-transform"
+                onClick={() => handleMovieClick(movie)}
+              >
+                <img
+                  src={convertGoogleDriveUrl(movie.Thumbnail) || FALLBACK_IMG}
+                  alt={movie.Title}
+                  className="w-full h-full object-cover"
+                  onError={(e) => { (e.currentTarget as HTMLImageElement).src = FALLBACK_IMG; }}
                 />
-                
+
+                {/* Top gradient + type badge */}
+                <div className="absolute top-0 left-0 right-0 p-1.5 bg-gradient-to-b from-black/70 to-transparent flex justify-between items-start">
+                  <TypeBadge type={movie.Type} />
+                  <button
+                    onClick={(e) => { e.stopPropagation(); toggleMyList(movie.ID); }}
+                    className="p-1 bg-black/40 backdrop-blur-md rounded-full"
+                  >
+                    {myList.includes(movie.ID)
+                      ? <Check className="w-3 h-3 text-red-500" />
+                      : <Plus className="w-3 h-3 text-white/60" />}
+                  </button>
+                </div>
+
+                {/* Bottom gradient + title */}
+                <div className="absolute bottom-0 left-0 right-0 px-2 pb-2 pt-6 bg-gradient-to-t from-black via-black/60 to-transparent">
+                  <p className="text-[9px] font-black uppercase truncate leading-tight text-white">{movie.Title}</p>
+                  {movie.Category && (
+                    <p className="text-[7px] text-white/40 font-bold truncate mt-0.5">{movie.Category}</p>
+                  )}
+                </div>
+
+                {/* Progress bar */}
                 {progressPercent > 0 && progressPercent < 95 && (
-                  <div className="absolute bottom-0 left-0 w-full h-1 bg-gray-700/50 rounded-b-md overflow-hidden">
-                    <div className="h-full bg-red-600" style={{ width: `${progressPercent}%` }}></div>
+                  <div className="absolute bottom-0 left-0 right-0 h-0.5 bg-gray-700/50">
+                    <div className="h-full bg-red-600" style={{ width: `${progressPercent}%` }} />
                   </div>
                 )}
 
-                <div className="absolute top-1 right-1 flex flex-col gap-1">
-                   <button onClick={(e) => { e.stopPropagation(); toggleMyList(movie.ID); }} className="p-1.5 bg-black/40 backdrop-blur-md rounded-full">
-                      {myList.includes(movie.ID) ? <Check className="w-3.5 h-3.5 text-red-600" /> : <Plus className="w-3.5 h-3.5 text-white" />}
-                   </button>
-                   {isAdmin && (
-                      <button onClick={(e) => { e.stopPropagation(); deleteMovie(movie.ID); }} className="p-1.5 bg-red-600/40 backdrop-blur-md rounded-full">
-                        <Trash2 className="w-3.5 h-3.5 text-white" />
-                      </button>
-                   )}
-                </div>
+                {/* Admin delete */}
+                {isAdmin && (
+                  <button
+                    onClick={(e) => { e.stopPropagation(); deleteMovie(movie.ID); }}
+                    className="absolute bottom-2 right-1.5 p-1 bg-red-600/40 backdrop-blur-md rounded-full"
+                  >
+                    <Trash2 className="w-3 h-3 text-white" />
+                  </button>
+                )}
               </div>
             );
           })}
@@ -563,7 +606,7 @@ const MobileNetflixEntertainment: React.FC<MobileNetflixEntertainmentProps> = ({
 
       {!searchQuery && (
         <div className="flex gap-6 px-4 py-4 text-xs font-bold uppercase opacity-60 overflow-x-auto no-scrollbar">
-           <button onClick={() => {setActiveTab('home'); setSelectedCategory(null);}} className={`whitespace-nowrap ${activeTab === 'home' ? 'text-white border-b-2 border-red-600 pb-1 opacity-100' : ''}`}>{t.today || 'Home'}</button>
+           <button onClick={() => {setActiveTab('home'); setSelectedCategory(null);}} className={`whitespace-nowrap ${activeTab === 'home' ? 'text-white border-b-2 border-red-600 pb-1 opacity-100' : ''}`}>Home</button>
            <button onClick={() => {setActiveTab('movies'); setSelectedCategory(null);}} className={`whitespace-nowrap ${activeTab === 'movies' ? 'text-white border-b-2 border-red-600 pb-1 opacity-100' : ''}`}>{t.movies || 'Movies'}</button>
            <button onClick={() => {setActiveTab('mylist'); setSelectedCategory(null);}} className={`whitespace-nowrap ${activeTab === 'mylist' ? 'text-white border-b-2 border-red-600 pb-1 opacity-100' : ''}`}>My List</button>
         </div>

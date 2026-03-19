@@ -128,6 +128,45 @@ const ShortFilmPlayerPage: React.FC = () => {
 
   const startTime = useMemo(() => watchProgress[selectedMovieId]?.time || 0, [selectedMovieId, watchProgress]);
 
+  // ── Auto-rotate to Landscape on Mobile/Tablet ──────────────────────────────
+  useEffect(() => {
+    if (!currentMovie) return;
+
+    const isMobileOrTablet = window.matchMedia('(max-width: 1024px)').matches;
+    if (!isMobileOrTablet) return;
+
+    let locked = false;
+
+    const tryLock = async () => {
+      try {
+        if (screen.orientation && typeof (screen.orientation as any).lock === 'function') {
+          await (screen.orientation as any).lock('landscape');
+          locked = true;
+        } else {
+          // Fallback: request fullscreen on the root element which triggers landscape on most Android
+          const el = document.documentElement;
+          if (el.requestFullscreen) {
+            await el.requestFullscreen().catch(() => {});
+          }
+        }
+      } catch (_) {
+        // Silently ignore — happens on iOS where lock is not permitted
+      }
+    };
+
+    tryLock();
+
+    return () => {
+      if (locked) {
+        try {
+          (screen.orientation as any).unlock?.();
+        } catch (_) {}
+      } else if (document.fullscreenElement) {
+        document.exitFullscreen?.().catch(() => {});
+      }
+    };
+  }, [currentMovie?.ID]);
+
   const handleShare = () => {
     if (!currentMovie) return;
     const shareUrl = `${window.location.origin}${window.location.pathname}?view=short_player&movie=${currentMovie.ID}`;

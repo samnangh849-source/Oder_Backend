@@ -26,10 +26,10 @@ const RoleSelectionPage: React.FC<RoleSelectionPageProps> = ({ onSelect }) => {
     const userRoles = (currentUser.Role || '').split(',').map(r => r.trim().toLowerCase());
     const isInternalAdmin = currentUser.IsSystemAdmin || userRoles.includes('admin');
     
-    const showAdmin = isInternalAdmin;
+    const showAdmin = isInternalAdmin || hasPermission('view_admin_dashboard');
     const showFulfillment = hasPermission('access_fulfillment');
     const showSales = hasPermission('access_sales_portal');
-    const showEntertainment = true; // Always visible as requested
+    const showEntertainment = isInternalAdmin || hasPermission('view_entertainment');
 
     const visibleCount = (showAdmin ? 1 : 0) + (showFulfillment ? 1 : 0) + (showSales ? 1 : 0) + (showEntertainment ? 1 : 0);
 

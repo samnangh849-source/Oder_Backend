@@ -619,7 +619,7 @@ const DesktopNetflixEntertainment: React.FC<DesktopNetflixEntertainmentProps> = 
           </div>
           <div className="hidden lg:flex gap-7 text-[13px] font-bold uppercase tracking-wide opacity-50 mt-1">
             {[
-              { id: 'home', label: t.today || 'Home' },
+              { id: 'home', label: 'Home' },
               { id: 'tv', label: t.series || 'TV' },
               { id: 'movies', label: t.movies || 'Movies' },
               { id: 'mylist', label: 'My List' }

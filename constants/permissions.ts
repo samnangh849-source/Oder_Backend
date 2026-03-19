@@ -14,6 +14,8 @@ export const FEATURES = {
     // Module Access
     ACCESS_SALES_PORTAL: "access_sales_portal",
     ACCESS_FULFILLMENT: "access_fulfillment",
+    VIEW_ADMIN_DASHBOARD: "view_admin_dashboard",
+    VIEW_ENTERTAINMENT: "view_entertainment",
     
     // Admin & Management
     MANAGE_ROLES: "manage_roles",
