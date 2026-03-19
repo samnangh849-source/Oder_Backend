@@ -5,23 +5,44 @@ import { FEATURES } from '../../../constants/permissions';
 import Spinner from '../../common/Spinner';
 
 const PermissionMatrix: React.FC = () => {
-    const { appData, updatePermission } = useContext(AppContext);
-    const [updating, setUpdating] = useState<string | null>(null); // To show loading on specific toggle
+    const { appData, updatePermission, showNotification } = useContext(AppContext);
+    const [updating, setUpdating] = useState<string | null>(null);
+    // Optimistic state: tracks pending toggle values so toggle doesn't snap back
+    // while fetchData() races with SSE or other concurrent refreshes
+    const [pendingChanges, setPendingChanges] = useState<Record<string, boolean>>({});
 
     const roles = appData.roles || [];
     const permissions = appData.permissions || [];
-    
-    // Rely solely on appData.roles populated by App.tsx fetchData()
-    // Standalone /api/roles fetch removed to prevent stale data sync
 
-    // Get all features from our constant
     const featureKeys = Object.values(FEATURES);
 
     const handleToggle = async (role: string, feature: string, currentState: boolean) => {
         const lockKey = `${role}-${feature}`;
+        const newValue = !currentState;
+
+        // ── Optimistic update: show new value immediately ──────────────────
         setUpdating(lockKey);
+        setPendingChanges(prev => ({ ...prev, [lockKey]: newValue }));
+
         try {
-            await updatePermission(role, feature, !currentState);
+            await updatePermission(role, feature, newValue);
+            // After API success, keep pending for 4s to let fetchData settle.
+            // If fetchData returns correct data within 4s, clearing pending is fine.
+            setTimeout(() => {
+                setPendingChanges(prev => {
+                    const next = { ...prev };
+                    delete next[lockKey];
+                    return next;
+                });
+            }, 4000);
+        } catch (_) {
+            // Revert on error: clear pending → toggle snaps back to server state
+            setPendingChanges(prev => {
+                const next = { ...prev };
+                delete next[lockKey];
+                return next;
+            });
+            showNotification?.('Failed to update permission', 'error');
         } finally {
             setUpdating(null);
         }
@@ -70,16 +91,22 @@ const PermissionMatrix: React.FC = () => {
 
                             {/* Role Toggles */}
                             {roles.map(role => {
-                                const isEnabled = permissions.find(p => 
-                                    (p.role || '').toLowerCase() === (role.roleName || '').toLowerCase() && 
+                                const lockKey = `${role.roleName}-${feature}`;
+                                // ── Optimistic first, then server data ─────────────────────────
+                                const serverEnabled = permissions.find(p =>
+                                    (p.role || '').toLowerCase() === (role.roleName || '').toLowerCase() &&
                                     (p.feature || '').toLowerCase() === (feature || '').toLowerCase()
                                 )?.isEnabled || false;
                                 
-                                const isUpdating = updating === `${role.roleName}-${feature}`;
+                                const isEnabled = lockKey in pendingChanges
+                                    ? pendingChanges[lockKey]
+                                    : serverEnabled;
+
+                                const isUpdating = updating === lockKey;
                                 const isAdminRole = role.roleName.toLowerCase() === 'admin';
 
                                 return (
-                                    <td key={`${role.roleName}-${feature}`} className="p-6 text-center">
+                                    <td key={lockKey} className="p-6 text-center">
                                         {isAdminRole ? (
                                             <div className="flex items-center justify-center">
                                                 <div className="px-3 py-1 bg-blue-500/10 border border-blue-500/20 rounded-full">

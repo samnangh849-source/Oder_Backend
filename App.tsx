@@ -97,14 +97,33 @@ const AppContent: React.FC = () => {
     // --- PERMISSION REFRESH ---
     useEffect(() => {
         if (currentUser && appData?.permissions && Array.isArray(appData.permissions)) {
-            const rolePerms = appData.permissions.filter(p => p.role === currentUser.Role);
-            if (rolePerms && rolePerms.length > 0) {
-                // Check if perms actually changed before updating to prevent infinite loops
+            // Split user roles (e.g. "Manager, Driver") and normalize to lowercase
+            const userRoles = (currentUser.Role || '').split(',').map(r => r.trim().toLowerCase());
+            
+            // Filter all permissions that match any of the user's roles (case-insensitive)
+            const matchedPerms = appData.permissions.filter(p => 
+                userRoles.includes((p.role || '').toLowerCase())
+            );
+
+            // Deduplicate: If multiple roles define the same feature, priorize isEnabled: true
+            const mergedPermsMap: Record<string, any> = {};
+            matchedPerms.forEach(p => {
+                const feature = (p.feature || '').toLowerCase();
+                if (!mergedPermsMap[feature] || p.isEnabled) {
+                    mergedPermsMap[feature] = p;
+                }
+            });
+            const rolePerms = Object.values(mergedPermsMap);
+
+            if (rolePerms.length > 0) {
                 const currentPermsStr = JSON.stringify(currentUser.Permissions || []);
                 const nextPermsStr = JSON.stringify(rolePerms);
                 if (currentPermsStr !== nextPermsStr) {
                     setCurrentUser(prev => prev ? { ...prev, Permissions: rolePerms } : null);
                 }
+            } else if ((currentUser.Permissions || []).length > 0) {
+                // Clear permissions if none match anymore (except for Admin who bypasses in hasPermission)
+                setCurrentUser(prev => prev ? { ...prev, Permissions: [] } : null);
             }
         }
     }, [currentUser?.Role, appData?.permissions, currentUser?.Permissions, setCurrentUser]);
