@@ -388,6 +388,44 @@ func initDB() {
 		log.Fatal("❌ DATABASE_URL is not set!")
 	}
 
+	// --- SSL/TLS Check & Configuration (Aiven.io) ---
+	caCertEnv := os.Getenv("DB_CA_CERT")
+	if caCertEnv != "" {
+		caPath := "ca.pem"
+		// ព្យាយាម Decode បើវាជា base64 បើមិនមែនទេប្រើផ្ទាល់តែម្តង
+		certData, err := base64.StdEncoding.DecodeString(caCertEnv)
+		if err != nil {
+			certData = []byte(caCertEnv)
+		}
+
+		if err := os.WriteFile(caPath, certData, 0600); err != nil {
+			log.Printf("⚠️ មិនអាចបង្កើតឯកសារ SSL CA: %v", err)
+		} else {
+			log.Println("🔒 SSL CA Certificate ត្រូវបានកំណត់សម្រាប់ការត្រួតពិនិត្យ (verify-full)")
+			if !strings.Contains(dsn, "sslrootcert=") {
+				if strings.Contains(dsn, "?") {
+					dsn += "&sslrootcert=" + caPath
+				} else {
+					dsn += "?sslrootcert=" + caPath
+				}
+			}
+			// ប្តូរ sslmode ទៅ verify-full ដើម្បីសុវត្ថិភាពខ្ពស់បំផុត
+			if !strings.Contains(dsn, "sslmode=") {
+				dsn += "&sslmode=verify-full"
+			} else if strings.Contains(dsn, "sslmode=require") {
+				dsn = strings.Replace(dsn, "sslmode=require", "sslmode=verify-full", 1)
+			}
+		}
+	} else if !strings.Contains(dsn, "sslmode=") {
+		// បើមិនមានការកំណត់ SSL ទេ ដាក់ឱ្យវា require ជាលំនាំដើមសម្រាប់ Aiven
+		if strings.Contains(dsn, "?") {
+			dsn += "&sslmode=require"
+		} else {
+			dsn += "?sslmode=require"
+		}
+		log.Println("🛡️ SSL Mode ត្រូវបានកំណត់ត្រឹម 'require' (Encryption Only)")
+	}
+
 	var db *gorm.DB
 	var err error
 	maxRetries := 10

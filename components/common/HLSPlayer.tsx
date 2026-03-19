@@ -37,9 +37,14 @@ const HLSPlayer: React.FC<HLSPlayerProps> = ({ url, startTime = 0, onProgress, o
   useEffect(() => {
     const proxyBaseUrl = WEB_APP_URL;
 
-    // Reset states
+    // Reset all states immediately when URL changes
+    setFinalUrl(null);
     setUseIframeFallback(null);
     setError(null);
+    setIsExtracting(false);
+    setExtractStatus('');
+
+    if (!url) return;
 
     // If it's already a proxy URL, use it directly
     if (url.includes('/api/proxy-')) {
@@ -243,7 +248,7 @@ const HLSPlayer: React.FC<HLSPlayerProps> = ({ url, startTime = 0, onProgress, o
   }
 
   return (
-    <div className="w-full h-full bg-black flex items-center justify-center overflow-hidden">
+    <div className="w-full h-full bg-black flex items-center justify-center overflow-hidden relative">
       <video
         ref={videoRef}
         controls
@@ -253,6 +258,24 @@ const HLSPlayer: React.FC<HLSPlayerProps> = ({ url, startTime = 0, onProgress, o
         className="w-full h-full object-contain"
         style={{ '--plyr-color-main': '#e50914' } as any}
       />
+      <style dangerouslySetInnerHTML={{ __html: `
+        .plyr {
+          width: 100%;
+          height: 100%;
+        }
+        .plyr__poster {
+          background-size: cover !important;
+          background-position: center !important;
+          width: 100% !important;
+          height: 100% !important;
+        }
+        .plyr--video {
+          height: 100% !important;
+        }
+        .plyr__video-wrapper {
+          height: 100% !important;
+        }
+      `}} />
     </div>
   );
 };
