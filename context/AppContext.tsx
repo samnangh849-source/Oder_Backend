@@ -35,8 +35,8 @@ export interface AppContextType {
     unreadCount: number;
     updateProductInData: (productName: string, newData: Partial<MasterProduct>) => void;
     apiKey: string;
-    appState: 'login' | 'role_selection' | 'admin_dashboard' | 'user_journey' | 'confirm_delivery' | 'fulfillment' | 'create_order';
-    setAppState: (newState: 'login' | 'role_selection' | 'admin_dashboard' | 'user_journey' | 'confirm_delivery' | 'fulfillment' | 'create_order') => void;
+    appState: 'login' | 'role_selection' | 'admin_dashboard' | 'user_journey' | 'confirm_delivery' | 'fulfillment' | 'create_order' | 'entertainment' | 'watch' | 'series_player';
+    setAppState: (newState: 'login' | 'role_selection' | 'admin_dashboard' | 'user_journey' | 'confirm_delivery' | 'fulfillment' | 'create_order' | 'entertainment' | 'watch' | 'series_player') => void;
     setOriginalAdminUser: React.Dispatch<React.SetStateAction<User | null>>;
     fetchData: (force?: boolean) => Promise<void>;
     fetchOrders: (force?: boolean) => Promise<void>;
@@ -58,6 +58,8 @@ export interface AppContextType {
     setAdvancedSettings: React.Dispatch<React.SetStateAction<AdvancedSettings>>;
     selectedTeam: string;
     setSelectedTeam: (team: string) => void;
+    selectedMovieId: string;
+    setSelectedMovieId: (id: string) => void;
 }
 
 export const AppContext = createContext<AppContextType>({} as AppContextType);

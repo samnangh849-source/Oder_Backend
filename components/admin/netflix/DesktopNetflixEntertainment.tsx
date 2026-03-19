@@ -20,7 +20,7 @@ interface DesktopNetflixEntertainmentProps {
 }
 
 const DesktopNetflixEntertainment: React.FC<DesktopNetflixEntertainmentProps> = ({ guestMovieId, isTablet }) => {
-  const { currentUser, language, appState, setAppState, originalAdminUser, appData, refreshData, showNotification } = useContext(AppContext);
+  const { currentUser, language, appState, setAppState, setSelectedMovieId, originalAdminUser, appData, refreshData, showNotification } = useContext(AppContext);
   const t = translations[language];
   const isAdmin = currentUser?.IsSystemAdmin || (currentUser?.Role && currentUser.Role.toLowerCase() === 'admin');
   const hasBanner = !!originalAdminUser;
@@ -28,6 +28,18 @@ const DesktopNetflixEntertainment: React.FC<DesktopNetflixEntertainmentProps> = 
   // Use movies from AppData
   const [localMovies, setLocalMovies] = useState<Movie[]>([]);
   const movies = useMemo(() => (appData?.movies?.length ? appData.movies : localMovies), [appData?.movies, localMovies]);
+
+  // Helper to filter out duplicate episodes of the same series for display
+  const displayMovies = useMemo(() => {
+    const seenSeries = new Set<string>();
+    return movies.filter(m => {
+      if (m.Type !== 'series') return true;
+      const seriesId = m.SeriesKey || m.Title.split('-')[0].trim();
+      if (seenSeries.has(seriesId)) return false;
+      seenSeries.add(seriesId);
+      return true;
+    });
+  }, [movies]);
 
   // Fetch movies if not available (e.g. in guest mode)
   useEffect(() => {
@@ -94,10 +106,10 @@ const DesktopNetflixEntertainment: React.FC<DesktopNetflixEntertainmentProps> = 
   };
 
   useEffect(() => {
-    if (movies.length > 0) {
-      setBillboardMovie(movies[0]);
+    if (displayMovies.length > 0) {
+      setBillboardMovie(displayMovies[0]);
     }
-  }, [movies]);
+  }, [displayMovies]);
 
   useEffect(() => {
     if (guestMovieId && movies.length > 0) {
@@ -472,7 +484,7 @@ const DesktopNetflixEntertainment: React.FC<DesktopNetflixEntertainmentProps> = 
     }
   };
 
-  const filteredMovies = movies.filter(m => {
+  const filteredMovies = displayMovies.filter(m => {
     const matchesSearch = m.Title.toLowerCase().includes(searchQuery.toLowerCase());
     const matchesTab = activeTab === 'home' || 
                        (activeTab === 'movies' && m.Type === 'long') ||
@@ -481,19 +493,19 @@ const DesktopNetflixEntertainment: React.FC<DesktopNetflixEntertainmentProps> = 
     return matchesSearch && matchesTab;
   });
 
-  const trendingMovies = [...movies].sort((a, b) => new Date(b.AddedAt || 0).getTime() - new Date(a.AddedAt || 0).getTime()).slice(0, 5);
-  const shortFilms = movies.filter(m => m.Type === 'short');
-  const longFilms = movies.filter(m => m.Type === 'long');
-  const series = movies.filter(m => m.Type === 'series');
+  const trendingMovies = [...displayMovies].sort((a, b) => new Date(b.AddedAt || 0).getTime() - new Date(a.AddedAt || 0).getTime()).slice(0, 5);
+  const shortFilms = displayMovies.filter(m => m.Type === 'short');
+  const longFilms = displayMovies.filter(m => m.Type === 'long');
+  const seriesList = displayMovies.filter(m => m.Type === 'series');
 
   // Calculate Continue Watching
-  const continueWatchingMovies = movies.filter(m => {
+  const continueWatchingMovies = displayMovies.filter(m => {
     const prog = watchProgress[m.ID];
     return prog && prog.time > 10 && prog.time < prog.duration - 30; // Watched more than 10s and not finished
   });
 
   // Hero Slider Logic
-  const heroMovies = trendingMovies.length > 0 ? trendingMovies : movies.slice(0, 5);
+  const heroMovies = trendingMovies.length > 0 ? trendingMovies : displayMovies.slice(0, 5);
   const [heroIndex, setHeroIndex] = useState(0);
 
   useEffect(() => {
@@ -519,6 +531,16 @@ const DesktopNetflixEntertainment: React.FC<DesktopNetflixEntertainmentProps> = 
     ? filteredMovies.filter(m => m.Category === selectedCategory)
     : filteredMovies;
 
+  const handleMovieClick = (movie: Movie) => {
+    if (movie.Type === 'series') {
+      setActiveMovie(null);
+      setSelectedMovieId(movie.ID);
+      setAppState('series_player');
+    } else {
+      setActiveMovie(movie);
+    }
+  };
+
   const MovieRow = ({ title, items }: { title: string, items: Movie[] }) => {
     if (items.length === 0) return null;
     return (
@@ -529,7 +551,7 @@ const DesktopNetflixEntertainment: React.FC<DesktopNetflixEntertainmentProps> = 
             const progress = watchProgress[movie.ID];
             const progressPercent = progress ? (progress.time / progress.duration) * 100 : 0;
             return (
-              <div key={movie.ID} className="relative min-w-[240px] aspect-[2/3] group cursor-pointer transition-all hover:scale-105" onClick={() => setActiveMovie(movie)}>
+              <div key={movie.ID} className="relative min-w-[240px] aspect-[2/3] group cursor-pointer transition-all hover:scale-105" onClick={() => handleMovieClick(movie)}>
                 <img src={movie.Thumbnail} alt={movie.Title} className="w-full h-full object-cover rounded-md shadow-lg" />
                 
                 {/* Progress Bar */}
@@ -627,7 +649,7 @@ const DesktopNetflixEntertainment: React.FC<DesktopNetflixEntertainmentProps> = 
             </div>
             <p className="text-lg text-gray-300 max-w-2xl mb-8 leading-relaxed line-clamp-3 drop-shadow-md">{billboardMovie.Description || "No description available for this title."}</p>
             <div className="flex gap-4">
-              <button onClick={() => setActiveMovie(billboardMovie)} className="bg-white text-black hover:bg-gray-200 transition-colors px-8 py-3 rounded font-black flex items-center gap-3 shadow-xl"><Play className="w-6 h-6 fill-current" /> Play</button>
+              <button onClick={() => handleMovieClick(billboardMovie)} className="bg-white text-black hover:bg-gray-200 transition-colors px-8 py-3 rounded font-black flex items-center gap-3 shadow-xl"><Play className="w-6 h-6 fill-current" /> Play</button>
               <button onClick={() => setShowDetails(billboardMovie)} className="bg-gray-500/50 hover:bg-gray-500/70 transition-colors px-8 py-3 rounded font-black flex items-center gap-3 backdrop-blur-md text-white"><Info className="w-6 h-6" /> More Info</button>
             </div>
           </div>
@@ -681,8 +703,8 @@ const DesktopNetflixEntertainment: React.FC<DesktopNetflixEntertainmentProps> = 
         {activeTab === 'home' && !selectedCategory && !searchQuery && (
           <>
             <MovieRow title="Trending Now" items={trendingMovies} />
-            <MovieRow title="Khmer Series" items={series.filter(m => m.Country === 'Cambodia').slice(0, 10)} />
-            <MovieRow title="Trending Series" items={series.filter(m => m.Country !== 'Cambodia').slice(0, 10)} />
+            <MovieRow title="Khmer Series" items={seriesList.filter(m => m.Country === 'Cambodia').slice(0, 10)} />
+            <MovieRow title="Trending Series" items={seriesList.filter(m => m.Country !== 'Cambodia').slice(0, 10)} />
             <MovieRow title="Feature Movies" items={longFilms.slice(0, 10)} />
             <MovieRow title="Short Films" items={shortFilms.slice(0, 10)} />
           </>
@@ -697,25 +719,16 @@ const DesktopNetflixEntertainment: React.FC<DesktopNetflixEntertainmentProps> = 
       </main>
 
       {activeMovie && (
-        activeMovie.Type === 'series' ? (
-          <SeriesPlayerView 
-            movie={activeMovie}
-            allMovies={movies}
-            onBack={() => setActiveMovie(null)}
-            onSelectMovie={setActiveMovie}
-          />
-        ) : (
-          <MoviePlayer 
-            movie={activeMovie}
-            isMobile={false}
-            onClose={() => setActiveMovie(null)}
-            onShare={handleShare}
-            watchProgress={watchProgress}
-            onSaveProgress={saveProgress}
-            relatedMovies={movies.filter(m => m.ID !== activeMovie.ID && (m.Category === activeMovie.Category || m.Type === activeMovie.Type)).slice(0, 10)}
-            onSelectMovie={setActiveMovie}
-          />
-        )
+        <MoviePlayer 
+          movie={activeMovie}
+          isMobile={false}
+          onClose={() => setActiveMovie(null)}
+          onShare={handleShare}
+          watchProgress={watchProgress}
+          onSaveProgress={saveProgress}
+          relatedMovies={movies.filter(m => m.ID !== activeMovie.ID && (m.Category === activeMovie.Category || m.Type === activeMovie.Type)).slice(0, 10)}
+          onSelectMovie={handleMovieClick}
+        />
       )}
 
       {showDetails && (
@@ -729,7 +742,7 @@ const DesktopNetflixEntertainment: React.FC<DesktopNetflixEntertainmentProps> = 
                 {showDetails.Category && <span className="text-gray-300">{showDetails.Category}</span>}
              </div>
              <p className="text-gray-300 leading-relaxed mb-8">{showDetails.Description || "No description available."}</p>
-             <button onClick={() => { setShowDetails(null); setActiveMovie(showDetails); }} className="w-full bg-white text-black font-black py-4 rounded-xl flex items-center justify-center gap-3 hover:bg-gray-200 transition-colors"><Play className="w-6 h-6 fill-current" /> Play Now</button>
+             <button onClick={() => { setShowDetails(null); handleMovieClick(showDetails); }} className="w-full bg-white text-black font-black py-4 rounded-xl flex items-center justify-center gap-3 hover:bg-gray-200 transition-colors"><Play className="w-6 h-6 fill-current" /> Play Now</button>
            </div>
          </Modal>
       )}

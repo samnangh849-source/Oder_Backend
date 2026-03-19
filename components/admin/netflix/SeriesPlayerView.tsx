@@ -87,9 +87,9 @@ const SeriesPlayerView: React.FC<SeriesPlayerViewProps> = ({ movie, allMovies, o
         </div>
       </div>
 
-      <div className="max-w-[1600px] mx-auto px-6 -mt-8 relative z-10">
+      <div className="max-w-[1800px] 2xl:max-w-[95vw] mx-auto px-6 -mt-8 relative z-10">
         {/* Main Player Preview Area */}
-        <div className="relative group shadow-[0_20px_50px_rgba(0,0,0,0.7)] rounded-2xl overflow-hidden border border-white/10 bg-black transition-transform duration-500">
+        <div className="relative group shadow-[0_40px_100px_rgba(0,0,0,0.8)] rounded-[2.5rem] overflow-hidden border border-white/10 bg-black transition-all duration-700 hover:border-red-600/20">
             <div className="aspect-video w-full relative">
                 <HLSPlayer 
                     url={movie.VideoURL} 
@@ -103,13 +103,13 @@ const SeriesPlayerView: React.FC<SeriesPlayerViewProps> = ({ movie, allMovies, o
                 />
                 
                 {/* Fullscreen Trigger Overlay */}
-                <div className="absolute inset-0 z-20 flex items-center justify-center bg-black/20 opacity-0 group-hover:opacity-100 transition-opacity">
+                <div className="absolute inset-0 z-20 flex items-center justify-center bg-black/40 opacity-0 group-hover:opacity-100 transition-all backdrop-blur-[2px]">
                    <button 
                     onClick={() => setShowFullscreenPlayer(true)}
-                    className="bg-red-600 text-white p-6 rounded-full shadow-2xl hover:scale-110 transition-transform flex items-center gap-3 font-black uppercase tracking-widest text-sm"
+                    className="bg-red-600 text-white p-10 rounded-full shadow-[0_0_50px_rgba(220,38,38,0.5)] hover:scale-110 active:scale-95 transition-all flex flex-col items-center gap-4 font-black uppercase tracking-[0.3em] text-sm"
                    >
-                      <Maximize className="w-8 h-8" />
-                      បើក Full Screen
+                      <Maximize className="w-12 h-12" />
+                      <span>Theater Mode</span>
                    </button>
                 </div>
             </div>

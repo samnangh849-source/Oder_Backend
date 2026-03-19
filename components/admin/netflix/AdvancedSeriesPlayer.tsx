@@ -94,21 +94,27 @@ const AdvancedSeriesPlayer: React.FC<AdvancedSeriesPlayerProps> = ({
           {/* Top Bar */}
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-4">
-               <button onClick={onClose} className="p-2 hover:bg-white/10 rounded-full transition-all active:scale-90">
+               <button 
+                  onClick={onClose} 
+                  className={`p-2 hover:bg-red-600 rounded-full transition-all active:scale-90 bg-black/20 backdrop-blur-md border border-white/10 ${
+                    showControls ? 'opacity-100' : 'opacity-40 hover:opacity-100'
+                  }`}
+                  style={{ pointerEvents: 'auto' }}
+               >
                   <X className="w-7 h-7 text-white" />
                </button>
-               <div className="flex flex-col">
+               <div className={`flex flex-col transition-opacity duration-500 ${showControls ? 'opacity-100' : 'opacity-0'}`}>
                   <h2 className="text-white font-black text-lg truncate max-w-[200px] md:max-w-md italic tracking-tighter uppercase">{movie.Title}</h2>
                   <span className="text-red-500 text-[10px] font-black uppercase tracking-widest flex items-center gap-2">
                      <Loader2 className="w-3 h-3 animate-spin" /> Advanced HLS Proxying
                   </span>
                </div>
             </div>
-            <div className="flex items-center gap-3">
+            <div className={`flex items-center gap-3 transition-opacity duration-500 ${showControls ? 'opacity-100' : 'opacity-0'}`}>
                <button onClick={toggleRotation} className="p-3 bg-white/10 hover:bg-red-600 rounded-full transition-all border border-white/5 active:scale-90" title="Rotate Screen">
                   <RotateCw className="w-5 h-5" />
                </button>
-               <button onClick={toggleFullscreen} className="p-3 bg-white/10 hover:bg-white/20 rounded-full transition-all border border-white/5 active:scale-90">
+               <button onClick={toggleFullscreen} className={`p-3 rounded-full transition-all border border-white/5 active:scale-90 ${isFullscreen ? 'bg-red-600 border-red-500' : 'bg-white/10 hover:bg-white/20'}`}>
                   <Maximize className="w-5 h-5" />
                </button>
             </div>

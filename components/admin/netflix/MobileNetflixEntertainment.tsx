@@ -20,12 +20,25 @@ interface MobileNetflixEntertainmentProps {
 }
 
 const MobileNetflixEntertainment: React.FC<MobileNetflixEntertainmentProps> = ({ guestMovieId }) => {
-  const { currentUser, language, setAppState, originalAdminUser, appData, refreshData, showNotification } = useContext(AppContext);
+  const { currentUser, language, setAppState, setSelectedMovieId, originalAdminUser, appData, refreshData, showNotification } = useContext(AppContext);
   const t = translations[language];
   const isAdmin = currentUser?.IsSystemAdmin || (currentUser?.Role && currentUser.Role.toLowerCase() === 'admin');
 
   const [localMovies, setLocalMovies] = useState<Movie[]>([]);
   const movies = useMemo(() => (appData?.movies?.length ? appData.movies : localMovies), [appData?.movies, localMovies]);
+
+  // Helper to filter out duplicate episodes of the same series for display
+  const displayMovies = useMemo(() => {
+    const seenSeries = new Set<string>();
+    return movies.filter(m => {
+      if (m.Type !== 'series') return true;
+      // Group by SeriesKey if available, otherwise by the first part of the title before a dash
+      const seriesId = m.SeriesKey || m.Title.split('-')[0].trim();
+      if (seenSeries.has(seriesId)) return false;
+      seenSeries.add(seriesId);
+      return true;
+    });
+  }, [movies]);
 
   useEffect(() => {
     if (!appData?.movies?.length) {
@@ -331,7 +344,7 @@ const MobileNetflixEntertainment: React.FC<MobileNetflixEntertainmentProps> = ({
   const allCategories = Array.from(new Set(movies.map(m => m.Category).filter(Boolean)));
   const [selectedCategory, setSelectedCategory] = useState<string | null>(null);
 
-  const filteredMovies = movies.filter(m => {
+  const filteredMovies = displayMovies.filter(m => {
     const matchesSearch = m.Title.toLowerCase().includes(searchQuery.toLowerCase());
     const matchesTab = activeTab === 'home' || 
                        (activeTab === 'movies' && m.Type === 'long') ||
@@ -343,19 +356,19 @@ const MobileNetflixEntertainment: React.FC<MobileNetflixEntertainmentProps> = ({
     ? filteredMovies.filter(m => m.Category === selectedCategory)
     : filteredMovies;
 
-  const trendingMovies = [...movies].sort((a, b) => new Date(b.AddedAt || 0).getTime() - new Date(a.AddedAt || 0).getTime()).slice(0, 5);
-  const shortFilms = movies.filter(m => m.Type === 'short');
-  const longFilms = movies.filter(m => m.Type === 'long');
-  const series = movies.filter(m => m.Type === 'series');
+  const trendingMovies = [...displayMovies].sort((a, b) => new Date(b.AddedAt || 0).getTime() - new Date(a.AddedAt || 0).getTime()).slice(0, 5);
+  const shortFilms = displayMovies.filter(m => m.Type === 'short');
+  const longFilms = displayMovies.filter(m => m.Type === 'long');
+  const seriesList = displayMovies.filter(m => m.Type === 'series');
 
   // Continue Watching
-  const continueWatchingMovies = movies.filter(m => {
+  const continueWatchingMovies = displayMovies.filter(m => {
     const prog = watchProgress[m.ID];
     return prog && prog.time > 10 && prog.time < prog.duration - 30;
   });
 
   // Hero Slider Logic
-  const heroMovies = trendingMovies.length > 0 ? trendingMovies : movies.slice(0, 5);
+  const heroMovies = trendingMovies.length > 0 ? trendingMovies : displayMovies.slice(0, 5);
   const [heroIndex, setHeroIndex] = useState(0);
 
   useEffect(() => {
@@ -374,6 +387,12 @@ const MobileNetflixEntertainment: React.FC<MobileNetflixEntertainmentProps> = ({
   }, [heroIndex, heroMovies]);
 
   useEffect(() => {
+    if (!billboardMovie && displayMovies.length > 0) {
+      setBillboardMovie(displayMovies[0]);
+    }
+  }, [displayMovies, billboardMovie]);
+
+  useEffect(() => {
     if (guestMovieId && movies.length > 0) {
       const movie = movies.find(m => m.ID === guestMovieId);
       if (movie) setActiveMovie(movie);
@@ -387,6 +406,16 @@ const MobileNetflixEntertainment: React.FC<MobileNetflixEntertainmentProps> = ({
     showNotification("Link copied! Guests can watch this movie without login.", "success");
   };
 
+  const handleMovieClick = (movie: Movie) => {
+    if (movie.Type === 'series') {
+      setActiveMovie(null);
+      setSelectedMovieId(movie.ID);
+      setAppState('series_player');
+    } else {
+      setActiveMovie(movie);
+    }
+  };
+
   const MovieRow = ({ title, items }: { title: string, items: Movie[] }) => {
     if (items.length === 0) return null;
     return (
@@ -397,7 +426,7 @@ const MobileNetflixEntertainment: React.FC<MobileNetflixEntertainmentProps> = ({
             const progress = watchProgress[movie.ID];
             const progressPercent = progress ? (progress.time / progress.duration) * 100 : 0;
             return (
-              <div key={movie.ID} className="relative min-w-[120px] aspect-[2/3] cursor-pointer" onClick={() => setActiveMovie(movie)}>
+              <div key={movie.ID} className="relative min-w-[120px] aspect-[2/3] cursor-pointer" onClick={() => handleMovieClick(movie)}>
                 <img src={movie.Thumbnail} alt={movie.Title} className="w-full h-full object-cover rounded-md shadow-lg" />
                 
                 {progressPercent > 0 && progressPercent < 95 && (
@@ -502,7 +531,7 @@ const MobileNetflixEntertainment: React.FC<MobileNetflixEntertainmentProps> = ({
       )}
 
       {billboardMovie && activeTab === 'home' && !searchQuery && !selectedCategory && (
-        <div className="relative w-full aspect-[4/5] mb-6 animate-[fade-in_1s_ease-out]" onClick={() => setActiveMovie(billboardMovie)}>
+        <div className="relative w-full aspect-[4/5] mb-6 animate-[fade-in_1s_ease-out]" onClick={() => handleMovieClick(billboardMovie)}>
            <img key={billboardMovie.ID} src={billboardMovie.Thumbnail} className="w-full h-full object-cover animate-[fade-in_1s_ease-out]" />
            <div className="absolute inset-0 bg-gradient-to-t from-[#080808] via-black/40 to-transparent flex flex-col justify-end p-6 items-center text-center">
               <h2 className="text-4xl font-black italic uppercase mb-2 drop-shadow-lg">{billboardMovie.Title}</h2>
@@ -533,33 +562,24 @@ const MobileNetflixEntertainment: React.FC<MobileNetflixEntertainmentProps> = ({
 
          {!searchQuery && !selectedCategory && (
            <>
-             <MovieRow title="Recently Added" items={movies.slice().reverse().slice(0, 6)} />
+             <MovieRow title="Recently Added" items={displayMovies.slice().reverse().slice(0, 6)} />
              <MovieRow title="All Movies" items={longFilms} />
-             <MovieRow title="Series" items={series} />
+             <MovieRow title="Series" items={seriesList} />
            </>
          )}
       </main>
 
       {activeMovie && (
-        activeMovie.Type === 'series' ? (
-          <SeriesPlayerView 
-            movie={activeMovie}
-            allMovies={movies}
-            onBack={() => setActiveMovie(null)}
-            onSelectMovie={setActiveMovie}
-          />
-        ) : (
-          <MoviePlayer 
-            movie={activeMovie}
-            isMobile={true}
-            onClose={() => setActiveMovie(null)}
-            onShare={handleShare}
-            watchProgress={watchProgress}
-            onSaveProgress={saveProgress}
-            relatedMovies={movies.filter(m => m.ID !== activeMovie.ID && (m.Category === activeMovie.Category || m.Type === activeMovie.Type)).slice(0, 6)}
-            onSelectMovie={setActiveMovie}
-          />
-        )
+        <MoviePlayer 
+          movie={activeMovie}
+          isMobile={true}
+          onClose={() => setActiveMovie(null)}
+          onShare={handleShare}
+          watchProgress={watchProgress}
+          onSaveProgress={saveProgress}
+          relatedMovies={movies.filter(m => m.ID !== activeMovie.ID && (m.Category === activeMovie.Category || m.Type === activeMovie.Type)).slice(0, 6)}
+          onSelectMovie={handleMovieClick}
+        />
       )}
 
       {showAddModal && (

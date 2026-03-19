@@ -102,12 +102,19 @@ const MoviePlayer: React.FC<MoviePlayerProps> = ({
   // Desktop/Tablet View
   return (
     <div id="movie-player-container" className="fixed inset-0 z-[100] bg-black flex flex-col animate-[fade-in_0.3s_ease-out] overflow-y-auto no-scrollbar">
-      <div className="p-10 flex items-center justify-between bg-gradient-to-b from-black via-black/80 to-transparent relative z-10">
-        <button onClick={onClose} className="text-white hover:scale-110 hover:text-red-500 transition-all bg-black/50 p-3 rounded-full backdrop-blur-md"><X className="w-8 h-8" /></button>
-        <h2 className="text-3xl font-black italic drop-shadow-xl text-white">{movie.Title}</h2>
-        <button onClick={() => onShare(movie)} className="bg-white/10 hover:bg-white/20 transition-colors px-6 py-3 rounded-full text-xs font-black uppercase tracking-widest flex items-center gap-2 text-white"><Share2 className="w-4 h-4" /> Share</button>
+      <div className="p-8 flex items-center justify-between bg-gradient-to-b from-black via-black/80 to-transparent relative z-[110]">
+        <button 
+            onClick={onClose} 
+            className="text-white hover:scale-110 hover:bg-red-600 transition-all bg-black/40 p-4 rounded-full backdrop-blur-xl border border-white/10 shadow-2xl group"
+            title="Close Player"
+        >
+            <X className="w-8 h-8 group-active:scale-90 transition-transform" />
+        </button>
+        <h2 className="text-3xl font-black italic drop-shadow-xl text-white tracking-tighter uppercase">{movie.Title}</h2>
+        <button onClick={() => onShare(movie)} className="bg-white/10 hover:bg-white/20 transition-colors px-8 py-3 rounded-full text-xs font-black uppercase tracking-widest flex items-center gap-3 text-white border border-white/10 shadow-lg"><Share2 className="w-5 h-5" /> Share</button>
       </div>
-      <div className="flex-shrink-0 w-full max-w-[1600px] mx-auto relative rounded-xl overflow-hidden shadow-2xl mb-10 aspect-video bg-black">
+
+      <div className="flex-shrink-0 w-full max-w-[1800px] 2xl:max-w-[95vw] mx-auto relative rounded-[2rem] md:rounded-[3rem] overflow-hidden shadow-[0_0_100px_rgba(0,0,0,0.8)] mb-10 aspect-video bg-black border border-white/5">
         {renderVideo()}
       </div>
 

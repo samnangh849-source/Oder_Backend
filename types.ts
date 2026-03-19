@@ -387,6 +387,7 @@ export interface Movie {
     Country: string;
     Category: string;
     AddedAt: string;
+    SeriesKey?: string; // For grouping episodes
 }
 
 export interface IncentiveManualData {

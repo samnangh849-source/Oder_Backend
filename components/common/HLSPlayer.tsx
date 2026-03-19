@@ -2,7 +2,7 @@ import React, { useEffect, useRef, useState } from 'react';
 import Hls from 'hls.js';
 import Plyr from 'plyr';
 import 'plyr/dist/plyr.css';
-import { Loader2 } from 'lucide-react';
+import { Loader2, AlertCircle } from 'lucide-react';
 import { WEB_APP_URL } from '../../constants';
 
 interface HLSPlayerProps {
@@ -23,24 +23,20 @@ const HLSPlayer: React.FC<HLSPlayerProps> = ({ url, startTime = 0, onProgress, o
   const [error, setError] = useState<string | null>(null);
   const [useIframeFallback, setUseIframeFallback] = useState<string | null>(null);
 
-  useEffect(() => {
-    const proxyBaseUrl = window.location.hostname === 'localhost' 
-      ? 'http://localhost:3001' 
-      : WEB_APP_URL;
+  const lowerUrl = url.toLowerCase();
+  const isM3u8 = lowerUrl.includes('.m3u8') || 
+                 url.includes('/hlsplaylist/') || 
+                 url.includes('/hls/');
+                 
+  const isDirectVideo = lowerUrl.includes('.mp4') || 
+                        lowerUrl.includes('.webm') || 
+                        lowerUrl.includes('.ogg') || 
+                        lowerUrl.includes('.mov') ||
+                        lowerUrl.includes('.m4v');
 
-    const lowerUrl = url.toLowerCase();
-    
-    // 1. Check video types
-    const isM3u8 = lowerUrl.includes('.m3u8') || 
-                   url.includes('/hlsplaylist/') || 
-                   url.includes('/hls/');
-                   
-    const isDirectVideo = lowerUrl.includes('.mp4') || 
-                          lowerUrl.includes('.webm') || 
-                          lowerUrl.includes('.ogg') || 
-                          lowerUrl.includes('.mov') ||
-                          lowerUrl.includes('.m4v');
-    
+  useEffect(() => {
+    const proxyBaseUrl = WEB_APP_URL;
+
     // Reset states
     setUseIframeFallback(null);
     setError(null);
@@ -127,17 +123,31 @@ const HLSPlayer: React.FC<HLSPlayerProps> = ({ url, startTime = 0, onProgress, o
       const player = new Plyr(video, {
         autoplay: true,
         settings: ['quality', 'speed', 'loop'],
-        ratio: '16:9',
         keyboard: { focused: true, global: true },
         tooltips: { controls: true, seek: true },
         displayDuration: true,
       });
 
+      // Override play to handle errors gracefully
+      const originalPlay = player.play.bind(player);
+      player.play = async () => {
+        try {
+          return await originalPlay();
+        } catch (e) {
+          if (e.name !== 'NotAllowedError' && e.name !== 'AbortError') {
+             console.warn("Plyr play error:", e);
+          }
+        }
+      };
+
       player.on('ready', () => {
         if (startTime > 0) {
           player.currentTime = startTime;
         }
-        if (onReady) onReady(player);
+        // Small delay to ensure everything is initialized
+        setTimeout(() => {
+          if (onReady) onReady(player);
+        }, 100);
       });
 
       player.on('timeupdate', () => {
@@ -192,7 +202,7 @@ const HLSPlayer: React.FC<HLSPlayerProps> = ({ url, startTime = 0, onProgress, o
         playerRef.current = null;
       }
     };
-  }, [finalUrl, startTime]);
+  }, [finalUrl, startTime, isM3u8]);
 
   if (isExtracting) {
     return (
@@ -206,7 +216,7 @@ const HLSPlayer: React.FC<HLSPlayerProps> = ({ url, startTime = 0, onProgress, o
 
   if (useIframeFallback) {
     return (
-      <div className="w-full h-full bg-black flex items-center justify-center overflow-hidden rounded-xl shadow-2xl relative">
+      <div className="w-full h-full bg-black flex items-center justify-center overflow-hidden relative">
         <iframe 
           src={useIframeFallback} 
           className="w-full h-full border-none" 
@@ -224,7 +234,7 @@ const HLSPlayer: React.FC<HLSPlayerProps> = ({ url, startTime = 0, onProgress, o
 
   if (error && !finalUrl) {
     return (
-        <div className="w-full h-full bg-black flex flex-col items-center justify-center rounded-xl shadow-2xl p-6 text-center">
+        <div className="w-full h-full bg-black flex flex-col items-center justify-center p-6 text-center">
             <AlertCircle className="w-10 h-10 text-red-600 mb-4" />
             <p className="text-red-500 mb-2 font-bold">{error}</p>
             <p className="text-gray-400 text-sm">សូមព្យាយាមម្ដងទៀត ឬប្រើប្រាស់ Link ផ្សេង។</p>
@@ -233,12 +243,14 @@ const HLSPlayer: React.FC<HLSPlayerProps> = ({ url, startTime = 0, onProgress, o
   }
 
   return (
-    <div className="w-full h-full bg-black flex items-center justify-center overflow-hidden rounded-xl shadow-2xl">
+    <div className="w-full h-full bg-black flex items-center justify-center overflow-hidden">
       <video
         ref={videoRef}
         controls
         playsInline
-        className="w-full h-full"
+        crossOrigin="anonymous"
+        preload="auto"
+        className="w-full h-full object-contain"
         style={{ '--plyr-color-main': '#e50914' } as any}
       />
     </div>

@@ -10,6 +10,7 @@ import AdminDashboard from './pages/AdminDashboard';
 import CreateOrderPage from './pages/CreateOrderPage';
 import FulfillmentPage from './pages/FulfillmentPage';
 import RoleSelectionPage from './pages/RoleSelectionPage';
+import SeriesPlayerPage from './pages/SeriesPlayerPage';
 import NetflixEntertainment from './components/admin/netflix/NetflixEntertainment';
 import Header from './components/common/Header';
 import Spinner from './components/common/Spinner';
@@ -42,7 +43,7 @@ const AppContent: React.FC = () => {
         orders, appData, isOrdersLoading, isSyncing, refreshTimestamp, fetchData, fetchOrders, refreshData
     } = useOrder();
 
-    const [appState, setAppState] = useUrlState<'login' | 'user_journey' | 'admin_dashboard' | 'create_order' | 'fulfillment' | 'role_selection' | 'confirm_delivery' | 'entertainment' | 'watch'>('view', 'login');
+    const [appState, setAppState] = useUrlState<'login' | 'user_journey' | 'admin_dashboard' | 'create_order' | 'fulfillment' | 'role_selection' | 'confirm_delivery' | 'entertainment' | 'watch' | 'series_player'>('view', 'login');
     const [selectedTeam, setSelectedTeam] = useUrlState<string>('team', '');
     const [selectedMovieId, setSelectedMovieId] = useUrlState<string>('movie', '');
     const [mobilePageTitle, setMobilePageTitle] = useState<string | null>(null);
@@ -74,7 +75,7 @@ const AppContent: React.FC = () => {
 
     // Handle initial state and auth
     useEffect(() => {
-        if (!currentUser && appState !== 'login' && appState !== 'confirm_delivery' && appState !== 'watch') {
+        if (!currentUser && appState !== 'login' && appState !== 'confirm_delivery' && appState !== 'watch' && appState !== 'series_player') {
             setAppState('login');
         }
     }, [currentUser, appState, setAppState]);
@@ -174,17 +175,17 @@ const AppContent: React.FC = () => {
     }, []);
 
     const shouldShowHeader = useMemo(() => {
-        if (appState === 'login' || appState === 'admin_dashboard' || appState === 'confirm_delivery' || appState === 'entertainment' || appState === 'watch') return false;
+        if (appState === 'login' || appState === 'admin_dashboard' || appState === 'confirm_delivery' || appState === 'entertainment' || appState === 'watch' || appState === 'series_player') return false;
         return true;
     }, [appState]);
 
     const containerClass = useMemo(() => {
-        if (appState === 'entertainment' || appState === 'watch') return 'w-full';
+        if (appState === 'entertainment' || appState === 'watch' || appState === 'series_player') return 'w-full';
         return (appState === 'admin_dashboard' || appState === 'role_selection' || (appState === 'user_journey' && !selectedTeam)) ? 'w-full' : 'w-full px-2 sm:px-6';
     }, [appState, selectedTeam]);
 
     const paddingClass = useMemo(() => {
-        if (appState === 'login' || appState === 'confirm_delivery' || appState === 'entertainment' || appState === 'watch') return 'pt-0 pb-0';
+        if (appState === 'login' || appState === 'confirm_delivery' || appState === 'entertainment' || appState === 'watch' || appState === 'series_player') return 'pt-0 pb-0';
         
         // Base header padding
         let topPadding = isMobile ? 'pt-16' : 'pt-20';
@@ -235,14 +236,16 @@ const AppContent: React.FC = () => {
         showNotification,
         mobilePageTitle, setMobilePageTitle,
         advancedSettings, setAdvancedSettings,
-        selectedTeam, setSelectedTeam
+        selectedTeam, setSelectedTeam,
+        selectedMovieId, setSelectedMovieId
     }), [
         currentUser, appData, orders, isOrdersLoading, isSyncing, login, logout, refreshData, refreshTimestamp,
         originalAdminUser, setUnreadCount, unreadCount, appState, setAppState, setOriginalAdminUser,
         fetchData, fetchOrders, setCurrentUser, setChatVisibility, hasPermission,
         isSidebarCollapsed, setIsSidebarCollapsed, setIsChatOpen, isMobileMenuOpen, 
         setIsMobileMenuOpen, language, setLanguage, showNotification, mobilePageTitle, 
-        setMobilePageTitle, advancedSettings, setAdvancedSettings, selectedTeam, setSelectedTeam
+        setMobilePageTitle, advancedSettings, setAdvancedSettings, selectedTeam, setSelectedTeam,
+        selectedMovieId, setSelectedMovieId
     ]);
 
     if (isGlobalLoading) return <div className="flex h-screen items-center justify-center bg-[#020617]"><Spinner size="lg" /></div>;
@@ -273,7 +276,7 @@ const AppContent: React.FC = () => {
                                  <AdminDashboard />
                                  {!isMobileMenuOpen && <ChatWidget isOpen={isChatOpen} onClose={() => setIsChatOpen(false)} />}
                             </div>
-                        ) : currentUser && appState !== 'login' ? (
+                        ) : (currentUser || appState === 'series_player') && appState !== 'login' ? (
                             <div className="flex flex-col h-full w-full overflow-hidden">
                                 {originalAdminUser && <ImpersonationBanner />}
                                 {shouldShowHeader && <Header appState={appState} onBackToRoleSelect={() => setAppState('role_selection')} />}
@@ -284,6 +287,7 @@ const AppContent: React.FC = () => {
                                         {appState === 'fulfillment' && <FulfillmentPage />}
                                         {appState === 'entertainment' && <NetflixEntertainment />}
                                         {appState === 'watch' && <NetflixEntertainment guestMovieId={selectedMovieId} />}
+                                        {appState === 'series_player' && <SeriesPlayerPage />}
                                         {appState === 'role_selection' && (
                                             <RoleSelectionPage onSelect={(s) => {
                                                 if (s === 'user_journey') setSelectedTeam('');
