@@ -26,6 +26,8 @@ const AdvancedSeriesPlayer: React.FC<AdvancedSeriesPlayerProps> = ({
   const [showControls, setShowControls] = useState(true);
   const [isLandscape, setIsLandscape] = useState(false);
   const controlsTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+  const [playerInstance, setPlayerInstance] = useState<any>(null);
+  const [isPlaying, setIsPlaying] = useState(true); // Default to true as Plyr has autoplay
 
   // Auto-hide controls
   const resetControlsTimeout = () => {
@@ -80,6 +82,10 @@ const AdvancedSeriesPlayer: React.FC<AdvancedSeriesPlayerProps> = ({
         <HLSPlayer 
           url={movie.VideoURL} 
           onReady={(player) => {
+            setPlayerInstance(player);
+            player.on('play', () => setIsPlaying(true));
+            player.on('pause', () => setIsPlaying(false));
+            player.on('playing', () => setIsPlaying(true));
             player.on('ended', () => {
               if (autoPlayNext && nextEpisode) onNext();
             });
@@ -133,11 +139,26 @@ const AdvancedSeriesPlayer: React.FC<AdvancedSeriesPlayerProps> = ({
              )}
 
              <button 
-              onClick={() => setIsLocked(!isLocked)} 
-              className={`p-5 rounded-full border-2 transition-all active:scale-90 ${isLocked ? 'bg-red-600 border-red-500' : 'bg-white/10 border-white/20 hover:bg-white/20'}`}
+              onClick={(e) => { e.stopPropagation(); setIsLocked(!isLocked); }} 
+              className={`p-4 rounded-full border-2 transition-all active:scale-90 ${isLocked ? 'bg-red-600 border-red-500' : 'bg-white/10 border-white/20 hover:bg-white/20'}`}
              >
-                {isLocked ? <Lock className="w-8 h-8" /> : <Unlock className="w-8 h-8" />}
+                {isLocked ? <Lock className="w-6 h-6" /> : <Unlock className="w-6 h-6" />}
              </button>
+
+             {!isLocked && (
+               <button 
+                 onClick={(e) => {
+                    e.stopPropagation();
+                    if (playerInstance) {
+                       if (isPlaying) playerInstance.pause();
+                       else playerInstance.play();
+                    }
+                 }}
+                 className="p-6 md:p-8 rounded-full bg-red-600/90 hover:bg-red-600 text-white transition-all active:scale-95 shadow-[0_0_30px_rgba(220,38,38,0.5)] border border-red-400/50 backdrop-blur-md"
+               >
+                  {isPlaying ? <Pause className="w-10 h-10 md:w-14 md:h-14 fill-current" /> : <Play className="w-10 h-10 md:w-14 md:h-14 fill-current ml-2" />}
+               </button>
+             )}
 
              {!isLocked && (
                <button 

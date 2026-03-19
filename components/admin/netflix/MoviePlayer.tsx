@@ -33,37 +33,36 @@ const MoviePlayer: React.FC<MoviePlayerProps> = ({
   }, [movie.ID]);
 
   const renderVideo = () => {
-    // Check if it's a known non-video link that should stay as iframe
+    // Check if it's a known non-video link that should stay as authentic iframe
     const isSocialOrIframeOnly = movie.VideoURL.includes('facebook.com') || 
                                  movie.VideoURL.includes('youtube.com/embed');
 
-    if (!isSocialOrIframeOnly && !movie.VideoURL.includes('<iframe')) {
+    if (isSocialOrIframeOnly) {
+        if (movie.VideoURL.includes('<iframe')) {
+            return (
+                <div 
+                  className="w-full h-full bg-black flex items-center justify-center overflow-hidden rounded-xl shadow-2xl [&>iframe]:w-full [&>iframe]:h-full"
+                  dangerouslySetInnerHTML={{ __html: movie.VideoURL }}
+                />
+              );
+        }
         return (
-            <HLSPlayer 
-              url={movie.VideoURL} 
-              startTime={startTime} 
-              onProgress={(time, duration) => onSaveProgress(movie.ID, time, duration)}
+            <iframe 
+              src={movie.VideoURL} 
+              className="w-full h-full border-none rounded-xl shadow-2xl" 
+              allowFullScreen 
+              sandbox="allow-scripts allow-same-origin allow-presentation"
             />
         );
     }
 
-    if (movie.VideoURL.includes('<iframe')) {
-      return (
-        <div 
-          className="w-full h-full bg-black flex items-center justify-center overflow-hidden rounded-xl shadow-2xl"
-          dangerouslySetInnerHTML={{ __html: movie.VideoURL }}
-        />
-      );
-    }
-
-    // Default to iframe for specific links
+    // Pass everything else to our robust HLSPlayer (it handles <iframe extraction internally)
     return (
-      <iframe 
-        src={movie.VideoURL} 
-        className="w-full h-full border-none rounded-xl shadow-2xl" 
-        allowFullScreen 
-        sandbox="allow-scripts allow-same-origin allow-presentation"
-      />
+        <HLSPlayer 
+          url={movie.VideoURL} 
+          startTime={startTime} 
+          onProgress={(time, duration) => onSaveProgress(movie.ID, time, duration)}
+        />
     );
   };
 

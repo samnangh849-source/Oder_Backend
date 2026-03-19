@@ -4142,9 +4142,21 @@ func handleCreateMovie(c *gin.Context) {
 		if len(parts) > 1 {
 			tempID := parts[1]
 			var tempImg TempImage
-			if err := DB.Where("id = ?", tempID).First(&tempImg).Error; err == nil && tempImg.DriveURL != "" {
-				movie.Thumbnail = tempImg.DriveURL
-				log.Printf("✨ Resolved temp image %s to permanent URL: %s", tempID, movie.Thumbnail)
+			
+			// Poll database for up to 15 seconds waiting for the background upload to finish
+			resolved := false
+			for i := 0; i < 15; i++ {
+				if err := DB.Where("id = ?", tempID).First(&tempImg).Error; err == nil && tempImg.DriveURL != "" {
+					movie.Thumbnail = tempImg.DriveURL
+					log.Printf("✨ Resolved temp image %s to permanent URL: %s", tempID, movie.Thumbnail)
+					resolved = true
+					break
+				}
+				time.Sleep(1 * time.Second)
+			}
+			
+			if !resolved {
+				log.Printf("⚠️ Warning: Could not resolve permanent Drive URL for temp image %s within timeout.", tempID)
 			}
 		}
 	}

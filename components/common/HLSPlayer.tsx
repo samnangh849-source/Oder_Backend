@@ -23,6 +23,7 @@ const HLSPlayer: React.FC<HLSPlayerProps> = ({ url, startTime = 0, onProgress, o
   const [extractStatus, setExtractStatus] = useState<string>('');
   const [error, setError] = useState<string | null>(null);
   const [useIframeFallback, setUseIframeFallback] = useState<string | null>(null);
+  const [backupIframe, setBackupIframe] = useState<string | null>(null);
   const [swReady, setSwReady] = useState(false);
 
   // Register Service Worker
@@ -140,7 +141,7 @@ const HLSPlayer: React.FC<HLSPlayerProps> = ({ url, startTime = 0, onProgress, o
 
         let m3u8Url = null;
         
-        // Match 1: JW Player playlist
+        // Match 1: JW Player playlist or standard file: "..." declarations
         const playlistMatch = html.match(/var playlist = (\[.*?\]);/s);
         if (playlistMatch) {
             try {
@@ -149,11 +150,24 @@ const HLSPlayer: React.FC<HLSPlayerProps> = ({ url, startTime = 0, onProgress, o
             } catch (e) {}
         }
         
+        if (!m3u8Url) {
+            const fileMatch = html.match(/file:\s*["']([^"']+(?:\.m3u8|\/m3u8)[^"']*)["']/i);
+            if (fileMatch) m3u8Url = fileMatch[1];
+        }
+        
         // Match 2: Direct m3u8 regex
         if (!m3u8Url) {
-            const m3u8Regex = /(["'])(https?:\/\/[^"']+(\.m3u8|\/hlsplaylist\/|\/hls\/)[^"']*)\1/i;
-            const match = html.match(m3u8Regex);
-            if (match && match[2]) m3u8Url = match[2];
+            // Find m3u8 urls or paths containing /hls/ but specifically exclude images
+            const m3u8Regex = /(["'])(https?:\/\/[^"']+(?:\.m3u8|\/hlsplaylist\/|\/hls\/)[^"']*)\1/gi;
+            let match;
+            while ((match = m3u8Regex.exec(html)) !== null) {
+                const matchedUrl = match[2];
+                const lowerUrl = matchedUrl.toLowerCase();
+                if (!lowerUrl.endsWith('.jpg') && !lowerUrl.endsWith('.jpeg') && !lowerUrl.endsWith('.png') && !lowerUrl.endsWith('.webp') && !lowerUrl.includes('.jpg?') && !lowerUrl.includes('.png?')) {
+                    m3u8Url = matchedUrl;
+                    break;
+                }
+            }
         }
 
         if (m3u8Url) {
@@ -174,19 +188,41 @@ const HLSPlayer: React.FC<HLSPlayerProps> = ({ url, startTime = 0, onProgress, o
 
     const executeScraping = async () => {
         try {
+            // Start with the original URL as a fallback
+            let backup: string | null = null;
+            if (urlToExtract.includes('<iframe')) {
+                 const srcMatch = urlToExtract.match(/src=["']([^"']+)["']/);
+                 if (srcMatch) backup = srcMatch[1];
+            }
+
             let result = await scrapeForM3U8(urlToExtract, 0);
             
-            // Nested Iframe Logic
+            // If step 1 found a nested iframe embed, prefer THAT as the backup
+            // (it's a clean player page, not the full article website!)
+            if (result.fallbackIframe) {
+                backup = result.fallbackIframe;
+            } else if (!backup) {
+                backup = urlToExtract; // Last resort: the original article URL
+            }
+
+            // Nested Iframe Logic — try to extract m3u8 from the embed iframe
             if (!result.m3u8Url && result.fallbackIframe) {
                  setExtractStatus('កំពុងទម្លុះកូដ Iframe (Deep Scraping)...');
                  result = await scrapeForM3U8(result.fallbackIframe, 1);
             }
 
+            if (backup) setBackupIframe(backup);
+
             if (result.m3u8Url) {
                 let finalM3u8 = result.m3u8Url;
                 if (finalM3u8.startsWith('//')) finalM3u8 = 'https:' + finalM3u8;
                 setExtractStatus('កំពុងរៀបចំការចាក់វីដេអូ (Backend Proxying)...');
-                setFinalUrl(`${WEB_APP_URL}/api/proxy-m3u8?url=${encodeURIComponent(finalM3u8)}`);
+                // Pass the original page URL as referer so the Go proxy can authenticate with the CDN
+                let refererToPass = '';
+                try {
+                    refererToPass = new URL(urlToExtract).origin;
+                } catch(e) { refererToPass = urlToExtract; }
+                setFinalUrl(`${WEB_APP_URL}/api/proxy-m3u8?url=${encodeURIComponent(finalM3u8)}&referer=${encodeURIComponent(refererToPass)}`);
             } else if (result.fallbackIframe) {
                 setUseIframeFallback(result.fallbackIframe);
             } else {
@@ -297,7 +333,13 @@ const HLSPlayer: React.FC<HLSPlayerProps> = ({ url, startTime = 0, onProgress, o
           switch (data.type) {
             case Hls.ErrorTypes.NETWORK_ERROR:
               console.error("HLS Network Error:", data);
-              hls.startLoad();
+              if (backupIframe) {
+                  console.warn("HLS Fatal Network Error. Auto-Failover to Iframe...");
+                  setUseIframeFallback(backupIframe);
+                  hls.destroy();
+              } else {
+                  hls.startLoad();
+              }
               break;
             case Hls.ErrorTypes.MEDIA_ERROR:
               console.error("HLS Media Error:", data);
@@ -305,7 +347,12 @@ const HLSPlayer: React.FC<HLSPlayerProps> = ({ url, startTime = 0, onProgress, o
               break;
             default:
               console.error("HLS Fatal Error:", data);
-              setError(`HLS Fatal Error: ${data.details}`);
+              if (backupIframe) {
+                  console.warn("HLS Fatal Unknown Error. Auto-Failover to Iframe...");
+                  setUseIframeFallback(backupIframe);
+              } else {
+                  setError(`HLS Fatal Error: ${data.details}`);
+              }
               hls.destroy();
               break;
           }
@@ -355,7 +402,9 @@ const HLSPlayer: React.FC<HLSPlayerProps> = ({ url, startTime = 0, onProgress, o
         video.load();
       }
     };
-  }, [finalUrl, startTime, isM3u8]);
+    // Exclude startTime from dependencies to prevent infinite unmount/mount loops when parent updates watch progress
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [finalUrl, isM3u8]);
 
   if (isExtracting) {
     return (
@@ -374,8 +423,7 @@ const HLSPlayer: React.FC<HLSPlayerProps> = ({ url, startTime = 0, onProgress, o
           src={useIframeFallback} 
           className="w-full h-full border-none" 
           allowFullScreen 
-          sandbox="allow-scripts allow-same-origin allow-presentation"
-          referrerPolicy="no-referrer"
+          allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
         />
         <div className="absolute bottom-4 left-4 flex items-center gap-2 bg-black/60 backdrop-blur-md px-3 py-1.5 rounded-full border border-white/10">
            <div className="w-2 h-2 bg-yellow-500 rounded-full animate-pulse"></div>
