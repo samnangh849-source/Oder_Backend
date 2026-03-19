@@ -3138,11 +3138,16 @@ func extractDriveFolderID(idOrURL string) string {
 }
 
 func uploadToGoogleDriveDirectly(base64Data string, fileName string, mimeType string) (string, string, error) {
+	log.Printf("📤 [Drive Upload] Starting upload: file=%q mime=%q dataLen=%d", fileName, mimeType, len(base64Data))
+
 	if driveService == nil {
+		log.Println("⚙️ [Drive Upload] driveService is nil — attempting to init Google API client...")
 		ctx := context.Background()
 		if err := createGoogleAPIClient(ctx); err != nil {
+			log.Printf("❌ [Drive Upload] Failed to init Google API client: %v", err)
 			return "", "", fmt.Errorf("failed to init drive client: %v", err)
 		}
+		log.Println("✅ [Drive Upload] Google API client initialized.")
 	}
 
 	if fileName == "" {
@@ -3155,31 +3160,43 @@ func uploadToGoogleDriveDirectly(base64Data string, fileName string, mimeType st
 	cleanMimeType := strings.Split(mimeType, ";")[0]
 	decodedBytes, err := parseBase64(base64Data)
 	if err != nil {
+		log.Printf("❌ [Drive Upload] Base64 decode failed: %v", err)
 		return "", "", fmt.Errorf("failed to decode base64: %v", err)
 	}
+	log.Printf("✅ [Drive Upload] Base64 decoded: %d bytes", len(decodedBytes))
 
 	f := &drive.File{Name: fileName, MimeType: cleanMimeType}
 	
 	targetFolder := ""
-	if envFolderID := os.Getenv("UPLOAD_FOLDER_ID"); envFolderID != "" {
+	envFolderID := os.Getenv("UPLOAD_FOLDER_ID")
+	if envFolderID != "" {
 		targetFolder = extractDriveFolderID(envFolderID)
+		log.Printf("📁 [Drive Upload] Using UPLOAD_FOLDER_ID env: %q → folderID=%q", envFolderID, targetFolder)
 	} else if uploadFolderID != "" {
 		targetFolder = extractDriveFolderID(uploadFolderID)
+		log.Printf("📁 [Drive Upload] Using DB uploadFolderID: %q → folderID=%q", uploadFolderID, targetFolder)
+	} else {
+		log.Println("⚠️ [Drive Upload] No folder ID found — file will be uploaded to Drive root (not UPLOAD_FOLDER_ID)!")
 	}
 
 	if targetFolder != "" {
 		f.Parents = []string{targetFolder}
 	}
 
+	log.Printf("🚀 [Drive Upload] Calling Drive API to create file %q in folder %q...", fileName, targetFolder)
 	file, err := driveService.Files.Create(f).Media(bytes.NewReader(decodedBytes)).Do()
 	if err != nil {
+		log.Printf("❌ [Drive Upload] Drive API create error: %v", err)
 		return "", "", fmt.Errorf("drive api error: %v", err)
 	}
+	log.Printf("✅ [Drive Upload] File created: ID=%s", file.Id)
 
-	// ✅ Ensure file is public (anyone can view)
+	// Ensure file is public (anyone with link can view)
 	_, err = driveService.Permissions.Create(file.Id, &drive.Permission{Type: "anyone", Role: "reader"}).Do()
 	if err != nil {
-		log.Printf("⚠️ Warning: Could not set public permission for file %s: %v", file.Id, err)
+		log.Printf("⚠️ [Drive Upload] Could not set public permission for file %s: %v", file.Id, err)
+	} else {
+		log.Printf("🔓 [Drive Upload] File made public: https://drive.google.com/uc?id=%s", file.Id)
 	}
 
 	return fmt.Sprintf("https://drive.google.com/uc?id=%s", file.Id), file.Id, nil
@@ -3235,11 +3252,13 @@ func handleImageUploadProxy(c *gin.Context) {
 			}
 		}()
 
-		driveURL, _, err := uploadToGoogleDriveDirectly(rawData, r.FileName, r.MimeType)
+		log.Printf("⏳ [Background Upload] Starting for tempID=%s file=%q mime=%q", tid, r.FileName, r.MimeType)
+		driveURL, fileID, err := uploadToGoogleDriveDirectly(rawData, r.FileName, r.MimeType)
 		if err != nil {
-			log.Printf("❌ Background upload error: %v", err)
+			log.Printf("❌ [Background Upload] FAILED for tempID=%s: %v", tid, err)
 			return
 		}
+		log.Printf("✅ [Background Upload] SUCCESS tempID=%s fileID=%s driveURL=%s", tid, fileID, driveURL)
 
 		// Save the resolved DriveURL in TempImage for later retrieval (if needed by CreateMovie)
 		DB.Model(&TempImage{}).Where("id = ?", tid).Update("drive_url", driveURL)

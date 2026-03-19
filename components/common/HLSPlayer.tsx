@@ -3,9 +3,85 @@ import Hls from 'hls.js';
 import * as PlyrModule from 'plyr';
 const Plyr = (PlyrModule as any).default || PlyrModule;
 import 'plyr/dist/plyr.css';
-import { Loader2, AlertCircle } from 'lucide-react';
+import { Loader2, AlertCircle, ExternalLink } from 'lucide-react';
 import { WEB_APP_URL } from '../../constants';
 
+// ─── Iframe Fallback Player ───────────────────────────────────────────────────
+// Two-phase Cloudflare warm-up strategy:
+//  Phase 1 (warmup): Hidden 0×0 iframe loads the full article page so CF JS
+//                    challenge runs and sets cookies for the source domain.
+//  Phase 2 (play):   Visible iframe loads the clean embed URL, now with CF
+//                    cookies already in place → video plays even in fresh tabs.
+const IframeFallbackPlayer: React.FC<{ src: string; warmupSrc?: string }> = ({ src, warmupSrc }) => {
+  // warm-up phase: true = still warming up, false = ready to show video
+  const [warming, setWarming] = useState(!!warmupSrc);
+  const [warmupDone, setWarmupDone] = useState(!warmupSrc);
+
+  useEffect(() => {
+    if (!warmupSrc) return;
+    // Give the hidden iframe ~4.5 s to run Cloudflare's JS challenge & set cookies
+    const timer = setTimeout(() => {
+      setWarming(false);
+      setWarmupDone(true);
+    }, 4500);
+    return () => clearTimeout(timer);
+  }, [warmupSrc]);
+
+  return (
+    <div className="w-full h-full bg-black flex items-center justify-center overflow-hidden relative">
+
+      {/* Phase 1 — Hidden warm-up iframe (loads article page for CF cookie) */}
+      {warmupSrc && (
+        <iframe
+          src={warmupSrc}
+          style={{ position: 'absolute', width: 1, height: 1, opacity: 0, pointerEvents: 'none', zIndex: -1 }}
+          aria-hidden="true"
+          title="warmup"
+        />
+      )}
+
+      {/* Phase 2 — Visible video embed (shown only after warm-up) */}
+      {warmupDone && (
+        <iframe
+          src={src}
+          className="w-full h-full border-none"
+          allowFullScreen
+          allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
+        />
+      )}
+
+      {/* Warm-up Loading overlay */}
+      {warming && (
+        <div className="absolute inset-0 bg-black flex flex-col items-center justify-center gap-3 z-10">
+          <Loader2 className="w-10 h-10 text-yellow-500 animate-spin" />
+          <p className="text-white/80 font-bold text-sm">កំពុងរៀបចំ Video...</p>
+          <p className="text-white/40 text-[10px] uppercase tracking-widest animate-pulse">Initializing Secure Session</p>
+        </div>
+      )}
+
+      {/* Always-visible bottom status bar */}
+      <div className="absolute bottom-4 left-4 right-4 flex items-center justify-between z-20 pointer-events-none">
+        <div className="flex items-center gap-2 bg-black/60 backdrop-blur-md px-3 py-1.5 rounded-full border border-white/10">
+          <div className={`w-2 h-2 rounded-full animate-pulse ${warming ? 'bg-yellow-500' : 'bg-green-500'}`}></div>
+          <span className="text-[10px] font-bold text-white/80 uppercase tracking-widest">
+            {warming ? 'Warming Up Session...' : 'Iframe Fallback Mode'}
+          </span>
+        </div>
+        <a
+          href={src}
+          target="_blank"
+          rel="noopener noreferrer"
+          className="pointer-events-auto flex items-center gap-1.5 bg-white/10 hover:bg-white/20 backdrop-blur-md px-3 py-1.5 rounded-full border border-white/10 transition-all"
+        >
+          <ExternalLink className="w-3 h-3 text-white/70" />
+          <span className="text-[10px] font-bold text-white/70 uppercase tracking-widest">Open in Tab</span>
+        </a>
+      </div>
+    </div>
+  );
+};
+
+// ─── HLS Player ───────────────────────────────────────────────────────────────
 interface HLSPlayerProps {
   url: string;
   startTime?: number;
@@ -418,18 +494,7 @@ const HLSPlayer: React.FC<HLSPlayerProps> = ({ url, startTime = 0, onProgress, o
 
   if (useIframeFallback) {
     return (
-      <div className="w-full h-full bg-black flex items-center justify-center overflow-hidden relative">
-        <iframe 
-          src={useIframeFallback} 
-          className="w-full h-full border-none" 
-          allowFullScreen 
-          allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
-        />
-        <div className="absolute bottom-4 left-4 flex items-center gap-2 bg-black/60 backdrop-blur-md px-3 py-1.5 rounded-full border border-white/10">
-           <div className="w-2 h-2 bg-yellow-500 rounded-full animate-pulse"></div>
-           <span className="text-[10px] font-bold text-white/80 uppercase tracking-widest">Iframe Fallback Mode</span>
-        </div>
-      </div>
+      <IframeFallbackPlayer src={useIframeFallback} warmupSrc={url} />
     );
   }
 
