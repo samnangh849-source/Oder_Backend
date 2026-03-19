@@ -3853,9 +3853,9 @@ func handleProxyM3U8(c *gin.Context) {
 						absURL := resolveURL(m3u8URL, uri)
 						
 						// Check if it's a playlist or a segment
-						isPlaylist := strings.Contains(strings.ToLower(absURL), ".m3u8") || 
-									 strings.Contains(absURL, "/hlsplaylist/") || 
-									 strings.Contains(absURL, "/hls/")
+						lowerAbsURL := strings.ToLower(absURL)
+						isImageOrSegment := strings.HasSuffix(lowerAbsURL, ".ts") || strings.HasSuffix(lowerAbsURL, ".jpg") || strings.HasSuffix(lowerAbsURL, ".jpeg") || strings.HasSuffix(lowerAbsURL, ".vtt") || strings.HasSuffix(lowerAbsURL, ".mp4") || strings.HasSuffix(lowerAbsURL, ".m4s")
+						isPlaylist := strings.Contains(lowerAbsURL, ".m3u8") || (!isImageOrSegment && (strings.Contains(lowerAbsURL, "/hlsplaylist/") || strings.Contains(lowerAbsURL, "/hls/")))
 						endpoint := backendBaseURL + "/api/proxy-ts"
 						if isPlaylist {
 							endpoint = backendBaseURL + "/api/proxy-m3u8"
@@ -3883,8 +3883,10 @@ func handleProxyM3U8(c *gin.Context) {
 		if targetReferer != "" {
 			refererParam = fmt.Sprintf("&referer=%s", url.QueryEscape(targetReferer))
 		}
+		lowerAbsURL := strings.ToLower(absURL)
+		isImageOrSegment := strings.HasSuffix(lowerAbsURL, ".ts") || strings.HasSuffix(lowerAbsURL, ".jpg") || strings.HasSuffix(lowerAbsURL, ".jpeg") || strings.HasSuffix(lowerAbsURL, ".vtt") || strings.HasSuffix(lowerAbsURL, ".mp4") || strings.HasSuffix(lowerAbsURL, ".m4s")
 		
-		if isMasterPlaylist || strings.Contains(strings.ToLower(absURL), ".m3u8") || strings.Contains(absURL, "/hlsplaylist/") || strings.Contains(absURL, "/hls/") {
+		if isMasterPlaylist || strings.Contains(lowerAbsURL, ".m3u8") || (!isImageOrSegment && (strings.Contains(lowerAbsURL, "/hlsplaylist/") || strings.Contains(lowerAbsURL, "/hls/"))) {
 			rewrittenLines = append(rewrittenLines, fmt.Sprintf("%s/api/proxy-m3u8?url=%s%s", backendBaseURL, url.QueryEscape(absURL), refererParam))
 		} else {
 			rewrittenLines = append(rewrittenLines, fmt.Sprintf("%s/api/proxy-ts?url=%s%s", backendBaseURL, url.QueryEscape(absURL), refererParam))
@@ -3951,6 +3953,10 @@ func handleProxyTS(c *gin.Context) {
 		c.Header("Content-Type", "video/mp4")
 	} else if ext == ".m3u8" || strings.Contains(tsURL, ".m3u8") {
 		c.Header("Content-Type", "application/vnd.apple.mpegurl")
+	} else if ext == ".jpg" || ext == ".jpeg" || strings.Contains(tsURL, "thumbnails") {
+		c.Header("Content-Type", "image/jpeg")
+	} else if ext == ".vtt" || strings.Contains(tsURL, ".vtt") {
+		c.Header("Content-Type", "text/vtt")
 	} else {
 		// Force MP2T for any other stream chunk (Overrides things like image/png)
 		c.Header("Content-Type", "video/MP2T")
