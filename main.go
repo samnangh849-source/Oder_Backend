@@ -267,7 +267,7 @@ type Order struct {
 }
 
 type RevenueEntry struct {
-	ID               uint    `gorm:"primaryKey;autoIncrement;column:id"`
+	ID               uint    `gorm:"primaryKey;autoIncrement;column:id" json:"id"`
 	Timestamp        string  `gorm:"column:timestamp" json:"Timestamp"`
 	Team             string  `gorm:"column:team" json:"Team"`
 	Page             string  `gorm:"column:page" json:"Page"`
@@ -287,7 +287,7 @@ type ChatMessage struct {
 }
 
 type EditLog struct {
-	ID           uint   `gorm:"primaryKey;autoIncrement"`
+	ID           uint   `gorm:"primaryKey;autoIncrement" json:"id"`
 	Timestamp    string `json:"Timestamp"`
 	OrderID      string `json:"OrderID"`
 	Requester    string `json:"Requester"`
@@ -296,7 +296,7 @@ type EditLog struct {
 	NewValue     string `json:"New Value"`
 }
 type UserActivityLog struct {
-	ID        uint   `gorm:"primaryKey;autoIncrement"`
+	ID        uint   `gorm:"primaryKey;autoIncrement" json:"id"`
 	Timestamp string `json:"Timestamp"`
 	User      string `json:"User"`
 	Action    string `json:"Action"`
@@ -1779,7 +1779,8 @@ func fetchSheetDataFromAPI(sheetName string) ([]map[string]interface{}, error) {
 }
 
 func isNumericHeader(h string) bool {
-	h = strings.ToLower(h)
+	// Trim to be robust against accidental whitespace in the header row (e.g. "id ").
+	h = strings.ToLower(strings.TrimSpace(h))
 	return h == "price" || h == "cost" || h == "grand total" || h == "subtotal" || h == "shipping fee (customer)" ||
 		h == "internal cost" || h == "internalcost" || h == "discount ($)" || h == "delivery unpaid" ||
 		h == "delivery paid" || h == "total product cost ($)" || h == "revenue" || h == "quantity" ||
@@ -1788,7 +1789,8 @@ func isNumericHeader(h string) bool {
 		h == "calculatorid"
 }
 func isBoolHeader(h string) bool {
-	h = strings.ToLower(h)
+	// Trim to be robust against accidental whitespace in the header row.
+	h = strings.ToLower(strings.TrimSpace(h))
 	return h == "issystemadmin" || h == "allowmanualdriver" || h == "requiredriverselection" ||
 		h == "isrestocked" || h == "isenabled" ||
 		h == "enabledriverrecommendation" || h == "requireperiodselection" || h == "iscustom"
@@ -1807,7 +1809,7 @@ func convertSheetValuesToMaps(sheetName string, values *sheets.ValueRange) ([]ma
 		rowData := make(map[string]interface{})
 		for i, cell := range row {
 			if i < len(headers) {
-				header := fmt.Sprintf("%v", headers[i])
+				header := strings.TrimSpace(fmt.Sprintf("%v", headers[i]))
 				if header != "" {
 					if cellStr, ok := cell.(string); ok {
 						if isNumericHeader(header) {
@@ -1815,11 +1817,8 @@ func convertSheetValuesToMaps(sheetName string, values *sheets.ValueRange) ([]ma
 							if f, err := strconv.ParseFloat(cleanedStr, 64); err == nil {
 								rowData[header] = f
 							} else {
-								if cleanedStr == "" || cleanedStr == "-" {
-									rowData[header] = 0.0
-								} else {
-									rowData[header] = cellStr
-								}
+								// Default to 0.0 for numeric headers if parsing fails to avoid unmarshal errors
+								rowData[header] = 0.0
 							}
 						} else if isBoolHeader(header) {
 							rowData[header] = strings.ToUpper(strings.TrimSpace(cellStr)) == "TRUE"
@@ -1854,7 +1853,7 @@ func convertSheetValuesToMaps(sheetName string, values *sheets.ValueRange) ([]ma
 						}
 					}
 					// Ensure critical IDs are always strings to avoid scientific notation or rounding issues
-					lowHeader := strings.ToLower(header)
+					lowHeader := strings.ToLower(strings.TrimSpace(header))
 					if lowHeader == "telegram message id 1" || lowHeader == "telegram message id 2" || lowHeader == "order id" || lowHeader == "customer phone" || lowHeader == "barcode" || (sheetName == "Movies" && lowHeader == "id") {
 						rowData[header] = fmt.Sprintf("%v", cell)
 					}
@@ -4354,7 +4353,11 @@ func handleSheetsWebhook(c *gin.Context) {
 
 	for k, v := range req.RowData {
 		dbCol := mapToDBColumn(k)
-		if k == pkName {
+		
+		normalizedK := strings.ReplaceAll(strings.ToLower(k), " ", "")
+		normalizedPK := strings.ReplaceAll(strings.ToLower(pkName), " ", "")
+
+		if normalizedK == normalizedPK {
 			pkCol = dbCol
 			pkVal = v
 			continue
