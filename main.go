@@ -1018,11 +1018,20 @@ func handleUpdatePermission(c *gin.Context) {
 			continue
 		}
 
+		// Normalize names for consistent lookups (case-insensitive)
+		roleLower := strings.ToLower(strings.TrimSpace(req.Role))
+		featureLower := strings.ToLower(strings.TrimSpace(req.Feature))
+
 		var existing RolePermission
-		result := DB.Where("role = ? AND feature = ?", req.Role, req.Feature).First(&existing)
+		// Using LOWER() in SQL for robust case-insensitive matching regardless of collation
+		result := DB.Where("LOWER(role) = ? AND LOWER(feature) = ?", roleLower, featureLower).First(&existing)
 
 		if result.Error != nil && result.Error == gorm.ErrRecordNotFound {
 			req.ID = 0
+			// Use the normalized values for creation to avoid mixing "Manager" and "manager"
+			req.Role = roleLower
+			req.Feature = featureLower
+			
 			if err := DB.Create(&req).Error; err != nil {
 				log.Printf("❌ Failed to create permission [%s:%s]: %v", req.Role, req.Feature, err)
 				continue
@@ -1038,13 +1047,15 @@ func handleUpdatePermission(c *gin.Context) {
 			}(req)
 
 		} else if result.Error == nil {
+			// Update existing record using its specific primary key (ID)
 			if err := DB.Model(&existing).Update("is_enabled", req.IsEnabled).Error; err != nil {
-				log.Printf("❌ Failed to update permission [%s:%s]: %v", req.Role, req.Feature, err)
+				log.Printf("❌ Failed to update permission ID %d [%s:%s]: %v", existing.ID, existing.Role, existing.Feature, err)
 				continue
 			}
 
 			go func(r RolePermission) {
-				enqueueSync("updateSheet", map[string]interface{}{"IsEnabled": r.IsEnabled}, "RolePermissions", map[string]string{"Role": r.Role, "Feature": r.Feature})
+				// Use ID as primary key for Google Sheet update to be 100% precise
+				enqueueSync("updateSheet", map[string]interface{}{"IsEnabled": r.IsEnabled}, "RolePermissions", map[string]string{"ID": fmt.Sprintf("%d", r.ID)})
 			}(req)
 		}
 

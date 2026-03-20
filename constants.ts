@@ -30,13 +30,13 @@ export const APP_LOGO_URL = "https://drive.google.com/file/d/1vb9IG8wn31LDYtUKLu
 
 // Chat Sounds (Using more reliable open-source sounds)
 export const SOUND_URLS = {
-    NOTIFICATION: 'https://notificationsounds.com/storage/sounds/notifications/glass-clinking.mp3', 
-    SENT: 'https://notificationsounds.com/storage/sounds/notifications/ping.mp3' 
+    NOTIFICATION: 'https://assets.mixkit.co/active_storage/sfx/1113/1113-preview.mp3', 
+    SENT: 'https://assets.mixkit.co/active_storage/sfx/2869/2869-preview.mp3' 
 };
 
 export const NOTIFICATION_SOUNDS = [
-    { id: 'default', name: 'Default Ding', url: 'https://notificationsounds.com/storage/sounds/notifications/glass-clinking.mp3' },
-    { id: 'professional_1', name: 'Office Chime', url: 'https://notificationsounds.com/storage/sounds/notifications/soft-bells.mp3' },
-    { id: 'professional_2', name: 'Corporate Bell', url: 'https://notificationsounds.com/storage/sounds/notifications/clear-announcement.mp3' },
-    { id: 'click', name: 'Modern Click', url: 'https://notificationsounds.com/storage/sounds/notifications/ping.mp3' }
+    { id: 'default', name: 'Default Ding', url: 'https://assets.mixkit.co/active_storage/sfx/1113/1113-preview.mp3' },
+    { id: 'professional_1', name: 'Office Chime', url: 'https://assets.mixkit.co/active_storage/sfx/1114/1114-preview.mp3' },
+    { id: 'professional_2', name: 'Corporate Bell', url: 'https://assets.mixkit.co/active_storage/sfx/1115/1115-preview.mp3' },
+    { id: 'click', name: 'Modern Click', url: 'https://assets.mixkit.co/active_storage/sfx/2869/2869-preview.mp3' }
 ];
