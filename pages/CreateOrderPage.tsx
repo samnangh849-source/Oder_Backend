@@ -19,6 +19,7 @@ import DriverSelector from '../components/orders/DriverSelector';
 import BankSelector from '../components/orders/BankSelector'; // Import the new component
 import { logUserActivity } from '../services/auditService';
 import { CacheService, CACHE_KEYS } from '../services/cacheService';
+import { useSoundEffects } from '../hooks/useSoundEffects';
 
 import OrderGracePeriod from '../components/orders/OrderGracePeriod';
 
@@ -63,18 +64,9 @@ const STEPS = [
 
 const CreateOrderPage: React.FC<CreateOrderPageProps> = ({ team, onSaveSuccess, onCancel }) => {
     const { appData, currentUser, apiKey, previewImage, hasPermission } = useContext(AppContext);
+    const { playSuccess, playClick } = useSoundEffects();
     const [currentStep, setCurrentStep] = useState(1);
     const [isCancelModalOpen, setIsCancelModalOpen] = useState(false);
-    
-    // SFX
-    const sfxDriverSelect = useRef(new Audio('https://assets.mixkit.co/active_storage/sfx/2568/2568-preview.mp3'));
-    // Changed to Cash Register Sound
-    const sfxSuccess = useRef(new Audio('https://samnangh849-source.github.io/ButtonTest/Send.mp3'));
-
-    useEffect(() => {
-        sfxDriverSelect.current.volume = 0.4;
-        sfxSuccess.current.volume = 0.6;
-    }, []);
 
     useEffect(() => {
         if (window.innerWidth < 768) {
@@ -587,8 +579,7 @@ const CreateOrderPage: React.FC<CreateOrderPageProps> = ({ team, onSaveSuccess, 
             if (!res.ok || result.status !== 'success') throw new Error(result.message || 'Error');
             
             // Play success sound
-            sfxSuccess.current.currentTime = 0;
-            sfxSuccess.current.play().catch(() => {});
+            playSuccess();
 
             // *** NEW: Send Global Notification via Chat System ***
             try {

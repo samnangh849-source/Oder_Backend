@@ -1,4 +1,5 @@
 import React, { createContext, useState, useContext, useEffect, useCallback } from 'react';
+import { NOTIFICATION_SOUNDS } from '../constants';
 
 export type Language = 'en' | 'km';
 
@@ -8,6 +9,7 @@ export interface AdvancedSettings {
     securityLevel?: 'standard' | 'high';
     notificationSound?: string;
     notificationVolume?: number;
+    musicVolume?: number;
     orderEditGracePeriod?: number;
     placingOrderGracePeriod?: number;
     packagingGracePeriod?: number;
@@ -61,6 +63,7 @@ export const UIProvider: React.FC<{ children: React.ReactNode }> = ({ children }
             enableFloatingAlerts: true, 
             notificationSound: 'default', 
             notificationVolume: 1.0,
+            musicVolume: 0.3,
             orderEditGracePeriod: 43200,
             placingOrderGracePeriod: 5,
             packagingGracePeriod: 3,
@@ -86,10 +89,34 @@ export const UIProvider: React.FC<{ children: React.ReactNode }> = ({ children }
         localStorage.setItem('appLanguage', lang);
     };
 
+    const audioRef = React.useRef<HTMLAudioElement | null>(null);
+
+    const playNotificationSound = useCallback((type: 'success' | 'info' | 'error') => {
+        const volume = (advancedSettings.notificationVolume ?? 1.0) * 0.6;
+        if (volume <= 0) return;
+
+        let soundId = advancedSettings.notificationSound || 'default';
+        
+        // Override with specific sounds for success/error
+        if (type === 'success') soundId = 'success';
+        if (type === 'error') soundId = 'error';
+
+        const sound = NOTIFICATION_SOUNDS.find(s => s.id === soundId) || NOTIFICATION_SOUNDS.find(s => s.id === 'default');
+        if (sound) {
+            // Reuse existing audio element to avoid memory leaks
+            if (!audioRef.current) audioRef.current = new Audio();
+            audioRef.current.src = sound.url;
+            audioRef.current.volume = Math.min(1, volume);
+            audioRef.current.currentTime = 0;
+            audioRef.current.play().catch(() => {});
+        }
+    }, [advancedSettings.notificationSound, advancedSettings.notificationVolume]);
+
     const showNotification = useCallback((message: string, type: 'success' | 'info' | 'error' = 'info', title?: string) => {
         const id = Math.random().toString(36).substring(2, 9);
         setNotifications(prev => [...prev, { id, message, type, title }]);
-    }, []);
+        playNotificationSound(type);
+    }, [playNotificationSound]);
 
     const removeNotification = useCallback((id: string) => {
         setNotifications(prev => prev.filter(n => n.id !== id));

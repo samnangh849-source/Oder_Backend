@@ -264,6 +264,22 @@ const AdvancedSettingsModal: React.FC<AdvancedSettingsModalProps> = ({ onClose }
                                     />
                                 </div>
 
+                                {/* Music Volume Slider */}
+                                <div className={`space-y-6 pt-6 border-t ${isLightMode ? 'border-gray-100' : 'border-white/5'}`}>
+                                    <div className="flex items-center justify-between">
+                                        <h4 className="text-[11px] font-black uppercase tracking-[0.3em] text-gray-500">{t.music_volume || 'Music Volume'}</h4>
+                                        <span className="text-sm font-black font-mono" style={{ color: accentColor }}>{Math.round((advancedSettings.musicVolume ?? 0.3) * 100)}%</span>
+                                    </div>
+                                    <input 
+                                        type="range" 
+                                        min="0" max="1" step="0.01" 
+                                        value={advancedSettings.musicVolume ?? 0.3} 
+                                        onChange={(e) => setAdvancedSettings(prev => ({ ...prev, musicVolume: parseFloat(e.target.value) }))}
+                                        className={`w-full h-1 ${isLightMode ? 'bg-gray-200' : 'bg-[#4d4d4d]'} rounded-full appearance-none cursor-pointer`}
+                                        style={{ accentColor: accentColor }}
+                                    />
+                                </div>
+
                                 {/* Action Button */}
                                 <div className="pt-10">
                                     <button 

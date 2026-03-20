@@ -302,6 +302,7 @@ export const translations = {
     floating_alerts_desc: "បង្ហាញការជូនដំណឹងប្រព័ន្ធក្នុងកម្មវិធី",
     notification_sound: "សំឡេងជូនដំណឹង",
     alert_volume: "កម្រិតសំឡេង",
+    music_volume: "កម្រិតសំឡេងតន្ត្រី (Music Volume)",
     privacy_mode: "របៀបឯកជនភាព",
     privacy_mode_desc: "លាក់ព័ត៌មានអតិថិជនដែលងាយរងគ្រោះ",
     high_security: "សុវត្ថិភាពខ្ពស់",

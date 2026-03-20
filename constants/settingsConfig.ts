@@ -243,7 +243,7 @@ export const getValueCaseInsensitive = (item: any, key: string) => {
     if (!item || typeof item !== 'object' || !key) return undefined;
     if (item[key] !== undefined) return item[key];
     const lowerKey = key.toLowerCase();
-    const foundKey = Object.keys(item).find(k => k.toLowerCase() === lowerKey || k.toLowerCase().replace(/_/g, '') === lowerKey.replace(/_/g, ''));
+    const foundKey = Object.keys(item).find(k => k.toLowerCase() === lowerKey || k.toLowerCase().replace(/[_\s]/g, '') === lowerKey.replace(/[_\s]/g, ''));
     return foundKey ? item[foundKey] : undefined;
 };
 

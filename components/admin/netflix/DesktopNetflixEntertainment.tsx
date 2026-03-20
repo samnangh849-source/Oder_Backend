@@ -13,6 +13,7 @@ import { compressImage } from '../../../utils/imageCompressor';
 
 import MoviePlayer from './MoviePlayer';
 import SeriesPlayerView from './SeriesPlayerView';
+import TikTokFeed from './TikTokFeed';
 
 interface DesktopNetflixEntertainmentProps {
   guestMovieId?: string;
@@ -73,7 +74,7 @@ const DesktopNetflixEntertainment: React.FC<DesktopNetflixEntertainmentProps> = 
   
   const [activeMovie, setActiveMovie] = useState<Movie | null>(null);
   const [billboardMovie, setBillboardMovie] = useState<Movie | null>(null);
-  const [activeTab, setActiveTab] = useState<'home' | 'tv' | 'movies' | 'mylist' | 'games'>('home');
+  const [activeTab, setActiveTab] = useState<'home' | 'tv' | 'movies' | 'mylist' | 'shorts'>('home');
   const [myList, setMyList] = useState<string[]>(() => {
     const saved = localStorage.getItem('entertainment_mylist');
     return saved ? JSON.parse(saved) : [];
@@ -622,9 +623,10 @@ const DesktopNetflixEntertainment: React.FC<DesktopNetflixEntertainmentProps> = 
               { id: 'home', label: 'Home' },
               { id: 'tv', label: t.series || 'TV' },
               { id: 'movies', label: t.movies || 'Movies' },
-              { id: 'mylist', label: 'My List' }
+              { id: 'mylist', label: 'My List' },
+              { id: 'shorts', label: '🎬 Shorts' },
             ].map(tab => (
-              <button key={tab.id} onClick={() => { setActiveTab(tab.id as any); setSelectedCategory(null); }} className={`transition-all ${activeTab === tab.id ? 'text-white opacity-100' : 'hover:opacity-100 hover:text-white'}`}>{tab.label}</button>
+              <button key={tab.id} onClick={() => { setActiveTab(tab.id as any); setSelectedCategory(null); }} className={`transition-all ${activeTab === tab.id ? 'text-white opacity-100' : 'hover:opacity-100 hover:text-white'} ${tab.id === 'shorts' ? 'text-pink-400 opacity-80' : ''}`}>{tab.label}</button>
             ))}
           </div>
         </div>
@@ -673,7 +675,7 @@ const DesktopNetflixEntertainment: React.FC<DesktopNetflixEntertainmentProps> = 
 
       {billboardMovie && activeTab === 'home' && !searchQuery && !selectedCategory && (
         <div className="relative w-full h-[85vh] transition-opacity duration-1000">
-          <img key={billboardMovie.ID} src={billboardMovie.Thumbnail} alt={billboardMovie.Title} className="w-full h-full object-cover animate-[fade-in_1s_ease-out]" />
+          <img key={billboardMovie.ID} src={convertGoogleDriveUrl(billboardMovie.Thumbnail)} alt={billboardMovie.Title} className="w-full h-full object-cover animate-[fade-in_1s_ease-out]" />
           <div className="absolute inset-0 bg-gradient-to-r from-black via-black/60 to-transparent flex flex-col justify-center px-12">
             <h2 className="text-7xl font-black italic uppercase mb-4 max-w-4xl leading-tight drop-shadow-2xl">{billboardMovie.Title}</h2>
             <div className="flex gap-4 items-center mb-6 text-sm font-bold text-gray-300">
@@ -788,7 +790,13 @@ const DesktopNetflixEntertainment: React.FC<DesktopNetflixEntertainmentProps> = 
           </>
         )}
 
-        {(selectedCategory || searchQuery || activeTab !== 'home') && (
+        {activeTab === 'shorts' && (
+          <div className="fixed inset-0 z-[55] bg-black" style={{ top: hasBanner ? '44px' : '0' }}>
+            <TikTokFeed shortFilms={shortFilms} onOpenPlayer={handleMovieClick} />
+          </div>
+        )}
+
+        {(selectedCategory || searchQuery || activeTab !== 'home') && activeTab !== 'shorts' && (
           <MovieRow 
             title={selectedCategory ? `${selectedCategory} Movies` : activeTab === 'tv' ? 'TV Series' : activeTab === 'movies' ? 'Feature Movies' : 'Results'} 
             items={finalFilteredMovies} 
@@ -801,7 +809,7 @@ const DesktopNetflixEntertainment: React.FC<DesktopNetflixEntertainmentProps> = 
       {showDetails && (
          <Modal isOpen={!!showDetails} onClose={() => setShowDetails(null)} title="Movie Details">
            <div className="text-white p-4">
-             <img src={showDetails.Thumbnail} className="w-full h-64 object-cover rounded-xl mb-6 shadow-xl" />
+             <img src={convertGoogleDriveUrl(showDetails.Thumbnail)} className="w-full h-64 object-cover rounded-xl mb-6 shadow-xl" />
              <h2 className="text-3xl font-black italic mb-2">{showDetails.Title}</h2>
              <div className="flex gap-3 text-sm text-gray-400 mb-6 font-bold">
                 <span>{showDetails.AddedAt ? new Date(showDetails.AddedAt).getFullYear() : '2024'}</span>

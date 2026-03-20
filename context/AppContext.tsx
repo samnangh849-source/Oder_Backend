@@ -10,6 +10,7 @@ export interface AdvancedSettings {
     securityLevel?: 'standard' | 'high';
     notificationSound?: string; // ID from NOTIFICATION_SOUNDS
     notificationVolume?: number; // 0.0 to 1.0
+    musicVolume?: number; // 0.0 to 1.0
     orderEditGracePeriod?: number; // Time in seconds, minimum 3
     placingOrderGracePeriod?: number; // Time in seconds, minimum 3
     packagingGracePeriod?: number; // Time in seconds, minimum 3

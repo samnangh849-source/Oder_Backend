@@ -49,34 +49,34 @@ var (
 )
 
 var sheetRanges = map[string]string{
-	"Users":                 "Users!A:Z",
-	"Stores":                "Stores!A:Z",
+	"Users":                  "Users!A:Z",
+	"Stores":                 "Stores!A:Z",
 	"Settings":               "Settings!A:Z",
-	"TeamsPages":            "TeamsPages!A:Z",
-	"Products":              "Products!A:Z",
-	"Locations":             "Locations!A:Z",
-	"ShippingMethods":       "ShippingMethods!A:Z",
-	"Colors":                "Colors!A:Z",
-	"Drivers":               "Drivers!A:Z",
-	"BankAccounts":          "BankAccounts!A:Z",
-	"PhoneCarriers":         "PhoneCarriers!A:Z",
-	"TelegramTemplates":     "TelegramTemplates!A:Z",
-	"Inventory":             "Inventory!A:Z",
-	"StockTransfers":        "StockTransfers!A:Z",
-	"Returns":               "Returns!A:Z",
-	"AllOrders":             "AllOrders!A:AZ",
-	"RevenueDashboard":      "RevenueDashboard!A:Z",
-	"ChatMessages":          "ChatMessages!A:Z",
-	"EditLogs":              "EditLogs!A:Z",
-	"UserActivityLogs":      "UserActivityLogs!A:Z",
-	"Roles":                 "Roles!A:Z",
-	"RolePermissions":       "RolePermissions!A:Z",
-	"DriverRecommendations": "DriverRecommendations!A:Z",
-	"IncentiveResults":      "IncentiveResults!A:Z",
-	"Movies":                "Movies!A:Z",
-	"IncentiveProjects":     "IncentiveProjects!A:Z",
-	"IncentiveCalculators":  "IncentiveCalculators!A:Z",
-	"IncentiveManualData":   "IncentiveManualData!A:Z",
+	"TeamsPages":             "TeamsPages!A:Z",
+	"Products":               "Products!A:Z",
+	"Locations":              "Locations!A:Z",
+	"ShippingMethods":        "ShippingMethods!A:Z",
+	"Colors":                 "Colors!A:Z",
+	"Drivers":                "Drivers!A:Z",
+	"BankAccounts":           "BankAccounts!A:Z",
+	"PhoneCarriers":          "PhoneCarriers!A:Z",
+	"TelegramTemplates":      "TelegramTemplates!A:Z",
+	"Inventory":              "Inventory!A:Z",
+	"StockTransfers":         "StockTransfers!A:Z",
+	"Returns":                "Returns!A:Z",
+	"AllOrders":              "AllOrders!A:AZ",
+	"RevenueDashboard":       "RevenueDashboard!A:Z",
+	"ChatMessages":           "ChatMessages!A:Z",
+	"EditLogs":               "EditLogs!A:Z",
+	"UserActivityLogs":       "UserActivityLogs!A:Z",
+	"Roles":                  "Roles!A:Z",
+	"RolePermissions":        "RolePermissions!A:Z",
+	"DriverRecommendations":  "DriverRecommendations!A:Z",
+	"IncentiveResults":       "IncentiveResults!A:Z",
+	"Movies":                 "Movies!A:Z",
+	"IncentiveProjects":      "IncentiveProjects!A:Z",
+	"IncentiveCalculators":   "IncentiveCalculators!A:Z",
+	"IncentiveManualData":    "IncentiveManualData!A:Z",
 	"IncentiveCustomPayouts": "IncentiveCustomPayouts!A:Z",
 }
 
@@ -463,7 +463,7 @@ func initDB() {
 			db.Migrator().DropTable(&TeamPage{})
 		}
 	}
-	
+
 	// Force re-migrate ShippingMethod to fix naming issues
 	if db.Migrator().HasTable(&ShippingMethod{}) {
 		if !db.Migrator().HasColumn(&ShippingMethod{}, "AlertTopic") {
@@ -801,7 +801,8 @@ func handleLogin(c *gin.Context) {
 	}
 
 	var user User
-	if err := DB.Where("user_name = ?", credentials.UserName).First(&user).Error; err != nil {
+	DB.Where("user_name = ?", credentials.UserName).Limit(1).Find(&user)
+	if user.UserName == "" {
 		c.JSON(http.StatusUnauthorized, gin.H{"status": "error", "message": "អ្នកប្រើប្រាស់មិនត្រឹមត្រូវ"})
 		return
 	}
@@ -947,7 +948,22 @@ func handleCreateRole(c *gin.Context) {
 		return
 	}
 
-	req.ID = 0
+	// If ID is 0 or already exists, find the max ID and use next one
+	// This fixes the issue where PostgreSQL sequence might be out of sync
+	if req.ID == 0 {
+		var maxID uint
+		DB.Model(&Role{}).Select("COALESCE(MAX(id), 0)").Row().Scan(&maxID)
+		req.ID = maxID + 1
+	} else {
+		// Check if the ID provided by frontend already exists
+		var existingCount int64
+		DB.Model(&Role{}).Where("id = ?", req.ID).Count(&existingCount)
+		if existingCount > 0 {
+			var maxID uint
+			DB.Model(&Role{}).Select("COALESCE(MAX(id), 0)").Row().Scan(&maxID)
+			req.ID = maxID + 1
+		}
+	}
 
 	if err := DB.Create(&req).Error; err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"status": "error", "message": "ការបង្កើត Role បរាជ័យ: " + err.Error()})
@@ -1027,11 +1043,15 @@ func handleUpdatePermission(c *gin.Context) {
 		result := DB.Where("LOWER(role) = ? AND LOWER(feature) = ?", roleLower, featureLower).First(&existing)
 
 		if result.Error != nil && result.Error == gorm.ErrRecordNotFound {
-			req.ID = 0
+			// Find max ID to avoid PK conflicts in case sequence is out of sync
+			var maxID uint
+			DB.Model(&RolePermission{}).Select("COALESCE(MAX(id), 0)").Row().Scan(&maxID)
+			req.ID = maxID + 1
+
 			// Use the normalized values for creation to avoid mixing "Manager" and "manager"
 			req.Role = roleLower
 			req.Feature = featureLower
-			
+
 			if err := DB.Create(&req).Error; err != nil {
 				log.Printf("❌ Failed to create permission [%s:%s]: %v", req.Role, req.Feature, err)
 				continue
@@ -1087,6 +1107,13 @@ func handleCreateIncentiveCalculator(c *gin.Context) {
 		c.JSON(400, gin.H{"status": "error", "message": err.Error()})
 		return
 	}
+
+	if req.ID == 0 {
+		var maxID uint
+		DB.Model(&IncentiveCalculator{}).Select("COALESCE(MAX(id), 0)").Row().Scan(&maxID)
+		req.ID = maxID + 1
+	}
+
 	if err := DB.Create(&req).Error; err != nil {
 		c.JSON(500, gin.H{"status": "error", "message": err.Error()})
 		return
@@ -1106,6 +1133,13 @@ func handleCreateIncentiveProject(c *gin.Context) {
 		c.JSON(400, gin.H{"status": "error", "message": err.Error()})
 		return
 	}
+
+	if req.ID == 0 {
+		var maxID uint
+		DB.Model(&IncentiveProject{}).Select("COALESCE(MAX(id), 0)").Row().Scan(&maxID)
+		req.ID = maxID + 1
+	}
+
 	if err := DB.Create(&req).Error; err != nil {
 		c.JSON(500, gin.H{"status": "error", "message": err.Error()})
 		return
@@ -1190,8 +1224,8 @@ func handleSaveIncentiveCustomPayout(c *gin.Context) {
 
 func handleLockIncentivePayout(c *gin.Context) {
 	var req struct {
-		ProjectID uint   `json:"projectId"`
-		Month     string `json:"month"`
+		ProjectID uint              `json:"projectId"`
+		Month     string            `json:"month"`
 		Results   []IncentiveResult `json:"results"`
 	}
 	if err := c.ShouldBindJSON(&req); err != nil {
@@ -1204,11 +1238,15 @@ func handleLockIncentivePayout(c *gin.Context) {
 
 	// 2. Save new results
 	if len(req.Results) > 0 {
+		var maxID uint
+		DB.Model(&IncentiveResult{}).Select("COALESCE(MAX(id), 0)").Row().Scan(&maxID)
+
 		for i := range req.Results {
-			req.Results[i].ID = 0 // Ensure auto-increment
+			maxID++
+			req.Results[i].ID = maxID
 		}
 		DB.Create(&req.Results)
-		
+
 		// 3. Send to Google Sheet
 		go func() {
 			timestamp := time.Now().Format("2006-01-02 15:04:05")
@@ -1371,7 +1409,7 @@ func handleCalculateIncentive(c *gin.Context) {
 
 	startDate := req.Month + "-01T00:00:00Z"
 	endDate := req.Month + "-31T23:59:59Z" // Default fallback
-	
+
 	// Calculate end of month properly
 	parts := strings.Split(req.Month, "-")
 	if len(parts) == 2 {
@@ -1497,12 +1535,12 @@ type SyncTask struct {
 }
 
 var (
-	syncQueue = make(chan SyncTask, 1000)
+	syncQueue  = make(chan SyncTask, 1000)
 	httpClient = &http.Client{
 		Timeout: 45 * time.Second,
 		Transport: &http.Transport{
 			MaxIdleConns:        100,
-			IdleConnTimeout:    90 * time.Second,
+			IdleConnTimeout:     90 * time.Second,
 			MaxIdleConnsPerHost: 20,
 		},
 	}
@@ -1617,7 +1655,7 @@ func startSyncManager(workerCount int) {
 					}
 
 					log.Printf("❌ SyncManager [Worker %d]: Task %s failed: %v", workerID, task.Request.Action, errorMessage)
-					
+
 					if task.RetryCount < task.MaxRetries {
 						task.RetryCount++
 						backoff := time.Duration(task.RetryCount*task.RetryCount) * time.Second
@@ -1661,12 +1699,30 @@ func handleGetStaticData(c *gin.Context) {
 		func() { var d []ReturnItem; DB.Find(&d); mu.Lock(); result["returns"] = d; mu.Unlock() },
 		func() { var d []Role; DB.Find(&d); mu.Lock(); result["roles"] = d; mu.Unlock() },
 		func() { var d []RolePermission; DB.Find(&d); mu.Lock(); result["rolePermissions"] = d; mu.Unlock() },
-		func() { var d []DriverRecommendation; DB.Find(&d); mu.Lock(); result["driverRecommendations"] = d; mu.Unlock() },
+		func() {
+			var d []DriverRecommendation
+			DB.Find(&d)
+			mu.Lock()
+			result["driverRecommendations"] = d
+			mu.Unlock()
+		},
 		func() { var d []Movie; DB.Find(&d); mu.Lock(); result["movies"] = d; mu.Unlock() },
 		func() { var d []TelegramTemplate; DB.Find(&d); mu.Lock(); result["telegramTemplates"] = d; mu.Unlock() },
 		func() { var d []RevenueEntry; DB.Find(&d); mu.Lock(); result["revenueEntries"] = d; mu.Unlock() },
-		func() { var d []EditLog; DB.Limit(500).Order("timestamp desc").Find(&d); mu.Lock(); result["editLogs"] = d; mu.Unlock() },
-		func() { var d []UserActivityLog; DB.Limit(500).Order("timestamp desc").Find(&d); mu.Lock(); result["actLogs"] = d; mu.Unlock() },
+		func() {
+			var d []EditLog
+			DB.Limit(500).Order("timestamp desc").Find(&d)
+			mu.Lock()
+			result["editLogs"] = d
+			mu.Unlock()
+		},
+		func() {
+			var d []UserActivityLog
+			DB.Limit(500).Order("timestamp desc").Find(&d)
+			mu.Lock()
+			result["actLogs"] = d
+			mu.Unlock()
+		},
 		func() {
 			var settings []Setting
 			DB.Find(&settings)
@@ -1724,10 +1780,10 @@ func fetchSheetDataFromAPI(sheetName string) ([]map[string]interface{}, error) {
 
 func isNumericHeader(h string) bool {
 	h = strings.ToLower(h)
-	return h == "price" || h == "cost" || h == "grand total" || h == "subtotal" || h == "shipping fee (customer)" || 
-		h == "internal cost" || h == "internalcost" || h == "discount ($)" || h == "delivery unpaid" || 
-		h == "delivery paid" || h == "total product cost ($)" || h == "revenue" || h == "quantity" || 
-		h == "part" || h == "id" || h == "projectid" || 
+	return h == "price" || h == "cost" || h == "grand total" || h == "subtotal" || h == "shipping fee (customer)" ||
+		h == "internal cost" || h == "internalcost" || h == "discount ($)" || h == "delivery unpaid" ||
+		h == "delivery paid" || h == "total product cost ($)" || h == "revenue" || h == "quantity" ||
+		h == "part" || h == "id" || h == "projectid" ||
 		h == "totalorders" || h == "totalrevenue" || h == "calculatedvalue" ||
 		h == "calculatorid"
 }
@@ -1789,6 +1845,9 @@ func convertSheetValuesToMaps(sheetName string, values *sheets.ValueRange) ([]ma
 								} else {
 									rowData[header] = "FALSE"
 								}
+							} else if f, ok := cell.(float64); ok {
+								// Preserve numeric types directly
+								rowData[header] = f
 							} else {
 								rowData[header] = fmt.Sprintf("%v", cell)
 							}
@@ -2988,7 +3047,9 @@ func handleGetTeamSalesRanking(c *gin.Context) {
 	case "this_week":
 		// Monday is the start of the week
 		offset := int(now.Weekday()) - 1
-		if offset < 0 { offset = 6 }
+		if offset < 0 {
+			offset = 6
+		}
 		start := now.AddDate(0, 0, -offset)
 		whereClause += fmt.Sprintf(" AND timestamp >= '%s'", start.Format("2006-01-02"))
 	case "this_month":
@@ -3328,7 +3389,6 @@ func handleImageUploadProxy(c *gin.Context) {
 			}
 		}
 
-
 		// Removed immediate TempImage deletion to allow client time to load
 		log.Printf("✅ Background upload complete: %s", driveURL)
 	}(req, data, tempID)
@@ -3436,8 +3496,7 @@ func handleSendChatMessage(c *gin.Context) {
 				hub.broadcast <- updateMsg
 				log.Printf("📢 Broadcasted upload_complete for Message ID: %d", m.ID)
 
-		
-		// Removed immediate TempImage deletion to allow client time to load
+				// Removed immediate TempImage deletion to allow client time to load
 			} else {
 				log.Printf("❌ Chat media upload failed: %v", err)
 			}
@@ -3570,7 +3629,7 @@ func handleExtractM3U8(c *gin.Context) {
 						targetURL = playerURL
 					}
 				}
-				break 
+				break
 			}
 		}
 	}
@@ -3673,28 +3732,28 @@ func handleExtractM3U8(c *gin.Context) {
 				m3u8URL = src
 				break
 			}
-			
+
 			// Deep scrape the iframe (Advanced iframe extraction)
 			if strings.HasPrefix(src, "//") {
 				src = "https:" + src
 			} else if !strings.HasPrefix(src, "http") {
 				src = resolveURL(targetURL, src)
 			}
-			
+
 			iframeReq, errReq := http.NewRequest("GET", src, nil)
 			if errReq != nil || iframeReq == nil {
 				continue
 			}
-			
+
 			iframeReq.Header.Set("Referer", targetURL)
 			iframeReq.Header.Set("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36")
-			
+
 			iframeResp, err := client.Do(iframeReq)
 			if err == nil {
 				iframeBody, _ := io.ReadAll(iframeResp.Body)
 				iframeResp.Body.Close()
 				iframeHtml := string(iframeBody)
-				
+
 				// Standard URL regex
 				re := regexp.MustCompile(`(["'])(https?://[^"']+(\.m3u8|\.mp4|/hlsplaylist/|/hls/)[^"']*)\1`)
 				matches := re.FindAllStringSubmatch(iframeHtml, -1)
@@ -3706,7 +3765,7 @@ func handleExtractM3U8(c *gin.Context) {
 						break
 					}
 				}
-				
+
 				// Special JS file variables
 				if m3u8URL == "" {
 					fileRe := regexp.MustCompile(`file:\s*["']([^"']+(\.m3u8|\.mp4)[^"']*)["']`)
@@ -3716,25 +3775,25 @@ func handleExtractM3U8(c *gin.Context) {
 						targetURL = src
 					}
 				}
-                
-                // HTML5 Source tag
-                if m3u8URL == "" {
-                    sourceRe := regexp.MustCompile(`(?i)<source.*?src=["']([^"']+(\.m3u8|\.mp4)[^"']*)["']`)
-                    sourceMatch := sourceRe.FindStringSubmatch(iframeHtml)
-                    if len(sourceMatch) > 1 {
-                        m3u8URL = strings.ReplaceAll(sourceMatch[1], "\\/", "/")
-                        targetURL = src
-                    }
-                }
+
+				// HTML5 Source tag
+				if m3u8URL == "" {
+					sourceRe := regexp.MustCompile(`(?i)<source.*?src=["']([^"']+(\.m3u8|\.mp4)[^"']*)["']`)
+					sourceMatch := sourceRe.FindStringSubmatch(iframeHtml)
+					if len(sourceMatch) > 1 {
+						m3u8URL = strings.ReplaceAll(sourceMatch[1], "\\/", "/")
+						targetURL = src
+					}
+				}
 			}
-			
+
 			if m3u8URL != "" {
 				if !strings.HasPrefix(m3u8URL, "http") {
 					m3u8URL = resolveURL(src, m3u8URL)
 				}
 				break
 			}
-			
+
 			// Ultimately, fallback to iframe src
 			m3u8URL = src
 			break
@@ -3798,14 +3857,14 @@ func handleProxyM3U8(c *gin.Context) {
 
 	client := &http.Client{Timeout: 10 * time.Second}
 	req, _ := http.NewRequest("GET", m3u8URL, nil)
-	
+
 	targetReferer := c.Query("referer")
 	if targetReferer != "" {
 		req.Header.Set("Referer", targetReferer)
 	} else {
 		req.Header.Set("Referer", u.Scheme+"://"+u.Host)
 	}
-	
+
 	req.Header.Set("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36")
 
 	resp, err := client.Do(req)
@@ -3823,7 +3882,7 @@ func handleProxyM3U8(c *gin.Context) {
 	var rewrittenLines []string
 	var lines []string
 	isMasterPlaylist := false
-	
+
 	// Increase scanner buffer to handle long lines in M3U8 files
 	scanner := bufio.NewScanner(resp.Body)
 	buf := make([]byte, 0, 1024*1024) // 1MB buffer
@@ -3863,7 +3922,7 @@ func handleProxyM3U8(c *gin.Context) {
 					if len(subMatch) > 1 {
 						uri := subMatch[1]
 						absURL := resolveURL(m3u8URL, uri)
-						
+
 						// Check if it's a playlist or a segment
 						lowerAbsURL := strings.ToLower(absURL)
 						isImageOrSegment := strings.HasSuffix(lowerAbsURL, ".ts") || strings.HasSuffix(lowerAbsURL, ".jpg") || strings.HasSuffix(lowerAbsURL, ".jpeg") || strings.HasSuffix(lowerAbsURL, ".vtt") || strings.HasSuffix(lowerAbsURL, ".mp4") || strings.HasSuffix(lowerAbsURL, ".m4s")
@@ -3872,7 +3931,7 @@ func handleProxyM3U8(c *gin.Context) {
 						if isPlaylist {
 							endpoint = backendBaseURL + "/api/proxy-m3u8"
 						}
-						
+
 						refererParam := ""
 						if targetReferer != "" {
 							refererParam = fmt.Sprintf("&referer=%s", url.QueryEscape(targetReferer))
@@ -3890,14 +3949,14 @@ func handleProxyM3U8(c *gin.Context) {
 
 		// It's a URL line (segment or sub-playlist)
 		absURL := resolveURL(m3u8URL, line)
-		
+
 		refererParam := ""
 		if targetReferer != "" {
 			refererParam = fmt.Sprintf("&referer=%s", url.QueryEscape(targetReferer))
 		}
 		lowerAbsURL := strings.ToLower(absURL)
 		isImageOrSegment := strings.HasSuffix(lowerAbsURL, ".ts") || strings.HasSuffix(lowerAbsURL, ".jpg") || strings.HasSuffix(lowerAbsURL, ".jpeg") || strings.HasSuffix(lowerAbsURL, ".vtt") || strings.HasSuffix(lowerAbsURL, ".mp4") || strings.HasSuffix(lowerAbsURL, ".m4s")
-		
+
 		if isMasterPlaylist || strings.Contains(lowerAbsURL, ".m3u8") || (!isImageOrSegment && (strings.Contains(lowerAbsURL, "/hlsplaylist/") || strings.Contains(lowerAbsURL, "/hls/"))) {
 			rewrittenLines = append(rewrittenLines, fmt.Sprintf("%s/api/proxy-m3u8?url=%s%s", backendBaseURL, url.QueryEscape(absURL), refererParam))
 		} else {
@@ -3925,7 +3984,7 @@ func handleProxyTS(c *gin.Context) {
 
 	client := &http.Client{Timeout: 60 * time.Second}
 	req, _ := http.NewRequest("GET", tsURL, nil)
-	
+
 	// Copy Range header for fragmented MP4 support
 	if rangeHeader := c.Request.Header.Get("Range"); rangeHeader != "" {
 		req.Header.Set("Range", rangeHeader)
@@ -3937,7 +3996,7 @@ func handleProxyTS(c *gin.Context) {
 	} else {
 		req.Header.Set("Referer", u.Scheme+"://"+u.Host)
 	}
-	
+
 	req.Header.Set("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36")
 
 	resp, err := client.Do(req)
@@ -3958,7 +4017,7 @@ func handleProxyTS(c *gin.Context) {
 			c.Header(k, v[0])
 		}
 	}
-	
+
 	// Force Content-Type to match expected video segments and ignore origin obfuscation
 	ext := strings.ToLower(filepath.Ext(tsURL))
 	if ext == ".m4s" || ext == ".mp4" || strings.Contains(tsURL, ".m4s") || strings.Contains(tsURL, ".mp4") {
@@ -3973,7 +4032,7 @@ func handleProxyTS(c *gin.Context) {
 		// Force MP2T for any other stream chunk (Overrides things like image/png)
 		c.Header("Content-Type", "video/MP2T")
 	}
-	
+
 	c.Header("Access-Control-Allow-Origin", "*")
 	c.Status(resp.StatusCode)
 	io.Copy(c.Writer, resp.Body)
@@ -3994,12 +4053,12 @@ func handleFetchJSON(c *gin.Context) {
 
 	client := &http.Client{Timeout: 30 * time.Second}
 	var req *http.Request
-	
+
 	// Complex Fetch Logic for AJAX
 	if c.Request.Method == "POST" || (u.RawQuery != "" && strings.Contains(targetURL, "admin-ajax.php")) {
 		var bodyReader io.Reader
 		contentType := "application/x-www-form-urlencoded"
-		
+
 		if u.RawQuery != "" && strings.Contains(targetURL, "admin-ajax.php") {
 			// Convert query params to form body for admin-ajax requests
 			form := url.Values{}
@@ -4017,7 +4076,7 @@ func handleFetchJSON(c *gin.Context) {
 				contentType = ct
 			}
 		}
-		
+
 		req, _ = http.NewRequest("POST", targetURL, bodyReader)
 		req.Header.Set("Content-Type", contentType)
 	} else {
@@ -4041,13 +4100,13 @@ func handleFetchJSON(c *gin.Context) {
 	defer resp.Body.Close()
 
 	body, _ := io.ReadAll(resp.Body)
-	
+
 	// Forward Content-Type from target
 	respContentType := resp.Header.Get("Content-Type")
 	if respContentType == "" {
 		respContentType = "application/json"
 	}
-	
+
 	c.Data(resp.StatusCode, resp.Header.Get("Content-Type"), body)
 }
 
@@ -4154,7 +4213,7 @@ func handleCreateMovie(c *gin.Context) {
 		if len(parts) > 1 {
 			tempID := parts[1]
 			var tempImg TempImage
-			
+
 			// Poll database for up to 15 seconds waiting for the background upload to finish
 			resolved := false
 			for i := 0; i < 15; i++ {
@@ -4166,7 +4225,7 @@ func handleCreateMovie(c *gin.Context) {
 				}
 				time.Sleep(1 * time.Second)
 			}
-			
+
 			if !resolved {
 				log.Printf("⚠️ Warning: Could not resolve permanent Drive URL for temp image %s within timeout.", tempID)
 			}
@@ -4284,7 +4343,7 @@ func handleSheetsWebhook(c *gin.Context) {
 	} else if req.SheetName == "AllOrders" || strings.HasPrefix(req.SheetName, "Orders_") {
 		pkName = "Order ID"
 	} else {
-		// Default to "id" (lowercase) for Roles, Permissions, Incentive, etc. 
+		// Default to "id" (lowercase) for Roles, Permissions, Incentive, etc.
 		// if "ID" (uppercase) doesn't find a match in RowData.
 		if _, exists := req.RowData["ID"]; !exists {
 			if _, lowerExists := req.RowData["id"]; lowerExists {
@@ -4300,7 +4359,7 @@ func handleSheetsWebhook(c *gin.Context) {
 			pkVal = v
 			continue
 		}
-		
+
 		// Skip empty or nil values to avoid overwriting with blanks
 		if v == nil || v == "" {
 			continue
@@ -4340,7 +4399,7 @@ func handleSheetsWebhook(c *gin.Context) {
 			c.JSON(500, gin.H{"status": "error", "message": result.Error.Error()})
 			return
 		}
-		
+
 		// If no rows were updated, it's likely a new record. Attempt to Create.
 		if result.RowsAffected == 0 {
 			// Ensure PK is in mappedData for creation
@@ -4354,10 +4413,10 @@ func handleSheetsWebhook(c *gin.Context) {
 
 	// Broadcast update to all connected clients
 	event, _ := json.Marshal(map[string]interface{}{
-		"type": "sheet_webhook_sync",
+		"type":      "sheet_webhook_sync",
 		"sheetName": req.SheetName,
-		"action": req.Action,
-		"pk": pkVal,
+		"action":    req.Action,
+		"pk":        pkVal,
 	})
 	hub.broadcast <- event
 
@@ -4382,8 +4441,8 @@ func main() {
 	hub = NewHub()
 	go hub.run()
 	// Start Background Workers
-	startSyncManager(3)        // Standard Google Sheets sync workers
-	go startOrderWorker()       // Specialized Order workers
+	startSyncManager(3)   // Standard Google Sheets sync workers
+	go startOrderWorker() // Specialized Order workers
 	startScheduler()
 
 	r := gin.Default()

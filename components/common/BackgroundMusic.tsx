@@ -5,12 +5,14 @@ import { convertGoogleDriveUrl } from '../../utils/fileUtils';
 import { AppContext } from '../../context/AppContext';
 
 const BackgroundMusic: React.FC = () => {
-    const { appState } = useContext(AppContext);
+    const { appState, advancedSettings } = useContext(AppContext);
     const audioRef = useRef<HTMLAudioElement>(null);
     // State is still needed for logic, even if UI is hidden
     const [isPlaying, setIsPlaying] = useState(false);
     const [hasError, setHasError] = useState(false);
-    const volume = 0.3; // Fixed volume at 30% since slider is hidden
+    
+    // Use musicVolume from settings, default to 0.3
+    const volume = advancedSettings?.musicVolume ?? 0.3;
 
     // Determine if music should be playing based on current view
     const shouldPlay = useMemo(() => {
@@ -44,7 +46,7 @@ const BackgroundMusic: React.FC = () => {
         const audio = audioRef.current;
         if (!audio || !musicSource) return;
 
-        audio.volume = 0.3;
+        audio.volume = volume;
 
         const playAudio = async () => {
             if (!shouldPlay) {
@@ -91,7 +93,7 @@ const BackgroundMusic: React.FC = () => {
             window.removeEventListener('touchstart', onUserInteraction);
             window.removeEventListener('keydown', onUserInteraction);
         };
-    }, [musicSource, shouldPlay, appState]);
+    }, [musicSource, shouldPlay, appState, volume]);
 
     const handleAudioError = (e: any) => {
         console.error("❌ Background Music Error:", e);

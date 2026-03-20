@@ -5,6 +5,7 @@ import Spinner from '../components/common/Spinner';
 import { WEB_APP_URL, APP_LOGO_URL } from '../constants';
 import { User } from '../types';
 import { convertGoogleDriveUrl } from '../utils/fileUtils';
+import { useSoundEffects } from '../hooks/useSoundEffects';
 
 const LoginPage: React.FC = () => {
     const [username, setUsername] = useState('');
@@ -20,22 +21,9 @@ const LoginPage: React.FC = () => {
     const [mousePos, setMousePos] = useState({ x: 0, y: 0 });
 
     const { login } = useContext(AppContext);
-    
-    // SFX Refs
-    const sfxStartup = useRef(new Audio('https://assets.mixkit.co/active_storage/sfx/2571/2571-preview.mp3'));
-    const sfxInteraction = useRef(new Audio('https://assets.mixkit.co/active_storage/sfx/2568/2568-preview.mp3'));
-    const sfxError = useRef(new Audio('https://assets.mixkit.co/active_storage/sfx/2573/2573-preview.mp3'));
+    const { playClick, playError } = useSoundEffects();
 
     useEffect(() => {
-        sfxStartup.current.volume = 0.4;
-        sfxInteraction.current.volume = 0.1;
-        
-        const handleFirstClick = () => {
-            sfxStartup.current.play().catch(() => {});
-            window.removeEventListener('click', handleFirstClick);
-        };
-        window.addEventListener('click', handleFirstClick);
-
         const duration = 3000;
         const interval = 30;
         const step = (100 / (duration / interval));
@@ -54,7 +42,6 @@ const LoginPage: React.FC = () => {
         }, interval);
 
         const handleMove = (e: MouseEvent) => {
-            // Subtle tilt for mobile feeling
             setMousePos({
                 x: (e.clientX / window.innerWidth - 0.5) * 20,
                 y: (e.clientY / window.innerHeight - 0.5) * 20
@@ -65,13 +52,11 @@ const LoginPage: React.FC = () => {
         return () => {
             clearInterval(timer);
             window.removeEventListener('mousemove', handleMove);
-            window.removeEventListener('click', handleFirstClick);
         };
     }, []);
 
     const playInteraction = () => {
-        sfxInteraction.current.currentTime = 0;
-        sfxInteraction.current.play().catch(() => {});
+        playClick();
     };
 
     const handleLogin = async (e: React.FormEvent) => {
@@ -98,7 +83,7 @@ const LoginPage: React.FC = () => {
                 throw new Error('Invalid server response');
             }
         } catch (err: any) {
-            sfxError.current.play().catch(() => {});
+            playError();
             setError('Login Failed: ' + err.message);
         } finally {
             setLoading(false);

@@ -7,7 +7,7 @@ import { useAudioRecorder } from '../../hooks/useAudioRecorder';
 import { compressImage } from '../../utils/imageCompressor';
 import { WEB_APP_URL, NOTIFICATION_SOUNDS } from '../../constants';
 import AudioPlayer from './AudioPlayer';
-import { fileToBase64, convertGoogleDriveUrl } from '../../utils/fileUtils';
+import { fileToBase64, fileToDataUrl, convertGoogleDriveUrl } from '../../utils/fileUtils';
 import UserAvatar from '../common/UserAvatar';
 import ChatMembers from './ChatMembers';
 import { requestNotificationPermission, sendSystemNotification } from '../../utils/notificationUtils';

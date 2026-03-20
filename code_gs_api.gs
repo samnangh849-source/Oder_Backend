@@ -862,8 +862,19 @@ function handleSheetEdit(e) {
     CONFIG.MOVIES_SHEET, 
     CONFIG.USERS_SHEET, 
     CONFIG.STORES_SHEET, 
+    CONFIG.PAGES_SHEET,
     CONFIG.PRODUCTS_SHEET,
     CONFIG.SHIPPING_METHODS_SHEET,
+    CONFIG.COLORS_SHEET,
+    CONFIG.DRIVERS_SHEET,
+    CONFIG.BANK_ACCOUNTS_SHEET,
+    CONFIG.PHONE_CARRIERS_SHEET,
+    CONFIG.TELEGRAM_TEMPLATES_SHEET,
+    CONFIG.LOCATIONS_SHEET,
+    CONFIG.ROLES_SHEET,
+    CONFIG.ROLE_PERMISSIONS_SHEET,
+    CONFIG.DRIVER_RECOMMENDATIONS_SHEET,
+    CONFIG.SETTINGS_SHEET,
     CONFIG.ALL_ORDERS_SHEET
   ];
 
@@ -899,3 +910,93 @@ function handleSheetEdit(e) {
   }
 }
 
+// ============================================================
+// HLS VIDEO PROXY — Google Drive Folder Streaming (Option C)
+// ============================================================
+
+/**
+ * Main Web App Entry Point for Apps Script
+ * You must deploy this script as a "Web App" (Execute as: Me, Access: Anyone)
+ */
+function doGet(e) {
+  var action = e.parameter.action;
+
+  if (action === 'hls_playlist') {
+    var folderId = e.parameter.folderId;
+    if (!folderId) return ContentService.createTextOutput("Missing folderId");
+    return handleHlsPlaylist(folderId);
+  } 
+
+  return ContentService.createTextOutput("System Online. Use action=hls_playlist&folderId=...");
+}
+
+/**
+ * Serve a rewritten .m3u8 playlist from a Google Drive folder.
+ * Changes relative .ts segment paths to direct Google Drive download URLs.
+ */
+function handleHlsPlaylist(folderId) {
+  try {
+    var folder = DriveApp.getFolderById(folderId);
+    var m3u8File = null;
+    
+    // 1. Find the .m3u8 file
+    var files = folder.getFilesByType('application/x-mpegurl');
+    if (files.hasNext()) {
+      m3u8File = files.next();
+    } else {
+      var allFiles = folder.getFiles();
+      while (allFiles.hasNext()) {
+        var f = allFiles.next();
+        if (f.getName().toLowerCase().endsWith('.m3u8')) {
+          m3u8File = f;
+          break;
+        }
+      }
+    }
+
+    if (!m3u8File) {
+      return ContentService.createTextOutput('Error: No .m3u8 file found in folder ' + folderId)
+        .setMimeType(ContentService.MimeType.TEXT);
+    }
+
+    // 2. Read raw playlist
+    var rawPlaylist = m3u8File.getBlob().getDataAsString('UTF-8');
+
+    // 3. Map TS segment filenames to their Drive File IDs
+    var segmentMap = {};
+    var segFiles = folder.getFiles();
+    while (segFiles.hasNext()) {
+      var sf = segFiles.next();
+      var sfName = sf.getName();
+      if (sfName.toLowerCase().endsWith('.ts')) {
+        segmentMap[sfName] = sf.getId();
+      }
+    }
+
+    // 4. Rewrite segments to direct Google Drive download URLs
+    var lines = rawPlaylist.split('\n');
+    var rewritten = lines.map(function(line) {
+      var trimmed = line.trim();
+      if (!trimmed.startsWith('#') && trimmed.toLowerCase().endsWith('.ts')) {
+        var segmentName = trimmed.replace(/\r$/, '');
+        var targetFileId = segmentMap[segmentName] || segmentMap[decodeURIComponent(segmentName)];
+        
+        if (targetFileId) {
+          // Send direct Drive download link so HLS.js can fetch binary TS chunks effortlessly
+          return 'https://drive.google.com/uc?export=download&id=' + targetFileId;
+        }
+      }
+      return line;
+    });
+
+    var output = rewritten.join('\n');
+    
+    // Return M3U8 payload
+    return ContentService.createTextOutput(output)
+      .setMimeType(ContentService.MimeType.TEXT);
+
+  } catch (e) {
+    return ContentService.createTextOutput('Error parsing playlist: ' + e.message)
+      .setMimeType(ContentService.MimeType.TEXT);
+  }
+}

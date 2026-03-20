@@ -11,6 +11,7 @@ import Modal from '../../common/Modal';
 
 import MoviePlayer from './MoviePlayer';
 import SeriesPlayerView from './SeriesPlayerView';
+import TikTokFeed from './TikTokFeed';
 
 import { fileToBase64, convertGoogleDriveUrl } from '../../../utils/fileUtils';
 import { compressImage } from '../../../utils/imageCompressor';
@@ -69,7 +70,7 @@ const MobileNetflixEntertainment: React.FC<MobileNetflixEntertainmentProps> = ({
   
   const [activeMovie, setActiveMovie] = useState<Movie | null>(null);
   const [billboardMovie, setBillboardMovie] = useState<Movie | null>(null);
-  const [activeTab, setActiveTab] = useState<'home' | 'movies' | 'mylist'>('home');
+  const [activeTab, setActiveTab] = useState<'home' | 'movies' | 'mylist' | 'shorts'>('home');
   const [myList, setMyList] = useState<string[]>(() => {
     const saved = localStorage.getItem('entertainment_mylist');
     return saved ? JSON.parse(saved) : [];
@@ -609,6 +610,14 @@ const MobileNetflixEntertainment: React.FC<MobileNetflixEntertainmentProps> = ({
            <button onClick={() => {setActiveTab('home'); setSelectedCategory(null);}} className={`whitespace-nowrap ${activeTab === 'home' ? 'text-white border-b-2 border-red-600 pb-1 opacity-100' : ''}`}>Home</button>
            <button onClick={() => {setActiveTab('movies'); setSelectedCategory(null);}} className={`whitespace-nowrap ${activeTab === 'movies' ? 'text-white border-b-2 border-red-600 pb-1 opacity-100' : ''}`}>{t.movies || 'Movies'}</button>
            <button onClick={() => {setActiveTab('mylist'); setSelectedCategory(null);}} className={`whitespace-nowrap ${activeTab === 'mylist' ? 'text-white border-b-2 border-red-600 pb-1 opacity-100' : ''}`}>My List</button>
+           <button onClick={() => {setActiveTab('shorts'); setSelectedCategory(null);}} className={`whitespace-nowrap text-pink-400 ${activeTab === 'shorts' ? 'border-b-2 border-pink-500 pb-1 opacity-100' : ''}`}>🎬 Shorts</button>
+        </div>
+      )}
+
+      {/* TikTok Shorts Feed */}
+      {activeTab === 'shorts' && (
+        <div className="fixed inset-0 z-[55] bg-black" style={{ top: '52px' }}>
+          <TikTokFeed shortFilms={shortFilms} onOpenPlayer={handleMovieClick} />
         </div>
       )}
 
