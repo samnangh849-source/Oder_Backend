@@ -391,6 +391,15 @@ func initDB() {
 		log.Fatal("❌ DATABASE_URL is not set!")
 	}
 
+	// បន្ថែម connect_timeout ដើម្បីកុំឱ្យវា Hang យូរពេកពេលភ្ជាប់មិនបាន
+	if !strings.Contains(dsn, "connect_timeout=") {
+		if strings.Contains(dsn, "?") {
+			dsn += "&connect_timeout=15"
+		} else {
+			dsn += "?connect_timeout=15"
+		}
+	}
+
 	// --- SSL/TLS Check & Configuration (Aiven.io) ---
 	caCertEnv := os.Getenv("DB_CA_CERT")
 	if caCertEnv != "" {
@@ -439,7 +448,7 @@ func initDB() {
 			break
 		}
 		log.Printf("⚠️ ភ្ជាប់ Database មិនបាន (ព្យាយាមលើកទី %d/%d): %v", i+1, maxRetries, err)
-		time.Sleep(10 * time.Second)
+		time.Sleep(5 * time.Second)
 	}
 
 	if err != nil {
@@ -464,9 +473,9 @@ func initDB() {
 		}
 	}
 
-	// Force re-migrate ShippingMethod to fix naming issues
+	// Force re-migrate ShippingMethod to add new columns (enable_driver_recommendation)
 	if db.Migrator().HasTable(&ShippingMethod{}) {
-		if !db.Migrator().HasColumn(&ShippingMethod{}, "AlertTopic") {
+		if !db.Migrator().HasColumn(&ShippingMethod{}, "enable_driver_recommendation") {
 			db.Migrator().DropTable(&ShippingMethod{})
 		}
 	}
@@ -825,6 +834,20 @@ func handleLogin(c *gin.Context) {
 		"token":  tokenString,
 		"user":   user,
 	})
+}
+
+func DBMiddleware() gin.HandlerFunc {
+	return func(c *gin.Context) {
+		if DB == nil {
+			c.JSON(http.StatusServiceUnavailable, gin.H{
+				"status":  "error",
+				"message": "សេវាកម្មកំពុងចាប់ផ្តើម (Database is initializing...)",
+			})
+			c.Abort()
+			return
+		}
+		c.Next()
+	}
 }
 
 func AuthMiddleware() gin.HandlerFunc {
@@ -1577,7 +1600,7 @@ func startOrderWorker() {
 				defer resp.Body.Close()
 				var scriptResp AppsScriptResponse
 				if err := json.NewDecoder(resp.Body).Decode(&scriptResp); err == nil {
-					if scriptResp.MessageIds.ID1 != "" || scriptResp.MessageIds.ID2 != "" {
+					if (scriptResp.MessageIds.ID1 != "" || scriptResp.MessageIds.ID2 != "") && DB != nil {
 						DB.Model(&Order{}).Where("order_id = ?", job.OrderID).Updates(map[string]interface{}{
 							"telegram_message_id1": scriptResp.MessageIds.ID1,
 							"telegram_message_id2": scriptResp.MessageIds.ID2,
@@ -4440,13 +4463,18 @@ func main() {
 	}
 	jwtSecret = []byte(jwtSecretEnv)
 
-	initDB()
 	hub = NewHub()
 	go hub.run()
-	// Start Background Workers
-	startSyncManager(3)   // Standard Google Sheets sync workers
-	go startOrderWorker() // Specialized Order workers
-	startScheduler()
+
+	// Initialize DB in background to allow fast port binding for Render
+	go func() {
+		initDB()
+		// Start Background Workers ONLY after DB is ready (if they depend on it)
+		startSyncManager(3)
+		go startOrderWorker()
+		startScheduler()
+		createGoogleAPIClient(context.Background())
+	}()
 
 	r := gin.Default()
 	r.Use(ErrorHandlingMiddleware())
@@ -4460,7 +4488,8 @@ func main() {
 	r.GET("/", func(c *gin.Context) { c.JSON(200, gin.H{"status": "ok"}) })
 	r.GET("/healthz", func(c *gin.Context) { c.String(200, "OK") })
 
-	api := r.Group("/api")
+	// Apply DBMiddleware to all /api routes except root health checks
+	api := r.Group("/api", DBMiddleware())
 	api.POST("/login", handleLogin)
 	api.GET("/images/temp/:id", handleServeTempImage)
 	api.GET("/teams/ranking", handleGetTeamSalesRanking)
@@ -4524,6 +4553,5 @@ func main() {
 	}
 	api.GET("/chat/ws", serveWs)
 	api.GET("/chat/audio/:fileID", handleGetAudioProxy)
-	go func() { createGoogleAPIClient(context.Background()) }()
 	r.Run("0.0.0.0:" + port)
 }

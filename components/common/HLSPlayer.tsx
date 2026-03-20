@@ -93,10 +93,11 @@ interface HLSPlayerProps {
   startTime?: number;
   onProgress?: (time: number, duration: number) => void;
   onReady?: (player: any) => void;
+  onMetadataLoaded?: (width: number, height: number) => void;
   hideStatusBar?: boolean;
 }
 
-const HLSPlayer: React.FC<HLSPlayerProps> = ({ url, startTime = 0, onProgress, onReady, hideStatusBar }) => {
+const HLSPlayer: React.FC<HLSPlayerProps> = ({ url, startTime = 0, onProgress, onReady, onMetadataLoaded, hideStatusBar }) => {
   const videoRef = useRef<HTMLVideoElement>(null);
   const playerRef = useRef<any>(null);
   const hlsRef = useRef<Hls | null>(null);
@@ -139,7 +140,8 @@ const HLSPlayer: React.FC<HLSPlayerProps> = ({ url, startTime = 0, onProgress, o
   const lowerUrl = url.toLowerCase();
   const isM3u8 = lowerUrl.includes('.m3u8') || 
                  url.includes('/hlsplaylist/') || 
-                 url.includes('/hls/');
+                 url.includes('/hls/') ||
+                 url.includes('action=hls_playlist');
                  
   const isDirectVideo = lowerUrl.includes('.mp4') || 
                         lowerUrl.includes('.webm') || 
@@ -327,8 +329,14 @@ const HLSPlayer: React.FC<HLSPlayerProps> = ({ url, startTime = 0, onProgress, o
     if (!videoRef.current || !finalUrl || useIframeFallback) return;
 
     const video = videoRef.current;
-    // ... rest of HLS logic remains same ...
+    
+    const handleMetadata = () => {
+      if (onMetadataLoaded) {
+        onMetadataLoaded(video.videoWidth, video.videoHeight);
+      }
+    };
 
+    video.addEventListener('loadedmetadata', handleMetadata);
 
     const initPlyr = () => {
       if (playerRef.current) {
@@ -475,6 +483,7 @@ const HLSPlayer: React.FC<HLSPlayerProps> = ({ url, startTime = 0, onProgress, o
     }
 
     return () => {
+      video.removeEventListener('loadedmetadata', handleMetadata);
       if (hlsRef.current) {
         hlsRef.current.detachMedia();
         hlsRef.current.destroy();
