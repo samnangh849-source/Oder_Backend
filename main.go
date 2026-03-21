@@ -2964,6 +2964,18 @@ func handleAdminUpdateSheet(c *gin.Context) {
 		}
 		// Sync with Google Sheets via managed queue
 		enqueueSync("updateSheet", req.NewData, req.SheetName, map[string]string{sheetPKKey: fmt.Sprintf("%v", pkVal)})
+
+		// If updating an Order row, also notify Telegram to keep message in sync
+		if req.SheetName == "AllOrders" {
+			orderID := fmt.Sprintf("%v", pkVal)
+			var order Order
+			DB.Where("order_id = ?", orderID).Select("team").First(&order)
+			enqueueSync("updateOrderTelegram", map[string]interface{}{
+				"orderId":       orderID,
+				"updatedFields": req.NewData,
+				"team":          order.Team,
+			}, "", nil)
+		}
 	}()
 	c.JSON(200, gin.H{"status": "success"})
 }
@@ -3054,85 +3066,64 @@ func handleAdminUpdateProductTags(c *gin.Context) { c.JSON(200, gin.H{"status": 
 
 func handleGetTeamSalesRanking(c *gin.Context) {
 	period := c.DefaultQuery("period", "today")
-	var results []struct {
-		Team    string  `json:"Team"`
-		Revenue float64 `json:"Revenue"`
-	}
 
-	whereClause := "team IS NOT NULL AND team <> '' AND team <> 'Unassigned'"
+	type TeamRevenue struct {
+		TeamName     string  `gorm:"column:team_name"`
+		TotalRevenue float64 `gorm:"column:total_revenue"`
+	}
+	var rows []TeamRevenue
+
 	now := time.Now()
+
+	// Build date filter safely with parameterized values
+	db := DB.Table("revenue_entries").
+		Select("LOWER(TRIM(team)) as team_name, SUM(COALESCE(revenue, 0))::FLOAT as total_revenue").
+		Where("team IS NOT NULL AND team <> '' AND team <> 'Unassigned'").
+		Group("team_name").
+		Order("total_revenue DESC").
+		Limit(10)
 
 	switch period {
 	case "today":
 		start := time.Date(now.Year(), now.Month(), now.Day(), 0, 0, 0, 0, now.Location())
-		whereClause += fmt.Sprintf(" AND timestamp >= '%s'", start.Format("2006-01-02"))
+		db = db.Where("timestamp::date >= ?", start.Format("2006-01-02"))
 	case "this_week":
-		// Monday is the start of the week
 		offset := int(now.Weekday()) - 1
 		if offset < 0 {
 			offset = 6
 		}
 		start := now.AddDate(0, 0, -offset)
-		whereClause += fmt.Sprintf(" AND timestamp >= '%s'", start.Format("2006-01-02"))
+		db = db.Where("timestamp::date >= ?", start.Format("2006-01-02"))
 	case "this_month":
 		start := time.Date(now.Year(), now.Month(), 1, 0, 0, 0, 0, now.Location())
-		whereClause += fmt.Sprintf(" AND timestamp >= '%s'", start.Format("2006-01-02"))
+		db = db.Where("timestamp::date >= ?", start.Format("2006-01-02"))
+	// "all" — no date filter
 	}
 
-	query := fmt.Sprintf(`
-		SELECT 
-			LOWER(TRIM(team)) as team_name,
-			SUM(COALESCE(revenue, 0))::FLOAT as total_revenue
-		FROM revenue_entries
-		WHERE %s
-		GROUP BY team_name
-		ORDER BY total_revenue DESC
-		LIMIT 10
-	`, whereClause)
-
-	rows, err := DB.Raw(query).Rows()
-	if err != nil {
+	if err := db.Scan(&rows).Error; err != nil {
 		log.Printf("[ERROR] Team Ranking Query Failed: %v", err)
 		c.JSON(500, gin.H{"status": "error", "message": "Query failed"})
 		return
 	}
-	defer rows.Close()
 
-	for rows.Next() {
-		var teamName string
-		var revenue float64
-		if err := rows.Scan(&teamName, &revenue); err != nil {
-			log.Printf("[ERROR] Team Ranking Scan Failed: %v", err)
-			continue
-		}
-
-		displayName := teamName
-		if len(displayName) > 0 {
-			words := strings.Fields(displayName)
-			for i, w := range words {
-				if len(w) > 0 {
-					runes := []rune(w)
-					runes[0] = unicode.ToUpper(runes[0])
-					words[i] = string(runes)
-				}
-			}
-			displayName = strings.Join(words, " ")
-		}
-
-		results = append(results, struct {
-			Team    string  `json:"Team"`
-			Revenue float64 `json:"Revenue"`
-		}{
-			Team:    displayName,
-			Revenue: revenue,
-		})
+	// Build response with proper Title Case display names
+	type TeamResult struct {
+		Team    string  `json:"Team"`
+		Revenue float64 `json:"Revenue"`
 	}
-
-	if results == nil {
-		results = []struct {
-			Team    string  `json:"Team"`
-			Revenue float64 `json:"Revenue"`
-		}{}
+	results := make([]TeamResult, 0, len(rows))
+	for _, row := range rows {
+		displayName := row.TeamName
+		words := strings.Fields(displayName)
+		for i, w := range words {
+			if len(w) > 0 {
+				runes := []rune(w)
+				runes[0] = unicode.ToUpper(runes[0])
+				words[i] = string(runes)
+			}
+		}
+		displayName = strings.Join(words, " ")
+		results = append(results, TeamResult{Team: displayName, Revenue: row.TotalRevenue})
 	}
 
 	c.JSON(http.StatusOK, gin.H{"status": "success", "data": results})

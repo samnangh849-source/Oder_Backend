@@ -168,6 +168,15 @@ const ShortFilmPlayerPage: React.FC = () => {
   }, [currentMovie?.ID]);
 
   const [isDescriptionExpanded, setIsDescriptionExpanded] = useState(false);
+  const [isVertical, setIsVertical] = useState(false);
+
+  const handleMetadataLoaded = (width: number, height: number) => {
+    if (height > width) {
+      setIsVertical(true);
+    } else {
+      setIsVertical(false);
+    }
+  };
 
   const handleShare = () => {
     if (!currentMovie) return;
@@ -255,11 +264,12 @@ const ShortFilmPlayerPage: React.FC = () => {
 
       <main className="flex-grow w-full max-w-[1400px] mx-auto px-4 sm:px-6 py-6 space-y-10">
         {/* Player */}
-        <div className="w-full aspect-video bg-black rounded-3xl overflow-hidden shadow-2xl border border-white/5">
+        <div className={`w-full ${isVertical ? 'max-w-md mx-auto aspect-[9/16]' : 'aspect-video'} bg-black rounded-3xl overflow-hidden shadow-2xl border border-white/5 transition-all duration-500`}>
           <HLSPlayer
             url={currentMovie.VideoURL}
             startTime={startTime}
             onProgress={(time, duration) => saveProgress(currentMovie.ID, time, duration)}
+            onMetadataLoaded={handleMetadataLoaded}
           />
         </div>
 

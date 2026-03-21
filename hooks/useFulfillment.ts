@@ -34,12 +34,14 @@ export const useFulfillment = (allOrders: ParsedOrder[], onUpdate?: () => void) 
     const updateStatus = useCallback(async (orderId: string, newStatus: FulfillmentStatus, extraData: any = {}) => {
         setLoadingId(orderId);
         try {
-            const response = await fetch(`${WEB_APP_URL}/api/admin/update-sheet`, {
+            const order = allOrders.find(o => o['Order ID'] === orderId);
+            const response = await fetch(`${WEB_APP_URL}/api/admin/update-order`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
-                    sheetName: 'AllOrders',
-                    primaryKey: { 'Order ID': orderId },
+                    orderId,
+                    team: order?.Team || '',
+                    userName: currentUser?.UserName || 'System',
                     newData: { 
                         'Fulfillment Status': newStatus,
                         ...extraData

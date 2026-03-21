@@ -305,12 +305,14 @@ const FulfillmentDashboard: React.FC<{ orders: ParsedOrder[], onOpenDeliveryList
     const executeBulkAction = async (ids: string[], targetStatus: string, extraData: any = {}) => {
         setIsUpdatingBulk(true);
         const promises = ids.map(async (id) => {
-            return fetch(`${WEB_APP_URL}/api/admin/update-sheet`, {
+            const order = storeOrders.find(o => o['Order ID'] === id);
+            return fetch(`${WEB_APP_URL}/api/admin/update-order`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
-                    sheetName: 'AllOrders',
-                    primaryKey: { 'Order ID': id },
+                    orderId: id,
+                    team: order?.Team || '',
+                    userName: currentUser?.UserName || 'System',
                     newData: { 'Fulfillment Status': targetStatus, ...extraData }
                 })
             });
