@@ -30,7 +30,7 @@ export const useBarcodeScanner = (
     
     const videoRef = useRef<HTMLVideoElement | null>(null);
     const trackRef = useRef<MediaStreamTrack | null>(null);
-    const beepSound = useRef(new Audio('https://assets.mixkit.co/active_storage/sfx/2869/2869-preview.mp3'));
+    const beepSound = useRef(new Audio('https://assets.mixkit.co/active_storage/sfx/2568/2568-preview.mp3')); // Modern Soft Tap for scanner beep
 
     // --- Core Camera Functions ---
 

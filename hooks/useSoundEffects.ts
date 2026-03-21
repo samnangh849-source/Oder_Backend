@@ -46,16 +46,16 @@ export const useSoundEffects = () => {
     }, [baseVolume]);
 
     return {
-        // Core UI Interactions (Very Short, Crisp)
-        playClick: () => playSound('click', 0.8), // Standard button click
-        playTransition: () => playSound('bubble', 0.5), // Subtle tick for page changes
-        playPop: () => playSound('pop', 0.8), // Modal opening/closing
-        playHover: () => playSound('professional_2', 0.2), // Extremely soft tick for hovering
+        // Core UI Interactions (Very Short, Crisp, Modern)
+        playClick: () => playSound('click', 0.7), // Standard button click (Soft Tap)
+        playTransition: () => playSound('professional_2', 0.4), // Interface Tick for page changes
+        playPop: () => playSound('pop', 0.7), // Elegant Bubble for modal opening/closing
+        playHover: () => playSound('professional_2', 0.15), // Extremely soft Interface Tick for hovering
         
-        // Status Notifications
-        playSuccess: () => playSound('success', 1.0),
-        playError: () => playSound('error', 1.0),
-        playNotify: () => playSound('notify', 1.0),
+        // Status Notifications (Clean & Professional)
+        playSuccess: () => playSound('success', 0.9), // Crisp Success
+        playError: () => playSound('error', 0.9), // Minimal Alert
+        playNotify: () => playSound('notify', 1.0), // Modern Ping
         
         // Custom sound from settings
         playCustom: () => playSound(advancedSettings?.notificationSound || 'default', 1.0),
