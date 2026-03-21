@@ -36,26 +36,26 @@ export const APP_LOGO_URL = "https://drive.google.com/file/d/1vb9IG8wn31LDYtUKLu
 
 // Chat-specific sounds (short, clean)
 export const SOUND_URLS = {
-    // A short, clear tick/pop for notifications
-    NOTIFICATION: 'https://assets.mixkit.co/active_storage/sfx/2869/2869-preview.mp3', // Modern Click
-    // A subtle pop for sent messages
-    SENT: 'https://assets.mixkit.co/active_storage/sfx/1110/1110-preview.mp3', // UI Pop
+    // Modern iOS style subtle pop
+    NOTIFICATION: 'https://assets.mixkit.co/active_storage/sfx/2571/2571-preview.mp3', // Subtle UI Pop
+    // Soft elegant bubble for interactions
+    SENT: 'https://assets.mixkit.co/active_storage/sfx/2869/2869-preview.mp3', // Crisp Modern Click
 };
 
 // Full NOTIFICATION_SOUNDS palette for the settings panel
 // Each sound is carefully chosen to be very short (click/pop style).
 export const NOTIFICATION_SOUNDS = [
     // Soft, short interaction tones
-    { id: 'default',       name: 'Short Click',      url: 'https://assets.mixkit.co/active_storage/sfx/2869/2869-preview.mp3' }, // Modern click
-    { id: 'professional_1',name: 'Light Pop',        url: 'https://assets.mixkit.co/active_storage/sfx/1110/1110-preview.mp3' }, // Pop
-    { id: 'professional_2',name: 'Subtle Tick',      url: 'https://assets.mixkit.co/active_storage/sfx/2571/2571-preview.mp3' }, // UI Blip
-    { id: 'click',         name: 'Basic Click',      url: 'https://assets.mixkit.co/active_storage/sfx/2359/2359-preview.mp3' }, // Soft click
-    { id: 'pop',           name: 'Bubble Pop',       url: 'https://assets.mixkit.co/active_storage/sfx/2835/2835-preview.mp3' }, // Soft bubble
-    { id: 'bubble',        name: 'Tiny Drop',        url: 'https://assets.mixkit.co/active_storage/sfx/1120/1120-preview.mp3' }, // Subtle tick
+    { id: 'default',       name: 'Crisp Click',      url: 'https://assets.mixkit.co/active_storage/sfx/2869/2869-preview.mp3' }, 
+    { id: 'professional_1',name: 'Light Pop',        url: 'https://assets.mixkit.co/active_storage/sfx/1110/1110-preview.mp3' }, 
+    { id: 'professional_2',name: 'Digital Blip',     url: 'https://assets.mixkit.co/active_storage/sfx/2571/2571-preview.mp3' }, 
+    { id: 'click',         name: 'Soft Touch',       url: 'https://assets.mixkit.co/active_storage/sfx/2359/2359-preview.mp3' }, 
+    { id: 'pop',           name: 'Smooth Bubble',    url: 'https://assets.mixkit.co/active_storage/sfx/2354/2354-preview.mp3' }, 
+    { id: 'bubble',        name: 'Tiny Drop',        url: 'https://assets.mixkit.co/active_storage/sfx/1120/1120-preview.mp3' }, 
     
     // Status sounds (short versions)
-    { id: 'success',       name: 'Short Ding',       url: 'https://assets.mixkit.co/active_storage/sfx/1114/1114-preview.mp3' }, // Office chime (short)
-    { id: 'error',         name: 'Short Alert',      url: 'https://assets.mixkit.co/active_storage/sfx/1119/1119-preview.mp3' }, // Error alert
-    { id: 'notify',        name: 'Quick Notify',     url: 'https://assets.mixkit.co/active_storage/sfx/2354/2354-preview.mp3' }, // Soft ping
+    { id: 'success',       name: 'Modern Success',   url: 'https://assets.mixkit.co/active_storage/sfx/1114/1114-preview.mp3' }, 
+    { id: 'error',         name: 'Gentle Alert',     url: 'https://assets.mixkit.co/active_storage/sfx/1119/1119-preview.mp3' }, 
+    { id: 'notify',        name: 'Tech Ping',        url: 'https://assets.mixkit.co/active_storage/sfx/2578/2578-preview.mp3' },
 ];
 
