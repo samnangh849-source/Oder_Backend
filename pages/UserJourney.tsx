@@ -7,11 +7,11 @@ import DesktopUserJourney from './DesktopUserJourney';
 
 const UserJourney: React.FC<{ onBackToRoleSelect: () => void }> = ({ onBackToRoleSelect }) => {
     const { currentUser, language, hasPermission } = useContext(AppContext);
-    
-    const userTeams = useMemo(() => 
-        (currentUser?.Team || '').split(',').map(t => t.trim()).filter(Boolean), 
-    [currentUser]);
-    
+
+    const userTeams = useMemo(() =>
+        (currentUser?.Team || '').split(',').map(t => t.trim()).filter(Boolean),
+        [currentUser]);
+
     const t = translations[language];
 
     // Responsive State

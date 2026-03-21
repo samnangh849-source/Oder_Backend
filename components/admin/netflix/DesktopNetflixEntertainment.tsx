@@ -191,14 +191,27 @@ const DesktopNetflixEntertainment: React.FC<DesktopNetflixEntertainmentProps> = 
           fileName: file.name,
           mimeType: compressedBlob.type,
           sheetName: 'Movies',
+          primaryKey: { ID: movieId },
           movieId: movieId,
           targetColumn: 'Thumbnail'
         })
       });
       const result = await response.json();
       if (!response.ok || result.status !== 'success') throw new Error(result.message || 'Upload failed');
+      
+      // Local update for immediate UI feedback (use temp URL if provided)
+      const finalUrl = result.url || result.tempUrl;
+      if (finalUrl) {
+          setLocalMovies(prev => prev.map(m => m.ID === movieId ? { ...m, Thumbnail: finalUrl } : m));
+          // Also update appData if possible (though it's better to wait for refreshData)
+      }
+      
       showNotification('Thumbnail updated!', 'success');
-      await refreshData();
+      
+      // Small delay before refresh to allow background sync to start/progress
+      setTimeout(async () => {
+          await refreshData();
+      }, 3000);
     } catch (err: any) {
       showNotification(err.message || 'Thumbnail update failed', 'error');
     } finally {

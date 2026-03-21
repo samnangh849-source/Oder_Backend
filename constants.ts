@@ -37,7 +37,7 @@ export const APP_LOGO_URL = "https://drive.google.com/file/d/1vb9IG8wn31LDYtUKLu
 // Chat-specific sounds (short, clean)
 export const SOUND_URLS = {
     // Modern iOS style subtle pop
-    NOTIFICATION: 'https://assets.mixkit.co/active_storage/sfx/2572/2572-preview.mp3', // Modern Message Ping
+    NOTIFICATION: 'https://res.cloudinary.com/dhobzwi7h/video/upload/v1774094352/Apple_Pay_Success_Sound_Effect_ul3ka5.mp3', // Modern Message Ping
     // Soft elegant bubble for interactions
     SENT: 'https://assets.mixkit.co/active_storage/sfx/2568/2568-preview.mp3', // Modern Interface Click
 };
@@ -46,16 +46,16 @@ export const SOUND_URLS = {
 // Each sound is carefully chosen to be very short (click/pop style).
 export const NOTIFICATION_SOUNDS = [
     // Soft, short interaction tones
-    { id: 'default',       name: 'Modern Click',     url: 'https://assets.mixkit.co/active_storage/sfx/2568/2568-preview.mp3' }, 
-    { id: 'professional_1',name: 'Subtle Pop',       url: 'https://assets.mixkit.co/active_storage/sfx/2571/2571-preview.mp3' }, 
-    { id: 'professional_2',name: 'Interface Tick',   url: 'https://assets.mixkit.co/active_storage/sfx/2567/2567-preview.mp3' }, 
-    { id: 'click',         name: 'Soft Tap',         url: 'https://assets.mixkit.co/active_storage/sfx/2568/2568-preview.mp3' }, 
-    { id: 'pop',           name: 'Elegant Bubble',   url: 'https://assets.mixkit.co/active_storage/sfx/2571/2571-preview.mp3' }, 
-    { id: 'bubble',        name: 'Digital Drop',     url: 'https://assets.mixkit.co/active_storage/sfx/1120/1120-preview.mp3' }, 
-    
+    { id: 'default', name: 'Modern Click', url: 'https://assets.mixkit.co/active_storage/sfx/2568/2568-preview.mp3' },
+    { id: 'professional_1', name: 'APPLE', url: 'https://res.cloudinary.com/dhobzwi7h/video/upload/v1774094352/Apple_Pay_Success_Sound_Effect_ul3ka5.mp3' },
+    { id: 'professional_2', name: 'Interface Tick', url: 'https://assets.mixkit.co/active_storage/sfx/2567/2567-preview.mp3' },
+    { id: 'click', name: 'Soft Tap', url: 'https://assets.mixkit.co/active_storage/sfx/2568/2568-preview.mp3' },
+    { id: 'pop', name: 'Elegant Bubble', url: 'https://assets.mixkit.co/active_storage/sfx/2571/2571-preview.mp3' },
+    { id: 'bubble', name: 'Digital Drop', url: 'https://assets.mixkit.co/active_storage/sfx/1120/1120-preview.mp3' },
+
     // Status sounds (short versions)
-    { id: 'success',       name: 'Crisp Success',    url: 'https://assets.mixkit.co/active_storage/sfx/1114/1114-preview.mp3' }, 
-    { id: 'error',         name: 'Minimal Alert',    url: 'https://assets.mixkit.co/active_storage/sfx/1119/1119-preview.mp3' }, 
-    { id: 'notify',        name: 'Modern Ping',      url: 'https://assets.mixkit.co/active_storage/sfx/2572/2572-preview.mp3' },
+    { id: 'success', name: 'Crisp Success', url: 'https://res.cloudinary.com/dhobzwi7h/video/upload/v1774094352/Apple_Pay_Success_Sound_Effect_ul3ka5.mp3' },
+    { id: 'error', name: 'Minimal Alert', url: 'https://res.cloudinary.com/dhobzwi7h/video/upload/v1774095073/Error_beavk0.mp3' },
+    { id: 'notify', name: 'Modern Ping', url: 'https://res.cloudinary.com/dhobzwi7h/video/upload/v1774094352/Apple_Pay_Success_Sound_Effect_ul3ka5.mp3' },
 ];
 

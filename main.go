@@ -3363,31 +3363,38 @@ func handleImageUploadProxy(c *gin.Context) {
 		// Support Movie Thumbnail Background Update
 		if r.MovieID != "" && r.TargetColumn != "" {
 			dbCol := mapToDBColumn(r.TargetColumn)
-			var movie Movie
-			if err := DB.Where("id = ?", r.MovieID).First(&movie).Error; err == nil {
-				DB.Model(&movie).Update(dbCol, driveURL)
-				log.Printf("🎬 Background update for Movie %s (%s): %s", r.MovieID, r.TargetColumn, driveURL)
-
-				// Sync with Google Sheets via managed queue
-				enqueueSync("updateSheet", map[string]interface{}{r.TargetColumn: driveURL}, "Movies", map[string]string{"ID": r.MovieID})
+			
+			// Update Database
+			res := DB.Model(&Movie{}).Where("id = ?", r.MovieID).UpdateColumn(dbCol, driveURL)
+			if res.Error != nil {
+				log.Printf("❌ [Movie Update] DB update failed for Movie %s: %v", r.MovieID, res.Error)
+			} else if res.RowsAffected == 0 {
+				log.Printf("⚠️ [Movie Update] No rows affected for Movie %s (might be new)", r.MovieID)
 			} else {
-				// Fallback if movie not found in DB yet
-				DB.Model(&Movie{}).Where("id = ?", r.MovieID).UpdateColumn(dbCol, driveURL)
+				log.Printf("🎬 [Movie Update] DB updated for Movie %s (%s): %s", r.MovieID, r.TargetColumn, driveURL)
 			}
+
+			// Sync with Google Sheets via managed queue
+			// Note: We always queue the sync even if rows affected is 0, just in case it exists in Sheet but not DB yet
+			enqueueSync("updateSheet", map[string]interface{}{r.TargetColumn: driveURL}, "Movies", map[string]string{"ID": r.MovieID})
 		}
 
 		if r.UserName != "" {
-			DB.Model(&User{}).Where("user_name = ?", r.UserName).Update("profile_picture_url", driveURL)
-
+			DB.Model(&User{}).Where("user_name = ?", r.UserName).UpdateColumn("profile_picture_url", driveURL)
+			
 			notify, _ := json.Marshal(map[string]interface{}{
 				"type":     "profile_image_ready",
 				"userName": r.UserName,
 				"url":      driveURL,
 			})
 			hub.broadcast <- notify
+
+			// Also sync with Google Sheets
+			enqueueSync("updateSheet", map[string]interface{}{"ProfilePictureURL": driveURL}, "Users", map[string]string{"UserName": r.UserName})
 		}
 
-		if r.SheetName != "" && r.PrimaryKey != nil && r.TargetColumn != "" {
+		// Generic update block (if not already handled by Movie/Order specific blocks)
+		if r.SheetName != "" && r.PrimaryKey != nil && r.TargetColumn != "" && r.MovieID == "" && r.OrderID == "" && r.UserName == "" {
 			// Sync with Google Sheets via managed queue
 			enqueueSync("updateSheet", map[string]interface{}{r.TargetColumn: driveURL}, r.SheetName, r.PrimaryKey)
 
