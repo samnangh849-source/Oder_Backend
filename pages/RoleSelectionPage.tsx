@@ -13,19 +13,26 @@ interface RoleSelectionPageProps {
 const RoleSelectionPage: React.FC<RoleSelectionPageProps> = ({ onSelect }) => {
     const { currentUser, hasPermission, logout, language } = useContext(AppContext);
     const [mounted, setMounted] = useState(false);
-    const { playClick, playTransition, playHover, playEntrance } = useSoundEffects();
+    const { playClick, playTransition, playHover, playEntrance, playSlide, playPop } = useSoundEffects();
 
     const t = translations[language];
 
     useEffect(() => {
         setMounted(true);
-        // Play the entrance sound matching the fadeInUp animation reveal
-        const timer = setTimeout(() => {
-            playEntrance();
-        }, 100); // 100ms matches the first animation delay (0.1s)
         
-        return () => clearTimeout(timer);
-    }, [playEntrance]);
+        // Sequence of sounds to match the CSS animation delays
+        const timer1 = setTimeout(() => playEntrance(), 100); // 0.1s: Avatar reveal
+        const timer2 = setTimeout(() => playSlide(), 200);    // 0.2s: Subtitle reveal
+        const timer3 = setTimeout(() => playSlide(), 300);    // 0.3s: Buttons grid reveal
+        const timer4 = setTimeout(() => playPop(), 600);      // 0.6s: Footer reveal
+        
+        return () => {
+            clearTimeout(timer1);
+            clearTimeout(timer2);
+            clearTimeout(timer3);
+            clearTimeout(timer4);
+        };
+    }, [playEntrance, playSlide, playPop]);
 
     if (!currentUser) return null;
 

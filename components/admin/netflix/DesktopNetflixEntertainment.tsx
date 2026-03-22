@@ -177,6 +177,10 @@ const DesktopNetflixEntertainment: React.FC<DesktopNetflixEntertainmentProps> = 
     if (!file) return;
     setIsChangingThumbnail(true);
     try {
+      const movie = movies.find(m => m.ID === movieId);
+      const extension = file.name.split('.').pop();
+      const fileName = movie ? `${movie.Title}.${extension}` : file.name;
+
       const compressedBlob = await compressImage(file, 'balanced');
       const base64Data = await fileToBase64(compressedBlob);
       const token = localStorage.getItem('token');
@@ -188,7 +192,7 @@ const DesktopNetflixEntertainment: React.FC<DesktopNetflixEntertainmentProps> = 
         },
         body: JSON.stringify({
           fileData: base64Data,
-          fileName: file.name,
+          fileName: fileName,
           mimeType: compressedBlob.type,
           sheetName: 'Movies',
           primaryKey: { ID: movieId },
@@ -224,6 +228,9 @@ const DesktopNetflixEntertainment: React.FC<DesktopNetflixEntertainmentProps> = 
     if (!file) return;
     setIsUploading(true);
     try {
+      const extension = file.name.split('.').pop();
+      const fileName = newMovie.Title ? `${newMovie.Title}.${extension}` : file.name;
+
       const compressedBlob = await compressImage(file, 'balanced');
       const base64Data = await fileToBase64(compressedBlob);
       const token = localStorage.getItem('token');
@@ -236,7 +243,7 @@ const DesktopNetflixEntertainment: React.FC<DesktopNetflixEntertainmentProps> = 
         },
         body: JSON.stringify({ 
           fileData: base64Data, 
-          fileName: file.name, 
+          fileName: fileName, 
           mimeType: compressedBlob.type,
           sheetName: 'Movies',
           movieId: newMovie.ID, // ✅ Pass ID for background update

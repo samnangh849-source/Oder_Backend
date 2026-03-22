@@ -23,7 +23,7 @@ const DesktopUserJourney: React.FC<DesktopUserJourneyProps> = ({ onBackToRoleSel
     } = useContext(AppContext);
     
     const t = translations[language];
-    const { playClick, playTransition, playHover } = useSoundEffects();
+    const { playClick, playTransition, playHover, playTeamSelect } = useSoundEffects();
 
     const [globalRanking, setGlobalRanking] = useState<{name: string, revenue: number}[]>([]);
     const [isRankingLoading, setIsRankingLoading] = useState(false);
@@ -64,7 +64,7 @@ const DesktopUserJourney: React.FC<DesktopUserJourneyProps> = ({ onBackToRoleSel
     };
 
     const handleTeamSelect = (team: string) => {
-        playTransition();
+        playTeamSelect();
         setSelectedTeam(team);
     };
 

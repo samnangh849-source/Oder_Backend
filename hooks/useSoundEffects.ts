@@ -60,11 +60,13 @@ export const useSoundEffects = () => {
 
     return {
         // Core UI Interactions (Using modern clean URLs)
-        playClick: () => playSound(SOUND_URLS.SENT, 0.7), 
-        playTransition: () => playSound('professional_2', 0.4), 
-        playPop: () => playSound('pop', 0.7), 
-        playHover: () => playSound('professional_2', 0.15), 
-        playEntrance: () => playSound('https://res.cloudinary.com/dhobzwi7h/video/upload/v1774094352/Apple_Pay_Success_Sound_Effect_ul3ka5.mp3', 0.8), // Matches fadeInUp animation
+        playClick: () => playSound(SOUND_URLS.TECH_CLICK, 0.7), 
+        playTransition: () => playSound(SOUND_URLS.ZIP_SLIDE, 0.4), 
+        playPop: () => playSound(SOUND_URLS.CRYSTAL_POP, 0.7), 
+        playHover: () => playSound(SOUND_URLS.TECH_CLICK, 0.15), 
+        playEntrance: () => playSound(SOUND_URLS.TECH_REVEAL, 0.6), // Matches fadeInUp animation
+        playSlide: () => playSound(SOUND_URLS.TECH_CLICK, 0.3), 
+        playTeamSelect: () => playSound(SOUND_URLS.TEAM_SELECT, 0.5),
         
         // Status Notifications
         playSuccess: () => playSound('success', 0.9), 

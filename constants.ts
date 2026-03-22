@@ -40,6 +40,12 @@ export const SOUND_URLS = {
     NOTIFICATION: 'https://res.cloudinary.com/dhobzwi7h/video/upload/v1774094352/Apple_Pay_Success_Sound_Effect_ul3ka5.mp3', // Modern Message Ping
     // Soft elegant bubble for interactions
     SENT: 'https://assets.mixkit.co/active_storage/sfx/2568/2568-preview.mp3', // Modern Interface Click
+    // Modern Digital Theme
+    TECH_REVEAL: 'https://res.cloudinary.com/dhobzwi7h/video/upload/v1774169953/click_yxuwrw.mp3', // Sharp digital reveal
+    TECH_CLICK: 'https://res.cloudinary.com/dhobzwi7h/video/upload/v1774169953/click_yxuwrw.mp3', // Clean interface tick
+    CRYSTAL_POP: 'https://res.cloudinary.com/dhobzwi7h/video/upload/v1774169953/click_yxuwrw.mp3', // Premium bubbly pop
+    ZIP_SLIDE: 'https://res.cloudinary.com/dhobzwi7h/video/upload/v1774169953/click_yxuwrw.mp3', // Clean modern tap click
+    TEAM_SELECT: 'https://res.cloudinary.com/dhobzwi7h/video/upload/v1774170151/Slon_jqijdy.mp3', // Modern tech slide for team selection
 };
 
 // Full NOTIFICATION_SOUNDS palette for the settings panel

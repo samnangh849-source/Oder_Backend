@@ -25,7 +25,7 @@ const MobileUserJourney: React.FC<MobileUserJourneyProps> = ({ onBackToRoleSelec
     } = useContext(AppContext);
     
     const t = translations[language];
-    const { playClick, playTransition } = useSoundEffects();
+    const { playClick, playTransition, playTeamSelect } = useSoundEffects();
 
     const [globalRanking, setGlobalRanking] = useState<{name: string, revenue: number}[]>([]);
     const [isRankingLoading, setIsRankingLoading] = useState(false);
@@ -72,7 +72,7 @@ const MobileUserJourney: React.FC<MobileUserJourneyProps> = ({ onBackToRoleSelec
     };
 
     const handleTeamSelect = (team: string) => {
-        playTransition();
+        playTeamSelect();
         setSelectedTeam(team);
     };
 
