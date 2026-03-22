@@ -1661,7 +1661,7 @@ func enqueueSync(action string, data map[string]interface{}, sheetName string, p
 		PrimaryKey: pk,
 		NewData:    data,
 	}
-	syncQueue <- SyncTask{Request: req, MaxRetries: 3}
+	syncQueue <- SyncTask{Request: req, MaxRetries: 5}
 }
 
 // startSyncManager runs background workers for Google Sheets synchronization
@@ -3377,9 +3377,28 @@ func handleImageUploadProxy(c *gin.Context) {
 			enqueueSync("updateSheet", map[string]interface{}{"ProfilePictureURL": driveURL}, "Users", map[string]string{"UserName": r.UserName})
 		}
 
-		// 3. Generic Table/Sheet Update (Handles Movies, etc.)
-		// If SheetName and PrimaryKey are provided, we can update any table generically
-		if r.SheetName != "" && r.PrimaryKey != nil && r.TargetColumn != "" {
+		// 3. Specialized Movie Update
+		if r.MovieID != "" && r.TargetColumn != "" {
+			log.Printf("🎬 [Background Update] Specialized Movie update: movieId=%s col=%s", r.MovieID, r.TargetColumn)
+			dbCol := mapToDBColumn(r.TargetColumn)
+			
+			// Update PostgreSQL
+			DB.Model(&Movie{}).Where("id = ?", r.MovieID).UpdateColumn(dbCol, driveURL)
+			
+			// Sync with Google Sheets
+			enqueueSync("updateSheet", map[string]interface{}{r.TargetColumn: driveURL}, "Movies", map[string]string{"ID": r.MovieID})
+			
+			// Broadcast update
+			notify, _ := json.Marshal(map[string]interface{}{
+				"type":    "movie_thumbnail_ready",
+				"movieId": r.MovieID,
+				"url":     driveURL,
+			})
+			hub.broadcast <- notify
+		}
+
+		// 4. Generic Table/Sheet Update (Handles other tables)
+		if r.SheetName != "" && r.PrimaryKey != nil && r.TargetColumn != "" && r.SheetName != "Movies" {
 			log.Printf("📝 [Background Update] Generic update for sheet=%s PK=%v col=%s", r.SheetName, r.PrimaryKey, r.TargetColumn)
 			
 			// Sync with Google Sheets via managed queue
@@ -4226,11 +4245,17 @@ func handleCreateMovie(c *gin.Context) {
 		parts := strings.Split(movie.Thumbnail, "/api/images/temp/")
 		if len(parts) > 1 {
 			tempID := parts[1]
+			// Robust extraction: remove any trailing slashes or query parameters
+			if idx := strings.IndexAny(tempID, "?/"); idx != -1 {
+				tempID = tempID[:idx]
+			}
+			tempID = strings.TrimSpace(tempID)
+
 			var tempImg TempImage
 
-			// Poll database for up to 15 seconds waiting for the background upload to finish
+			// Poll database for up to 30 seconds waiting for the background upload to finish
 			resolved := false
-			for i := 0; i < 15; i++ {
+			for i := 0; i < 30; i++ {
 				if err := DB.Where("id = ?", tempID).First(&tempImg).Error; err == nil && tempImg.DriveURL != "" {
 					movie.Thumbnail = tempImg.DriveURL
 					log.Printf("✨ Resolved temp image %s to permanent URL: %s", tempID, movie.Thumbnail)
@@ -4241,7 +4266,7 @@ func handleCreateMovie(c *gin.Context) {
 			}
 
 			if !resolved {
-				log.Printf("⚠️ Warning: Could not resolve permanent Drive URL for temp image %s within timeout.", tempID)
+				log.Printf("⚠️ Warning: Could not resolve permanent Drive URL for temp image %s within timeout. Record will be saved with temporary URL.", tempID)
 			}
 		}
 	}

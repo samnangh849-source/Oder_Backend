@@ -64,6 +64,7 @@ export const useSoundEffects = () => {
         playTransition: () => playSound('professional_2', 0.4), 
         playPop: () => playSound('pop', 0.7), 
         playHover: () => playSound('professional_2', 0.15), 
+        playEntrance: () => playSound('https://res.cloudinary.com/dhobzwi7h/video/upload/v1774094352/Apple_Pay_Success_Sound_Effect_ul3ka5.mp3', 0.8), // Matches fadeInUp animation
         
         // Status Notifications
         playSuccess: () => playSound('success', 0.9), 

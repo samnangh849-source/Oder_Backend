@@ -211,7 +211,7 @@ const DesktopNetflixEntertainment: React.FC<DesktopNetflixEntertainmentProps> = 
       // Small delay before refresh to allow background sync to start/progress
       setTimeout(async () => {
           await refreshData();
-      }, 3000);
+      }, 5000);
     } catch (err: any) {
       showNotification(err.message || 'Thumbnail update failed', 'error');
     } finally {
@@ -412,6 +412,7 @@ const DesktopNetflixEntertainment: React.FC<DesktopNetflixEntertainmentProps> = 
           for (const ep of validEpisodes) {
             const payload = {
               ...newMovie,
+              ID: generateShortID(), // ✅ Generate unique ID for each episode
               Title: ep.title,
               VideoURL: ep.url,
               SeriesKey: newMovie.SeriesKey || newMovie.Title // Use Title as default SeriesKey if empty
@@ -1111,7 +1112,7 @@ const DesktopNetflixEntertainment: React.FC<DesktopNetflixEntertainmentProps> = 
               </button>
               <button 
                 onClick={addMovieToStore} 
-                disabled={isSubmitting}
+                disabled={isSubmitting || isUploading}
                 className="flex-[2] py-4 px-6 rounded-2xl bg-gradient-to-r from-red-600 to-red-700 hover:from-red-500 hover:to-red-600 text-white font-black transition-all active:scale-[0.98] shadow-lg shadow-red-900/40 flex items-center justify-center gap-2 group tracking-widest uppercase text-sm"
               >
                 {isSubmitting ? (

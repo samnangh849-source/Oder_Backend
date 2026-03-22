@@ -6,6 +6,7 @@ import {
 } from 'lucide-react';
 import { Movie } from '../../../types';
 import { convertGoogleDriveUrl } from '../../../utils/fileUtils';
+import HLSPlayer from '../../common/HLSPlayer';
 
 interface TikTokFeedProps {
     shortFilms: Movie[];
@@ -20,7 +21,6 @@ interface ReelCardProps {
 }
 
 const ReelCard: React.FC<ReelCardProps> = ({ movie, isActive, onOpenPlayer }) => {
-    const videoRef = useRef<HTMLVideoElement | null>(null);
     const [isMuted, setIsMuted] = useState(true);
     const [isPlaying, setIsPlaying] = useState(false);
     const [progress, setProgress] = useState(0);
@@ -31,32 +31,35 @@ const ReelCard: React.FC<ReelCardProps> = ({ movie, isActive, onOpenPlayer }) =>
     const [showDesc, setShowDesc] = useState(false);
     const [ripple, setRipple] = useState<{x:number,y:number} | null>(null);
     const lastTap = useRef(0);
+    const playerRef = useRef<any>(null);
 
     // Is a real video URL? (not just a thumbnail)
     const isRealVideo = movie.VideoURL && (
         movie.VideoURL.includes('.mp4') ||
         movie.VideoURL.includes('.m3u8') ||
-        movie.VideoURL.includes('.webm')
+        movie.VideoURL.includes('.webm') ||
+        movie.VideoURL.includes('action=hls_playlist')
     );
 
     // Play/Pause when active changes
     useEffect(() => {
-        if (!videoRef.current || !isRealVideo) return;
+        if (!playerRef.current || !isRealVideo) return;
         if (isActive) {
-            videoRef.current.play().then(() => setIsPlaying(true)).catch(() => {});
+            playerRef.current.play();
+            setIsPlaying(true);
         } else {
-            videoRef.current.pause();
-            videoRef.current.currentTime = 0;
+            playerRef.current.pause();
+            playerRef.current.currentTime = 0;
             setIsPlaying(false);
             setProgress(0);
         }
     }, [isActive, isRealVideo]);
 
-    const handleTimeUpdate = () => {
-        if (!videoRef.current) return;
-        const { currentTime, duration } = videoRef.current;
-        if (duration > 0) setProgress((currentTime / duration) * 100);
-    };
+    useEffect(() => {
+        if (playerRef.current) {
+            playerRef.current.muted = isMuted;
+        }
+    }, [isMuted]);
 
     const handleTap = (e: React.MouseEvent) => {
         const now = Date.now();
@@ -69,9 +72,9 @@ const ReelCard: React.FC<ReelCardProps> = ({ movie, isActive, onOpenPlayer }) =>
             setTimeout(() => setRipple(null), 900);
         } else {
             // Single tap = play/pause
-            if (videoRef.current) {
-                if (isPlaying) { videoRef.current.pause(); setIsPlaying(false); }
-                else { videoRef.current.play().catch(() => {}); setIsPlaying(true); }
+            if (playerRef.current) {
+                if (isPlaying) { playerRef.current.pause(); setIsPlaying(false); }
+                else { playerRef.current.play(); setIsPlaying(true); }
             }
         }
         lastTap.current = now;
@@ -81,17 +84,20 @@ const ReelCard: React.FC<ReelCardProps> = ({ movie, isActive, onOpenPlayer }) =>
         <div className="relative w-full h-full bg-black flex-shrink-0 overflow-hidden">
             {/* Background / Video */}
             {isRealVideo ? (
-                <video
-                    ref={videoRef}
-                    src={movie.VideoURL}
-                    className="absolute inset-0 w-full h-full object-cover"
-                    muted={isMuted}
-                    loop
-                    playsInline
-                    onTimeUpdate={handleTimeUpdate}
-                    onPlay={() => setIsPlaying(true)}
-                    onPause={() => setIsPlaying(false)}
-                />
+                <div className="absolute inset-0 w-full h-full pointer-events-none">
+                    <HLSPlayer
+                        url={movie.VideoURL}
+                        hideStatusBar={true}
+                        onReady={(p) => {
+                            playerRef.current = p;
+                            p.muted = isMuted;
+                            if (isActive) p.play();
+                        }}
+                        onProgress={(time, duration) => {
+                            if (duration > 0) setProgress((time / duration) * 100);
+                        }}
+                    />
+                </div>
             ) : (
                 <img
                     src={convertGoogleDriveUrl(movie.Thumbnail)}

@@ -1,7 +1,7 @@
 import React, { useState, useRef, useEffect, useContext, useMemo } from 'react';
 import { 
   Play, Loader2, AlertCircle, CheckCircle2, Server, Film, Copy, 
-  Check, Share2, Plus, X, Search, Info, ChevronLeft, Trash2
+  Check, Share2, Plus, X, Search, Info, ChevronLeft, Trash2, Camera
 } from 'lucide-react';
 import { AppContext } from '../../../context/AppContext';
 import { Movie } from '../../../types';
@@ -151,7 +151,7 @@ const MobileNetflixEntertainment: React.FC<MobileNetflixEntertainmentProps> = ({
       showNotification('Thumbnail updated!', 'success');
       setTimeout(async () => {
           await refreshData();
-      }, 3000);
+      }, 5000);
     } catch (err: any) {
       showNotification(err.message || 'Thumbnail update failed', 'error');
     } finally {
@@ -344,7 +344,13 @@ const MobileNetflixEntertainment: React.FC<MobileNetflixEntertainmentProps> = ({
           }
 
           for (const ep of validEpisodes) {
-            const payload = { ...newMovie, Title: ep.title, VideoURL: ep.url };
+            const payload = { 
+              ...newMovie, 
+              ID: generateShortID(), // ✅ Unique ID for each episode
+              Title: ep.title, 
+              VideoURL: ep.url,
+              SeriesKey: newMovie.SeriesKey || newMovie.Title
+            };
             await fetch(`${WEB_APP_URL}/api/admin/movies`, {
                 method: 'POST',
                 headers: { 
@@ -1026,9 +1032,8 @@ const MobileNetflixEntertainment: React.FC<MobileNetflixEntertainmentProps> = ({
 
             <div className="pt-6 pb-2">
               <button 
-                onClick={addMovieToStore} 
-                disabled={isSubmitting}
-                className="w-full bg-gradient-to-r from-red-600 to-red-700 font-black py-4 rounded-xl shadow-lg shadow-red-900/20 flex items-center justify-center gap-2 active:scale-95 transition-all text-sm uppercase tracking-widest"
+                onClick={addMovieToStore}
+                disabled={isSubmitting || isUploading}                className="w-full bg-gradient-to-r from-red-600 to-red-700 font-black py-4 rounded-xl shadow-lg shadow-red-900/20 flex items-center justify-center gap-2 active:scale-95 transition-all text-sm uppercase tracking-widest"
               >
                 {isSubmitting ? <Loader2 className="w-5 h-5 animate-spin" /> : <CheckCircle2 className="w-5 h-5" />}
                 {isSubmitting ? 'Saving...' : 'Save Movie'}
