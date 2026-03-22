@@ -112,6 +112,54 @@ const MobileNetflixEntertainment: React.FC<MobileNetflixEntertainmentProps> = ({
   const [isUploading, setIsUploading] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
+  // Thumbnail change for existing movies (admin)
+  const changeThumbnailInputRef = useRef<HTMLInputElement>(null);
+  const [changeThumbnailTargetId, setChangeThumbnailTargetId] = useState<string | null>(null);
+  const [isChangingThumbnail, setIsChangingThumbnail] = useState(false);
+
+  const handleChangeThumbnail = async (file: File, movieId: string) => {
+    if (!file) return;
+    setIsChangingThumbnail(true);
+    try {
+      const compressedBlob = await compressImage(file, 'balanced');
+      const base64Data = await fileToBase64(compressedBlob);
+      const token = localStorage.getItem('token');
+      const response = await fetch(`${WEB_APP_URL}/api/upload-image`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          ...(token ? { 'Authorization': `Bearer ${token}` } : {})
+        },
+        body: JSON.stringify({
+          fileData: base64Data,
+          fileName: file.name,
+          mimeType: compressedBlob.type,
+          sheetName: 'Movies',
+          primaryKey: { ID: movieId },
+          movieId: movieId,
+          targetColumn: 'Thumbnail'
+        })
+      });
+      const result = await response.json();
+      if (!response.ok || result.status !== 'success') throw new Error(result.message || 'Upload failed');
+      
+      const finalUrl = result.url || result.tempUrl;
+      if (finalUrl) {
+          setLocalMovies(prev => prev.map(m => m.ID === movieId ? { ...m, Thumbnail: finalUrl } : m));
+      }
+      
+      showNotification('Thumbnail updated!', 'success');
+      setTimeout(async () => {
+          await refreshData();
+      }, 3000);
+    } catch (err: any) {
+      showNotification(err.message || 'Thumbnail update failed', 'error');
+    } finally {
+      setIsChangingThumbnail(false);
+      setChangeThumbnailTargetId(null);
+    }
+  };
+
   const handleImageUpload = async (file: File) => {
     if (!file) return;
     setIsUploading(true);
@@ -514,14 +562,30 @@ const MobileNetflixEntertainment: React.FC<MobileNetflixEntertainmentProps> = ({
                   </div>
                 )}
 
-                {/* Admin delete */}
+                {/* Admin delete & Change Thumbnail */}
                 {isAdmin && (
-                  <button
-                    onClick={(e) => { e.stopPropagation(); deleteMovie(movie.ID); }}
-                    className="absolute bottom-2 right-1.5 p-1 bg-red-600/40 backdrop-blur-md rounded-full"
-                  >
-                    <Trash2 className="w-3 h-3 text-white" />
-                  </button>
+                  <div className="absolute bottom-2 right-1.5 flex flex-col gap-2">
+                    <button
+                      onClick={(e) => { 
+                        e.stopPropagation(); 
+                        setChangeThumbnailTargetId(movie.ID);
+                        changeThumbnailInputRef.current?.click();
+                      }}
+                      className="p-1.5 bg-blue-600/60 backdrop-blur-md rounded-full shadow-lg border border-white/10"
+                      title="Change Thumbnail"
+                    >
+                      {isChangingThumbnail && changeThumbnailTargetId === movie.ID 
+                        ? <Loader2 className="w-3.5 h-3.5 animate-spin text-white" />
+                        : <Camera className="w-3.5 h-3.5 text-white" />
+                      }
+                    </button>
+                    <button
+                      onClick={(e) => { e.stopPropagation(); deleteMovie(movie.ID); }}
+                      className="p-1.5 bg-red-600/60 backdrop-blur-md rounded-full shadow-lg border border-white/10"
+                    >
+                      <Trash2 className="w-3.5 h-3.5 text-white" />
+                    </button>
+                  </div>
                 )}
               </div>
             );
@@ -533,6 +597,20 @@ const MobileNetflixEntertainment: React.FC<MobileNetflixEntertainmentProps> = ({
 
   return (
     <div className="min-h-screen bg-[#080808] text-white font-['Kantumruy_Pro'] pb-20">
+      {/* Hidden file input for thumbnail change */}
+      <input
+        ref={changeThumbnailInputRef}
+        type="file"
+        accept="image/*"
+        className="hidden"
+        onChange={(e) => {
+          const file = e.target.files?.[0];
+          if (file && changeThumbnailTargetId) {
+            handleChangeThumbnail(file, changeThumbnailTargetId);
+          }
+          e.target.value = ''; // Reset so same file can be re-selected
+        }}
+      />
       <nav className="sticky top-0 z-[60] px-4 py-3 bg-black/60 backdrop-blur-xl flex items-center justify-between">
         <div className="flex items-center gap-3">
            <button onClick={() => setAppState('role_selection')} className="p-1.5 bg-white/5 rounded-full"><ChevronLeft className="w-5 h-5" /></button>

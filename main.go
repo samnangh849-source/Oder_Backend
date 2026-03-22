@@ -631,6 +631,8 @@ func mapToDBColumn(key string) string {
 		"LogosURL":                  "logo_url",
 		"Logos URL":                 "logo_url",
 		"LogoURL":                   "logo_url",
+		"Thumbnail":                 "thumbnail",
+		"Thumbnail URL":             "thumbnail",
 		"ID":                        "id",
 		"Key":                       "config_key",
 		"Value":                     "config_value",
@@ -3328,19 +3330,19 @@ func handleImageUploadProxy(c *gin.Context) {
 		log.Printf("✅ [Background Upload] SUCCESS tempID=%s fileID=%s driveURL=%s", tid, fileID, driveURL)
 
 		// Save the resolved DriveURL in TempImage for later retrieval (if needed by CreateMovie)
-		DB.Model(&TempImage{}).Where("id = ?", tid).Update("drive_url", driveURL)
+		DB.Model(&TempImage{}).Where("id = ?", tid).UpdateColumn("drive_url", driveURL)
 
+		// 1. Specialized Order Update (Needs Team for Telegram)
 		if r.OrderID != "" && r.TargetColumn != "" {
+			log.Printf("📦 [Background Update] Specialized Order update: orderId=%s col=%s", r.OrderID, r.TargetColumn)
 			dbCol := mapToDBColumn(r.TargetColumn)
 			if isValidOrderColumn(dbCol) {
-				// Fetch the order to get the Team information for Apps Script
 				var order Order
 				team := ""
 				if err := DB.Where("order_id = ?", r.OrderID).First(&order).Error; err == nil {
 					team = order.Team
 					DB.Model(&order).UpdateColumn(dbCol, driveURL)
 				} else {
-					// Fallback if order not found in DB yet
 					DB.Model(&Order{}).Where("order_id = ?", r.OrderID).UpdateColumn(dbCol, driveURL)
 				}
 
@@ -3351,7 +3353,6 @@ func handleImageUploadProxy(c *gin.Context) {
 				})
 				hub.broadcast <- event
 
-				// Sync with Google Sheets & Telegram via managed queue
 				enqueueSync("updateOrderTelegram", map[string]interface{}{
 					"orderId":       r.OrderID,
 					"team":          team,
@@ -3360,26 +3361,9 @@ func handleImageUploadProxy(c *gin.Context) {
 			}
 		}
 
-		// Support Movie Thumbnail Background Update
-		if r.MovieID != "" && r.TargetColumn != "" {
-			dbCol := mapToDBColumn(r.TargetColumn)
-			
-			// Update Database
-			res := DB.Model(&Movie{}).Where("id = ?", r.MovieID).UpdateColumn(dbCol, driveURL)
-			if res.Error != nil {
-				log.Printf("❌ [Movie Update] DB update failed for Movie %s: %v", r.MovieID, res.Error)
-			} else if res.RowsAffected == 0 {
-				log.Printf("⚠️ [Movie Update] No rows affected for Movie %s (might be new)", r.MovieID)
-			} else {
-				log.Printf("🎬 [Movie Update] DB updated for Movie %s (%s): %s", r.MovieID, r.TargetColumn, driveURL)
-			}
-
-			// Sync with Google Sheets via managed queue
-			// Note: We always queue the sync even if rows affected is 0, just in case it exists in Sheet but not DB yet
-			enqueueSync("updateSheet", map[string]interface{}{r.TargetColumn: driveURL}, "Movies", map[string]string{"ID": r.MovieID})
-		}
-
+		// 2. Specialized User Profile Update
 		if r.UserName != "" {
+			log.Printf("👤 [Background Update] Specialized User update: userName=%s", r.UserName)
 			DB.Model(&User{}).Where("user_name = ?", r.UserName).UpdateColumn("profile_picture_url", driveURL)
 			
 			notify, _ := json.Marshal(map[string]interface{}{
@@ -3393,11 +3377,15 @@ func handleImageUploadProxy(c *gin.Context) {
 			enqueueSync("updateSheet", map[string]interface{}{"ProfilePictureURL": driveURL}, "Users", map[string]string{"UserName": r.UserName})
 		}
 
-		// Generic update block (if not already handled by Movie/Order specific blocks)
-		if r.SheetName != "" && r.PrimaryKey != nil && r.TargetColumn != "" && r.MovieID == "" && r.OrderID == "" && r.UserName == "" {
+		// 3. Generic Table/Sheet Update (Handles Movies, etc.)
+		// If SheetName and PrimaryKey are provided, we can update any table generically
+		if r.SheetName != "" && r.PrimaryKey != nil && r.TargetColumn != "" {
+			log.Printf("📝 [Background Update] Generic update for sheet=%s PK=%v col=%s", r.SheetName, r.PrimaryKey, r.TargetColumn)
+			
 			// Sync with Google Sheets via managed queue
 			enqueueSync("updateSheet", map[string]interface{}{r.TargetColumn: driveURL}, r.SheetName, r.PrimaryKey)
 
+			// Update PostgreSQL
 			tableName := getTableName(r.SheetName)
 			if tableName != "" {
 				dbCol := mapToDBColumn(r.TargetColumn)
@@ -3405,11 +3393,17 @@ func handleImageUploadProxy(c *gin.Context) {
 				for k, v := range r.PrimaryKey {
 					query = query.Where(mapToDBColumn(k)+" = ?", v)
 				}
-				query.UpdateColumn(dbCol, driveURL)
+				res := query.UpdateColumn(dbCol, driveURL)
+				if res.Error != nil {
+					log.Printf("❌ [Background Update] DB update failed for %s: %v", tableName, res.Error)
+				} else if res.RowsAffected == 0 {
+					log.Printf("⚠️ [Background Update] No rows affected for %s (PK: %v)", tableName, r.PrimaryKey)
+				} else {
+					log.Printf("✅ [Background Update] DB updated for %s (%s)", tableName, r.TargetColumn)
+				}
 			}
 		}
 
-		// Removed immediate TempImage deletion to allow client time to load
 		log.Printf("✅ Background upload complete: %s", driveURL)
 	}(req, data, tempID)
 }

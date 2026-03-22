@@ -1,7 +1,7 @@
 
 import { useContext, useCallback, useRef } from 'react';
 import { AppContext } from '../context/AppContext';
-import { NOTIFICATION_SOUNDS } from '../constants';
+import { NOTIFICATION_SOUNDS, SOUND_URLS } from '../constants';
 
 export const useSoundEffects = () => {
     const { advancedSettings } = useContext(AppContext);
@@ -12,22 +12,35 @@ export const useSoundEffects = () => {
     // Cache for Audio objects to avoid repeated creation
     const audioCache = useRef<Map<string, HTMLAudioElement>>(new Map());
 
-    const playSound = useCallback((soundId: string, customVolumeMultiplier = 1) => {
+    const playSound = useCallback((soundIdOrUrl: string, customVolumeMultiplier = 1) => {
         if (baseVolume <= 0) return;
 
         try {
-            // Find the sound by ID, fallback to 'click' if not found
-            const sound = NOTIFICATION_SOUNDS.find(s => s.id === soundId) || 
-                          NOTIFICATION_SOUNDS.find(s => s.id === 'click');
-            
-            if (!sound) return;
+            let soundUrl = '';
 
-            let audio = audioCache.current.get(sound.url);
+            // 1. Check if it's a direct URL (starts with http)
+            if (soundIdOrUrl.startsWith('http')) {
+                soundUrl = soundIdOrUrl;
+            } else {
+                // 2. Otherwise treat it as an ID and look up in NOTIFICATION_SOUNDS
+                const found = NOTIFICATION_SOUNDS.find(s => s.id === soundIdOrUrl);
+                if (found) {
+                    soundUrl = found.url;
+                } else {
+                    // Fallback to default click sound if ID not found
+                    const defaultSound = NOTIFICATION_SOUNDS.find(s => s.id === 'default') || NOTIFICATION_SOUNDS[0];
+                    soundUrl = defaultSound?.url || '';
+                }
+            }
+            
+            if (!soundUrl) return;
+
+            let audio = audioCache.current.get(soundUrl);
 
             if (!audio) {
-                audio = new Audio(sound.url);
+                audio = new Audio(soundUrl);
                 audio.load();
-                audioCache.current.set(sound.url, audio);
+                audioCache.current.set(soundUrl, audio);
             }
 
             // Create a clone to allow overlapping sounds for fast clicks
@@ -46,16 +59,16 @@ export const useSoundEffects = () => {
     }, [baseVolume]);
 
     return {
-        // Core UI Interactions (Very Short, Crisp, Modern)
-        playClick: () => playSound('click', 0.7), // Standard button click (Soft Tap)
-        playTransition: () => playSound('professional_2', 0.4), // Interface Tick for page changes
-        playPop: () => playSound('pop', 0.7), // Elegant Bubble for modal opening/closing
-        playHover: () => playSound('professional_2', 0.15), // Extremely soft Interface Tick for hovering
+        // Core UI Interactions (Using modern clean URLs)
+        playClick: () => playSound(SOUND_URLS.SENT, 0.7), 
+        playTransition: () => playSound('professional_2', 0.4), 
+        playPop: () => playSound('pop', 0.7), 
+        playHover: () => playSound('professional_2', 0.15), 
         
-        // Status Notifications (Clean & Professional)
-        playSuccess: () => playSound('success', 0.9), // Crisp Success
-        playError: () => playSound('error', 0.9), // Minimal Alert
-        playNotify: () => playSound('notify', 1.0), // Modern Ping
+        // Status Notifications
+        playSuccess: () => playSound('success', 0.9), 
+        playError: () => playSound('error', 0.9), 
+        playNotify: () => playSound(SOUND_URLS.NOTIFICATION, 1.0),
         
         // Custom sound from settings
         playCustom: () => playSound(advancedSettings?.notificationSound || 'default', 1.0),
@@ -63,4 +76,5 @@ export const useSoundEffects = () => {
         playSound
     };
 };
+
 
