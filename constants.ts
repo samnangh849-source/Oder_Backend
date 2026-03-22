@@ -45,7 +45,7 @@ export const SOUND_URLS = {
     TECH_CLICK: 'https://res.cloudinary.com/dhobzwi7h/video/upload/v1774169953/click_yxuwrw.mp3', // Clean interface tick
     CRYSTAL_POP: 'https://res.cloudinary.com/dhobzwi7h/video/upload/v1774169953/click_yxuwrw.mp3', // Premium bubbly pop
     ZIP_SLIDE: 'https://res.cloudinary.com/dhobzwi7h/video/upload/v1774169953/click_yxuwrw.mp3', // Clean modern tap click
-    TEAM_SELECT: 'https://res.cloudinary.com/dhobzwi7h/video/upload/v1774170151/Slon_jqijdy.mp3', // Modern tech slide for team selection
+    TEAM_SELECT: 'https://res.cloudinary.com/dhobzwi7h/video/upload/v1774170475/Slon_hp7sne.mp3', // Modern tech slide for team selection
 };
 
 // Full NOTIFICATION_SOUNDS palette for the settings panel
