@@ -321,7 +321,7 @@ type IncentiveCalculator struct {
 	ProjectID uint    `gorm:"index" json:"projectId"`
 	Name      string  `json:"name"`
 	Type      string  `json:"type"`
-	Value     float64 `json:"value,string"`
+	Value     float64 `json:"value"`
 	RulesJSON string  `gorm:"type:text" json:"rulesJson"`
 }
 
@@ -356,7 +356,7 @@ type IncentiveManualData struct {
 	Month      string  `gorm:"index" json:"month"` // Format: YYYY-MM
 	MetricType string  `json:"metricType"`
 	DataKey    string  `json:"dataKey"` // Format: {period}_{targetId} e.g. "month_TeamA", "W1_user1"
-	Value      float64 `json:"value,string"`
+	Value      float64 `json:"value"`
 }
 
 type IncentiveCustomPayout struct {
@@ -364,7 +364,7 @@ type IncentiveCustomPayout struct {
 	ProjectID uint    `gorm:"index" json:"projectId"`
 	Month     string  `gorm:"index" json:"month"` // Format: YYYY-MM
 	UserName  string  `json:"userName"`
-	Value     float64 `json:"value,string"`
+	Value     float64 `json:"value"`
 }
 
 type DeleteOrderRequest struct {
@@ -3209,6 +3209,16 @@ func handleChangePassword(c *gin.Context) {
 	c.JSON(200, gin.H{"status": "success"})
 }
 
+func extractFileIDFromURL(url string) string {
+	if strings.Contains(url, "id=") {
+		parts := strings.Split(url, "id=")
+		if len(parts) > 1 {
+			return strings.Split(parts[1], "&")[0]
+		}
+	}
+	return ""
+}
+
 func extractDriveFolderID(idOrURL string) string {
 	idOrURL = strings.TrimSpace(idOrURL)
 	if strings.Contains(idOrURL, "drive.google.com") {
@@ -3382,12 +3392,35 @@ func handleImageUploadProxy(c *gin.Context) {
 			log.Printf("🎬 [Background Update] Specialized Movie update: movieId=%s col=%s", r.MovieID, r.TargetColumn)
 			dbCol := mapToDBColumn(r.TargetColumn)
 			
-			// Update PostgreSQL
-			DB.Model(&Movie{}).Where("id = ?", r.MovieID).UpdateColumn(dbCol, driveURL)
-			
-			// Sync with Google Sheets
+			// Retry updating the database for up to 1 minute (for new records being created)
+			updated := false
+			for i := 0; i < 12; i++ {
+				res := DB.Model(&Movie{}).Where("id = ?", r.MovieID).UpdateColumn(dbCol, driveURL)
+				if res.Error == nil && res.RowsAffected > 0 {
+					updated = true
+					log.Printf("✅ [Background Update] SUCCESS: Updated movie %s column %s", r.MovieID, dbCol)
+					break
+				}
+				log.Printf("⏳ [Background Update] Waiting for movie record %s... (attempt %d)", r.MovieID, i+1)
+				time.Sleep(5 * time.Second)
+			}
+
+			// Also sync with Google Sheets if updated or if it's a known record
 			enqueueSync("updateSheet", map[string]interface{}{r.TargetColumn: driveURL}, "Movies", map[string]string{"ID": r.MovieID})
 			
+			// If we have a movie title, rename the file in Drive to match
+			fID := extractFileIDFromURL(driveURL)
+			if fID != "" {
+				var mv Movie
+				if err := DB.Where("id = ?", r.MovieID).First(&mv).Error; err == nil && mv.Title != "" {
+					log.Printf("📂 [Background Update] Renaming Drive file %s to %q", fID, mv.Title)
+					enqueueSync("renameFile", map[string]interface{}{
+						"fileID":  fID,
+						"newName": mv.Title,
+					}, "", nil)
+				}
+			}
+
 			// Broadcast update
 			notify, _ := json.Marshal(map[string]interface{}{
 				"type":    "movie_thumbnail_ready",
@@ -4283,8 +4316,9 @@ func handleCreateMovie(c *gin.Context) {
 		return
 	}
 
-	// Send to Google Sheets via managed queue
+	// Send to Google Sheets and Rename Drive file in background
 	go func(m Movie) {
+		// 1. Sync to Sheets
 		enqueueSync("addRow", map[string]interface{}{
 			"ID":          m.ID,
 			"Title":       m.Title,
@@ -4298,6 +4332,16 @@ func handleCreateMovie(c *gin.Context) {
 			"SeriesKey":   m.SeriesKey,
 			"AddedAt":     m.AddedAt,
 		}, "Movies", nil)
+
+		// 2. If thumbnail is a permanent Drive URL, rename it to match movie title
+		fileID := extractFileIDFromURL(m.Thumbnail)
+		if fileID != "" {
+			log.Printf("📂 [Background] Renaming Drive file %s to %q", fileID, m.Title)
+			enqueueSync("renameFile", map[string]interface{}{
+				"fileID":  fileID,
+				"newName": m.Title,
+			}, "", nil)
+		}
 	}(movie)
 
 	c.JSON(http.StatusOK, gin.H{"status": "success", "data": movie})

@@ -887,7 +887,7 @@ const FastPackModal: React.FC<FastPackModalProps> = ({ order, onClose, onSuccess
                     maxTimer={maxUndoTimer}
                     onUndo={handleUndo}
                     isUndoing={isUndoing}
-                    accentColor="#1DB954"
+                    accentColor="emerald"
                     title="SYNCHRONIZING..."
                     subtitle="Packaging data is being committed to the secure stream. Discard now to prevent sync."
                 />

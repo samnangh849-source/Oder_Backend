@@ -55,7 +55,7 @@ const OrderGracePeriod: React.FC<OrderGracePeriodProps> = ({
         }
     };
 
-    const activeColor = colors[accentColor];
+    const activeColor = colors[accentColor as keyof typeof colors] || colors.emerald;
 
     // Use Portal to render at document body root
     return createPortal(

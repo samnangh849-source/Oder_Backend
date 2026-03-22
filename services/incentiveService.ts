@@ -55,6 +55,10 @@ export const createIncentiveCalculator = async (calc: Omit<IncentiveCalculator, 
             body: JSON.stringify(serializedCalc)
         });
         const result = await response.json();
+        if (result.status === 'error') {
+            console.error("Server error creating calculator:", result.message);
+            throw new Error(result.message || "Failed to create calculator");
+        }
         return result.status === 'success' ? result.data : null;
     } catch (e) {
         console.error("Error creating incentive calculator", e);

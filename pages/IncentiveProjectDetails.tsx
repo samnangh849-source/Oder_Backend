@@ -207,12 +207,28 @@ const IncentiveProjectDetails: React.FC<IncentiveProjectDetailsProps> = ({ proje
                                     </div>
                                     {calc.type === 'Achievement' && calc.achievementTiers && (
                                         <div className="col-span-2 border-t border-slate-800 pt-3">
-                                            <p className="text-[10px] text-slate-500 font-bold uppercase mb-2">{t.tiers_config}</p>
-                                            <div className="flex flex-wrap gap-2">
-                                                {calc.achievementTiers.map((t, i) => (
-                                                    <span key={t.id} className="text-[9px] font-bold bg-slate-800 text-slate-300 px-2 py-1 rounded-lg border border-slate-700">
-                                                        T{i+1}: {t.target} {calc.metricUnit} → {t.rewardType === 'Percentage' ? `${t.rewardAmount}%` : `$${t.rewardAmount}`}
-                                                    </span>
+                                            <p className="text-[10px] text-slate-500 font-bold uppercase mb-3">{t.tiers_config}</p>
+                                            <div className="flex flex-col gap-2 relative">
+                                                {/* Vertical connecting line */}
+                                                {calc.achievementTiers.length > 1 && (
+                                                    <div className="absolute left-3 top-3 bottom-3 w-0.5 bg-indigo-500/20 z-0"></div>
+                                                )}
+                                                {[...calc.achievementTiers].sort((a,b) => a.target - b.target).map((tier, i) => (
+                                                    <div key={tier.id} className="relative z-10 flex items-center justify-between bg-[#0f172a] px-3 py-2 rounded-xl border border-slate-800/50 group hover:border-indigo-500/30 transition-all">
+                                                        <div className="flex items-center gap-3">
+                                                            <div className="w-6 h-6 rounded-lg bg-indigo-500/10 text-indigo-400 flex items-center justify-center text-[10px] font-black italic">{i+1}</div>
+                                                            <div className="flex flex-col">
+                                                                <span className="text-[10px] text-slate-400 font-bold uppercase tracking-widest">{tier.name || `Milestone ${i+1}`}</span>
+                                                                <span className="text-xs font-black text-white">${tier.target.toLocaleString()}</span>
+                                                            </div>
+                                                        </div>
+                                                        <div className="text-right flex flex-col">
+                                                            <span className="text-[8px] text-emerald-500/50 font-black uppercase tracking-widest">Reward</span>
+                                                            <span className="text-sm font-black text-emerald-400">
+                                                                {tier.rewardType === 'Percentage' ? `${tier.rewardAmount}%` : `$${tier.rewardAmount.toLocaleString()}`}
+                                                            </span>
+                                                        </div>
+                                                    </div>
                                                 ))}
                                             </div>
                                         </div>

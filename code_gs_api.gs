@@ -90,6 +90,18 @@ function doPost(e) {
       case 'updateSheet':
         return handleUpdateSheet(contents);
 
+      case 'renameFile':
+        if (!contents.fileID || !contents.newName) {
+          return createJsonResponse({ status: 'error', message: 'fileID និង newName ត្រូវតែមាន' });
+        }
+        try {
+          const file = DriveApp.getFileById(contents.fileID);
+          file.setName(contents.newName);
+          return createJsonResponse({ status: 'success' });
+        } catch (e) {
+          return createJsonResponse({ status: 'error', message: 'Rename បរាជ័យ: ' + e.message });
+        }
+
       case 'uploadImage':
         const upRes = uploadImageToDrive(contents.fileData, contents.fileName, contents.mimeType, contents.uploadFolderID, contents.userName);
         return createJsonResponse({ status: 'success', url: upRes.url, fileID: upRes.fileID });

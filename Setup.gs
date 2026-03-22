@@ -54,7 +54,7 @@ const SYSTEM_STRUCTURE = {
   "IncentiveCalculators": ["ID", "ProjectID", "Name", "Type", "Value", "RulesJSON"],
   "IncentiveResults": ["ID", "Timestamp", "ProjectID", "UserName", "TotalOrders", "TotalRevenue", "CalculatedValue", "IsCustom"],
   "IncentiveManualData": ["ID", "ProjectID", "Month", "MetricType", "DataKey", "Value"],
-  "IncentiveCustomPayouts": ["ID", "ProjectID", "Period", "TargetID", "Value"],
+  "IncentiveCustomPayouts": ["ID", "ProjectID", "Month", "UserName", "Value"],
 
   // ប្រព័ន្ធកម្សាន្ត (Entertainment)
   "Movies": ["ID", "Title", "Description", "Thumbnail", "VideoURL", "Type", "Language", "Country", "Category", "SeriesKey", "AddedAt"],
