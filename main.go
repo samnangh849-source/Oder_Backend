@@ -546,6 +546,7 @@ func handleLockIncentivePayout(c *gin.Context) {
 					"UserName":        res.UserName,
 					"TotalOrders":     res.TotalOrders,
 					"TotalRevenue":    res.TotalRevenue,
+					"TotalProfit":     res.TotalProfit,
 					"CalculatedValue": res.CalculatedValue,
 					"IsCustom":        res.IsCustom,
 				}
@@ -611,6 +612,14 @@ func handleCalculateIncentive(c *gin.Context) {
 	userRevenue := make(map[string]float64)
 	userProfit := make(map[string]float64)
 	userBreakdown := make(map[string][]map[string]interface{})
+
+	// Pre-calculate base stats for all users who have orders
+	for _, o := range orders {
+		userOrders[o.User]++
+		userRevenue[o.User] += o.GrandTotal
+		orderProfit := o.GrandTotal - o.TotalProductCost - o.InternalCost
+		userProfit[o.User] += orderProfit
+	}
 
 	// Process each active calculator
 	for _, calc := range project.Calculators {
@@ -706,28 +715,23 @@ func handleCalculateIncentive(c *gin.Context) {
 			}
 		}
 
-		// Calculate performance for each eligible user (Orders + Individual Manual)
+		// Calculate performance for each eligible user
 		perfMap := make(map[string]float64)
 		for _, u := range eligibleUsers {
-			var val float64
-			for _, o := range orders {
-				if o.User == u.UserName {
-					switch strings.ToLower(strings.TrimSpace(metricType)) {
-					case "sales amount", "revenue":
-						val += o.GrandTotal
-						userRevenue[u.UserName] += o.GrandTotal
-					case "profit":
-						orderProfit := o.GrandTotal - o.TotalProductCost - o.InternalCost
-						val += orderProfit
-						userProfit[u.UserName] += orderProfit
-					default:
-						val += 1
-						userOrders[u.UserName]++
-					}
-				}
+			var baseVal float64
+			mType := strings.ToLower(strings.TrimSpace(metricType))
+			if mType == "sales amount" || mType == "revenue" {
+				baseVal = userRevenue[u.UserName]
+			} else if mType == "profit" {
+				baseVal = userProfit[u.UserName]
+			} else if mType == "orders" || mType == "order count" {
+				baseVal = float64(userOrders[u.UserName])
+			} else {
+				// Default or unrecognized metric
+				baseVal = float64(userOrders[u.UserName])
 			}
-			// Add User-specific Manual Data
-			val += userManualPerf[u.UserName]
+
+			val := baseVal + userManualPerf[u.UserName]
 			
 			// If distribution is Individual, we also add a proportional share of Team Manual Data
 			if rules.DistributionRule.Method == "" || rules.DistributionRule.Method == "Individual" {
@@ -828,6 +832,7 @@ func handleCalculateIncentive(c *gin.Context) {
 	for u := range userRewards { uniqueUsers[u] = true }
 	for u := range userOrders { uniqueUsers[u] = true }
 	for u := range userRevenue { uniqueUsers[u] = true }
+	for u := range userProfit { uniqueUsers[u] = true }
 
 	for user := range uniqueUsers {
 		payout := userRewards[user]
@@ -843,8 +848,8 @@ func handleCalculateIncentive(c *gin.Context) {
 			ProjectID:       project.ID,
 			UserName:        user,
 			TotalOrders:     userOrders[user],
-			// Keep TotalRevenue compatible for UI; include realized profit if revenue is zero.
-			TotalRevenue:    func() float64 { if userRevenue[user] != 0 { return userRevenue[user] }; return userProfit[user] }(),
+			TotalRevenue:    userRevenue[user],
+			TotalProfit:     userProfit[user],
 			CalculatedValue: payout,
 			IsCustom:        isCustom,
 			BreakdownJSON:   string(breakdownJSON),
