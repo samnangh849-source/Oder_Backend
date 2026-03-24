@@ -1,4 +1,4 @@
-package main
+package backend
 
 import (
 	"encoding/json"
@@ -49,7 +49,7 @@ type CommissionTier struct {
 	Rate float64  `json:"rate"`
 }
 
-func parseManualDataKey(dataKey string) (string, string, bool) {
+func ParseManualDataKey(dataKey string) (string, string, bool) {
 	parts := strings.SplitN(strings.TrimSpace(dataKey), "_", 2)
 	if len(parts) != 2 {
 		return "", "", false
@@ -62,11 +62,11 @@ func parseManualDataKey(dataKey string) (string, string, bool) {
 	return period, target, true
 }
 
-func normalizeTeamKey(team string) string {
+func NormalizeTeamKey(team string) string {
 	return strings.ToLower(strings.TrimSpace(team))
 }
 
-func resolveManualTarget(targetRaw string, userSet map[string]bool) (targetType string, targetID string) {
+func ResolveManualTarget(targetRaw string, userSet map[string]bool) (targetType string, targetID string) {
 	target := strings.TrimSpace(targetRaw)
 	lower := strings.ToLower(target)
 
@@ -74,21 +74,21 @@ func resolveManualTarget(targetRaw string, userSet map[string]bool) (targetType 
 		return "user", strings.TrimSpace(target[len("user:"):])
 	}
 	if strings.HasPrefix(lower, "team:") {
-		return "team", normalizeTeamKey(target[len("team:"):])
+		return "team", NormalizeTeamKey(target[len("team:"):])
 	}
 	if strings.HasPrefix(lower, "user_") {
 		return "user", strings.TrimSpace(target[len("user_"):])
 	}
 	if strings.HasPrefix(lower, "team_") {
-		return "team", normalizeTeamKey(target[len("team_"):])
+		return "team", NormalizeTeamKey(target[len("team_"):])
 	}
 	if userSet[target] {
 		return "user", target
 	}
-	return "team", normalizeTeamKey(target)
+	return "team", NormalizeTeamKey(target)
 }
 
-func calculatePayout(calc IncentiveCalculator, val float64, subPeriod string) float64 {
+func CalculatePayout(calc IncentiveCalculator, val float64, subPeriod string) float64 {
 	var rules IncentiveRules
 	if calc.RulesJSON != "" {
 		json.Unmarshal([]byte(calc.RulesJSON), &rules)

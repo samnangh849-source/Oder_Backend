@@ -294,9 +294,12 @@ type IncentiveCustomPayout struct {
 }
 
 type DeleteOrderRequest struct {
-	OrderID  string `json:"orderId"`
-	Team     string `json:"team"`
-	UserName string `json:"userName"`
+	OrderID            string `json:"orderId"`
+	Team               string `json:"team"`
+	UserName           string `json:"userName"`
+	TelegramMessageID1 string `json:"telegramMessageId1"`
+	TelegramMessageID2 string `json:"telegramMessageId2"`
+	TelegramChatId     string `json:"telegramChatId"`
 }
 
 type TempImage struct {
