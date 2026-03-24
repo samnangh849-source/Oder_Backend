@@ -23,6 +23,8 @@ type AppsScriptRequest struct {
 	FileData       string                 `json:"fileData,omitempty"`
 	Image          string                 `json:"image,omitempty"` // Alias for fileData
 	FileName       string                 `json:"fileName,omitempty"`
+	FileID         string                 `json:"fileID,omitempty"`   // Added for renameFile compatibility
+	NewName        string                 `json:"newName,omitempty"`  // Added for renameFile compatibility
 	MimeType       string                 `json:"mimeType,omitempty"`
 	UserName       string                 `json:"userName,omitempty"`
 	OrderData      interface{}            `json:"orderData,omitempty"`
@@ -104,7 +106,22 @@ func EnqueueSync(action string, data map[string]interface{}, sheetName string, p
 		SheetName:  sheetName,
 		PrimaryKey: pk,
 		NewData:    data,
+		OrderData:  data, // Set OrderData for compatibility with actions like updateOrderTelegram
 	}
+
+	// Handle special fields if present in data
+	if data != nil {
+		if val, ok := data["fileID"].(string); ok {
+			req.FileID = val
+		}
+		if val, ok := data["newName"].(string); ok {
+			req.NewName = val
+		}
+		if val, ok := data["orderId"].(string); ok {
+			req.OrderID = val
+		}
+	}
+
 	task := SyncTask{Request: req, MaxRetries: 5}
 	select {
 	case SyncQueue <- task:
