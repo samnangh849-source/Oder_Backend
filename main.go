@@ -2315,17 +2315,17 @@ func handleGetTeamSalesRanking(c *gin.Context) {
 	switch period {
 	case "today":
 		start := time.Date(now.Year(), now.Month(), now.Day(), 0, 0, 0, 0, now.Location())
-		db = db.Where("timestamp::date >= ?", start.Format("2006-01-02"))
+		db = db.Where("timestamp ~ '^\\d{4}-\\d{2}-\\d{2}' AND timestamp::date >= ?", start.Format("2006-01-02"))
 	case "this_week":
 		offset := int(now.Weekday()) - 1
 		if offset < 0 {
 			offset = 6
 		}
 		start := now.AddDate(0, 0, -offset)
-		db = db.Where("timestamp::date >= ?", start.Format("2006-01-02"))
+		db = db.Where("timestamp ~ '^\\d{4}-\\d{2}-\\d{2}' AND timestamp::date >= ?", start.Format("2006-01-02"))
 	case "this_month":
 		start := time.Date(now.Year(), now.Month(), 1, 0, 0, 0, 0, now.Location())
-		db = db.Where("timestamp::date >= ?", start.Format("2006-01-02"))
+		db = db.Where("timestamp ~ '^\\d{4}-\\d{2}-\\d{2}' AND timestamp::date >= ?", start.Format("2006-01-02"))
 	// "all" — no date filter
 	}
 
