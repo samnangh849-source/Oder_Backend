@@ -115,6 +115,15 @@ type IncentiveCustomPayout = backend.IncentiveCustomPayout
 type DeleteOrderRequest = backend.DeleteOrderRequest
 type TempImage = backend.TempImage
 
+type IncentiveRules = backend.IncentiveRules
+type IncentiveTier = backend.IncentiveTier
+type CommissionTier = backend.CommissionTier
+
+var parseManualDataKey = backend.ParseManualDataKey
+var normalizeTeamKey = backend.NormalizeTeamKey
+var resolveManualTarget = backend.ResolveManualTarget
+var calculatePayout = backend.CalculatePayout
+
 // =========================================================================
 // INIT DATABASE & GOOGLE SERVICES
 // =========================================================================
@@ -2095,14 +2104,27 @@ func handleAdminDeleteOrder(c *gin.Context) {
 
 	var order Order
 	if err := DB.Where("order_id = ?", r.OrderID).First(&order).Error; err == nil {
-		go func() {
-			// Sync with Google Sheets via managed queue
-			enqueueSync("deleteRow", nil, "AllOrders", map[string]string{"Order ID": r.OrderID})
+		// Prepare IDs, falling back to request values if DB is empty
+		m1 := order.TelegramMessageID1
+		if m1 == "" {
+			m1 = r.TelegramMessageID1
+		}
+		m2 := order.TelegramMessageID2
+		if m2 == "" {
+			m2 = r.TelegramMessageID2
+		}
 
-			// Also send to Telegram via Apps Script (this is a separate action)
+		go func() {
+			// ✅ Sync with Google Sheets & Telegram via managed queue.
+			// deleteOrderTelegram in Apps Script already handles BOTH Google Sheets and Telegram deletion.
+			// This is safer and more efficient than calling deleteRow + deleteOrderTelegram separately.
 			enqueueSync("deleteOrderTelegram", map[string]interface{}{
-				"orderId": r.OrderID, "team": order.Team, "messageId1": order.TelegramMessageID1, "messageId2": order.TelegramMessageID2, "fulfillmentStore": order.FulfillmentStore,
-			}, "", nil) // SheetName and PrimaryKey are not directly applicable for Telegram delete action
+				"orderId":          r.OrderID,
+				"team":             order.Team,
+				"messageId1":       m1,
+				"messageId2":       m2,
+				"fulfillmentStore": order.FulfillmentStore,
+			}, "", nil)
 		}()
 		DB.Delete(&order)
 		eventBytes, _ := json.Marshal(map[string]interface{}{"type": "delete_order", "orderId": r.OrderID})
