@@ -2,12 +2,15 @@ package backend
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"fmt"
 	"io"
 	"log"
+	"math/rand"
 	"net/http"
 	"strings"
+	"sync"
 	"time"
 )
 
@@ -52,10 +55,17 @@ type SyncTask struct {
 	Request    AppsScriptRequest
 	RetryCount int
 	MaxRetries int
+	EnqueuedAt time.Time
 }
 
 var (
-	SyncQueue  = make(chan SyncTask, 1000)
+	SyncQueue = make(chan SyncTask, 1000)
+
+	// Deduplication map for updateSheet actions
+	// Key: sheetName + primaryKey values
+	pendingUpdates = make(map[string]*SyncTask)
+	updateMutex    sync.Mutex
+
 	HTTPClient = &http.Client{
 		Timeout: 45 * time.Second,
 		Transport: &http.Transport{
@@ -64,6 +74,10 @@ var (
 			MaxIdleConnsPerHost: 20,
 		},
 	}
+
+	// For graceful shutdown
+	workerWG sync.WaitGroup
+	stopChan = make(chan struct{})
 )
 
 func CallAppsScriptPOST(requestData AppsScriptRequest) (AppsScriptResponse, error) {
@@ -94,9 +108,19 @@ func CallAppsScriptPOST(requestData AppsScriptRequest) (AppsScriptResponse, erro
 	}
 	var scriptResponse AppsScriptResponse
 	if err := json.Unmarshal(body, &scriptResponse); err != nil {
-		return AppsScriptResponse{}, fmt.Errorf("invalid response from apps script")
+		return AppsScriptResponse{}, fmt.Errorf("invalid response from apps script: %v", err)
 	}
 	return scriptResponse, nil
+}
+
+// getDedupeKey generates a unique key for a task to see if it can be merged
+func getDedupeKey(action, sheetName string, pk map[string]string) string {
+	if action != "updateSheet" || sheetName == "" || len(pk) == 0 {
+		return ""
+	}
+	// Sort or just concatenate for consistency
+	// Since PK is usually just one field like {"Order ID": "123"}
+	return fmt.Sprintf("%s:%s:%v", action, sheetName, pk)
 }
 
 // EnqueueSync adds a task to the background synchronization queue
@@ -106,7 +130,7 @@ func EnqueueSync(action string, data map[string]interface{}, sheetName string, p
 		SheetName:  sheetName,
 		PrimaryKey: pk,
 		NewData:    data,
-		OrderData:  data, // Set OrderData for compatibility with actions like updateOrderTelegram
+		OrderData:  data, // Set OrderData for compatibility
 	}
 
 	// Handle special fields if present in data
@@ -122,46 +146,129 @@ func EnqueueSync(action string, data map[string]interface{}, sheetName string, p
 		}
 	}
 
-	task := SyncTask{Request: req, MaxRetries: 5}
+	task := SyncTask{
+		Request:    req,
+		MaxRetries: 5,
+		EnqueuedAt: time.Now(),
+	}
+
+	// Deduplication Logic
+	dedupeKey := getDedupeKey(action, sheetName, pk)
+	if dedupeKey != "" {
+		updateMutex.Lock()
+		if existing, exists := pendingUpdates[dedupeKey]; exists {
+			// Merge NewData: newer fields overwrite older ones
+			if existing.Request.NewData == nil {
+				existing.Request.NewData = make(map[string]interface{})
+			}
+			for k, v := range data {
+				existing.Request.NewData[k] = v
+			}
+			// Update OrderData as well for compatibility
+			existing.Request.OrderData = existing.Request.NewData
+			updateMutex.Unlock()
+			// log.Printf("🔄 SyncManager: Merged update for %s", dedupeKey)
+			return
+		}
+		pendingUpdates[dedupeKey] = &task
+		updateMutex.Unlock()
+	}
+
 	select {
 	case SyncQueue <- task:
-	default:
-		log.Printf("⚠️ SyncQueue is full. Dropping task action=%s sheet=%s", action, sheetName)
+	case <-time.After(2 * time.Second):
+		log.Printf("⚠️ SyncQueue is full. Dropping task action=%s sheet=%s after timeout", action, sheetName)
+		if dedupeKey != "" {
+			updateMutex.Lock()
+			delete(pendingUpdates, dedupeKey)
+			updateMutex.Unlock()
+		}
 	}
 }
 
 // StartSyncManager runs background workers for Google Sheets synchronization
 func StartSyncManager(workerCount int) {
 	for i := 0; i < workerCount; i++ {
+		workerWG.Add(1)
 		go func(workerID int) {
+			defer workerWG.Done()
 			log.Printf("🔄 SyncManager: Worker %d started", workerID)
-			for task := range SyncQueue {
-				resp, err := CallAppsScriptPOST(task.Request)
-				if err != nil || resp.Status == "error" {
-					errorMessage := "Unknown error"
-					if err != nil {
-						errorMessage = err.Error()
-					} else {
-						errorMessage = resp.Message
+
+			for {
+				select {
+				case <-stopChan:
+					log.Printf("🛑 SyncManager [Worker %d]: Stopping...", workerID)
+					return
+				case task, ok := <-SyncQueue:
+					if !ok {
+						return
 					}
 
-					log.Printf("❌ SyncManager [Worker %d]: Task %s failed: %v", workerID, task.Request.Action, errorMessage)
-
-					if task.RetryCount < task.MaxRetries {
-						task.RetryCount++
-						backoff := time.Duration(task.RetryCount*task.RetryCount) * time.Second
-						log.Printf("⏳ SyncManager: Retrying task %s in %v (Attempt %d/%d)", task.Request.Action, backoff, task.RetryCount, task.MaxRetries)
-						go func(t SyncTask, d time.Duration) {
-							time.Sleep(d)
-							SyncQueue <- t
-						}(task, backoff)
-					} else {
-						log.Printf("🔥 SyncManager: Task %s reached max retries. Dropping.", task.Request.Action)
+					// Remove from dedupe map if it was there
+					dedupeKey := getDedupeKey(task.Request.Action, task.Request.SheetName, task.Request.PrimaryKey)
+					if dedupeKey != "" {
+						updateMutex.Lock()
+						delete(pendingUpdates, dedupeKey)
+						updateMutex.Unlock()
 					}
-				} else {
-					log.Printf("✅ SyncManager [Worker %d]: Task %s success on %s", workerID, task.Request.Action, task.Request.SheetName)
+
+					processTask(workerID, task)
 				}
 			}
 		}(i)
 	}
 }
+
+// StopSyncManager gracefully stops all workers
+func StopSyncManager() {
+	close(stopChan)
+	workerWG.Wait()
+	log.Println("✅ SyncManager: All workers stopped gracefully")
+}
+
+func processTask(workerID int, task SyncTask) {
+	resp, err := CallAppsScriptPOST(task.Request)
+
+	if err != nil || resp.Status == "error" {
+		errorMessage := "Unknown error"
+		if err != nil {
+			errorMessage = err.Error()
+		} else {
+			errorMessage = resp.Message
+		}
+
+		log.Printf("❌ SyncManager [Worker %d]: Task %s failed: %v", workerID, task.Request.Action, errorMessage)
+
+		if task.RetryCount < task.MaxRetries {
+			task.RetryCount++
+			// Exponential backoff with jitter: 2^retry + 0-1000ms jitter
+			delay := time.Duration(1<<uint(task.RetryCount)) * time.Second
+			jitter := time.Duration(rand.Intn(1000)) * time.Millisecond
+			backoff := delay + jitter
+
+			log.Printf("⏳ SyncManager: Retrying task %s in %v (Attempt %d/%d)", task.Request.Action, backoff, task.RetryCount, task.MaxRetries)
+
+			go func(t SyncTask, d time.Duration) {
+				time.Sleep(d)
+				// Re-enqueue without dedupe check for retries to ensure they aren't merged with NEW events
+				// that might have happened after the failure
+				select {
+				case SyncQueue <- t:
+				case <-stopChan:
+					return
+				}
+			}(task, backoff)
+		} else {
+			log.Printf("🔥 SyncManager: Task %s reached max retries. Dropping. Sheet=%s PK=%v",
+				task.Request.Action, task.Request.SheetName, task.Request.PrimaryKey)
+		}
+	} else {
+		// log.Printf("✅ SyncManager [Worker %d]: Task %s success on %s", workerID, task.Request.Action, task.Request.SheetName)
+	}
+}
+
+func init() {
+	// Seed random for jitter
+	rand.Seed(time.Now().UnixNano())
+}
+
