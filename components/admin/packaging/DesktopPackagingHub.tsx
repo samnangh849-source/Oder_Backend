@@ -1,9 +1,20 @@
-
 import React, { useContext, useMemo } from 'react';
 import { AppContext } from '@/context/AppContext';
 import { ParsedOrder } from '@/types';
 import Spinner from '@/components/common/Spinner';
 import { convertGoogleDriveUrl } from '@/utils/fileUtils';
+
+// --- Theme Constants ---
+const B_BG_MAIN = 'bg-[#0B0E11]';
+const B_BG_PANEL = 'bg-[#181A20]';
+const B_BG_HOVER = 'hover:bg-[#2B3139]';
+const B_BORDER = 'border-[#2B3139]';
+const B_TEXT_PRIMARY = 'text-[#EAECEF]';
+const B_TEXT_SECONDARY = 'text-[#848E9C]';
+const B_ACCENT = 'text-[#FCD535]';
+const B_ACCENT_BG = 'bg-[#FCD535] text-[#0B0E11] hover:bg-[#E5C02A]';
+const B_GREEN = 'text-[#0ECB81]';
+const B_RED = 'text-[#F6465D]';
 
 interface DesktopPackagingHubProps {
     orders: ParsedOrder[];
@@ -14,20 +25,30 @@ interface DesktopPackagingHubProps {
     onPack: (order: ParsedOrder) => void;
     onShip: (order: ParsedOrder) => void;
     onView: (order: ParsedOrder) => void;
+    onPrintManifest: () => void;
     onSwitchHub: () => void;
     onExit: () => void;
     selectedStore: string;
-    sessionStats: { packed: number, startTime: number };
+    progressStats: { packedByUserToday: number, storeTotalToday: number, progressPercentage: number };
     viewMode: 'card' | 'list';
     setViewMode: (mode: 'card' | 'list') => void;
     setIsFilterModalOpen: (open: boolean) => void;
     loadingActionId: string | null;
+    tabCounts: { pending: number, ready: number, shipped: number };
+    selectedOrderIds: Set<string>;
+    toggleOrderSelection: (id: string) => void;
+    clearSelection: () => void;
+    onBulkShip: () => void;
+    isBulkProcessing: boolean;
+    onToggleSelectAll: (orders: ParsedOrder[]) => void;
 }
 
 const DesktopPackagingHub: React.FC<DesktopPackagingHubProps> = ({
     orders, activeTab, setActiveTab, searchTerm, setSearchTerm,
-    onPack, onShip, onView, onSwitchHub, onExit, selectedStore,
-    sessionStats, viewMode, setViewMode, setIsFilterModalOpen, loadingActionId
+    onPack, onShip, onView, onPrintManifest, onSwitchHub, onExit, selectedStore,
+    progressStats, viewMode, setViewMode, setIsFilterModalOpen, loadingActionId, tabCounts,
+    selectedOrderIds, toggleOrderSelection, clearSelection, onBulkShip, isBulkProcessing,
+    onToggleSelectAll
 }) => {
     const { appData, previewImage: showFullImage } = useContext(AppContext);
 
@@ -42,222 +63,258 @@ const DesktopPackagingHub: React.FC<DesktopPackagingHubProps> = ({
         const result: { [key: string]: ParsedOrder[] } = {};
         if (activeTab === 'Pending') {
             sorted.forEach(order => {
-                const date = order.Timestamp ? getSafeDateObj(order.Timestamp).toLocaleDateString('km-KH', { month: 'short', day: 'numeric' }) : 'ថ្មីៗ';
+                const date = order.Timestamp ? getSafeDateObj(order.Timestamp).toLocaleDateString('km-KH', { month: 'short', day: 'numeric' }) : 'Recent';
                 if (!result[date]) result[date] = [];
                 result[date].push(order);
             });
         } else {
-            result['បញ្ជីឥវ៉ាន់'] = sorted;
+            result['Order Stream'] = sorted;
         }
         return result;
     }, [orders, activeTab]);
 
     return (
-        <div className="flex h-screen bg-black text-white overflow-hidden font-custom">
-            {/* Left Sidebar (Spotify Style) */}
-            <aside className="w-72 flex flex-col p-2 gap-2 bg-black flex-shrink-0 border-r border-white/5">
-                <div className="bg-[#121212] rounded-xl p-6 flex flex-col gap-6 shadow-xl">
-                    <div className="flex items-center gap-4">
-                        <div className="w-12 h-12 bg-blue-600 rounded-xl flex items-center justify-center shadow-lg shadow-blue-900/40">
-                            <svg className="w-7 h-7" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4" strokeWidth={2.5}/></svg>
+        <div className={`flex h-screen ${B_BG_MAIN} font-sans`}>
+            {/* Binance Style Side Panel */}
+            <aside className={`w-64 flex flex-col flex-shrink-0 border-r ${B_BORDER} ${B_BG_PANEL}`}>
+                <div className={`p-4 border-b ${B_BORDER}`}>
+                    <h2 className={`text-xl font-bold ${B_ACCENT}`}>HUB OPS</h2>
+                    <p className={`text-[10px] uppercase font-medium ${B_TEXT_SECONDARY} mt-0.5`}>{selectedStore}</p>
+                </div>
+                
+                <nav className={`flex flex-col py-2 border-b ${B_BORDER}`}>
+                    {[
+                        { id: 'Pending', label: 'Pending Pack', count: tabCounts.pending },
+                        { id: 'Ready to Ship', label: 'Ready for Dispatch', count: tabCounts.ready },
+                        { id: 'Shipped', label: 'Shipped Log', count: tabCounts.shipped }
+                    ].map(tab => (
+                        <button 
+                            key={tab.id}
+                            onClick={() => setActiveTab(tab.id)}
+                            className={`flex items-center justify-between px-4 py-2.5 transition-colors text-xs font-medium border-l-2 ${activeTab === tab.id ? `${B_BG_MAIN} border-[#FCD535] ${B_TEXT_PRIMARY}` : `border-transparent ${B_TEXT_SECONDARY} ${B_BG_HOVER} hover:text-white`}`}
+                        >
+                            <span>{tab.label}</span>
+                            <span className={B_TEXT_PRIMARY}>{tab.count}</span>
+                        </button>
+                    ))}
+                </nav>
+
+                <div className="flex-grow p-4 space-y-4">
+                    <p className={`text-[10px] font-bold ${B_TEXT_SECONDARY} uppercase`}>Live Telemetry</p>
+                    <div className="space-y-1">
+                        <div className="flex justify-between items-center text-xs">
+                            <span className={B_TEXT_SECONDARY}>Ops Load</span>
+                            <span className={`font-mono ${B_TEXT_PRIMARY}`}>{orders.length}</span>
                         </div>
-                        <div>
-                            <h2 className="text-xl font-black tracking-tighter uppercase italic">Packaging Hub</h2>
-                            <p className="text-xs text-gray-400 font-black tracking-widest uppercase">{selectedStore}</p>
+                        <div className="flex justify-between items-center text-xs">
+                            <span className={B_TEXT_SECONDARY}>Personal Packs</span>
+                            <span className={`font-mono ${B_GREEN}`}>{progressStats.packedByUserToday}</span>
                         </div>
                     </div>
                     
-                    <nav className="flex flex-col gap-1">
-                        {[
-                            { id: 'Pending', label: 'រង់ចាំវេចខ្ចប់', icon: '📥', count: orders.filter(o => o.FulfillmentStatus === 'Pending').length },
-                            { id: 'Ready to Ship', label: 'ខ្ចប់រួចរាល់', icon: '📦', count: orders.filter(o => o.FulfillmentStatus === 'Ready to Ship').length },
-                            { id: 'Shipped', label: 'បានបញ្ចេញ', icon: '🚚', count: orders.filter(o => o.FulfillmentStatus === 'Shipped').length }
-                        ].map(tab => (
-                            <button 
-                                key={tab.id}
-                                onClick={() => setActiveTab(tab.id)}
-                                className={`flex items-center justify-between px-4 py-3.5 rounded-xl transition-all duration-300 group ${activeTab === tab.id ? 'bg-white/10 text-white shadow-lg' : 'text-gray-400 hover:text-white hover:bg-white/5'}`}
-                            >
-                                <div className="flex items-center gap-4">
-                                    <span className="text-xl group-hover:scale-110 transition-transform">{tab.icon}</span>
-                                    <span className="text-[14px] font-black uppercase tracking-wider">{tab.label}</span>
-                                </div>
-                                {tab.count > 0 && <span className={`text-xs font-black px-2.5 py-1 rounded-lg ${activeTab === tab.id ? 'bg-blue-600 text-white' : 'bg-white/10 text-gray-400'}`}>{tab.count}</span>}
-                            </button>
-                        ))}
-                    </nav>
+                    <div className="pt-2">
+                        <div className="flex justify-between items-center mb-1 text-[10px]">
+                            <span className={B_TEXT_SECONDARY}>Hub Progress</span>
+                            <span className={`font-mono ${B_GREEN}`}>{progressStats.progressPercentage}%</span>
+                        </div>
+                        <div className={`h-[3px] w-full ${B_BG_MAIN} overflow-hidden`}>
+                            <div className="h-full bg-[#0ECB81] transition-all duration-1000" style={{ width: `${progressStats.progressPercentage}%` }}></div>
+                        </div>
+                    </div>
                 </div>
 
-                <div className="flex-grow bg-[#121212] rounded-xl p-6 flex flex-col gap-6 shadow-xl overflow-hidden">
-                    <div className="flex items-center justify-between">
-                        <h3 className="text-xs font-black text-gray-500 uppercase tracking-[0.3em]">Operational Stats</h3>
-                        <div className="w-2 h-2 rounded-full bg-emerald-500 shadow-[0_0_12px_#10b981]"></div>
-                    </div>
-                    <div className="space-y-6 overflow-y-auto no-scrollbar">
-                        <div className="bg-black/40 p-6 rounded-2xl border border-white/5 shadow-inner">
-                            <p className="text-xs font-black text-gray-500 uppercase tracking-widest mb-1">Packed Session</p>
-                            <p className="text-4xl font-black text-[#1DB954] font-mono tracking-tighter">{sessionStats.packed}</p>
-                            <div className="h-1.5 w-full bg-white/5 rounded-full mt-4 overflow-hidden">
-                                <div className="h-full bg-[#1DB954] shadow-[0_0_10px_rgba(29,185,84,0.5)]" style={{ width: '45%' }}></div>
-                            </div>
-                        </div>
-                        <div className="bg-black/40 p-6 rounded-2xl border border-white/5 shadow-inner">
-                            <p className="text-xs font-black text-gray-500 uppercase tracking-widest mb-1">Queue Load</p>
-                            <p className="text-4xl font-black text-blue-400 font-mono tracking-tighter">{orders.length}</p>
-                        </div>
-                    </div>
-                    <div className="flex flex-col gap-2 mt-auto">
-                        <button onClick={onSwitchHub} className="py-4 bg-white/5 hover:bg-white/10 text-gray-300 rounded-xl font-black uppercase text-xs tracking-[0.2em] border border-white/5 transition-all active:scale-95 shadow-lg flex items-center justify-center gap-3">
-                            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path d="M8 7h12m0 0l-4-4m4 4l-4 4m0 6H4m0 0l4 4m-4-4l4-4" strokeWidth={3}/></svg>
-                            Switch Hub
-                        </button>
-                        <button onClick={onExit} className="py-4 bg-red-600/10 hover:bg-red-600 text-red-500 hover:text-white rounded-xl font-black uppercase text-xs tracking-[0.2em] border border-red-500/20 transition-all active:scale-95 shadow-lg flex items-center justify-center gap-3">
-                            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" strokeWidth={3}/></svg>
-                            Exit Hub
-                        </button>
-                    </div>
+                <div className="mt-auto p-4 flex flex-col gap-2">
+                    <button onClick={onSwitchHub} className={`w-full py-2 bg-[#2B3139] hover:bg-[#3B424A] ${B_TEXT_PRIMARY} text-xs font-medium transition-colors rounded-sm`}>
+                        Switch Hub
+                    </button>
+                    <button onClick={onExit} className={`w-full py-2 bg-[#F6465D]/10 hover:bg-[#F6465D]/20 ${B_RED} text-xs font-medium transition-colors rounded-sm`}>
+                        Exit Module
+                    </button>
                 </div>
             </aside>
 
-            {/* Main Content (Spotify Style) */}
-            <main className="flex-1 flex flex-col bg-black overflow-hidden relative">
-                {/* Gradient Header Overlay */}
-                <div className="absolute top-0 left-0 right-0 h-80 bg-gradient-to-b from-blue-900/20 via-transparent to-transparent pointer-events-none"></div>
-
-                {/* Top Toolbar */}
-                <header className="flex-shrink-0 h-20 px-8 flex items-center justify-between relative z-10 backdrop-blur-md bg-black/40 border-b border-white/5">
-                    <div className="flex items-center gap-6 flex-grow max-w-2xl">
-                        <div className="relative w-full group">
+            {/* Main Market/Order View */}
+            <main className="flex-1 flex flex-col overflow-hidden relative">
+                {/* Minimal Top Nav */}
+                <header className={`flex-shrink-0 h-14 px-4 flex items-center justify-between relative z-10 ${B_BG_PANEL} border-b ${B_BORDER}`}>
+                    <div className="flex items-center gap-4 flex-grow max-w-lg">
+                        <div className="relative w-full">
                             <input 
                                 type="text" 
-                                placeholder="ស្វែងរកតាមឈ្មោះ លេខទូរស័ព្ទ ឬលេខសម្គាល់..." 
+                                placeholder="Query ID, Name, Phone..." 
                                 value={searchTerm}
                                 onChange={(e) => setSearchTerm(e.target.value)}
-                                className="w-full pl-12 pr-6 py-3.5 bg-white/5 border border-transparent rounded-full text-sm font-bold text-white placeholder:text-gray-500 focus:bg-white/10 focus:border-white/10 transition-all outline-none shadow-2xl"
+                                className={`w-full pl-8 pr-4 py-1.5 ${B_BG_MAIN} border ${B_BORDER} text-xs ${B_TEXT_PRIMARY} placeholder:text-[#848E9C] focus:border-[#FCD535] rounded-sm transition-colors outline-none`}
                             />
-                            <div className="absolute left-5 top-1/2 -translate-y-1/2 text-gray-500 group-focus-within:text-white transition-colors">
-                                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={3}><path d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" /></svg>
+                            <div className={`absolute inset-y-0 left-0 flex items-center pl-2.5 pointer-events-none ${B_TEXT_SECONDARY}`}>
+                                <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2.5}><path d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" /></svg>
                             </div>
                         </div>
-                        <button onClick={() => setIsFilterModalOpen(true)} className="p-3.5 bg-white/5 hover:bg-white/10 text-white rounded-full border border-white/5 transition-all shadow-xl active:scale-95">
-                            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2.5}><path d="M3 4a1 1 0 011-1h16a1 1 0 011 1v2.586a1 1 0 01-.293.707l-6.414 6.414a1 1 0 00-.293.707V17l-4 4v-6.586a1 1 0 00-.293-.707L3.293 7.293A1 1 0 013 6.586V4z" /></svg>
+                        <button onClick={() => setIsFilterModalOpen(true)} className={`px-3 py-1.5 ${B_BG_MAIN} hover:bg-[#2B3139] ${B_TEXT_PRIMARY} text-xs font-medium border ${B_BORDER} rounded-sm flex items-center gap-1.5 whitespace-nowrap`}>
+                            <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 4a1 1 0 011-1h16a1 1 0 011 1v2.586a1 1 0 01-.293.707l-6.414 6.414a1 1 0 00-.293.707V17l-4 4v-6.586a1 1 0 00-.293-.707L3.293 7.293A1 1 0 013 6.586V4z" /></svg>
+                            Filters
                         </button>
+                        {activeTab === 'Ready to Ship' && (
+                            <div className="flex items-center gap-3">
+                                {viewMode === 'card' && orders.length > 0 && (
+                                    <button 
+                                        onClick={() => onToggleSelectAll(orders)}
+                                        className={`px-3 py-2 border ${orders.every(o => selectedOrderIds.has(o['Order ID'])) ? 'bg-[#FCD535] border-[#FCD535] text-black' : 'border-[#2B3139] text-[#848E9C]'} text-[11px] font-bold rounded-sm uppercase tracking-wider transition-colors whitespace-nowrap`}
+                                    >
+                                        {orders.every(o => selectedOrderIds.has(o['Order ID'])) ? 'Deselect All' : 'Select All'}
+                                    </button>
+                                )}
+                                <button onClick={onPrintManifest} className={`px-4 py-2 border border-[#FCD535]/50 hover:bg-[#FCD535] group transition-all rounded-sm flex items-center gap-2 whitespace-nowrap`}>
+                                <svg className="w-4 h-4 text-[#FCD535] group-hover:text-[#0B0E11]" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 17h2a2 2 0 002-2v-4a2 2 0 00-2-2H5a2 2 0 00-2 2v4a2 2 0 002 2h2m2 4h6a2 2 0 002-2v-4a2 2 0 00-2-2H9a2 2 0 00-2 2v4a2 2 0 002 2zm8-12V5a2 2 0 00-2-2H9a2 2 0 00-2 2v4h10z" /></svg>
+                                <span className="text-[#FCD535] group-hover:text-[#0B0E11] text-xs font-bold uppercase tracking-wider">Print Manifest</span>
+                            </button>
+                            {activeTab === 'Ready to Ship' && selectedOrderIds.size > 0 && (
+                                <button 
+                                    onClick={onBulkShip}
+                                    disabled={isBulkProcessing}
+                                    className={`px-4 py-2 bg-[#0ECB81] hover:bg-[#0CA66B] text-[#0B0E11] text-xs font-bold rounded-sm flex items-center gap-2 transition-all animate-fade-in-down whitespace-nowrap`}
+                                >
+                                    {isBulkProcessing ? <Spinner size="sm" /> : (
+                                        <>
+                                            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 13l4 4L19 7" /></svg>
+                                            SHIP SELECTED ({selectedOrderIds.size})
+                                        </>
+                                    )}
+                                </button>
+                            )}
+                        </div>
+                    )}
                     </div>
 
-                    <div className="flex items-center gap-4">
-                        <div className="flex bg-white/5 p-1 rounded-full border border-white/5">
-                            <button onClick={() => setViewMode('card')} className={`p-2.5 rounded-full transition-all ${viewMode === 'card' ? 'bg-white text-black shadow-xl' : 'text-gray-500 hover:text-white'}`}><svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={3}><rect x="3" y="3" width="7" height="7" rx="1.5" /><rect x="14" y="3" width="7" height="7" rx="1.5" /><rect x="14" y="14" width="7" height="7" rx="1.5" /><rect x="3" y="14" width="7" height="7" rx="1.5" /></svg></button>
-                            <button onClick={() => setViewMode('list')} className={`p-2.5 rounded-full transition-all ${viewMode === 'list' ? 'bg-white text-black shadow-xl' : 'text-gray-500 hover:text-white'}`}><svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={3}><line x1="3" y1="6" x2="21" y2="6" /><line x1="3" y1="12" x2="21" y2="12" /><line x1="3" y1="18" x2="21" y2="18" /></svg></button>
-                        </div>
+                    <div className="flex bg-[#0B0E11] p-0.5 border border-[#2B3139] rounded-sm">
+                        <button onClick={() => setViewMode('card')} className={`p-1.5 rounded-sm transition-all ${viewMode === 'card' ? 'bg-[#2B3139] text-[#EAECEF]' : 'text-[#848E9C] hover:text-[#EAECEF]'}`}><svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2}><rect x="3" y="3" width="7" height="7" /><rect x="14" y="3" width="7" height="7" /><rect x="14" y="14" width="7" height="7" /><rect x="3" y="14" width="7" height="7" /></svg></button>
+                        <button onClick={() => setViewMode('list')} className={`p-1.5 rounded-sm transition-all ${viewMode === 'list' ? 'bg-[#2B3139] text-[#EAECEF]' : 'text-[#848E9C] hover:text-[#EAECEF]'}`}><svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2}><line x1="3" y1="6" x2="21" y2="6" /><line x1="3" y1="12" x2="21" y2="12" /><line x1="3" y1="18" x2="21" y2="18" /></svg></button>
                     </div>
                 </header>
 
-                {/* Scrollable Grid */}
-                <div className="flex-1 overflow-y-auto custom-scrollbar p-8 pt-4 relative z-10">
+                <div className="flex-1 overflow-y-auto custom-scrollbar p-4 md:p-6 lg:p-8 pt-4">
                     {orders.length === 0 ? (
-                        <div className="flex flex-col items-center justify-center h-[60vh] gap-6 text-gray-500 opacity-30">
-                            <span className="text-9xl">📦</span>
-                            <p className="text-xl font-black uppercase tracking-[0.4em]">Empty Operations</p>
-                        </div>
+                        <div className={`flex flex-col items-center justify-center p-10 ${B_TEXT_SECONDARY} text-xs mt-10`}><span className="text-3xl mb-2 opacity-50">📂</span>No Operations in Queue</div>
                     ) : (
-                        <div className="space-y-12 pb-20">
-                            {Object.entries(groups).map(([date, groupOrders]) => (
-                                <section key={date} className="space-y-6">
-                                    <div className="flex items-center gap-4 px-2">
-                                        <h2 className="text-2xl font-black text-white italic tracking-tight">{date}</h2>
-                                        <div className="flex-grow h-px bg-white/5"></div>
-                                        <span className="text-xs font-black text-gray-500 uppercase tracking-widest">{groupOrders.length} items</span>
+                        <div className="space-y-8 pb-20">
+                            {Object.entries(groups).map(([date, groupOrders]: [string, any]) => (
+                                <section key={date} className="space-y-4">
+                                    <div className={`text-xs font-bold ${B_TEXT_PRIMARY} px-1 pb-1 border-b ${B_BORDER} flex justify-between`}>
+                                        <span>{date}</span>
+                                        <span className={B_TEXT_SECONDARY}>{groupOrders.length} records</span>
                                     </div>
 
+                                    {viewMode === 'list' && (
+                                        <div className={`grid grid-cols-12 gap-2 px-3 py-1 text-[10px] font-bold ${B_TEXT_SECONDARY} uppercase`}>
+                                            <div className="col-span-1">
+                                                {activeTab === 'Ready to Ship' ? (
+                                                    <button 
+                                                        onClick={() => onToggleSelectAll(orders)}
+                                                        className={`w-5 h-5 border-2 rounded-sm transition-colors flex items-center justify-center ${orders.length > 0 && orders.every(o => selectedOrderIds.has(o['Order ID'])) ? 'bg-[#FCD535] border-[#FCD535]' : 'border-gray-600'}`}
+                                                    >
+                                                        {orders.length > 0 && orders.every(o => selectedOrderIds.has(o['Order ID'])) && (
+                                                            <svg className="w-4 h-4 text-black" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={4}><path d="M5 13l4 4L19 7" /></svg>
+                                                        )}
+                                                    </button>
+                                                ) : (
+                                                    <span className={`text-[10px] font-bold ${B_TEXT_SECONDARY} uppercase tracking-widest`}>#</span>
+                                                )}
+                                            </div>
+                                            <div className="col-span-4">Asset / Node</div>
+                                            <div className="col-span-2">Location</div>
+                                            <div className="col-span-2">Value / Status</div>
+                                            <div className="col-span-3 text-right">Action</div>
+                                        </div>
+                                    )}
+
                                     <div className={viewMode === 'card' 
-                                        ? "grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-3 2xl:grid-cols-4 min-[1900px]:grid-cols-5 gap-6" 
-                                        : "flex flex-col gap-2"
+                                        ? "grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 min-[1900px]:grid-cols-5 gap-3" 
+                                        : "flex flex-col gap-1"
                                     }>
                                         {groupOrders.map((order, idx) => (
                                             viewMode === 'card' ? (
-                                                <div key={order['Order ID']} className="group bg-[#181818] hover:bg-[#282828] p-5 rounded-2xl transition-all duration-500 shadow-2xl relative border border-transparent hover:border-white/5">
-                                                    {loadingActionId === order['Order ID'] && (
-                                                        <div className="absolute inset-0 bg-black/60 z-50 flex items-center justify-center rounded-2xl backdrop-blur-sm"><Spinner /></div>
-                                                    )}
+                        <div 
+                            key={order['Order ID']} 
+                            className={`${B_BG_PANEL} border ${B_BORDER} hover:border-[#FCD535]/30 group transition-all relative cursor-pointer`}
+                            onClick={() => activeTab === 'Ready to Ship' ? toggleOrderSelection(order['Order ID']) : onView(order)}
+                        >
+                            {loadingActionId === order['Order ID'] && (
+                                <div className="absolute inset-0 bg-[#0B0E11]/80 z-50 flex items-center justify-center"><Spinner size="sm" /></div>
+                            )}
+                            {activeTab === 'Ready to Ship' && (
+                                <div className="absolute top-3 left-3 z-10">
+                                    <div className={`w-5 h-5 border-2 rounded-sm transition-colors flex items-center justify-center ${selectedOrderIds.has(order['Order ID']) ? 'bg-[#FCD535] border-[#FCD535]' : 'border-gray-600 bg-black/20'}`}>
+                                        {selectedOrderIds.has(order['Order ID']) && (
+                                            <svg className="w-3.5 h-3.5 text-black" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={4}><path d="M5 13l4 4L19 7" /></svg>
+                                        )}
+                                    </div>
+                                </div>
+                            )}
+
+                            <div className={`px-3 py-2 border-b ${B_BORDER} flex justify-between items-center ${activeTab === 'Ready to Ship' ? 'pt-10' : ''}`}>
+                                                        <div className="flex items-center gap-2">
+                                                            <span className={`text-[10px] font-mono ${B_TEXT_SECONDARY}`}>{(idx + 1).toString().padStart(2, '0')}</span>
+                                                            <span className={`text-xs font-mono font-medium ${B_TEXT_PRIMARY}`}>{order['Order ID'].substring(0, 10)}</span>
+                                                        </div>
+                                                        <span className={`text-[9px] uppercase font-bold px-1.5 py-0.5 rounded-sm ${order.Team === 'A' ? 'bg-blue-900/40 text-blue-400' : 'bg-purple-900/40 text-purple-400'}`}>T-{order.Team}</span>
+                                                    </div>
                                                     
-                                                    <div className="relative aspect-square mb-5 rounded-xl overflow-hidden shadow-2xl group/img">
-                                                        <img 
-                                                            src={convertGoogleDriveUrl(order.Products[0]?.image)} 
-                                                            className="w-full h-full object-cover transform transition-transform duration-700 group-hover:scale-110" 
-                                                            alt="" 
-                                                        />
-                                                        {/* Serial Number Badge */}
-                                                        <div className="absolute top-3 left-3 w-7 h-7 bg-black/60 backdrop-blur-md rounded-lg flex items-center justify-center border border-white/10 z-20">
-                                                            <span className="text-xs font-black text-white">{idx + 1}</span>
+                                                    <div className="p-3 flex gap-3 flex-grow">
+                                                        <img src={convertGoogleDriveUrl(order.Products[0]?.image)} className={`w-12 h-12 object-cover ${B_BG_MAIN} border ${B_BORDER} flex-shrink-0 rounded-sm`} alt="" />
+                                                        <div className="flex flex-col flex-grow min-w-0">
+                                                            <p className={`text-xs font-medium ${B_TEXT_PRIMARY} truncate uppercase`}>{order['Customer Name']}</p>
+                                                            <p className={`text-[10px] font-mono ${B_TEXT_SECONDARY}`}>{order['Customer Phone']}</p>
+                                                            <div className="flex justify-between items-end mt-auto pt-1">
+                                                                <div className="flex flex-col">
+                                                                    <span className={`text-[10px] ${B_TEXT_SECONDARY} truncate max-w-[80px]`}>{order.Location}</span>
+                                                                    {(activeTab === 'Ready to Ship' || activeTab === 'Shipped') && (
+                                                                        <span className={`text-[9px] ${B_ACCENT} font-bold mt-0.5`}>D: {order['Driver Name'] || 'TBD'}</span>
+                                                                    )}
+                                                                </div>
+                                                                {order['Package Photo URL'] && (
+                                                                     <svg className={`w-4 h-4 mr-1 ${B_GREEN}`} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M3 9a2 2 0 012-2h.93a2 2 0 001.664-.89l.812-1.22A2 2 0 0110.07 4h3.86a2 2 0 011.664.89l.812 1.22A2 2 0 0018.07 7H19a2 2 0 012 2v9a2 2 0 01-2 2H5a2 2 0 01-2-2V9z" /><path strokeLinecap="round" strokeLinejoin="round" d="M15 13a3 3 0 11-6 0 3 3 0 016 0z" /></svg>
+                                                                )}
+                                                                <span className={`text-xs font-mono font-bold ${B_GREEN}`}>${(Number(order['Grand Total']) || 0).toFixed(2)}</span>
+                                                            </div>
                                                         </div>
-                                                        <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center gap-3">
-                                                            <button onClick={() => showFullImage(convertGoogleDriveUrl(order.Products[0]?.image))} className="w-10 h-10 bg-white text-black rounded-full flex items-center justify-center shadow-xl active:scale-90 transform translate-y-4 group-hover:translate-y-0 transition-all duration-300">
-                                                                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={3}><path d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" /></svg>
-                                                            </button>
-                                                            <button onClick={() => onView(order)} className="w-10 h-10 bg-blue-600 text-white rounded-full flex items-center justify-center shadow-xl active:scale-90 transform translate-y-4 group-hover:translate-y-0 transition-all duration-300 delay-75">
-                                                                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={3}><path d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
-                                                            </button>
-                                                        </div>
-                                                        {activeTab === 'Pending' && (
-                                                            <button 
-                                                                onClick={() => onPack(order)}
-                                                                className="absolute bottom-4 right-4 w-12 h-12 bg-[#1DB954] text-black rounded-full flex items-center justify-center shadow-[0_8px_25px_rgba(29,185,84,0.5)] transform translate-y-12 opacity-0 group-hover:translate-y-0 group-hover:opacity-100 transition-all duration-300 active:scale-95"
-                                                            >
-                                                                <svg className="w-6 h-6" fill="currentColor" viewBox="0 0 20 20"><path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" /></svg>
-                                                            </button>
-                                                        )}
-                                                        {activeTab === 'Ready to Ship' && (
-                                                            <button 
-                                                                onClick={() => onShip(order)}
-                                                                className="absolute bottom-4 right-4 w-12 h-12 bg-amber-500 text-black rounded-full flex items-center justify-center shadow-[0_8px_25px_rgba(245,158,11,0.5)] transform translate-y-12 opacity-0 group-hover:translate-y-0 group-hover:opacity-100 transition-all duration-300 active:scale-95"
-                                                            >
-                                                                <svg className="w-6 h-6" fill="currentColor" viewBox="0 0 24 24"><path d="M13 10V3L4 14h7v7l9-11h-7z" /></svg>
-                                                            </button>
-                                                        )}
                                                     </div>
 
-                                                    <div className="space-y-1">
-                                                        <div className="flex items-center gap-2">
-                                                            <span className={`text-xs font-black uppercase tracking-widest px-2 py-0.5 rounded ${order.Team === 'A' ? 'bg-blue-600/20 text-blue-400' : 'bg-purple-600/20 text-purple-400'}`}>{order.Team} TEAM</span>
-                                                            <span className={`text-xs font-black uppercase tracking-widest px-2 py-0.5 rounded ${order['Payment Status']?.toLowerCase() === 'paid' ? 'bg-emerald-600/20 text-emerald-400' : 'bg-amber-600/20 text-amber-400'}`}>
-                                                                {order['Payment Status'] || 'Unpaid'}
-                                                            </span>
-                                                        </div>
-                                                        <h4 className="text-white font-black text-sm truncate uppercase tracking-tight pt-1">{order['Customer Name']}</h4>
-                                                        <p className="text-gray-400 text-[11px] font-mono">{order['Customer Phone']}</p>
-                                                        <div className="pt-2 flex items-center justify-between">
-                                                            <span className="text-xs text-gray-500 font-bold truncate max-w-[120px]">{order.Location}</span>
-                                                            <span className="text-white font-mono font-black text-[11px]">${(Number(order['Grand Total']) || 0).toFixed(2)}</span>
-                                                        </div>
+                                                    <div className={`p-2 border-t ${B_BORDER} bg-[#0B0E11] grid ${activeTab === 'Pending' || activeTab === 'Ready to Ship' ? 'grid-cols-2 gap-2' : 'grid-cols-1'}`}>
+                                                        <button onClick={(e) => { e.stopPropagation(); onView(order); }} className={`w-full py-1.5 bg-[#2B3139] hover:bg-[#3B424A] ${B_TEXT_PRIMARY} text-[10px] font-medium transition-colors rounded-sm`}>Details</button>
+                                                        {activeTab === 'Pending' && <button onClick={(e) => { e.stopPropagation(); onPack(order); }} className={`w-full py-1.5 ${B_ACCENT_BG} text-[10px] font-bold uppercase transition-colors rounded-sm`}>Pack</button>}
+                                                        {activeTab === 'Ready to Ship' && <button onClick={(e) => { e.stopPropagation(); onShip(order); }} className={`w-full py-1.5 bg-amber-500 hover:bg-amber-400 text-black text-[10px] font-bold uppercase transition-colors rounded-sm`}>Ship</button>}
                                                     </div>
                                                 </div>
                                             ) : (
-                                                <div key={order['Order ID']} className="group bg-[#181818] hover:bg-[#282828] p-3 rounded-xl transition-all flex items-center gap-5 border border-transparent hover:border-white/5">
-                                                    <div className="w-8 flex-shrink-0 text-center">
-                                                        <span className="text-[11px] font-black text-gray-500 font-mono">{idx + 1}</span>
-                                                    </div>
-                                                    <img src={convertGoogleDriveUrl(order.Products[0]?.image)} className="w-12 h-12 rounded-lg object-cover shadow-lg" alt="" />
-                                                    <div className="flex-grow min-w-0 grid grid-cols-4 items-center gap-6">
-                                                        <div className="col-span-1 min-w-0">
-                                                            <h4 className="text-white font-black text-sm truncate uppercase tracking-tight">{order['Customer Name']}</h4>
-                                                            <p className="text-gray-500 text-xs font-mono">{order['Customer Phone']}</p>
-                                                        </div>
-                                                        <div className="col-span-1">
-                                                            <p className="text-[11px] text-gray-500 font-black uppercase tracking-widest">Location</p>
-                                                            <p className="text-white text-xs font-bold truncate">{order.Location}</p>
-                                                        </div>
-                                                        <div className="col-span-1">
-                                                            <p className="text-[11px] text-gray-500 font-black uppercase tracking-widest">Payment</p>
-                                                            <p className={`text-xs font-black uppercase ${order['Payment Status']?.toLowerCase() === 'paid' ? 'text-emerald-400' : 'text-amber-400'}`}>{order['Payment Status'] || 'Unpaid'}</p>
-                                                        </div>
-                                                        <div className="col-span-1 text-right">
-                                                            <p className="text-white font-mono font-black text-sm">${(Number(order['Grand Total']) || 0).toFixed(2)}</p>
+                                                <div key={order['Order ID']} className={`${B_BG_PANEL} border ${B_BORDER} ${B_BG_HOVER} transition-colors grid grid-cols-12 items-center gap-2 p-2 relative group cursor-pointer`} onClick={() => onView(order)}>
+                                                    {loadingActionId === order['Order ID'] && (
+                                                        <div className="absolute inset-0 bg-[#0B0E11]/80 z-50 flex items-center justify-center"><Spinner size="sm" /></div>
+                                                    )}
+                                                    <div className="col-span-1 text-[10px] font-mono text-[#848E9C] pl-1">{(idx + 1).toString().padStart(2, '0')}</div>
+                                                    <div className="col-span-4 flex items-center gap-3 w-min-0">
+                                                        <img src={convertGoogleDriveUrl(order.Products[0]?.image)} className={`w-8 h-8 object-cover ${B_BG_MAIN} border ${B_BORDER} flex-shrink-0 rounded-sm`} alt="" />
+                                                        <div className="min-w-0">
+                                                            <p className={`text-xs font-medium ${B_TEXT_PRIMARY} truncate uppercase`}>{order['Customer Name']}</p>
+                                                            <p className={`text-[10px] font-mono ${B_TEXT_SECONDARY} truncate`}>{order['Order ID'].substring(0,10)}</p>
                                                         </div>
                                                     </div>
-                                                    <div className="flex items-center gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
-                                                        {activeTab === 'Pending' && <button onClick={() => onPack(order)} className="px-4 py-2 bg-[#1DB954] text-black rounded-full text-[11px] font-black uppercase tracking-widest shadow-lg">Pack</button>}
-                                                        {activeTab === 'Ready to Ship' && <button onClick={() => onShip(order)} className="px-4 py-2 bg-amber-500 text-black rounded-full text-[11px] font-black uppercase tracking-widest shadow-lg">Ship</button>}
-                                                        <button onClick={() => onView(order)} className="p-2.5 bg-white/5 hover:bg-white/10 text-white rounded-full transition-all border border-white/5"><svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path d="M12 5v.01M12 12v.01M12 19v.01" strokeWidth={3}/></svg></button>
+                                                    <div className="col-span-2 min-w-0">
+                                                        <p className={`text-xs ${B_TEXT_PRIMARY} truncate`}>{order.Location}</p>
+                                                        <div className="flex items-center gap-2">
+                                                            <p className={`text-[9px] ${B_TEXT_SECONDARY} uppercase`}>{order.Team} Team</p>
+                                                            {(activeTab === 'Ready to Ship' || activeTab === 'Shipped') && (
+                                                                <p className={`text-[9px] ${B_ACCENT} font-bold uppercase truncate`}>{order['Driver Name'] || 'TBD'}</p>
+                                                            )}
+                                                        </div>
+                                                    </div>
+                                                    <div className="col-span-2">
+                                                        <p className={`text-xs font-mono font-bold ${B_GREEN}`}>${(Number(order['Grand Total']) || 0).toFixed(2)}</p>
+                                                        <p className={`text-[9px] uppercase ${order['Payment Status']?.toLowerCase() === 'paid' ? 'text-[#0ECB81]' : 'text-[#FCD535]'}`}>{order['Payment Status'] || 'Unpaid'}</p>
+                                                    </div>
+                                                    <div className="col-span-3 flex justify-end items-center gap-2">
+                                                        <button onClick={(e) => { e.stopPropagation(); onView(order); }} className={`px-3 py-1 bg-[#2B3139] hover:bg-[#3B424A] ${B_TEXT_PRIMARY} text-[10px] font-medium rounded-sm transition-colors`}>View</button>
+                                                        {activeTab === 'Pending' && <button onClick={(e) => { e.stopPropagation(); onPack(order); }} className={`px-4 py-1 ${B_ACCENT_BG} text-[10px] font-bold uppercase rounded-sm`}>Pack</button>}
+                                                        {activeTab === 'Ready to Ship' && <button onClick={(e) => { e.stopPropagation(); onShip(order); }} className={`px-4 py-1 bg-amber-500 hover:bg-amber-400 text-[#0B0E11] text-[10px] font-bold uppercase rounded-sm`}>Ship</button>}
                                                     </div>
                                                 </div>
                                             )

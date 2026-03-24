@@ -96,7 +96,7 @@ const Sidebar: React.FC<SidebarProps> = ({
                     {!isSidebarCollapsed && (
                         <div className="flex flex-col z-10 animate-fade-in min-w-0">
                             <h1 className={`text-base font-black ${isLightMode ? 'text-gray-900' : 'text-white'} italic uppercase tracking-tighter leading-none`}>O-System</h1>
-                            <span className="text-[8px] text-blue-400 font-bold uppercase tracking-[0.25em]">Admin</span>
+                            <span className="text-[10px] text-blue-400 font-bold uppercase tracking-[0.25em]">Admin</span>
                         </div>
                     )}
                 </div>
@@ -126,7 +126,7 @@ const Sidebar: React.FC<SidebarProps> = ({
                                     <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" /></svg>
                                     {unreadCount > 0 && <span className="absolute -top-1 -right-1 w-2 h-2 bg-red-500 rounded-full border-2 border-gray-900 animate-pulse"></span>}
                                 </div>
-                                <span className="text-[10px] font-black uppercase tracking-widest">{t.chat_system}</span>
+                                <span className="text-xs font-black uppercase tracking-widest">{t.chat_system}</span>
                             </div>
                             {unreadCount > 0 && <span className="bg-red-500 text-white text-[8px] font-black px-1.5 py-0.5 rounded-full shadow-lg">{unreadCount}</span>}
                         </button>
@@ -156,7 +156,7 @@ const Sidebar: React.FC<SidebarProps> = ({
                                         {item.icon}
                                     </span>
                                     {(isMobile || !isSidebarCollapsed) && (
-                                        <span className={`text-[10px] font-bold uppercase tracking-widest ${isActive ? (isLightMode ? 'text-blue-600' : 'text-white') : ''}`}>
+                                        <span className={`text-xs font-bold uppercase tracking-widest ${isActive ? (isLightMode ? 'text-blue-600' : 'text-white') : ''}`}>
                                             {item.label}
                                         </span>
                                     )}
@@ -173,7 +173,7 @@ const Sidebar: React.FC<SidebarProps> = ({
                                     <button 
                                         key={sub.id}
                                         onClick={() => onReportSubNav(sub.id)}
-                                        className={`w-full flex items-center gap-3 px-6 pl-14 py-1.5 text-[9px] font-bold uppercase tracking-wider transition-all relative group ${isLightMode ? 'text-gray-400 hover:text-blue-600 hover:bg-blue-100/50' : 'text-gray-500 hover:text-white hover:bg-white/5'}`}
+                                        className={`w-full flex items-center gap-3 px-6 pl-14 py-1.5 text-[11px] font-bold uppercase tracking-wider transition-all relative group ${isLightMode ? 'text-gray-400 hover:text-blue-600 hover:bg-blue-100/50' : 'text-gray-500 hover:text-white hover:bg-white/5'}`}
                                     >
                                         <div className={`absolute left-10 w-1 h-1 rounded-full ${isLightMode ? 'bg-gray-300' : 'bg-gray-700'} group-hover:bg-blue-500 transition-colors`}></div>
                                         <span className="truncate">{sub.title}</span>
@@ -198,8 +198,8 @@ const Sidebar: React.FC<SidebarProps> = ({
                     <UserAvatar avatarUrl={currentUser?.ProfilePictureURL} name={currentUser?.FullName || ''} size="md" className={`ring-2 ${isLightMode ? 'ring-blue-100' : 'ring-white/5'} shadow-md flex-shrink-0`} />
                     {(isMobile || !isSidebarCollapsed) && (
                         <div className="min-w-0 flex-grow text-left">
-                            <p className={`text-xs font-black ${isLightMode ? 'text-gray-900' : 'text-white'} truncate leading-tight`}>{currentUser?.FullName}</p>
-                            <p className="text-[9px] text-blue-400 font-bold uppercase tracking-widest mt-0.5 truncate">{currentUser?.Role}</p>
+                            <p className={`text-sm font-black ${isLightMode ? 'text-gray-900' : 'text-white'} truncate leading-tight`}>{currentUser?.FullName}</p>
+                            <p className="text-[11px] text-blue-400 font-bold uppercase tracking-widest mt-0.5 truncate">{currentUser?.Role}</p>
                         </div>
                     )}
                     {(isMobile || !isSidebarCollapsed) && (
@@ -214,21 +214,21 @@ const Sidebar: React.FC<SidebarProps> = ({
                 `}>
                     <div className="space-y-3">
                         <div className={`rounded-xl p-1 flex border ${isLightMode ? 'bg-gray-100 border-gray-200' : 'bg-gray-900 border-white/5'}`}>
-                            <button onClick={() => setLanguage('en')} className={`flex-1 py-1.5 text-[9px] font-black uppercase rounded-lg transition-all ${language === 'en' ? 'bg-blue-600 text-white shadow-md' : 'text-gray-500 hover:text-gray-300'}`}>ENG</button>
-                            <button onClick={() => setLanguage('km')} className={`flex-1 py-1.5 text-[9px] font-black uppercase rounded-lg transition-all ${language === 'km' ? 'bg-blue-600 text-white shadow-md' : 'text-gray-500 hover:text-gray-300'}`}>KH</button>
+                            <button onClick={() => setLanguage('en')} className={`flex-1 py-1.5 text-[11px] font-black uppercase rounded-lg transition-all ${language === 'en' ? 'bg-blue-600 text-white shadow-md' : 'text-gray-500 hover:text-gray-300'}`}>ENG</button>
+                            <button onClick={() => setLanguage('km')} className={`flex-1 py-1.5 text-[11px] font-black uppercase rounded-lg transition-all ${language === 'km' ? 'bg-blue-600 text-white shadow-md' : 'text-gray-500 hover:text-gray-300'}`}>KH</button>
                         </div>
 
                         <div className="grid grid-cols-2 gap-2">
                             {/* Profile */}
                             <button onClick={() => setEditProfileModalOpen(true)} className={`flex flex-col items-center justify-center p-3 rounded-2xl border transition-all group ${isLightMode ? 'bg-white border-gray-200 hover:bg-blue-50' : 'bg-gray-800/50 border-white/5 hover:bg-blue-600/20'}`}>
                                 <svg className="w-4 h-4 text-blue-400 mb-1.5 group-hover:scale-110 transition-transform" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2}><path d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" /></svg>
-                                <span className={`text-[8px] font-black uppercase ${isLightMode ? 'text-gray-500' : 'text-gray-400'} group-hover:text-blue-600`}>Profile</span>
+                                <span className={`text-[10px] font-black uppercase ${isLightMode ? 'text-gray-500' : 'text-gray-400'} group-hover:text-blue-600`}>Profile</span>
                             </button>
 
                             {/* Advanced Settings */}
                             <button onClick={() => setAdvancedSettingsOpen(true)} className={`flex flex-col items-center justify-center p-3 rounded-2xl border transition-all group ${isLightMode ? 'bg-white border-gray-200 hover:bg-purple-50' : 'bg-gray-800/50 border-white/5 hover:bg-purple-600/20'}`}>
                                 <svg className="w-4 h-4 text-purple-400 mb-1.5 group-hover:rotate-90 transition-transform duration-500" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2}><path d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" /><path strokeLinecap="round" strokeLinejoin="round" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" /></svg>
-                                <span className={`text-[8px] font-black uppercase ${isLightMode ? 'text-gray-500' : 'text-gray-400'} group-hover:text-purple-600`}>Settings</span>
+                                <span className={`text-[10px] font-black uppercase ${isLightMode ? 'text-gray-500' : 'text-gray-400'} group-hover:text-purple-600`}>Settings</span>
                             </button>
                             {/* ... rest of buttons with similar logic ... */}
 
@@ -236,27 +236,27 @@ const Sidebar: React.FC<SidebarProps> = ({
                             {/* Refresh Page */}
                             <button onClick={handleRefresh} disabled={isRefreshing} className={`flex flex-col items-center justify-center p-3 rounded-2xl border transition-all group ${isLightMode ? 'bg-white border-gray-200 hover:bg-emerald-50' : 'bg-gray-800/50 border-white/5 hover:bg-emerald-600/20'}`}>
                                 {isRefreshing ? <Spinner size="sm" /> : <svg className="w-4 h-4 text-emerald-400 mb-1.5 group-hover:rotate-180 transition-transform duration-500" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" /></svg>}
-                                <span className={`text-[8px] font-black uppercase ${isLightMode ? 'text-gray-500' : 'text-gray-400'} group-hover:text-emerald-600 text-center leading-none`}>Refresh & Clear Cache</span>
+                                <span className={`text-[10px] font-black uppercase ${isLightMode ? 'text-gray-500' : 'text-gray-400'} group-hover:text-emerald-600 text-center leading-none`}>Refresh & Clear Cache</span>
                             </button>
 
                             {/* Test Notification */}
                             <button onClick={handleTestNotification} className={`flex flex-col items-center justify-center p-3 rounded-2xl border transition-all group ${isLightMode ? 'bg-white border-gray-200 hover:bg-indigo-50' : 'bg-gray-800/50 border-white/5 hover:bg-indigo-600/20'}`}>
                                 <svg className="w-4 h-4 text-indigo-400 mb-1.5 group-hover:animate-bounce" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V5a2 2 0 10-4 0v.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9" /></svg>
-                                <span className={`text-[8px] font-black uppercase ${isLightMode ? 'text-gray-500' : 'text-gray-400'} group-hover:text-indigo-600`}>Notify</span>
+                                <span className={`text-[10px] font-black uppercase ${isLightMode ? 'text-gray-500' : 'text-gray-400'} group-hover:text-indigo-600`}>Notify</span>
                             </button>
 
                             {/* Switch Role */}
                             {isHybridAdmin && (
                                 <button onClick={() => setAppState('role_selection')} className={`flex flex-col items-center justify-center p-3 rounded-2xl border transition-all group ${isLightMode ? 'bg-white border-gray-200 hover:bg-yellow-50' : 'bg-gray-800/50 border-white/5 hover:bg-yellow-600/20'}`}>
                                     <svg className="w-4 h-4 text-yellow-400 mb-1.5" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2}><path d="M8 7h12m0 0l-4-4m4 4l-4 4m0 6H4m0 0l4 4m-4-4l4-4" /></svg>
-                                    <span className={`text-[8px] font-black uppercase ${isLightMode ? 'text-gray-500' : 'text-gray-400'} group-hover:text-yellow-600`}>Switch</span>
+                                    <span className={`text-[10px] font-black uppercase ${isLightMode ? 'text-gray-500' : 'text-gray-400'} group-hover:text-yellow-600`}>Switch</span>
                                 </button>
                             )}
 
                             {/* Logout */}
                             <button onClick={logout} className={`flex flex-col items-center justify-center p-3 rounded-2xl border transition-all group ${isLightMode ? 'bg-white border-gray-200 hover:bg-red-50' : 'bg-gray-800/50 border-white/5 hover:bg-red-600/20'} ${!isHybridAdmin ? 'col-span-2' : ''}`}>
                                 <svg className="w-4 h-4 text-red-400 mb-1.5 group-hover:translate-x-0.5 transition-transform" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2.5}><path strokeLinecap="round" strokeLinejoin="round" d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" /></svg>
-                                <span className={`text-[8px] font-black uppercase ${isLightMode ? 'text-gray-500' : 'text-gray-400'} group-hover:text-red-600`}>Logout</span>
+                                <span className={`text-[10px] font-black uppercase ${isLightMode ? 'text-gray-500' : 'text-gray-400'} group-hover:text-red-600`}>Logout</span>
                             </button>
                         </div>
                     </div>

@@ -13,6 +13,9 @@ interface DeliveryListGeneratorModalProps {
     orders: ParsedOrder[];
     appData: AppData;
     team?: string;
+    initialStore?: string;
+    initialShipping?: string;
+    ignoreDateFilter?: boolean;
 }
 
 const STEPS = {
@@ -25,7 +28,7 @@ const STEPS = {
 const SESSION_KEY = 'delivery_list_session';
 
 const DeliveryListGeneratorModal: React.FC<DeliveryListGeneratorModalProps> = ({
-    isOpen, onClose, orders, appData
+    isOpen, onClose, orders, appData, initialStore, initialShipping, ignoreDateFilter
 }) => {
     const { currentUser, showNotification, refreshData, language } = useContext(AppContext);
     const [step, setStep] = useState(STEPS.FILTER);
@@ -77,7 +80,8 @@ const DeliveryListGeneratorModal: React.FC<DeliveryListGeneratorModalProps> = ({
         const dateFiltered = orders.filter(o => {
             if (!o.Timestamp) return false;
             const orderDate = getSafeIsoDate(o.Timestamp); 
-            return orderDate === selectedDate && 
+            const passesDate = ignoreDateFilter || orderDate === selectedDate;
+            return passesDate && 
                    (!selectedStore || o['Fulfillment Store'] === selectedStore) &&
                    (o['Internal Shipping Method'] || '').toLowerCase() === selectedShipping.toLowerCase();
         });
@@ -125,10 +129,19 @@ const DeliveryListGeneratorModal: React.FC<DeliveryListGeneratorModalProps> = ({
         setPendingOrders([]); setVerifiedIds(new Set()); setShippingAdjustments({});
         setStep1ReturnIds(new Set()); setManualOrders([]); setSearchQuery('');
         setShowManualSearch(false); setShowPaymentModal(false); setPassword(''); setSelectedBank('');
-        if (appData.stores?.length > 0) setSelectedStore(appData.stores[0].StoreName);
-        if (appData.shippingMethods?.length > 0) {
+        
+        if (initialStore) {
+            setSelectedStore(initialStore);
+        } else if (appData.stores?.length > 0) {
+            setSelectedStore(appData.stores[0].StoreName);
+        }
+
+        if (initialShipping) {
+            setSelectedShipping(initialShipping);
+        } else if (appData.shippingMethods?.length > 0) {
             const hasACC = appData.shippingMethods.some(m => m.MethodName === 'ACC Delivery Agent');
-            if (!hasACC) setSelectedShipping(appData.shippingMethods[0].MethodName);
+            if (hasACC) setSelectedShipping('ACC Delivery Agent');
+            else setSelectedShipping(appData.shippingMethods[0].MethodName);
         }
     };
 
@@ -256,8 +269,8 @@ const DeliveryListGeneratorModal: React.FC<DeliveryListGeneratorModalProps> = ({
                     try {
                         const res = await fetch(`${WEB_APP_URL}/api/admin/update-order`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) });
                         if (res.ok) success = true;
-                        else await new Promise(r => setTimeout(resolve, Math.min(5000, (Math.pow(2, attempts) * 500))));
-                    } catch (e) { await new Promise(r => setTimeout(resolve, Math.min(5000, (Math.pow(2, attempts) * 500)))); }
+                        else await new Promise(r => setTimeout(r, Math.min(5000, (Math.pow(2, attempts) * 500))));
+                    } catch (e) { await new Promise(r => setTimeout(r, Math.min(5000, (Math.pow(2, attempts) * 500)))); }
                 }
                 if (!success) { failureCount++; failedOrders.push(order['Order ID']); }
                 processedCount++;
@@ -292,7 +305,7 @@ const DeliveryListGeneratorModal: React.FC<DeliveryListGeneratorModalProps> = ({
         if (!element) return;
         try {
             setCopyStatus('idle'); await document.fonts.ready; await new Promise(r => setTimeout(r, 800));
-            const canvas = await html2canvas(element, { backgroundColor: '#020617', scale: 4, useCORS: true });
+            const canvas = await html2canvas(element, { backgroundColor: '#0B0E11', scale: 4, useCORS: true });
             canvas.toBlob(async (blob) => {
                 if (blob) {
                     try { await navigator.clipboard.write([new ClipboardItem({ 'image/png': blob })]); setCopyStatus('success'); }
@@ -304,83 +317,167 @@ const DeliveryListGeneratorModal: React.FC<DeliveryListGeneratorModalProps> = ({
 
     if (!isOpen) return null;
 
+    if (isPreviewing) {
+        return (
+            <Modal isOpen={true} onClose={() => setIsPreviewing(false)} maxWidth="max-w-xl">
+                <div className="flex flex-col h-full max-h-[90vh] bg-[#181A20] font-sans">
+                    <div className="px-6 py-4 border-b border-[#2B3139] flex justify-between items-center bg-[#0B0E11]/50">
+                        <h3 className="text-sm font-bold text-gray-200 uppercase tracking-widest">Delivery Roster Preview</h3>
+                        <button onClick={() => setIsPreviewing(false)} className="text-gray-500 hover:text-white transition-colors">
+                            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" /></svg>
+                        </button>
+                    </div>
+                    <div className="flex-grow p-6 overflow-y-auto custom-scrollbar">
+                        <pre className="whitespace-pre-wrap font-mono text-[11px] text-gray-300 leading-relaxed bg-[#0B0E11] p-4 rounded-sm border border-[#2B3139]">{previewText}</pre>
+                    </div>
+                    <div className="px-6 py-4 border-t border-[#2B3139] bg-[#0B0E11]/50 flex gap-4">
+                        <button onClick={handleCopyAgentLink} className="flex-1 py-3 text-[10px] font-bold text-[#FCD535] bg-[#FCD535]/10 border border-[#FCD535]/20 hover:bg-[#FCD535] hover:text-black rounded-sm uppercase tracking-widest transition-colors text-center">Copy Agent Link</button>
+                        <button onClick={handleCopyAndSaveSession} className="flex-1 py-3 text-[10px] font-bold text-black bg-[#FCD535] hover:bg-[#FCD535]/90 rounded-sm uppercase tracking-widest transition-colors text-center">Copy & Proceed</button>
+                    </div>
+                </div>
+            </Modal>
+        );
+    }
+
+    if (step === STEPS.PROMPT) {
+        return (
+            <Modal isOpen={true} onClose={handleDiscardSession} maxWidth="max-w-md">
+                <div className="bg-[#181A20] border border-[#2B3139] rounded-sm p-8 text-center font-sans space-y-6">
+                    <div className="w-16 h-16 bg-[#2B3139] mx-auto rounded-sm flex items-center justify-center text-[#FCD535]">
+                        <svg className="w-8 h-8" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" /></svg>
+                    </div>
+                    <div>
+                        <h3 className="text-base font-bold text-gray-200 uppercase tracking-widest mb-2">Pending Session</h3>
+                        <p className="text-xs text-gray-400 leading-relaxed">You have an unverified delivery list pending completion. Would you like to resume?</p>
+                    </div>
+                    <div className="grid grid-cols-2 gap-3 pt-4 border-t border-[#2B3139]">
+                        <button onClick={handleDiscardSession} className="py-3 text-[10px] font-bold text-gray-400 bg-[#0B0E11] border border-[#2B3139] hover:text-[#F6465D] hover:border-[#F6465D] uppercase tracking-widest rounded-sm transition-colors text-center">Discard</button>
+                        <button onClick={() => setStep(STEPS.VERIFY)} className="py-3 text-[10px] font-bold text-black bg-[#FCD535] hover:bg-[#FCD535]/90 uppercase tracking-widest rounded-sm transition-colors text-center">Resume</button>
+                    </div>
+                </div>
+            </Modal>
+        );
+    }
+
     return (
         <Modal isOpen={isOpen} onClose={onClose} fullScreen={true}>
-            <style>{`
-                .glass-surface { background: rgba(255, 255, 255, 0.02); backdrop-filter: blur(40px); border: 1px solid rgba(255, 255, 255, 0.08); }
-                .action-pill { background: rgba(255, 255, 255, 0.03); border: 1px solid rgba(255, 255, 255, 0.05); transition: all 0.3s cubic-bezier(0.23, 1, 0.32, 1); }
-                .action-pill:active { transform: scale(0.95); background: rgba(255, 255, 255, 0.08); }
-                .no-scrollbar::-webkit-scrollbar { display: none; }
-            `}</style>
-            
-            <div className="flex flex-col h-screen w-screen bg-[#020617] text-white font-['Kantumruy_Pro'] overflow-hidden">
-                {/* Modern Fixed Header */}
-                <div className="flex-shrink-0 px-6 py-4 flex justify-between items-center border-b border-white/5 bg-black/20 backdrop-blur-2xl z-50">
-                    <div className="flex items-center gap-4">
-                        <div className="w-10 h-10 rounded-2xl bg-blue-600/20 flex items-center justify-center border border-blue-500/20 shadow-lg">
-                            <svg className="w-5 h-5 text-blue-400" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2.5}><path d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" /></svg>
+            <div className="flex flex-col h-screen w-screen bg-[#0B0E11] font-sans text-gray-300">
+                {/* Header */}
+                <div className="flex-shrink-0 px-6 py-4 flex justify-between items-center border-b border-[#2B3139] bg-[#181A20] z-50">
+                    <div className="flex items-center gap-3">
+                        <div className="w-10 h-10 rounded-sm bg-[#2B3139] flex items-center justify-center text-[#FCD535]">
+                            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" /></svg>
                         </div>
                         <div>
-                            <h2 className="text-sm sm:text-base font-black uppercase tracking-widest">{step === STEPS.FILTER ? 'Generate List' : step === STEPS.VERIFY ? 'Verify Delivery' : 'Success Summary'}</h2>
+                            <h2 className="text-base font-bold uppercase tracking-widest text-gray-200">
+                                {step === STEPS.FILTER ? 'Generate Dispatch List' : step === STEPS.VERIFY ? 'Verify Deliveries' : 'Execution Summary'}
+                            </h2>
                             <div className="flex items-center gap-2 mt-0.5">
-                                <div className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse"></div>
-                                <span className="text-[8px] font-bold text-gray-500 uppercase tracking-widest">Secure Logistics Mode</span>
+                                <span className="w-1.5 h-1.5 rounded-full bg-[#0ECB81]"></span>
+                                <span className="text-[9px] font-bold text-[#0ECB81] uppercase tracking-widest">Secure Logistics Core</span>
                             </div>
                         </div>
                     </div>
-                    <button onClick={onClose} className="w-10 h-10 rounded-xl hover:bg-white/5 text-gray-500 transition-colors flex items-center justify-center text-2xl">&times;</button>
+                    <button onClick={onClose} className="w-10 h-10 rounded-sm bg-[#0B0E11] border border-[#2B3139] hover:bg-[#2B3139] text-gray-500 hover:text-white transition-colors flex items-center justify-center">
+                        <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" /></svg>
+                    </button>
                 </div>
 
                 <div className="flex-grow overflow-y-auto custom-scrollbar relative">
-                    <div className="max-w-6xl mx-auto w-full p-4 sm:p-10">
+                    <div className="max-w-6xl mx-auto w-full p-4 sm:p-8">
                         {step === STEPS.FILTER && (
-                            <div className="animate-reveal space-y-8">
-                                {/* Compact Control Panel */}
-                                <div className="glass-surface rounded-[2.5rem] p-4 sm:p-6 grid grid-cols-1 sm:grid-cols-3 gap-4 shadow-2xl">
-                                    <div className="space-y-1.5">
-                                        <label className="text-[9px] font-black text-blue-500 uppercase tracking-widest ml-3">Date Selection</label>
-                                        <input type="date" value={selectedDate} onChange={(e) => setSelectedDate(e.target.value)} className="w-full bg-black/40 border border-white/5 rounded-2xl py-3 px-4 text-xs font-bold focus:border-blue-500 transition-all shadow-inner" />
+                            <div className="animate-fade-in space-y-6">
+                                {/* Control Panel */}
+                                <div className="bg-[#181A20] border border-[#2B3139] rounded-sm p-5 grid grid-cols-1 sm:grid-cols-3 gap-4 shadow-sm">
+                                    <div className="space-y-2">
+                                        <label className="text-[10px] font-bold text-gray-500 uppercase tracking-widest">Date Selection</label>
+                                        <input type="date" value={selectedDate} onChange={(e) => setSelectedDate(e.target.value)} className="w-full bg-[#0B0E11] border border-[#2B3139] rounded-sm py-2.5 px-3 text-white text-xs font-mono focus:border-[#FCD535] outline-none transition-colors" />
                                     </div>
-                                    <div className="space-y-1.5">
-                                        <label className="text-[9px] font-black text-amber-500 uppercase tracking-widest ml-3">Logistics Partner</label>
-                                        <select value={selectedShipping} onChange={(e) => setSelectedShipping(e.target.value)} className="w-full bg-black/40 border border-white/5 rounded-2xl py-3 px-4 text-xs font-bold focus:border-amber-500 transition-all shadow-inner">
+                                    <div className="space-y-2">
+                                        <label className="text-[10px] font-bold text-gray-500 uppercase tracking-widest">Logistics Partner</label>
+                                        <select value={selectedShipping} onChange={(e) => setSelectedShipping(e.target.value)} className="w-full bg-[#0B0E11] border border-[#2B3139] rounded-sm py-2.5 px-3 text-white text-xs font-bold focus:border-[#FCD535] outline-none transition-colors">
                                             {appData.shippingMethods?.map(m => <option key={m.MethodName} value={m.MethodName}>{m.MethodName}</option>)}
                                         </select>
                                     </div>
-                                    <div className="space-y-1.5">
-                                        <label className="text-[9px] font-black text-emerald-500 uppercase tracking-widest ml-3">Fulfillment Node</label>
-                                        <select value={selectedStore} onChange={(e) => setSelectedStore(e.target.value)} className="w-full bg-black/40 border border-white/5 rounded-2xl py-3 px-4 text-xs font-bold focus:border-emerald-500 transition-all shadow-inner">
+                                    <div className="space-y-2">
+                                        <label className="text-[10px] font-bold text-gray-500 uppercase tracking-widest">Fulfillment Node</label>
+                                        <select value={selectedStore} onChange={(e) => setSelectedStore(e.target.value)} className="w-full bg-[#0B0E11] border border-[#2B3139] rounded-sm py-2.5 px-3 text-white text-xs font-bold focus:border-[#FCD535] outline-none transition-colors">
                                             {appData.stores?.map(s => <option key={s.StoreName} value={s.StoreName}>{s.StoreName}</option>)}
                                         </select>
                                     </div>
                                 </div>
 
-                                {/* Order Grid - Premium List Style */}
-                                <div className="space-y-4">
-                                    <div className="flex justify-between items-center px-4">
-                                        <h3 className="text-xs font-black text-gray-500 uppercase tracking-[0.3em]">Selection Queue ({filteredOrders.length})</h3>
-                                        <button onClick={() => setShowManualSearch(true)} className="px-4 py-2 bg-purple-600/10 text-purple-400 rounded-xl border border-purple-500/20 text-[9px] font-black uppercase tracking-widest">+ Add External</button>
+                                {/* External Search Mode */}
+                                {showManualSearch && (
+                                    <div className="bg-[#181A20] border border-[#2B3139] rounded-sm p-4 space-y-4">
+                                        <div className="flex justify-between items-center">
+                                            <label className="text-[10px] font-bold text-[#FCD535] uppercase tracking-widest">External Inclusion</label>
+                                            <button onClick={() => setShowManualSearch(false)} className="text-gray-500 hover:text-white"><svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" /></svg></button>
+                                        </div>
+                                        <input 
+                                            type="text" 
+                                            placeholder="Search Mobile/ID..." 
+                                            value={searchQuery} 
+                                            onChange={e => setSearchQuery(e.target.value)} 
+                                            className="w-full bg-[#0B0E11] border border-[#2B3139] rounded-sm px-4 py-2 text-white font-mono text-xs focus:border-[#FCD535] outline-none transition-colors"
+                                        />
+                                        <div className="space-y-2">
+                                            {searchResults.map(o => (
+                                                <div key={o['Order ID']} className="flex justify-between items-center p-3 bg-[#0B0E11] border border-[#2B3139] rounded-sm">
+                                                    <div>
+                                                        <span className="text-gray-200 text-xs font-bold block">{o['Customer Name']}</span>
+                                                        <span className="text-gray-500 text-[10px] font-mono">{o['Order ID']}</span>
+                                                    </div>
+                                                    <button 
+                                                        onClick={() => { setManualOrders(prev => [...prev, o]); setSearchQuery(''); setShowManualSearch(false); }}
+                                                        className="px-3 py-1 bg-[#FCD535]/10 text-[#FCD535] border border-[#FCD535]/20 hover:bg-[#FCD535] hover:text-black rounded-sm text-[10px] font-bold uppercase transition-colors"
+                                                    >
+                                                        Add
+                                                    </button>
+                                                </div>
+                                            ))}
+                                        </div>
+                                    </div>
+                                )}
+
+                                {/* Order Grid */}
+                                <div className="space-y-3">
+                                    <div className="flex justify-between items-center py-2">
+                                        <h3 className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">Selection Queue ({filteredOrders.length})</h3>
+                                        {!showManualSearch && (
+                                            <button onClick={() => setShowManualSearch(true)} className="px-3 py-1.5 bg-[#2B3139] hover:bg-gray-700 text-white rounded-sm border border-transparent text-[9px] font-bold uppercase tracking-widest transition-colors">+ Add External</button>
+                                        )}
                                     </div>
 
-                                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
                                         {filteredOrders.map((order, idx) => {
                                             const isSelected = step1SelectedIds.has(order['Order ID']);
                                             const isReturn = step1ReturnIds.has(order['Order ID']);
                                             return (
-                                                <div key={order['Order ID']} className={`group p-4 rounded-[2rem] border-2 transition-all duration-500 ${isSelected ? 'bg-emerald-500/5 border-emerald-500/20' : isReturn ? 'bg-red-500/5 border-red-500/20' : 'bg-white/[0.02] border-white/5'}`}>
+                                                <div key={order['Order ID']} className={`p-4 rounded-sm border transition-colors ${isSelected ? 'bg-[#FCD535]/5 border-[#FCD535]/30' : isReturn ? 'bg-[#F6465D]/5 border-[#F6465D]/30' : 'bg-[#181A20] border-[#2B3139]'}`}>
                                                     <div className="flex justify-between items-start mb-4">
                                                         <div className="flex gap-3">
-                                                            <div className="w-8 h-8 rounded-xl bg-white/5 flex items-center justify-center text-[10px] font-black text-gray-600 shrink-0 italic">{idx + 1}</div>
+                                                            <div className="w-6 h-6 rounded-sm bg-[#0B0E11] flex items-center justify-center text-[10px] font-bold text-gray-500 shrink-0 border border-[#2B3139]">{idx + 1}</div>
                                                             <div className="min-w-0">
-                                                                <h4 className="text-sm font-black text-white uppercase truncate tracking-tight">{order['Customer Name']}</h4>
-                                                                <p className="text-[11px] font-bold text-blue-400 font-mono mt-0.5">{order['Customer Phone']}</p>
+                                                                <h4 className="text-sm font-bold text-gray-200 uppercase truncate">{order['Customer Name']}</h4>
+                                                                <p className="text-[10px] font-bold text-gray-500 font-mono mt-0.5">{order['Customer Phone']}</p>
                                                             </div>
                                                         </div>
-                                                        <span className="text-xs font-black text-white italic">${(order['Grand Total'] || 0).toFixed(2)}</span>
+                                                        <span className="text-xs font-bold text-[#0ECB81]">${(order['Grand Total'] || 0).toFixed(2)}</span>
                                                     </div>
                                                     <div className="flex items-center justify-end gap-2">
-                                                        <button onClick={() => { const s = new Set(step1SelectedIds), r = new Set(step1ReturnIds); if (s.has(order['Order ID'])) s.delete(order['Order ID']); else { s.add(order['Order ID']); r.delete(order['Order ID']); }; setStep1SelectedIds(s); setStep1ReturnIds(r); }} className={`px-4 py-1.5 rounded-xl text-[9px] font-black uppercase tracking-widest border transition-all ${isSelected ? 'bg-emerald-600 border-emerald-500 text-white shadow-lg' : 'bg-black/20 border-white/5 text-gray-500 hover:text-emerald-400'}`}>Success</button>
-                                                        <button onClick={() => { const s = new Set(step1SelectedIds), r = new Set(step1ReturnIds); if (r.has(order['Order ID'])) r.delete(order['Order ID']); else { r.add(order['Order ID']); s.delete(order['Order ID']); }; setStep1SelectedIds(s); setStep1ReturnIds(r); }} className={`px-4 py-1.5 rounded-xl text-[9px] font-black uppercase tracking-widest border transition-all ${isReturn ? 'bg-red-600 border-red-500 text-white shadow-lg' : 'bg-black/20 border-white/5 text-gray-500 hover:text-red-400'}`}>Return</button>
+                                                        <button 
+                                                            onClick={() => { const s = new Set(step1SelectedIds), r = new Set(step1ReturnIds); if (s.has(order['Order ID'])) s.delete(order['Order ID']); else { s.add(order['Order ID']); r.delete(order['Order ID']); }; setStep1SelectedIds(s); setStep1ReturnIds(r); }} 
+                                                            className={`flex-1 py-1.5 rounded-sm text-[9px] font-bold uppercase tracking-widest border transition-colors ${isSelected ? 'bg-[#0ECB81] border-[#0ECB81] text-black' : 'bg-[#0B0E11] border-[#2B3139] text-gray-400 hover:text-[#0ECB81]'}`}
+                                                        >
+                                                            Success
+                                                        </button>
+                                                        <button 
+                                                            onClick={() => { const s = new Set(step1SelectedIds), r = new Set(step1ReturnIds); if (r.has(order['Order ID'])) r.delete(order['Order ID']); else { r.add(order['Order ID']); s.delete(order['Order ID']); }; setStep1SelectedIds(s); setStep1ReturnIds(r); }} 
+                                                            className={`flex-1 py-1.5 rounded-sm text-[9px] font-bold uppercase tracking-widest border transition-colors ${isReturn ? 'bg-[#F6465D] border-[#F6465D] text-white' : 'bg-[#0B0E11] border-[#2B3139] text-gray-400 hover:text-[#F6465D]'}`}
+                                                        >
+                                                            Return
+                                                        </button>
                                                     </div>
                                                 </div>
                                             );
@@ -391,41 +488,44 @@ const DeliveryListGeneratorModal: React.FC<DeliveryListGeneratorModalProps> = ({
                         )}
 
                         {step === STEPS.VERIFY && (
-                            <div className="animate-reveal space-y-6">
-                                <div className="glass-surface rounded-[2.5rem] p-6 border-amber-500/20 flex gap-5">
-                                    <div className="w-12 h-12 rounded-2xl bg-amber-500/10 flex items-center justify-center border border-amber-500/20 shrink-0"><svg className="w-6 h-6 text-amber-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" strokeWidth={2.5}/></svg></div>
+                            <div className="animate-fade-in space-y-6">
+                                <div className="bg-[#181A20] border border-[#2B3139] rounded-sm p-5 flex gap-4">
+                                    <div className="w-10 h-10 rounded-sm bg-[#2B3139] flex items-center justify-center shrink-0">
+                                        <svg className="w-5 h-5 text-[#FCD535]" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" /></svg>
+                                    </div>
                                     <div className="space-y-1">
-                                        <h4 className="text-[10px] font-black text-amber-500 uppercase tracking-widest">Verification Protocol</h4>
-                                        <p className="text-sm text-gray-300 font-medium leading-relaxed italic">សូមពិនិត្យមើលបញ្ជីដឹកជញ្ជូនឱ្យបានច្បាស់លាស់មុនពេលបញ្ជាក់។</p>
+                                        <h4 className="text-[10px] font-bold text-[#FCD535] uppercase tracking-widest">Verification Protocol</h4>
+                                        <p className="text-xs text-gray-400 font-medium">Please verify the delivery logistics and update shipping costs appropriately.</p>
                                     </div>
                                 </div>
 
-                                <div className="grid grid-cols-1 gap-3">
+                                <div className="space-y-3">
                                     {pendingOrders.map((order, idx) => {
                                         const isChecked = verifiedIds.has(order['Order ID']);
                                         const isPaid = order['Payment Status'] === 'Paid';
                                         return (
-                                            <div key={order['Order ID']} className={`p-4 rounded-[2rem] border-2 transition-all duration-500 ${isChecked ? 'bg-white/[0.03] border-white/10' : 'bg-red-500/5 border-red-500/10 opacity-40'}`}>
+                                            <div key={order['Order ID']} className={`p-4 rounded-sm border transition-colors ${isChecked ? 'bg-[#181A20] border-[#2B3139]' : 'bg-[#0B0E11] border-[#2B3139] opacity-50'}`}>
                                                 <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
                                                     <div className="flex gap-4 min-w-0 flex-1">
-                                                        <div className="w-8 h-8 rounded-xl bg-black/40 flex items-center justify-center text-[10px] font-black text-gray-600 shrink-0 italic">{idx + 1}</div>
+                                                        <div className="w-8 h-8 rounded-sm bg-[#0B0E11] border border-[#2B3139] flex items-center justify-center text-[10px] font-bold text-gray-500 shrink-0">{idx + 1}</div>
                                                         <div className="min-w-0">
-                                                            <h4 className="text-sm font-black text-white uppercase truncate tracking-tight">{order['Customer Name']}</h4>
-                                                            <div className="flex items-center gap-2 mt-0.5">
-                                                                <span className="text-[11px] font-bold text-blue-400 font-mono">{order['Customer Phone']}</span>
-                                                                <span className="text-[10px] font-bold text-gray-500 uppercase tracking-tighter truncate max-w-[120px]">{order.Location}</span>
+                                                            <h4 className="text-sm font-bold text-gray-200 uppercase truncate">{order['Customer Name']}</h4>
+                                                            <div className="flex items-center gap-3 mt-1">
+                                                                <span className="text-[10px] font-bold text-gray-400 font-mono">{order['Customer Phone']}</span>
+                                                                <span className="text-[9px] font-bold text-gray-500 uppercase tracking-widest truncate max-w-[150px]">{order.Location}</span>
                                                             </div>
                                                         </div>
                                                     </div>
                                                     <div className="flex items-center justify-end gap-4">
-                                                        <div className="text-right">
-                                                            <p className="text-lg font-black text-white italic tracking-tighter leading-none">${(order['Grand Total'] || 0).toFixed(2)}</p>
-                                                            <span className={`text-[7px] font-black uppercase tracking-widest ${isPaid ? 'text-emerald-500' : 'text-orange-500'}`}>{order['Payment Status']}</span>
+                                                        <div className="text-right flex flex-col items-end">
+                                                            <p className="text-sm font-bold text-white">${(order['Grand Total'] || 0).toFixed(2)}</p>
+                                                            <span className={`text-[8px] font-bold uppercase tracking-widest px-1.5 py-0.5 mt-0.5 rounded-sm ${isPaid ? 'bg-[#0ECB81]/10 text-[#0ECB81] border border-[#0ECB81]/20' : 'bg-[#F6465D]/10 text-[#F6465D] border border-[#F6465D]/20'}`}>{order['Payment Status']}</span>
                                                         </div>
                                                         <div className="w-24">
-                                                            <input type="number" step="0.01" value={shippingAdjustments[order['Order ID']] ?? 0} onChange={(e) => handleShippingChange(order['Order ID'], e.target.value)} className="w-full bg-black/40 border border-white/5 rounded-xl py-2 px-3 text-right text-xs font-black text-blue-400 focus:border-blue-500 transition-all shadow-inner" disabled={!isChecked} />
+                                                            <p className="text-[8px] font-bold text-gray-500 uppercase tracking-widest mb-1 text-right">Fee ($)</p>
+                                                            <input type="number" step="0.01" value={shippingAdjustments[order['Order ID']] ?? 0} onChange={(e) => handleShippingChange(order['Order ID'], e.target.value)} className="w-full bg-[#0B0E11] border border-[#2B3139] rounded-sm py-1.5 px-2 text-right text-xs font-mono text-[#FCD535] focus:border-[#FCD535] outline-none transition-colors" disabled={!isChecked} />
                                                         </div>
-                                                        <button onClick={() => toggleVerify(order['Order ID'])} className={`w-10 h-10 rounded-xl flex items-center justify-center border-2 transition-all ${isChecked ? 'bg-emerald-600 border-emerald-500 text-white' : 'bg-gray-900 border-white/5 text-gray-700'}`}><svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={3}><path d="M5 13l4 4L19 7" /></svg></button>
+                                                        <button onClick={() => toggleVerify(order['Order ID'])} className={`w-10 h-10 mt-4 sm:mt-0 rounded-sm flex items-center justify-center border transition-colors ${isChecked ? 'bg-[#FCD535] border-[#FCD535] text-black' : 'bg-[#0B0E11] border-[#2B3139] text-gray-500 hover:text-white'}`}><svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" /></svg></button>
                                                     </div>
                                                 </div>
                                             </div>
@@ -436,42 +536,41 @@ const DeliveryListGeneratorModal: React.FC<DeliveryListGeneratorModalProps> = ({
                         )}
 
                         {step === STEPS.SUMMARY && summaryResult && (
-                            <div className="animate-reveal max-w-lg mx-auto w-full space-y-8 py-10">
-                                <div id="summary-card" className="glass-surface rounded-[3rem] p-8 border-emerald-500/20 relative overflow-hidden flex flex-col items-center">
-                                    <div className="absolute top-0 right-0 w-32 h-32 bg-emerald-600/10 blur-[60px] -mr-16 -mt-16"></div>
-                                    <div className="w-20 h-20 bg-emerald-500/10 rounded-full flex items-center justify-center border-2 border-emerald-500/20 shadow-2xl mb-6"><svg className="w-10 h-10 text-emerald-500" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={3}><path d="M5 13l4 4L19 7" /></svg></div>
-                                    <h3 className="text-2xl font-black text-white uppercase tracking-tighter italic mb-8">Delivery Success</h3>
+                            <div className="animate-fade-in max-w-lg mx-auto w-full space-y-6 pt-10">
+                                <div id="summary-card" className="bg-[#181A20] border border-[#0ECB81]/30 rounded-sm p-8 relative flex flex-col items-center shadow-lg">
+                                    <div className="w-16 h-16 bg-[#0ECB81]/10 border border-[#0ECB81]/30 rounded-sm flex items-center justify-center mb-6"><svg className="w-8 h-8 text-[#0ECB81]" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" /></svg></div>
+                                    <h3 className="text-xl font-bold text-gray-200 uppercase tracking-widest mb-6">Execution Success</h3>
                                     
-                                    <div className="w-full grid grid-cols-2 gap-4 mb-8">
-                                        <div className="bg-black/40 p-5 rounded-[2.5rem] border border-white/5 text-center shadow-inner">
-                                            <p className="text-[8px] font-black text-gray-500 uppercase tracking-widest mb-1">Total Items</p>
-                                            <p className="text-3xl font-black text-white italic leading-none">{summaryResult.count}</p>
+                                    <div className="w-full grid grid-cols-2 gap-4 mb-6">
+                                        <div className="bg-[#0B0E11] p-4 rounded-sm border border-[#2B3139] text-center">
+                                            <p className="text-[9px] font-bold text-gray-500 uppercase tracking-widest mb-2">Total Packets</p>
+                                            <p className="text-2xl font-mono text-white leading-none">{summaryResult.count}</p>
                                         </div>
-                                        <div className="bg-blue-600/10 p-5 rounded-[2.5rem] border border-blue-500/20 text-center shadow-inner">
-                                            <p className="text-[8px] font-black text-blue-400 uppercase tracking-widest mb-1">Total Fee</p>
-                                            <p className="text-3xl font-black text-white italic leading-none">${summaryResult.shipCost.toFixed(2)}</p>
+                                        <div className="bg-[#0B0E11] p-4 rounded-sm border border-[#2B3139] text-center">
+                                            <p className="text-[9px] font-bold text-gray-500 uppercase tracking-widest mb-2">Total Fee</p>
+                                            <p className="text-2xl font-mono text-[#FCD535] leading-none">${summaryResult.shipCost.toFixed(2)}</p>
                                         </div>
                                     </div>
 
-                                    <div className="w-full bg-black/20 p-6 rounded-[2.5rem] border border-white/5 space-y-4">
-                                        <div className="flex justify-between items-center border-b border-white/5 pb-4">
-                                            <span className="text-xs font-black text-gray-400 uppercase tracking-widest">Gross Revenue</span>
-                                            <span className="text-2xl font-black text-white italic tracking-tighter">${summaryResult.totalUSD.toFixed(2)}</span>
+                                    <div className="w-full bg-[#0B0E11] p-5 rounded-sm border border-[#2B3139] space-y-3">
+                                        <div className="flex justify-between items-center border-b border-[#2B3139] pb-3">
+                                            <span className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">Gross Target</span>
+                                            <span className="text-lg font-mono text-[#0ECB81]">${summaryResult.totalUSD.toFixed(2)}</span>
                                         </div>
                                         <div className="flex justify-between items-center">
-                                            <span className="text-[10px] font-bold text-gray-500 uppercase">├─ Already Paid</span>
-                                            <span className="text-xs font-black text-emerald-400/80">${summaryResult.alreadyPaid.toFixed(2)}</span>
+                                            <span className="text-[9px] font-bold text-gray-500 uppercase tracking-widest">├─ Already Paid</span>
+                                            <span className="text-xs font-mono text-gray-300">${summaryResult.alreadyPaid.toFixed(2)}</span>
                                         </div>
                                         <div className="flex justify-between items-center">
-                                            <span className="text-[10px] font-bold text-gray-500 uppercase">└─ Newly Collected</span>
-                                            <span className="text-xs font-black text-blue-400/80">${summaryResult.newlyPaid.toFixed(2)}</span>
+                                            <span className="text-[9px] font-bold text-gray-500 uppercase tracking-widest">└─ Handled Today</span>
+                                            <span className="text-xs font-mono text-[#FCD535]">${summaryResult.newlyPaid.toFixed(2)}</span>
                                         </div>
                                     </div>
-                                    <p className="mt-8 text-[8px] font-black text-gray-700 uppercase tracking-[0.4em] italic">Authorized by {summaryResult.user}</p>
+                                    <p className="mt-6 text-[8px] font-bold text-gray-600 uppercase tracking-widest">Authorized by {summaryResult.user}</p>
                                 </div>
 
-                                <button onClick={handleCopySummary} className="w-full py-4 rounded-2xl bg-white text-black font-black uppercase text-[10px] tracking-widest shadow-2xl active:scale-95 transition-all flex items-center justify-center gap-3">
-                                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2.5}><path d="M8 5H6a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2v-1M8 5a2 2 0 002 2h2a2 2 0 002-2M8 5a2 2 0 012-2h2a2 2 0 012 2m0 0h2a2 2 0 012 2v3m2 4H10m0 0l3-3m-3 3l3 3" /></svg> {copyStatus === 'success' ? 'Report Copied!' : 'Copy Summary Image'}
+                                <button onClick={handleCopySummary} className="w-full py-3 rounded-sm bg-[#FCD535] hover:bg-[#FCD535]/90 text-black font-bold uppercase text-[10px] tracking-widest transition-colors flex items-center justify-center gap-2">
+                                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M8 5H6a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2v-1M8 5a2 2 0 002 2h2a2 2 0 002-2M8 5a2 2 0 012-2h2a2 2 0 012 2m0 0h2a2 2 0 012 2v3m2 4H10m0 0l3-3m-3 3l3 3" /></svg> {copyStatus === 'success' ? 'Report Copied!' : 'Copy Summary Image'}
                                 </button>
                             </div>
                         )}
@@ -479,36 +578,44 @@ const DeliveryListGeneratorModal: React.FC<DeliveryListGeneratorModalProps> = ({
                 </div>
 
                 {/* Secure Action Bar */}
-                <div className="flex-shrink-0 px-8 py-6 border-t border-white/5 bg-black/40 backdrop-blur-2xl z-50 flex justify-end gap-4">
+                <div className="flex-shrink-0 px-6 py-4 border-t border-[#2B3139] bg-[#181A20] z-50 flex justify-end gap-3">
                     {step === STEPS.FILTER && (
-                        <button onClick={handleGeneratePreview} disabled={step1SelectedIds.size === 0} className="px-10 py-4 rounded-2xl bg-blue-600 text-white font-black uppercase text-[10px] tracking-[0.2em] shadow-xl active:scale-95 transition-all disabled:opacity-30 border border-blue-500/20">Generate Preview</button>
+                        <button onClick={handleGeneratePreview} disabled={step1SelectedIds.size === 0} className="px-6 py-2.5 rounded-sm bg-[#FCD535] hover:bg-[#FCD535]/90 text-black font-bold uppercase text-[10px] tracking-widest disabled:opacity-50 transition-colors">Generate Preview</button>
                     )}
                     {step === STEPS.VERIFY && (
                         <>
-                            <button onClick={() => setStep(STEPS.FILTER)} className="px-8 py-4 rounded-2xl bg-white/5 text-gray-500 font-black uppercase text-[10px] tracking-widest active:scale-95 transition-all">Back</button>
-                            <button onClick={() => setShowPaymentModal(true)} className="px-10 py-4 rounded-2xl bg-gradient-to-r from-emerald-500 to-emerald-700 text-white font-black uppercase text-[10px] tracking-[0.2em] shadow-xl active:scale-95 transition-all">Finalize Delivery</button>
+                            <button onClick={() => setStep(STEPS.FILTER)} className="px-6 py-2.5 rounded-sm bg-[#0B0E11] border border-[#2B3139] hover:bg-[#2B3139] text-gray-400 font-bold uppercase text-[10px] tracking-widest transition-colors">Back</button>
+                            <button onClick={() => setShowPaymentModal(true)} className="px-6 py-2.5 rounded-sm bg-[#0ECB81] hover:bg-[#0ECB81]/90 text-black font-bold uppercase text-[10px] tracking-widest transition-colors">Finalize Deliveries</button>
                         </>
+                    )}
+                    {step === STEPS.SUMMARY && (
+                        <button onClick={onClose} className="px-6 py-2.5 rounded-sm bg-[#2B3139] hover:bg-gray-700 text-white font-bold uppercase text-[10px] tracking-widest transition-colors">Close</button>
                     )}
                 </div>
 
-                {/* Password Modal (Auth) */}
+                {/* Password Modal */}
                 {showPaymentModal && (
-                    <div className="absolute inset-0 z-[100] bg-black/95 backdrop-blur-xl flex items-center justify-center p-6 animate-fade-in">
-                        <div className="glass-surface rounded-[3rem] w-full max-w-md p-8 sm:p-12 shadow-[0_0_100px_rgba(0,0,0,1)] text-center space-y-8 animate-reveal">
-                            <div className="w-16 h-16 bg-blue-600/10 rounded-3xl flex items-center justify-center border-2 border-blue-500/20 mx-auto shadow-2xl"><svg className="w-8 h-8 text-blue-500" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2.5}><path d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" /></svg></div>
-                            <div><h3 className="text-xl font-black uppercase tracking-tighter italic">Authorization Required</h3><p className="text-[10px] font-bold text-gray-500 uppercase tracking-widest mt-1">Please confirm your secure password</p></div>
+                    <div className="absolute inset-0 z-[100] bg-[#0B0E11]/80 backdrop-blur-sm flex items-center justify-center p-4">
+                        <div className="bg-[#181A20] border border-[#2B3139] rounded-sm w-full max-w-sm p-8 text-center space-y-6 shadow-2xl">
+                            <div className="w-12 h-12 bg-[#2B3139] rounded-sm flex items-center justify-center mx-auto text-[#0ECB81]">
+                                <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" /></svg>
+                            </div>
+                            <div>
+                                <h3 className="text-sm font-bold uppercase tracking-widest text-gray-200">System Override</h3>
+                                <p className="text-[10px] font-bold text-gray-500 uppercase tracking-widest mt-1">Authenticate action</p>
+                            </div>
                             
-                            <div className="space-y-6">
+                            <div className="space-y-4">
                                 {pendingOrders.some(o => verifiedIds.has(o['Order ID']) && o['Payment Status'] !== 'Paid') && (
-                                    <div className="space-y-2">
-                                        <label className="text-[9px] font-black text-blue-500 uppercase tracking-widest block text-left ml-4">Receive Funds Via</label>
+                                    <div className="space-y-2 text-left">
+                                        <label className="text-[9px] font-bold text-gray-500 uppercase tracking-widest block">Collection Channel</label>
                                         <BankSelector bankAccounts={appData.bankAccounts || []} selectedBankName={selectedBank} onSelect={setSelectedBank} />
                                     </div>
                                 )}
-                                <input type="password" value={password} onChange={e => setPassword(e.target.value)} className="w-full bg-black/60 border-2 border-white/5 rounded-2xl py-4 px-6 text-center text-xl font-black text-white focus:border-blue-500 transition-all shadow-inner tracking-[0.5em] placeholder:tracking-normal" placeholder="••••••••" />
-                                <div className="grid grid-cols-2 gap-4 pt-4">
-                                    <button onClick={() => setShowPaymentModal(false)} className="py-4 rounded-2xl bg-white/5 text-gray-500 font-black uppercase text-[10px] tracking-widest border border-white/5">Cancel</button>
-                                    <button onClick={handleConfirmTransaction} disabled={isSubmitting} className="py-4 rounded-2xl bg-blue-600 text-white font-black uppercase text-[10px] tracking-widest shadow-xl flex items-center justify-center gap-2">{isSubmitting ? <Spinner size="sm" /> : 'Confirm'}</button>
+                                <input type="password" value={password} onChange={e => setPassword(e.target.value)} className="w-full bg-[#0B0E11] border border-[#2B3139] rounded-sm py-3 px-4 text-center text-lg font-bold text-white focus:border-[#0ECB81] outline-none transition-colors tracking-widest placeholder:tracking-normal" placeholder="Password" />
+                                <div className="grid grid-cols-2 gap-3 pt-2">
+                                    <button onClick={() => setShowPaymentModal(false)} className="py-2.5 rounded-sm bg-[#0B0E11] border border-[#2B3139] hover:bg-[#2B3139] text-gray-400 font-bold uppercase text-[10px] tracking-widest transition-colors">Cancel</button>
+                                    <button onClick={handleConfirmTransaction} disabled={isSubmitting} className="py-2.5 rounded-sm bg-[#0ECB81] hover:bg-[#0ECB81]/90 text-black font-bold uppercase text-[10px] tracking-widest transition-colors flex items-center justify-center gap-2">{isSubmitting ? <Spinner size="sm" /> : 'Confirm'}</button>
                                 </div>
                             </div>
                         </div>

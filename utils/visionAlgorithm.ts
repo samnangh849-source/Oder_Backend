@@ -1,6 +1,7 @@
 import * as handPoseDetection from '@tensorflow-models/hand-pose-detection';
 import * as tf from '@tensorflow/tfjs-core';
 import '@tensorflow/tfjs-backend-webgl';
+import jsQR from 'jsqr';
 
 export interface DetectionResult {
     found: boolean;
@@ -11,19 +12,46 @@ export interface DetectionResult {
     gesture?: 'none' | 'five_fingers' | 'thumbs_up';
     confidence: number;
     isHand: boolean;
+    barcodeBox?: { x: number, y: number, w: number, h: number } | null;
+    barcodeValue?: string;
 }
 
 export class PackageDetector {
     private detector: handPoseDetection.HandDetector | null = null;
+    private barcodeDetector: any = null;
     private isInitializing: boolean = false;
     
     private lastBox: { x: number, y: number, w: number, h: number } | null = null;
     private smoothingFactor = 0.2; 
 
+    private scanCanvas: HTMLCanvasElement | null = null;
+    private scanCtx: CanvasRenderingContext2D | null = null;
+    private frameCount = 0;
+    private lastBarcodeBox: { x: number, y: number, w: number, h: number } | null = null;
+    private lastBarcodeValue = '';
+
+    private getScanContext(video: HTMLVideoElement) {
+        if (!this.scanCanvas) {
+            this.scanCanvas = document.createElement('canvas');
+            this.scanCtx = this.scanCanvas.getContext('2d', { willReadFrequently: true });
+        }
+        const scale = 0.5; // Scale down for performance
+        this.scanCanvas.width = video.videoWidth * scale;
+        this.scanCanvas.height = video.videoHeight * scale;
+        this.scanCtx?.drawImage(video, 0, 0, this.scanCanvas.width, this.scanCanvas.height);
+        return { ctx: this.scanCtx, width: this.scanCanvas.width, height: this.scanCanvas.height, scale };
+    }
+
     async init() {
         if (this.detector || this.isInitializing) return;
         this.isInitializing = true;
         try {
+            if ('BarcodeDetector' in window) {
+                try {
+                    // @ts-ignore
+                    this.barcodeDetector = new window.BarcodeDetector({ formats: ['qr_code', 'code_128', 'ean_13', 'data_matrix'] });
+                } catch (e) { console.warn("BarcodeDetector formats unsupported"); }
+            }
             console.log("AI: Initializing WebGL backend...");
             await tf.ready();
             await tf.setBackend('webgl');
@@ -71,6 +99,45 @@ export class PackageDetector {
         let isHand = false;
         let confidence = 0;
 
+        this.frameCount++;
+        
+        // Process Barcodes every 2 frames to save CPU
+        if (this.frameCount % 2 === 0) {
+            let foundBox = null;
+            let foundValue = '';
+
+            if (this.barcodeDetector) {
+                try {
+                    const barcodes = await this.barcodeDetector.detect(video);
+                    if (barcodes.length > 0) {
+                        const box = barcodes[0].boundingBox;
+                        foundBox = { x: box.left, y: box.top, w: box.width, h: box.height };
+                        foundValue = barcodes[0].rawValue;
+                    }
+                } catch (err) {}
+            }
+
+            if (!foundBox && jsQR) {
+                const { ctx, width, height, scale } = this.getScanContext(video);
+                if (ctx) {
+                    const imageData = ctx.getImageData(0, 0, width, height);
+                    const code = jsQR(imageData.data, width, height, { inversionAttempts: "dontInvert" });
+                    if (code) {
+                        const { topLeftCorner, topRightCorner, bottomLeftCorner, bottomRightCorner } = code.location;
+                        const minX = Math.min(topLeftCorner.x, bottomLeftCorner.x) / scale;
+                        const minY = Math.min(topLeftCorner.y, topRightCorner.y) / scale;
+                        const maxX = Math.max(topRightCorner.x, bottomRightCorner.x) / scale;
+                        const maxY = Math.max(bottomLeftCorner.y, bottomRightCorner.y) / scale;
+                        foundBox = { x: minX, y: minY, w: maxX - minX, h: maxY - minY };
+                        foundValue = code.data;
+                    }
+                }
+            }
+
+            this.lastBarcodeBox = foundBox;
+            this.lastBarcodeValue = foundValue;
+        }
+
         if (this.detector) {
             try {
                 const hands = await this.detector.estimateHands(video, { flipHorizontal: false });
@@ -116,10 +183,12 @@ export class PackageDetector {
             isHand: isHand,
             type: isHand ? 'general' : 'box',
             box: rawBox ? this.smoothBox(rawBox) : undefined,
-            keypoints, // Send keypoints back to UI
+            keypoints,
             stability: isHand ? 0.95 : 0.6,
             gesture: gestureDetected,
-            confidence
+            confidence,
+            barcodeBox: this.lastBarcodeBox,
+            barcodeValue: this.lastBarcodeValue
         };
     }
 }

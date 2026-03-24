@@ -51,7 +51,7 @@ const SYSTEM_STRUCTURE = {
   
   // ប្រព័ន្ធប្រាក់លើកទឹកចិត្ត (Incentive)
   "IncentiveProjects": ["ID", "ProjectName", "CalculatorID", "StartDate", "EndDate", "TargetTeam", "Status", "ColorCode", "RequirePeriodSelection", "DataSource", "CreatedAt"],
-  "IncentiveCalculators": ["ID", "ProjectID", "Name", "Type", "Value", "RulesJSON"],
+  "IncentiveCalculators": ["ID", "ProjectID", "Name", "Type", "Value", "Status", "RulesJSON"],
   "IncentiveResults": ["ID", "Timestamp", "ProjectID", "UserName", "TotalOrders", "TotalRevenue", "CalculatedValue", "IsCustom"],
   "IncentiveManualData": ["ID", "ProjectID", "Month", "MetricType", "DataKey", "Value"],
   "IncentiveCustomPayouts": ["ID", "ProjectID", "Month", "UserName", "Value"],

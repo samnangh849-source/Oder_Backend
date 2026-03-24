@@ -1,9 +1,16 @@
-
 import React, { useContext, useMemo } from 'react';
 import { AppContext } from '@/context/AppContext';
 import { ParsedOrder } from '@/types';
 import Spinner from '@/components/common/Spinner';
 import { convertGoogleDriveUrl } from '@/utils/fileUtils';
+
+const B_BG_MAIN = 'bg-[#0B0E11]';
+const B_BG_PANEL = 'bg-[#181A20]';
+const B_BORDER = 'border-[#2B3139]';
+const B_TEXT_PRIMARY = 'text-[#EAECEF]';
+const B_TEXT_SECONDARY = 'text-[#848E9C]';
+const B_ACCENT = 'text-[#FCD535]';
+const B_GREEN = 'text-[#0ECB81]';
 
 interface MobilePackagingHubProps {
     orders: ParsedOrder[];
@@ -14,18 +21,28 @@ interface MobilePackagingHubProps {
     onPack: (order: ParsedOrder) => void;
     onShip: (order: ParsedOrder) => void;
     onView: (order: ParsedOrder) => void;
+    onPrintManifest: () => void;
     onSwitchHub: () => void;
     onExit: () => void;
     selectedStore: string;
-    sessionStats: { packed: number, startTime: number };
+    progressStats: { packedByUserToday: number, storeTotalToday: number, progressPercentage: number };
     setIsFilterModalOpen: (open: boolean) => void;
     loadingActionId: string | null;
+    tabCounts: { pending: number, ready: number, shipped: number };
+    selectedOrderIds: Set<string>;
+    toggleOrderSelection: (id: string) => void;
+    clearSelection: () => void;
+    onBulkShip: () => void;
+    isBulkProcessing: boolean;
+    onToggleSelectAll: (orders: ParsedOrder[]) => void;
 }
 
 const MobilePackagingHub: React.FC<MobilePackagingHubProps> = ({
     orders, activeTab, setActiveTab, searchTerm, setSearchTerm,
-    onPack, onShip, onView, onSwitchHub, onExit, selectedStore,
-    sessionStats, setIsFilterModalOpen, loadingActionId
+    onPack, onShip, onView, onPrintManifest, onSwitchHub, onExit, selectedStore,
+    progressStats, setIsFilterModalOpen, loadingActionId, tabCounts,
+    selectedOrderIds, toggleOrderSelection, clearSelection, onBulkShip, isBulkProcessing,
+    onToggleSelectAll
 }) => {
     const { previewImage: showFullImage } = useContext(AppContext);
 
@@ -40,135 +57,189 @@ const MobilePackagingHub: React.FC<MobilePackagingHubProps> = ({
         const result: { [key: string]: ParsedOrder[] } = {};
         if (activeTab === 'Pending') {
             sorted.forEach(order => {
-                const date = order.Timestamp ? getSafeDateObj(order.Timestamp).toLocaleDateString('km-KH', { month: 'short', day: 'numeric' }) : 'ថ្មីៗ';
+                const date = order.Timestamp ? getSafeDateObj(order.Timestamp).toLocaleDateString('km-KH', { month: 'short', day: 'numeric' }) : 'Recent';
                 if (!result[date]) result[date] = [];
                 result[date].push(order);
             });
         } else {
-            result['បញ្ជីឥវ៉ាន់'] = sorted;
+            result['Order Stream'] = sorted;
         }
         return result;
     }, [orders, activeTab]);
 
     return (
-        <div className="flex flex-col h-screen bg-black text-white overflow-hidden font-custom">
-            {/* Gradient Header */}
-            <header className="flex-shrink-0 pt-12 pb-6 px-6 bg-gradient-to-b from-blue-900/40 to-black">
-                <div className="flex justify-between items-center mb-6">
+        <div className={`flex flex-col h-screen ${B_BG_MAIN} font-sans`}>
+            {/* Minimal Mobile Header */}
+            <div className={`flex-shrink-0 border-b ${B_BORDER} ${B_BG_PANEL}`}>
+                <div className="flex items-center justify-between p-3">
                     <div>
-                        <h2 className="text-2xl font-black text-white italic tracking-tight">Packaging Hub</h2>
-                        <p className="text-[11px] text-blue-400 font-black uppercase tracking-widest">{selectedStore}</p>
+                        <h2 className={`text-sm font-bold ${B_ACCENT}`}>HUB OPS</h2>
+                        <span className={`text-[10px] font-bold ${B_TEXT_SECONDARY} uppercase`}>{selectedStore}</span>
                     </div>
-                    <div className="flex gap-3">
-                        <button onClick={onSwitchHub} title="Switch Hub" className="w-11 h-11 bg-white/10 rounded-xl flex items-center justify-center border border-white/5 active:scale-90 shadow-lg">
-                            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path d="M8 7h12m0 0l-4-4m4 4l-4 4m0 6H4m0 0l4 4m-4-4l4-4" strokeWidth={3}/></svg>
+                    <div className="flex gap-2">
+                        <button onClick={onSwitchHub} className={`p-1.5 ${B_BG_MAIN} border ${B_BORDER} rounded-sm text-[#848E9C]`}>
+                            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path d="M8 7h12m0 0l-4-4m4 4l-4 4m0 6H4m0 0l4 4m-4-4l4-4" strokeWidth={2}/></svg>
                         </button>
-                        <button onClick={onExit} title="Exit Hub" className="w-11 h-11 bg-red-600/20 text-red-400 rounded-xl flex items-center justify-center border border-red-500/30 active:scale-90 shadow-lg">
-                            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" strokeWidth={3}/></svg>
+                        <button onClick={onExit} className={`p-1.5 bg-[#F6465D]/10 text-[#F6465D] border border-[#F6465D]/20 rounded-sm`}>
+                            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" strokeWidth={2}/></svg>
                         </button>
                     </div>
                 </div>
 
-                <div className="flex gap-2 overflow-x-auto no-scrollbar pb-3">
+                <div className="flex">
                     {[
-                        { id: 'Pending', label: 'រង់ចាំវេចខ្ចប់', icon: '📥' },
-                        { id: 'Ready to Ship', label: 'ខ្ចប់រួចរាល់', icon: '📦' },
-                        { id: 'Shipped', label: 'បានបញ្ចេញ', icon: '🚚' }
+                        { id: 'Pending', label: 'Pending', count: tabCounts.pending },
+                        { id: 'Ready to Ship', label: 'Ready', count: tabCounts.ready },
+                        { id: 'Shipped', label: 'Shipped', count: tabCounts.shipped }
                     ].map(tab => (
                         <button 
                             key={tab.id}
                             onClick={() => setActiveTab(tab.id)}
-                            className={`px-5 py-3 rounded-full whitespace-nowrap text-[12px] font-black uppercase tracking-widest border transition-all ${activeTab === tab.id ? 'bg-white text-black border-white shadow-xl' : 'bg-white/5 text-gray-400 border-white/5'}`}
+                            className={`flex flex-col items-center justify-center flex-1 py-1 border-b-2 transition-colors ${activeTab === tab.id ? `border-[#FCD535] text-[#FCD535]` : `border-transparent ${B_TEXT_SECONDARY}`}`}
                         >
-                            <span className="mr-2 text-base">{tab.icon}</span>
-                            {tab.label}
+                            <span className="text-[11px] font-bold uppercase">{tab.label}</span>
+                            <span className={`text-[10px] font-mono mt-0.5 ${activeTab === tab.id ? 'text-[#FCD535]' : 'text-[#848E9C]'}`}>
+                                {tab.count}
+                            </span>
                         </button>
                     ))}
                 </div>
-            </header>
-
-            {/* Sticky Search Bar */}
-            <div className="px-6 py-5 bg-black/80 backdrop-blur-xl border-b border-white/5 flex gap-3">
-                <div className="relative flex-grow">
-                    <input 
-                        type="text" 
-                        placeholder="ស្វែងរក..." 
-                        value={searchTerm}
-                        onChange={(e) => setSearchTerm(e.target.value)}
-                        className="w-full pl-12 pr-4 py-4 bg-white/10 border-transparent rounded-2xl text-sm font-bold text-white placeholder:text-gray-500 focus:bg-white/15 transition-all outline-none shadow-inner"
-                    />
-                    <div className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400">
-                        <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={3.5}><path d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" /></svg>
-                    </div>
-                </div>
-                <button onClick={() => setIsFilterModalOpen(true)} className="w-14 h-14 bg-white/10 text-white rounded-2xl flex items-center justify-center border border-white/5 active:scale-95 shadow-lg">
-                    <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={3}><path d="M3 4a1 1 0 011-1h16a1 1 0 011 1v2.586a1 1 0 01-.293.707l-6.414 6.414a1 1 0 00-.293.707V17l-4 4v-6.586a1 1 0 00-.293-.707L3.293 7.293A1 1 0 013 6.586V4z" /></svg>
-                </button>
             </div>
 
-            {/* Mobile Scrollable Area */}
-            <div className="flex-1 overflow-y-auto custom-scrollbar p-6">
-                <div className="space-y-12 pb-32">
-                    {Object.entries(groups).map(([date, groupOrders]) => (
-                        <section key={date} className="space-y-4">
-                            <h3 className="text-xl font-black text-white italic tracking-tight">{date}</h3>
-                            <div className="space-y-4">
-                                {groupOrders.map((order, idx) => (
-                                    <div key={order['Order ID']} className="group bg-[#121212] active:bg-[#1a1a1a] p-4 rounded-2xl transition-all relative flex gap-4 shadow-xl border border-white/5">
-                                        {loadingActionId === order['Order ID'] && (
-                                            <div className="absolute inset-0 bg-black/60 z-50 flex items-center justify-center rounded-2xl backdrop-blur-sm"><Spinner /></div>
-                                        )}
-                                        
-                                        <div className="w-24 h-24 flex-shrink-0 rounded-xl overflow-hidden shadow-lg relative" onClick={() => showFullImage(convertGoogleDriveUrl(order.Products[0]?.image))}>
-                                            <img 
-                                                src={convertGoogleDriveUrl(order.Products[0]?.image)} 
-                                                className="w-full h-full object-cover" 
-                                                alt="" 
-                                            />
-                                            {/* Serial Number Badge */}
-                                            <div className="absolute top-1.5 left-1.5 w-5 h-5 bg-black/60 backdrop-blur-md rounded-md flex items-center justify-center border border-white/10 z-20">
-                                                <span className="text-xs font-black text-white">{idx + 1}</span>
+            {/* Sticky Mobile Search/Filter */}
+            <div className={`flex-shrink-0 p-3 border-b ${B_BORDER} ${B_BG_MAIN} flex gap-2 sticky z-20 shadow-md`}>
+                <div className="relative flex-1">
+                    <input 
+                        type="text" 
+                        placeholder="Search operations..." 
+                        value={searchTerm}
+                        onChange={(e) => setSearchTerm(e.target.value)}
+                        className={`w-full pl-8 pr-3 py-2 ${B_BG_PANEL} border ${B_BORDER} rounded-sm text-xs ${B_TEXT_PRIMARY} placeholder:text-[#848E9C] focus:border-[#FCD535] outline-none transition-colors`}
+                    />
+                    <div className={`absolute inset-y-0 left-0 flex items-center pl-2.5 pointer-events-none ${B_TEXT_SECONDARY}`}>
+                        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2.5}><path d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" /></svg>
+                    </div>
+                </div>
+                <button onClick={() => setIsFilterModalOpen(true)} className={`px-3 py-2 ${B_BG_PANEL} border ${B_BORDER} rounded-sm ${B_TEXT_SECONDARY} flex items-center justify-center`}>
+                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2}><path d="M3 4a1 1 0 011-1h16a1 1 0 011 1v2.586a1 1 0 01-.293.707l-6.414 6.414a1 1 0 00-.293.707V17l-4 4v-6.586a1 1 0 00-.293-.707L3.293 7.293A1 1 0 013 6.586V4z" /></svg>
+                </button>
+                {activeTab === 'Ready to Ship' && (
+                    <div className="flex items-center gap-2">
+                        {orders.length > 0 && (
+                            <button 
+                                onClick={() => onToggleSelectAll(orders)}
+                                className={`p-2 bg-[#181A20] border ${orders.every(o => selectedOrderIds.has(o['Order ID'])) ? 'border-[#FCD535] text-[#FCD535]' : 'border-[#2B3139] text-[#848E9C]'} rounded-sm flex items-center gap-1 transition-colors`}
+                            >
+                                <span className="text-[9px] font-bold uppercase">{orders.every(o => selectedOrderIds.has(o['Order ID'])) ? 'None' : 'All'}</span>
+                            </button>
+                        )}
+                        <button onClick={onPrintManifest} className={`p-2 bg-[#181A20] border border-[#FCD535]/30 rounded-sm hover:border-[#FCD535] transition-all`}>
+                            <svg className="w-4 h-4 text-[#FCD535]" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 17h2a2 2 0 002-2v-4a2 2 0 00-2-2H5a2 2 0 00-2 2v4a2 2 0 002 2h2m2 4h6a2 2 0 002-2v-4a2 2 0 00-2-2H9a2 2 0 00-2 2v4a2 2 0 002 2zm8-12V5a2 2 0 00-2-2H9a2 2 0 00-2 2v4h10z" /></svg>
+                        </button>
+                        {activeTab === 'Ready to Ship' && selectedOrderIds.size > 0 && (
+                            <button 
+                                onClick={onBulkShip}
+                                disabled={isBulkProcessing}
+                                className={`px-4 py-2 bg-[#0ECB81] hover:bg-[#0CA66B] text-[#0B0E11] text-[10px] font-bold rounded-sm flex items-center gap-2 transition-all animate-fade-in-down whitespace-nowrap`}
+                            >
+                                {isBulkProcessing ? <Spinner size="sm" /> : (
+                                    <>
+                                        <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 13l4 4L19 7" /></svg>
+                                        SHIP ({selectedOrderIds.size})
+                                    </>
+                                )}
+                            </button>
+                        )}
+                    </div>
+                )}
+            </div>
+
+            {/* Scrollable Order List */}
+            <div className={`flex-1 overflow-y-auto custom-scrollbar p-3 relative z-10 space-y-4 pb-24`}>
+                {Object.entries(groups).map(([date, groupOrders]: [string, any]) => (
+                    <div key={date}>
+                        <h3 className={`text-[10px] font-bold ${B_TEXT_SECONDARY} uppercase border-b ${B_BORDER} pb-1 mb-2 px-1`}>{date}</h3>
+                        <div className="space-y-2">
+                            {groupOrders.map((order: ParsedOrder) => (
+                                <div 
+                                    key={order['Order ID']} 
+                                    className={`${B_BG_PANEL} border ${B_BORDER} flex flex-col relative transition-all ${selectedOrderIds.has(order['Order ID']) ? 'border-[#FCD535]/50 bg-[#FCD535]/5 shadow-[0_4px_12px_rgba(252,213,53,0.05)]' : ''}`}
+                                    onClick={() => activeTab === 'Ready to Ship' ? toggleOrderSelection(order['Order ID']) : onView(order)}
+                                >
+                                    {loadingActionId === order['Order ID'] && (
+                                        <div className={`absolute inset-0 ${B_BG_MAIN}/80 z-50 flex items-center justify-center`}><Spinner size="sm" /></div>
+                                    )}
+                                    
+                                    {activeTab === 'Ready to Ship' && (
+                                        <div className="absolute top-3 left-3 z-10">
+                                            <div className={`w-5 h-5 border-2 rounded-sm transition-colors flex items-center justify-center ${selectedOrderIds.has(order['Order ID']) ? 'bg-[#FCD535] border-[#FCD535]' : 'border-gray-600 bg-black/20'}`}>
+                                                {selectedOrderIds.has(order['Order ID']) && (
+                                                    <svg className="w-3.5 h-3.5 text-black" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={4}><path d="M5 13l4 4L19 7" /></svg>
+                                                )}
                                             </div>
                                         </div>
+                                    )}
 
-                                        <div className="flex-grow min-w-0 flex flex-col justify-between py-1">
-                                            <div className="min-w-0">
-                                                <div className="flex items-center gap-2 mb-1">
-                                                    <span className={`text-[7px] font-black uppercase tracking-widest px-1.5 py-0.5 rounded ${order.Team === 'A' ? 'bg-blue-600' : 'bg-purple-600'}`}>{order.Team} TEAM</span>
-                                                    <span className={`text-[7px] font-black uppercase tracking-widest px-1.5 py-0.5 rounded ${order['Payment Status']?.toLowerCase() === 'paid' ? 'bg-[#1DB954]/20 text-[#1DB954]' : 'bg-amber-600/20 text-amber-400'}`}>{order['Payment Status'] || 'Unpaid'}</span>
+                                    <div className={`px-3 py-2 border-b ${B_BORDER} flex justify-between items-center ${activeTab === 'Ready to Ship' ? 'pt-10' : ''}`}>
+                                        <span className={`text-xs font-mono font-medium ${B_TEXT_PRIMARY}`}>{order['Order ID'].substring(0, 10)}</span>
+                                        <span className={`text-[9px] uppercase font-bold px-1.5 py-0.5 rounded-sm border ${B_BORDER} ${B_TEXT_SECONDARY}`}>T-{order.Team}</span>
+                                    </div>
+
+                                    <div className="p-3">
+                                        <div className="flex gap-3">
+                                            <div className="flex flex-col flex-1 min-w-0">
+                                                <h4 className={`text-sm font-bold ${B_TEXT_PRIMARY} truncate uppercase flex items-center gap-1`}>
+                                                    {order['Customer Name']}
+                                                    {order['Package Photo URL'] && <span title="Photo Verified" className="text-[10px]">📸</span>}
+                                                </h4>
+                                                <div className="flex justify-between items-center mt-0.5">
+                                                    <p className={`text-[11px] ${B_TEXT_SECONDARY} font-mono`}>{order['Customer Phone']}</p>
+                                                    {(activeTab === 'Ready to Ship' || activeTab === 'Shipped') && (
+                                                        <p className={`text-[9px] ${B_ACCENT} font-bold uppercase truncate max-w-[80px]`}>{order['Driver Name'] || 'TBD'}</p>
+                                                    )}
                                                 </div>
-                                                <h4 className="text-white font-black text-xs truncate uppercase tracking-tight">{order['Customer Name']}</h4>
-                                                <p className="text-gray-500 text-xs font-mono">{order['Customer Phone']}</p>
+                                                <p className={`text-[11px] ${B_TEXT_SECONDARY} mt-2 truncate max-w-[150px]`}>{order.Location}</p>
                                             </div>
-                                            <div className="flex justify-between items-center">
-                                                <span className="text-[#1DB954] font-mono font-black text-[11px]">${(Number(order['Grand Total']) || 0).toFixed(2)}</span>
-                                                <div className="flex gap-2">
-                                                    <button onClick={() => onView(order)} className="p-2 bg-white/5 text-gray-500 rounded-lg"><svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" strokeWidth={3}/></svg></button>
-                                                    {activeTab === 'Pending' && <button onClick={() => onPack(order)} className="px-4 py-2 bg-[#1DB954] text-black rounded-lg text-[11px] font-black uppercase tracking-widest">Pack</button>}
-                                                    {activeTab === 'Ready to Ship' && <button onClick={() => onShip(order)} className="px-4 py-2 bg-amber-500 text-black rounded-lg text-[11px] font-black uppercase tracking-widest">Ship</button>}
-                                                </div>
+                                            <div className="text-right flex flex-col items-end">
+                                                <p className={`text-sm font-mono font-bold ${B_GREEN}`}>${(Number(order['Grand Total']) || 0).toFixed(2)}</p>
+                                                <span className={`mt-1 text-[9px] font-bold uppercase rounded-sm border ${B_BORDER} px-1 text-center min-w-[50px]
+                                                    ${order['Payment Status']?.toLowerCase() === 'paid' ? 'text-[#0ECB81]' : 'text-[#FCD535]'}
+                                                `}>
+                                                    {order['Payment Status'] || 'Unpaid'}
+                                                </span>
                                             </div>
                                         </div>
                                     </div>
-                                ))}
-                            </div>
-                        </section>
-                    ))}
-                </div>
+
+                                    <div className={`p-2 border-t ${B_BORDER} flex gap-2`}>
+                                        <button onClick={() => onView(order)} className={`flex-1 py-1.5 bg-[#2B3139] text-[#EAECEF] rounded-sm text-xs font-medium`}>View Info</button>
+                                        {activeTab === 'Pending' && <button onClick={() => onPack(order)} className={`flex-1 py-1.5 bg-[#FCD535] text-[#0B0E11] rounded-sm text-xs font-bold uppercase`}>Pack Order</button>}
+                                        {activeTab === 'Ready to Ship' && <button onClick={() => onShip(order)} className={`flex-1 py-1.5 bg-[#0ECB81] text-[#0B0E11] rounded-sm text-xs font-bold uppercase`}>Ship Order</button>}
+                                    </div>
+                                </div>
+                            ))}
+                        </div>
+                    </div>
+                ))}
             </div>
 
-            {/* Mobile Footer Stats */}
-            <footer className="flex-shrink-0 bg-black/90 backdrop-blur-2xl border-t border-white/5 p-6 pb-10 flex justify-around items-center">
-                <div className="text-center">
-                    <p className="text-xs font-black text-gray-500 uppercase tracking-widest mb-1">Session Packed</p>
-                    <p className="text-xl font-black text-[#1DB954] font-mono tracking-tighter">{sessionStats.packed}</p>
+            {/* Sticky Bottom Stats Nav */}
+            <div className={`fixed bottom-0 left-0 right-0 h-16 ${B_BG_PANEL} border-t ${B_BORDER} z-40 px-4 flex items-center justify-between`}>
+                <div className="flex flex-col">
+                    <span className={`text-[10px] font-bold ${B_TEXT_SECONDARY} uppercase`}>Packs Authored</span>
+                    <span className={`text-lg font-mono font-bold ${B_GREEN}`}>{progressStats.packedByUserToday}</span>
                 </div>
-                <div className="w-px h-8 bg-white/10"></div>
-                <div className="text-center">
-                    <p className="text-xs font-black text-gray-500 uppercase tracking-widest mb-1">Remaining</p>
-                    <p className="text-xl font-black text-blue-400 font-mono tracking-tighter">{orders.filter(o => o.FulfillmentStatus === 'Pending').length}</p>
+                
+                <div className="flex flex-col items-end w-32 border-l border-[#2B3139] pl-3">
+                    <div className="flex justify-between w-full text-[10px] uppercase font-bold mb-1">
+                        <span className={B_TEXT_SECONDARY}>Hub Sync</span>
+                        <span className={B_GREEN}>{progressStats.progressPercentage}%</span>
+                    </div>
+                    <div className={`h-1.5 w-full ${B_BG_MAIN} overflow-hidden rounded-full`}>
+                        <div className="h-full bg-[#0ECB81] transition-all duration-1000" style={{ width: `${progressStats.progressPercentage}%` }}></div>
+                    </div>
                 </div>
-            </footer>
+            </div>
         </div>
     );
 };

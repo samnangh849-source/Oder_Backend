@@ -8,9 +8,10 @@ interface ModalProps {
     children?: React.ReactNode;
     maxWidth?: string;
     fullScreen?: boolean;
+    zIndex?: string;
 }
 
-const Modal: React.FC<ModalProps> = ({ isOpen, onClose, children, maxWidth = 'max-w-md', fullScreen = false }) => {
+const Modal: React.FC<ModalProps> = ({ isOpen, onClose, children, maxWidth = 'max-w-md', fullScreen = false, zIndex = 'z-[100]' }) => {
     const { playPop, playClick } = useSoundEffects();
 
     useEffect(() => {
@@ -40,11 +41,11 @@ const Modal: React.FC<ModalProps> = ({ isOpen, onClose, children, maxWidth = 'ma
 
     return (
         <div 
-            className={`fixed inset-0 bg-black/60 backdrop-blur-md flex items-center justify-center z-[100] transition-opacity duration-300 modal-overlay ${fullScreen ? 'p-0' : 'p-4 sm:p-6 lg:p-8'}`}
+            className={`fixed inset-0 bg-[#0B0E11]/80 backdrop-blur-sm flex items-center justify-center ${zIndex} transition-opacity duration-300 modal-overlay ${fullScreen ? 'p-0' : 'p-4 sm:p-6'}`}
             onClick={handleOverlayClick}
         >
             <div
-                className={`${fullScreen ? 'w-screen h-screen max-w-none max-h-none' : `page-card w-full ${maxWidth} rounded-[2.5rem] shadow-[0_30px_100px_rgba(0,0,0,0.8)] border border-white/10 max-h-[92vh] flex flex-col my-auto`} bg-[#0f172a]/95 transform transition-all duration-300 scale-100 opacity-100 animate-modal-in overflow-hidden`}
+                className={`${fullScreen ? 'w-screen h-screen max-w-none max-h-none' : `page-card w-full ${maxWidth} rounded-sm shadow-2xl border border-[#2B3139] max-h-[95vh] flex flex-col my-auto`} bg-[#181A20] transform transition-all duration-300 scale-100 opacity-100 animate-modal-in overflow-hidden font-sans text-gray-300`}
                 onClick={(e) => e.stopPropagation()}
             >
                 <div className="flex-grow overflow-y-auto overscroll-contain no-scrollbar scroll-smooth">

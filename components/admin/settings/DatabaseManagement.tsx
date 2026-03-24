@@ -8,6 +8,7 @@ import { CacheService, CACHE_KEYS } from '../../../services/cacheService';
 const DatabaseManagement: React.FC = () => {
     const { refreshData, showNotification } = useContext(AppContext);
     const [isMigrating, setIsMigrating] = useState(false);
+    const [isMigratingMovies, setIsMigratingMovies] = useState(false);
     const [isClearingCache, setIsClearingCache] = useState(false);
     const [status, setStatus] = useState<{ type: 'success' | 'error' | 'idle', message: string }>({ type: 'idle', message: '' });
 
@@ -46,6 +47,43 @@ const DatabaseManagement: React.FC = () => {
             showNotification("Migration Failed", "error");
         } finally {
             setIsMigrating(false);
+        }
+    };
+
+    const handleMigrateMovies = async () => {
+        if (!window.confirm("តើអ្នកចង់ Sync ទិន្នន័យ Movie ពី Google Sheet ចូលទៅកាន់ Database ឥឡូវនេះមែនទេ?")) return;
+        
+        setIsMigratingMovies(true);
+        setStatus({ type: 'idle', message: 'កំពុងទាញយកទិន្នន័យ Movie ពី Google Sheet...' });
+        
+        try {
+            const session = await CacheService.get<{ token: string }>(CACHE_KEYS.SESSION);
+            const token = session?.token;
+            const headers: HeadersInit = { 'Content-Type': 'application/json' };
+            if (token) headers['Authorization'] = `Bearer ${token}`;
+
+            const response = await fetch(`${WEB_APP_URL}/api/admin/migrate-movies`, {
+                method: 'POST',
+                headers
+            });
+            
+            const result = await response.json();
+            
+            if (response.ok && result.status === 'success') {
+                setStatus({ type: 'success', message: 'ការ Sync ទិន្នន័យ Movie បានចាប់ផ្តើមដោយជោគជ័យ! សូមរង់ចាំមួយស្របក់...' });
+                showNotification("Movie Migration Started", "success");
+                
+                setTimeout(async () => {
+                    await refreshData();
+                }, 3000);
+            } else {
+                throw new Error(result.message || 'Movie migration request failed');
+            }
+        } catch (err: any) {
+            setStatus({ type: 'error', message: 'បរាជ័យ: ' + err.message });
+            showNotification("Movie Migration Failed", "error");
+        } finally {
+            setIsMigratingMovies(false);
         }
     };
 
@@ -127,6 +165,38 @@ const DatabaseManagement: React.FC = () => {
                                 <p className="text-xs font-bold leading-relaxed">{status.message}</p>
                             </div>
                         )}
+                    </div>
+
+                    {/* Movie Sync Section */}
+                    <div className="bg-purple-600/5 border border-purple-500/20 rounded-[2.5rem] p-8 space-y-6 shadow-inner relative overflow-hidden">
+                        <div className="absolute top-0 right-0 w-32 h-32 bg-purple-600/10 blur-[60px] -mr-16 -mt-16"></div>
+                        
+                        <div className="space-y-4 relative z-10">
+                            <h3 className="text-lg font-black text-purple-400 uppercase tracking-widest flex items-center gap-3">
+                                <span className="w-2 h-2 rounded-full bg-purple-500 animate-pulse"></span>
+                                Sync Movie Sheet Only
+                            </h3>
+                            <p className="text-gray-400 text-sm leading-relaxed font-medium">
+                                មុខងារនេះនឹងធ្វើការទាញយកតែទិន្នន័យពី Sheet "Movies" ប៉ុណ្ណោះ។ វារហ័ស និងមិនប៉ះពាល់ដល់ទិន្នន័យផ្សេងៗទៀតឡើយ។
+                            </p>
+                        </div>
+
+                        <div className="pt-4 relative z-10">
+                            <button 
+                                onClick={handleMigrateMovies}
+                                disabled={isMigratingMovies}
+                                className={`
+                                    w-full py-5 rounded-[1.8rem] font-black uppercase text-sm tracking-[0.2em] transition-all flex items-center justify-center gap-4 shadow-2xl
+                                    ${isMigratingMovies 
+                                        ? 'bg-gray-800 text-gray-500 cursor-not-allowed border border-white/5' 
+                                        : 'bg-gradient-to-r from-purple-600 to-indigo-700 text-white hover:scale-[1.02] active:scale-95 border border-white/10'
+                                    }
+                                `}
+                            >
+                                {isMigratingMovies ? <Spinner size="sm" /> : <svg className="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={3}><path strokeLinecap="round" strokeLinejoin="round" d="M7 4v16M17 4v16M3 8h4m10 0h4M3 12h18M3 16h4m10 0h4M4 20h16a1 1 0 001-1V5a1 1 0 00-1-1H4a1 1 0 00-1 1v14a1 1 0 001 1z" /></svg>}
+                                {isMigratingMovies ? 'កំពុងដំណើរការ...' : 'SYNC MOVIES ONLY'}
+                            </button>
+                        </div>
                     </div>
 
                     {/* Cache Section */}

@@ -260,7 +260,10 @@ const DesktopAdminDashboard: React.FC<{ isTablet?: boolean }> = ({ isTablet }) =
                     if (incentiveViewMode === 'execute') return <IncentiveExecutionView projectId={activeIncentiveProjectId} orders={orders} onBack={() => setActiveIncentiveProjectId('')} />;
                     return <IncentiveProjectDetails projectId={activeIncentiveProjectId} onBack={() => setActiveIncentiveProjectId('')} />;
                 }
-                return <IncentivesDashboard onOpenProject={(id, mode) => { setActiveIncentiveProjectId(id); setIncentiveViewMode(mode); }} />;
+                return <IncentivesDashboard 
+                    onOpenProject={(id, mode) => { setActiveIncentiveProjectId(id); setIncentiveViewMode(mode); }} 
+                    onBack={() => setActiveDashboard('admin')}
+                />;
             default: return null;
         }
     };
@@ -279,6 +282,17 @@ const DesktopAdminDashboard: React.FC<{ isTablet?: boolean }> = ({ isTablet }) =
         children: renderContent(),
         isSidebarCollapsed
     };
+
+    // --- FULL SCREEN WRAPPERS FOR SPECIFIC TABS ---
+    if (activeDashboard === 'incentives') {
+        return (
+            <div className="fixed inset-0 z-[100] bg-[#0B0E11] overflow-y-auto">
+                {renderContent()}
+                {editProfileModalOpen && <EditProfileModal onClose={() => setEditProfileModalOpen(false)} />}
+                {advancedSettingsOpen && <AdvancedSettingsModal onClose={() => setAdvancedSettingsOpen(false)} />}
+            </div>
+        );
+    }
 
     if (isTablet) return (
         <>

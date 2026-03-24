@@ -102,17 +102,17 @@ const SelectFilter: React.FC<SelectFilterProps> = ({
             <div className="w-full flex flex-col space-y-3">
                 {searchable && (
                     <div className="relative group px-1">
-                        <svg className="absolute left-4 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-600 group-focus-within:text-blue-500 transition-colors" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" strokeWidth={2.5}/></svg>
+                        <svg className="absolute left-4 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-600 group-focus-within:text-[#FCD535] transition-colors" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" strokeWidth={2.5}/></svg>
                         <input
                             type="text"
-                            className="w-full bg-black/40 border border-white/10 rounded-xl pl-11 pr-4 py-3 text-sm text-white focus:border-blue-500/50 outline-none transition-all shadow-inner"
+                            className="w-full bg-[#0B0E11] border border-[#2B3139] rounded-sm pl-11 pr-4 py-3 text-sm text-white focus:border-[#FCD535] outline-none transition-all"
                             placeholder="Type to search..."
                             value={searchTerm}
                             onChange={(e) => setSearchTerm(e.target.value)}
                         />
                     </div>
                 )}
-                <div className="max-h-[320px] overflow-y-auto custom-scrollbar space-y-1 pr-1 py-1">
+                <div className="max-h-[320px] overflow-y-auto custom-scrollbar space-y-1 py-1">
                     {filteredOptions.length > 0 ? filteredOptions.map((opt, idx) => {
                         const optValue = getOptionValue(opt);
                         const optLabel = getOptionLabel(opt);
@@ -121,21 +121,21 @@ const SelectFilter: React.FC<SelectFilterProps> = ({
                             <div 
                                 key={`${optValue}-${idx}`}
                                 onClick={() => handleSelect(optValue)}
-                                className={`px-4 py-3.5 flex items-center justify-between cursor-pointer rounded-2xl transition-all mx-1 ${isSelected ? 'bg-blue-600 text-white shadow-lg shadow-blue-900/40' : 'bg-white/[0.03] text-gray-400 hover:bg-white/10 border border-transparent hover:border-white/10'}`}
+                                className={`px-4 py-3.5 flex items-center justify-between cursor-pointer rounded-sm transition-all ${isSelected ? 'bg-[#FCD535]/10 text-[#FCD535] border border-[#FCD535]/50' : 'bg-transparent text-gray-400 hover:bg-[#2B3139] border border-transparent'}`}
                             >
-                                <span className={`text-[13px] font-bold tracking-tight ${isSelected ? 'text-white' : ''}`}>{optLabel}</span>
+                                <span className={`text-[13px] font-bold tracking-tight ${isSelected ? 'text-[#FCD535]' : ''}`}>{optLabel}</span>
                                 {isSelected ? (
-                                    <div className="w-5.5 h-5.5 bg-white/20 rounded-lg flex items-center justify-center shrink-0">
-                                        <svg className="w-4 h-4 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={4}><path d="M5 13l4 4L19 7" /></svg>
+                                    <div className="w-5.5 h-5.5 bg-[#FCD535] rounded-sm flex items-center justify-center shrink-0">
+                                        <svg className="w-4 h-4 text-black" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={4}><path d="M5 13l4 4L19 7" /></svg>
                                     </div>
                                 ) : multiple && (
-                                    <div className="w-5.5 h-5.5 rounded-lg border-2 border-white/10 shrink-0"></div>
+                                    <div className="w-5.5 h-5.5 rounded-sm border border-[#2B3139] shrink-0"></div>
                                 )}
                             </div>
                         );
                     }) : (
-                        <div className="py-14 text-center flex flex-col items-center gap-3 opacity-30 border-2 border-dashed border-white/5 rounded-[2rem] mx-1">
-                            <div className="w-12 h-12 bg-white/5 rounded-full flex items-center justify-center">
+                        <div className="py-14 text-center flex flex-col items-center gap-3 opacity-30 border-2 border-dashed border-[#2B3139] rounded-sm">
+                            <div className="w-12 h-12 bg-white/5 rounded-sm flex items-center justify-center">
                                 <svg className="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" strokeWidth={2}/></svg>
                             </div>
                             <span className="text-[10px] font-black uppercase tracking-[0.2em]">No Matches Found</span>
@@ -158,31 +158,31 @@ const SelectFilter: React.FC<SelectFilterProps> = ({
     }
 
     // Style logic for dropdown mode
-    let baseClass = "relative w-full cursor-pointer bg-gray-900/50 border border-gray-800 py-3.5 px-4 rounded-2xl font-bold transition-all hover:bg-gray-900 hover:border-gray-700 flex justify-between items-center group/select";
+    let baseClass = "relative w-full cursor-pointer bg-[#0B0E11] border border-[#2B3139] py-3.5 px-4 rounded-sm font-bold transition-all hover:bg-[#181A20] flex justify-between items-center group/select";
     let textClass = "text-gray-400";
 
     if (variant === 'payment') {
         if (selectedValues.includes('Paid')) {
-            baseClass += " border-emerald-500/30 bg-emerald-500/5 shadow-[0_0_20px_rgba(16,185,129,0.1)]";
-            textClass = "text-emerald-400";
+            baseClass += " border-[#0ECB81]/50 bg-[#0ECB81]/10";
+            textClass = "text-[#0ECB81]";
         } else if (selectedValues.includes('Unpaid')) {
-            baseClass += " border-red-500/30 bg-red-500/5 shadow-[0_0_20px_rgba(239,68,68,0.1)]";
-            textClass = "text-red-400";
+            baseClass += " border-[#F6465D]/50 bg-[#F6465D]/10";
+            textClass = "text-[#F6465D]";
         }
     } else {
         if (selectedValues.length > 0) {
-            textClass = "text-white";
-            baseClass += " border-blue-500/40 bg-blue-600/5 shadow-[0_0_20px_rgba(37,99,235,0.1)]";
+            textClass = "text-[#FCD535]";
+            baseClass += " border-[#FCD535]/50 bg-[#FCD535]/10";
         }
     }
 
-    if (isOpen) baseClass += " ring-2 ring-blue-500/20 border-blue-500/50 bg-gray-950";
+    if (isOpen) baseClass += " border-[#FCD535] bg-[#181A20]";
 
     return (
         <div className={`w-full transition-all ${isOpen ? 'relative z-[60]' : 'relative z-10'}`} ref={dropdownRef}>
-            <label className="text-[10px] font-black text-gray-500 mb-2 block uppercase tracking-widest ml-2 flex items-center gap-2">
+            <label className="text-[10px] font-black text-gray-500 mb-2 uppercase tracking-widest flex items-center gap-2">
                 {label} 
-                {multiple && <span className="text-[8px] font-black text-blue-400 bg-blue-500/10 px-2 py-0.5 rounded-full border border-blue-500/20">MULTI</span>}
+                {multiple && <span className="text-[8px] font-black text-[#FCD535] bg-[#FCD535]/10 px-2 py-0.5 rounded-sm border border-[#FCD535]/20">MULTI</span>}
             </label>
             
             <div 
@@ -205,16 +205,16 @@ const SelectFilter: React.FC<SelectFilterProps> = ({
 
                 {/* Dropdown Menu */}
                 {isOpen && (
-                    <div className="absolute top-full left-0 w-full mt-3 bg-[#1a2235] border border-white/10 rounded-2xl shadow-[0_30px_60px_rgba(0,0,0,0.6)] z-50 overflow-hidden animate-dropdown-in md:max-h-[400px] flex flex-col backdrop-blur-xl">
+                    <div className="absolute top-full left-0 w-full mt-1 bg-[#181A20] border border-[#2B3139] rounded-sm shadow-2xl z-50 overflow-hidden animate-dropdown-in md:max-h-[400px] flex flex-col">
                         {/* Search Bar */}
                         {searchable && (
-                            <div className="p-3 border-b border-white/5 sticky top-0 bg-[#1a2235]/80 backdrop-blur-md z-10">
+                            <div className="p-2 border-b border-[#2B3139] sticky top-0 bg-[#181A20] z-10">
                                 <div className="relative">
                                     <svg className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" /></svg>
                                     <input
                                         ref={searchInputRef}
                                         type="text"
-                                        className="w-full bg-gray-950 border border-gray-700 rounded-xl pl-10 pr-4 py-2.5 text-sm text-white focus:border-blue-500/50 focus:outline-none placeholder-gray-600 transition-all"
+                                        className="w-full bg-[#0B0E11] border border-[#2B3139] rounded-sm pl-10 pr-4 py-2 text-sm text-white focus:border-[#FCD535] focus:outline-none transition-all"
                                         placeholder="Type to filter..."
                                         value={searchTerm}
                                         onChange={(e) => setSearchTerm(e.target.value)}
@@ -236,29 +236,29 @@ const SelectFilter: React.FC<SelectFilterProps> = ({
                                             key={`${optValue}-${idx}`}
                                             onClick={(e) => { e.stopPropagation(); handleSelect(optValue); }}
                                             className={`
-                                                px-4 py-3.5 flex items-center justify-between cursor-pointer transition-all mx-1.5 rounded-xl mb-0.5 last:mb-0
-                                                ${isSelected ? 'bg-blue-600 text-white shadow-lg shadow-blue-900/40' : 'text-gray-300 hover:bg-white/5'}
+                                                px-3 py-2.5 flex items-center justify-between cursor-pointer transition-all mx-1 rounded-sm
+                                                ${isSelected ? 'bg-[#2B3139] text-[#FCD535]' : 'text-gray-300 hover:bg-[#2B3139]'}
                                             `}
                                         >
-                                            <span className={`text-sm font-bold truncate ${isSelected ? 'text-white' : ''}`}>
+                                            <span className={`text-xs font-bold truncate ${isSelected ? 'text-[#FCD535]' : ''}`}>
                                                 {optLabel}
                                             </span>
                                             {isSelected ? (
-                                                <div className="w-5 h-5 bg-white/20 rounded-lg flex items-center justify-center flex-shrink-0 ml-2">
-                                                    <svg className="w-3.5 h-3.5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 13l4 4L19 7" /></svg>
+                                                <div className="w-4 h-4 bg-[#FCD535] rounded-sm flex items-center justify-center flex-shrink-0 ml-2">
+                                                    <svg className="w-3 h-3 text-black" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 13l4 4L19 7" /></svg>
                                                 </div>
                                             ) : multiple && (
-                                                <div className="w-5 h-5 rounded-lg border-2 border-gray-700 flex-shrink-0 ml-2 group-hover:border-gray-500 transition-colors"></div>
+                                                <div className="w-4 h-4 rounded-sm border border-[#2B3139] flex-shrink-0 ml-2"></div>
                                             )}
                                         </div>
                                     );
                                 })
                             ) : (
                                 <div className="p-8 text-center flex flex-col items-center gap-3">
-                                    <div className="w-12 h-12 bg-gray-800 rounded-full flex items-center justify-center text-gray-600">
-                                        <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" /></svg>
+                                    <div className="w-10 h-10 bg-[#2B3139] rounded-sm flex items-center justify-center text-gray-500">
+                                        <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" /></svg>
                                     </div>
-                                    <div className="text-xs text-gray-500 font-black uppercase tracking-widest">No Matches Found</div>
+                                    <div className="text-[10px] text-gray-500 font-bold uppercase tracking-widest">No Matches Found</div>
                                 </div>
                             )}
                         </div>

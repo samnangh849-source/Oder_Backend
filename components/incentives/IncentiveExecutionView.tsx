@@ -193,14 +193,15 @@ const IncentiveExecutionView: React.FC<IncentiveExecutionViewProps> = ({ project
     };
 
     const exportToCSV = () => {
-        const headers = ["Personnel", "Username", "Role", "Team", "Reward Amount", "Performance"];
+        const headers = ["Personnel", "Username", "Role", "Team", "Reward Amount", "Performance", "Metric"];
         const rows = preparedResults.users.map(u => [
             u.fullName, 
             u.username, 
             u.role || '', 
             u.team || '', 
-            u.reward.toFixed(2), 
-            u.performance.toFixed(2)
+            u.reward.toFixed(2),
+            u.performance.toFixed(2),
+            u.performanceMetric
         ]);
         const csvContent = "data:text/csv;charset=utf-8," + headers.join(",") + "\n" + rows.map(e => e.join(",")).join("\n");
         const link = document.createElement("a");
@@ -213,6 +214,16 @@ const IncentiveExecutionView: React.FC<IncentiveExecutionViewProps> = ({ project
     const preparedResults = useMemo(() => {
         const users = calculationResults.map(cr => {
             const u = appData.users?.find(x => x.UserName === cr.userName);
+            let breakdown: any[] = [];
+            if (cr.breakdownJson) {
+                try {
+                    breakdown = JSON.parse(cr.breakdownJson);
+                } catch (e) {
+                    console.error("Failed to parse breakdownJson", e);
+                }
+            }
+            const metricType = breakdown.find((b: any) => b?.metricType)?.metricType || '';
+            const isAmountMetric = ['sales amount', 'revenue', 'profit'].includes(String(metricType).toLowerCase());
             return {
                 username: cr.userName,
                 fullName: u?.FullName || cr.userName,
@@ -220,9 +231,11 @@ const IncentiveExecutionView: React.FC<IncentiveExecutionViewProps> = ({ project
                 role: u?.Role,
                 team: u?.Team,
                 performance: cr.totalRevenue || cr.totalOrders, // Simplified assumption
+                performanceMetric: metricType || (cr.totalRevenue ? 'Revenue/Profit' : 'Number of Orders'),
+                isAmountMetric,
                 reward: cr.calculatedValue,
                 isCustom: cr.isCustom || false,
-                breakdown: [] // Backend simplification currently omits detailed breakdown
+                breakdown: breakdown
             };
         }).sort((a, b) => b.reward - a.reward || b.performance - a.performance);
 
@@ -253,14 +266,14 @@ const IncentiveExecutionView: React.FC<IncentiveExecutionViewProps> = ({ project
                             <svg className="w-7 h-7" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path d="M13 7h8m0 0v8m0-8l-8 8-4-4-6 6" strokeWidth="2.5" /></svg>
                         </div>
                         <div>
-                            <h1 className="text-2xl font-black text-white tracking-tight uppercase italic">{project.name}</h1>
+                            <h1 className="text-2xl font-black text-white tracking-tight uppercase italic">{project.name || (project as any).projectName}</h1>
                             <div className="flex items-center gap-3 mt-1.5">
                                 <div className="flex items-center gap-2 bg-black/40 px-3 py-1 rounded-full border border-white/5">
                                     <input type="month" value={selectedMonth} onChange={e => setSelectedMonth(e.target.value)} className="bg-transparent border-none p-0 text-indigo-400 text-[10px] font-black uppercase focus:ring-0 cursor-pointer" />
                                 </div>
                                 <span className="w-1 h-1 bg-slate-700 rounded-full"></span>
                                 <span className="text-[10px] font-black text-slate-500 uppercase tracking-widest">{t.total_payout}: <span className="text-emerald-400 font-black ml-1">${totalPayout.toLocaleString(undefined, { minimumFractionDigits: 2 })}</span></span>
-                                {isCalculating && <span className="text-[10px] text-blue-400 animate-pulse ml-2">Calculating...</span>}
+                                {isCalculating && <span className="text-[10px] text-blue-400 animate-pulse ml-2">{t.loading}</span>}
                             </div>
                         </div>
                     </div>
@@ -286,7 +299,7 @@ const IncentiveExecutionView: React.FC<IncentiveExecutionViewProps> = ({ project
                 <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
                     <div className="bg-slate-900/40 border border-white/5 p-6 rounded-[2.5rem] backdrop-blur-xl relative overflow-hidden group">
                         <div className="relative z-10">
-                            <span className="text-[10px] font-black text-slate-500 uppercase tracking-widest block mb-1">Total Payout Volume</span>
+                            <span className="text-[10px] font-black text-slate-500 uppercase tracking-widest block mb-1">Total Distributed</span>
                             <div className="flex items-baseline gap-2">
                                 <span className="text-3xl font-black text-emerald-400 italic">${totalPayout.toLocaleString(undefined, { minimumFractionDigits: 2 })}</span>
                                 <span className="text-[10px] font-bold text-slate-600 uppercase">USD</span>
@@ -298,7 +311,7 @@ const IncentiveExecutionView: React.FC<IncentiveExecutionViewProps> = ({ project
                     <div className="bg-slate-900/40 border border-white/5 p-6 rounded-[2.5rem] backdrop-blur-xl relative overflow-hidden group">
                         <div className="relative z-10 flex items-center justify-between">
                             <div>
-                                <span className="text-[10px] font-black text-slate-500 uppercase tracking-widest block mb-1">Top Performer</span>
+                                <span className="text-[10px] font-black text-slate-500 uppercase tracking-widest block mb-1">{t.top_performer || 'Top Performer'}</span>
                                 {topStaff ? (
                                     <div className="flex items-center gap-3">
                                         <UserAvatar avatarUrl={topStaff.avatar} name={topStaff.fullName} size="sm" />
@@ -319,15 +332,16 @@ const IncentiveExecutionView: React.FC<IncentiveExecutionViewProps> = ({ project
 
                     <div className="bg-slate-900/40 border border-white/5 p-6 rounded-[2.5rem] backdrop-blur-xl relative overflow-hidden group">
                         <div className="relative z-10">
-                            <span className="text-[10px] font-black text-slate-500 uppercase tracking-widest block mb-1">Avg. Achievement</span>
+                            <span className="text-[10px] font-black text-slate-500 uppercase tracking-widest block mb-1">Avg. Reward</span>
                             <div className="flex items-baseline gap-2">
-                                <span className="text-3xl font-black text-blue-400 italic">${avgPerf.toLocaleString(undefined, { maximumFractionDigits: 0 })}</span>
+                                <span className="text-3xl font-black text-blue-400 italic">${(totalPayout / (preparedResults.users.length || 1)).toLocaleString(undefined, { maximumFractionDigits: 0 })}</span>
                                 <span className="text-[10px] font-bold text-slate-600 uppercase">Per Staff</span>
                             </div>
                         </div>
                         <div className="absolute -right-4 -bottom-4 w-24 h-24 bg-blue-500/10 rounded-full blur-3xl group-hover:bg-blue-500/20 transition-all"></div>
                     </div>
                 </div>
+
             </div>
 
             {/* MODERN Manual Input Editor */} 
@@ -536,8 +550,8 @@ const IncentiveExecutionView: React.FC<IncentiveExecutionViewProps> = ({ project
                                         </td>
                                         <td className="px-8 py-5">
                                             <div className="space-y-1">
-                                                <p className="font-mono text-slate-300 font-black text-[13px] italic">${u.performance.toLocaleString()}</p>
-                                                <p className="text-[8px] text-slate-600 uppercase font-black tracking-tighter">{t.gross_perf_vol}</p>
+                                                <p className="font-mono text-slate-300 font-black text-[13px] italic">{u.isAmountMetric ? '$' : ''}{u.performance.toLocaleString()}</p>
+                                                <p className="text-[8px] text-slate-600 uppercase font-black tracking-tighter">{u.performanceMetric || t.gross_perf_vol}</p>
                                             </div>
                                         </td>
                                         <td className="px-8 py-5">

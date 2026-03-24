@@ -52,17 +52,40 @@ const IframeFallbackPlayer: React.FC<{
 
   return (
     <div ref={wrapperRef} className="w-full h-full bg-black flex items-center justify-center overflow-hidden relative">
+      <style dangerouslySetInnerHTML={{ __html: `
+        .video-container {
+          position: relative;
+          width: 100%;
+          padding-bottom: 56.25%; /* 16:9 Aspect Ratio */
+          height: 0;
+          overflow: hidden;
+          background: #000;
+        }
 
-      {warmupSrc && (
-        <iframe src={warmupSrc} style={{ position: 'absolute', width: 1, height: 1, opacity: 0, pointerEvents: 'none', zIndex: -1 }} aria-hidden="true" title="warmup" />
-      )}
+        .video-container iframe {
+          position: absolute;
+          top: 0;
+          left: 0;
+          width: 100%;
+          height: 100%;
+          border: 0;
+        }
+      `}} />
 
-      {warmupDone && (
-        <iframe src={src} className="w-full h-full border-none" allowFullScreen allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share" />
-      )}
+      <div className="w-full max-w-4xl mx-auto">
+        <div className="video-container shadow-2xl border border-white/5 rounded-xl overflow-hidden">
+          {warmupSrc && (
+            <iframe src={warmupSrc} style={{ position: 'absolute', width: 1, height: 1, opacity: 0, pointerEvents: 'none', zIndex: -1 }} aria-hidden="true" title="warmup" />
+          )}
+
+          {warmupDone && (
+            <iframe src={src} allowFullScreen allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share" />
+          )}
+        </div>
+      </div>
 
       {warming && (
-        <div className="absolute inset-0 bg-black flex flex-col items-center justify-center gap-3 z-10">
+        <div className="absolute inset-0 bg-black flex flex-col items-center justify-center gap-3 z-30">
           <Loader2 className="w-10 h-10 text-yellow-500 animate-spin" />
           {!hideStatusBar && <p className="text-white/80 font-bold text-sm">កំពុងរៀបចំ Video...</p>}
           {!hideStatusBar && <p className="text-white/40 text-[10px] uppercase tracking-widest animate-pulse">Initializing Secure Session</p>}
@@ -70,7 +93,7 @@ const IframeFallbackPlayer: React.FC<{
       )}
 
       {!hideStatusBar && (
-        <div className="absolute bottom-4 left-4 right-4 flex items-center justify-between z-20 pointer-events-none">
+        <div className="absolute bottom-4 left-4 right-4 flex items-center justify-between z-40 pointer-events-none">
           <div className="flex items-center gap-2 bg-black/60 backdrop-blur-md px-3 py-1.5 rounded-full border border-white/10">
             <div className={`w-2 h-2 rounded-full animate-pulse ${warming ? 'bg-yellow-500' : 'bg-green-500'}`}></div>
             <span className="text-[10px] font-bold text-white/80 uppercase tracking-widest">

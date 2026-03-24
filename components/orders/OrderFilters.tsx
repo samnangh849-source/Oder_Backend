@@ -234,7 +234,7 @@ const OrderFilters: React.FC<OrderFiltersProps> = ({
                 />
 
                 <div className="sm:col-span-2 xl:col-span-3">
-                    <label className="text-[10px] font-black text-gray-500 mb-2 block uppercase tracking-widest ml-2">Asset Selection (Product)</label>
+                    <label className="text-[10px] font-black text-gray-500 mb-2 uppercase tracking-widest flex items-center gap-2">Asset Selection (Product)</label>
                     <SearchableProductDropdown 
                         products={appData.products} 
                         selectedProductName={filters.product} 
@@ -247,7 +247,7 @@ const OrderFilters: React.FC<OrderFiltersProps> = ({
             <div className="pt-4">
                 <button 
                     onClick={handleReset}
-                    className="w-full py-4 text-[11px] font-black text-gray-500 uppercase tracking-widest hover:text-white border border-dashed border-gray-800 rounded-2xl transition-all active:scale-95 hover:border-red-500/30 hover:bg-red-500/10"
+                    className="w-full py-3 text-[11px] font-bold text-gray-400 uppercase tracking-widest hover:text-[#F6465D] border border-transparent bg-[#181A20] rounded-sm transition-all hover:bg-[#F6465D]/10 hover:border-[#F6465D]/30"
                 >
                     Reset All Configurations
                 </button>

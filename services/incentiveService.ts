@@ -74,7 +74,17 @@ export const getIncentiveProjects = async (): Promise<IncentiveProject[]> => {
         if (result.status === 'success' && Array.isArray(result.data)) {
             return result.data.map((p: any) => ({
                 ...p,
-                calculators: p.calculators || []
+                calculators: (p.calculators || []).map((c: any) => {
+                    if (c.rulesJson) {
+                        try {
+                            const extra = JSON.parse(c.rulesJson);
+                            return { ...c, ...extra };
+                        } catch (e) {
+                            console.error("Error parsing rulesJson", e);
+                        }
+                    }
+                    return c;
+                })
             }));
         }
         return [];
@@ -250,13 +260,29 @@ export const addCalculatorToProject = async (projectId: number, calculator: Omit
 export const updateCalculator = async (projectId: number, calculatorId: number, updates: Partial<IncentiveCalculator>): Promise<IncentiveCalculator | null> => {
     try {
         const headers = await getAuthHeaders();
+        
+        // Split updates into core fields and extra fields
+        const { name, type, value, projectId: _, rulesJson, ...extraFields } = updates as any;
+        
+        const newData: any = {};
+        if (name !== undefined) newData.name = name;
+        if (type !== undefined) newData.type = type;
+        if (value !== undefined) newData.value = Number(value);
+        
+        // Handle extra fields by putting them in rulesJson
+        if (Object.keys(extraFields).length > 0) {
+            newData.rulesJson = JSON.stringify(extraFields);
+        } else if (rulesJson !== undefined) {
+            newData.rulesJson = rulesJson;
+        }
+
         const response = await fetch(`${WEB_APP_URL}/api/admin/update-sheet`, {
             method: 'POST',
             headers,
             body: JSON.stringify({
                 sheetName: 'IncentiveCalculators',
                 primaryKey: { id: String(calculatorId) },
-                newData: updates
+                newData
             })
         });
         const result = await response.json();

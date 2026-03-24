@@ -374,6 +374,7 @@ export interface IncentiveResult {
     totalRevenue: number;
     calculatedValue: number;
     isCustom?: boolean;
+    breakdownJson?: string;
 }
 
 export interface Movie {

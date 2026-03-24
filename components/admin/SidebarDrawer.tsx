@@ -63,7 +63,7 @@ const SidebarDrawer: React.FC<SidebarDrawerProps> = ({
                         </div>
                         <div>
                             <h2 className="text-xl font-black text-white italic uppercase tracking-tighter leading-none">O-System</h2>
-                            <p className="text-[9px] text-blue-400 font-bold uppercase tracking-[0.25em] mt-1">Core Access</p>
+                            <p className="text-[11px] text-blue-400 font-bold uppercase tracking-[0.25em] mt-1">Core Access</p>
                         </div>
                     </div>
                     

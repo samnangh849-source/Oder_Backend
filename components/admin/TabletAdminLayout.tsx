@@ -82,7 +82,7 @@ const TabletAdminLayout: React.FC<TabletAdminLayoutProps> = ({
                         </div>
                         <div className="min-w-0">
                             <h1 className="text-sm font-black text-white italic uppercase tracking-tighter leading-none">O-System</h1>
-                            <span className="text-[8px] text-blue-500 font-black uppercase tracking-[0.2em] opacity-80">TABLET ADMIN</span>
+                            <span className="text-[10px] text-blue-500 font-black uppercase tracking-[0.2em] opacity-80">TABLET ADMIN</span>
                         </div>
                     </div>
                 </div>
@@ -90,7 +90,7 @@ const TabletAdminLayout: React.FC<TabletAdminLayoutProps> = ({
                 <div className="flex items-center gap-4">
                     <div className="text-right hidden sm:block">
                         <p className="text-xs font-black text-white leading-tight mb-0.5">{currentUser?.FullName}</p>
-                        <p className="text-[9px] text-blue-500 font-black uppercase tracking-widest opacity-70">{currentUser?.Role}</p>
+                        <p className="text-[10px] text-blue-500 font-black uppercase tracking-widest opacity-70">{currentUser?.Role}</p>
                     </div>
                     
                     <div className="relative" ref={dropdownRef}>

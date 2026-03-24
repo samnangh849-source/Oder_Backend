@@ -27,6 +27,7 @@
     "hls.js": "^1.6.15",
     "jspdf": "^2.5.2",
     "jspdf-autotable": "^3.8.4",
+    "jsqr": "^1.4.0",
     "lucide-react": "^0.562.0",
     "path": "^0.12.7",
     "plyr": "^3.8.4",

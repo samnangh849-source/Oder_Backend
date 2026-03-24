@@ -89,7 +89,7 @@ const DesktopAdminLayout: React.FC<DesktopAdminLayoutProps> = ({
                         <div>
                             <h1 className="text-xl font-black text-white italic uppercase tracking-tighter flex items-center gap-2">
                                 <span>O-System</span>
-                                <span className="text-[10px] bg-blue-500/20 text-blue-400 px-2 py-0.5 rounded border border-blue-500/30">ADMIN CORE</span>
+                                <span className="text-xs bg-blue-500/20 text-blue-400 px-2 py-0.5 rounded border border-blue-500/30">ADMIN CORE</span>
                             </h1>
                         </div>
 

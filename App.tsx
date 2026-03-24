@@ -335,8 +335,8 @@ const AppContent: React.FC = () => {
                     )}
 
                     {previewImageUrl && (
-                        <Modal isOpen={true} onClose={() => setPreviewImageUrl(null)} maxWidth="max-w-4xl">
-                            <div className="relative p-2 h-[85vh] flex flex-col">
+                        <Modal isOpen={true} onClose={() => setPreviewImageUrl(null)} maxWidth="max-w-5xl" zIndex="z-[300]">
+                            <div className="relative bg-transparent h-[85vh] flex flex-col p-4 w-full" onClick={(e) => e.stopPropagation()}>
                                 <button onClick={() => setPreviewImageUrl(null)} className="absolute top-4 right-4 z-50 w-10 h-10 bg-red-600/80 hover:bg-red-600 text-white rounded-full flex items-center justify-center shadow-2xl transition-all border border-white/20 active:scale-90"><svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2.5}><path d="M6 18L18 6M6 6l12 12" /></svg></button>
                                 
                                 {previewImageUrl.includes('drive.google.com') ? (
