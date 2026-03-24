@@ -122,6 +122,9 @@ func InitDB() {
 	if db.Migrator().HasTable(&RevenueEntry{}) && !db.Migrator().HasColumn(&RevenueEntry{}, "revenue") {
 		log.Println("⚠️ Legacy schema detected for RevenueEntry (missing revenue). Table will NOT be dropped automatically.")
 	}
+	if db.Migrator().HasTable(&IncentiveResult{}) && !db.Migrator().HasColumn(&IncentiveResult{}, "total_profit") {
+		log.Println("⚠️ Legacy schema detected for IncentiveResult (missing total_profit). Auto-migrating...")
+	}
 
 	err = db.AutoMigrate(
 		&User{}, &Store{}, &Setting{}, &TeamPage{}, &Product{}, &Location{}, &ShippingMethod{},
