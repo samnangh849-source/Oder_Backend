@@ -14,7 +14,7 @@ export interface AdvancedSettings {
     orderEditGracePeriod?: number; // Time in seconds, minimum 3
     placingOrderGracePeriod?: number; // Time in seconds, minimum 3
     packagingGracePeriod?: number; // Time in seconds, minimum 3
-    uiTheme?: 'default' | 'neumorphism' | 'samsung' | 'netflix';
+    uiTheme?: 'default' | 'neumorphism' | 'samsung' | 'netflix' | 'finance' | 'binance';
     themeMode?: 'light' | 'dark';
 }
 

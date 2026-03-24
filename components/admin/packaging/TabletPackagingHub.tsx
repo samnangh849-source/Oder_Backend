@@ -19,6 +19,7 @@ interface TabletPackagingHubProps {
     setSearchTerm: (term: string) => void;
     onPack: (order: ParsedOrder) => void;
     onShip: (order: ParsedOrder) => void;
+    onUndo: (order: ParsedOrder) => void;
     onView: (order: ParsedOrder) => void;
     onPrintManifest: () => void;
     onSwitchHub: () => void;
@@ -38,7 +39,7 @@ interface TabletPackagingHubProps {
 
 const TabletPackagingHub: React.FC<TabletPackagingHubProps> = ({
     orders, activeTab, setActiveTab, searchTerm, setSearchTerm,
-    onPack, onShip, onView, onPrintManifest, onSwitchHub, onExit, selectedStore,
+    onPack, onShip, onUndo, onView, onPrintManifest, onSwitchHub, onExit, selectedStore,
     progressStats, setIsFilterModalOpen, loadingActionId, tabCounts,
     selectedOrderIds, toggleOrderSelection, clearSelection, onBulkShip, isBulkProcessing,
     onToggleSelectAll
@@ -216,9 +217,14 @@ const TabletPackagingHub: React.FC<TabletPackagingHubProps> = ({
                                                 <div className={`flex justify-between items-center mt-2 pt-2 border-t ${B_BORDER}`}>
                                                     <span className={`text-[11px] font-mono font-bold text-[#0ECB81]`}>${(Number(order['Grand Total']) || 0).toFixed(2)}</span>
                                                     <div className="flex gap-1">
-                                                        <button onClick={() => onView(order)} className={`px-2 py-1 bg-[#2B3139] text-[#EAECEF] rounded-sm text-[10px]`}>View</button>
-                                                        {activeTab === 'Pending' && <button onClick={() => onPack(order)} className={`px-3 py-1 bg-[#FCD535] text-[#0B0E11] rounded-sm text-[10px] font-bold uppercase`}>Pack</button>}
-                                                        {activeTab === 'Ready to Ship' && <button onClick={() => onShip(order)} className={`px-3 py-1 bg-[#0ECB81] text-[#0B0E11] rounded-sm text-[10px] font-bold uppercase`}>Ship</button>}
+                                                        <button onClick={(e) => { e.stopPropagation(); onView(order); }} className={`px-2 py-1 bg-[#2B3139] text-[#EAECEF] rounded-sm text-[10px]`}>View</button>
+                                                        {activeTab === 'Pending' && <button onClick={(e) => { e.stopPropagation(); onPack(order); }} className={`px-3 py-1 bg-[#FCD535] text-[#0B0E11] rounded-sm text-[10px] font-bold uppercase`}>Pack</button>}
+                                                        {activeTab === 'Ready to Ship' && (
+                                                            <>
+                                                                <button onClick={(e) => { e.stopPropagation(); onUndo(order); }} className={`px-2 py-1 bg-[#F6465D]/10 text-[#F6465D] rounded-sm text-[10px] font-bold uppercase`}>Undo</button>
+                                                                <button onClick={(e) => { e.stopPropagation(); onShip(order); }} className={`px-3 py-1 bg-[#0ECB81] text-[#0B0E11] rounded-sm text-[10px] font-bold uppercase`}>Ship</button>
+                                                            </>
+                                                        )}
                                                     </div>
                                                 </div>
                                             </div>

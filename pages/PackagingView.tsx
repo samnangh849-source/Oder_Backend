@@ -173,7 +173,7 @@ const PackagingView: React.FC<{ orders?: ParsedOrder[] }> = ({ orders: propOrder
         return { packedByUserToday, storeTotalToday, progressPercentage };
     }, [localOrders, selectedStore, currentUser]);
 
-    const executeAction = async (order: ParsedOrder, newStatus: string, extraData: any = {}) => {
+    const executeAction = async (order: ParsedOrder, newStatus: string, extraData: any = {}, onSuccess?: () => void) => {
         const orderId = order['Order ID'];
         setLoadingActionId(orderId);
         try {
@@ -195,6 +195,7 @@ const PackagingView: React.FC<{ orders?: ParsedOrder[] }> = ({ orders: propOrder
             });
             const result = await res.json();
             if (result.status === 'success') {
+                if (onSuccess) onSuccess();
                 refreshData();
             } else {
                 alert("Action Failed: " + (result.message || "Unknown error"));
@@ -270,6 +271,17 @@ const PackagingView: React.FC<{ orders?: ParsedOrder[] }> = ({ orders: propOrder
 
     const clearSelection = () => setSelectedOrderIds(new Set());
 
+    const handleUndoReadyToShip = async (order: ParsedOrder) => {
+        if (!window.confirm("Do you want to move this order back to Pending Pack?")) return;
+        await executeAction(order, 'Pending', { 
+            'Packed By': '', 
+            'Packed Time': '', 
+            'Package Photo URL': '' 
+        }, () => {
+            setActiveTab('Pending');
+        });
+    };
+
     const toggleSelectAll = (ordersToSelect: ParsedOrder[]) => {
         const allIds = ordersToSelect.map(o => o['Order ID']);
         const allSelected = allIds.length > 0 && allIds.every(id => selectedOrderIds.has(id));
@@ -330,6 +342,7 @@ const PackagingView: React.FC<{ orders?: ParsedOrder[] }> = ({ orders: propOrder
         setSearchTerm,
         onPack: (order: ParsedOrder) => setPackingOrder(order),
         onShip: (order: ParsedOrder) => executeAction(order, 'Shipped', { 'Dispatched Time': new Date().toLocaleString('km-KH'), 'Dispatched By': currentUser?.FullName || 'Packer' }),
+        onUndo: handleUndoReadyToShip,
         onView: (order: ParsedOrder) => setViewingOrder(order),
         onPrintManifest: () => setIsManifestModalOpen(true),
         onSwitchHub: () => setSelectedStore(''),

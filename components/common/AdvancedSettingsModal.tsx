@@ -26,18 +26,24 @@ const AdvancedSettingsModal: React.FC<AdvancedSettingsModalProps> = ({ onClose }
     const getModalBg = () => {
         if (uiTheme === 'netflix') return isLightMode ? 'bg-[#f5f5f1]' : 'bg-[#141414]';
         if (uiTheme === 'samsung') return isLightMode ? 'bg-[#f2f2f7]' : 'bg-black';
+        if (uiTheme === 'finance') return isLightMode ? 'bg-[#f8fafc]' : 'bg-[#0f172a]';
+        if (uiTheme === 'binance') return isLightMode ? 'bg-[#f5f5f5]' : 'bg-[#0b0e11]';
         return isLightMode ? 'bg-white' : 'bg-black';
     };
 
     const getSidebarBg = () => {
         if (uiTheme === 'netflix') return isLightMode ? 'bg-white' : 'bg-black';
         if (uiTheme === 'samsung') return isLightMode ? 'bg-white/50 backdrop-blur-xl' : 'bg-[#121212]';
+        if (uiTheme === 'finance') return isLightMode ? 'bg-white' : 'bg-[#1e293b]';
+        if (uiTheme === 'binance') return isLightMode ? 'bg-white' : 'bg-[#1e2329]';
         return isLightMode ? 'bg-gray-50' : 'bg-black';
     };
 
     const getAccentColor = () => {
         if (uiTheme === 'netflix') return '#e50914';
         if (uiTheme === 'samsung') return '#0381fe';
+        if (uiTheme === 'finance') return '#10b981'; // Emerald green for Finance
+        if (uiTheme === 'binance') return '#FCD535'; // Binance Yellow
         return '#1DB954'; // Spotify green for default
     };
 
@@ -77,7 +83,7 @@ const AdvancedSettingsModal: React.FC<AdvancedSettingsModalProps> = ({ onClose }
         }));
     };
 
-    const setUiTheme = (theme: 'default' | 'neumorphism' | 'samsung' | 'netflix') => {
+    const setUiTheme = (theme: 'default' | 'neumorphism' | 'samsung' | 'netflix' | 'finance' | 'binance') => {
         setAdvancedSettings(prev => ({ ...prev, uiTheme: theme }));
     };
 
@@ -319,12 +325,14 @@ const AdvancedSettingsModal: React.FC<AdvancedSettingsModalProps> = ({ onClose }
 
                                 <section className="space-y-6">
                                     <h4 className="text-[11px] font-black uppercase tracking-[0.3em] text-gray-500">{t.ui_style}</h4>
-                                    <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
+                                    <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-6 gap-4">
                                         {[
                                             { id: 'default', label: t.ui_default, icon: '🏠' },
                                             { id: 'neumorphism', label: t.ui_neumorphism, icon: '🫧' },
                                             { id: 'samsung', label: t.ui_samsung, icon: '🪐' },
-                                            { id: 'netflix', label: t.ui_netflix, icon: '🎬' }
+                                            { id: 'netflix', label: t.ui_netflix, icon: '🎬' },
+                                            { id: 'finance', label: t.ui_finance || 'Finance', icon: '💎' },
+                                            { id: 'binance', label: t.ui_binance || 'Binance', icon: '🪙' }
                                         ].map(theme => {
                                             const isSelected = advancedSettings.uiTheme === theme.id || (!advancedSettings.uiTheme && theme.id === 'default');
                                             return (
