@@ -1211,9 +1211,10 @@ func performDataMigration() {
 	var users []User
 	if err := fetchSheetDataToStruct("Users", &users); err != nil {
 		tx.Rollback()
-		log.Println("❌ Migration failed for Users:", err)
+		log.Println("❌ Migration failed for Users (fetch):", err)
 		return
 	}
+	log.Printf("📊 Users: Fetched %d rows from sheet", len(users))
 	var validUsers []User
 	seenUsers := make(map[string]bool)
 	for _, x := range users {
@@ -1225,17 +1226,21 @@ func performDataMigration() {
 	if len(validUsers) > 0 {
 		if err := tx.CreateInBatches(validUsers, 100).Error; err != nil {
 			tx.Rollback()
-			log.Println("❌ Migration failed to save Users:", err)
+			log.Println("❌ Migration failed for Users (save):", err)
 			return
 		}
+		log.Printf("✅ Users: Saved %d valid rows", len(validUsers))
+	} else {
+		log.Println("⚠️ Users: No valid rows found to save")
 	}
 
 	var stores []Store
 	if err := fetchSheetDataToStruct("Stores", &stores); err != nil {
 		tx.Rollback()
-		log.Println("❌ Migration failed for Stores:", err)
+		log.Println("❌ Migration failed for Stores (fetch):", err)
 		return
 	}
+	log.Printf("📊 Stores: Fetched %d rows from sheet", len(stores))
 	var validStores []Store
 	seenStores := make(map[string]bool)
 	for _, x := range stores {
@@ -1247,9 +1252,10 @@ func performDataMigration() {
 	if len(validStores) > 0 {
 		if err := tx.CreateInBatches(validStores, 100).Error; err != nil {
 			tx.Rollback()
-			log.Println("❌ Migration failed to save Stores:", err)
+			log.Println("❌ Migration failed for Stores (save):", err)
 			return
 		}
+		log.Printf("✅ Stores: Saved %d valid rows", len(validStores))
 	}
 
 	var settings []Setting
@@ -1279,9 +1285,10 @@ func performDataMigration() {
 	var pages []TeamPage
 	if err := fetchSheetDataToStruct("TeamsPages", &pages); err != nil {
 		tx.Rollback()
-		log.Println("❌ Migration failed for TeamsPages:", err)
+		log.Println("❌ Migration failed for TeamsPages (fetch):", err)
 		return
 	}
+	log.Printf("📊 TeamsPages: Fetched %d rows from sheet", len(pages))
 	var validPages []TeamPage
 	seenPages := make(map[uint]bool)
 	for _, x := range pages {
@@ -1295,17 +1302,19 @@ func performDataMigration() {
 	if len(validPages) > 0 {
 		if err := tx.CreateInBatches(validPages, 100).Error; err != nil {
 			tx.Rollback()
-			log.Println("❌ Migration failed to save TeamsPages:", err)
+			log.Println("❌ Migration failed for TeamsPages (save):", err)
 			return
 		}
+		log.Printf("✅ TeamsPages: Saved %d valid rows", len(validPages))
 	}
 
 	var products []Product
 	if err := fetchSheetDataToStruct("Products", &products); err != nil {
 		tx.Rollback()
-		log.Println("❌ Migration failed for Products:", err)
+		log.Println("❌ Migration failed for Products (fetch):", err)
 		return
 	}
+	log.Printf("📊 Products: Fetched %d rows from sheet", len(products))
 	var validProducts []Product
 	seenProducts := make(map[string]bool)
 	for _, x := range products {
@@ -1317,9 +1326,10 @@ func performDataMigration() {
 	if len(validProducts) > 0 {
 		if err := tx.CreateInBatches(validProducts, 100).Error; err != nil {
 			tx.Rollback()
-			log.Println("❌ Migration failed to save Products:", err)
+			log.Println("❌ Migration failed for Products (save):", err)
 			return
 		}
+		log.Printf("✅ Products: Saved %d valid rows", len(validProducts))
 	}
 
 	var locations []Location
@@ -1712,9 +1722,10 @@ func performDataMigration() {
 	var orders []Order
 	if err := fetchSheetDataToStruct("AllOrders", &orders); err != nil {
 		tx.Rollback()
-		log.Println("❌ Migration failed for AllOrders:", err)
+		log.Println("❌ Migration failed for AllOrders (fetch):", err)
 		return
 	}
+	log.Printf("📊 AllOrders: Fetched %d rows from sheet", len(orders))
 	var validOrders []Order
 	seenOrderIDs := make(map[string]bool)
 	for _, o := range orders {
@@ -1726,9 +1737,12 @@ func performDataMigration() {
 	if len(validOrders) > 0 {
 		if err := tx.CreateInBatches(validOrders, 100).Error; err != nil {
 			tx.Rollback()
-			log.Println("❌ Migration failed to save AllOrders:", err)
+			log.Println("❌ Migration failed for AllOrders (save):", err)
 			return
 		}
+		log.Printf("✅ AllOrders: Saved %d valid rows", len(validOrders))
+	} else {
+		log.Println("⚠️ AllOrders: No valid rows found to save")
 	}
 
 	var movies []Movie
