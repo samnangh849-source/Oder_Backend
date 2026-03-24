@@ -2,8 +2,11 @@ package backend
 
 import (
 	"encoding/base64"
+	"fmt"
 	"log"
+	"net/url"
 	"os"
+	"strconv"
 	"strings"
 	"time"
 
@@ -14,149 +17,166 @@ import (
 
 var DB *gorm.DB
 
+// GetEnvInt returns an integer from environment or a default value
+func GetEnvInt(key string, defaultVal int) int {
+	if val, exists := os.LookupEnv(key); exists {
+		if intVal, err := strconv.Atoi(val); err == nil {
+			return intVal
+		}
+	}
+	return defaultVal
+}
+
 func InitDB() {
 	log.Println("🔌 Initializing PostgreSQL database connection...")
-	dsn := os.Getenv("DATABASE_URL")
-	if dsn == "" {
+	rawDSN := os.Getenv("DATABASE_URL")
+	if rawDSN == "" {
 		log.Fatal("❌ DATABASE_URL is not set!")
 	}
 
-	// បន្ថែម connect_timeout ដើម្បីកុំឱ្យវា Hang យូរពេកពេលភ្ជាប់មិនបាន
-	if !strings.Contains(dsn, "connect_timeout=") {
-		if strings.Contains(dsn, "?") {
-			dsn += "&connect_timeout=15"
-		} else {
-			dsn += "?connect_timeout=15"
-		}
+	// Smart DSN parsing and parameter injection
+	u, err := url.Parse(rawDSN)
+	if err != nil {
+		// If it's not a full URL (e.g. host=localhost...), fallback to string manipulation
+		log.Printf("⚠️ DSN is not a URL format, using string manipulation: %v", err)
 	}
 
-	// --- SSL/TLS Check & Configuration (Aiven.io) ---
+	dsn := rawDSN
+	appendParam := func(d, key, val string) string {
+		if !strings.Contains(d, key+"=") {
+			if strings.Contains(d, "?") {
+				return d + "&" + key + "=" + val
+			}
+			return d + "?" + key + "=" + val
+		}
+		return d
+	}
+
+	dsn = appendParam(dsn, "connect_timeout", "15")
+
+	// --- SSL/TLS Check & Configuration (Aiven.io/DigitalOcean) ---
 	caCertEnv := os.Getenv("DB_CA_CERT")
 	if caCertEnv != "" {
 		caPath := "ca.pem"
-		// ព្យាយាម Decode បើវាជា base64 បើមិនមែនទេប្រើផ្ទាល់តែម្តង
 		certData, err := base64.StdEncoding.DecodeString(caCertEnv)
 		if err != nil {
-			certData = []byte(caCertEnv)
+			certData = []byte(caCertEnv) // Assume raw PEM
 		}
 
 		if err := os.WriteFile(caPath, certData, 0600); err != nil {
-			log.Printf("⚠️ មិនអាចបង្កើតឯកសារ SSL CA: %v", err)
+			log.Printf("⚠️ Failed to write SSL CA file: %v", err)
 		} else {
-			log.Println("🔒 SSL CA Certificate ត្រូវបានកំណត់សម្រាប់ការត្រួតពិនិត្យ (verify-full)")
-			if !strings.Contains(dsn, "sslrootcert=") {
-				if strings.Contains(dsn, "?") {
-					dsn += "&sslrootcert=" + caPath
-				} else {
-					dsn += "?sslrootcert=" + caPath
+			log.Println("🔒 SSL CA Certificate configured (verify-full)")
+			dsn = appendParam(dsn, "sslrootcert", caPath)
+			// Force sslmode to verify-full for security if CA is provided
+			if strings.Contains(dsn, "sslmode=") {
+				// Replace existing sslmode
+				re := []string{"sslmode=disable", "sslmode=require", "sslmode=prefer", "sslmode=allow"}
+				for _, mode := range re {
+					dsn = strings.Replace(dsn, mode, "sslmode=verify-full", 1)
 				}
-			}
-			// ប្តូរ sslmode ទៅ verify-full ដើម្បីសុវត្ថិភាពខ្ពស់បំផុត
-			if !strings.Contains(dsn, "sslmode=") {
-				dsn += "&sslmode=verify-full"
-			} else if strings.Contains(dsn, "sslmode=require") {
-				dsn = strings.Replace(dsn, "sslmode=require", "sslmode=verify-full", 1)
+			} else {
+				dsn = appendParam(dsn, "sslmode", "verify-full")
 			}
 		}
-	} else if !strings.Contains(dsn, "sslmode=") {
-		// បើមិនមានការកំណត់ SSL ទេ ដាក់ឱ្យវា require ជាលំនាំដើមសម្រាប់ Aiven
-		if strings.Contains(dsn, "?") {
-			dsn += "&sslmode=require"
-		} else {
-			dsn += "?sslmode=require"
-		}
-		log.Println("🛡️ SSL Mode ត្រូវបានកំណត់ត្រឹម 'require' (Encryption Only)")
+	} else {
+		// Default to require for security if not specified
+		dsn = appendParam(dsn, "sslmode", "require")
 	}
 
 	var db *gorm.DB
-	var err error
-	maxRetries := 10
+	maxRetries := GetEnvInt("DB_MAX_RETRIES", 10)
 
 	for i := 0; i < maxRetries; i++ {
-		db, err = gorm.Open(postgres.Open(dsn), &gorm.Config{Logger: logger.Default.LogMode(logger.Error)})
+		db, err = gorm.Open(postgres.Open(dsn), &gorm.Config{
+			Logger: logger.Default.LogMode(logger.Error),
+			// PrepareStmt: true, // Increases performance for repeated queries
+		})
 		if err == nil {
 			break
 		}
-		log.Printf("⚠️ ភ្ជាប់ Database មិនបាន (ព្យាយាមលើកទី %d/%d): %v", i+1, maxRetries, err)
+		log.Printf("⚠️ Database connection failed (Attempt %d/%d): %v", i+1, maxRetries, err)
 		time.Sleep(5 * time.Second)
 	}
 
 	if err != nil {
-		log.Fatal("❌ បរាជ័យក្នុងការភ្ជាប់ Database ជាស្ថាពរ:", err)
+		log.Fatal("❌ Database connection failed permanently:", err)
 	}
 
 	sqlDB, err := db.DB()
 	if err == nil {
-		// Optimized pool for 3 Sync workers + 1 Order worker + HTTP traffic
-		sqlDB.SetMaxIdleConns(5)
-		sqlDB.SetMaxOpenConns(15)
-		sqlDB.SetConnMaxLifetime(10 * time.Minute)
-		log.Println("⚡ Database Connection Pool Optimized (Balanced for Workers)!")
+		// Configurable pool settings
+		maxIdle := GetEnvInt("DB_MAX_IDLE_CONNS", 10)
+		maxOpen := GetEnvInt("DB_MAX_OPEN_CONNS", 25)
+		sqlDB.SetMaxIdleConns(maxIdle)
+		sqlDB.SetMaxOpenConns(maxOpen)
+		sqlDB.SetConnMaxLifetime(15 * time.Minute)
+		log.Printf("⚡ Database Pool: MaxOpen=%d, MaxIdle=%d", maxOpen, maxIdle)
 	}
 
 	log.Println("✅ Database connection established!")
-	log.Println("🔄 Auto-migrating ALL tables...")
+	
+	// Smart Migration
+	runMigrations(db)
 
-	// Never drop production tables automatically. Warn and rely on explicit migrations.
-	if db.Migrator().HasTable(&TeamPage{}) && !db.Migrator().HasColumn(&TeamPage{}, "id") {
-		log.Println("⚠️ Legacy schema detected for TeamPage (missing id). Table will NOT be dropped automatically.")
-	}
-	if db.Migrator().HasTable(&ShippingMethod{}) && !db.Migrator().HasColumn(&ShippingMethod{}, "enable_driver_recommendation") {
-		log.Println("⚠️ Legacy schema detected for ShippingMethod (missing enable_driver_recommendation). Table will NOT be dropped automatically.")
-	}
-	if db.Migrator().HasTable(&User{}) && !db.Migrator().HasColumn(&User{}, "user_name") {
-		log.Println("⚠️ Legacy schema detected for User (missing user_name). Table will NOT be dropped automatically.")
-	}
-	if db.Migrator().HasTable(&Store{}) && !db.Migrator().HasColumn(&Store{}, "store_name") {
-		log.Println("⚠️ Legacy schema detected for Store (missing store_name). Table will NOT be dropped automatically.")
-	}
-	if db.Migrator().HasTable(&Product{}) && !db.Migrator().HasColumn(&Product{}, "product_name") {
-		log.Println("⚠️ Legacy schema detected for Product (missing product_name). Table will NOT be dropped automatically.")
-	}
-	if db.Migrator().HasTable(&DriverRecommendation{}) && !db.Migrator().HasColumn(&DriverRecommendation{}, "day_of_week") {
-		log.Println("⚠️ Legacy schema detected for DriverRecommendation (missing day_of_week). Table will NOT be dropped automatically.")
-	}
-	if db.Migrator().HasTable(&Order{}) && !db.Migrator().HasColumn(&Order{}, "customer_name") {
-		log.Println("⚠️ Legacy schema detected for Order (missing customer_name). Table will NOT be dropped automatically.")
-	}
-	if db.Migrator().HasTable(&RevenueEntry{}) && !db.Migrator().HasColumn(&RevenueEntry{}, "revenue") {
-		log.Println("⚠️ Legacy schema detected for RevenueEntry (missing revenue). Table will NOT be dropped automatically.")
-	}
-	if db.Migrator().HasTable(&IncentiveResult{}) && !db.Migrator().HasColumn(&IncentiveResult{}, "total_profit") {
-		log.Println("⚠️ Legacy schema detected for IncentiveResult (missing total_profit). Auto-migrating...")
+	DB = db
+
+	// Ensure essential data exists
+	ensureSeedData()
+
+	log.Println("✅ Database initialization complete!")
+}
+
+func runMigrations(db *gorm.DB) {
+	log.Println("🔄 Running Auto-Migrations...")
+
+	// Helper to check for breaking schema changes before migration
+	checkLegacy := func(model interface{}, tableName, column string) {
+		if db.Migrator().HasTable(tableName) && !db.Migrator().HasColumn(model, column) {
+			log.Printf("🚨 SCHEMA ALERT: Table '%s' is missing expected column '%s'. Migration might be partial.", tableName, column)
+		}
 	}
 
-	err = db.AutoMigrate(
+	checkLegacy(&TeamPage{}, "team_pages", "id")
+	checkLegacy(&Order{}, "orders", "customer_name")
+	checkLegacy(&User{}, "users", "user_name")
+
+	err := db.AutoMigrate(
 		&User{}, &Store{}, &Setting{}, &TeamPage{}, &Product{}, &Location{}, &ShippingMethod{},
 		&Color{}, &Driver{}, &BankAccount{}, &PhoneCarrier{}, &TelegramTemplate{},
 		&Inventory{}, &StockTransfer{}, &ReturnItem{},
 		&Order{}, &RevenueEntry{}, &ChatMessage{}, &EditLog{}, &UserActivityLog{},
-		&Role{},
-		&RolePermission{},
-		&IncentiveProject{},
-		&IncentiveCalculator{},
-		&IncentiveResult{},
-		&IncentiveManualData{},
-		&IncentiveCustomPayout{},
-		&TempImage{},
-		&DriverRecommendation{},
-		&Movie{},
+		&Role{}, &RolePermission{},
+		&IncentiveProject{}, &IncentiveCalculator{}, &IncentiveResult{},
+		&IncentiveManualData{}, &IncentiveCustomPayout{},
+		&TempImage{}, &DriverRecommendation{}, &Movie{},
 	)
 	if err != nil {
-		log.Fatal("❌ Migration failed:", err)
+		log.Printf("❌ Migration failed: %v", err)
 	}
+}
 
-	DB = db
-
-	// ធានាថាមាន Role "Admin" ជានិច្ច (តែមួយគត់ដែលជាកាតព្វកិច្ច)
+func ensureSeedData() {
 	var adminRole Role
-	result := DB.Where("LOWER(role_name) = ?", "admin").First(&adminRole)
-	if result.Error != nil && result.Error == gorm.ErrRecordNotFound {
-		adminRole = Role{RoleName: "Admin", Description: "Administrator with full access"}
-		if err := DB.Create(&adminRole).Error; err == nil {
-			log.Println("✅ បង្បង្កើតតួនាទី (Admin) ដោយស្វ័យប្រវត្តិបានជោគជ័យ!")
+	if err := DB.Where("LOWER(role_name) = ?", "admin").First(&adminRole).Error; err != nil {
+		if err == gorm.ErrRecordNotFound {
+			adminRole = Role{RoleName: "Admin", Description: "System Administrator"}
+			if err := DB.Create(&adminRole).Error; err == nil {
+				log.Println("✅ Created default Admin role")
+				// Auto-seed basic permissions for Admin if needed
+			}
 		}
 	}
+}
 
-	log.Println("✅ Successfully setup database tables!")
+// CheckHealth returns true if the database is reachable
+func CheckHealth() bool {
+	if DB == nil {
+		return false
+	}
+	sqlDB, err := DB.DB()
+	if err != nil {
+		return false
+	}
+	return sqlDB.Ping() == nil
 }
