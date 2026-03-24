@@ -1,405 +1,1070 @@
 package main
 
 import (
+	"bufio"
 	"bytes"
 	"context"
-
-	// "encoding/base64"
+	"encoding/base64"
 	"encoding/json"
 	"fmt"
 	"io"
 	"log"
+	"math/rand"
 	"net/http"
-
-	// "net/url" // REMOVED (No longer used)
+	"net/url"
 	"os"
-	"sort"
+	"path/filepath"
+	"regexp"
 	"strconv"
 	"strings"
 	"sync"
 	"time"
+	"unicode"
 
 	"github.com/gin-contrib/cors"
 	"github.com/gin-gonic/gin"
+	"golang.org/x/crypto/bcrypt"
 
-	// --- REMOVED: Telegram Bot API ---
 
-	// --- NEW: WebSocket Library ---
-	"github.com/gorilla/websocket"
-
-	// --- Google API Imports ---
+	"google.golang.org/api/drive/v3"
 	"google.golang.org/api/option"
 	"google.golang.org/api/sheets/v4"
+
+	"github.com/samnangh849-source/Oder_Backend-2-/Backend"
+
+	// Import GORM
+	"gorm.io/gorm"
 )
 
 // --- Configuration ---
 var (
-	// --- Google API Services ---
-	sheetsService *sheets.Service
-	// ---
-	spreadsheetID  string
-	uploadFolderID string
-	// ---
-	// *** Apps Script API Config (for Uploads AND Orders) ***
+	DB               *gorm.DB
+	sheetsService    *sheets.Service
+	driveService     *drive.Service
+	spreadsheetID    string
+	uploadFolderID   string
 	appsScriptURL    string
 	appsScriptSecret string
-	// ---
-	renderBaseURL string // URL of this Render service itself
-
-	// --- NEW: WebSocket Hub ---
-	hub *Hub
-
-	// --- NEW: Cache for Sheet IDs ---
-	sheetIdCache      = make(map[string]int64)
-	sheetIdCacheMutex sync.RWMutex
 )
 
-// --- Constants from Apps Script Config (Keep consistent) ---
-// *** UPDATED RANGES TO MATCH NEW COLUMNS IN SETUP.GS ***
 var sheetRanges = map[string]string{
-	"Users":            "Users!A:H",    // Updated: A:G -> A:H (Includes TelegramUsername)
-	"Settings":         "Settings!A:G", // Updated: A:F -> A:G (Includes CODAlertGroupID)
-	"TeamsPages":       "TeamsPages!A:D",
-	"Products":         "Products!A:F", // Updated: A:F (Includes Tags)
-	"Locations":        "Locations!A:C",
-	"ShippingMethods":  "ShippingMethods!A:F", // Updated: A:D -> A:F (Includes EnableCODAlert, AlertTopicID)
-	"Colors":           "Colors!A:A",
-	"Drivers":          "Drivers!A:B",
-	"BankAccounts":     "BankAccounts!A:B",
-	"PhoneCarriers":    "PhoneCarriers!A:C",
-	"AllOrders":        "AllOrders!A:AC", // Updated: A:Z -> A:AC (Includes Team, IsVerified)
-	"RevenueDashboard": "RevenueDashboard!A:D",
-	"ChatMessages":     "ChatMessages!A:E",
-
-	"FormulaReportSheet": "FormulaReport!A:Z",
-	"UserActivityLogs":   "UserActivityLogs!A:Z",
-	"EditLogs":           "EditLogs!A:Z",
+	"Users":                  "Users!A:Z",
+	"Stores":                 "Stores!A:Z",
+	"Settings":               "Settings!A:Z",
+	"TeamsPages":             "TeamsPages!A:Z",
+	"Products":               "Products!A:Z",
+	"Locations":              "Locations!A:Z",
+	"ShippingMethods":        "ShippingMethods!A:Z",
+	"Colors":                 "Colors!A:Z",
+	"Drivers":                "Drivers!A:Z",
+	"BankAccounts":           "BankAccounts!A:Z",
+	"PhoneCarriers":          "PhoneCarriers!A:Z",
+	"TelegramTemplates":      "TelegramTemplates!A:Z",
+	"Inventory":              "Inventory!A:Z",
+	"StockTransfers":         "StockTransfers!A:Z",
+	"Returns":                "Returns!A:Z",
+	"AllOrders":              "AllOrders!A:AZ",
+	"RevenueDashboard":       "RevenueDashboard!A:Z",
+	"ChatMessages":           "ChatMessages!A:Z",
+	"EditLogs":               "EditLogs!A:Z",
+	"UserActivityLogs":       "UserActivityLogs!A:Z",
+	"Roles":                  "Roles!A:Z",
+	"RolePermissions":        "RolePermissions!A:Z",
+	"DriverRecommendations":  "DriverRecommendations!A:Z",
+	"IncentiveResults":       "IncentiveResults!A:Z",
+	"Movies":                 "Movies!A:Z",
+	"IncentiveProjects":      "IncentiveProjects!A:Z",
+	"IncentiveCalculators":   "IncentiveCalculators!A:Z",
+	"IncentiveManualData":    "IncentiveManualData!A:Z",
+	"IncentiveCustomPayouts": "IncentiveCustomPayouts!A:Z",
 }
 
-const (
-	AllOrdersSheet     = "AllOrders"
-	FormulaReportSheet = "FormulaReport"
-	RevenueSheet       = "RevenueDashboard"
-	UserActivitySheet  = "UserActivityLogs"
-	ChatMessagesSheet  = "ChatMessages"
-	UsersSheet         = "Users"
-	EditLogsSheet      = "EditLogs"
-)
+// =========================================================================
+// ម៉ូដែលទិន្នន័យ (GORM Models) - Aliased to Backend package
+// =========================================================================
 
-// --- Cache ---
-type CacheItem struct {
-	Data      interface{}
-	ExpiresAt time.Time
-}
+type User = backend.User
+type Movie = backend.Movie
+type Store = backend.Store
+type Setting = backend.Setting
+type TeamPage = backend.TeamPage
+type Product = backend.Product
+type Location = backend.Location
+type ShippingMethod = backend.ShippingMethod
+type DriverRecommendation = backend.DriverRecommendation
+type Color = backend.Color
+type Driver = backend.Driver
+type BankAccount = backend.BankAccount
+type PhoneCarrier = backend.PhoneCarrier
+type TelegramTemplate = backend.TelegramTemplate
+type Inventory = backend.Inventory
+type StockTransfer = backend.StockTransfer
+type ReturnItem = backend.ReturnItem
+type Order = backend.Order
+type RevenueEntry = backend.RevenueEntry
+type ChatMessage = backend.ChatMessage
+type EditLog = backend.EditLog
+type UserActivityLog = backend.UserActivityLog
+type Role = backend.Role
+type RolePermission = backend.RolePermission
+type IncentiveCalculator = backend.IncentiveCalculator
+type IncentiveProject = backend.IncentiveProject
+type IncentiveResult = backend.IncentiveResult
+type IncentiveManualData = backend.IncentiveManualData
+type IncentiveCustomPayout = backend.IncentiveCustomPayout
+type DeleteOrderRequest = backend.DeleteOrderRequest
+type TempImage = backend.TempImage
 
-var (
-	cache      = make(map[string]CacheItem)
-	cacheMutex sync.RWMutex
-	cacheTTL   = 5 * time.Minute // Default cache duration
-)
-
-func setCache(key string, data interface{}, duration time.Duration) {
-	cacheMutex.Lock()
-	defer cacheMutex.Unlock()
-	cache[key] = CacheItem{
-		Data:      data,
-		ExpiresAt: time.Now().Add(duration),
-	}
-	log.Printf("Cache SET for key: %s", key)
-}
-func getCache(key string) (interface{}, bool) {
-	cacheMutex.RLock()
-	defer cacheMutex.RUnlock()
-	item, found := cache[key]
-	if !found || time.Now().After(item.ExpiresAt) {
-		if found {
-			log.Printf("Cache EXPIRED for key: %s", key)
-		}
-		return nil, false
-	}
-	log.Printf("Cache HIT for key: %s", key)
-	return item.Data, true
-}
-
-func clearCache() {
-	cacheMutex.Lock()
-	defer cacheMutex.Unlock()
-	cache = make(map[string]CacheItem)
-	log.Println("Cache CLEARED")
-	sheetIdCacheMutex.Lock()
-	defer sheetIdCacheMutex.Unlock()
-	sheetIdCache = make(map[string]int64)
-	log.Println("Sheet ID Cache CLEARED")
+// =========================================================================
+// INIT DATABASE & GOOGLE SERVICES
+// =========================================================================
+func initDB() {
+	backend.InitDB()
+	DB = backend.DB
 }
 
-func invalidateSheetCache(sheetName string) {
-	// Invalidate data cache
-	cacheMutex.Lock()
-	delete(cache, "sheet_"+sheetName)
-	cacheMutex.Unlock()
-	log.Printf("Cache INVALIDATED for key: sheet_%s", sheetName)
-
-	// Invalidate Sheet ID cache
-	sheetIdCacheMutex.Lock()
-	delete(sheetIdCache, sheetName)
-	sheetIdCacheMutex.Unlock()
-	log.Printf("Sheet ID Cache INVALIDATED for key: %s", sheetName)
-}
-
-// --- Models ---
-type User struct {
-	UserName          string `json:"UserName"`
-	Password          string `json:"Password"`
-	Team              string `json:"Team"`
-	FullName          string `json:"FullName"`
-	ProfilePictureURL string `json:"ProfilePictureURL"`
-	Role              string `json:"Role"`
-	IsSystemAdmin     bool   `json:"IsSystemAdmin"`
-}
-type Product struct {
-	ProductName string  `json:"ProductName"`
-	Barcode     string  `json:"Barcode"`
-	Price       float64 `json:"Price"`
-	Cost        float64 `json:"Cost"`
-	ImageURL    string  `json:"ImageURL"`
-	Tags        string  `json:"Tags"` 
-}
-type Location struct {
-	Province string `json:"Province"`
-	District string `json:"District"`
-	Sangkat  string `json:"Sangkat"`
-}
-type ShippingMethod struct {
-	MethodName             string `json:"MethodName"`
-	LogoURL                string `json:"LogosURL"`
-	AllowManualDriver      bool   `json:"AllowManualDriver"`
-	RequireDriverSelection bool   `json:"RequireDriverSelection"`
-}
-type TeamPage struct {
-	Team          string `json:"Team"`
-	PageName      string `json:"PageName"`
-	TelegramValue string `json:"TelegramValue"`
-	PageLogoURL   string `json:"PageLogoURL"`
-}
-type Color struct {
-	ColorName string `json:"ColorName"`
-}
-type Driver struct {
-	DriverName string `json:"DriverName"`
-	ImageURL   string `json:"ImageURL"`
-}
-type BankAccount struct {
-	BankName string `json:"BankName"`
-	LogoURL  string `json:"LogoURL"`
-}
-type PhoneCarrier struct {
-	CarrierName    string `json:"CarrierName"`
-	Prefixes       string `json:"Prefixes"`
-	CarrierLogoURL string `json:"CarrierLogoURL"`
-}
-type Order struct {
-	Timestamp               string  `json:"Timestamp"`
-	OrderID                 string  `json:"Order ID"`
-	User                    string  `json:"User"`
-	Page                    string  `json:"Page"`
-	TelegramValue           string  `json:"TelegramValue"`
-	CustomerName            string  `json:"Customer Name"`
-	CustomerPhone           string  `json:"Customer Phone"`
-	Location                string  `json:"Location"`
-	AddressDetails          string  `json:"Address Details"`
-	Note                    string  `json:"Note"`
-	ShippingFeeCustomer     float64 `json:"Shipping Fee (Customer)"`
-	Subtotal                float64 `json:"Subtotal"`
-	GrandTotal              float64 `json:"Grand Total"`
-	ProductsJSON            string  `json:"Products (JSON)"`
-	InternalShippingMethod  string  `json:"Internal Shipping Method"`
-	InternalShippingDetails string  `json:"Internal Shipping Details"`
-	InternalCost            float64 `json:"Internal Cost"`
-	PaymentStatus           string  `json:"Payment Status"`
-	PaymentInfo             string  `json:"Payment Info"`
-	TelegramMessageID       string  `json:"Telegram Message ID"`
-	Team                    string  `json:"Team"`
-	DiscountUSD             float64 `json:"Discount ($)"`
-	DeliveryUnpaid          float64 `json:"Delivery Unpaid"`
-	DeliveryPaid            float64 `json:"Delivery Paid"`
-	TotalProductCost        float64 `json:"Total Product Cost ($)"`
-	IsVerified              string  `json:"IsVerified"` // ✅ CHANGED: Bool -> String
-}
-type RevenueEntry struct {
-	Timestamp string  `json:"Timestamp"`
-	Team      string  `json:"Team"`
-	Page      string  `json:"Page"`
-	Revenue   float64 `json:"Revenue"`
-}
-type ChatMessage struct {
-	Timestamp   string `json:"Timestamp"`
-	UserName    string `json:"UserName"`
-	MessageType string `json:"MessageType"`
-	Content     string `json:"Content"`
-	FileID      string `json:"FileID,omitempty"`
-}
-type ReportSummary struct {
-	TotalSales       float64
-	TotalExpense     float64
-	TotalProductCost float64
-}
-type RevenueAggregate struct {
-	YearlyByTeam  map[int]map[string]float64    `json:"yearlyByTeam"`
-	YearlyByPage  map[int]map[string]float64    `json:"yearlyByPage"`
-	MonthlyByTeam map[string]map[string]float64 `json:"monthlyByTeam"`
-	MonthlyByPage map[string]map[string]float64 `json:"monthlyByPage"`
-	DailyByTeam   map[string]map[string]float64 `json:"dailyByTeam"`
-	DailyByPage   map[string]map[string]float64 `json:"dailyByPage"`
-}
-
-type UpdateOrderRequest struct {
-	OrderID  string                 `json:"orderId"`
-	Team     string                 `json:"team"`
-	UserName string                 `json:"userName"` // For logging
-	NewData  map[string]interface{} `json:"newData"`
-}
-
-// --- NEW: Struct for Change Password Request ---
-type ChangePasswordRequest struct {
-	UserName    string `json:"userName"`
-	OldPassword string `json:"oldPassword"`
-	NewPassword string `json:"newPassword"`
-}
-
-// --- NEW: Struct for Update Tags Request ---
-type UpdateTagsRequest struct {
-	ProductName string   `json:"productName"`
-	NewTags     []string `json:"newTags"`
-}
-
-// --- NEW: Struct for Delete Order Request ---
-type DeleteOrderRequest struct {
-	OrderID  string `json:"orderId"`
-	Team     string `json:"team"`
-	UserName string `json:"userName"` // For logging
-}
-
-// --- WebSocket Structs ---
-type WebSocketMessage struct {
-	Action  string      `json:"action"`
-	Payload interface{} `json:"payload"`
-}
-
-var upgrader = websocket.Upgrader{
-	CheckOrigin: func(r *http.Request) bool {
-		return true
-	},
-}
-
-type Client struct {
-	hub  *Hub
-	conn *websocket.Conn
-	send chan []byte
-}
-type Hub struct {
-	clients    map[*Client]bool
-	broadcast  chan []byte
-	register   chan *Client
-	unregister chan *Client
-}
-
-func NewHub() *Hub {
-	return &Hub{
-		broadcast:  make(chan []byte),
-		register:   make(chan *Client),
-		unregister: make(chan *Client),
-		clients:    make(map[*Client]bool),
-	}
-}
-func (h *Hub) run() {
-	for {
-		select {
-		case client := <-h.register:
-			h.clients[client] = true
-			log.Println("WebSocket client connected")
-		case client := <-h.unregister:
-			if _, ok := h.clients[client]; ok {
-				delete(h.clients, client)
-				close(client.send)
-				log.Println("WebSocket client disconnected")
-			}
-		case message := <-h.broadcast:
-			for client := range h.clients {
-				select {
-				case client.send <- message:
-				default:
-					close(client.send)
-					delete(h.clients, client)
-				}
-			}
-		}
-	}
-}
-func (c *Client) writePump() {
-	defer func() {
-		c.conn.Close()
-	}()
-	for {
-		message, ok := <-c.send
-		if !ok {
-			c.conn.WriteMessage(websocket.CloseMessage, []byte{})
-			return
-		}
-		c.conn.WriteMessage(websocket.TextMessage, message)
-	}
-}
-func serveWs(c *gin.Context) {
-	conn, err := upgrader.Upgrade(c.Writer, c.Request, nil)
-	if err != nil {
-		log.Printf("Failed to upgrade websocket: %v", err)
-		return
-	}
-	client := &Client{hub: hub, conn: conn, send: make(chan []byte, 256)}
-	client.hub.register <- client
-	go client.writePump()
-	go func() {
-		defer func() {
-			client.hub.unregister <- client
-			client.conn.Close()
-		}()
-		for {
-			if _, _, err := client.conn.ReadMessage(); err != nil {
-				if websocket.IsUnexpectedCloseError(err, websocket.CloseGoingAway, websocket.CloseAbnormalClosure) {
-					log.Printf("WebSocket read error: %v", err)
-				}
-				break
-			}
-		}
-	}()
-}
-
-// --- Google API Client Setup ---
 func createGoogleAPIClient(ctx context.Context) error {
 	credentialsJSON := os.Getenv("GCP_CREDENTIALS")
 	if credentialsJSON == "" {
-		return fmt.Errorf("GCP_CREDENTIALS environment variable is not set")
+		return fmt.Errorf("GCP_CREDENTIALS not set")
 	}
-	creds := []byte(credentialsJSON)
-	sheetsSrv, err := sheets.NewService(ctx, option.WithCredentialsJSON(creds), option.WithScopes(sheets.SpreadsheetsScope))
+	credentialsJSON = strings.Trim(credentialsJSON, "\"")
+	credentialsJSON = strings.ReplaceAll(credentialsJSON, "\\\"", "\"")
+
+	clientOptions := option.WithCredentialsJSON([]byte(credentialsJSON))
+
+	sheetsSrv, err := sheets.NewService(ctx, clientOptions, option.WithScopes(sheets.SpreadsheetsScope))
 	if err != nil {
-		return fmt.Errorf("unable to retrieve Sheets client: %v", err)
+		return err
 	}
 	sheetsService = sheetsSrv
-	log.Println("Google Sheets API client created successfully.")
+
+	driveSrv, err := drive.NewService(ctx, clientOptions, option.WithScopes(drive.DriveFileScope))
+	if err != nil {
+		return err
+	}
+	driveService = driveSrv
+
+	log.Println("✅ Google API Clients Initialized.")
 	return nil
 }
 
-// --- Google Sheets API Helper Functions ---
+// =========================================================================
+// UTILS
+// =========================================================================
 
-// UPDATED: More robust parsing for strings/booleans
-func convertSheetValuesToMaps(values *sheets.ValueRange) ([]map[string]interface{}, error) {
+func generateShortID() string {
+	const chars = "ABCDEFGHJKMNPQRSTUVWXYZ23456789"
+	b := make([]byte, 6)
+	for i := range b {
+		b[i] = chars[rand.Intn(len(chars))]
+	}
+	return string(b)
+}
+
+func mapToDBColumn(key string) string {
+	specialCases := map[string]string{
+		"Order ID":                  "order_id",
+		"Discount ($)":              "discount_usd",
+		"Total Product Cost ($)":    "total_product_cost",
+		"Shipping Fee (Customer)":   "shipping_fee_customer",
+		"Products":                  "products_json",
+		"Products (JSON)":           "products_json",
+		"Telegram Message ID 1":     "telegram_message_id1",
+		"Telegram Message ID 2":     "telegram_message_id2",
+		"Customer Name":             "customer_name",
+		"Customer Phone":            "customer_phone",
+		"Location":                  "location",
+		"Address Details":           "address_details",
+		"Fulfillment Status":        "fulfillment_status",
+		"Fulfillment Store":         "fulfillment_store",
+		"Internal Shipping Method":  "internal_shipping_method",
+		"Internal Shipping Details": "internal_shipping_details",
+		"Internal Cost":             "internal_cost",
+		"Payment Status":            "payment_status",
+		"Payment Info":              "payment_info",
+		"Scheduled Time":            "scheduled_time",
+		"Delivery Unpaid":           "delivery_unpaid",
+		"Delivery Paid":             "delivery_paid",
+		"Package Photo":             "package_photo_url",
+		"Package Photo URL":         "package_photo_url",
+		"Delivery Photo":            "delivery_photo_url",
+		"Delivery Photo URL":        "delivery_photo_url",
+		"Driver Name":               "driver_name",
+		"Tracking Number":           "tracking_number",
+		"Dispatched Time":           "dispatched_time",
+		"Delivered Time":            "delivered_time",
+		"Packed By":                 "packed_by",
+		"IsVerified":                "is_verified",
+		"UserName":                  "user_name",
+		"FullName":                  "full_name",
+		"ProfilePictureURL":         "profile_picture_url",
+		"IsSystemAdmin":             "is_system_admin",
+		"TelegramUsername":          "telegram_username",
+		"ImageURL":                  "image_url",
+		"Image URL":                 "image_url",
+		"LogosURL":                  "logo_url",
+		"Logos URL":                 "logo_url",
+		"LogoURL":                   "logo_url",
+		"Thumbnail":                 "thumbnail",
+		"Thumbnail URL":             "thumbnail",
+		"ID":                        "id",
+		"Key":                       "config_key",
+		"Value":                     "config_value",
+		"Description":               "description",
+	}
+
+	for k, v := range specialCases {
+		if strings.EqualFold(k, key) {
+			return v
+		}
+	}
+
+	var res []rune
+	for i, r := range key {
+		if i > 0 && (unicode.IsUpper(r) || r == ' ' || r == '(' || r == ')') {
+			if len(res) > 0 && res[len(res)-1] != '_' {
+				res = append(res, '_')
+			}
+		}
+		if r != ' ' && r != '(' && r != ')' && r != '$' {
+			res = append(res, unicode.ToLower(r))
+		}
+	}
+
+	final := strings.Trim(string(res), "_")
+	final = strings.ReplaceAll(final, "__", "_")
+	return final
+}
+
+func getTableName(sheetName string) string {
+	switch sheetName {
+	case "Users":
+		return "users"
+	case "Stores":
+		return "stores"
+	case "Settings":
+		return "settings"
+	case "TeamsPages":
+		return "team_pages"
+	case "Products":
+		return "products"
+	case "Locations":
+		return "locations"
+	case "ShippingMethods":
+		return "shipping_methods"
+	case "Colors":
+		return "colors"
+	case "Drivers":
+		return "drivers"
+	case "BankAccounts":
+		return "bank_accounts"
+	case "PhoneCarriers":
+		return "phone_carriers"
+	case "Inventory":
+		return "inventories"
+	case "StockTransfers":
+		return "stock_transfers"
+	case "Returns":
+		return "returns"
+	case "AllOrders":
+		return "orders"
+	case "Roles":
+		return "roles"
+	case "RolePermissions":
+		return "role_permissions"
+	case "DriverRecommendations":
+		return "driver_recommendations"
+	case "IncentiveCalculators":
+		return "incentive_calculators"
+	case "IncentiveProjects":
+		return "incentive_projects"
+	case "Movies":
+		return "movies"
+	case "RevenueDashboard":
+		return "revenue_entries"
+	case "ChatMessages":
+		return "chat_messages"
+	case "EditLogs":
+		return "edit_logs"
+	case "UserActivityLogs":
+		return "user_activity_logs"
+	case "IncentiveResults":
+		return "incentive_results"
+	case "IncentiveManualData":
+		return "incentive_manual_data"
+	case "IncentiveCustomPayouts":
+		return "incentive_custom_payouts"
+	case "TelegramTemplates":
+		return "telegram_templates"
+	}
+	if strings.HasPrefix(sheetName, "Orders_") {
+		return "orders"
+	}
+	return ""
+}
+
+func isValidOrderColumn(col string) bool {
+	validCols := map[string]bool{
+		"order_id": true, "timestamp": true, "user": true, "page": true, "telegram_value": true,
+		"customer_name": true, "customer_phone": true, "location": true, "address_details": true,
+		"note": true, "shipping_fee_customer": true, "subtotal": true, "grand_total": true,
+		"products_json": true, "internal_shipping_method": true, "internal_shipping_details": true,
+		"internal_cost": true, "payment_status": true, "payment_info": true, "discount_usd": true,
+		"delivery_unpaid": true, "delivery_paid": true, "total_product_cost": true,
+		"telegram_message_id1": true, "telegram_message_id2": true, "scheduled_time": true,
+		"fulfillment_store": true, "team": true, "is_verified": true, "fulfillment_status": true,
+		"packed_by": true, "package_photo_url": true, "driver_name": true, "tracking_number": true,
+		"dispatched_time": true, "delivered_time": true, "delivery_photo_url": true,
+	}
+	return validCols[col]
+}
+
+func parseBase64(b64 string) ([]byte, error) {
+	cleanB64 := strings.ReplaceAll(b64, " ", "+")
+	cleanB64 = strings.ReplaceAll(cleanB64, "\n", "")
+	cleanB64 = strings.ReplaceAll(cleanB64, "\r", "")
+	return base64.StdEncoding.DecodeString(cleanB64)
+}
+
+func ErrorHandlingMiddleware() gin.HandlerFunc {
+	return func(c *gin.Context) {
+		c.Next()
+
+		if len(c.Errors) > 0 {
+			var errMsgs []string
+			for _, err := range c.Errors {
+				errMsgs = append(errMsgs, err.Error())
+				log.Printf("[ERROR] %s: %v\n", c.Request.URL.Path, err.Error())
+			}
+
+			if !c.Writer.Written() {
+				c.JSON(http.StatusInternalServerError, gin.H{
+					"status":  "error",
+					"message": strings.Join(errMsgs, "; "),
+				})
+			}
+		}
+	}
+}
+
+// =========================================================================
+// AUTHENTICATION, JWT & AUTHORIZATION (RBAC) - Aliased to Backend package
+// =========================================================================
+
+type Claims = backend.Claims
+
+var generateJWT = backend.GenerateJWT
+var handleLogin = backend.HandleLogin
+var DBMiddleware = backend.DBMiddleware
+var AuthMiddleware = backend.AuthMiddleware
+var AdminOnlyMiddleware = backend.AdminOnlyMiddleware
+var RequirePermission = backend.RequirePermission
+var hasPermissionInternal = backend.HasPermissionInternal
+
+// =========================================================================
+// API សម្រាប់គ្រប់គ្រងសិទ្ធិ (Role Permissions) - RBAC - Aliased to Backend package
+// =========================================================================
+
+var handleGetRoles = backend.HandleGetRoles
+var handleCreateRole = backend.HandleCreateRole
+var handleGetAllPermissions = backend.HandleGetAllPermissions
+var handleGetUserPermissions = backend.HandleGetUserPermissions
+var handleUpdatePermission = backend.HandleUpdatePermission
+
+// =========================================================================
+
+// =========================================================================
+// API សម្រាប់ប្រព័ន្ធ INCENTIVE (ប្រាក់លើកទឹកចិត្ត)
+// =========================================================================
+
+func handleGetIncentiveCalculators(c *gin.Context) {
+	var calcs []IncentiveCalculator
+	DB.Find(&calcs)
+	c.JSON(200, gin.H{"status": "success", "data": calcs})
+}
+
+func handleCreateIncentiveCalculator(c *gin.Context) {
+	var req IncentiveCalculator
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(400, gin.H{"status": "error", "message": err.Error()})
+		return
+	}
+
+	// Always let DB generate unique IDs to avoid collisions when duplicating calculators.
+	req.ID = 0
+
+	if err := DB.Create(&req).Error; err != nil {
+		c.JSON(500, gin.H{"status": "error", "message": err.Error()})
+		return
+	}
+	c.JSON(200, gin.H{"status": "success", "data": req})
+}
+
+func handleGetIncentiveProjects(c *gin.Context) {
+	var projects []IncentiveProject
+	DB.Preload("Calculators").Find(&projects)
+	c.JSON(200, gin.H{"status": "success", "data": projects})
+}
+
+func handleCreateIncentiveProject(c *gin.Context) {
+	var req IncentiveProject
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(400, gin.H{"status": "error", "message": err.Error()})
+		return
+	}
+
+	if req.ID == 0 {
+		var maxID uint
+		DB.Model(&IncentiveProject{}).Select("COALESCE(MAX(id), 0)").Row().Scan(&maxID)
+		req.ID = maxID + 1
+	}
+
+	if err := DB.Create(&req).Error; err != nil {
+		c.JSON(500, gin.H{"status": "error", "message": err.Error()})
+		return
+	}
+	c.JSON(200, gin.H{"status": "success", "data": req})
+}
+
+func handleGetIncentiveResults(c *gin.Context) {
+	projectId := c.Query("projectId")
+	var results []IncentiveResult
+	query := DB.Model(&IncentiveResult{})
+	if projectId != "" {
+		query = query.Where("project_id = ?", projectId)
+	}
+	query.Find(&results)
+	c.JSON(200, gin.H{"status": "success", "data": results})
+}
+
+func handleGetIncentiveManualData(c *gin.Context) {
+	projectId := c.Query("projectId")
+	month := c.Query("month")
+	var data []IncentiveManualData
+	query := DB.Model(&IncentiveManualData{})
+	if projectId != "" {
+		query = query.Where("project_id = ?", projectId)
+	}
+	if month != "" {
+		query = query.Where("month = ?", month)
+	}
+	query.Find(&data)
+	c.JSON(200, gin.H{"status": "success", "data": data})
+}
+
+func handleSaveIncentiveManualData(c *gin.Context) {
+	var req IncentiveManualData
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(400, gin.H{"status": "error", "message": "ទិន្នន័យមិនត្រឹមត្រូវ"})
+		return
+	}
+
+	var existing IncentiveManualData
+	err := DB.Where("project_id = ? AND month = ? AND metric_type = ? AND data_key = ?", req.ProjectID, req.Month, req.MetricType, req.DataKey).First(&existing).Error
+	if err == nil {
+		DB.Model(&existing).Update("value", req.Value)
+	} else {
+		DB.Create(&req)
+	}
+	c.JSON(200, gin.H{"status": "success"})
+}
+
+func handleGetIncentiveCustomPayouts(c *gin.Context) {
+	projectId := c.Query("projectId")
+	month := c.Query("month")
+	var payouts []IncentiveCustomPayout
+	query := DB.Model(&IncentiveCustomPayout{})
+	if projectId != "" {
+		query = query.Where("project_id = ?", projectId)
+	}
+	if month != "" {
+		query = query.Where("month = ?", month)
+	}
+	query.Find(&payouts)
+	c.JSON(200, gin.H{"status": "success", "data": payouts})
+}
+
+func handleSaveIncentiveCustomPayout(c *gin.Context) {
+	var req IncentiveCustomPayout
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(400, gin.H{"status": "error", "message": "ទិន្នន័យមិនត្រឹមត្រូវ"})
+		return
+	}
+
+	var existing IncentiveCustomPayout
+	err := DB.Where("project_id = ? AND month = ? AND user_name = ?", req.ProjectID, req.Month, req.UserName).First(&existing).Error
+	if err == nil {
+		DB.Model(&existing).Update("value", req.Value)
+	} else {
+		DB.Create(&req)
+	}
+	c.JSON(200, gin.H{"status": "success"})
+}
+
+func handleLockIncentivePayout(c *gin.Context) {
+	var req struct {
+		ProjectID uint              `json:"projectId"`
+		Month     string            `json:"month"`
+		Results   []IncentiveResult `json:"results"`
+	}
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(400, gin.H{"status": "error", "message": "ទិន្នន័យមិនត្រឹមត្រូវ"})
+		return
+	}
+
+	// 1. Delete existing results for this project/month (assuming results are stored per project, but model lacks month. Let's add month if needed, or rely on Project ID if project is 1 per month. For now, just replace).
+	DB.Where("project_id = ?", req.ProjectID).Delete(&IncentiveResult{})
+
+	// 2. Save new results
+	if len(req.Results) > 0 {
+		var maxID uint
+		DB.Model(&IncentiveResult{}).Select("COALESCE(MAX(id), 0)").Row().Scan(&maxID)
+
+		for i := range req.Results {
+			maxID++
+			req.Results[i].ID = maxID
+		}
+		DB.Create(&req.Results)
+
+		// 3. Send to Google Sheet
+		go func() {
+			timestamp := time.Now().Format("2006-01-02 15:04:05")
+			for _, res := range req.Results {
+				sheetData := map[string]interface{}{
+					"Timestamp":       timestamp,
+					"ProjectID":       req.ProjectID,
+					"UserName":        res.UserName,
+					"TotalOrders":     res.TotalOrders,
+					"TotalRevenue":    res.TotalRevenue,
+					"CalculatedValue": res.CalculatedValue,
+					"IsCustom":        res.IsCustom,
+				}
+				// Sync with Google Sheets via managed queue
+				enqueueSync("addRow", sheetData, "IncentiveResults", nil)
+			}
+		}()
+	}
+
+	c.JSON(200, gin.H{"status": "success", "message": "បានរក្សាទុករបាយការណ៍ជោគជ័យ!"})
+}
+
+func handleCalculateIncentive(c *gin.Context) {
+	var req struct {
+		ProjectID uint   `json:"projectId"`
+		Month     string `json:"month"`
+	}
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(400, gin.H{"status": "error", "message": "ទិន្នន័យមិនត្រឹមត្រូវ"})
+		return
+	}
+
+	var project IncentiveProject
+	if err := DB.Preload("Calculators").First(&project, req.ProjectID).Error; err != nil {
+		c.JSON(404, gin.H{"status": "error", "message": "រកគម្រោងមិនឃើញ"})
+		return
+	}
+
+	// Fetch all users once
+	var allUsers []User
+	DB.Find(&allUsers)
+
+	// Fetch orders for the month
+	startDate := req.Month + "-01T00:00:00Z"
+	endDate := req.Month + "-31T23:59:59Z"
+	parts := strings.Split(req.Month, "-")
+	if len(parts) == 2 {
+		year, _ := strconv.Atoi(parts[0])
+		month, _ := strconv.Atoi(parts[1])
+		firstDay := time.Date(year, time.Month(month), 1, 0, 0, 0, 0, time.UTC)
+		lastDay := firstDay.AddDate(0, 1, -1)
+		endDate = lastDay.Format("2006-01-02") + "T23:59:59Z"
+	}
+
+	var orders []Order
+	DB.Where("fulfillment_status = ? AND timestamp >= ? AND timestamp <= ?", "Delivered", startDate, endDate).Find(&orders)
+
+	// Fetch Manual Data
+	var manualData []IncentiveManualData
+	DB.Where("project_id = ? AND month = ?", req.ProjectID, req.Month).Find(&manualData)
+
+	// Custom Payouts
+	var customPayouts []IncentiveCustomPayout
+	DB.Where("project_id = ? AND month = ?", req.ProjectID, req.Month).Find(&customPayouts)
+	customPayoutMap := make(map[string]float64)
+	for _, cp := range customPayouts {
+		customPayoutMap[cp.UserName] = cp.Value
+	}
+
+	// Group results by User
+	userRewards := make(map[string]float64)
+	userOrders := make(map[string]int)
+	userRevenue := make(map[string]float64)
+	userProfit := make(map[string]float64)
+	userBreakdown := make(map[string][]map[string]interface{})
+
+	// Process each active calculator
+	for _, calc := range project.Calculators {
+		if calc.Status == "Disable" {
+			continue
+		}
+
+		var rules IncentiveRules
+		if calc.RulesJSON != "" {
+			json.Unmarshal([]byte(calc.RulesJSON), &rules)
+		}
+
+		// Identify eligible users for this calculator
+		eligibleUsers := []User{}
+		for _, u := range allUsers {
+			isEligible := false
+			if len(rules.ApplyTo) == 0 {
+				isEligible = true // Applies to all if not specified
+			} else {
+				for _, target := range rules.ApplyTo {
+					if strings.HasPrefix(target, "Role:") && u.Role == strings.TrimPrefix(target, "Role:") {
+						isEligible = true
+						break
+					}
+					if strings.HasPrefix(target, "Team:") {
+						targetTeam := strings.TrimPrefix(target, "Team:")
+						userTeams := strings.Split(u.Team, ",")
+						for _, ut := range userTeams {
+							if strings.EqualFold(strings.TrimSpace(ut), strings.TrimSpace(targetTeam)) {
+								isEligible = true
+								break
+							}
+						}
+						if isEligible {
+							break
+						}
+					}
+					if strings.HasPrefix(target, "User:") && u.UserName == strings.TrimPrefix(target, "User:") {
+						isEligible = true
+						break
+					}
+				}
+			}
+			if isEligible {
+				eligibleUsers = append(eligibleUsers, u)
+			}
+		}
+
+		if len(eligibleUsers) == 0 {
+			continue
+		}
+
+		// Metric Calculation
+		metricType := rules.MetricType
+		if metricType == "" {
+			metricType = "Sales Amount"
+		}
+
+		// Pre-calculate member counts for teams to distribute team manual data
+		teamMemberCount := make(map[string]int)
+		for _, u := range eligibleUsers {
+			if u.Team != "" {
+				userTeams := strings.Split(u.Team, ",")
+				for _, ut := range userTeams {
+					teamName := normalizeTeamKey(ut)
+					if teamName != "" {
+						teamMemberCount[teamName]++
+					}
+				}
+			}
+		}
+
+		userSet := make(map[string]bool, len(allUsers))
+		for _, u := range allUsers {
+			userSet[u.UserName] = true
+		}
+
+		// Map to store manual data for both users and teams
+		userManualPerf := make(map[string]float64)
+		teamManualPerf := make(map[string]float64)
+		for _, md := range manualData {
+			if md.MetricType == metricType {
+				_, targetRaw, ok := parseManualDataKey(md.DataKey)
+				if !ok {
+					continue
+				}
+				targetType, targetID := resolveManualTarget(targetRaw, userSet)
+				if targetType == "user" {
+					userManualPerf[targetID] += md.Value
+				} else {
+					teamManualPerf[targetID] += md.Value
+				}
+			}
+		}
+
+		// Calculate performance for each eligible user (Orders + Individual Manual)
+		perfMap := make(map[string]float64)
+		for _, u := range eligibleUsers {
+			var val float64
+			for _, o := range orders {
+				if o.User == u.UserName {
+					switch strings.ToLower(strings.TrimSpace(metricType)) {
+					case "sales amount", "revenue":
+						val += o.GrandTotal
+						userRevenue[u.UserName] += o.GrandTotal
+					case "profit":
+						orderProfit := o.GrandTotal - o.TotalProductCost - o.InternalCost
+						val += orderProfit
+						userProfit[u.UserName] += orderProfit
+					default:
+						val += 1
+						userOrders[u.UserName]++
+					}
+				}
+			}
+			// Add User-specific Manual Data
+			val += userManualPerf[u.UserName]
+			
+			// If distribution is Individual, we also add a proportional share of Team Manual Data
+			if rules.DistributionRule.Method == "" || rules.DistributionRule.Method == "Individual" {
+				if u.Team != "" {
+					userTeams := strings.Split(u.Team, ",")
+					for _, ut := range userTeams {
+						teamName := normalizeTeamKey(ut)
+						if teamName != "" && teamManualPerf[teamName] > 0 && teamMemberCount[teamName] > 0 {
+							share := teamManualPerf[teamName] / float64(teamMemberCount[teamName])
+							val += share
+						}
+					}
+				}
+			}
+
+			perfMap[u.UserName] = val
+		}
+
+		// Distribution Logic
+		distMethod := rules.DistributionRule.Method
+		if distMethod == "" {
+			distMethod = "Individual" // Default
+		}
+
+		if distMethod == "Equal Split" || distMethod == "Percentage Allocation" {
+			// Calculate Group Total Performance (Sum of Individual Perfs + Team Manual Data)
+			var groupTotalPerf float64
+			for _, v := range perfMap {
+				groupTotalPerf += v
+			}
+			// Add Team Manual Data that hasn't been added to individual perfs yet
+			for teamID, teamVal := range teamManualPerf {
+				// Only add if at least one member of this team is in the eligible group
+				if teamMemberCount[teamID] > 0 {
+					groupTotalPerf += teamVal
+				}
+			}
+
+			// Calculate Pool Reward
+			poolReward := calculatePayout(calc, groupTotalPerf, "")
+
+			if distMethod == "Equal Split" {
+				share := poolReward / float64(len(eligibleUsers))
+				for _, u := range eligibleUsers {
+					userRewards[u.UserName] += share
+					userBreakdown[u.UserName] = append(userBreakdown[u.UserName], map[string]interface{}{
+						"name":         calc.Name,
+						"calculatorId": calc.ID,
+						"key":          fmt.Sprintf("%s#%d", calc.Name, calc.ID),
+						"metricType":   metricType,
+						"amount":       share,
+					})
+				}
+			} else if distMethod == "Percentage Allocation" {
+				for _, u := range eligibleUsers {
+					// Find allocation for this user
+					found := false
+					for _, alloc := range rules.DistributionRule.Allocations {
+						if alloc.MemberRoleOrName == u.UserName || alloc.MemberRoleOrName == u.Role {
+							share := poolReward * (alloc.Percentage / 100.0)
+							userRewards[u.UserName] += share
+							userBreakdown[u.UserName] = append(userBreakdown[u.UserName], map[string]interface{}{
+								"name":         calc.Name,
+								"calculatorId": calc.ID,
+								"key":          fmt.Sprintf("%s#%d", calc.Name, calc.ID),
+								"metricType":   metricType,
+								"amount":       share,
+							})
+							found = true
+							break
+						}
+					}
+					if !found {
+						// Fallback or skip
+					}
+				}
+			}
+		} else {
+			// Individual Calculation (Performance-Based or Default)
+			for _, u := range eligibleUsers {
+				share := calculatePayout(calc, perfMap[u.UserName], "")
+				userRewards[u.UserName] += share
+				userBreakdown[u.UserName] = append(userBreakdown[u.UserName], map[string]interface{}{
+					"name":         calc.Name,
+					"calculatorId": calc.ID,
+					"key":          fmt.Sprintf("%s#%d", calc.Name, calc.ID),
+					"metricType":   metricType,
+					"amount":       share,
+				})
+			}
+		}
+	}
+
+	// Final Results Consolidation
+	var results []IncentiveResult
+	// We need to decide which users to show. Let's show any user that has any stat or reward.
+	uniqueUsers := make(map[string]bool)
+	for u := range userRewards { uniqueUsers[u] = true }
+	for u := range userOrders { uniqueUsers[u] = true }
+	for u := range userRevenue { uniqueUsers[u] = true }
+
+	for user := range uniqueUsers {
+		payout := userRewards[user]
+		isCustom := false
+		if customVal, exists := customPayoutMap[user]; exists {
+			payout = customVal
+			isCustom = true
+		}
+
+		breakdownJSON, _ := json.Marshal(userBreakdown[user])
+
+		results = append(results, IncentiveResult{
+			ProjectID:       project.ID,
+			UserName:        user,
+			TotalOrders:     userOrders[user],
+			// Keep TotalRevenue compatible for UI; include realized profit if revenue is zero.
+			TotalRevenue:    func() float64 { if userRevenue[user] != 0 { return userRevenue[user] }; return userProfit[user] }(),
+			CalculatedValue: payout,
+			IsCustom:        isCustom,
+			BreakdownJSON:   string(breakdownJSON),
+		})
+	}
+
+	c.JSON(200, gin.H{"status": "success", "data": results})
+}
+
+// =========================================================================
+// ប្រព័ន្ធ BACKGROUND QUEUE & SCHEDULER - Aliased to Backend package
+// =========================================================================
+
+type AppsScriptRequest = backend.AppsScriptRequest
+type AppsScriptResponse = backend.AppsScriptResponse
+type SyncTask = backend.SyncTask
+
+var callAppsScriptPOST = backend.CallAppsScriptPOST
+var enqueueSync = backend.EnqueueSync
+var startSyncManager = backend.StartSyncManager
+
+type OrderJob struct {
+	JobID     string
+	OrderID   string
+	UserName  string
+	OrderData map[string]interface{}
+}
+
+var orderChannel = make(chan OrderJob, 2000)
+
+func startOrderWorker() {
+	for job := range orderChannel {
+		func() {
+			defer func() {
+				if r := recover(); r != nil {
+					log.Printf("⚠️ Recovered from panic in OrderWorker for Order %s: %v", job.OrderID, r)
+				}
+			}()
+
+			log.Printf("☁️ Background Worker: Processing Order %s", job.OrderID)
+			reqBody := AppsScriptRequest{Action: "submitOrder", Secret: backend.AppsScriptSecret, OrderData: job.OrderData}
+			jsonData, _ := json.Marshal(reqBody)
+
+			client := &http.Client{Timeout: 45 * time.Second}
+			resp, err := client.Post(backend.AppsScriptURL, "application/json", bytes.NewBuffer(jsonData))
+
+			if err != nil {
+				log.Printf("❌ Worker error for %s: %v", job.OrderID, err)
+			} else {
+				defer resp.Body.Close()
+				var scriptResp AppsScriptResponse
+				if err := json.NewDecoder(resp.Body).Decode(&scriptResp); err == nil {
+					if (scriptResp.MessageIds.ID1 != "" || scriptResp.MessageIds.ID2 != "") && DB != nil {
+						DB.Model(&Order{}).Where("order_id = ?", job.OrderID).Updates(map[string]interface{}{
+							"telegram_message_id1": scriptResp.MessageIds.ID1,
+							"telegram_message_id2": scriptResp.MessageIds.ID2,
+						})
+					}
+				}
+				msgBytes, _ := json.Marshal(map[string]interface{}{"type": "system_notification", "status": "success", "targetUser": job.UserName, "message": "បាញ់ទៅ Telegram ជោគជ័យ!", "jobId": job.JobID})
+				if backend.HubGlobal != nil {
+					backend.HubGlobal.Broadcast <- msgBytes
+				}
+			}
+		}()
+	}
+}
+
+func startScheduler() {
+	ticker := time.NewTicker(1 * time.Minute)
+	cleanupTicker := time.NewTicker(5 * time.Minute)
+
+	go func() {
+		for {
+			select {
+			case <-ticker.C:
+				// Sync with Google Sheets via managed queue
+				enqueueSync("checkScheduledOrders", nil, "", nil)
+			case <-cleanupTicker.C:
+				result := DB.Where("expires_at < ?", time.Now()).Delete(&TempImage{})
+				if result.RowsAffected > 0 {
+					log.Printf("🧹 Cleanup: លុបរូបភាពបណ្ដោះអាសន្នចំនួន %d ឯកសារដែលហួសពេលចេញពី Database", result.RowsAffected)
+				}
+			}
+		}
+	}()
+}
+
+// =========================================================================
+// WEB SOCKET - Aliased to Backend package
+// =========================================================================
+
+type Client = backend.Client
+type Hub = backend.Hub
+
+var NewHub = backend.NewHub
+var serveWs = backend.ServeWs
+var upgrader = backend.Upgrader
+var hub *Hub
+
+// =========================================================================
+
+// =========================================================================
+// MIGRATION SCRIPT
+// =========================================================================
+
+func handleGetStaticData(c *gin.Context) {
+	var wg sync.WaitGroup
+	var mu sync.Mutex
+	result := make(map[string]interface{})
+
+	queries := []func(){
+		func() { var d []Product; DB.Find(&d); mu.Lock(); result["products"] = d; mu.Unlock() },
+		func() { var d []Store; DB.Find(&d); mu.Lock(); result["stores"] = d; mu.Unlock() },
+		func() { var d []TeamPage; DB.Find(&d); mu.Lock(); result["pages"] = d; mu.Unlock() },
+		func() { var d []Location; DB.Find(&d); mu.Lock(); result["locations"] = d; mu.Unlock() },
+		func() { var d []ShippingMethod; DB.Find(&d); mu.Lock(); result["shippingMethods"] = d; mu.Unlock() },
+		func() { var d []Color; DB.Find(&d); mu.Lock(); result["colors"] = d; mu.Unlock() },
+		func() { var d []Driver; DB.Find(&d); mu.Lock(); result["drivers"] = d; mu.Unlock() },
+		func() { var d []BankAccount; DB.Find(&d); mu.Lock(); result["bankAccounts"] = d; mu.Unlock() },
+		func() { var d []PhoneCarrier; DB.Find(&d); mu.Lock(); result["phoneCarriers"] = d; mu.Unlock() },
+		func() { var d []Inventory; DB.Find(&d); mu.Lock(); result["inventory"] = d; mu.Unlock() },
+		func() { var d []StockTransfer; DB.Find(&d); mu.Lock(); result["stockTransfers"] = d; mu.Unlock() },
+		func() { var d []ReturnItem; DB.Find(&d); mu.Lock(); result["returns"] = d; mu.Unlock() },
+		func() { var d []Role; DB.Find(&d); mu.Lock(); result["roles"] = d; mu.Unlock() },
+		func() { var d []RolePermission; DB.Find(&d); mu.Lock(); result["rolePermissions"] = d; mu.Unlock() },
+		func() {
+			var d []DriverRecommendation
+			DB.Find(&d)
+			mu.Lock()
+			result["driverRecommendations"] = d
+			mu.Unlock()
+		},
+		func() { var d []Movie; DB.Find(&d); mu.Lock(); result["movies"] = d; mu.Unlock() },
+		func() { var d []TelegramTemplate; DB.Find(&d); mu.Lock(); result["telegramTemplates"] = d; mu.Unlock() },
+		func() { var d []RevenueEntry; DB.Find(&d); mu.Lock(); result["revenueEntries"] = d; mu.Unlock() },
+		func() {
+			var d []EditLog
+			DB.Limit(500).Order("timestamp desc").Find(&d)
+			mu.Lock()
+			result["editLogs"] = d
+			mu.Unlock()
+		},
+		func() {
+			var d []UserActivityLog
+			DB.Limit(500).Order("timestamp desc").Find(&d)
+			mu.Lock()
+			result["actLogs"] = d
+			mu.Unlock()
+		},
+		func() {
+			var settings []Setting
+			DB.Find(&settings)
+			settingsObj := make(map[string]interface{})
+			for _, s := range settings {
+				settingsObj[s.ConfigKey] = s.ConfigValue
+				if s.ConfigKey == "UploadFolderID" {
+					envVal := os.Getenv("UPLOAD_FOLDER_ID")
+					if envVal != "" {
+						uploadFolderID = envVal
+					} else {
+						uploadFolderID = s.ConfigValue
+					}
+				}
+			}
+			mu.Lock()
+			result["settings"] = settingsObj
+			mu.Unlock()
+		},
+	}
+
+	for _, q := range queries {
+		wg.Add(1)
+		go func(f func()) {
+			defer wg.Done()
+			f()
+		}(q)
+	}
+
+	wg.Wait()
+
+	c.JSON(http.StatusOK, gin.H{"status": "success", "data": result})
+}
+
+func handleGetSettings(c *gin.Context) {
+	var settings []Setting
+	if err := DB.Find(&settings).Error; err != nil {
+		c.Error(err)
+		return
+	}
+	c.JSON(http.StatusOK, gin.H{"status": "success", "data": settings})
+}
+
+func fetchSheetDataFromAPI(sheetName string) ([]map[string]interface{}, error) {
+	readRange, ok := sheetRanges[sheetName]
+	if !ok {
+		return nil, fmt.Errorf("range not defined")
+	}
+	resp, err := sheetsService.Spreadsheets.Values.Get(spreadsheetID, readRange).Do()
+	if err != nil {
+		return nil, err
+	}
+	return convertSheetValuesToMaps(sheetName, resp)
+}
+
+func isNumericHeader(h string) bool {
+	// Trim to be robust against accidental whitespace in the header row (e.g. "id ").
+	h = strings.ToLower(strings.TrimSpace(h))
+	return h == "price" || h == "cost" || h == "grand total" || h == "subtotal" || h == "shipping fee (customer)" ||
+		h == "internal cost" || h == "internalcost" || h == "discount ($)" || h == "delivery unpaid" ||
+		h == "delivery paid" || h == "total product cost ($)" || h == "revenue" || h == "quantity" ||
+		h == "part" || h == "id" || h == "projectid" ||
+		h == "totalorders" || h == "totalrevenue" || h == "calculatedvalue" ||
+		h == "calculatorid"
+}
+func isBoolHeader(h string) bool {
+	// Trim to be robust against accidental whitespace in the header row.
+	h = strings.ToLower(strings.TrimSpace(h))
+	return h == "issystemadmin" || h == "allowmanualdriver" || h == "requiredriverselection" ||
+		h == "isrestocked" || h == "isenabled" ||
+		h == "enabledriverrecommendation" || h == "requireperiodselection" || h == "iscustom"
+}
+func convertSheetValuesToMaps(sheetName string, values *sheets.ValueRange) ([]map[string]interface{}, error) {
 	if values == nil || len(values.Values) < 2 {
 		return []map[string]interface{}{}, nil
 	}
 	headers := values.Values[0]
 	dataRows := values.Values[1:]
 	result := make([]map[string]interface{}, 0, len(dataRows))
-
 	for _, row := range dataRows {
 		if len(row) == 0 || (len(row) == 1 && row[0] == "") {
 			continue
@@ -407,37 +1072,52 @@ func convertSheetValuesToMaps(values *sheets.ValueRange) ([]map[string]interface
 		rowData := make(map[string]interface{})
 		for i, cell := range row {
 			if i < len(headers) {
-				header := fmt.Sprintf("%v", headers[i])
+				header := strings.TrimSpace(fmt.Sprintf("%v", headers[i]))
 				if header != "" {
 					if cellStr, ok := cell.(string); ok {
-						// Clean up string first
-						cleanedStr := strings.TrimSpace(cellStr)
-
-						// Handle Numbers/Currency
-						cleanedNum := strings.ReplaceAll(cleanedStr, "$", "")
-						cleanedNum = strings.ReplaceAll(cleanedNum, ",", "")
-
-						if header == "Cost" || header == "Price" || header == "Grand Total" || header == "Subtotal" || header == "Shipping Fee (Customer)" || header == "Internal Cost" || header == "Discount ($)" || header == "Delivery Unpaid" || header == "Delivery Paid" || header == "Total Product Cost ($)" {
-							if f, err := strconv.ParseFloat(cleanedNum, 64); err == nil {
+						if isNumericHeader(header) {
+							cleanedStr := strings.ReplaceAll(strings.ReplaceAll(strings.TrimSpace(cellStr), "$", ""), ",", "")
+							if f, err := strconv.ParseFloat(cleanedStr, 64); err == nil {
 								rowData[header] = f
 							} else {
-								rowData[header] = cleanedStr
+								// Default to 0.0 for numeric headers if parsing fails to avoid unmarshal errors
+								rowData[header] = 0.0
 							}
-						} else if header == "IsVerified" {
-							// ✅ CHANGED: Keep IsVerified as String ("A" or "")
-							rowData[header] = cleanedStr
-						} else if b, err := strconv.ParseBool(cleanedStr); err == nil {
-							// FIX: Using cleanedStr to handle "TRUE " cases
-							rowData[header] = b
+						} else if isBoolHeader(header) {
+							rowData[header] = strings.ToUpper(strings.TrimSpace(cellStr)) == "TRUE"
 						} else {
-							rowData[header] = cellStr // Keep original for non-numeric/boolean
+							if strings.ToLower(header) == "value" && (strings.TrimSpace(cellStr) == "" || strings.TrimSpace(cellStr) == "-") {
+								rowData[header] = "0"
+							} else {
+								rowData[header] = cellStr
+							}
 						}
 					} else {
-						rowData[header] = cell
+						// If not a string, check if it's already a boolean (sometimes happens with API)
+						if isBoolHeader(header) {
+							if b, ok := cell.(bool); ok {
+								rowData[header] = b
+							} else {
+								rowData[header] = false
+							}
+						} else {
+							if b, ok := cell.(bool); ok {
+								if b {
+									rowData[header] = "TRUE"
+								} else {
+									rowData[header] = "FALSE"
+								}
+							} else if f, ok := cell.(float64); ok {
+								// Preserve numeric types directly
+								rowData[header] = f
+							} else {
+								rowData[header] = fmt.Sprintf("%v", cell)
+							}
+						}
 					}
-
-					// Force String for specific IDs/Notes
-					if header == "Password" || header == "Customer Phone" || header == "Barcode" || header == "Customer Name" || header == "Note" || header == "Content" || header == "Tags" {
+					// Ensure critical IDs are always strings to avoid scientific notation or rounding issues
+					lowHeader := strings.ToLower(strings.TrimSpace(header))
+					if lowHeader == "telegram message id 1" || lowHeader == "telegram message id 2" || lowHeader == "order id" || lowHeader == "customer phone" || lowHeader == "barcode" || (sheetName == "Movies" && lowHeader == "id") {
 						rowData[header] = fmt.Sprintf("%v", cell)
 					}
 				}
@@ -448,373 +1128,814 @@ func convertSheetValuesToMaps(values *sheets.ValueRange) ([]map[string]interface
 	return result, nil
 }
 
-func fetchSheetDataFromAPI(sheetName string) ([]map[string]interface{}, error) {
-	readRange, ok := sheetRanges[sheetName]
-	if !ok {
-		return nil, fmt.Errorf("no A1 range defined for sheet: %s", sheetName)
-	}
-	resp, err := sheetsService.Spreadsheets.Values.Get(spreadsheetID, readRange).Do()
-	if err != nil {
-		log.Printf("Error calling Sheets API GET for %s: %v", sheetName, err)
-		return nil, fmt.Errorf("failed to retrieve data from Google Sheets API")
-	}
-	mappedData, err := convertSheetValuesToMaps(resp)
-	if err != nil {
-		log.Printf("Error converting sheet data for %s: %v", sheetName, err)
-		return nil, fmt.Errorf("failed to process data structure from Google Sheets")
-	}
-	return mappedData, nil
-}
-
-func appendRowToSheet(sheetName string, rowData []interface{}) error {
-	writeRange := sheetName
-	valueRange := &sheets.ValueRange{
-		Values: [][]interface{}{rowData},
-	}
-	_, err := sheetsService.Spreadsheets.Values.Append(spreadsheetID, writeRange, valueRange).ValueInputOption("RAW").Do()
-	if err != nil {
-		log.Printf("Error calling Sheets API APPEND for %s: %v", sheetName, err)
-		return fmt.Errorf("failed to append row to Google Sheets API")
-	}
-	invalidateSheetCache(sheetName)
-	return nil
-}
-
-func overwriteSheetDataInAPI(sheetName string, data [][]interface{}) error {
-	clearRange, ok := sheetRanges[sheetName]
-	if !ok {
-		return fmt.Errorf("no A1 range defined for sheet: %s", sheetName)
-	}
-	_, err := sheetsService.Spreadsheets.Values.Clear(spreadsheetID, clearRange, &sheets.ClearValuesRequest{}).Do()
-	if err != nil {
-		log.Printf("Error calling Sheets API CLEAR for %s: %v", sheetName, err)
-		return fmt.Errorf("failed to clear sheet %s: %v", sheetName, err)
-	}
-	if len(data) == 0 {
-		log.Printf("No data provided to overwrite sheet %s. Sheet cleared.", sheetName)
-		return nil
-	}
-	writeRange := fmt.Sprintf("%s!A1", sheetName)
-	valueRange := &sheets.ValueRange{
-		Values: data,
-	}
-	_, err = sheetsService.Spreadsheets.Values.Update(spreadsheetID, writeRange, valueRange).ValueInputOption("RAW").Do()
-	if err != nil {
-		log.Printf("Error calling Sheets API UPDATE for %s: %v", sheetName, err)
-		return fmt.Errorf("failed to write data to sheet %s: %v", sheetName, err)
-	}
-	invalidateSheetCache(sheetName)
-	return nil
-}
-
-func getSheetIdByName(sheetName string) (int64, error) {
-	sheetIdCacheMutex.RLock()
-	sheetId, found := sheetIdCache[sheetName]
-	sheetIdCacheMutex.RUnlock()
-	if found {
-		log.Printf("Cache HIT for Sheet ID: %s", sheetName)
-		return sheetId, nil
-	}
-
-	log.Printf("Cache MISS for Sheet ID: %s. Fetching from API...", sheetName)
-	resp, err := sheetsService.Spreadsheets.Get(spreadsheetID).Fields("sheets(properties(title,sheetId))").Do()
-	if err != nil {
-		log.Printf("Error fetching spreadsheet properties: %v", err)
-		return 0, fmt.Errorf("failed to get spreadsheet info")
-	}
-
-	for _, sheet := range resp.Sheets {
-		sheetIdCacheMutex.Lock()
-		sheetIdCache[sheet.Properties.Title] = sheet.Properties.SheetId
-		sheetIdCacheMutex.Unlock()
-
-		if sheet.Properties.Title == sheetName {
-			log.Printf("Found Sheet ID for %s: %d", sheetName, sheet.Properties.SheetId)
-			sheetId = sheet.Properties.SheetId
-			found = true
-		}
-	}
-
-	if found {
-		return sheetId, nil
-	}
-
-	return 0, fmt.Errorf("sheet '%s' not found in spreadsheet", sheetName)
-}
-
-func findHeaderMap(sheetName string) (map[string]int, error) {
-	headersResp, err := sheetsService.Spreadsheets.Values.Get(spreadsheetID, fmt.Sprintf("%s!1:1", sheetName)).Do()
-	if err != nil || len(headersResp.Values) == 0 {
-		log.Printf("Error fetching headers for %s: %v", sheetName, err)
-		return nil, fmt.Errorf("failed to read headers for sheet %s", sheetName)
-	}
-	headers := headersResp.Values[0]
-	headerMap := make(map[string]int)
-	for i, header := range headers {
-		headerMap[fmt.Sprintf("%v", header)] = i
-	}
-	return headerMap, nil
-}
-
-func findRowIndexByPK(sheetName string, pkHeader string, pkValue string) (int64, int64, error) {
-	sheetId, err := getSheetIdByName(sheetName)
-	if err != nil {
-		return -1, 0, err
-	}
-	headerMap, err := findHeaderMap(sheetName)
-	if err != nil {
-		return -1, sheetId, err
-	}
-	pkColIndex, ok := headerMap[pkHeader]
-	if !ok {
-		return -1, sheetId, fmt.Errorf("primary key column '%s' not found in sheet '%s'", pkHeader, sheetName)
-	}
-	pkColLetter := string(rune('A' + pkColIndex))
-	readRange := fmt.Sprintf("%s!%s2:%s", sheetName, pkColLetter, pkColLetter)
-	resp, err := sheetsService.Spreadsheets.Values.Get(spreadsheetID, readRange).Do()
-	if err != nil {
-		log.Printf("Error fetching PK column from %s: %v", sheetName, err)
-		return -1, sheetId, fmt.Errorf("failed to read sheet %s", sheetName)
-	}
-	for i, row := range resp.Values {
-		if len(row) > 0 && fmt.Sprintf("%v", row[0]) == pkValue {
-			rowIndex := i + 1
-			return int64(rowIndex), sheetId, nil
-		}
-	}
-	return -1, sheetId, fmt.Errorf("row not found with %s = %s in sheet %s", pkHeader, pkValue, sheetName)
-}
-
-// --- Fetch & Cache Sheet Data ---
-func getCachedSheetData(sheetName string, target interface{}, duration time.Duration) error {
-	cacheKey := "sheet_" + sheetName
-	cachedData, found := getCache(cacheKey)
-	if found {
-		jsonData, err := json.Marshal(cachedData)
-		if err == nil {
-			err = json.Unmarshal(jsonData, target)
-			if err == nil {
-				return nil
-			}
-			log.Printf("Error unmarshalling cached data for %s: %v", sheetName, err)
-		} else {
-			log.Printf("Error marshalling cached data for %s: %v", sheetName, err)
-		}
-	}
-	log.Printf("Fetching fresh data for %s (via Sheets API)", sheetName)
+func fetchSheetDataToStruct(sheetName string, target interface{}) error {
 	mappedData, err := fetchSheetDataFromAPI(sheetName)
 	if err != nil {
 		return err
 	}
-	jsonData, err := json.Marshal(mappedData)
-	if err != nil {
-		log.Printf("Error marshalling data from Sheets API for %s: %v", sheetName, err)
-		return fmt.Errorf("internal error processing sheet data")
+	jsonData, _ := json.Marshal(mappedData)
+	if err = json.Unmarshal(jsonData, target); err != nil {
+		return err
 	}
-	err = json.Unmarshal(jsonData, target)
-	if err != nil {
-		log.Printf("Error unmarshalling data for %s: %v. JSON: %s", sheetName, err, string(jsonData))
-		return fmt.Errorf("mismatched data structure for %s", sheetName)
-	}
-	setCache(cacheKey, mappedData, duration)
 	return nil
 }
 
-// --- Apps Script Communication ---
-type AppsScriptRequest struct {
-	Action         string      `json:"action"`
-	Secret         string      `json:"secret"`
-	UploadFolderID string      `json:"uploadFolderID,omitempty"`
-	FileData       string      `json:"fileData,omitempty"`
-	FileName       string      `json:"fileName,omitempty"`
-	MimeType       string      `json:"mimeType,omitempty"`
-	UserName       string      `json:"userName,omitempty"`
-	FileID         string      `json:"fileID,omitempty"`
-	OrderData      interface{} `json:"orderData,omitempty"`
-}
-type AppsScriptResponse struct {
-	Status  string `json:"status"`
-	Message string `json:"message,omitempty"`
-	URL     string `json:"url,omitempty"`
-	FileID  string `json:"fileID,omitempty"`
-	OrderID string `json:"orderId,omitempty"`
-}
-
-func callAppsScriptPOST(requestData AppsScriptRequest) (AppsScriptResponse, error) {
-	requestData.Secret = appsScriptSecret
-	jsonData, err := json.Marshal(requestData)
-	if err != nil {
-		log.Printf("Error marshalling Apps Script POST request (%s): %v", requestData.Action, err)
-		return AppsScriptResponse{}, fmt.Errorf("internal error preparing data")
-	}
-	resp, err := http.Post(appsScriptURL, "application/json", bytes.NewBuffer(jsonData))
-	if err != nil {
-		log.Printf("Error calling Apps Script POST (%s): %v", requestData.Action, err)
-		return AppsScriptResponse{}, fmt.Errorf("failed to connect to Google Apps Script API")
-	}
-	defer resp.Body.Close()
-	body, err := io.ReadAll(resp.Body)
-	if err != nil {
-		log.Printf("Error reading Apps Script POST response (%s): %v", requestData.Action, err)
-		return AppsScriptResponse{}, fmt.Errorf("failed to read Google Apps Script API response")
-	}
-	var scriptResponse AppsScriptResponse
-	err = json.Unmarshal(body, &scriptResponse)
-	if err != nil {
-		log.Printf("Error unmarshalling Apps Script POST response (%s): %v. Body: %s", requestData.Action, err, string(body))
-		log.Printf("Raw response body: %s", string(body))
-		return AppsScriptResponse{}, fmt.Errorf("invalid response format from Google Apps Script API")
-	}
-	if resp.StatusCode != http.StatusOK {
-		log.Printf("Apps Script POST request (%s) returned status %d. Body: %s", requestData.Action, resp.StatusCode, string(body))
-		if scriptResponse.Status == "locked" {
-			return AppsScriptResponse{}, fmt.Errorf("Google Apps Script API is busy, please try again")
+func handleMigrateData(c *gin.Context) {
+	go func() {
+		ctx := context.Background()
+		if sheetsService == nil {
+			createGoogleAPIClient(ctx)
 		}
-		if scriptResponse.Status == "error" && scriptResponse.Message != "" {
-			return AppsScriptResponse{}, fmt.Errorf("Google Apps Script API error: %s", scriptResponse.Message)
+
+		// Start Transaction
+		tx := DB.Begin()
+		defer func() {
+			if r := recover(); r != nil {
+				tx.Rollback()
+			}
+		}()
+
+		log.Println("🗑️ លុបទិន្នន័យចាស់ (Resetting Database within transaction)...")
+		tx.Session(&gorm.Session{AllowGlobalUpdate: true}).Delete(&User{})
+		tx.Session(&gorm.Session{AllowGlobalUpdate: true}).Delete(&Store{})
+		tx.Session(&gorm.Session{AllowGlobalUpdate: true}).Delete(&Setting{})
+		tx.Session(&gorm.Session{AllowGlobalUpdate: true}).Delete(&TeamPage{})
+		tx.Session(&gorm.Session{AllowGlobalUpdate: true}).Delete(&Product{})
+		tx.Session(&gorm.Session{AllowGlobalUpdate: true}).Delete(&Location{})
+		tx.Session(&gorm.Session{AllowGlobalUpdate: true}).Delete(&ShippingMethod{})
+		tx.Session(&gorm.Session{AllowGlobalUpdate: true}).Delete(&Color{})
+		tx.Session(&gorm.Session{AllowGlobalUpdate: true}).Delete(&Driver{})
+		tx.Session(&gorm.Session{AllowGlobalUpdate: true}).Delete(&BankAccount{})
+		tx.Session(&gorm.Session{AllowGlobalUpdate: true}).Delete(&PhoneCarrier{})
+		tx.Session(&gorm.Session{AllowGlobalUpdate: true}).Delete(&TelegramTemplate{})
+		tx.Session(&gorm.Session{AllowGlobalUpdate: true}).Delete(&Inventory{})
+		tx.Session(&gorm.Session{AllowGlobalUpdate: true}).Delete(&StockTransfer{})
+		tx.Session(&gorm.Session{AllowGlobalUpdate: true}).Delete(&ReturnItem{})
+		tx.Session(&gorm.Session{AllowGlobalUpdate: true}).Delete(&RevenueEntry{})
+		tx.Session(&gorm.Session{AllowGlobalUpdate: true}).Delete(&ChatMessage{})
+		tx.Session(&gorm.Session{AllowGlobalUpdate: true}).Delete(&EditLog{})
+		tx.Session(&gorm.Session{AllowGlobalUpdate: true}).Delete(&UserActivityLog{})
+		tx.Session(&gorm.Session{AllowGlobalUpdate: true}).Delete(&Order{})
+		tx.Session(&gorm.Session{AllowGlobalUpdate: true}).Delete(&DriverRecommendation{})
+		tx.Session(&gorm.Session{AllowGlobalUpdate: true}).Delete(&Role{})
+		tx.Session(&gorm.Session{AllowGlobalUpdate: true}).Delete(&RolePermission{})
+		tx.Session(&gorm.Session{AllowGlobalUpdate: true}).Delete(&IncentiveProject{})
+		tx.Session(&gorm.Session{AllowGlobalUpdate: true}).Delete(&IncentiveCalculator{})
+		tx.Session(&gorm.Session{AllowGlobalUpdate: true}).Delete(&IncentiveResult{})
+		tx.Session(&gorm.Session{AllowGlobalUpdate: true}).Delete(&IncentiveManualData{})
+		tx.Session(&gorm.Session{AllowGlobalUpdate: true}).Delete(&IncentiveCustomPayout{})
+		tx.Session(&gorm.Session{AllowGlobalUpdate: true}).Delete(&Movie{})
+
+		log.Println("🔄 ចាប់ផ្តើមទាញទិន្នន័យថ្មីពី Google Sheet...")
+
+		var users []User
+		if err := fetchSheetDataToStruct("Users", &users); err != nil {
+			tx.Rollback()
+			log.Println("❌ Migration failed for Users:", err)
+			return
 		}
-		return AppsScriptResponse{}, fmt.Errorf("Google Apps Script API returned status %d", resp.StatusCode)
-	}
-	if scriptResponse.Status != "success" {
-		log.Printf("Apps Script POST Error (%s): %s", requestData.Action, scriptResponse.Message)
-		return AppsScriptResponse{}, fmt.Errorf("Google Apps Script API error: %s", scriptResponse.Message)
-	}
-	return scriptResponse, nil
+		var validUsers []User
+		seenUsers := make(map[string]bool)
+		for _, x := range users {
+			if x.UserName != "" && !seenUsers[x.UserName] {
+				seenUsers[x.UserName] = true
+				validUsers = append(validUsers, x)
+			}
+		}
+		if len(validUsers) > 0 {
+			if err := tx.CreateInBatches(validUsers, 100).Error; err != nil {
+				tx.Rollback()
+				log.Println("❌ Migration failed to save Users:", err)
+				return
+			}
+		}
+
+		var stores []Store
+		if err := fetchSheetDataToStruct("Stores", &stores); err != nil {
+			tx.Rollback()
+			log.Println("❌ Migration failed for Stores:", err)
+			return
+		}
+		var validStores []Store
+		seenStores := make(map[string]bool)
+		for _, x := range stores {
+			if x.StoreName != "" && !seenStores[x.StoreName] {
+				seenStores[x.StoreName] = true
+				validStores = append(validStores, x)
+			}
+		}
+		if len(validStores) > 0 {
+			if err := tx.CreateInBatches(validStores, 100).Error; err != nil {
+				tx.Rollback()
+				log.Println("❌ Migration failed to save Stores:", err)
+				return
+			}
+		}
+
+		var settings []Setting
+		if err := fetchSheetDataToStruct("Settings", &settings); err != nil {
+			tx.Rollback()
+			log.Println("❌ Migration failed for Settings:", err)
+			return
+		}
+		for _, s := range settings {
+			if s.ConfigKey != "" {
+				if err := tx.Save(&s).Error; err != nil {
+					tx.Rollback()
+					log.Println("❌ Migration failed to save Setting:", s.ConfigKey, err)
+					return
+				}
+				if s.ConfigKey == "UploadFolderID" {
+					envVal := os.Getenv("UPLOAD_FOLDER_ID")
+					if envVal != "" {
+						uploadFolderID = envVal
+					} else {
+						uploadFolderID = s.ConfigValue
+					}
+				}
+			}
+		}
+
+		var pages []TeamPage
+		if err := fetchSheetDataToStruct("TeamsPages", &pages); err != nil {
+			tx.Rollback()
+			log.Println("❌ Migration failed for TeamsPages:", err)
+			return
+		}
+		var validPages []TeamPage
+		seenPages := make(map[uint]bool)
+		for _, x := range pages {
+			if x.PageName != "" && !seenPages[x.ID] {
+				if x.ID != 0 {
+					seenPages[x.ID] = true
+				}
+				validPages = append(validPages, x)
+			}
+		}
+		if len(validPages) > 0 {
+			if err := tx.CreateInBatches(validPages, 100).Error; err != nil {
+				tx.Rollback()
+				log.Println("❌ Migration failed to save TeamsPages:", err)
+				return
+			}
+		}
+
+		var products []Product
+		if err := fetchSheetDataToStruct("Products", &products); err != nil {
+			tx.Rollback()
+			log.Println("❌ Migration failed for Products:", err)
+			return
+		}
+		var validProducts []Product
+		seenProducts := make(map[string]bool)
+		for _, x := range products {
+			if x.Barcode != "" && !seenProducts[x.Barcode] {
+				seenProducts[x.Barcode] = true
+				validProducts = append(validProducts, x)
+			}
+		}
+		if len(validProducts) > 0 {
+			if err := tx.CreateInBatches(validProducts, 100).Error; err != nil {
+				tx.Rollback()
+				log.Println("❌ Migration failed to save Products:", err)
+				return
+			}
+		}
+
+		var locations []Location
+		if err := fetchSheetDataToStruct("Locations", &locations); err != nil {
+			tx.Rollback()
+			log.Println("❌ Migration failed for Locations:", err)
+			return
+		}
+		var validLocations []Location
+		seenLocations := make(map[uint]bool)
+		for _, x := range locations {
+			if !seenLocations[x.ID] {
+				if x.ID != 0 {
+					seenLocations[x.ID] = true
+				}
+				validLocations = append(validLocations, x)
+			}
+		}
+		if len(validLocations) > 0 {
+			if err := tx.CreateInBatches(validLocations, 100).Error; err != nil {
+				tx.Rollback()
+				log.Println("❌ Migration failed to save Locations:", err)
+				return
+			}
+		}
+
+		var shipping []ShippingMethod
+		if err := fetchSheetDataToStruct("ShippingMethods", &shipping); err != nil {
+			tx.Rollback()
+			log.Println("❌ Migration failed for ShippingMethods:", err)
+			return
+		}
+		var validShipping []ShippingMethod
+		seenShipping := make(map[string]bool)
+		for _, x := range shipping {
+			if x.MethodName != "" && !seenShipping[x.MethodName] {
+				seenShipping[x.MethodName] = true
+				validShipping = append(validShipping, x)
+			}
+		}
+		if len(validShipping) > 0 {
+			if err := tx.CreateInBatches(validShipping, 100).Error; err != nil {
+				tx.Rollback()
+				log.Println("❌ Migration failed to save ShippingMethods:", err)
+				return
+			}
+		}
+
+		var colors []Color
+		if err := fetchSheetDataToStruct("Colors", &colors); err != nil {
+			tx.Rollback()
+			log.Println("❌ Migration failed for Colors:", err)
+			return
+		}
+		var validColors []Color
+		seenColors := make(map[string]bool)
+		for _, x := range colors {
+			if x.ColorName != "" && !seenColors[x.ColorName] {
+				seenColors[x.ColorName] = true
+				validColors = append(validColors, x)
+			}
+		}
+		if len(validColors) > 0 {
+			if err := tx.CreateInBatches(validColors, 100).Error; err != nil {
+				tx.Rollback()
+				log.Println("❌ Migration failed to save Colors:", err)
+				return
+			}
+		}
+
+		var drivers []Driver
+		if err := fetchSheetDataToStruct("Drivers", &drivers); err != nil {
+			tx.Rollback()
+			log.Println("❌ Migration failed for Drivers:", err)
+			return
+		}
+		var validDrivers []Driver
+		seenDrivers := make(map[string]bool)
+		for _, x := range drivers {
+			if x.DriverName != "" && !seenDrivers[x.DriverName] {
+				seenDrivers[x.DriverName] = true
+				validDrivers = append(validDrivers, x)
+			}
+		}
+		if len(validDrivers) > 0 {
+			if err := tx.CreateInBatches(validDrivers, 100).Error; err != nil {
+				tx.Rollback()
+				log.Println("❌ Migration failed to save Drivers:", err)
+				return
+			}
+		}
+
+		var banks []BankAccount
+		if err := fetchSheetDataToStruct("BankAccounts", &banks); err != nil {
+			tx.Rollback()
+			log.Println("❌ Migration failed for BankAccounts:", err)
+			return
+		}
+		var validBanks []BankAccount
+		seenBanks := make(map[string]bool)
+		for _, x := range banks {
+			if x.BankName != "" && !seenBanks[x.BankName] {
+				seenBanks[x.BankName] = true
+				validBanks = append(validBanks, x)
+			}
+		}
+		if len(validBanks) > 0 {
+			if err := tx.CreateInBatches(validBanks, 100).Error; err != nil {
+				tx.Rollback()
+				log.Println("❌ Migration failed to save BankAccounts:", err)
+				return
+			}
+		}
+
+		var carriers []PhoneCarrier
+		if err := fetchSheetDataToStruct("PhoneCarriers", &carriers); err != nil {
+			tx.Rollback()
+			log.Println("❌ Migration failed for PhoneCarriers:", err)
+			return
+		}
+		var validCarriers []PhoneCarrier
+		seenCarriers := make(map[string]bool)
+		for _, x := range carriers {
+			if x.CarrierName != "" && !seenCarriers[x.CarrierName] {
+				seenCarriers[x.CarrierName] = true
+				validCarriers = append(validCarriers, x)
+			}
+		}
+		if len(validCarriers) > 0 {
+			if err := tx.CreateInBatches(validCarriers, 100).Error; err != nil {
+				tx.Rollback()
+				log.Println("❌ Migration failed to save PhoneCarriers:", err)
+				return
+			}
+		}
+
+		var templates []TelegramTemplate
+		if err := fetchSheetDataToStruct("TelegramTemplates", &templates); err != nil {
+			tx.Rollback()
+			log.Println("❌ Migration failed for TelegramTemplates:", err)
+			return
+		}
+		var validTemplates []TelegramTemplate
+		seenTemplates := make(map[uint]bool)
+		for _, x := range templates {
+			if !seenTemplates[x.ID] {
+				if x.ID != 0 {
+					seenTemplates[x.ID] = true
+				}
+				validTemplates = append(validTemplates, x)
+			}
+		}
+		if len(validTemplates) > 0 {
+			if err := tx.CreateInBatches(validTemplates, 100).Error; err != nil {
+				tx.Rollback()
+				log.Println("❌ Migration failed to save TelegramTemplates:", err)
+				return
+			}
+		}
+		var inventory []Inventory
+		if err := fetchSheetDataToStruct("Inventory", &inventory); err != nil {
+			tx.Rollback()
+			log.Println("❌ Migration failed for Inventory:", err)
+			return
+		}
+		var validInventory []Inventory
+		seenInventory := make(map[uint]bool)
+		for _, x := range inventory {
+			if !seenInventory[x.ID] {
+				if x.ID != 0 {
+					seenInventory[x.ID] = true
+				}
+				validInventory = append(validInventory, x)
+			}
+		}
+		if len(validInventory) > 0 {
+			if err := tx.CreateInBatches(validInventory, 100).Error; err != nil {
+				tx.Rollback()
+				log.Println("❌ Migration failed to save Inventory:", err)
+				return
+			}
+		}
+		var transfers []StockTransfer
+		if err := fetchSheetDataToStruct("StockTransfers", &transfers); err != nil {
+			tx.Rollback()
+			log.Println("❌ Migration failed for StockTransfers:", err)
+			return
+		}
+		var validTransfers []StockTransfer
+		seenTransfers := make(map[string]bool)
+		for _, x := range transfers {
+			if x.TransferID != "" && !seenTransfers[x.TransferID] {
+				seenTransfers[x.TransferID] = true
+				validTransfers = append(validTransfers, x)
+			}
+		}
+		if len(validTransfers) > 0 {
+			if err := tx.CreateInBatches(validTransfers, 100).Error; err != nil {
+				tx.Rollback()
+				log.Println("❌ Migration failed to save StockTransfers:", err)
+				return
+			}
+		}
+		var returns []ReturnItem
+		if err := fetchSheetDataToStruct("Returns", &returns); err != nil {
+			tx.Rollback()
+			log.Println("❌ Migration failed for Returns:", err)
+			return
+		}
+		var validReturns []ReturnItem
+		seenReturns := make(map[string]bool)
+		for _, x := range returns {
+			if x.ReturnID != "" && !seenReturns[x.ReturnID] {
+				seenReturns[x.ReturnID] = true
+				validReturns = append(validReturns, x)
+			}
+		}
+		if len(validReturns) > 0 {
+			if err := tx.CreateInBatches(validReturns, 100).Error; err != nil {
+				tx.Rollback()
+				log.Println("❌ Migration failed to save Returns:", err)
+				return
+			}
+		}
+		var revs []RevenueEntry
+		if err := fetchSheetDataToStruct("RevenueDashboard", &revs); err != nil {
+			tx.Rollback()
+			log.Println("❌ Migration failed for RevenueDashboard:", err)
+			return
+		}
+		var validRevs []RevenueEntry
+		seenRevs := make(map[uint]bool)
+		for _, x := range revs {
+			if !seenRevs[x.ID] {
+				if x.ID != 0 {
+					seenRevs[x.ID] = true
+				}
+				validRevs = append(validRevs, x)
+			}
+		}
+		if len(validRevs) > 0 {
+			if err := tx.CreateInBatches(validRevs, 100).Error; err != nil {
+				tx.Rollback()
+				log.Println("❌ Migration failed to save RevenueDashboard:", err)
+				return
+			}
+		}
+		var chats []ChatMessage
+		if err := fetchSheetDataToStruct("ChatMessages", &chats); err != nil {
+			tx.Rollback()
+			log.Println("❌ Migration failed for ChatMessages:", err)
+			return
+		}
+		var validChats []ChatMessage
+		seenChats := make(map[uint]bool)
+		for _, x := range chats {
+			if !seenChats[x.ID] {
+				if x.ID != 0 {
+					seenChats[x.ID] = true
+				}
+				validChats = append(validChats, x)
+			}
+		}
+		if len(validChats) > 0 {
+			if err := tx.CreateInBatches(validChats, 100).Error; err != nil {
+				tx.Rollback()
+				log.Println("❌ Migration failed to save ChatMessages:", err)
+				return
+			}
+		}
+		var editLogs []EditLog
+		if err := fetchSheetDataToStruct("EditLogs", &editLogs); err != nil {
+			tx.Rollback()
+			log.Println("❌ Migration failed for EditLogs:", err)
+			return
+		}
+		var validEditLogs []EditLog
+		seenEditLogs := make(map[uint]bool)
+		for _, x := range editLogs {
+			if !seenEditLogs[x.ID] {
+				if x.ID != 0 {
+					seenEditLogs[x.ID] = true
+				}
+				validEditLogs = append(validEditLogs, x)
+			}
+		}
+		if len(validEditLogs) > 0 {
+			if err := tx.CreateInBatches(validEditLogs, 100).Error; err != nil {
+				tx.Rollback()
+				log.Println("❌ Migration failed to save EditLogs:", err)
+				return
+			}
+		}
+		var actLogs []UserActivityLog
+		if err := fetchSheetDataToStruct("UserActivityLogs", &actLogs); err != nil {
+			tx.Rollback()
+			log.Println("❌ Migration failed for UserActivityLogs:", err)
+			return
+		}
+		var validActLogs []UserActivityLog
+		seenActLogs := make(map[uint]bool)
+		for _, x := range actLogs {
+			if !seenActLogs[x.ID] {
+				if x.ID != 0 {
+					seenActLogs[x.ID] = true
+				}
+				validActLogs = append(validActLogs, x)
+			}
+		}
+		if len(validActLogs) > 0 {
+			if err := tx.CreateInBatches(validActLogs, 100).Error; err != nil {
+				tx.Rollback()
+				log.Println("❌ Migration failed to save UserActivityLogs:", err)
+				return
+			}
+		}
+		var recs []DriverRecommendation
+		if err := fetchSheetDataToStruct("DriverRecommendations", &recs); err != nil {
+			tx.Rollback()
+			log.Println("❌ Migration failed for DriverRecommendations:", err)
+			return
+		}
+		var validRecs []DriverRecommendation
+		seenRecs := make(map[uint]bool)
+		for _, x := range recs {
+			if !seenRecs[x.ID] {
+				if x.ID != 0 {
+					seenRecs[x.ID] = true
+				}
+				validRecs = append(validRecs, x)
+			}
+		}
+		if len(validRecs) > 0 {
+			if err := tx.CreateInBatches(validRecs, 100).Error; err != nil {
+				tx.Rollback()
+				log.Println("❌ Migration failed to save DriverRecommendations:", err)
+				return
+			}
+		}
+
+		var roles []Role
+		if err := fetchSheetDataToStruct("Roles", &roles); err != nil {
+			tx.Rollback()
+			log.Println("❌ Migration failed for Roles:", err)
+			return
+		}
+		var validRoles []Role
+		seenRoles := make(map[uint]bool)
+		for _, x := range roles {
+			if !seenRoles[x.ID] {
+				if x.ID != 0 {
+					seenRoles[x.ID] = true
+				}
+				validRoles = append(validRoles, x)
+			}
+		}
+		if len(validRoles) > 0 {
+			if err := tx.CreateInBatches(validRoles, 100).Error; err != nil {
+				tx.Rollback()
+				log.Println("❌ Migration failed to save Roles:", err)
+				return
+			}
+		}
+
+		var perms []RolePermission
+		if err := fetchSheetDataToStruct("RolePermissions", &perms); err != nil {
+			tx.Rollback()
+			log.Println("❌ Migration failed for RolePermissions:", err)
+			return
+		}
+		var validPerms []RolePermission
+		seenPermKeys := make(map[string]bool)
+		for _, x := range perms {
+			// Deduplicate by Role + Feature (normalized) to be robust
+			key := strings.ToLower(x.Role + "|" + x.Feature)
+			if x.Role != "" && x.Feature != "" && !seenPermKeys[key] {
+				seenPermKeys[key] = true
+				x.ID = 0 // Zero out ID to let local DB auto-increment manage it, avoiding PK conflicts
+				validPerms = append(validPerms, x)
+			}
+		}
+		if len(validPerms) > 0 {
+			if err := tx.CreateInBatches(validPerms, 100).Error; err != nil {
+				tx.Rollback()
+				log.Printf("❌ Migration failed to save RolePermissions: %v", err)
+				return
+			}
+		}
+
+		var orders []Order
+		if err := fetchSheetDataToStruct("AllOrders", &orders); err != nil {
+			tx.Rollback()
+			log.Println("❌ Migration failed for AllOrders:", err)
+			return
+		}
+		var validOrders []Order
+		seenOrderIDs := make(map[string]bool)
+		for _, o := range orders {
+			if o.OrderID != "" && !seenOrderIDs[o.OrderID] {
+				seenOrderIDs[o.OrderID] = true
+				validOrders = append(validOrders, o)
+			}
+		}
+		if len(validOrders) > 0 {
+			if err := tx.CreateInBatches(validOrders, 100).Error; err != nil {
+				tx.Rollback()
+				log.Println("❌ Migration failed to save AllOrders:", err)
+				return
+			}
+		}
+
+		var movies []Movie
+		if err := fetchSheetDataToStruct("Movies", &movies); err != nil {
+			tx.Rollback()
+			log.Println("❌ Migration failed for Movies:", err)
+			return
+		}
+		var validMovies []Movie
+		seenMovieIDs := make(map[string]bool)
+		for _, x := range movies {
+			if x.ID != "" && !seenMovieIDs[x.ID] {
+				seenMovieIDs[x.ID] = true
+				validMovies = append(validMovies, x)
+			}
+		}
+		if len(validMovies) > 0 {
+			if err := tx.CreateInBatches(validMovies, 100).Error; err != nil {
+				tx.Rollback()
+				log.Println("❌ Migration failed to save Movies:", err)
+				return
+			}
+		}
+
+		// Incentive Sheets
+		var incProjects []IncentiveProject
+		if err := fetchSheetDataToStruct("IncentiveProjects", &incProjects); err != nil {
+			tx.Rollback()
+			log.Println("❌ Migration failed for IncentiveProjects:", err)
+			return
+		}
+		if len(incProjects) > 0 {
+			if err := tx.CreateInBatches(incProjects, 100).Error; err != nil {
+				tx.Rollback()
+				log.Println("❌ Migration failed to save IncentiveProjects:", err)
+				return
+			}
+		}
+
+		var incCalcs []IncentiveCalculator
+		if err := fetchSheetDataToStruct("IncentiveCalculators", &incCalcs); err != nil {
+			tx.Rollback()
+			log.Println("❌ Migration failed for IncentiveCalculators:", err)
+			return
+		}
+		if len(incCalcs) > 0 {
+			if err := tx.CreateInBatches(incCalcs, 100).Error; err != nil {
+				tx.Rollback()
+				log.Println("❌ Migration failed to save IncentiveCalculators:", err)
+				return
+			}
+		}
+
+		var incResults []IncentiveResult
+		if err := fetchSheetDataToStruct("IncentiveResults", &incResults); err != nil {
+			tx.Rollback()
+			log.Println("❌ Migration failed for IncentiveResults:", err)
+			return
+		}
+		if len(incResults) > 0 {
+			if err := tx.CreateInBatches(incResults, 100).Error; err != nil {
+				tx.Rollback()
+				log.Println("❌ Migration failed to save IncentiveResults:", err)
+				return
+			}
+		}
+
+		var incManual []IncentiveManualData
+		if err := fetchSheetDataToStruct("IncentiveManualData", &incManual); err != nil {
+			tx.Rollback()
+			log.Println("❌ Migration failed for IncentiveManualData:", err)
+			return
+		}
+		if len(incManual) > 0 {
+			if err := tx.CreateInBatches(incManual, 100).Error; err != nil {
+				tx.Rollback()
+				log.Println("❌ Migration failed to save IncentiveManualData:", err)
+				return
+			}
+		}
+
+		var incCustom []IncentiveCustomPayout
+		if err := fetchSheetDataToStruct("IncentiveCustomPayouts", &incCustom); err != nil {
+			tx.Rollback()
+			log.Println("❌ Migration failed for IncentiveCustomPayouts:", err)
+			return
+		}
+		if len(incCustom) > 0 {
+			if err := tx.CreateInBatches(incCustom, 100).Error; err != nil {
+				tx.Rollback()
+				log.Println("❌ Migration failed to save IncentiveCustomPayouts:", err)
+				return
+			}
+		}
+
+		if err := tx.Commit().Error; err != nil {
+			log.Println("❌ Migration failed on commit:", err)
+		} else {
+			log.Println("🎉 Migration ជោគជ័យ!")
+		}
+	}()
+	c.JSON(200, gin.H{"status": "success", "message": "Migration started."})
 }
 
-// --- API Handlers ---
+func handleMigrateMovies(c *gin.Context) {
+	go func() {
+		ctx := context.Background()
+		if sheetsService == nil {
+			createGoogleAPIClient(ctx)
+		}
 
-func handlePing(c *gin.Context) {
-	c.JSON(http.StatusOK, gin.H{"status": "success", "message": "Go backend pong"})
+		// Start Transaction
+		tx := DB.Begin()
+		defer func() {
+			if r := recover(); r != nil {
+				tx.Rollback()
+			}
+		}()
+
+		log.Println("🗑️ លុបទិន្នន័យ Movie ចាស់ (Resetting Movies table within transaction)...")
+		tx.Session(&gorm.Session{AllowGlobalUpdate: true}).Delete(&Movie{})
+
+		log.Println("🔄 ចាប់ផ្តើមទាញទិន្នន័យ Movie ថ្មីពី Google Sheet...")
+
+		var movies []Movie
+		if err := fetchSheetDataToStruct("Movies", &movies); err != nil {
+			tx.Rollback()
+			log.Println("❌ Movie Migration failed for Movies:", err)
+			return
+		}
+		var validMovies []Movie
+		seenMovieIDs := make(map[string]bool)
+		for _, x := range movies {
+			if x.ID != "" && !seenMovieIDs[x.ID] {
+				seenMovieIDs[x.ID] = true
+				validMovies = append(validMovies, x)
+			}
+		}
+		if len(validMovies) > 0 {
+			if err := tx.CreateInBatches(validMovies, 100).Error; err != nil {
+				tx.Rollback()
+				log.Println("❌ Movie Migration failed to save Movies:", err)
+				return
+			}
+		}
+
+		if err := tx.Commit().Error; err != nil {
+			log.Println("❌ Movie Migration failed on commit:", err)
+		} else {
+			log.Println("🎉 Movie Migration ជោគជ័យ!")
+		}
+	}()
+	c.JSON(200, gin.H{"status": "success", "message": "Movie migration started."})
 }
+
+// =========================================================================
+// HANDLERS
+// =========================================================================
 
 func handleGetUsers(c *gin.Context) {
 	var users []User
-	err := getCachedSheetData("Users", &users, 15*time.Minute)
-	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"status": "error", "message": err.Error()})
-		return
+	DB.Find(&users)
+	for i := range users {
+		users[i].Password = ""
 	}
-	c.JSON(http.StatusOK, gin.H{"status": "success", "data": users})
+	c.JSON(200, gin.H{"status": "success", "data": users})
 }
 
-func handleGetStaticData(c *gin.Context) {
-	result := make(map[string]interface{})
-	var err error
-	var pages []TeamPage
-	var products []Product
-	var locations []Location
-	var shippingMethods []ShippingMethod
-	var settingsMaps []map[string]interface{}
-	var colors []Color
-	var drivers []Driver
-	var bankAccounts []BankAccount
-	var phoneCarriers []PhoneCarrier
+func handleGetAllOrders(c *gin.Context) {
+	var orders []Order
+	query := DB.Order("timestamp desc")
+	countQuery := DB.Model(&Order{})
 
-	err = getCachedSheetData("TeamsPages", &pages, cacheTTL)
-	if err != nil {
-		goto handleError
-	}
-	result["pages"] = pages
+	role, _ := c.Get("role")
+	team, _ := c.Get("team")
+	isSystemAdmin, _ := c.Get("isSystemAdmin")
 
-	err = getCachedSheetData("Products", &products, cacheTTL)
-	if err != nil {
-		goto handleError
-	}
-	result["products"] = products
+	isAdmin := (isSystemAdmin != nil && isSystemAdmin.(bool)) || strings.EqualFold(fmt.Sprintf("%v", role), "Admin")
 
-	err = getCachedSheetData("Locations", &locations, cacheTTL)
-	if err != nil {
-		goto handleError
-	}
-	result["locations"] = locations
-
-	err = getCachedSheetData("ShippingMethods", &shippingMethods, cacheTTL)
-	if err != nil {
-		goto handleError
-	}
-	result["shippingMethods"] = shippingMethods
-
-	err = getCachedSheetData("Settings", &settingsMaps, cacheTTL)
-	if err != nil {
-		goto handleError
-	}
-	result["settings"] = settingsMaps
-
-	if len(settingsMaps) > 0 && len(settingsMaps[0]) > 0 {
-		if id, ok := settingsMaps[0]["UploadFolderID"].(string); ok {
-			uploadFolderID = id
+	if !isAdmin && team != nil {
+		teams := strings.Split(fmt.Sprintf("%v", team), ",")
+		var teamConditions []string
+		var teamArgs []interface{}
+		for _, t := range teams {
+			t = strings.TrimSpace(t)
+			if t != "" {
+				teamConditions = append(teamConditions, "LOWER(team) = LOWER(?)")
+				teamArgs = append(teamArgs, t)
+			}
+		}
+		if len(teamConditions) > 0 {
+			condition := strings.Join(teamConditions, " OR ")
+			query = query.Where(condition, teamArgs...)
+			countQuery = countQuery.Where(condition, teamArgs...)
 		}
 	}
-	if uploadFolderID == "" {
-		uploadFolderID = os.Getenv("UPLOAD_FOLDER_ID")
-	}
-	if uploadFolderID == "" {
-		log.Printf("CRITICAL WARNING: UPLOAD_FOLDER_ID is not set in Settings sheet or Environment Variables. File uploads will fail.")
-	}
 
-	err = getCachedSheetData("Colors", &colors, cacheTTL)
-	if err != nil {
-		goto handleError
+	if err := query.Find(&orders).Error; err != nil {
+		c.Error(err)
+		return
 	}
-	result["colors"] = colors
-
-	err = getCachedSheetData("Drivers", &drivers, cacheTTL)
-	if err != nil {
-		goto handleError
-	}
-	result["drivers"] = drivers
-
-	err = getCachedSheetData("BankAccounts", &bankAccounts, cacheTTL)
-	if err != nil {
-		goto handleError
-	}
-	result["bankAccounts"] = bankAccounts
-
-	err = getCachedSheetData("PhoneCarriers", &phoneCarriers, cacheTTL)
-	if err != nil {
-		goto handleError
-	}
-	result["phoneCarriers"] = phoneCarriers
-
-	c.JSON(http.StatusOK, gin.H{"status": "success", "data": result})
-	return
-
-handleError:
-	c.JSON(http.StatusInternalServerError, gin.H{"status": "error", "message": err.Error()})
+	var total int64
+	countQuery.Count(&total)
+	c.JSON(200, gin.H{"status": "success", "data": orders, "total": total})
 }
 
 func handleSubmitOrder(c *gin.Context) {
 	var orderRequest struct {
-		CurrentUser   User                     `json:"currentUser"`
-		SelectedTeam  string                   `json:"selectedTeam"`
-		Page          string                   `json:"page"`
-		TelegramValue string                   `json:"telegramValue"`
-		Customer      map[string]interface{}   `json:"customer"`
-		Products      []map[string]interface{} `json:"products"`
-		Shipping      map[string]interface{}   `json:"shipping"`
-		Payment       map[string]interface{}   `json:"payment"`
-		Telegram      map[string]interface{}   `json:"telegram"`
-		Subtotal      float64                  `json:"subtotal"`
-		GrandTotal    float64                  `json:"grandTotal"`
-		Note          string                   `json:"note"`
+		CurrentUser      User                     `json:"currentUser"`
+		SelectedTeam     string                   `json:"selectedTeam"`
+		Page             string                   `json:"page"`
+		Customer         map[string]interface{}   `json:"customer"`
+		Products         []map[string]interface{} `json:"products"`
+		Payment          map[string]interface{}   `json:"payment"`
+		Shipping         map[string]interface{}   `json:"shipping"`
+		Subtotal         float64                  `json:"subtotal"`
+		GrandTotal       float64                  `json:"grandTotal"`
+		Note             string                   `json:"note"`
+		FulfillmentStore string                   `json:"fulfillmentStore"`
+		ScheduledTime    string                   `json:"scheduledTime"`
 	}
 	if err := c.ShouldBindJSON(&orderRequest); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"status": "error", "message": "Invalid order data format: " + err.Error()})
+		c.Error(err)
 		return
 	}
-	team := orderRequest.SelectedTeam
-	if team == "" {
-		c.JSON(http.StatusBadRequest, gin.H{"status": "error", "message": "Team not selected"})
-		return
-	}
-	timestamp := time.Now().UTC().Format(time.RFC3339)
-	orderId := fmt.Sprintf("GO-%s-%d", team, time.Now().UnixNano())
-	productsJSON, err := json.Marshal(orderRequest.Products)
-	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"status": "error", "message": "Failed to serialize products"})
-		return
-	}
+
+	productsJSON, _ := json.Marshal(orderRequest.Products)
 	var locationParts []string
 	if p, ok := orderRequest.Customer["province"].(string); ok && p != "" {
 		locationParts = append(locationParts, p)
@@ -825,1246 +1946,1884 @@ func handleSubmitOrder(c *gin.Context) {
 	if s, ok := orderRequest.Customer["sangkat"].(string); ok && s != "" {
 		locationParts = append(locationParts, s)
 	}
-	fullLocation := strings.Join(locationParts, ", ")
-	shippingCost, _ := orderRequest.Shipping["cost"].(float64)
+
+	var shippingCost float64 = 0
+	if costVal, ok := orderRequest.Shipping["cost"]; ok {
+		switch v := costVal.(type) {
+		case float64:
+			shippingCost = v
+		case string:
+			if parsed, err := strconv.ParseFloat(v, 64); err == nil {
+				shippingCost = parsed
+			}
+		}
+	}
+
 	var totalDiscount float64 = 0
 	var totalProductCost float64 = 0
 	for _, p := range orderRequest.Products {
-		originalPrice, opOK := p["originalPrice"].(float64)
-		finalPrice, fpOK := p["finalPrice"].(float64)
-		quantity, qOK := p["quantity"].(float64)
-		cost, cOK := p["cost"].(float64)
-		if opOK && fpOK && qOK && originalPrice > 0 && quantity > 0 {
-			totalDiscount += (originalPrice - finalPrice) * quantity
+		op, _ := p["originalPrice"].(float64)
+		fp, _ := p["finalPrice"].(float64)
+		q, _ := p["quantity"].(float64)
+		cost, _ := p["cost"].(float64)
+		if op > 0 && q > 0 {
+			totalDiscount += (op - fp) * q
 		}
-		if cOK && qOK {
-			totalProductCost += (cost * quantity)
+		totalProductCost += (cost * q)
+	}
+
+	orderID := generateShortID()
+	timestamp := time.Now().UTC().Format(time.RFC3339)
+	custName, _ := orderRequest.Customer["name"].(string)
+	custPhone, _ := orderRequest.Customer["phone"].(string)
+	paymentStatus, _ := orderRequest.Payment["status"].(string)
+	paymentInfo, _ := orderRequest.Payment["info"].(string)
+	addLocation, _ := orderRequest.Customer["additionalLocation"].(string)
+
+	var shipFeeCustomer float64 = 0
+	if feeVal, ok := orderRequest.Customer["shippingFee"]; ok {
+		switch v := feeVal.(type) {
+		case float64:
+			shipFeeCustomer = v
+		case string:
+			if parsed, err := strconv.ParseFloat(v, 64); err == nil {
+				shipFeeCustomer = parsed
+			}
 		}
 	}
-	fullOrderData := map[string]interface{}{
-		"orderId":          orderId,
-		"timestamp":        timestamp,
-		"totalDiscount":    totalDiscount,
-		"totalProductCost": totalProductCost,
-		"fullLocation":     fullLocation,
-		"productsJSON":     string(productsJSON),
-		"shippingCost":     shippingCost,
-		"originalRequest":  orderRequest,
+
+	internalShipMethod, _ := orderRequest.Shipping["method"].(string)
+	internalShipDetails, _ := orderRequest.Shipping["details"].(string)
+
+	newOrder := Order{
+		OrderID: orderID, Timestamp: timestamp, User: orderRequest.CurrentUser.UserName, Team: orderRequest.SelectedTeam,
+		Page: orderRequest.Page, CustomerName: custName, CustomerPhone: custPhone, Subtotal: orderRequest.Subtotal,
+		GrandTotal: orderRequest.GrandTotal, ProductsJSON: string(productsJSON), Note: orderRequest.Note,
+		FulfillmentStore: orderRequest.FulfillmentStore, ScheduledTime: orderRequest.ScheduledTime, FulfillmentStatus: "Pending",
+		PaymentStatus: paymentStatus, PaymentInfo: paymentInfo, InternalCost: shippingCost, DiscountUSD: totalDiscount,
+		TotalProductCost: totalProductCost, Location: strings.Join(locationParts, ", "), AddressDetails: addLocation,
+		ShippingFeeCustomer: shipFeeCustomer, InternalShippingMethod: internalShipMethod, InternalShippingDetails: internalShipDetails,
 	}
-	_, err = callAppsScriptPOST(AppsScriptRequest{
-		Action:    "submitOrder",
-		OrderData: fullOrderData,
-	})
-	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"status": "error", "message": "Failed to submit order to Apps Script: " + err.Error()})
+
+	if err := DB.Create(&newOrder).Error; err != nil {
+		c.Error(err)
 		return
 	}
-	c.JSON(http.StatusOK, gin.H{"status": "success", "orderId": orderId})
+
+	eventBytes, _ := json.Marshal(map[string]interface{}{"type": "new_order", "data": newOrder})
+	hub.Broadcast <- eventBytes
+
+	orderChannel <- OrderJob{JobID: fmt.Sprintf("job_%d", time.Now().UnixNano()), OrderID: orderID, UserName: orderRequest.CurrentUser.UserName, OrderData: map[string]interface{}{"orderId": orderID, "timestamp": timestamp, "totalDiscount": totalDiscount, "totalProductCost": totalProductCost, "fullLocation": strings.Join(locationParts, ", "), "productsJSON": string(productsJSON), "shippingCost": shippingCost, "originalRequest": orderRequest, "scheduledTime": orderRequest.ScheduledTime}}
+	c.JSON(200, gin.H{"status": "success", "orderId": orderID})
+}
+
+func handleAdminUpdateOrder(c *gin.Context) {
+	var r struct {
+		OrderID string                 `json:"orderId"`
+		NewData map[string]interface{} `json:"newData"`
+	}
+	if err := c.ShouldBindJSON(&r); err != nil {
+		c.Error(err)
+		return
+	}
+
+	var originalOrder Order
+	if err := DB.Where("order_id = ?", r.OrderID).First(&originalOrder).Error; err != nil {
+		c.JSON(http.StatusNotFound, gin.H{"status": "error", "message": "រកមិនឃើញការកម្មង់"})
+		return
+	}
+
+	mappedData := make(map[string]interface{})
+	for k, v := range r.NewData {
+		dbCol := mapToDBColumn(k)
+		if isValidOrderColumn(dbCol) && v != nil {
+			// ✅ Prevent overwriting a permanent Google Drive URL with a temporary URL
+			if strVal, ok := v.(string); ok && strings.Contains(strVal, "/api/images/temp/") {
+				var currentVal string
+				DB.Model(&Order{}).Where("order_id = ?", r.OrderID).Select(dbCol).Scan(&currentVal)
+				if strings.Contains(currentVal, "drive.google.com") {
+					continue // Skip updating this column as we already have the permanent Drive URL
+				}
+			}
+
+			if dbCol == "discount_usd" || dbCol == "grand_total" || dbCol == "subtotal" || dbCol == "shipping_fee_customer" || dbCol == "internal_cost" || dbCol == "delivery_unpaid" || dbCol == "delivery_paid" || dbCol == "total_product_cost" {
+				if f, ok := v.(float64); ok {
+					mappedData[dbCol] = f
+				} else if s, ok := v.(string); ok {
+					if fVal, err := strconv.ParseFloat(s, 64); err == nil {
+						mappedData[dbCol] = fVal
+					}
+				}
+			} else {
+				mappedData[dbCol] = fmt.Sprintf("%v", v)
+			}
+		}
+	}
+
+	if err := DB.Model(&Order{}).Where("order_id = ?", r.OrderID).Updates(mappedData).Error; err != nil {
+		c.Error(err)
+		return
+	}
+
+	eventBytes, _ := json.Marshal(map[string]interface{}{"type": "update_order", "orderId": r.OrderID, "newData": r.NewData})
+	hub.Broadcast <- eventBytes
+
+	go func() {
+		// Sync with Google Sheets via managed queue
+		// Note: "AllOrders" is the sheet name for orders.
+		// The primary key for an order in the sheet is "Order ID".
+		enqueueSync("updateSheet", r.NewData, "AllOrders", map[string]string{"Order ID": r.OrderID})
+
+		// Also send to Telegram via Apps Script (this is a separate action)
+		// Sync with Telegram via Apps Script (keep separate for now)
+		enqueueSync("updateOrderTelegram", map[string]interface{}{
+			"orderId":       r.OrderID,
+			"updatedFields": r.NewData,
+			"team":          originalOrder.Team,
+		}, "", nil) // SheetName and PrimaryKey are not directly applicable for Telegram update action
+	}()
+
+	c.JSON(200, gin.H{"status": "success"})
+}
+
+func handleAdminDeleteOrder(c *gin.Context) {
+	var r DeleteOrderRequest
+	if err := c.ShouldBindJSON(&r); err != nil {
+		c.Error(err)
+		return
+	}
+
+	var order Order
+	if err := DB.Where("order_id = ?", r.OrderID).First(&order).Error; err == nil {
+		go func() {
+			// Sync with Google Sheets via managed queue
+			enqueueSync("deleteRow", nil, "AllOrders", map[string]string{"Order ID": r.OrderID})
+
+			// Also send to Telegram via Apps Script (this is a separate action)
+			enqueueSync("deleteOrderTelegram", map[string]interface{}{
+				"orderId": r.OrderID, "team": order.Team, "messageId1": order.TelegramMessageID1, "messageId2": order.TelegramMessageID2, "fulfillmentStore": order.FulfillmentStore,
+			}, "", nil) // SheetName and PrimaryKey are not directly applicable for Telegram delete action
+		}()
+		DB.Delete(&order)
+		eventBytes, _ := json.Marshal(map[string]interface{}{"type": "delete_order", "orderId": r.OrderID})
+		hub.Broadcast <- eventBytes
+	}
+	c.JSON(200, gin.H{"status": "success"})
+}
+
+func handleAdminUpdateSheet(c *gin.Context) {
+	var req struct {
+		SheetName  string                 `json:"sheetName"`
+		PrimaryKey map[string]interface{} `json:"primaryKey"`
+		NewData    map[string]interface{} `json:"newData"`
+	}
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.Error(err)
+		return
+	}
+	tableName := getTableName(req.SheetName)
+	if tableName == "" {
+		c.Error(fmt.Errorf("unknown sheet"))
+		return
+	}
+
+	pkCol := ""
+	var pkVal interface{}
+	originalPKKey := ""
+	for k, v := range req.PrimaryKey {
+		pkCol = mapToDBColumn(k)
+		pkVal = v
+		originalPKKey = k
+	}
+	mappedData := make(map[string]interface{})
+	for k, v := range req.NewData {
+		dbCol := mapToDBColumn(k)
+		if v == nil {
+			continue
+		}
+
+		// ✅ Prevent overwriting a permanent Google Drive URL with a temporary URL
+		if strVal, ok := v.(string); ok && strings.Contains(strVal, "/api/images/temp/") {
+			var currentVal string
+			if pkCol != "" && pkVal != nil {
+				DB.Table(tableName).Where(pkCol+" = ?", pkVal).Select(dbCol).Scan(&currentVal)
+				if strings.Contains(currentVal, "drive.google.com") {
+					continue // Skip updating this column as we already have the permanent Drive URL
+				}
+			}
+		}
+
+		mappedData[dbCol] = v
+	}
+
+	if err := DB.Table(tableName).Where(pkCol+" = ?", pkVal).Updates(mappedData).Error; err != nil {
+		c.Error(err)
+		return
+	}
+
+	eventBytes, _ := json.Marshal(map[string]interface{}{"type": "update_sheet", "sheetName": req.SheetName, "primaryKey": req.PrimaryKey, "newData": req.NewData})
+	hub.Broadcast <- eventBytes
+
+	go func() {
+		sheetPKKey := originalPKKey
+		if req.SheetName == "Roles" && strings.ToLower(originalPKKey) == "id" {
+			sheetPKKey = "ID"
+		}
+		// Sync with Google Sheets via managed queue
+		enqueueSync("updateSheet", req.NewData, req.SheetName, map[string]string{sheetPKKey: fmt.Sprintf("%v", pkVal)})
+
+		// If updating an Order row, also notify Telegram to keep message in sync
+		if req.SheetName == "AllOrders" {
+			orderID := fmt.Sprintf("%v", pkVal)
+			var order Order
+			DB.Where("order_id = ?", orderID).Select("team").First(&order)
+			enqueueSync("updateOrderTelegram", map[string]interface{}{
+				"orderId":       orderID,
+				"updatedFields": req.NewData,
+				"team":          order.Team,
+			}, "", nil)
+		}
+	}()
+	c.JSON(200, gin.H{"status": "success"})
+}
+
+func handleAdminAddRow(c *gin.Context) {
+	var req struct {
+		SheetName string                 `json:"sheetName"`
+		NewData   map[string]interface{} `json:"newData"`
+	}
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.Error(err)
+		return
+	}
+
+	tableName := getTableName(req.SheetName)
+	if tableName != "" {
+		mappedData := make(map[string]interface{})
+		for k, v := range req.NewData {
+			mappedData[mapToDBColumn(k)] = v
+		}
+		DB.Table(tableName).Create(mappedData)
+	}
+
+	eventBytes, _ := json.Marshal(map[string]interface{}{"type": "add_row", "sheetName": req.SheetName, "newData": req.NewData})
+	hub.Broadcast <- eventBytes
+
+	go func() {
+		// Sync with Google Sheets via managed queue
+		enqueueSync("addRow", req.NewData, req.SheetName, nil)
+	}()
+	c.JSON(200, gin.H{"status": "success"})
+}
+
+func handleAdminDeleteRow(c *gin.Context) {
+	var req struct {
+		SheetName  string                 `json:"sheetName"`
+		PrimaryKey map[string]interface{} `json:"primaryKey"`
+	}
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.Error(err)
+		return
+	}
+
+	pkCol := ""
+	var pkVal interface{}
+	for k, v := range req.PrimaryKey {
+		pkCol = mapToDBColumn(k)
+		pkVal = v
+	}
+
+	if req.SheetName == "Roles" && strings.EqualFold(fmt.Sprintf("%v", pkVal), "Admin") {
+		c.JSON(403, gin.H{"status": "error", "message": "មិនអាចលុបតួនាទី Admin បានទេ"})
+		return
+	}
+
+	tableName := getTableName(req.SheetName)
+	if tableName != "" {
+		DB.Table(tableName).Where(pkCol+" = ?", pkVal).Delete(nil)
+	}
+
+	strPrimaryKey := make(map[string]string)
+	for k, v := range req.PrimaryKey {
+		sheetKey := k
+		if req.SheetName == "Roles" && strings.ToLower(k) == "id" {
+			sheetKey = "ID"
+		}
+		strPrimaryKey[sheetKey] = fmt.Sprintf("%v", v)
+	}
+
+	eventBytes, _ := json.Marshal(map[string]interface{}{"type": "delete_row", "sheetName": req.SheetName, "primaryKey": strPrimaryKey})
+	hub.Broadcast <- eventBytes
+
+	go func() {
+		// Sync with Google Sheets via managed queue
+		enqueueSync("deleteRow", nil, req.SheetName, strPrimaryKey)
+	}()
+	c.JSON(200, gin.H{"status": "success"})
+}
+
+func handleGetRevenueSummary(c *gin.Context) {
+	var revs []RevenueEntry
+	DB.Find(&revs)
+	c.JSON(200, gin.H{"status": "success", "data": revs})
+}
+func handleUpdateFormulaReport(c *gin.Context)    { c.JSON(200, gin.H{"status": "success"}) }
+func handleClearCache(c *gin.Context)             { c.JSON(200, gin.H{"status": "success"}) }
+func handleAdminUpdateProductTags(c *gin.Context) { c.JSON(200, gin.H{"status": "success"}) }
+
+func handleGetTeamSalesRanking(c *gin.Context) {
+	period := c.DefaultQuery("period", "today")
+
+	type TeamRevenue struct {
+		TeamName     string  `gorm:"column:team_name"`
+		TotalRevenue float64 `gorm:"column:total_revenue"`
+	}
+	var rows []TeamRevenue
+
+	now := time.Now()
+
+	// Build date filter safely with parameterized values
+	db := DB.Table("revenue_entries").
+		Select("LOWER(TRIM(team)) as team_name, SUM(COALESCE(revenue, 0))::FLOAT as total_revenue").
+		Where("team IS NOT NULL AND team <> '' AND team <> 'Unassigned'").
+		Group("team_name").
+		Order("total_revenue DESC").
+		Limit(10)
+
+	switch period {
+	case "today":
+		start := time.Date(now.Year(), now.Month(), now.Day(), 0, 0, 0, 0, now.Location())
+		db = db.Where("timestamp::date >= ?", start.Format("2006-01-02"))
+	case "this_week":
+		offset := int(now.Weekday()) - 1
+		if offset < 0 {
+			offset = 6
+		}
+		start := now.AddDate(0, 0, -offset)
+		db = db.Where("timestamp::date >= ?", start.Format("2006-01-02"))
+	case "this_month":
+		start := time.Date(now.Year(), now.Month(), 1, 0, 0, 0, 0, now.Location())
+		db = db.Where("timestamp::date >= ?", start.Format("2006-01-02"))
+	// "all" — no date filter
+	}
+
+	if err := db.Scan(&rows).Error; err != nil {
+		log.Printf("[ERROR] Team Ranking Query Failed: %v", err)
+		c.JSON(500, gin.H{"status": "error", "message": "Query failed"})
+		return
+	}
+
+	// Build response with proper Title Case display names
+	type TeamResult struct {
+		Team    string  `json:"Team"`
+		Revenue float64 `json:"Revenue"`
+	}
+	results := make([]TeamResult, 0, len(rows))
+	for _, row := range rows {
+		displayName := row.TeamName
+		words := strings.Fields(displayName)
+		for i, w := range words {
+			if len(w) > 0 {
+				runes := []rune(w)
+				runes[0] = unicode.ToUpper(runes[0])
+				words[i] = string(runes)
+			}
+		}
+		displayName = strings.Join(words, " ")
+		results = append(results, TeamResult{Team: displayName, Revenue: row.TotalRevenue})
+	}
+
+	c.JSON(http.StatusOK, gin.H{"status": "success", "data": results})
+}
+
+func handleGetGlobalShippingCosts(c *gin.Context) {
+	var results []struct {
+		OrderID        string  `json:"Order ID"`
+		Timestamp      string  `json:"Timestamp"`
+		Team           string  `json:"Team"`
+		InternalCost   float64 `json:"Internal Cost"`
+		ShippingMethod string  `json:"Internal Shipping Method"`
+	}
+
+	err := DB.Model(&Order{}).
+		Select("order_id, timestamp, team, internal_cost, internal_shipping_method").
+		Where("order_id NOT LIKE ? AND order_id NOT LIKE ?", "%Opening_Balance%", "%Opening Balance%").
+		Order("timestamp DESC").
+		Scan(&results).Error
+
+	if err != nil {
+		c.JSON(500, gin.H{"status": "error", "message": err.Error()})
+		return
+	}
+
+	c.JSON(200, gin.H{"status": "success", "data": results})
+}
+
+func handleUpdateProfile(c *gin.Context) {
+	var req struct {
+		UserName string                 `json:"userName"`
+		NewData  map[string]interface{} `json:"newData"`
+	}
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.Error(err)
+		return
+	}
+	mappedData := make(map[string]interface{})
+	for k, v := range req.NewData {
+		if k == "Password" {
+			continue
+		}
+		mappedData[mapToDBColumn(k)] = v
+	}
+	if err := DB.Model(&User{}).Where("user_name = ?", req.UserName).Updates(mappedData).Error; err != nil {
+		c.Error(err)
+		return
+	}
+
+	go func() {
+		if appsScriptURL != "" {
+			// Sync with Google Sheets via managed queue
+			enqueueSync("updateSheet", req.NewData, "Users", map[string]string{"UserName": req.UserName})
+		}
+	}()
+
+	c.JSON(200, gin.H{"status": "success"})
+}
+
+func handleChangePassword(c *gin.Context) {
+	var req struct {
+		UserName    string `json:"userName"`
+		NewPassword string `json:"newPassword"`
+	}
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.Error(err)
+		return
+	}
+	hashedPassword, err := bcrypt.GenerateFromPassword([]byte(req.NewPassword), bcrypt.DefaultCost)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"status": "error", "message": "មិនអាចកំណត់លេខសម្ងាត់ថ្មីបានទេ"})
+		return
+	}
+	if err := DB.Model(&User{}).Where("user_name = ?", req.UserName).Update("password", string(hashedPassword)).Error; err != nil {
+		c.Error(err)
+		return
+	}
+
+	go func() {
+		if appsScriptURL != "" {
+			// Sync with Google Sheets via managed queue
+			enqueueSync("updateSheet", map[string]interface{}{"Password": string(hashedPassword)}, "Users", map[string]string{"UserName": req.UserName})
+		}
+	}()
+
+	c.JSON(200, gin.H{"status": "success"})
+}
+
+func extractFileIDFromURL(url string) string {
+	if strings.Contains(url, "id=") {
+		parts := strings.Split(url, "id=")
+		if len(parts) > 1 {
+			return strings.Split(parts[1], "&")[0]
+		}
+	}
+	return ""
+}
+
+func extractDriveFolderID(idOrURL string) string {
+	idOrURL = strings.TrimSpace(idOrURL)
+	if strings.Contains(idOrURL, "drive.google.com") {
+		if strings.Contains(idOrURL, "folders/") {
+			parts := strings.Split(idOrURL, "folders/")
+			if len(parts) > 1 {
+				return strings.Split(strings.Split(parts[1], "?")[0], "/")[0]
+			}
+		}
+		if strings.Contains(idOrURL, "id=") {
+			parts := strings.Split(idOrURL, "id=")
+			if len(parts) > 1 {
+				return strings.Split(parts[1], "&")[0]
+			}
+		}
+	}
+	return idOrURL
+}
+
+func uploadToGoogleDriveDirectly(base64Data string, fileName string, mimeType string) (string, string, error) {
+	log.Printf("📤 [Drive Upload via AppsScript] file=%q mime=%q dataLen=%d", fileName, mimeType, len(base64Data))
+
+	if fileName == "" {
+		fileName = "upload_" + time.Now().Format("20060102_150405")
+	}
+
+	// Resolve target folder ID (env > DB setting)
+	targetFolder := ""
+	if envFolderID := os.Getenv("UPLOAD_FOLDER_ID"); envFolderID != "" {
+		targetFolder = extractDriveFolderID(envFolderID)
+		log.Printf("📁 [Drive Upload] Folder from UPLOAD_FOLDER_ID env: %q", targetFolder)
+	} else if uploadFolderID != "" {
+		targetFolder = extractDriveFolderID(uploadFolderID)
+		log.Printf("📁 [Drive Upload] Folder from DB setting: %q", targetFolder)
+	} else {
+		log.Println("⚠️ [Drive Upload] No UPLOAD_FOLDER_ID set — uploading to Drive root")
+	}
+
+	// Call Apps Script to upload via Google user quota (not Service Account quota)
+	req := AppsScriptRequest{
+		Action:         "uploadImage",
+		FileData:       base64Data,
+		FileName:       fileName,
+		MimeType:       mimeType,
+		UploadFolderID: targetFolder,
+	}
+
+	log.Printf("🚀 [Drive Upload] Calling Apps Script uploadImage action...")
+	resp, err := callAppsScriptPOST(req)
+	if err != nil {
+		log.Printf("❌ [Drive Upload] Apps Script call error: %v", err)
+		return "", "", fmt.Errorf("apps script upload error: %v", err)
+	}
+	if resp.Status != "success" || resp.URL == "" {
+		log.Printf("❌ [Drive Upload] Apps Script returned error: %s", resp.Message)
+		return "", "", fmt.Errorf("apps script upload failed: %s", resp.Message)
+	}
+
+	log.Printf("✅ [Drive Upload] SUCCESS via Apps Script: fileID=%s url=%s", resp.FileID, resp.URL)
+	return resp.URL, resp.FileID, nil
+}
+
+func handleServeTempImage(c *gin.Context) {
+	id := c.Param("id")
+	var temp TempImage
+	if err := DB.Where("id = ?", id).First(&temp).Error; err != nil {
+		c.JSON(404, gin.H{"error": "រកមិនឃើញរូបភាព ឬផុតកំណត់"})
+		return
+	}
+	decodedBytes, _ := parseBase64(temp.ImageData)
+	c.Data(200, temp.MimeType, decodedBytes)
 }
 
 func handleImageUploadProxy(c *gin.Context) {
-	var uploadRequest struct {
-		FileData   string            `json:"fileData"`
-		FileName   string            `json:"fileName"`
-		MimeType   string            `json:"mimeType"`
-		SheetName  string            `json:"sheetName"`
-		PrimaryKey map[string]string `json:"primaryKey"`
-		ColumnName string            `json:"columnName"`
-		UserName   string            `json:"userName"`
-	}
-	if err := c.ShouldBindJSON(&uploadRequest); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"status": "error", "message": "Invalid image upload data format: " + err.Error()})
+	var req AppsScriptRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.Error(err)
 		return
 	}
-	if uploadFolderID == "" {
-		c.JSON(http.StatusInternalServerError, gin.H{"status": "error", "message": "Upload Folder ID is not configured on the server."})
+
+	data := req.FileData
+	if data == "" {
+		data = req.Image
+	}
+	if data == "" {
+		c.Error(fmt.Errorf("មិនមានទិន្នន័យឯកសារ"))
 		return
 	}
-	resp, err := callAppsScriptPOST(AppsScriptRequest{
-		Action:         "uploadImage",
-		FileData:       uploadRequest.FileData,
-		FileName:       uploadRequest.FileName,
-		MimeType:       uploadRequest.MimeType,
-		UploadFolderID: uploadFolderID,
-		UserName:       uploadRequest.UserName,
+
+	tempID := generateShortID() + generateShortID()
+	DB.Create(&TempImage{ID: tempID, MimeType: req.MimeType, ImageData: data, ExpiresAt: time.Now().Add(15 * time.Minute)})
+
+	protocol := "http"
+	if c.Request.TLS != nil || c.Request.Header.Get("X-Forwarded-Proto") == "https" {
+		protocol = "https"
+	}
+	tempUrl := fmt.Sprintf("%s://%s/api/images/temp/%s", protocol, c.Request.Host, tempID)
+
+	c.JSON(200, gin.H{
+		"status":  "success",
+		"message": "Processing upload...",
+		"tempUrl": tempUrl,
+		"url":     tempUrl,
 	})
-	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"status": "error", "message": "Failed to upload image via Google Apps Script: " + err.Error()})
-		return
-	}
-	fileUrl := resp.URL
-	if uploadRequest.SheetName != "" && uploadRequest.PrimaryKey != nil && uploadRequest.ColumnName != "" {
-		go func() {
-			pkHeader := ""
-			pkValue := ""
-			for k, v := range uploadRequest.PrimaryKey {
-				pkHeader = k
-				pkValue = v
-				break
-			}
-			if pkHeader == "" || pkValue == "" {
-				log.Printf("Warning: Missing primary key info for image update. Sheet: %s, Column: %s", uploadRequest.SheetName, uploadRequest.ColumnName)
-				return
-			}
-			headerMap, err := findHeaderMap(uploadRequest.SheetName)
-			if err != nil {
-				log.Printf("Error finding headers for %s: %v", uploadRequest.SheetName, err)
-				return
-			}
-			rowIndex, sheetId, err := findRowIndexByPK(uploadRequest.SheetName, pkHeader, pkValue)
-			if err != nil {
-				log.Printf("Error finding row for PK %s=%s in sheet %s for image update: %v", pkHeader, pkValue, uploadRequest.SheetName, err)
-				return
-			}
-			colIndex, ok := headerMap[uploadRequest.ColumnName]
-			if !ok {
-				log.Printf("Error: Column '%s' not found in sheet '%s'", uploadRequest.ColumnName, uploadRequest.SheetName)
-				return
-			}
-			batchUpdateReq := &sheets.BatchUpdateSpreadsheetRequest{
-				Requests: []*sheets.Request{
-					{
-						UpdateCells: &sheets.UpdateCellsRequest{
-							Start: &sheets.GridCoordinate{
-								SheetId:     sheetId,
-								RowIndex:    rowIndex,
-								ColumnIndex: int64(colIndex),
-							},
-							Rows: []*sheets.RowData{
-								{
-									Values: []*sheets.CellData{
-										{
-											UserEnteredValue: &sheets.ExtendedValue{
-												StringValue: &fileUrl,
-											},
-										},
-									},
-								},
-							},
-							Fields: "userEnteredValue",
-						},
-					},
-				},
-			}
-			_, updateErr := sheetsService.Spreadsheets.BatchUpdate(spreadsheetID, batchUpdateReq).Do()
-			if updateErr != nil {
-				log.Printf("Error updating sheet %s with image URL using BatchUpdate: %v", uploadRequest.SheetName, updateErr)
-			} else {
-				log.Printf("Successfully updated sheet %s with image URL", uploadRequest.SheetName)
-				invalidateSheetCache(uploadRequest.SheetName)
+
+	go func(r AppsScriptRequest, rawData string, tid string) {
+		defer func() {
+			if rec := recover(); rec != nil {
+				log.Printf("🔥 PANIC in background upload: %v", rec)
 			}
 		}()
+
+		log.Printf("⏳ [Background Upload] Starting for tempID=%s file=%q mime=%q", tid, r.FileName, r.MimeType)
+		driveURL, fileID, err := uploadToGoogleDriveDirectly(rawData, r.FileName, r.MimeType)
+		if err != nil {
+			log.Printf("❌ [Background Upload] FAILED for tempID=%s: %v", tid, err)
+			return
+		}
+		log.Printf("✅ [Background Upload] SUCCESS tempID=%s fileID=%s driveURL=%s", tid, fileID, driveURL)
+
+		// Save the resolved DriveURL in TempImage for later retrieval (if needed by CreateMovie)
+		DB.Model(&TempImage{}).Where("id = ?", tid).UpdateColumn("drive_url", driveURL)
+
+		// 1. Specialized Order Update (Needs Team for Telegram)
+		if r.OrderID != "" && r.TargetColumn != "" {
+			log.Printf("📦 [Background Update] Specialized Order update: orderId=%s col=%s", r.OrderID, r.TargetColumn)
+			dbCol := mapToDBColumn(r.TargetColumn)
+			if isValidOrderColumn(dbCol) {
+				var order Order
+				team := ""
+				if err := DB.Where("order_id = ?", r.OrderID).First(&order).Error; err == nil {
+					team = order.Team
+					DB.Model(&order).UpdateColumn(dbCol, driveURL)
+				} else {
+					DB.Model(&Order{}).Where("order_id = ?", r.OrderID).UpdateColumn(dbCol, driveURL)
+				}
+
+				event, _ := json.Marshal(map[string]interface{}{
+					"type":    "update_order",
+					"orderId": r.OrderID,
+					"newData": map[string]interface{}{r.TargetColumn: driveURL},
+				})
+				hub.Broadcast <- event
+
+				enqueueSync("updateOrderTelegram", map[string]interface{}{
+					"orderId":       r.OrderID,
+					"team":          team,
+					"updatedFields": map[string]interface{}{r.TargetColumn: driveURL},
+				}, "", nil)
+			}
+		}
+
+		// 2. Specialized User Profile Update
+		if r.UserName != "" {
+			log.Printf("👤 [Background Update] Specialized User update: userName=%s", r.UserName)
+			DB.Model(&User{}).Where("user_name = ?", r.UserName).UpdateColumn("profile_picture_url", driveURL)
+			
+			notify, _ := json.Marshal(map[string]interface{}{
+				"type":     "profile_image_ready",
+				"userName": r.UserName,
+				"url":      driveURL,
+			})
+			hub.Broadcast <- notify
+
+			// Also sync with Google Sheets
+			enqueueSync("updateSheet", map[string]interface{}{"ProfilePictureURL": driveURL}, "Users", map[string]string{"UserName": r.UserName})
+		}
+
+		// 3. Specialized Movie Update
+		if r.MovieID != "" && r.TargetColumn != "" {
+			log.Printf("🎬 [Background Update] Specialized Movie update: movieId=%s col=%s", r.MovieID, r.TargetColumn)
+			dbCol := mapToDBColumn(r.TargetColumn)
+			
+			// Retry updating the database for up to 1 minute (for new records being created)
+			for i := 0; i < 12; i++ {
+				res := DB.Model(&Movie{}).Where("id = ?", r.MovieID).UpdateColumn(dbCol, driveURL)
+				if res.Error == nil && res.RowsAffected > 0 {
+					log.Printf("✅ [Background Update] SUCCESS: Updated movie %s column %s", r.MovieID, dbCol)
+					break
+				}
+				log.Printf("⏳ [Background Update] Waiting for movie record %s... (attempt %d)", r.MovieID, i+1)
+				time.Sleep(5 * time.Second)
+			}
+
+			// Also sync with Google Sheets if updated or if it's a known record
+			enqueueSync("updateSheet", map[string]interface{}{r.TargetColumn: driveURL}, "Movies", map[string]string{"ID": r.MovieID})
+			
+			// If we have a movie title, rename the file in Drive to match
+			fID := extractFileIDFromURL(driveURL)
+			if fID != "" {
+				var mv Movie
+				if err := DB.Where("id = ?", r.MovieID).First(&mv).Error; err == nil && mv.Title != "" {
+					log.Printf("📂 [Background Update] Renaming Drive file %s to %q", fID, mv.Title)
+					enqueueSync("renameFile", map[string]interface{}{
+						"fileID":  fID,
+						"newName": mv.Title,
+					}, "", nil)
+				}
+			}
+
+			// Broadcast update
+			notify, _ := json.Marshal(map[string]interface{}{
+				"type":    "movie_thumbnail_ready",
+				"movieId": r.MovieID,
+				"url":     driveURL,
+			})
+			hub.Broadcast <- notify
+		}
+
+		// 4. Generic Table/Sheet Update (Handles other tables)
+		if r.SheetName != "" && r.PrimaryKey != nil && r.TargetColumn != "" && r.SheetName != "Movies" {
+			log.Printf("📝 [Background Update] Generic update for sheet=%s PK=%v col=%s", r.SheetName, r.PrimaryKey, r.TargetColumn)
+			
+			// Sync with Google Sheets via managed queue
+			enqueueSync("updateSheet", map[string]interface{}{r.TargetColumn: driveURL}, r.SheetName, r.PrimaryKey)
+
+			// Update PostgreSQL
+			tableName := getTableName(r.SheetName)
+			if tableName != "" {
+				dbCol := mapToDBColumn(r.TargetColumn)
+				query := DB.Table(tableName)
+				for k, v := range r.PrimaryKey {
+					query = query.Where(mapToDBColumn(k)+" = ?", v)
+				}
+				res := query.UpdateColumn(dbCol, driveURL)
+				if res.Error != nil {
+					log.Printf("❌ [Background Update] DB update failed for %s: %v", tableName, res.Error)
+				} else if res.RowsAffected == 0 {
+					log.Printf("⚠️ [Background Update] No rows affected for %s (PK: %v)", tableName, r.PrimaryKey)
+				} else {
+					log.Printf("✅ [Background Update] DB updated for %s (%s)", tableName, r.TargetColumn)
+				}
+			}
+		}
+
+		log.Printf("✅ Background upload complete: %s", driveURL)
+	}(req, data, tempID)
+}
+func handleGetChatMessages(c *gin.Context) {
+	limitParam := c.Query("limit")
+	receiverParam := c.Query("receiver")
+	currentUser, _ := c.Get("userName")
+	var messages []ChatMessage
+	query := DB.Order("timestamp desc")
+	if receiverParam != "" {
+		query = query.Where("(user_name = ? AND receiver = ?) OR (user_name = ? AND receiver = ?)", currentUser, receiverParam, receiverParam, currentUser)
+	} else {
+		query = query.Where("receiver = ?", "")
 	}
-	c.JSON(http.StatusOK, gin.H{"status": "success", "url": fileUrl, "fileID": resp.FileID})
+	limit, _ := strconv.Atoi(limitParam)
+	if limit <= 0 {
+		limit = 100
+	}
+	query.Limit(limit).Find(&messages)
+	for i, j := 0, len(messages)-1; i < j; i, j = i+1, j-1 {
+		messages[i], messages[j] = messages[j], messages[i]
+	}
+	c.JSON(200, gin.H{"status": "success", "data": messages})
 }
 
-// --- Audio Proxy Handler ---
-func handleGetAudioProxy(c *gin.Context) {
-	fileID := c.Param("fileID")
-	if fileID == "" {
-		c.String(http.StatusBadRequest, "File ID is required")
+func handleSendChatMessage(c *gin.Context) {
+	var msg ChatMessage
+	if err := c.ShouldBindJSON(&msg); err != nil {
+		c.JSON(400, gin.H{"status": "error", "message": "Invalid format"})
+		return
+	}
+	if sender, exists := c.Get("userName"); exists {
+		msg.UserName = sender.(string)
+	}
+	msg.Timestamp = time.Now().Format(time.RFC3339)
+
+	msgType := strings.ToLower(msg.MessageType)
+
+	var base64Data string
+	if msgType == "audio" && msg.AudioData != "" {
+		base64Data = msg.AudioData
+	} else if msgType == "image" {
+		base64Data = msg.Content
+	}
+
+	if (msgType == "audio" || msgType == "image") && msg.FileID == "" && len(base64Data) > 100 {
+		mimeType := "application/octet-stream"
+		if strings.Contains(base64Data, "data:") && strings.Contains(base64Data, ";base64,") {
+			parts := strings.Split(base64Data, ";base64,")
+			mimeType = strings.TrimPrefix(parts[0], "data:")
+			base64Data = parts[1]
+		}
+
+		tempID := "chat_temp_" + generateShortID() + generateShortID()
+		DB.Create(&TempImage{
+			ID:        tempID,
+			MimeType:  mimeType,
+			ImageData: base64Data,
+			ExpiresAt: time.Now().Add(30 * time.Minute),
+		})
+
+		protocol := "http"
+		if c.Request.TLS != nil || c.Request.Header.Get("X-Forwarded-Proto") == "https" {
+			protocol = "https"
+		}
+		tempUrl := fmt.Sprintf("%s://%s/api/images/temp/%s", protocol, c.Request.Host, tempID)
+
+		originalContent := msg.Content
+		msg.Content = tempUrl
+
+		DB.Create(&msg)
+		msgBytes, _ := json.Marshal(map[string]interface{}{"type": "new_message", "data": msg})
+		hub.Broadcast <- msgBytes
+
+		c.JSON(200, gin.H{"status": "success", "data": msg})
+
+		go func(m ChatMessage, b64 string, mt string, tid string, originalContent string) {
+			defer func() {
+				if rec := recover(); rec != nil {
+					log.Printf("🔥 PANIC in chat upload: %v", rec)
+				}
+			}()
+
+			driveURL, fileId, err := uploadToGoogleDriveDirectly(b64, "chat_file", mt)
+			if err == nil {
+
+				finalContent := originalContent
+				if strings.ToLower(m.MessageType) == "image" {
+					finalContent = driveURL
+				}
+
+				DB.Model(&ChatMessage{}).Where("id = ?", m.ID).Updates(map[string]interface{}{
+					"file_id": fileId,
+					"content": finalContent,
+				})
+
+				updateMsg, _ := json.Marshal(map[string]interface{}{
+					"type":       "upload_complete",
+					"message_id": m.ID,
+					"file_id":    fileId,
+					"url":        driveURL,
+					"receiver":   m.Receiver,
+				})
+				hub.Broadcast <- updateMsg
+				log.Printf("📢 Broadcasted upload_complete for Message ID: %d", m.ID)
+
+				// Removed immediate TempImage deletion to allow client time to load
+			} else {
+				log.Printf("❌ Chat media upload failed: %v", err)
+			}
+		}(msg, base64Data, mimeType, tempID, originalContent)
+
 		return
 	}
 
-	googleURL := fmt.Sprintf("https://drive.google.com/uc?id=%s&export=download", fileID)
-	resp, err := http.Get(googleURL)
+	DB.Create(&msg)
+	msgBytes, _ := json.Marshal(map[string]interface{}{"type": "new_message", "data": msg})
+	hub.Broadcast <- msgBytes
+	c.JSON(200, gin.H{"status": "success", "data": msg})
+}
+
+func handleDeleteChatMessage(c *gin.Context) {
+	var req struct {
+		ID       uint   `json:"id"`
+		UserName string `json:"userName"`
+	}
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"status": "error", "message": "ទិន្នន័យមិនត្រឹមត្រូវ"})
+		return
+	}
+
+	var msg ChatMessage
+	if err := DB.First(&msg, req.ID).Error; err != nil {
+		c.JSON(http.StatusNotFound, gin.H{"status": "error", "message": "រកមិនឃើញសារ"})
+		return
+	}
+
+	currentUser, _ := c.Get("userName")
+	isSystemAdmin, _ := c.Get("isSystemAdmin")
+	if msg.UserName != currentUser.(string) && (isSystemAdmin == nil || !isSystemAdmin.(bool)) {
+		c.JSON(http.StatusForbidden, gin.H{"status": "error", "message": "គ្មានសិទ្ធិលុបសារនេះទេ"})
+		return
+	}
+
+	if err := DB.Delete(&msg).Error; err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"status": "error", "message": "ការលុបសារបរាជ័យ"})
+		return
+	}
+
+	eventBytes, _ := json.Marshal(map[string]interface{}{
+		"type": "delete_message",
+		"id":   req.ID,
+	})
+	hub.Broadcast <- eventBytes
+
+	c.JSON(http.StatusOK, gin.H{"status": "success"})
+}
+func handleGetAudioProxy(c *gin.Context) {
+	fileID := c.Param("fileID")
+	resp, err := http.Get(fmt.Sprintf("https://drive.google.com/uc?id=%s&export=download", fileID))
+	if err != nil || resp.StatusCode != 200 {
+		c.Error(fmt.Errorf("failed to fetch audio"))
+		return
+	}
+	defer resp.Body.Close()
+	c.Writer.Header().Set("Content-Type", resp.Header.Get("Content-Type"))
+	io.Copy(c.Writer, resp.Body)
+}
+
+// =========================================================================
+// API សម្រាប់ប្រព័ន្ធ ENTERTAINMENT (HLS & Video Proxy)
+// =========================================================================
+
+func handleExtractM3U8(c *gin.Context) {
+	defer func() {
+		if r := recover(); r != nil {
+			log.Printf("🔥 PANIC in handleExtractM3U8: %v", r)
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "Internal Server Error during extraction"})
+		}
+	}()
+
+	targetURL := c.Query("url")
+	referer := c.Query("referer")
+	if targetURL == "" {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Missing url parameter"})
+		return
+	}
+
+	log.Printf("🔍 Extracting M3U8 from: %s", targetURL)
+
+	u, err := url.Parse(targetURL)
 	if err != nil {
-		log.Printf("Failed to fetch audio from Google Drive (FileID: %s): %v", fileID, err)
-		c.String(http.StatusInternalServerError, "Failed to retrieve audio file")
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid URL"})
+		return
+	}
+
+	fetchReferer := referer
+	if fetchReferer == "" {
+		fetchReferer = u.Scheme + "://" + u.Host
+	}
+
+	client := &http.Client{Timeout: 15 * time.Second}
+	req, _ := http.NewRequest("GET", targetURL, nil)
+	req.Header.Set("Referer", fetchReferer)
+	req.Header.Set("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36")
+
+	resp, err := client.Do(req)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+	defer resp.Body.Close()
+
+	body, _ := io.ReadAll(resp.Body)
+	html := string(body)
+
+	var m3u8URL string
+
+	// 1. Check for sitewise specific logic (e.g., khfullhd.co)
+	if strings.Contains(targetURL, "khfullhd.co") {
+		iframeRe := regexp.MustCompile(`(?i)<iframe.*?src=["']([^"']+)["']`)
+		iframes := iframeRe.FindAllStringSubmatch(html, -1)
+		for _, iframe := range iframes {
+			src := iframe[1]
+			if strings.Contains(src, "player.php") || strings.Contains(src, "v.php") {
+				playerURL := resolveURL(targetURL, src)
+				// Fetch the iframe content
+				pReq, _ := http.NewRequest("GET", playerURL, nil)
+				pReq.Header.Set("Referer", targetURL)
+				pReq.Header.Set("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36")
+				pResp, pErr := client.Do(pReq)
+				if pErr == nil && pResp != nil {
+					pBody, _ := io.ReadAll(pResp.Body)
+					pResp.Body.Close()
+					if len(pBody) > 0 {
+						html = string(pBody)
+						targetURL = playerURL
+					}
+				}
+				break
+			}
+		}
+	}
+
+	// 2. Advanced Scraping: Look for playlist variables (model from zip)
+	if m3u8URL == "" {
+		playlistRe := regexp.MustCompile(`var playlist = (\[.*?\]);`)
+		playlistMatch := playlistRe.FindStringSubmatch(html)
+		if len(playlistMatch) > 1 {
+			fileRe := regexp.MustCompile(`file:\s*["']([^"']+(\.m3u8|\.mp4|/hlsplaylist/|/hls/)[^"']*)["']`)
+			fileMatch := fileRe.FindStringSubmatch(playlistMatch[1])
+			if len(fileMatch) > 1 {
+				m3u8URL = fileMatch[1]
+			}
+		}
+	}
+
+	// 3. Dooplay Player Option Extraction
+	if m3u8URL == "" && strings.Contains(html, "dooplay_player_option") {
+		// Look for dtAjax
+		dtAjaxRe := regexp.MustCompile(`var dtAjax = (\{.*?\});`)
+		dtAjaxMatch := dtAjaxRe.FindStringSubmatch(html)
+		if len(dtAjaxMatch) > 1 {
+			var dtAjax struct {
+				PlayerAPI string `json:"player_api"`
+				URL       string `json:"url"`
+			}
+			json.Unmarshal([]byte(dtAjaxMatch[1]), &dtAjax)
+
+			// Look for player options
+			optionRe := regexp.MustCompile(`class=['"]dooplay_player_option['"].*?data-post=['"](\d+)['"].*?data-nume=['"](\w+)['"].*?data-type=['"](\w+)['"]`)
+			options := optionRe.FindAllStringSubmatch(html, -1)
+
+			for _, opt := range options {
+				if opt[2] == "trailer" {
+					continue
+				}
+				postID, nume, dtype := opt[1], opt[2], opt[3]
+				var apiURL string
+				isAjax := false
+
+				if dtAjax.PlayerAPI != "" {
+					apiURL = dtAjax.PlayerAPI + postID + "/" + dtype + "/" + nume
+				} else if dtAjax.URL != "" {
+					apiURL = dtAjax.URL + "?action=doo_player_ajax&post=" + postID + "&nume=" + nume + "&type=" + dtype
+					isAjax = true
+				}
+
+				if apiURL != "" {
+					if strings.HasPrefix(apiURL, "/") {
+						apiURL = u.Scheme + "://" + u.Host + apiURL
+					}
+
+					var apiReq *http.Request
+					if isAjax {
+						apiReq, _ = http.NewRequest("POST", apiURL, nil)
+					} else {
+						apiReq, _ = http.NewRequest("GET", apiURL, nil)
+					}
+					apiReq.Header.Set("Referer", targetURL)
+					apiReq.Header.Set("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36")
+					apiReq.Header.Set("X-Requested-With", "XMLHttpRequest")
+
+					apiResp, err := client.Do(apiReq)
+					if err == nil {
+						apiBody, _ := io.ReadAll(apiResp.Body)
+						apiResp.Body.Close()
+						var result struct {
+							EmbedURL string `json:"embed_url"`
+						}
+						json.Unmarshal(apiBody, &result)
+						if result.EmbedURL != "" {
+							// If it's an iframe, extract src
+							iframeSrcRe := regexp.MustCompile(`src=['"]([^'"]+)['"]`)
+							iframeSrcMatch := iframeSrcRe.FindStringSubmatch(result.EmbedURL)
+							if len(iframeSrcMatch) > 1 {
+								m3u8URL = iframeSrcMatch[1]
+							} else {
+								m3u8URL = result.EmbedURL
+							}
+							break
+						}
+					}
+				}
+			}
+		}
+	}
+
+	// 4. Iframe Extraction (Recursive-like search)
+	if m3u8URL == "" {
+		iframeRe := regexp.MustCompile(`(?i)<iframe.*?src=["']([^"']+)["']`)
+		iframes := iframeRe.FindAllStringSubmatch(html, -1)
+		for _, iframe := range iframes {
+			src := iframe[1]
+			if strings.Contains(src, "googletagmanager") || strings.Contains(src, "facebook") || strings.Contains(src, "plugins") {
+				continue
+			}
+			// If it's already a .m3u8, we found it
+			if strings.Contains(src, ".m3u8") || strings.Contains(src, "/hlsplaylist/") || strings.Contains(src, "/hls/") {
+				m3u8URL = src
+				break
+			}
+
+			// Deep scrape the iframe (Advanced iframe extraction)
+			if strings.HasPrefix(src, "//") {
+				src = "https:" + src
+			} else if !strings.HasPrefix(src, "http") {
+				src = resolveURL(targetURL, src)
+			}
+
+			iframeReq, errReq := http.NewRequest("GET", src, nil)
+			if errReq != nil || iframeReq == nil {
+				continue
+			}
+
+			iframeReq.Header.Set("Referer", targetURL)
+			iframeReq.Header.Set("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36")
+
+			iframeResp, err := client.Do(iframeReq)
+			if err == nil {
+				iframeBody, _ := io.ReadAll(iframeResp.Body)
+				iframeResp.Body.Close()
+				iframeHtml := string(iframeBody)
+
+				// Standard URL regex
+				re := regexp.MustCompile(`(["'])(https?://[^"']+(\.m3u8|\.mp4|/hlsplaylist/|/hls/)[^"']*)\1`)
+				matches := re.FindAllStringSubmatch(iframeHtml, -1)
+				for _, match := range matches {
+					found := strings.ReplaceAll(match[2], "\\/", "/")
+					if !strings.Contains(found, "ads") && !strings.Contains(found, "videoAd") {
+						m3u8URL = found
+						targetURL = src // Update referer for the proxy to use the iframe's URL
+						break
+					}
+				}
+
+				// Special JS file variables
+				if m3u8URL == "" {
+					fileRe := regexp.MustCompile(`file:\s*["']([^"']+(\.m3u8|\.mp4)[^"']*)["']`)
+					fileMatch := fileRe.FindStringSubmatch(iframeHtml)
+					if len(fileMatch) > 1 {
+						m3u8URL = strings.ReplaceAll(fileMatch[1], "\\/", "/")
+						targetURL = src
+					}
+				}
+
+				// HTML5 Source tag
+				if m3u8URL == "" {
+					sourceRe := regexp.MustCompile(`(?i)<source.*?src=["']([^"']+(\.m3u8|\.mp4)[^"']*)["']`)
+					sourceMatch := sourceRe.FindStringSubmatch(iframeHtml)
+					if len(sourceMatch) > 1 {
+						m3u8URL = strings.ReplaceAll(sourceMatch[1], "\\/", "/")
+						targetURL = src
+					}
+				}
+			}
+
+			if m3u8URL != "" {
+				if !strings.HasPrefix(m3u8URL, "http") {
+					m3u8URL = resolveURL(src, m3u8URL)
+				}
+				break
+			}
+
+			// Ultimately, fallback to iframe src
+			m3u8URL = src
+			break
+		}
+	}
+
+	// 5. Final Regex Search (Improved)
+	if m3u8URL == "" {
+		// Try playlist regex with broad HLS patterns, ignoring ads
+		re := regexp.MustCompile(`(["'])(https?://[^"']+(\.m3u8|\.mp4|/hlsplaylist/|/hls/)[^"']*)\1`)
+		matches := re.FindAllStringSubmatch(html, -1)
+		for _, match := range matches {
+			found := match[2]
+			if !strings.Contains(found, "ads") && !strings.Contains(found, "videoAd") {
+				m3u8URL = found
+				break
+			}
+		}
+	}
+
+	if m3u8URL == "" {
+		// Try simple regex as fallback
+		reSimple := regexp.MustCompile(`https?://[^\s"'<>]+?(\.m3u8|\.mp4|/hlsplaylist/|/hls/)[^\s"'<>]*`)
+		matches := reSimple.FindAllString(html, -1)
+		for _, found := range matches {
+			if !strings.Contains(found, "ads") && !strings.Contains(found, "videoAd") {
+				m3u8URL = found
+				break
+			}
+		}
+	}
+
+	if m3u8URL != "" {
+		if strings.HasPrefix(m3u8URL, "//") {
+			m3u8URL = "https:" + m3u8URL
+		} else if !strings.HasPrefix(m3u8URL, "http") {
+			m3u8URL = resolveURL(targetURL, m3u8URL)
+		}
+		c.JSON(http.StatusOK, gin.H{
+			"m3u8Url": m3u8URL,
+			"referer": targetURL,
+		})
+		return
+	}
+
+	c.JSON(http.StatusNotFound, gin.H{"error": "Could not extract HLS link from the page."})
+}
+
+func handleProxyM3U8(c *gin.Context) {
+	m3u8URL := c.Query("url")
+	if m3u8URL == "" {
+		c.String(http.StatusBadRequest, "Missing url parameter")
+		return
+	}
+
+	u, err := url.Parse(m3u8URL)
+	if err != nil {
+		c.String(http.StatusBadRequest, "Invalid URL")
+		return
+	}
+
+	client := &http.Client{Timeout: 10 * time.Second}
+	req, _ := http.NewRequest("GET", m3u8URL, nil)
+
+	targetReferer := c.Query("referer")
+	if targetReferer != "" {
+		req.Header.Set("Referer", targetReferer)
+	} else {
+		req.Header.Set("Referer", u.Scheme+"://"+u.Host)
+	}
+
+	req.Header.Set("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36")
+
+	resp, err := client.Do(req)
+	if err != nil {
+		c.String(http.StatusInternalServerError, err.Error())
 		return
 	}
 	defer resp.Body.Close()
 
 	if resp.StatusCode != http.StatusOK {
-		log.Printf("Google Drive returned non-OK status %d for FileID: %s", resp.StatusCode, fileID)
-		if strings.HasPrefix(resp.Header.Get("Content-Type"), "text/html") {
-			c.String(http.StatusForbidden, "Cannot proxy file. It may require manual download from Google.")
-			return
-		}
-		c.String(resp.StatusCode, "Error from Google Drive")
+		c.String(resp.StatusCode, "Failed to fetch m3u8")
 		return
 	}
 
-	c.Writer.Header().Set("Content-Type", resp.Header.Get("Content-Type"))
-	c.Writer.Header().Set("Content-Length", resp.Header.Get("Content-Length"))
-	c.Writer.Header().Set("Content-Disposition", fmt.Sprintf("inline; filename=\"%s\"", fileID))
+	var rewrittenLines []string
+	var lines []string
+	isMasterPlaylist := false
 
+	// Increase scanner buffer to handle long lines in M3U8 files
+	scanner := bufio.NewScanner(resp.Body)
+	buf := make([]byte, 0, 1024*1024) // 1MB buffer
+	scanner.Buffer(buf, 1024*1024)
+
+	for scanner.Scan() {
+		line := strings.TrimSpace(scanner.Text())
+		if line == "" {
+			rewrittenLines = append(rewrittenLines, "")
+			continue
+		}
+		if strings.Contains(line, "#EXT-X-STREAM-INF") {
+			isMasterPlaylist = true
+		}
+		lines = append(lines, line)
+	}
+
+	// Determine absolute backend host URL
+	scheme := "http"
+	if c.Request.TLS != nil || c.Request.Header.Get("X-Forwarded-Proto") == "https" {
+		scheme = "https"
+	}
+	backendBaseURL := fmt.Sprintf("%s://%s", scheme, c.Request.Host)
+
+	for _, line := range lines {
+		if line == "" {
+			rewrittenLines = append(rewrittenLines, "")
+			continue
+		}
+
+		if strings.HasPrefix(line, "#") {
+			// Rewrite URIs in tags like #EXT-X-KEY:URI="...", #EXT-X-MEDIA:URI="...", etc.
+			if strings.Contains(line, "URI=") {
+				re := regexp.MustCompile(`URI="([^"]+)"`)
+				newLine := re.ReplaceAllStringFunc(line, func(match string) string {
+					subMatch := re.FindStringSubmatch(match)
+					if len(subMatch) > 1 {
+						uri := subMatch[1]
+						absURL := resolveURL(m3u8URL, uri)
+
+						// Check if it's a playlist or a segment
+						lowerAbsURL := strings.ToLower(absURL)
+						isImageOrSegment := strings.HasSuffix(lowerAbsURL, ".ts") || strings.HasSuffix(lowerAbsURL, ".jpg") || strings.HasSuffix(lowerAbsURL, ".jpeg") || strings.HasSuffix(lowerAbsURL, ".vtt") || strings.HasSuffix(lowerAbsURL, ".mp4") || strings.HasSuffix(lowerAbsURL, ".m4s")
+						isPlaylist := strings.Contains(lowerAbsURL, ".m3u8") || (!isImageOrSegment && (strings.Contains(lowerAbsURL, "/hlsplaylist/") || strings.Contains(lowerAbsURL, "/hls/")))
+						endpoint := backendBaseURL + "/api/proxy-ts"
+						if isPlaylist {
+							endpoint = backendBaseURL + "/api/proxy-m3u8"
+						}
+
+						refererParam := ""
+						if targetReferer != "" {
+							refererParam = fmt.Sprintf("&referer=%s", url.QueryEscape(targetReferer))
+						}
+						return fmt.Sprintf(`URI="%s?url=%s%s"`, endpoint, url.QueryEscape(absURL), refererParam)
+					}
+					return match
+				})
+				rewrittenLines = append(rewrittenLines, newLine)
+			} else {
+				rewrittenLines = append(rewrittenLines, line)
+			}
+			continue
+		}
+
+		// It's a URL line (segment or sub-playlist)
+		absURL := resolveURL(m3u8URL, line)
+
+		refererParam := ""
+		if targetReferer != "" {
+			refererParam = fmt.Sprintf("&referer=%s", url.QueryEscape(targetReferer))
+		}
+		lowerAbsURL := strings.ToLower(absURL)
+		isImageOrSegment := strings.HasSuffix(lowerAbsURL, ".ts") || strings.HasSuffix(lowerAbsURL, ".jpg") || strings.HasSuffix(lowerAbsURL, ".jpeg") || strings.HasSuffix(lowerAbsURL, ".vtt") || strings.HasSuffix(lowerAbsURL, ".mp4") || strings.HasSuffix(lowerAbsURL, ".m4s")
+
+		if isMasterPlaylist || strings.Contains(lowerAbsURL, ".m3u8") || (!isImageOrSegment && (strings.Contains(lowerAbsURL, "/hlsplaylist/") || strings.Contains(lowerAbsURL, "/hls/"))) {
+			rewrittenLines = append(rewrittenLines, fmt.Sprintf("%s/api/proxy-m3u8?url=%s%s", backendBaseURL, url.QueryEscape(absURL), refererParam))
+		} else {
+			rewrittenLines = append(rewrittenLines, fmt.Sprintf("%s/api/proxy-ts?url=%s%s", backendBaseURL, url.QueryEscape(absURL), refererParam))
+		}
+	}
+
+	c.Header("Content-Type", "application/vnd.apple.mpegurl")
+	c.Header("Access-Control-Allow-Origin", "*")
+	c.String(http.StatusOK, strings.Join(rewrittenLines, "\n"))
+}
+
+func handleProxyTS(c *gin.Context) {
+	tsURL := c.Query("url")
+	if tsURL == "" {
+		c.String(http.StatusBadRequest, "Missing url parameter")
+		return
+	}
+
+	u, err := url.Parse(tsURL)
+	if err != nil {
+		c.String(http.StatusBadRequest, "Invalid URL")
+		return
+	}
+
+	client := &http.Client{Timeout: 60 * time.Second}
+	req, _ := http.NewRequest("GET", tsURL, nil)
+
+	// Copy Range header for fragmented MP4 support
+	if rangeHeader := c.Request.Header.Get("Range"); rangeHeader != "" {
+		req.Header.Set("Range", rangeHeader)
+	}
+
+	targetReferer := c.Query("referer")
+	if targetReferer != "" {
+		req.Header.Set("Referer", targetReferer)
+	} else {
+		req.Header.Set("Referer", u.Scheme+"://"+u.Host)
+	}
+
+	req.Header.Set("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36")
+
+	resp, err := client.Do(req)
+	if err != nil {
+		c.String(http.StatusInternalServerError, err.Error())
+		return
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK && resp.StatusCode != http.StatusPartialContent {
+		c.String(resp.StatusCode, "Failed to fetch segment")
+		return
+	}
+
+	// Forward response headers
+	for k, v := range resp.Header {
+		if k == "Content-Length" || k == "Content-Range" || k == "Accept-Ranges" {
+			c.Header(k, v[0])
+		}
+	}
+
+	// Force Content-Type to match expected video segments and ignore origin obfuscation
+	ext := strings.ToLower(filepath.Ext(tsURL))
+	if ext == ".m4s" || ext == ".mp4" || strings.Contains(tsURL, ".m4s") || strings.Contains(tsURL, ".mp4") {
+		c.Header("Content-Type", "video/mp4")
+	} else if ext == ".m3u8" || strings.Contains(tsURL, ".m3u8") {
+		c.Header("Content-Type", "application/vnd.apple.mpegurl")
+	} else if ext == ".jpg" || ext == ".jpeg" || strings.Contains(tsURL, "thumbnails") {
+		c.Header("Content-Type", "image/jpeg")
+	} else if ext == ".vtt" || strings.Contains(tsURL, ".vtt") {
+		c.Header("Content-Type", "text/vtt")
+	} else {
+		// Force MP2T for any other stream chunk (Overrides things like image/png)
+		c.Header("Content-Type", "video/MP2T")
+	}
+
+	c.Header("Access-Control-Allow-Origin", "*")
+	c.Status(resp.StatusCode)
 	io.Copy(c.Writer, resp.Body)
 }
 
-// --- Report/Admin Handlers ---
+func handleFetchJSON(c *gin.Context) {
+	targetURL := c.Query("url")
+	if targetURL == "" {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Missing url parameter"})
+		return
+	}
 
-func handleUpdateFormulaReport(c *gin.Context) {
-	var allOrders []Order
-	invalidateSheetCache(AllOrdersSheet)
-	err := getCachedSheetData(AllOrdersSheet, &allOrders, cacheTTL)
+	u, err := url.Parse(targetURL)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"status": "error", "message": "Failed to fetch order data: " + err.Error()})
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid URL"})
 		return
 	}
-	reportData := [][]interface{}{
-		{"Category", "Period", "Total Sales", "Total Expense (Shipping)", "Total Product Cost", "Net Profit"},
-	}
-	if len(allOrders) == 0 {
-		err = overwriteSheetDataInAPI(FormulaReportSheet, reportData)
-		if err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"status": "error", "message": "Failed to clear/write headers to report sheet: " + err.Error()})
-			return
-		}
-		c.JSON(http.StatusOK, gin.H{"status": "success", "message": "Formula Report updated (No order data found)."})
-		return
-	}
-	yearlyData := make(map[int]*ReportSummary)
-	monthlyData := make(map[string]*ReportSummary)
-	dailyData := make(map[string]*ReportSummary)
-	now := time.Now()
-	currentYear := now.Year()
-	currentMonth := now.Month()
-	loc, _ := time.LoadLocation("Asia/Phnom_Penh")
-	if loc == nil {
-		loc = time.UTC
-	}
-	for _, order := range allOrders {
-		ts, err := time.Parse(time.RFC3339, order.Timestamp)
-		if err != nil {
-			log.Printf("Warning: Could not parse timestamp '%s' for order %s: %v. Skipping record.", order.Timestamp, order.OrderID, err)
-			continue
-		}
-		ts = ts.In(loc)
-		year := ts.Year()
-		month := ts.Month()
-		yearMonthKey := fmt.Sprintf("%d-%02d", year, month)
-		yearMonthDayKey := ts.Format("2006-01-02")
-		if _, ok := yearlyData[year]; !ok {
-			yearlyData[year] = &ReportSummary{}
-		}
-		yearlyData[year].TotalSales += order.GrandTotal
-		yearlyData[year].TotalExpense += order.InternalCost
-		yearlyData[year].TotalProductCost += order.TotalProductCost
-		if year == currentYear {
-			if _, ok := monthlyData[yearMonthKey]; !ok {
-				monthlyData[yearMonthKey] = &ReportSummary{}
+
+	client := &http.Client{Timeout: 30 * time.Second}
+	var req *http.Request
+
+	// Complex Fetch Logic for AJAX
+	if c.Request.Method == "POST" || (u.RawQuery != "" && strings.Contains(targetURL, "admin-ajax.php")) {
+		var bodyReader io.Reader
+		contentType := "application/x-www-form-urlencoded"
+
+		if u.RawQuery != "" && strings.Contains(targetURL, "admin-ajax.php") {
+			// Convert query params to form body for admin-ajax requests
+			form := url.Values{}
+			for k, v := range u.Query() {
+				form.Set(k, v[0])
 			}
-			monthlyData[yearMonthKey].TotalSales += order.GrandTotal
-			monthlyData[yearMonthKey].TotalExpense += order.InternalCost
-			monthlyData[yearMonthKey].TotalProductCost += order.TotalProductCost
-		}
-		if year == currentYear && month == currentMonth {
-			if _, ok := dailyData[yearMonthDayKey]; !ok {
-				dailyData[yearMonthDayKey] = &ReportSummary{}
-			}
-			dailyData[yearMonthDayKey].TotalSales += order.GrandTotal
-			dailyData[yearMonthDayKey].TotalExpense += order.InternalCost
-			dailyData[yearMonthDayKey].TotalProductCost += order.TotalProductCost
-		}
-	}
-	reportData = append(reportData, []interface{}{"YEARLY REPORT", "", "", "", "", ""})
-	years := make([]int, 0, len(yearlyData))
-	for y := range yearlyData {
-		years = append(years, y)
-	}
-	sort.Sort(sort.Reverse(sort.IntSlice(years)))
-	for _, year := range years {
-		summary := yearlyData[year]
-		netProfit := summary.TotalSales - summary.TotalExpense - summary.TotalProductCost
-		reportData = append(reportData, []interface{}{
-			"", year,
-			fmt.Sprintf("%.2f", summary.TotalSales),
-			fmt.Sprintf("%.2f", summary.TotalExpense),
-			fmt.Sprintf("%.2f", summary.TotalProductCost),
-			fmt.Sprintf("%.2f", netProfit),
-		})
-	}
-	reportData = append(reportData, []interface{}{})
-	reportData = append(reportData, []interface{}{fmt.Sprintf("MONTHLY REPORT (%d)", currentYear), "", "", "", "", ""})
-	for m := 1; m <= 12; m++ {
-		monthKey := fmt.Sprintf("%d-%02d", currentYear, m)
-		summary, ok := monthlyData[monthKey]
-		monthName := time.Month(m).String()
-		if ok {
-			netProfit := summary.TotalSales - summary.TotalExpense - summary.TotalProductCost
-			reportData = append(reportData, []interface{}{
-				"", monthName,
-				fmt.Sprintf("%.2f", summary.TotalSales),
-				fmt.Sprintf("%.2f", summary.TotalExpense),
-				fmt.Sprintf("%.2f", summary.TotalProductCost),
-				fmt.Sprintf("%.2f", netProfit),
-			})
+			bodyReader = strings.NewReader(form.Encode())
+			// Clear query from URL
+			u.RawQuery = ""
+			targetURL = u.String()
 		} else {
-			reportData = append(reportData, []interface{}{"", monthName, "0.00", "0.00", "0.00", "0.00"})
-		}
-	}
-	reportData = append(reportData, []interface{}{})
-	reportData = append(reportData, []interface{}{fmt.Sprintf("DAILY REPORT (%s %d)", currentMonth.String(), currentYear), "", "", "", "", ""})
-	dayKeys := make([]string, 0, len(dailyData))
-	for d := range dailyData {
-		dayKeys = append(dayKeys, d)
-	}
-	sort.Strings(dayKeys)
-	for _, dayKey := range dayKeys {
-		summary := dailyData[dayKey]
-		t, _ := time.Parse("2006-01-02", dayKey)
-		dayLabel := t.Format("Jan 02, 2006")
-		netProfit := summary.TotalSales - summary.TotalExpense - summary.TotalProductCost
-		reportData = append(reportData, []interface{}{
-			"", dayLabel,
-			fmt.Sprintf("%.2f", summary.TotalSales),
-			fmt.Sprintf("%.2f", summary.TotalExpense),
-			fmt.Sprintf("%.2f", summary.TotalProductCost),
-			fmt.Sprintf("%.2f", netProfit),
-		})
-	}
-	err = overwriteSheetDataInAPI(FormulaReportSheet, reportData)
-	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"status": "error", "message": "Failed to write report data: " + err.Error()})
-		return
-	}
-	c.JSON(http.StatusOK, gin.H{"status": "success", "message": "Formula Report updated successfully."})
-}
-
-func handleGetRevenueSummary(c *gin.Context) {
-	var revenueEntries []RevenueEntry
-	invalidateSheetCache(RevenueSheet)
-	err := getCachedSheetData(RevenueSheet, &revenueEntries, cacheTTL)
-	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"status": "error", "message": "Failed to fetch revenue data: " + err.Error()})
-		return
-	}
-	if len(revenueEntries) == 0 {
-		c.JSON(http.StatusOK, gin.H{"status": "success", "data": RevenueAggregate{
-			YearlyByTeam:  make(map[int]map[string]float64),
-			YearlyByPage:  make(map[int]map[string]float64),
-			MonthlyByTeam: make(map[string]map[string]float64),
-			MonthlyByPage: make(map[string]map[string]float64),
-			DailyByTeam:   make(map[string]map[string]float64),
-			DailyByPage:   make(map[string]map[string]float64),
-		}})
-		return
-	}
-	yearlyByTeam := make(map[int]map[string]float64)
-	yearlyByPage := make(map[int]map[string]float64)
-	monthlyByTeam := make(map[string]map[string]float64)
-	monthlyByPage := make(map[string]map[string]float64)
-	dailyByTeam := make(map[string]map[string]float64)
-	dailyByPage := make(map[string]map[string]float64)
-	now := time.Now()
-	currentYear := now.Year()
-	currentMonth := now.Month()
-	loc, _ := time.LoadLocation("Asia/Phnom_Penh")
-	if loc == nil {
-		loc = time.UTC
-	}
-	for _, entry := range revenueEntries {
-		ts, err := time.Parse(time.RFC3339, entry.Timestamp)
-		if err != nil {
-			log.Printf("Warning: Could not parse timestamp '%s' for revenue entry. Skipping.", entry.Timestamp)
-			continue
-		}
-		ts = ts.In(loc)
-		year := ts.Year()
-		month := ts.Month()
-		yearMonthKey := fmt.Sprintf("%d-%02d", year, month)
-		yearMonthDayKey := ts.Format("2006-01-02")
-		team := entry.Team
-		if team == "" {
-			team = "Unknown"
-		}
-		page := entry.Page
-		if page == "" {
-			page = "Unknown"
-		}
-		revenue := entry.Revenue
-		if _, ok := yearlyByTeam[year]; !ok {
-			yearlyByTeam[year] = make(map[string]float64)
-		}
-		yearlyByTeam[year][team] += revenue
-		if _, ok := yearlyByPage[year]; !ok {
-			yearlyByPage[year] = make(map[string]float64)
-		}
-		yearlyByPage[year][page] += revenue
-		if year == currentYear {
-			if _, ok := monthlyByTeam[yearMonthKey]; !ok {
-				monthlyByTeam[yearMonthKey] = make(map[string]float64)
+			body, _ := io.ReadAll(c.Request.Body)
+			bodyReader = bytes.NewBuffer(body)
+			if ct := c.Request.Header.Get("Content-Type"); ct != "" {
+				contentType = ct
 			}
-			monthlyByTeam[yearMonthKey][team] += revenue
-			if _, ok := monthlyByPage[yearMonthKey]; !ok {
-				monthlyByPage[yearMonthKey] = make(map[string]float64)
-			}
-			monthlyByPage[yearMonthKey][page] += revenue
 		}
-		if year == currentYear && month == currentMonth {
-			if _, ok := dailyByTeam[yearMonthDayKey]; !ok {
-				dailyByTeam[yearMonthDayKey] = make(map[string]float64)
-			}
-			dailyByTeam[yearMonthDayKey][team] += revenue
-			if _, ok := dailyByPage[yearMonthDayKey]; !ok {
-				dailyByPage[yearMonthDayKey] = make(map[string]float64)
-			}
-			dailyByPage[yearMonthDayKey][page] += revenue
-		}
-	}
-	response := RevenueAggregate{
-		YearlyByTeam:  yearlyByTeam,
-		YearlyByPage:  yearlyByPage,
-		MonthlyByTeam: monthlyByTeam,
-		MonthlyByPage: monthlyByPage,
-		DailyByTeam:   dailyByTeam,
-		DailyByPage:   dailyByPage,
-	}
-	c.JSON(http.StatusOK, gin.H{"status": "success", "data": response})
-}
 
-func handleGetAllOrders(c *gin.Context) {
-	var allOrders []Order
-	invalidateSheetCache(AllOrdersSheet)
-	err := getCachedSheetData(AllOrdersSheet, &allOrders, cacheTTL)
-	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"status": "error", "message": "Failed to fetch all orders: " + err.Error()})
-		return
-	}
-	sort.Slice(allOrders, func(i, j int) bool {
-		if allOrders[i].Timestamp == "" {
-			return false
-		}
-		if allOrders[j].Timestamp == "" {
-			return true
-		}
-		return allOrders[i].Timestamp > allOrders[j].Timestamp
-	})
-	c.JSON(http.StatusOK, gin.H{"status": "success", "data": allOrders})
-}
-
-func handleGetChatMessages(c *gin.Context) {
-	var chatMessages []ChatMessage
-	err := getCachedSheetData(ChatMessagesSheet, &chatMessages, 10*time.Second)
-	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"status": "error", "message": "Failed to fetch chat history: " + err.Error()})
-		return
-	}
-	sort.Slice(chatMessages, func(i, j int) bool {
-		return chatMessages[i].Timestamp < chatMessages[j].Timestamp
-	})
-	c.JSON(http.StatusOK, gin.H{"status": "success", "data": chatMessages})
-}
-
-func uploadChatMediaToDrive(base64Data, fileName, mimeType, userName string) (string, string, error) {
-	if uploadFolderID == "" {
-		return "", "", fmt.Errorf("upload Folder ID is not configured on the server")
-	}
-	resp, err := callAppsScriptPOST(AppsScriptRequest{
-		Action:         "uploadImage",
-		FileData:       base64Data,
-		FileName:       fileName,
-		MimeType:       mimeType,
-		UploadFolderID: uploadFolderID,
-		UserName:       userName,
-	})
-	if err != nil {
-		return "", "", fmt.Errorf("failed to upload media via Google Apps Script: %v", err)
-	}
-	return resp.URL, resp.FileID, nil
-}
-
-func handleSendChatMessage(c *gin.Context) {
-	var request struct {
-		UserName    string `json:"userName"`
-		MessageType string `json:"type"`
-		Content     string `json:"content"`
-		MimeType    string `json:"mimeType,omitempty"`
-	}
-	if err := c.ShouldBindJSON(&request); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"status": "error", "message": "Invalid chat message format: " + err.Error()})
-		return
-	}
-	if request.UserName == "" || request.MessageType == "" || request.Content == "" {
-		c.JSON(http.StatusBadRequest, gin.H{"status": "error", "message": "Missing userName, type, or content"})
-		return
-	}
-	timestamp := time.Now().UTC().Format(time.RFC3339)
-	finalContent := ""
-	fileID := ""
-	switch request.MessageType {
-	case "text":
-		finalContent = request.Content
-	case "audio", "image":
-		if request.MimeType == "" {
-			c.JSON(http.StatusBadRequest, gin.H{"status": "error", "message": "mimeType is required for audio/image uploads"})
-			return
-		}
-		fileExt := strings.SplitN(request.MimeType, "/", 2)
-		if len(fileExt) < 2 {
-			fileExt = []string{"application", "octet-stream"}
-		}
-		fileName := fmt.Sprintf("chat_%s_%d.%s", request.UserName, time.Now().UnixNano(), fileExt[1])
-		var err error
-		finalContent, fileID, err = uploadChatMediaToDrive(request.Content, fileName, request.MimeType, request.UserName)
-		if err != nil {
-			log.Printf("Chat media upload failed: %v", err)
-			c.JSON(http.StatusInternalServerError, gin.H{"status": "error", "message": "Failed to upload media: " + err.Error()})
-			return
-		}
-	default:
-		c.JSON(http.StatusBadRequest, gin.H{"status": "error", "message": "Invalid messageType"})
-		return
-	}
-	rowData := []interface{}{
-		timestamp,
-		request.UserName,
-		request.MessageType,
-		finalContent,
-		fileID,
-	}
-	err := appendRowToSheet(ChatMessagesSheet, rowData)
-	if err != nil {
-		log.Printf("Failed to save chat message to sheet: %v", err)
-		c.JSON(http.StatusInternalServerError, gin.H{"status": "error", "message": "Failed to save message: " + err.Error()})
-		return
-	}
-	broadcastMsg := ChatMessage{
-		Timestamp:   timestamp,
-		UserName:    request.UserName,
-		MessageType: request.MessageType,
-		Content:     finalContent,
-		FileID:      fileID,
-	}
-	wsMsg := WebSocketMessage{
-		Action:  "new_message",
-		Payload: broadcastMsg,
-	}
-	broadcastJSON, err := json.Marshal(wsMsg)
-	if err == nil {
-		hub.broadcast <- broadcastJSON
+		req, _ = http.NewRequest("POST", targetURL, bodyReader)
+		req.Header.Set("Content-Type", contentType)
 	} else {
-		log.Printf("Failed to marshal chat message for broadcast: %v", err)
-	}
-	c.JSON(http.StatusOK, gin.H{"status": "success", "message": broadcastMsg})
-}
-
-func handleDeleteChatMessage(c *gin.Context) {
-	var request struct {
-		Timestamp string `json:"timestamp"`
-		FileID    string `json:"fileID,omitempty"`
-	}
-	if err := c.ShouldBindJSON(&request); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"status": "error", "message": "Invalid delete request: " + err.Error()})
-		return
-	}
-	if request.Timestamp == "" {
-		c.JSON(http.StatusBadRequest, gin.H{"status": "error", "message": "Timestamp is required to delete a message"})
-		return
-	}
-	if request.FileID != "" {
-		log.Printf("Attempting to delete file from Drive: %s", request.FileID)
-		_, err := callAppsScriptPOST(AppsScriptRequest{
-			Action: "deleteFile",
-			FileID: request.FileID,
-		})
-		if err != nil {
-			log.Printf("Warning: Failed to delete file %s from Google Drive: %v. Proceeding to delete sheet row.", request.FileID, err)
-		} else {
-			log.Printf("Successfully deleted file %s from Drive.", request.FileID)
-		}
-	}
-	log.Printf("Attempting to delete chat message row with Timestamp: %s", request.Timestamp)
-	sheetName := ChatMessagesSheet
-	pkHeader := "Timestamp"
-	pkValue := request.Timestamp
-
-	rowIndex, sheetId, err := findRowIndexByPK(sheetName, pkHeader, pkValue)
-	if err != nil {
-		log.Printf("Error finding chat message row to delete: %v", err)
-
-		if strings.Contains(err.Error(), "sheet") {
-			log.Printf("Clearing Sheet ID cache for %s and retrying...", sheetName)
-			invalidateSheetCache(sheetName)
-			rowIndex, sheetId, err = findRowIndexByPK(sheetName, pkHeader, pkValue)
-			if err != nil {
-				log.Printf("Error finding row on second attempt: %v", err)
-				c.JSON(http.StatusNotFound, gin.H{"status": "error", "message": "Message not found in sheet: " + err.Error()})
-				return
-			}
-		} else {
-			c.JSON(http.StatusNotFound, gin.H{"status": "error", "message": "Message not found in sheet: " + err.Error()})
-			return
-		}
+		req, _ = http.NewRequest("GET", targetURL, nil)
 	}
 
-	batchUpdateReq := &sheets.BatchUpdateSpreadsheetRequest{
-		Requests: []*sheets.Request{
-			{
-				DeleteDimension: &sheets.DeleteDimensionRequest{
-					Range: &sheets.DimensionRange{
-						SheetId:    sheetId,
-						Dimension:  "ROWS",
-						StartIndex: rowIndex,
-						EndIndex:   rowIndex + 1,
-					},
-				},
-			},
-		},
-	}
-	_, err = sheetsService.Spreadsheets.BatchUpdate(spreadsheetID, batchUpdateReq).Do()
-	if err != nil {
-		log.Printf("Error deleting row %d from sheet %s: %v", rowIndex, sheetName, err)
-		if strings.Contains(err.Error(), "No grid with id") {
-			log.Printf("Stale Sheet ID detected. Clearing Sheet ID cache for %s.", sheetName)
-			invalidateSheetCache(sheetName)
-		}
-		c.JSON(http.StatusInternalServerError, gin.H{"status": "error", "message": "Failed to delete message row: " + err.Error()})
-		return
-	}
-
-	invalidateSheetCache(sheetName)
-
-	wsMsg := WebSocketMessage{
-		Action:  "delete_message",
-		Payload: gin.H{"timestamp": request.Timestamp},
-	}
-	broadcastJSON, err := json.Marshal(wsMsg)
-	if err == nil {
-		hub.broadcast <- broadcastJSON
+	referer := c.Query("referer")
+	if referer != "" {
+		req.Header.Set("Referer", referer)
 	} else {
-		log.Printf("Failed to marshal chat delete message for broadcast: %v", err)
+		req.Header.Set("Referer", u.Scheme+"://"+u.Host)
 	}
-	log.Printf("Successfully deleted chat message: %s", request.Timestamp)
-	c.JSON(http.StatusOK, gin.H{"status": "success", "message": "Message deleted"})
+	req.Header.Set("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36")
+	req.Header.Set("X-Requested-With", "XMLHttpRequest")
+
+	resp, err := client.Do(req)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+	defer resp.Body.Close()
+
+	body, _ := io.ReadAll(resp.Body)
+
+	// Forward Content-Type from target
+	respContentType := resp.Header.Get("Content-Type")
+	if respContentType == "" {
+		respContentType = "application/json"
+	}
+
+	c.Data(resp.StatusCode, resp.Header.Get("Content-Type"), body)
 }
 
-// --- Helper Function for Updating Rows ---
-func updateSheetRow(sheetName string, primaryKey map[string]string, newData map[string]interface{}) error {
-	if sheetName == "" || len(primaryKey) != 1 || len(newData) == 0 {
-		return fmt.Errorf("sheetName, a single primaryKey, and newData are required")
+func handleProxyVideo(c *gin.Context) {
+	targetURL := c.Query("url")
+	if targetURL == "" {
+		c.String(http.StatusBadRequest, "Missing url parameter")
+		return
 	}
 
-	pkHeader := ""
-	pkValue := ""
-	for k, v := range primaryKey {
-		pkHeader, pkValue = k, v
-	}
-
-	headerMap, err := findHeaderMap(sheetName)
+	u, err := url.Parse(targetURL)
 	if err != nil {
-		return fmt.Errorf("failed to read sheet headers for %s: %v", sheetName, err)
+		c.String(http.StatusBadRequest, "Invalid URL")
+		return
 	}
 
-	rowIndex, sheetId, err := findRowIndexByPK(sheetName, pkHeader, pkValue)
+	client := &http.Client{
+		Timeout: 300 * time.Second, // Longer timeout for video streaming
+	}
+	req, _ := http.NewRequest("GET", targetURL, nil)
+
+	// Forward Range header and others
+	for k, v := range c.Request.Header {
+		if k == "Range" || k == "User-Agent" || k == "Accept" {
+			req.Header.Set(k, v[0])
+		}
+	}
+
+	referer := c.Query("referer")
+	if referer != "" {
+		req.Header.Set("Referer", referer)
+	} else {
+		req.Header.Set("Referer", u.Scheme+"://"+u.Host)
+	}
+
+	resp, err := client.Do(req)
 	if err != nil {
-		return fmt.Errorf("row not found (%s=%s) in %s: %v", pkHeader, pkValue, sheetName, err)
+		c.String(http.StatusInternalServerError, err.Error())
+		return
 	}
+	defer resp.Body.Close()
 
-	var updateRequests []*sheets.Request
-	for colName, newValue := range newData {
-		colIndex, ok := headerMap[colName]
-		if !ok {
-			log.Printf("Warning: Column '%s' not found in sheet '%s'. Skipping update for this column.", colName, sheetName)
-			continue
+	// Forward response headers back to the client
+	for k, v := range resp.Header {
+		if k == "Content-Type" || k == "Content-Length" || k == "Accept-Ranges" || k == "Content-Range" || k == "Last-Modified" || k == "ETag" {
+			c.Header(k, v[0])
 		}
-		extValue := &sheets.ExtendedValue{}
-		switch v := newValue.(type) {
-		case string:
-			extValue.StringValue = &v
-		case float64:
-			extValue.NumberValue = &v
-		case bool:
-			extValue.BoolValue = &v
-		case int:
-			f := float64(v)
-			extValue.NumberValue = &f
-		case int64:
-			f := float64(v)
-			extValue.NumberValue = &f
-		case nil:
-			extValue.StringValue = new(string)
-		default:
-			str := fmt.Sprintf("%v", v)
-			extValue.StringValue = &str
-		}
-		updateReq := &sheets.Request{
-			UpdateCells: &sheets.UpdateCellsRequest{
-				Start: &sheets.GridCoordinate{
-					SheetId:     sheetId,
-					RowIndex:    rowIndex,
-					ColumnIndex: int64(colIndex),
-				},
-				Rows: []*sheets.RowData{
-					{
-						Values: []*sheets.CellData{
-							{UserEnteredValue: extValue},
-						},
-					},
-				},
-				Fields: "userEnteredValue",
-			},
-		}
-		updateRequests = append(updateRequests, updateReq)
 	}
+	c.Header("Access-Control-Allow-Origin", "*")
 
-	if len(updateRequests) == 0 {
-		return fmt.Errorf("no valid columns found to update")
-	}
-
-	batchUpdateReq := &sheets.BatchUpdateSpreadsheetRequest{Requests: updateRequests}
-	_, err = sheetsService.Spreadsheets.BatchUpdate(spreadsheetID, batchUpdateReq).Do()
-
-	if err != nil {
-		if strings.Contains(err.Error(), "No grid with id") {
-			log.Printf("Stale Sheet ID detected during update. Clearing Sheet ID cache for %s.", sheetName)
-			invalidateSheetCache(sheetName)
-		}
-		return fmt.Errorf("failed to update sheet %s: %v", sheetName, err)
-	}
-
-	invalidateSheetCache(sheetName)
-	log.Printf("Successfully updated row %s=%s in sheet %s", pkHeader, pkValue, sheetName)
-	return nil
+	c.Status(resp.StatusCode)
+	io.Copy(c.Writer, resp.Body)
 }
 
-// --- Admin Update Sheet Handler ---
-func handleAdminUpdateSheet(c *gin.Context) {
-	var request struct {
-		SheetName  string                 `json:"sheetName"`
-		PrimaryKey map[string]string      `json:"primaryKey"`
-		NewData    map[string]interface{} `json:"newData"`
-	}
-	if err := c.ShouldBindJSON(&request); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"status": "error", "message": "Invalid update request: " + err.Error()})
-		return
-	}
-
-	err := updateSheetRow(request.SheetName, request.PrimaryKey, request.NewData)
-	if err != nil {
-		if strings.Contains(err.Error(), "not found") {
-			c.JSON(http.StatusNotFound, gin.H{"status": "error", "message": err.Error()})
-		} else if strings.Contains(err.Error(), "required") || strings.Contains(err.Error(), "columns") {
-			c.JSON(http.StatusBadRequest, gin.H{"status": "error", "message": err.Error()})
-		} else {
-			c.JSON(http.StatusInternalServerError, gin.H{"status": "error", "message": err.Error()})
-		}
-		return
-	}
-
-	c.JSON(http.StatusOK, gin.H{"status": "success", "message": "Row updated successfully"})
+func resolveURL(base, ref string) string {
+	baseURL, _ := url.Parse(base)
+	refURL, _ := url.Parse(ref)
+	return baseURL.ResolveReference(refURL).String()
 }
 
-// --- Handler to update a specific order ---
-func handleAdminUpdateOrder(c *gin.Context) {
-	var request UpdateOrderRequest
-	if err := c.ShouldBindJSON(&request); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"status": "error", "message": "Invalid update request: " + err.Error()})
-		return
+// =========================================================================
+// API សម្រាប់ប្រព័ន្ធ ENTERTAINMENT & VIDEO PROXY
+// =========================================================================
+
+func handleGetMovies(c *gin.Context) {
+	var movies []Movie
+	DB.Order("added_at desc").Find(&movies)
+
+	// Inject sample series data for testing UX
+	sampleSeries := []Movie{
+		{ID: "series-1-ep1", Title: "Squid Game - Ep 1", Description: "Red Light, Green Light.", Thumbnail: "https://image.tmdb.org/t/p/original/dDlEmu3EZ0Pgg93K2SVNLCjCSvE.jpg", VideoURL: "https://test-streams.mux.dev/x36xhzz/x36xhzz.m3u8", Type: "series", Language: "Korean", Country: "South Korea", Category: "Thriller", AddedAt: time.Now().Format(time.RFC3339)},
+		{ID: "series-1-ep2", Title: "Squid Game - Ep 2", Description: "Hell.", Thumbnail: "https://image.tmdb.org/t/p/original/dDlEmu3EZ0Pgg93K2SVNLCjCSvE.jpg", VideoURL: "https://test-streams.mux.dev/x36xhzz/x36xhzz.m3u8", Type: "series", Language: "Korean", Country: "South Korea", Category: "Thriller", AddedAt: time.Now().Format(time.RFC3339)},
+		{ID: "series-1-ep3", Title: "Squid Game - Ep 3", Description: "The Man with the Umbrella.", Thumbnail: "https://image.tmdb.org/t/p/original/dDlEmu3EZ0Pgg93K2SVNLCjCSvE.jpg", VideoURL: "https://test-streams.mux.dev/x36xhzz/x36xhzz.m3u8", Type: "series", Language: "Korean", Country: "South Korea", Category: "Thriller", AddedAt: time.Now().Format(time.RFC3339)},
+		{ID: "series-2-ep1", Title: "Stranger Things - Ep 1", Description: "The Vanishing of Will Byers.", Thumbnail: "https://image.tmdb.org/t/p/original/x2LSRK2Cm7MZhjluni1msVJ3wDF.jpg", VideoURL: "https://test-streams.mux.dev/x36xhzz/x36xhzz.m3u8", Type: "series", Language: "English", Country: "USA", Category: "Sci-Fi", AddedAt: time.Now().Format(time.RFC3339)},
+		{ID: "series-2-ep2", Title: "Stranger Things - Ep 2", Description: "The Weirdo on Maple Street.", Thumbnail: "https://image.tmdb.org/t/p/original/x2LSRK2Cm7MZhjluni1msVJ3wDF.jpg", VideoURL: "https://test-streams.mux.dev/x36xhzz/x36xhzz.m3u8", Type: "series", Language: "English", Country: "USA", Category: "Sci-Fi", AddedAt: time.Now().Format(time.RFC3339)},
 	}
 
-	if request.OrderID == "" || request.Team == "" || request.UserName == "" || len(request.NewData) == 0 {
-		c.JSON(http.StatusBadRequest, gin.H{"status": "error", "message": "orderId, team, userName, and newData are required"})
-		return
-	}
-
-	orderSheetName := fmt.Sprintf("Orders_%s", request.Team)
-	orderPK := map[string]string{"Order ID": request.OrderID}
-
-	err := updateSheetRow(orderSheetName, orderPK, request.NewData)
-	if err != nil {
-		log.Printf("Failed to update team order sheet (%s): %v", orderSheetName, err)
-	}
-
-	allOrdersPK := map[string]string{"Order ID": request.OrderID}
-	err = updateSheetRow(AllOrdersSheet, allOrdersPK, request.NewData)
-	if err != nil {
-		log.Printf("Failed to update AllOrders sheet: %v", err)
-		c.JSON(http.StatusInternalServerError, gin.H{"status": "error", "message": "Failed to update AllOrders sheet: " + err.Error()})
-		return
-	}
-
-	timestamp := time.Now().UTC().Format(time.RFC3339)
-	for field, newValue := range request.NewData {
-		logRow := []interface{}{
-			timestamp,
-			request.OrderID,
-			request.UserName,
-			// "", // Approver REMOVED
-			field,
-			"N/A", // Old Value
-			fmt.Sprintf("%v", newValue),
-		}
-		go appendRowToSheet(EditLogsSheet, logRow)
-	}
-
-	go func() {
-		log.Printf("Triggering Telegram update for order %s...", request.OrderID)
-		_, err := callAppsScriptPOST(AppsScriptRequest{
-			Action: "updateOrderTelegram",
-			OrderData: map[string]interface{}{
-				"orderId":       request.OrderID,
-				"team":          request.Team,
-				"updatedFields": request.NewData, // ✅ SEND CHANGES TO APPS SCRIPT
-			},
-		})
-		if err != nil {
-			log.Printf("Warning: Failed to update Telegram message via Apps Script: %v", err)
-		} else {
-			log.Printf("Successfully triggered Telegram update for order %s", request.OrderID)
-		}
-	}()
-
-	c.JSON(http.StatusOK, gin.H{"status": "success", "message": "Order updated successfully in Sheets and Telegram"})
-}
-
-// --- Handler for Tags ---
-func handleAdminUpdateProductTags(c *gin.Context) {
-	var request UpdateTagsRequest
-	if err := c.ShouldBindJSON(&request); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"status": "error", "message": "Invalid request: " + err.Error()})
-		return
-	}
-
-	if request.ProductName == "" || len(request.NewTags) == 0 {
-		c.JSON(http.StatusBadRequest, gin.H{"status": "error", "message": "productName and newTags are required"})
-		return
-	}
-
-	sheetName := "Products"
-
-	var products []Product
-	invalidateSheetCache(sheetName)
-	err := getCachedSheetData(sheetName, &products, 1*time.Minute)
-	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"status": "error", "message": "Failed to fetch product data: " + err.Error()})
-		return
-	}
-
-	var currentProduct *Product
-	for i, p := range products {
-		if p.ProductName == request.ProductName {
-			currentProduct = &products[i]
+	// Only add sample series if the database has none or very few
+	hasSeries := false
+	for _, m := range movies {
+		if m.Type == "series" {
+			hasSeries = true
 			break
 		}
 	}
 
-	if currentProduct == nil {
-		c.JSON(http.StatusNotFound, gin.H{"status": "error", "message": "Product not found"})
-		return
+	if !hasSeries {
+		movies = append(sampleSeries, movies...)
 	}
 
-	tagMap := make(map[string]bool)
-	currentTags := strings.Split(currentProduct.Tags, ",")
-	for _, tag := range currentTags {
-		cleanTag := strings.ToLower(strings.TrimSpace(tag))
-		if cleanTag != "" {
-			tagMap[cleanTag] = true
-		}
-	}
-
-	newTagsAdded := false
-	for _, tag := range request.NewTags {
-		cleanTag := strings.ToLower(strings.TrimSpace(tag))
-		if cleanTag != "" && !tagMap[cleanTag] {
-			tagMap[cleanTag] = true
-			newTagsAdded = true
-		}
-	}
-
-	if !newTagsAdded {
-		c.JSON(http.StatusOK, gin.H{"status": "success", "message": "Tags already up-to-date"})
-		return
-	}
-
-	finalTagList := make([]string, 0, len(tagMap))
-	for tag := range tagMap {
-		finalTagList = append(finalTagList, tag)
-	}
-	sort.Strings(finalTagList)
-	finalTagString := strings.Join(finalTagList, ",")
-
-	pk := map[string]string{"ProductName": request.ProductName}
-	newData := map[string]interface{}{
-		"Tags": finalTagString,
-	}
-
-	err = updateSheetRow(sheetName, pk, newData)
-	if err != nil {
-		log.Printf("Failed to update tags for %s: %v", request.ProductName, err)
-		c.JSON(http.StatusInternalServerError, gin.H{"status": "error", "message": "Failed to update tags: " + err.Error()})
-		return
-	}
-
-	log.Printf("Tags updated successfully for product: %s", request.ProductName)
-	c.JSON(http.StatusOK, gin.H{"status": "success", "message": "Tags updated successfully"})
+	c.JSON(http.StatusOK, gin.H{"status": "success", "data": movies})
 }
 
-func handleAdminAddRow(c *gin.Context) {
-	var request struct {
+func handleCreateMovie(c *gin.Context) {
+	var movie Movie
+	if err := c.ShouldBindJSON(&movie); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"status": "error", "message": "ទិន្នន័យមិនត្រឹមត្រូវ: " + err.Error()})
+		return
+	}
+
+	// Smart Image Resolution: If Thumbnail is a temp URL, resolve it to permanent DriveURL
+	if strings.Contains(movie.Thumbnail, "/api/images/temp/") {
+		parts := strings.Split(movie.Thumbnail, "/api/images/temp/")
+		if len(parts) > 1 {
+			tempID := parts[1]
+			// Robust extraction: remove any trailing slashes or query parameters
+			if idx := strings.IndexAny(tempID, "?/"); idx != -1 {
+				tempID = tempID[:idx]
+			}
+			tempID = strings.TrimSpace(tempID)
+
+			var tempImg TempImage
+
+			// Poll database for up to 30 seconds waiting for the background upload to finish
+			resolved := false
+			for i := 0; i < 30; i++ {
+				if err := DB.Where("id = ?", tempID).First(&tempImg).Error; err == nil && tempImg.DriveURL != "" {
+					movie.Thumbnail = tempImg.DriveURL
+					log.Printf("✨ Resolved temp image %s to permanent URL: %s", tempID, movie.Thumbnail)
+					resolved = true
+					break
+				}
+				time.Sleep(1 * time.Second)
+			}
+
+			if !resolved {
+				log.Printf("⚠️ Warning: Could not resolve permanent Drive URL for temp image %s within timeout. Record will be saved with temporary URL.", tempID)
+			}
+		}
+	}
+
+	if movie.ID == "" {
+		movie.ID = generateShortID()
+	}
+	if movie.AddedAt == "" {
+		movie.AddedAt = time.Now().Format(time.RFC3339)
+	}
+
+	if err := DB.Create(&movie).Error; err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"status": "error", "message": "ការរក្សាទុកភាពយន្តបរាជ័យ: " + err.Error()})
+		return
+	}
+
+	// Send to Google Sheets and Rename Drive file in background
+	go func(m Movie) {
+		// 1. Sync to Sheets
+		enqueueSync("addRow", map[string]interface{}{
+			"ID":          m.ID,
+			"Title":       m.Title,
+			"Description": m.Description,
+			"Thumbnail":   m.Thumbnail,
+			"VideoURL":    m.VideoURL,
+			"Type":        m.Type,
+			"Language":    m.Language,
+			"Country":     m.Country,
+			"Category":    m.Category,
+			"SeriesKey":   m.SeriesKey,
+			"AddedAt":     m.AddedAt,
+		}, "Movies", nil)
+
+		// 2. If thumbnail is a permanent Drive URL, rename it to match movie title
+		fileID := extractFileIDFromURL(m.Thumbnail)
+		if fileID != "" {
+			log.Printf("📂 [Background] Renaming Drive file %s to %q", fileID, m.Title)
+			enqueueSync("renameFile", map[string]interface{}{
+				"fileID":  fileID,
+				"newName": m.Title,
+			}, "", nil)
+		}
+	}(movie)
+
+	c.JSON(http.StatusOK, gin.H{"status": "success", "data": movie})
+}
+
+func handleDeleteMovie(c *gin.Context) {
+	id := c.Param("id")
+	if id == "" {
+		c.JSON(http.StatusBadRequest, gin.H{"status": "error", "message": "ID មិនអាចទទេរបានទេ"})
+		return
+	}
+
+	if err := DB.Where("id = ?", id).Delete(&Movie{}).Error; err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"status": "error", "message": "ការលុបភាពយន្តបរាជ័យ: " + err.Error()})
+		return
+	}
+
+	// Delete from Google Sheets via managed queue
+	go func(movieID string) {
+		enqueueSync("deleteRow", nil, "Movies", map[string]string{"ID": movieID})
+	}(id)
+
+	c.JSON(http.StatusOK, gin.H{"status": "success", "message": "បានលុបភាពយន្តដោយជោគជ័យ"})
+}
+
+// =========================================================================
+// GOOGLE SHEETS WEBHOOK (Real-time Sync Sheet -> DB)
+// =========================================================================
+
+func handleSheetsWebhook(c *gin.Context) {
+	var req struct {
+		Secret    string                 `json:"secret"`
 		SheetName string                 `json:"sheetName"`
-		NewData   map[string]interface{} `json:"newData"`
+		RowData   map[string]interface{} `json:"rowData"`
+		Action    string                 `json:"action"` // "update" or "delete"
 	}
-	if err := c.ShouldBindJSON(&request); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"status": "error", "message": "Invalid add request: " + err.Error()})
+
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(400, gin.H{"status": "error", "message": "Invalid format"})
 		return
 	}
-	if request.SheetName == "" || len(request.NewData) == 0 {
-		c.JSON(http.StatusBadRequest, gin.H{"status": "error", "message": "sheetName and newData are required"})
+
+	if req.Secret != appsScriptSecret {
+		c.JSON(401, gin.H{"status": "error", "message": "Unauthorized"})
 		return
 	}
-	headerMap, err := findHeaderMap(request.SheetName)
-	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"status": "error", "message": "Failed to read sheet headers: " + err.Error()})
+
+	tableName := getTableName(req.SheetName)
+	if tableName == "" {
+		c.JSON(400, gin.H{"status": "error", "message": "Unknown sheet"})
 		return
 	}
-	rowData := make([]interface{}, len(headerMap))
-	for header, colIndex := range headerMap {
-		if value, ok := request.NewData[header]; ok {
-			rowData[colIndex] = value
+
+	mappedData := make(map[string]interface{})
+	var pkCol string
+	var pkVal interface{}
+
+	// Identify Primary Key based on SheetName
+	pkName := "ID"
+	if req.SheetName == "Users" {
+		pkName = "UserName"
+	} else if req.SheetName == "Stores" {
+		pkName = "StoreName"
+	} else if req.SheetName == "Settings" {
+		pkName = "Key"
+	} else if req.SheetName == "Products" {
+		pkName = "Barcode"
+	} else if req.SheetName == "ShippingMethods" {
+		pkName = "MethodName"
+	} else if req.SheetName == "Colors" {
+		pkName = "ColorName"
+	} else if req.SheetName == "Drivers" {
+		pkName = "DriverName"
+	} else if req.SheetName == "BankAccounts" {
+		pkName = "BankName"
+	} else if req.SheetName == "PhoneCarriers" {
+		pkName = "CarrierName"
+	} else if req.SheetName == "StockTransfers" {
+		pkName = "TransferID"
+	} else if req.SheetName == "Returns" {
+		pkName = "ReturnID"
+	} else if req.SheetName == "AllOrders" || strings.HasPrefix(req.SheetName, "Orders_") {
+		pkName = "Order ID"
+	} else {
+		// Default to "id" (lowercase) for Roles, Permissions, Incentive, etc.
+		// if "ID" (uppercase) doesn't find a match in RowData.
+		if _, exists := req.RowData["ID"]; !exists {
+			if _, lowerExists := req.RowData["id"]; lowerExists {
+				pkName = "id"
+			}
+		}
+	}
+
+	for k, v := range req.RowData {
+		dbCol := mapToDBColumn(k)
+		
+		normalizedK := strings.ReplaceAll(strings.ToLower(k), " ", "")
+		normalizedPK := strings.ReplaceAll(strings.ToLower(pkName), " ", "")
+
+		if normalizedK == normalizedPK {
+			pkCol = dbCol
+			pkVal = v
+			continue
+		}
+
+		// Skip empty or nil values to avoid overwriting with blanks
+		if v == nil || v == "" {
+			continue
+		}
+
+		// Handle Numeric fields
+		if isNumericHeader(k) {
+			if s, ok := v.(string); ok {
+				if f, err := strconv.ParseFloat(s, 64); err == nil {
+					mappedData[dbCol] = f
+				}
+			} else {
+				mappedData[dbCol] = v
+			}
+		} else if isBoolHeader(k) {
+			if s, ok := v.(string); ok {
+				mappedData[dbCol] = strings.ToUpper(s) == "TRUE"
+			} else {
+				mappedData[dbCol] = v
+			}
 		} else {
-			rowData[colIndex] = ""
-		}
-	}
-	err = appendRowToSheet(request.SheetName, rowData)
-	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"status": "error", "message": "Failed to add row: " + err.Error()})
-		return
-	}
-	log.Printf("Successfully added new row to sheet %s", request.SheetName)
-	c.JSON(http.StatusOK, gin.H{"status": "success", "message": "Row added successfully"})
-}
-
-// --- Helper Function for Deleting Rows ---
-func deleteSheetRow(sheetName string, primaryKey map[string]string) error {
-	if sheetName == "" || len(primaryKey) != 1 {
-		return fmt.Errorf("sheetName and a single primaryKey are required")
-	}
-	pkHeader := ""
-	pkValue := ""
-	for k, v := range primaryKey {
-		pkHeader, pkValue = k, v
-	}
-
-	rowIndex, sheetId, err := findRowIndexByPK(sheetName, pkHeader, pkValue)
-	if err != nil {
-		return fmt.Errorf("row not found (%s=%s) in %s: %v", pkHeader, pkValue, sheetName, err)
-	}
-
-	batchUpdateReq := &sheets.BatchUpdateSpreadsheetRequest{
-		Requests: []*sheets.Request{
-			{
-				DeleteDimension: &sheets.DeleteDimensionRequest{
-					Range: &sheets.DimensionRange{
-						SheetId:    sheetId,
-						Dimension:  "ROWS",
-						StartIndex: rowIndex,
-						EndIndex:   rowIndex + 1,
-					},
-				},
-			},
-		},
-	}
-	_, err = sheetsService.Spreadsheets.BatchUpdate(spreadsheetID, batchUpdateReq).Do()
-	if err != nil {
-		if strings.Contains(err.Error(), "No grid with id") {
-			log.Printf("Stale Sheet ID detected during delete. Clearing Sheet ID cache for %s.", sheetName)
-			invalidateSheetCache(sheetName)
-		}
-		log.Printf("Error deleting row %d from sheet %s: %v", rowIndex, sheetName, err)
-		return fmt.Errorf("failed to delete row: %v", err)
-	}
-
-	invalidateSheetCache(sheetName)
-	log.Printf("Successfully deleted row %s=%s from sheet %s", pkHeader, pkValue, sheetName)
-	return nil
-}
-
-func handleAdminDeleteRow(c *gin.Context) {
-	var request struct {
-		SheetName  string            `json:"sheetName"`
-		PrimaryKey map[string]string `json:"primaryKey"`
-	}
-	if err := c.ShouldBindJSON(&request); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"status": "error", "message": "Invalid delete request: " + err.Error()})
-		return
-	}
-	if request.SheetName == "" || len(request.PrimaryKey) != 1 {
-		c.JSON(http.StatusBadRequest, gin.H{"status": "error", "message": "sheetName and a single primaryKey are required"})
-		return
-	}
-
-	err := deleteSheetRow(request.SheetName, request.PrimaryKey)
-	if err != nil {
-		if strings.Contains(err.Error(), "not found") {
-			c.JSON(http.StatusNotFound, gin.H{"status": "error", "message": err.Error()})
-		} else {
-			c.JSON(http.StatusInternalServerError, gin.H{"status": "error", "message": err.Error()})
-		}
-		return
-	}
-
-	c.JSON(http.StatusOK, gin.H{"status": "success", "message": "Row deleted successfully"})
-}
-
-func handleAdminDeleteOrder(c *gin.Context) {
-	var request DeleteOrderRequest
-	if err := c.ShouldBindJSON(&request); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"status": "error", "message": "Invalid delete request: " + err.Error()})
-		return
-	}
-
-	if request.OrderID == "" || request.Team == "" || request.UserName == "" {
-		c.JSON(http.StatusBadRequest, gin.H{"status": "error", "message": "orderId, team, and userName are required"})
-		return
-	}
-
-	go func() {
-		_, err := callAppsScriptPOST(AppsScriptRequest{
-			Action: "deleteOrderTelegram",
-			OrderData: map[string]interface{}{
-				"orderId": request.OrderID,
-				"team":    request.Team,
-			},
-		})
-		if err != nil {
-			log.Printf("Warning: Failed to trigger Telegram message deletion for order %s: %v", request.OrderID, err)
-		} else {
-			log.Printf("Successfully triggered Telegram message deletion for order %s", request.OrderID)
-		}
-	}()
-
-	teamOrderSheetName := fmt.Sprintf("Orders_%s", request.Team)
-	teamOrderPK := map[string]string{"Order ID": request.OrderID}
-
-	err := deleteSheetRow(teamOrderSheetName, teamOrderPK)
-	if err != nil {
-		log.Printf("Warning: Failed to delete from team order sheet (%s): %v. Proceeding to delete from AllOrders.", teamOrderSheetName, err)
-	}
-
-	allOrdersPK := map[string]string{"Order ID": request.OrderID}
-	err = deleteSheetRow(AllOrdersSheet, allOrdersPK)
-	if err != nil {
-		log.Printf("Failed to delete from AllOrders sheet: %v", err)
-		c.JSON(http.StatusInternalServerError, gin.H{"status": "error", "message": "Failed to delete order from AllOrders sheet: " + err.Error()})
-		return
-	}
-
-	timestamp := time.Now().UTC().Format(time.RFC3339)
-	logRow := []interface{}{
-		timestamp,
-		request.OrderID,
-		request.UserName,
-		// "N/A", // Approver REMOVED
-		"ORDER DELETED",
-		"N/A", // Old Value
-		"N/A", // New Value
-	}
-	go appendRowToSheet(EditLogsSheet, logRow)
-
-	c.JSON(http.StatusOK, gin.H{"status": "success", "message": "Order and Telegram messages deleted successfully"})
-}
-
-func handleUpdateProfile(c *gin.Context) {
-	var request struct {
-		UserName          string `json:"userName"`
-		FullName          string `json:"fullName"`
-		ProfilePictureURL string `json:"profilePictureURL"`
-	}
-	if err := c.ShouldBindJSON(&request); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"status": "error", "message": "Invalid profile update request: " + err.Error()})
-		return
-	}
-	if request.UserName == "" {
-		c.JSON(http.StatusBadRequest, gin.H{"status": "error", "message": "UserName is required"})
-		return
-	}
-	sheetName := UsersSheet
-	pkHeader := "UserName"
-	pkValue := request.UserName
-	headerMap, err := findHeaderMap(sheetName)
-	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"status": "error", "message": "Failed to read Users sheet headers: " + err.Error()})
-		return
-	}
-	rowIndex, sheetId, err := findRowIndexByPK(sheetName, pkHeader, pkValue)
-	if err != nil {
-		c.JSON(http.StatusNotFound, gin.H{"status": "error", "message": "User not found: " + err.Error()})
-		return
-	}
-	var updateRequests []*sheets.Request
-	if colIndex, ok := headerMap["FullName"]; ok {
-		updateRequests = append(updateRequests, &sheets.Request{
-			UpdateCells: &sheets.UpdateCellsRequest{
-				Start:  &sheets.GridCoordinate{SheetId: sheetId, RowIndex: rowIndex, ColumnIndex: int64(colIndex)},
-				Rows:   []*sheets.RowData{{Values: []*sheets.CellData{{UserEnteredValue: &sheets.ExtendedValue{StringValue: &request.FullName}}}}},
-				Fields: "userEnteredValue",
-			},
-		})
-	}
-	if colIndex, ok := headerMap["ProfilePictureURL"]; ok {
-		updateRequests = append(updateRequests, &sheets.Request{
-			UpdateCells: &sheets.UpdateCellsRequest{
-				Start:  &sheets.GridCoordinate{SheetId: sheetId, RowIndex: rowIndex, ColumnIndex: int64(colIndex)},
-				Rows:   []*sheets.RowData{{Values: []*sheets.CellData{{UserEnteredValue: &sheets.ExtendedValue{StringValue: &request.ProfilePictureURL}}}}},
-				Fields: "userEnteredValue",
-			},
-		})
-	}
-	if len(updateRequests) == 0 {
-		c.JSON(http.StatusBadRequest, gin.H{"status": "error", "message": "No valid profile columns found to update"})
-		return
-	}
-	batchUpdateReq := &sheets.BatchUpdateSpreadsheetRequest{Requests: updateRequests}
-	_, err = sheetsService.Spreadsheets.BatchUpdate(spreadsheetID, batchUpdateReq).Do()
-	if err != nil {
-		if strings.Contains(err.Error(), "No grid with id") {
-			log.Printf("Stale Sheet ID detected during profile update. Clearing Sheet ID cache for %s.", sheetName)
-			invalidateSheetCache(sheetName)
-		}
-		log.Printf("Error performing batch update on Users sheet: %v", err)
-		c.JSON(http.StatusInternalServerError, gin.H{"status": "error", "message": "Failed to update profile: " + err.Error()})
-		return
-	}
-	invalidateSheetCache(sheetName)
-	log.Printf("Successfully updated profile for user %s", request.UserName)
-	c.JSON(http.StatusOK, gin.H{"status": "success", "message": "Profile updated successfully"})
-}
-
-func handleChangePassword(c *gin.Context) {
-	var request ChangePasswordRequest
-	if err := c.ShouldBindJSON(&request); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"status": "error", "message": "Invalid request: " + err.Error()})
-		return
-	}
-
-	if request.UserName == "" || request.OldPassword == "" || request.NewPassword == "" {
-		c.JSON(http.StatusBadRequest, gin.H{"status": "error", "message": "UserName, oldPassword, and newPassword are required"})
-		return
-	}
-
-	var users []User
-	invalidateSheetCache(UsersSheet)
-	err := getCachedSheetData(UsersSheet, &users, 1*time.Minute)
-	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"status": "error", "message": "Failed to fetch user data: " + err.Error()})
-		return
-	}
-
-	var foundUser *User
-	for i, user := range users {
-		if user.UserName == request.UserName {
-			foundUser = &users[i]
-			break
+			mappedData[dbCol] = fmt.Sprintf("%v", v)
 		}
 	}
 
-	if foundUser == nil {
-		c.JSON(http.StatusNotFound, gin.H{"status": "error", "message": "User not found"})
+	if pkCol == "" || pkVal == nil {
+		c.JSON(400, gin.H{"status": "error", "message": "Missing primary key"})
 		return
 	}
 
-	if foundUser.Password != request.OldPassword {
-		c.JSON(http.StatusUnauthorized, gin.H{"status": "error", "message": "Incorrect old password"})
-		return
+	if req.Action == "delete" {
+		DB.Table(tableName).Where(pkCol+" = ?", pkVal).Delete(nil)
+	} else {
+		// UPSERT logic: Try to update first
+		result := DB.Table(tableName).Where(pkCol+" = ?", pkVal).Updates(mappedData)
+		if result.Error != nil {
+			c.JSON(500, gin.H{"status": "error", "message": result.Error.Error()})
+			return
+		}
+
+		// If no rows were updated, it's likely a new record. Attempt to Create.
+		if result.RowsAffected == 0 {
+			// Ensure PK is in mappedData for creation
+			mappedData[pkCol] = pkVal
+			if err := DB.Table(tableName).Create(mappedData).Error; err != nil {
+				// Log but don't fail, as it might have been created by another process/worker
+				log.Printf("⚠️ SyncManager: Upsert/Create failed for %s PK %v: %v", tableName, pkVal, err)
+			}
+		}
 	}
 
-	sheetName := UsersSheet
-	pk := map[string]string{"UserName": request.UserName}
-	newData := map[string]interface{}{
-		"Password": request.NewPassword,
-	}
+	// Broadcast update to all connected clients
+	event, _ := json.Marshal(map[string]interface{}{
+		"type":      "sheet_webhook_sync",
+		"sheetName": req.SheetName,
+		"action":    req.Action,
+		"pk":        pkVal,
+	})
+	hub.Broadcast <- event
 
-	err = updateSheetRow(sheetName, pk, newData)
-	if err != nil {
-		log.Printf("Failed to update password for %s: %v", request.UserName, err)
-		c.JSON(http.StatusInternalServerError, gin.H{"status": "error", "message": "Failed to update password: " + err.Error()})
-		return
-	}
-
-	log.Printf("Password changed successfully for user: %s", request.UserName)
-	c.JSON(http.StatusOK, gin.H{"status": "success", "message": "Password updated successfully"})
+	c.JSON(200, gin.H{"status": "success"})
 }
 
-func handleClearCache(c *gin.Context) {
-	clearCache()
-	log.Println("All server caches (data and Sheet IDs) have been cleared via API request.")
-	c.JSON(http.StatusOK, gin.H{"status": "success", "message": "All server caches cleared"})
-}
-
-// --- Main Function ---
 func main() {
-	spreadsheetID = os.Getenv("GOOGLE_SHEET_ID")
 	port := os.Getenv("PORT")
 	if port == "" {
 		port = "8080"
 	}
-	renderBaseURL = os.Getenv("RENDER_EXTERNAL_URL")
-
+	spreadsheetID = os.Getenv("GOOGLE_SHEET_ID")
 	appsScriptURL = os.Getenv("APPS_SCRIPT_URL")
 	appsScriptSecret = os.Getenv("APPS_SCRIPT_SECRET")
-
-	if spreadsheetID == "" {
-		log.Fatal("GOOGLE_SHEET_ID environment variable is required.")
+	backend.AppsScriptURL = appsScriptURL
+	backend.AppsScriptSecret = appsScriptSecret
+	jwtSecretEnv := os.Getenv("JWT_SECRET")
+	if jwtSecretEnv == "" {
+		jwtSecretEnv = "change-me-in-production"
 	}
-	if appsScriptURL == "" || appsScriptSecret == "" {
-		log.Fatal("APPS_SCRIPT_URL and APPS_SCRIPT_SECRET environment variables are required.")
-	}
+	backend.JwtSecret = []byte(jwtSecretEnv)
 
 	hub = NewHub()
-	go hub.run()
+	backend.HubGlobal = hub
+	go hub.Run()
 
-	ctx := context.Background()
-	err := createGoogleAPIClient(ctx)
-	if err != nil {
-		log.Fatalf("Failed to create Google API clients: %v", err)
-	}
+	// Initialize DB in background to allow fast port binding for Render
+	go func() {
+		initDB()
+		// Start Background Workers ONLY after DB is ready (if they depend on it)
+		startSyncManager(3)
+		go startOrderWorker()
+		startScheduler()
+		createGoogleAPIClient(context.Background())
+	}()
 
-	log.Printf("Connected to Google Sheet ID: %s", spreadsheetID)
-	log.Printf("Using Apps Script API at: %s", appsScriptURL)
-	log.Printf("Render Base URL: %s", renderBaseURL)
+	r := gin.Default()
+	r.Use(ErrorHandlingMiddleware())
+	r.Use(cors.New(cors.Config{
+		AllowOrigins: []string{"*"},
+		AllowMethods: []string{"GET", "POST", "PUT", "DELETE", "OPTIONS"},
+		AllowHeaders: []string{"Origin", "Content-Type", "Authorization"},
+		MaxAge:       12 * time.Hour,
+	}))
 
-	router := gin.Default()
-	config := cors.DefaultConfig()
-	config.AllowOrigins = []string{"*"}
-	config.AllowMethods = []string{"GET", "POST", "OPTIONS"}
-	config.AllowHeaders = []string{"Origin", "Content-Type", "Accept"}
-	router.Use(cors.New(config))
+	r.GET("/", func(c *gin.Context) { c.JSON(200, gin.H{"status": "ok"}) })
+	r.GET("/healthz", func(c *gin.Context) { c.String(200, "OK") })
 
-	api := router.Group("/api")
+	// Apply DBMiddleware to all /api routes except root health checks
+	api := r.Group("/api", DBMiddleware())
+	api.POST("/login", handleLogin)
+	api.GET("/images/temp/:id", handleServeTempImage)
+	api.GET("/teams/ranking", handleGetTeamSalesRanking)
+	api.GET("/settings", handleGetSettings)
+	api.GET("/movies", handleGetMovies)
+	api.GET("/extract-m3u8", handleExtractM3U8)
+	api.GET("/proxy-m3u8", handleProxyM3U8)
+	api.GET("/proxy-ts", handleProxyTS)
+	api.GET("/proxy-video", handleProxyVideo)
+	api.Any("/fetch-json", handleFetchJSON)
+	api.POST("/webhook/sheets-sync", handleSheetsWebhook)
+	protected := api.Group("/")
+	protected.Use(AuthMiddleware())
 	{
-		api.GET("/ping", handlePing)
-		api.GET("/users", handleGetUsers)
-		api.GET("/static-data", handleGetStaticData)
+		protected.GET("/users", handleGetUsers)
+		protected.GET("/static-data", handleGetStaticData)
+		protected.POST("/submit-order", handleSubmitOrder)
+		protected.POST("/upload-image", handleImageUploadProxy)
+		protected.GET("/permissions", handleGetUserPermissions)
+		protected.GET("/roles", handleGetRoles)
+		protected.GET("/orders", RequirePermission("view_order_list"), handleGetAllOrders)
+		protected.GET("/teams/shipping-costs", RequirePermission("view_revenue"), handleGetGlobalShippingCosts)
 
-		api.POST("/submit-order", handleSubmitOrder)
-		api.POST("/upload-image", handleImageUploadProxy)
+		chat := protected.Group("/chat")
+		chat.GET("/messages", handleGetChatMessages)
+		chat.POST("/send", handleSendChatMessage)
+		chat.POST("/delete", handleDeleteChatMessage)
 
-		chat := api.Group("/chat")
+		admin := protected.Group("/admin")
+		admin.Use(AdminOnlyMiddleware())
 		{
-			chat.GET("/messages", handleGetChatMessages)
-			chat.POST("/send", handleSendChatMessage)
-			chat.POST("/delete", handleDeleteChatMessage)
-			chat.GET("/ws", serveWs)
-			chat.GET("/audio/:fileID", handleGetAudioProxy)
-		}
-
-		admin := api.Group("/admin")
-		{
-			admin.POST("/update-formula-report", handleUpdateFormulaReport)
+			admin.GET("/orders", RequirePermission("view_order_list"), handleGetAllOrders)
+			admin.POST("/update-order", RequirePermission("edit_order"), handleAdminUpdateOrder)
+			admin.POST("/migrate-data", handleMigrateData)
+			admin.POST("/migrate-movies", handleMigrateMovies)
 			admin.GET("/revenue-summary", handleGetRevenueSummary)
-			admin.GET("/all-orders", handleGetAllOrders)
 			admin.POST("/update-sheet", handleAdminUpdateSheet)
 			admin.POST("/add-row", handleAdminAddRow)
 			admin.POST("/delete-row", handleAdminDeleteRow)
-			admin.POST("/clear-cache", handleClearCache)
-
-			admin.POST("/update-order", handleAdminUpdateOrder)
-			admin.POST("/delete-order", handleAdminDeleteOrder)
-			admin.POST("/update-product-tags", handleAdminUpdateProductTags)
+			admin.POST("/delete-order", RequirePermission("delete_order"), handleAdminDeleteOrder)
+			admin.GET("/permissions", handleGetAllPermissions)
+			admin.POST("/permissions", handleUpdatePermission)
+			admin.POST("/roles", handleCreateRole)
+			admin.GET("/incentive/calculators", handleGetIncentiveCalculators)
+			admin.POST("/incentive/calculators", handleCreateIncentiveCalculator)
+			admin.GET("/incentive/projects", handleGetIncentiveProjects)
+			admin.POST("/incentive/projects", handleCreateIncentiveProject)
+			admin.GET("/incentive/results", handleGetIncentiveResults)
+			admin.POST("/incentive/calculate", handleCalculateIncentive)
+			admin.GET("/incentive/manual-data", handleGetIncentiveManualData)
+			admin.POST("/incentive/manual-data", handleSaveIncentiveManualData)
+			admin.GET("/incentive/custom-payout", handleGetIncentiveCustomPayouts)
+			admin.POST("/incentive/custom-payout", handleSaveIncentiveCustomPayout)
+			admin.POST("/incentive/lock", handleLockIncentivePayout)
+			admin.POST("/movies", handleCreateMovie)
+			admin.DELETE("/movies/:id", handleDeleteMovie)
 		}
-
-		profile := api.Group("/profile")
-		{
-			profile.POST("/update", handleUpdateProfile)
-			profile.POST("/change-password", handleChangePassword)
-		}
+		profile := protected.Group("/profile")
+		profile.POST("/update", handleUpdateProfile)
+		profile.POST("/change-password", handleChangePassword)
 	}
-
-	log.Printf("Starting Go backend server on port %s", port)
-	err = router.Run(":" + port)
-	if err != nil {
-		log.Fatalf("Failed to start server: %v", err)
-	}
+	api.GET("/chat/ws", AuthMiddleware(), serveWs)
+	api.GET("/chat/audio/:fileID", handleGetAudioProxy)
+	r.Run("0.0.0.0:" + port)
 }
