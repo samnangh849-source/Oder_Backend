@@ -372,6 +372,7 @@ export interface IncentiveResult {
     userName: string;
     totalOrders: number;
     totalRevenue: number;
+    totalProfit: number;
     calculatedValue: number;
     isCustom?: boolean;
     breakdownJson?: string;

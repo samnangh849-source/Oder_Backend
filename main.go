@@ -25,7 +25,6 @@ import (
 	"github.com/gin-gonic/gin"
 	"golang.org/x/crypto/bcrypt"
 
-
 	"google.golang.org/api/drive/v3"
 	"google.golang.org/api/option"
 	"google.golang.org/api/sheets/v4"
@@ -546,6 +545,7 @@ func handleLockIncentivePayout(c *gin.Context) {
 					"UserName":        res.UserName,
 					"TotalOrders":     res.TotalOrders,
 					"TotalRevenue":    res.TotalRevenue,
+					"TotalProfit":     res.TotalProfit,
 					"CalculatedValue": res.CalculatedValue,
 					"IsCustom":        res.IsCustom,
 				}
@@ -611,6 +611,14 @@ func handleCalculateIncentive(c *gin.Context) {
 	userRevenue := make(map[string]float64)
 	userProfit := make(map[string]float64)
 	userBreakdown := make(map[string][]map[string]interface{})
+
+	// Pre-calculate base stats for all users who have orders
+	for _, o := range orders {
+		userOrders[o.User]++
+		userRevenue[o.User] += o.GrandTotal
+		orderProfit := o.GrandTotal - o.TotalProductCost - o.InternalCost
+		userProfit[o.User] += orderProfit
+	}
 
 	// Process each active calculator
 	for _, calc := range project.Calculators {
@@ -706,29 +714,24 @@ func handleCalculateIncentive(c *gin.Context) {
 			}
 		}
 
-		// Calculate performance for each eligible user (Orders + Individual Manual)
+		// Calculate performance for each eligible user
 		perfMap := make(map[string]float64)
 		for _, u := range eligibleUsers {
-			var val float64
-			for _, o := range orders {
-				if o.User == u.UserName {
-					switch strings.ToLower(strings.TrimSpace(metricType)) {
-					case "sales amount", "revenue":
-						val += o.GrandTotal
-						userRevenue[u.UserName] += o.GrandTotal
-					case "profit":
-						orderProfit := o.GrandTotal - o.TotalProductCost - o.InternalCost
-						val += orderProfit
-						userProfit[u.UserName] += orderProfit
-					default:
-						val += 1
-						userOrders[u.UserName]++
-					}
-				}
+			var baseVal float64
+			mType := strings.ToLower(strings.TrimSpace(metricType))
+			if mType == "sales amount" || mType == "revenue" {
+				baseVal = userRevenue[u.UserName]
+			} else if mType == "profit" {
+				baseVal = userProfit[u.UserName]
+			} else if mType == "orders" || mType == "order count" {
+				baseVal = float64(userOrders[u.UserName])
+			} else {
+				// Default or unrecognized metric
+				baseVal = float64(userOrders[u.UserName])
 			}
-			// Add User-specific Manual Data
-			val += userManualPerf[u.UserName]
-			
+
+			val := baseVal + userManualPerf[u.UserName]
+
 			// If distribution is Individual, we also add a proportional share of Team Manual Data
 			if rules.DistributionRule.Method == "" || rules.DistributionRule.Method == "Individual" {
 				if u.Team != "" {
@@ -825,9 +828,18 @@ func handleCalculateIncentive(c *gin.Context) {
 	var results []IncentiveResult
 	// We need to decide which users to show. Let's show any user that has any stat or reward.
 	uniqueUsers := make(map[string]bool)
-	for u := range userRewards { uniqueUsers[u] = true }
-	for u := range userOrders { uniqueUsers[u] = true }
-	for u := range userRevenue { uniqueUsers[u] = true }
+	for u := range userRewards {
+		uniqueUsers[u] = true
+	}
+	for u := range userOrders {
+		uniqueUsers[u] = true
+	}
+	for u := range userRevenue {
+		uniqueUsers[u] = true
+	}
+	for u := range userProfit {
+		uniqueUsers[u] = true
+	}
 
 	for user := range uniqueUsers {
 		payout := userRewards[user]
@@ -843,8 +855,8 @@ func handleCalculateIncentive(c *gin.Context) {
 			ProjectID:       project.ID,
 			UserName:        user,
 			TotalOrders:     userOrders[user],
-			// Keep TotalRevenue compatible for UI; include realized profit if revenue is zero.
-			TotalRevenue:    func() float64 { if userRevenue[user] != 0 { return userRevenue[user] }; return userProfit[user] }(),
+			TotalRevenue:    userRevenue[user],
+			TotalProfit:     userProfit[user],
 			CalculatedValue: payout,
 			IsCustom:        isCustom,
 			BreakdownJSON:   string(breakdownJSON),
@@ -1149,676 +1161,692 @@ func fetchSheetDataToStruct(sheetName string, target interface{}) error {
 	return nil
 }
 
-func handleMigrateData(c *gin.Context) {
-	go func() {
-		ctx := context.Background()
-		if sheetsService == nil {
-			createGoogleAPIClient(ctx)
-		}
+func performDataMigration() {
+	ctx := context.Background()
+	if sheetsService == nil {
+		createGoogleAPIClient(ctx)
+	}
 
-		// Start Transaction
-		tx := DB.Begin()
-		defer func() {
-			if r := recover(); r != nil {
-				tx.Rollback()
-			}
-		}()
-
-		log.Println("🗑️ លុបទិន្នន័យចាស់ (Resetting Database within transaction)...")
-		tx.Session(&gorm.Session{AllowGlobalUpdate: true}).Delete(&User{})
-		tx.Session(&gorm.Session{AllowGlobalUpdate: true}).Delete(&Store{})
-		tx.Session(&gorm.Session{AllowGlobalUpdate: true}).Delete(&Setting{})
-		tx.Session(&gorm.Session{AllowGlobalUpdate: true}).Delete(&TeamPage{})
-		tx.Session(&gorm.Session{AllowGlobalUpdate: true}).Delete(&Product{})
-		tx.Session(&gorm.Session{AllowGlobalUpdate: true}).Delete(&Location{})
-		tx.Session(&gorm.Session{AllowGlobalUpdate: true}).Delete(&ShippingMethod{})
-		tx.Session(&gorm.Session{AllowGlobalUpdate: true}).Delete(&Color{})
-		tx.Session(&gorm.Session{AllowGlobalUpdate: true}).Delete(&Driver{})
-		tx.Session(&gorm.Session{AllowGlobalUpdate: true}).Delete(&BankAccount{})
-		tx.Session(&gorm.Session{AllowGlobalUpdate: true}).Delete(&PhoneCarrier{})
-		tx.Session(&gorm.Session{AllowGlobalUpdate: true}).Delete(&TelegramTemplate{})
-		tx.Session(&gorm.Session{AllowGlobalUpdate: true}).Delete(&Inventory{})
-		tx.Session(&gorm.Session{AllowGlobalUpdate: true}).Delete(&StockTransfer{})
-		tx.Session(&gorm.Session{AllowGlobalUpdate: true}).Delete(&ReturnItem{})
-		tx.Session(&gorm.Session{AllowGlobalUpdate: true}).Delete(&RevenueEntry{})
-		tx.Session(&gorm.Session{AllowGlobalUpdate: true}).Delete(&ChatMessage{})
-		tx.Session(&gorm.Session{AllowGlobalUpdate: true}).Delete(&EditLog{})
-		tx.Session(&gorm.Session{AllowGlobalUpdate: true}).Delete(&UserActivityLog{})
-		tx.Session(&gorm.Session{AllowGlobalUpdate: true}).Delete(&Order{})
-		tx.Session(&gorm.Session{AllowGlobalUpdate: true}).Delete(&DriverRecommendation{})
-		tx.Session(&gorm.Session{AllowGlobalUpdate: true}).Delete(&Role{})
-		tx.Session(&gorm.Session{AllowGlobalUpdate: true}).Delete(&RolePermission{})
-		tx.Session(&gorm.Session{AllowGlobalUpdate: true}).Delete(&IncentiveProject{})
-		tx.Session(&gorm.Session{AllowGlobalUpdate: true}).Delete(&IncentiveCalculator{})
-		tx.Session(&gorm.Session{AllowGlobalUpdate: true}).Delete(&IncentiveResult{})
-		tx.Session(&gorm.Session{AllowGlobalUpdate: true}).Delete(&IncentiveManualData{})
-		tx.Session(&gorm.Session{AllowGlobalUpdate: true}).Delete(&IncentiveCustomPayout{})
-		tx.Session(&gorm.Session{AllowGlobalUpdate: true}).Delete(&Movie{})
-
-		log.Println("🔄 ចាប់ផ្តើមទាញទិន្នន័យថ្មីពី Google Sheet...")
-
-		var users []User
-		if err := fetchSheetDataToStruct("Users", &users); err != nil {
+	// Start Transaction
+	tx := DB.Begin()
+	defer func() {
+		if r := recover(); r != nil {
 			tx.Rollback()
-			log.Println("❌ Migration failed for Users:", err)
-			return
-		}
-		var validUsers []User
-		seenUsers := make(map[string]bool)
-		for _, x := range users {
-			if x.UserName != "" && !seenUsers[x.UserName] {
-				seenUsers[x.UserName] = true
-				validUsers = append(validUsers, x)
-			}
-		}
-		if len(validUsers) > 0 {
-			if err := tx.CreateInBatches(validUsers, 100).Error; err != nil {
-				tx.Rollback()
-				log.Println("❌ Migration failed to save Users:", err)
-				return
-			}
-		}
-
-		var stores []Store
-		if err := fetchSheetDataToStruct("Stores", &stores); err != nil {
-			tx.Rollback()
-			log.Println("❌ Migration failed for Stores:", err)
-			return
-		}
-		var validStores []Store
-		seenStores := make(map[string]bool)
-		for _, x := range stores {
-			if x.StoreName != "" && !seenStores[x.StoreName] {
-				seenStores[x.StoreName] = true
-				validStores = append(validStores, x)
-			}
-		}
-		if len(validStores) > 0 {
-			if err := tx.CreateInBatches(validStores, 100).Error; err != nil {
-				tx.Rollback()
-				log.Println("❌ Migration failed to save Stores:", err)
-				return
-			}
-		}
-
-		var settings []Setting
-		if err := fetchSheetDataToStruct("Settings", &settings); err != nil {
-			tx.Rollback()
-			log.Println("❌ Migration failed for Settings:", err)
-			return
-		}
-		for _, s := range settings {
-			if s.ConfigKey != "" {
-				if err := tx.Save(&s).Error; err != nil {
-					tx.Rollback()
-					log.Println("❌ Migration failed to save Setting:", s.ConfigKey, err)
-					return
-				}
-				if s.ConfigKey == "UploadFolderID" {
-					envVal := os.Getenv("UPLOAD_FOLDER_ID")
-					if envVal != "" {
-						uploadFolderID = envVal
-					} else {
-						uploadFolderID = s.ConfigValue
-					}
-				}
-			}
-		}
-
-		var pages []TeamPage
-		if err := fetchSheetDataToStruct("TeamsPages", &pages); err != nil {
-			tx.Rollback()
-			log.Println("❌ Migration failed for TeamsPages:", err)
-			return
-		}
-		var validPages []TeamPage
-		seenPages := make(map[uint]bool)
-		for _, x := range pages {
-			if x.PageName != "" && !seenPages[x.ID] {
-				if x.ID != 0 {
-					seenPages[x.ID] = true
-				}
-				validPages = append(validPages, x)
-			}
-		}
-		if len(validPages) > 0 {
-			if err := tx.CreateInBatches(validPages, 100).Error; err != nil {
-				tx.Rollback()
-				log.Println("❌ Migration failed to save TeamsPages:", err)
-				return
-			}
-		}
-
-		var products []Product
-		if err := fetchSheetDataToStruct("Products", &products); err != nil {
-			tx.Rollback()
-			log.Println("❌ Migration failed for Products:", err)
-			return
-		}
-		var validProducts []Product
-		seenProducts := make(map[string]bool)
-		for _, x := range products {
-			if x.Barcode != "" && !seenProducts[x.Barcode] {
-				seenProducts[x.Barcode] = true
-				validProducts = append(validProducts, x)
-			}
-		}
-		if len(validProducts) > 0 {
-			if err := tx.CreateInBatches(validProducts, 100).Error; err != nil {
-				tx.Rollback()
-				log.Println("❌ Migration failed to save Products:", err)
-				return
-			}
-		}
-
-		var locations []Location
-		if err := fetchSheetDataToStruct("Locations", &locations); err != nil {
-			tx.Rollback()
-			log.Println("❌ Migration failed for Locations:", err)
-			return
-		}
-		var validLocations []Location
-		seenLocations := make(map[uint]bool)
-		for _, x := range locations {
-			if !seenLocations[x.ID] {
-				if x.ID != 0 {
-					seenLocations[x.ID] = true
-				}
-				validLocations = append(validLocations, x)
-			}
-		}
-		if len(validLocations) > 0 {
-			if err := tx.CreateInBatches(validLocations, 100).Error; err != nil {
-				tx.Rollback()
-				log.Println("❌ Migration failed to save Locations:", err)
-				return
-			}
-		}
-
-		var shipping []ShippingMethod
-		if err := fetchSheetDataToStruct("ShippingMethods", &shipping); err != nil {
-			tx.Rollback()
-			log.Println("❌ Migration failed for ShippingMethods:", err)
-			return
-		}
-		var validShipping []ShippingMethod
-		seenShipping := make(map[string]bool)
-		for _, x := range shipping {
-			if x.MethodName != "" && !seenShipping[x.MethodName] {
-				seenShipping[x.MethodName] = true
-				validShipping = append(validShipping, x)
-			}
-		}
-		if len(validShipping) > 0 {
-			if err := tx.CreateInBatches(validShipping, 100).Error; err != nil {
-				tx.Rollback()
-				log.Println("❌ Migration failed to save ShippingMethods:", err)
-				return
-			}
-		}
-
-		var colors []Color
-		if err := fetchSheetDataToStruct("Colors", &colors); err != nil {
-			tx.Rollback()
-			log.Println("❌ Migration failed for Colors:", err)
-			return
-		}
-		var validColors []Color
-		seenColors := make(map[string]bool)
-		for _, x := range colors {
-			if x.ColorName != "" && !seenColors[x.ColorName] {
-				seenColors[x.ColorName] = true
-				validColors = append(validColors, x)
-			}
-		}
-		if len(validColors) > 0 {
-			if err := tx.CreateInBatches(validColors, 100).Error; err != nil {
-				tx.Rollback()
-				log.Println("❌ Migration failed to save Colors:", err)
-				return
-			}
-		}
-
-		var drivers []Driver
-		if err := fetchSheetDataToStruct("Drivers", &drivers); err != nil {
-			tx.Rollback()
-			log.Println("❌ Migration failed for Drivers:", err)
-			return
-		}
-		var validDrivers []Driver
-		seenDrivers := make(map[string]bool)
-		for _, x := range drivers {
-			if x.DriverName != "" && !seenDrivers[x.DriverName] {
-				seenDrivers[x.DriverName] = true
-				validDrivers = append(validDrivers, x)
-			}
-		}
-		if len(validDrivers) > 0 {
-			if err := tx.CreateInBatches(validDrivers, 100).Error; err != nil {
-				tx.Rollback()
-				log.Println("❌ Migration failed to save Drivers:", err)
-				return
-			}
-		}
-
-		var banks []BankAccount
-		if err := fetchSheetDataToStruct("BankAccounts", &banks); err != nil {
-			tx.Rollback()
-			log.Println("❌ Migration failed for BankAccounts:", err)
-			return
-		}
-		var validBanks []BankAccount
-		seenBanks := make(map[string]bool)
-		for _, x := range banks {
-			if x.BankName != "" && !seenBanks[x.BankName] {
-				seenBanks[x.BankName] = true
-				validBanks = append(validBanks, x)
-			}
-		}
-		if len(validBanks) > 0 {
-			if err := tx.CreateInBatches(validBanks, 100).Error; err != nil {
-				tx.Rollback()
-				log.Println("❌ Migration failed to save BankAccounts:", err)
-				return
-			}
-		}
-
-		var carriers []PhoneCarrier
-		if err := fetchSheetDataToStruct("PhoneCarriers", &carriers); err != nil {
-			tx.Rollback()
-			log.Println("❌ Migration failed for PhoneCarriers:", err)
-			return
-		}
-		var validCarriers []PhoneCarrier
-		seenCarriers := make(map[string]bool)
-		for _, x := range carriers {
-			if x.CarrierName != "" && !seenCarriers[x.CarrierName] {
-				seenCarriers[x.CarrierName] = true
-				validCarriers = append(validCarriers, x)
-			}
-		}
-		if len(validCarriers) > 0 {
-			if err := tx.CreateInBatches(validCarriers, 100).Error; err != nil {
-				tx.Rollback()
-				log.Println("❌ Migration failed to save PhoneCarriers:", err)
-				return
-			}
-		}
-
-		var templates []TelegramTemplate
-		if err := fetchSheetDataToStruct("TelegramTemplates", &templates); err != nil {
-			tx.Rollback()
-			log.Println("❌ Migration failed for TelegramTemplates:", err)
-			return
-		}
-		var validTemplates []TelegramTemplate
-		seenTemplates := make(map[uint]bool)
-		for _, x := range templates {
-			if !seenTemplates[x.ID] {
-				if x.ID != 0 {
-					seenTemplates[x.ID] = true
-				}
-				validTemplates = append(validTemplates, x)
-			}
-		}
-		if len(validTemplates) > 0 {
-			if err := tx.CreateInBatches(validTemplates, 100).Error; err != nil {
-				tx.Rollback()
-				log.Println("❌ Migration failed to save TelegramTemplates:", err)
-				return
-			}
-		}
-		var inventory []Inventory
-		if err := fetchSheetDataToStruct("Inventory", &inventory); err != nil {
-			tx.Rollback()
-			log.Println("❌ Migration failed for Inventory:", err)
-			return
-		}
-		var validInventory []Inventory
-		seenInventory := make(map[uint]bool)
-		for _, x := range inventory {
-			if !seenInventory[x.ID] {
-				if x.ID != 0 {
-					seenInventory[x.ID] = true
-				}
-				validInventory = append(validInventory, x)
-			}
-		}
-		if len(validInventory) > 0 {
-			if err := tx.CreateInBatches(validInventory, 100).Error; err != nil {
-				tx.Rollback()
-				log.Println("❌ Migration failed to save Inventory:", err)
-				return
-			}
-		}
-		var transfers []StockTransfer
-		if err := fetchSheetDataToStruct("StockTransfers", &transfers); err != nil {
-			tx.Rollback()
-			log.Println("❌ Migration failed for StockTransfers:", err)
-			return
-		}
-		var validTransfers []StockTransfer
-		seenTransfers := make(map[string]bool)
-		for _, x := range transfers {
-			if x.TransferID != "" && !seenTransfers[x.TransferID] {
-				seenTransfers[x.TransferID] = true
-				validTransfers = append(validTransfers, x)
-			}
-		}
-		if len(validTransfers) > 0 {
-			if err := tx.CreateInBatches(validTransfers, 100).Error; err != nil {
-				tx.Rollback()
-				log.Println("❌ Migration failed to save StockTransfers:", err)
-				return
-			}
-		}
-		var returns []ReturnItem
-		if err := fetchSheetDataToStruct("Returns", &returns); err != nil {
-			tx.Rollback()
-			log.Println("❌ Migration failed for Returns:", err)
-			return
-		}
-		var validReturns []ReturnItem
-		seenReturns := make(map[string]bool)
-		for _, x := range returns {
-			if x.ReturnID != "" && !seenReturns[x.ReturnID] {
-				seenReturns[x.ReturnID] = true
-				validReturns = append(validReturns, x)
-			}
-		}
-		if len(validReturns) > 0 {
-			if err := tx.CreateInBatches(validReturns, 100).Error; err != nil {
-				tx.Rollback()
-				log.Println("❌ Migration failed to save Returns:", err)
-				return
-			}
-		}
-		var revs []RevenueEntry
-		if err := fetchSheetDataToStruct("RevenueDashboard", &revs); err != nil {
-			tx.Rollback()
-			log.Println("❌ Migration failed for RevenueDashboard:", err)
-			return
-		}
-		var validRevs []RevenueEntry
-		seenRevs := make(map[uint]bool)
-		for _, x := range revs {
-			if !seenRevs[x.ID] {
-				if x.ID != 0 {
-					seenRevs[x.ID] = true
-				}
-				validRevs = append(validRevs, x)
-			}
-		}
-		if len(validRevs) > 0 {
-			if err := tx.CreateInBatches(validRevs, 100).Error; err != nil {
-				tx.Rollback()
-				log.Println("❌ Migration failed to save RevenueDashboard:", err)
-				return
-			}
-		}
-		var chats []ChatMessage
-		if err := fetchSheetDataToStruct("ChatMessages", &chats); err != nil {
-			tx.Rollback()
-			log.Println("❌ Migration failed for ChatMessages:", err)
-			return
-		}
-		var validChats []ChatMessage
-		seenChats := make(map[uint]bool)
-		for _, x := range chats {
-			if !seenChats[x.ID] {
-				if x.ID != 0 {
-					seenChats[x.ID] = true
-				}
-				validChats = append(validChats, x)
-			}
-		}
-		if len(validChats) > 0 {
-			if err := tx.CreateInBatches(validChats, 100).Error; err != nil {
-				tx.Rollback()
-				log.Println("❌ Migration failed to save ChatMessages:", err)
-				return
-			}
-		}
-		var editLogs []EditLog
-		if err := fetchSheetDataToStruct("EditLogs", &editLogs); err != nil {
-			tx.Rollback()
-			log.Println("❌ Migration failed for EditLogs:", err)
-			return
-		}
-		var validEditLogs []EditLog
-		seenEditLogs := make(map[uint]bool)
-		for _, x := range editLogs {
-			if !seenEditLogs[x.ID] {
-				if x.ID != 0 {
-					seenEditLogs[x.ID] = true
-				}
-				validEditLogs = append(validEditLogs, x)
-			}
-		}
-		if len(validEditLogs) > 0 {
-			if err := tx.CreateInBatches(validEditLogs, 100).Error; err != nil {
-				tx.Rollback()
-				log.Println("❌ Migration failed to save EditLogs:", err)
-				return
-			}
-		}
-		var actLogs []UserActivityLog
-		if err := fetchSheetDataToStruct("UserActivityLogs", &actLogs); err != nil {
-			tx.Rollback()
-			log.Println("❌ Migration failed for UserActivityLogs:", err)
-			return
-		}
-		var validActLogs []UserActivityLog
-		seenActLogs := make(map[uint]bool)
-		for _, x := range actLogs {
-			if !seenActLogs[x.ID] {
-				if x.ID != 0 {
-					seenActLogs[x.ID] = true
-				}
-				validActLogs = append(validActLogs, x)
-			}
-		}
-		if len(validActLogs) > 0 {
-			if err := tx.CreateInBatches(validActLogs, 100).Error; err != nil {
-				tx.Rollback()
-				log.Println("❌ Migration failed to save UserActivityLogs:", err)
-				return
-			}
-		}
-		var recs []DriverRecommendation
-		if err := fetchSheetDataToStruct("DriverRecommendations", &recs); err != nil {
-			tx.Rollback()
-			log.Println("❌ Migration failed for DriverRecommendations:", err)
-			return
-		}
-		var validRecs []DriverRecommendation
-		seenRecs := make(map[uint]bool)
-		for _, x := range recs {
-			if !seenRecs[x.ID] {
-				if x.ID != 0 {
-					seenRecs[x.ID] = true
-				}
-				validRecs = append(validRecs, x)
-			}
-		}
-		if len(validRecs) > 0 {
-			if err := tx.CreateInBatches(validRecs, 100).Error; err != nil {
-				tx.Rollback()
-				log.Println("❌ Migration failed to save DriverRecommendations:", err)
-				return
-			}
-		}
-
-		var roles []Role
-		if err := fetchSheetDataToStruct("Roles", &roles); err != nil {
-			tx.Rollback()
-			log.Println("❌ Migration failed for Roles:", err)
-			return
-		}
-		var validRoles []Role
-		seenRoles := make(map[uint]bool)
-		for _, x := range roles {
-			if !seenRoles[x.ID] {
-				if x.ID != 0 {
-					seenRoles[x.ID] = true
-				}
-				validRoles = append(validRoles, x)
-			}
-		}
-		if len(validRoles) > 0 {
-			if err := tx.CreateInBatches(validRoles, 100).Error; err != nil {
-				tx.Rollback()
-				log.Println("❌ Migration failed to save Roles:", err)
-				return
-			}
-		}
-
-		var perms []RolePermission
-		if err := fetchSheetDataToStruct("RolePermissions", &perms); err != nil {
-			tx.Rollback()
-			log.Println("❌ Migration failed for RolePermissions:", err)
-			return
-		}
-		var validPerms []RolePermission
-		seenPermKeys := make(map[string]bool)
-		for _, x := range perms {
-			// Deduplicate by Role + Feature (normalized) to be robust
-			key := strings.ToLower(x.Role + "|" + x.Feature)
-			if x.Role != "" && x.Feature != "" && !seenPermKeys[key] {
-				seenPermKeys[key] = true
-				x.ID = 0 // Zero out ID to let local DB auto-increment manage it, avoiding PK conflicts
-				validPerms = append(validPerms, x)
-			}
-		}
-		if len(validPerms) > 0 {
-			if err := tx.CreateInBatches(validPerms, 100).Error; err != nil {
-				tx.Rollback()
-				log.Printf("❌ Migration failed to save RolePermissions: %v", err)
-				return
-			}
-		}
-
-		var orders []Order
-		if err := fetchSheetDataToStruct("AllOrders", &orders); err != nil {
-			tx.Rollback()
-			log.Println("❌ Migration failed for AllOrders:", err)
-			return
-		}
-		var validOrders []Order
-		seenOrderIDs := make(map[string]bool)
-		for _, o := range orders {
-			if o.OrderID != "" && !seenOrderIDs[o.OrderID] {
-				seenOrderIDs[o.OrderID] = true
-				validOrders = append(validOrders, o)
-			}
-		}
-		if len(validOrders) > 0 {
-			if err := tx.CreateInBatches(validOrders, 100).Error; err != nil {
-				tx.Rollback()
-				log.Println("❌ Migration failed to save AllOrders:", err)
-				return
-			}
-		}
-
-		var movies []Movie
-		if err := fetchSheetDataToStruct("Movies", &movies); err != nil {
-			tx.Rollback()
-			log.Println("❌ Migration failed for Movies:", err)
-			return
-		}
-		var validMovies []Movie
-		seenMovieIDs := make(map[string]bool)
-		for _, x := range movies {
-			if x.ID != "" && !seenMovieIDs[x.ID] {
-				seenMovieIDs[x.ID] = true
-				validMovies = append(validMovies, x)
-			}
-		}
-		if len(validMovies) > 0 {
-			if err := tx.CreateInBatches(validMovies, 100).Error; err != nil {
-				tx.Rollback()
-				log.Println("❌ Migration failed to save Movies:", err)
-				return
-			}
-		}
-
-		// Incentive Sheets
-		var incProjects []IncentiveProject
-		if err := fetchSheetDataToStruct("IncentiveProjects", &incProjects); err != nil {
-			tx.Rollback()
-			log.Println("❌ Migration failed for IncentiveProjects:", err)
-			return
-		}
-		if len(incProjects) > 0 {
-			if err := tx.CreateInBatches(incProjects, 100).Error; err != nil {
-				tx.Rollback()
-				log.Println("❌ Migration failed to save IncentiveProjects:", err)
-				return
-			}
-		}
-
-		var incCalcs []IncentiveCalculator
-		if err := fetchSheetDataToStruct("IncentiveCalculators", &incCalcs); err != nil {
-			tx.Rollback()
-			log.Println("❌ Migration failed for IncentiveCalculators:", err)
-			return
-		}
-		if len(incCalcs) > 0 {
-			if err := tx.CreateInBatches(incCalcs, 100).Error; err != nil {
-				tx.Rollback()
-				log.Println("❌ Migration failed to save IncentiveCalculators:", err)
-				return
-			}
-		}
-
-		var incResults []IncentiveResult
-		if err := fetchSheetDataToStruct("IncentiveResults", &incResults); err != nil {
-			tx.Rollback()
-			log.Println("❌ Migration failed for IncentiveResults:", err)
-			return
-		}
-		if len(incResults) > 0 {
-			if err := tx.CreateInBatches(incResults, 100).Error; err != nil {
-				tx.Rollback()
-				log.Println("❌ Migration failed to save IncentiveResults:", err)
-				return
-			}
-		}
-
-		var incManual []IncentiveManualData
-		if err := fetchSheetDataToStruct("IncentiveManualData", &incManual); err != nil {
-			tx.Rollback()
-			log.Println("❌ Migration failed for IncentiveManualData:", err)
-			return
-		}
-		if len(incManual) > 0 {
-			if err := tx.CreateInBatches(incManual, 100).Error; err != nil {
-				tx.Rollback()
-				log.Println("❌ Migration failed to save IncentiveManualData:", err)
-				return
-			}
-		}
-
-		var incCustom []IncentiveCustomPayout
-		if err := fetchSheetDataToStruct("IncentiveCustomPayouts", &incCustom); err != nil {
-			tx.Rollback()
-			log.Println("❌ Migration failed for IncentiveCustomPayouts:", err)
-			return
-		}
-		if len(incCustom) > 0 {
-			if err := tx.CreateInBatches(incCustom, 100).Error; err != nil {
-				tx.Rollback()
-				log.Println("❌ Migration failed to save IncentiveCustomPayouts:", err)
-				return
-			}
-		}
-
-		if err := tx.Commit().Error; err != nil {
-			log.Println("❌ Migration failed on commit:", err)
-		} else {
-			log.Println("🎉 Migration ជោគជ័យ!")
 		}
 	}()
+
+	log.Println("🗑️ លុបទិន្នន័យចាស់ (Resetting Database within transaction)...")
+	tx.Session(&gorm.Session{AllowGlobalUpdate: true}).Delete(&User{})
+	tx.Session(&gorm.Session{AllowGlobalUpdate: true}).Delete(&Store{})
+	tx.Session(&gorm.Session{AllowGlobalUpdate: true}).Delete(&Setting{})
+	tx.Session(&gorm.Session{AllowGlobalUpdate: true}).Delete(&TeamPage{})
+	tx.Session(&gorm.Session{AllowGlobalUpdate: true}).Delete(&Product{})
+	tx.Session(&gorm.Session{AllowGlobalUpdate: true}).Delete(&Location{})
+	tx.Session(&gorm.Session{AllowGlobalUpdate: true}).Delete(&ShippingMethod{})
+	tx.Session(&gorm.Session{AllowGlobalUpdate: true}).Delete(&Color{})
+	tx.Session(&gorm.Session{AllowGlobalUpdate: true}).Delete(&Driver{})
+	tx.Session(&gorm.Session{AllowGlobalUpdate: true}).Delete(&BankAccount{})
+	tx.Session(&gorm.Session{AllowGlobalUpdate: true}).Delete(&PhoneCarrier{})
+	tx.Session(&gorm.Session{AllowGlobalUpdate: true}).Delete(&TelegramTemplate{})
+	tx.Session(&gorm.Session{AllowGlobalUpdate: true}).Delete(&Inventory{})
+	tx.Session(&gorm.Session{AllowGlobalUpdate: true}).Delete(&StockTransfer{})
+	tx.Session(&gorm.Session{AllowGlobalUpdate: true}).Delete(&ReturnItem{})
+	tx.Session(&gorm.Session{AllowGlobalUpdate: true}).Delete(&RevenueEntry{})
+	tx.Session(&gorm.Session{AllowGlobalUpdate: true}).Delete(&ChatMessage{})
+	tx.Session(&gorm.Session{AllowGlobalUpdate: true}).Delete(&EditLog{})
+	tx.Session(&gorm.Session{AllowGlobalUpdate: true}).Delete(&UserActivityLog{})
+	tx.Session(&gorm.Session{AllowGlobalUpdate: true}).Delete(&Order{})
+	tx.Session(&gorm.Session{AllowGlobalUpdate: true}).Delete(&DriverRecommendation{})
+	tx.Session(&gorm.Session{AllowGlobalUpdate: true}).Delete(&Role{})
+	tx.Session(&gorm.Session{AllowGlobalUpdate: true}).Delete(&RolePermission{})
+	tx.Session(&gorm.Session{AllowGlobalUpdate: true}).Delete(&IncentiveProject{})
+	tx.Session(&gorm.Session{AllowGlobalUpdate: true}).Delete(&IncentiveCalculator{})
+	tx.Session(&gorm.Session{AllowGlobalUpdate: true}).Delete(&IncentiveResult{})
+	tx.Session(&gorm.Session{AllowGlobalUpdate: true}).Delete(&IncentiveManualData{})
+	tx.Session(&gorm.Session{AllowGlobalUpdate: true}).Delete(&IncentiveCustomPayout{})
+	tx.Session(&gorm.Session{AllowGlobalUpdate: true}).Delete(&Movie{})
+
+	log.Println("🔄 ចាប់ផ្តើមទាញទិន្នន័យថ្មីពី Google Sheet...")
+
+	var users []User
+	if err := fetchSheetDataToStruct("Users", &users); err != nil {
+		tx.Rollback()
+		log.Println("❌ Migration failed for Users (fetch):", err)
+		return
+	}
+	log.Printf("📊 Users: Fetched %d rows from sheet", len(users))
+	var validUsers []User
+	seenUsers := make(map[string]bool)
+	for _, x := range users {
+		if x.UserName != "" && !seenUsers[x.UserName] {
+			seenUsers[x.UserName] = true
+			validUsers = append(validUsers, x)
+		}
+	}
+	if len(validUsers) > 0 {
+		if err := tx.CreateInBatches(validUsers, 100).Error; err != nil {
+			tx.Rollback()
+			log.Println("❌ Migration failed for Users (save):", err)
+			return
+		}
+		log.Printf("✅ Users: Saved %d valid rows", len(validUsers))
+	} else {
+		log.Println("⚠️ Users: No valid rows found to save")
+	}
+
+	var stores []Store
+	if err := fetchSheetDataToStruct("Stores", &stores); err != nil {
+		tx.Rollback()
+		log.Println("❌ Migration failed for Stores (fetch):", err)
+		return
+	}
+	log.Printf("📊 Stores: Fetched %d rows from sheet", len(stores))
+	var validStores []Store
+	seenStores := make(map[string]bool)
+	for _, x := range stores {
+		if x.StoreName != "" && !seenStores[x.StoreName] {
+			seenStores[x.StoreName] = true
+			validStores = append(validStores, x)
+		}
+	}
+	if len(validStores) > 0 {
+		if err := tx.CreateInBatches(validStores, 100).Error; err != nil {
+			tx.Rollback()
+			log.Println("❌ Migration failed for Stores (save):", err)
+			return
+		}
+		log.Printf("✅ Stores: Saved %d valid rows", len(validStores))
+	}
+
+	var settings []Setting
+	if err := fetchSheetDataToStruct("Settings", &settings); err != nil {
+		tx.Rollback()
+		log.Println("❌ Migration failed for Settings:", err)
+		return
+	}
+	for _, s := range settings {
+		if s.ConfigKey != "" {
+			if err := tx.Save(&s).Error; err != nil {
+				tx.Rollback()
+				log.Println("❌ Migration failed to save Setting:", s.ConfigKey, err)
+				return
+			}
+			if s.ConfigKey == "UploadFolderID" {
+				envVal := os.Getenv("UPLOAD_FOLDER_ID")
+				if envVal != "" {
+					uploadFolderID = envVal
+				} else {
+					uploadFolderID = s.ConfigValue
+				}
+			}
+		}
+	}
+
+	var pages []TeamPage
+	if err := fetchSheetDataToStruct("TeamsPages", &pages); err != nil {
+		tx.Rollback()
+		log.Println("❌ Migration failed for TeamsPages (fetch):", err)
+		return
+	}
+	log.Printf("📊 TeamsPages: Fetched %d rows from sheet", len(pages))
+	var validPages []TeamPage
+	seenPages := make(map[uint]bool)
+	for _, x := range pages {
+		if x.PageName != "" && !seenPages[x.ID] {
+			if x.ID != 0 {
+				seenPages[x.ID] = true
+			}
+			validPages = append(validPages, x)
+		}
+	}
+	if len(validPages) > 0 {
+		if err := tx.CreateInBatches(validPages, 100).Error; err != nil {
+			tx.Rollback()
+			log.Println("❌ Migration failed for TeamsPages (save):", err)
+			return
+		}
+		log.Printf("✅ TeamsPages: Saved %d valid rows", len(validPages))
+	}
+
+	var products []Product
+	if err := fetchSheetDataToStruct("Products", &products); err != nil {
+		tx.Rollback()
+		log.Println("❌ Migration failed for Products (fetch):", err)
+		return
+	}
+	log.Printf("📊 Products: Fetched %d rows from sheet", len(products))
+	var validProducts []Product
+	seenProducts := make(map[string]bool)
+	for _, x := range products {
+		if x.Barcode != "" && !seenProducts[x.Barcode] {
+			seenProducts[x.Barcode] = true
+			validProducts = append(validProducts, x)
+		}
+	}
+	if len(validProducts) > 0 {
+		if err := tx.CreateInBatches(validProducts, 100).Error; err != nil {
+			tx.Rollback()
+			log.Println("❌ Migration failed for Products (save):", err)
+			return
+		}
+		log.Printf("✅ Products: Saved %d valid rows", len(validProducts))
+	}
+
+	var locations []Location
+	if err := fetchSheetDataToStruct("Locations", &locations); err != nil {
+		tx.Rollback()
+		log.Println("❌ Migration failed for Locations:", err)
+		return
+	}
+	var validLocations []Location
+	seenLocations := make(map[uint]bool)
+	for _, x := range locations {
+		if !seenLocations[x.ID] {
+			if x.ID != 0 {
+				seenLocations[x.ID] = true
+			}
+			validLocations = append(validLocations, x)
+		}
+	}
+	if len(validLocations) > 0 {
+		if err := tx.CreateInBatches(validLocations, 100).Error; err != nil {
+			tx.Rollback()
+			log.Println("❌ Migration failed to save Locations:", err)
+			return
+		}
+	}
+
+	var shipping []ShippingMethod
+	if err := fetchSheetDataToStruct("ShippingMethods", &shipping); err != nil {
+		tx.Rollback()
+		log.Println("❌ Migration failed for ShippingMethods:", err)
+		return
+	}
+	var validShipping []ShippingMethod
+	seenShipping := make(map[string]bool)
+	for _, x := range shipping {
+		if x.MethodName != "" && !seenShipping[x.MethodName] {
+			seenShipping[x.MethodName] = true
+			validShipping = append(validShipping, x)
+		}
+	}
+	if len(validShipping) > 0 {
+		if err := tx.CreateInBatches(validShipping, 100).Error; err != nil {
+			tx.Rollback()
+			log.Println("❌ Migration failed to save ShippingMethods:", err)
+			return
+		}
+	}
+
+	var colors []Color
+	if err := fetchSheetDataToStruct("Colors", &colors); err != nil {
+		tx.Rollback()
+		log.Println("❌ Migration failed for Colors:", err)
+		return
+	}
+	var validColors []Color
+	seenColors := make(map[string]bool)
+	for _, x := range colors {
+		if x.ColorName != "" && !seenColors[x.ColorName] {
+			seenColors[x.ColorName] = true
+			validColors = append(validColors, x)
+		}
+	}
+	if len(validColors) > 0 {
+		if err := tx.CreateInBatches(validColors, 100).Error; err != nil {
+			tx.Rollback()
+			log.Println("❌ Migration failed to save Colors:", err)
+			return
+		}
+	}
+
+	var drivers []Driver
+	if err := fetchSheetDataToStruct("Drivers", &drivers); err != nil {
+		tx.Rollback()
+		log.Println("❌ Migration failed for Drivers:", err)
+		return
+	}
+	var validDrivers []Driver
+	seenDrivers := make(map[string]bool)
+	for _, x := range drivers {
+		if x.DriverName != "" && !seenDrivers[x.DriverName] {
+			seenDrivers[x.DriverName] = true
+			validDrivers = append(validDrivers, x)
+		}
+	}
+	if len(validDrivers) > 0 {
+		if err := tx.CreateInBatches(validDrivers, 100).Error; err != nil {
+			tx.Rollback()
+			log.Println("❌ Migration failed to save Drivers:", err)
+			return
+		}
+	}
+
+	var banks []BankAccount
+	if err := fetchSheetDataToStruct("BankAccounts", &banks); err != nil {
+		tx.Rollback()
+		log.Println("❌ Migration failed for BankAccounts:", err)
+		return
+	}
+	var validBanks []BankAccount
+	seenBanks := make(map[string]bool)
+	for _, x := range banks {
+		if x.BankName != "" && !seenBanks[x.BankName] {
+			seenBanks[x.BankName] = true
+			validBanks = append(validBanks, x)
+		}
+	}
+	if len(validBanks) > 0 {
+		if err := tx.CreateInBatches(validBanks, 100).Error; err != nil {
+			tx.Rollback()
+			log.Println("❌ Migration failed to save BankAccounts:", err)
+			return
+		}
+	}
+
+	var carriers []PhoneCarrier
+	if err := fetchSheetDataToStruct("PhoneCarriers", &carriers); err != nil {
+		tx.Rollback()
+		log.Println("❌ Migration failed for PhoneCarriers:", err)
+		return
+	}
+	var validCarriers []PhoneCarrier
+	seenCarriers := make(map[string]bool)
+	for _, x := range carriers {
+		if x.CarrierName != "" && !seenCarriers[x.CarrierName] {
+			seenCarriers[x.CarrierName] = true
+			validCarriers = append(validCarriers, x)
+		}
+	}
+	if len(validCarriers) > 0 {
+		if err := tx.CreateInBatches(validCarriers, 100).Error; err != nil {
+			tx.Rollback()
+			log.Println("❌ Migration failed to save PhoneCarriers:", err)
+			return
+		}
+	}
+
+	var templates []TelegramTemplate
+	if err := fetchSheetDataToStruct("TelegramTemplates", &templates); err != nil {
+		tx.Rollback()
+		log.Println("❌ Migration failed for TelegramTemplates:", err)
+		return
+	}
+	var validTemplates []TelegramTemplate
+	seenTemplates := make(map[uint]bool)
+	for _, x := range templates {
+		if !seenTemplates[x.ID] {
+			if x.ID != 0 {
+				seenTemplates[x.ID] = true
+			}
+			validTemplates = append(validTemplates, x)
+		}
+	}
+	if len(validTemplates) > 0 {
+		if err := tx.CreateInBatches(validTemplates, 100).Error; err != nil {
+			tx.Rollback()
+			log.Println("❌ Migration failed to save TelegramTemplates:", err)
+			return
+		}
+	}
+	var inventory []Inventory
+	if err := fetchSheetDataToStruct("Inventory", &inventory); err != nil {
+		tx.Rollback()
+		log.Println("❌ Migration failed for Inventory:", err)
+		return
+	}
+	var validInventory []Inventory
+	seenInventory := make(map[uint]bool)
+	for _, x := range inventory {
+		if !seenInventory[x.ID] {
+			if x.ID != 0 {
+				seenInventory[x.ID] = true
+			}
+			validInventory = append(validInventory, x)
+		}
+	}
+	if len(validInventory) > 0 {
+		if err := tx.CreateInBatches(validInventory, 100).Error; err != nil {
+			tx.Rollback()
+			log.Println("❌ Migration failed to save Inventory:", err)
+			return
+		}
+	}
+	var transfers []StockTransfer
+	if err := fetchSheetDataToStruct("StockTransfers", &transfers); err != nil {
+		tx.Rollback()
+		log.Println("❌ Migration failed for StockTransfers:", err)
+		return
+	}
+	var validTransfers []StockTransfer
+	seenTransfers := make(map[string]bool)
+	for _, x := range transfers {
+		if x.TransferID != "" && !seenTransfers[x.TransferID] {
+			seenTransfers[x.TransferID] = true
+			validTransfers = append(validTransfers, x)
+		}
+	}
+	if len(validTransfers) > 0 {
+		if err := tx.CreateInBatches(validTransfers, 100).Error; err != nil {
+			tx.Rollback()
+			log.Println("❌ Migration failed to save StockTransfers:", err)
+			return
+		}
+	}
+	var returns []ReturnItem
+	if err := fetchSheetDataToStruct("Returns", &returns); err != nil {
+		tx.Rollback()
+		log.Println("❌ Migration failed for Returns:", err)
+		return
+	}
+	var validReturns []ReturnItem
+	seenReturns := make(map[string]bool)
+	for _, x := range returns {
+		if x.ReturnID != "" && !seenReturns[x.ReturnID] {
+			seenReturns[x.ReturnID] = true
+			validReturns = append(validReturns, x)
+		}
+	}
+	if len(validReturns) > 0 {
+		if err := tx.CreateInBatches(validReturns, 100).Error; err != nil {
+			tx.Rollback()
+			log.Println("❌ Migration failed to save Returns:", err)
+			return
+		}
+	}
+	var revs []RevenueEntry
+	if err := fetchSheetDataToStruct("RevenueDashboard", &revs); err != nil {
+		tx.Rollback()
+		log.Println("❌ Migration failed for RevenueDashboard:", err)
+		return
+	}
+	var validRevs []RevenueEntry
+	seenRevs := make(map[uint]bool)
+	for _, x := range revs {
+		if !seenRevs[x.ID] {
+			if x.ID != 0 {
+				seenRevs[x.ID] = true
+			}
+			validRevs = append(validRevs, x)
+		}
+	}
+	if len(validRevs) > 0 {
+		if err := tx.CreateInBatches(validRevs, 100).Error; err != nil {
+			tx.Rollback()
+			log.Println("❌ Migration failed to save RevenueDashboard:", err)
+			return
+		}
+	}
+	var chats []ChatMessage
+	if err := fetchSheetDataToStruct("ChatMessages", &chats); err != nil {
+		tx.Rollback()
+		log.Println("❌ Migration failed for ChatMessages:", err)
+		return
+	}
+	var validChats []ChatMessage
+	seenChats := make(map[uint]bool)
+	for _, x := range chats {
+		if !seenChats[x.ID] {
+			if x.ID != 0 {
+				seenChats[x.ID] = true
+			}
+			validChats = append(validChats, x)
+		}
+	}
+	if len(validChats) > 0 {
+		if err := tx.CreateInBatches(validChats, 100).Error; err != nil {
+			tx.Rollback()
+			log.Println("❌ Migration failed to save ChatMessages:", err)
+			return
+		}
+	}
+	var editLogs []EditLog
+	if err := fetchSheetDataToStruct("EditLogs", &editLogs); err != nil {
+		tx.Rollback()
+		log.Println("❌ Migration failed for EditLogs:", err)
+		return
+	}
+	var validEditLogs []EditLog
+	seenEditLogs := make(map[uint]bool)
+	for _, x := range editLogs {
+		if !seenEditLogs[x.ID] {
+			if x.ID != 0 {
+				seenEditLogs[x.ID] = true
+			}
+			validEditLogs = append(validEditLogs, x)
+		}
+	}
+	if len(validEditLogs) > 0 {
+		if err := tx.CreateInBatches(validEditLogs, 100).Error; err != nil {
+			tx.Rollback()
+			log.Println("❌ Migration failed to save EditLogs:", err)
+			return
+		}
+	}
+	var actLogs []UserActivityLog
+	if err := fetchSheetDataToStruct("UserActivityLogs", &actLogs); err != nil {
+		tx.Rollback()
+		log.Println("❌ Migration failed for UserActivityLogs:", err)
+		return
+	}
+	var validActLogs []UserActivityLog
+	seenActLogs := make(map[uint]bool)
+	for _, x := range actLogs {
+		if !seenActLogs[x.ID] {
+			if x.ID != 0 {
+				seenActLogs[x.ID] = true
+			}
+			validActLogs = append(validActLogs, x)
+		}
+	}
+	if len(validActLogs) > 0 {
+		if err := tx.CreateInBatches(validActLogs, 100).Error; err != nil {
+			tx.Rollback()
+			log.Println("❌ Migration failed to save UserActivityLogs:", err)
+			return
+		}
+	}
+	var recs []DriverRecommendation
+	if err := fetchSheetDataToStruct("DriverRecommendations", &recs); err != nil {
+		tx.Rollback()
+		log.Println("❌ Migration failed for DriverRecommendations:", err)
+		return
+	}
+	var validRecs []DriverRecommendation
+	seenRecs := make(map[uint]bool)
+	for _, x := range recs {
+		if !seenRecs[x.ID] {
+			if x.ID != 0 {
+				seenRecs[x.ID] = true
+			}
+			validRecs = append(validRecs, x)
+		}
+	}
+	if len(validRecs) > 0 {
+		if err := tx.CreateInBatches(validRecs, 100).Error; err != nil {
+			tx.Rollback()
+			log.Println("❌ Migration failed to save DriverRecommendations:", err)
+			return
+		}
+	}
+
+	var roles []Role
+	if err := fetchSheetDataToStruct("Roles", &roles); err != nil {
+		tx.Rollback()
+		log.Println("❌ Migration failed for Roles:", err)
+		return
+	}
+	var validRoles []Role
+	seenRoles := make(map[uint]bool)
+	for _, x := range roles {
+		if !seenRoles[x.ID] {
+			if x.ID != 0 {
+				seenRoles[x.ID] = true
+			}
+			validRoles = append(validRoles, x)
+		}
+	}
+	if len(validRoles) > 0 {
+		if err := tx.CreateInBatches(validRoles, 100).Error; err != nil {
+			tx.Rollback()
+			log.Println("❌ Migration failed to save Roles:", err)
+			return
+		}
+	}
+
+	var perms []RolePermission
+	if err := fetchSheetDataToStruct("RolePermissions", &perms); err != nil {
+		tx.Rollback()
+		log.Println("❌ Migration failed for RolePermissions:", err)
+		return
+	}
+	var validPerms []RolePermission
+	seenPermKeys := make(map[string]bool)
+	for _, x := range perms {
+		// Deduplicate by Role + Feature (normalized) to be robust
+		key := strings.ToLower(x.Role + "|" + x.Feature)
+		if x.Role != "" && x.Feature != "" && !seenPermKeys[key] {
+			seenPermKeys[key] = true
+			x.ID = 0 // Zero out ID to let local DB auto-increment manage it, avoiding PK conflicts
+			validPerms = append(validPerms, x)
+		}
+	}
+	if len(validPerms) > 0 {
+		if err := tx.CreateInBatches(validPerms, 100).Error; err != nil {
+			tx.Rollback()
+			log.Printf("❌ Migration failed to save RolePermissions: %v", err)
+			return
+		}
+	}
+
+	var orders []Order
+	if err := fetchSheetDataToStruct("AllOrders", &orders); err != nil {
+		tx.Rollback()
+		log.Println("❌ Migration failed for AllOrders (fetch):", err)
+		return
+	}
+	log.Printf("📊 AllOrders: Fetched %d rows from sheet", len(orders))
+	var validOrders []Order
+	seenOrderIDs := make(map[string]bool)
+	for _, o := range orders {
+		if o.OrderID != "" && !seenOrderIDs[o.OrderID] {
+			seenOrderIDs[o.OrderID] = true
+			validOrders = append(validOrders, o)
+		}
+	}
+	if len(validOrders) > 0 {
+		if err := tx.CreateInBatches(validOrders, 100).Error; err != nil {
+			tx.Rollback()
+			log.Println("❌ Migration failed for AllOrders (save):", err)
+			return
+		}
+		log.Printf("✅ AllOrders: Saved %d valid rows", len(validOrders))
+	} else {
+		log.Println("⚠️ AllOrders: No valid rows found to save")
+	}
+
+	var movies []Movie
+	if err := fetchSheetDataToStruct("Movies", &movies); err != nil {
+		tx.Rollback()
+		log.Println("❌ Migration failed for Movies:", err)
+		return
+	}
+	var validMovies []Movie
+	seenMovieIDs := make(map[string]bool)
+	for _, x := range movies {
+		if x.ID != "" && !seenMovieIDs[x.ID] {
+			seenMovieIDs[x.ID] = true
+			validMovies = append(validMovies, x)
+		}
+	}
+	if len(validMovies) > 0 {
+		if err := tx.CreateInBatches(validMovies, 100).Error; err != nil {
+			tx.Rollback()
+			log.Println("❌ Migration failed to save Movies:", err)
+			return
+		}
+	}
+
+	// Incentive Sheets
+	var incProjects []IncentiveProject
+	if err := fetchSheetDataToStruct("IncentiveProjects", &incProjects); err != nil {
+		tx.Rollback()
+		log.Println("❌ Migration failed for IncentiveProjects:", err)
+		return
+	}
+	if len(incProjects) > 0 {
+		if err := tx.CreateInBatches(incProjects, 100).Error; err != nil {
+			tx.Rollback()
+			log.Println("❌ Migration failed to save IncentiveProjects:", err)
+			return
+		}
+	}
+
+	var incCalcs []IncentiveCalculator
+	if err := fetchSheetDataToStruct("IncentiveCalculators", &incCalcs); err != nil {
+		tx.Rollback()
+		log.Println("❌ Migration failed for IncentiveCalculators:", err)
+		return
+	}
+	if len(incCalcs) > 0 {
+		if err := tx.CreateInBatches(incCalcs, 100).Error; err != nil {
+			tx.Rollback()
+			log.Println("❌ Migration failed to save IncentiveCalculators:", err)
+			return
+		}
+	}
+
+	var incResults []IncentiveResult
+	if err := fetchSheetDataToStruct("IncentiveResults", &incResults); err != nil {
+		tx.Rollback()
+		log.Println("❌ Migration failed for IncentiveResults:", err)
+		return
+	}
+	if len(incResults) > 0 {
+		if err := tx.CreateInBatches(incResults, 100).Error; err != nil {
+			tx.Rollback()
+			log.Println("❌ Migration failed to save IncentiveResults:", err)
+			return
+		}
+	}
+
+	var incManual []IncentiveManualData
+	if err := fetchSheetDataToStruct("IncentiveManualData", &incManual); err != nil {
+		tx.Rollback()
+		log.Println("❌ Migration failed for IncentiveManualData:", err)
+		return
+	}
+	if len(incManual) > 0 {
+		if err := tx.CreateInBatches(incManual, 100).Error; err != nil {
+			tx.Rollback()
+			log.Println("❌ Migration failed to save IncentiveManualData:", err)
+			return
+		}
+	}
+
+	var incCustom []IncentiveCustomPayout
+	if err := fetchSheetDataToStruct("IncentiveCustomPayouts", &incCustom); err != nil {
+		tx.Rollback()
+		log.Println("❌ Migration failed for IncentiveCustomPayouts:", err)
+		return
+	}
+	if len(incCustom) > 0 {
+		if err := tx.CreateInBatches(incCustom, 100).Error; err != nil {
+			tx.Rollback()
+			log.Println("❌ Migration failed to save IncentiveCustomPayouts:", err)
+			return
+		}
+	}
+
+	if err := tx.Commit().Error; err != nil {
+		log.Println("❌ Migration failed on commit:", err)
+	} else {
+		log.Println("🎉 Migration ជោគជ័យ!")
+	}
+}
+
+func handleMigrateData(c *gin.Context) {
+	go performDataMigration()
 	c.JSON(200, gin.H{"status": "success", "message": "Migration started."})
 }
 
@@ -2326,7 +2354,7 @@ func handleGetTeamSalesRanking(c *gin.Context) {
 	case "this_month":
 		start := time.Date(now.Year(), now.Month(), 1, 0, 0, 0, 0, now.Location())
 		db = db.Where("timestamp ~ '^\\d{4}-\\d{2}-\\d{2}' AND timestamp::date >= ?", start.Format("2006-01-02"))
-	// "all" — no date filter
+		// "all" — no date filter
 	}
 
 	if err := db.Scan(&rows).Error; err != nil {
@@ -2607,7 +2635,7 @@ func handleImageUploadProxy(c *gin.Context) {
 		if r.UserName != "" {
 			log.Printf("👤 [Background Update] Specialized User update: userName=%s", r.UserName)
 			DB.Model(&User{}).Where("user_name = ?", r.UserName).UpdateColumn("profile_picture_url", driveURL)
-			
+
 			notify, _ := json.Marshal(map[string]interface{}{
 				"type":     "profile_image_ready",
 				"userName": r.UserName,
@@ -2623,7 +2651,7 @@ func handleImageUploadProxy(c *gin.Context) {
 		if r.MovieID != "" && r.TargetColumn != "" {
 			log.Printf("🎬 [Background Update] Specialized Movie update: movieId=%s col=%s", r.MovieID, r.TargetColumn)
 			dbCol := mapToDBColumn(r.TargetColumn)
-			
+
 			// Retry updating the database for up to 1 minute (for new records being created)
 			for i := 0; i < 12; i++ {
 				res := DB.Model(&Movie{}).Where("id = ?", r.MovieID).UpdateColumn(dbCol, driveURL)
@@ -2637,7 +2665,7 @@ func handleImageUploadProxy(c *gin.Context) {
 
 			// Also sync with Google Sheets if updated or if it's a known record
 			enqueueSync("updateSheet", map[string]interface{}{r.TargetColumn: driveURL}, "Movies", map[string]string{"ID": r.MovieID})
-			
+
 			// If we have a movie title, rename the file in Drive to match
 			fID := extractFileIDFromURL(driveURL)
 			if fID != "" {
@@ -2663,7 +2691,7 @@ func handleImageUploadProxy(c *gin.Context) {
 		// 4. Generic Table/Sheet Update (Handles other tables)
 		if r.SheetName != "" && r.PrimaryKey != nil && r.TargetColumn != "" && r.SheetName != "Movies" {
 			log.Printf("📝 [Background Update] Generic update for sheet=%s PK=%v col=%s", r.SheetName, r.PrimaryKey, r.TargetColumn)
-			
+
 			// Sync with Google Sheets via managed queue
 			enqueueSync("updateSheet", map[string]interface{}{r.TargetColumn: driveURL}, r.SheetName, r.PrimaryKey)
 
@@ -3667,7 +3695,7 @@ func handleSheetsWebhook(c *gin.Context) {
 
 	for k, v := range req.RowData {
 		dbCol := mapToDBColumn(k)
-		
+
 		normalizedK := strings.ReplaceAll(strings.ToLower(k), " ", "")
 		normalizedPK := strings.ReplaceAll(strings.ToLower(pkName), " ", "")
 
@@ -3768,6 +3796,8 @@ func main() {
 		go startOrderWorker()
 		startScheduler()
 		createGoogleAPIClient(context.Background())
+		log.Println("🚀 Starting automatic data migration on startup...")
+		performDataMigration()
 	}()
 
 	r := gin.Default()

@@ -89,7 +89,7 @@ const CameraViewport: React.FC<CameraViewportProps> = ({
                             }}>
                                 <div className="absolute inset-0 border-2 rounded-sm border-[#1DB954] shadow-[0_0_15px_rgba(29,185,84,0.5)]">
                                     <div className="absolute -top-6 left-0 px-2 py-0.5 rounded-sm text-[8px] font-bold uppercase tracking-widest whitespace-nowrap bg-[#1DB954] text-white">
-                                        QR DETECTED
+                                        {detection.barcodeFormat === 'qr_code' ? 'QR DETECTED' : 'BARCODE DETECTED'}
                                     </div>
                                 </div>
                             </div>

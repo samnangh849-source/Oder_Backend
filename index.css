@@ -211,6 +211,104 @@
     background: rgba(0, 0, 0, 0.02) !important;
 }
 
+/* --- BINANCE UI CONCEPT --- */
+.ui-binance {
+    --primary: #FCD535;
+    --primary-glow: rgba(252, 213, 53, 0.2);
+    --bg-dark: #121619;
+    --bg-black: #0B0E11;
+    --card-bg: #1E2329;
+    --card-bg-hover: #2B3139;
+    --border-light: rgba(71, 77, 87, 0.25);
+    --text-primary: #EAECEF;
+    --text-secondary: #848E9C;
+    --text-accent: #FCD535;
+    --radius-standard: 8px;
+    --radius-lg: 12px;
+    --radius-xl: 16px;
+    --nm-shadow: 0 4px 12px rgba(0,0,0,0.25);
+}
+
+.ui-binance.theme-dark {
+    --bg-dark: #121619;
+    --bg-black: #0B0E11;
+    --card-bg: #1E2329;
+    --border-light: rgba(71, 77, 87, 0.3);
+}
+
+.ui-binance.theme-light {
+    --bg-dark: #FAFAFA;
+    --bg-black: #FFFFFF;
+    --card-bg: #FFFFFF;
+    --card-bg-hover: #F5F5F5;
+    --border-light: rgba(0, 0, 0, 0.08);
+    --text-primary: #1E2329;
+    --text-secondary: #707A8A;
+    --text-accent: #C99400;
+}
+
+.ui-binance .page-card,
+.ui-binance .bg-gray-800\/40,
+.ui-binance .bg-gray-900\/50,
+.ui-binance .metric-card-pro,
+.ui-binance .binance-card {
+    background: var(--card-bg) !important;
+    border-radius: var(--radius-lg) !important;
+    border: 1px solid var(--border-light) !important;
+    box-shadow: var(--nm-shadow) !important;
+    backdrop-filter: none !important;
+    transition: all 0.2s ease;
+}
+
+.ui-binance .binance-card-hover:hover {
+    background: var(--card-bg-hover) !important;
+    border-color: var(--primary) !important;
+}
+
+.ui-binance .btn {
+    border-radius: var(--radius-standard) !important;
+    font-weight: 600 !important;
+    text-transform: none !important;
+    letter-spacing: normal !important;
+}
+
+.ui-binance .btn-primary {
+    background: var(--primary) !important;
+    color: #181A20 !important;
+    box-shadow: none !important;
+}
+
+.ui-binance .btn-primary:hover {
+    background: #f0c51d !important;
+    transform: none !important;
+}
+
+.ui-binance .admin-table th {
+    background: var(--card-bg) !important;
+    color: var(--text-secondary) !important;
+    border-bottom: 1px solid var(--border-light) !important;
+    font-size: 11px !important;
+}
+
+.ui-binance .admin-table td {
+    border-bottom: 1px solid var(--border-light) !important;
+    color: var(--text-primary) !important;
+}
+
+.ui-binance .admin-table tr:hover td {
+    background: var(--card-bg-hover) !important;
+}
+
+.ui-binance .sidebar-item-active {
+    border-left: 4px solid var(--primary) !important;
+    background: var(--primary-glow) !important;
+    color: var(--primary) !important;
+}
+
+.ui-binance .text-accent { color: var(--text-accent) !important; }
+.ui-binance .text-secondary { color: var(--text-secondary) !important; }
+.ui-binance .bg-binance { background-color: var(--bg-black) !important; }
+
 /* Global Transition */
 * {
     transition: background-color 0.3s ease, color 0.3s ease, box-shadow 0.3s ease, border-radius 0.3s ease;

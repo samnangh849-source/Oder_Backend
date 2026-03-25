@@ -72,13 +72,12 @@ const OrderRow = (props: any) => {
                     bottom: calc(100% + 5px);
                     left: 20px;
                     padding: 8px 12px;
-                    background: rgba(15, 23, 42, 0.98);
-                    backdrop-filter: blur(20px);
-                    border: 1px solid rgba(255, 255, 255, 0.12);
-                    border-radius: 10px;
+                    background: #1E2329;
+                    border: 1px solid #2B3139;
+                    border-radius: 4px;
                     color: white;
                     font-size: 11px;
-                    font-weight: 700;
+                    font-weight: 600;
                     white-space: pre-wrap;
                     width: max-content;
                     max-width: 260px;
@@ -86,8 +85,8 @@ const OrderRow = (props: any) => {
                     opacity: 0;
                     visibility: hidden;
                     transform: translateY(5px);
-                    transition: all 0.2s cubic-bezier(0.23, 1, 0.32, 1);
-                    box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.6);
+                    transition: all 0.2s ease;
+                    box-shadow: 0 4px 12px rgba(0,0,0,0.4);
                     pointer-events: none;
                 }
                 .os-tooltip-trigger:hover .os-tooltip {
@@ -95,37 +94,13 @@ const OrderRow = (props: any) => {
                     visibility: visible;
                     transform: translateY(0);
                 }
-                .os-tooltip::after {
-                    content: '';
-                    position: absolute;
-                    top: 100%;
-                    left: 15px;
-                    border-left: 5px solid transparent;
-                    border-right: 5px solid transparent;
-                    border-top: 5px solid rgba(15, 23, 42, 0.98);
-                }
-                /* Flip tooltip for top rows to avoid header conflict */
-                .os-tooltip-trigger.is-top .os-tooltip {
-                    bottom: auto;
-                    top: calc(100% + 5px);
-                    transform: translateY(-5px);
-                }
-                .os-tooltip-trigger.is-top:hover .os-tooltip {
-                    transform: translateY(0);
-                }
-                .os-tooltip-trigger.is-top .os-tooltip::after {
-                    top: auto;
-                    bottom: 100%;
-                    border-top: none;
-                    border-bottom: 5px solid rgba(15, 23, 42, 0.98);
-                }
             `}</style>
-            <div className={`flex h-full transition-all duration-300 border-b border-white/[0.08] ${isVerified ? 'bg-emerald-500/[0.04]' : isSelected ? 'bg-blue-500/[0.08]' : 'hover:bg-white/[0.05]'} ${showBorders ? 'border-x border-white/10' : ''}`}>
+            <div className={`flex h-full transition-all border-b border-[#2B3139] ${isVerified ? 'bg-[#0ECB81]/[0.02]' : isSelected ? 'bg-[#FCD535]/[0.05]' : 'hover:bg-[#2B3139]'} ${showBorders ? 'border-x border-[#2B3139]' : ''}`}>
                 {onToggleSelect && (
                     <div className="flex-shrink-0 flex items-center justify-center px-0.5" style={{ width: '40px' }}>
                         <input 
                             type="checkbox" 
-                            className="h-5 w-5 rounded border-white/10 bg-black/40 text-blue-500 cursor-pointer focus:ring-0" 
+                            className="h-4 w-4 rounded border-[#474D57] bg-transparent text-[#FCD535] cursor-pointer focus:ring-0 focus:ring-offset-0" 
                             checked={isSelected} 
                             onChange={() => onToggleSelect(order['Order ID'])} 
                         />
@@ -140,52 +115,46 @@ const OrderRow = (props: any) => {
                     const content = (() => {
                         switch (k) {
                             case 'index':
-                                return <div className="font-bold text-gray-600 text-sm text-center w-full">{item.originalIndex + 1}</div>;
+                                return <div className="font-bold text-[#848E9C] text-xs text-center w-full">{item.originalIndex + 1}</div>;
                             case 'actions':
                                 return (
-                                    <div className="flex items-center justify-center gap-2 opacity-40 group-hover:opacity-100 transition-opacity w-full">
-                                        <button onClick={() => onView && onView(order)} className="w-10 h-10 flex items-center justify-center bg-white/5 hover:bg-white/10 text-gray-400 hover:text-white rounded-xl transition-all border border-white/5 shadow-lg" title="View"><svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" /><path d="M2.458 12C3.732 7.943 7.523 5 12 5c3.478 0 6.991 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" strokeWidth={2.5}/></svg></button>
-                                        {allowEdit && <button onClick={() => onEdit && onEdit(order)} className="w-10 h-10 flex items-center justify-center bg-blue-600/10 hover:bg-blue-600 text-blue-400 hover:text-white rounded-xl transition-all border border-blue-500/20 shadow-lg" title="Edit"><svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" strokeWidth={2.5}/></svg></button>}
+                                    <div className="flex items-center justify-center gap-2 opacity-0 group-hover:opacity-100 transition-opacity w-full">
+                                        <button onClick={() => onView && onView(order)} className="w-8 h-8 flex items-center justify-center bg-[#2B3139] hover:bg-[#363C44] text-[#848E9C] hover:text-white rounded transition-all" title="View"><svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" /><path d="M2.458 12C3.732 7.943 7.523 5 12 5c3.478 0 6.991 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" strokeWidth={2}/></svg></button>
+                                        {allowEdit && <button onClick={() => onEdit && onEdit(order)} className="w-8 h-8 flex items-center justify-center bg-[#2B3139] hover:bg-[#363C44] text-[#FCD535] rounded transition-all" title="Edit"><svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" strokeWidth={2}/></svg></button>}
                                     </div>
                                 );
                             case 'customerName':
                                 return (
-                                    <div className="px-6 py-2 w-full overflow-hidden">
-                                        <div className="font-black text-gray-100 truncate mb-1 text-[15px]">{order['Customer Name']}</div>
+                                    <div className="px-4 py-2 w-full overflow-hidden">
+                                        <div className="font-bold text-[#EAECEF] truncate mb-0.5 text-[14px]">{order['Customer Name']}</div>
                                         <div className="flex items-center gap-2">
-                                            {carrierLogo && <img src={convertGoogleDriveUrl(carrierLogo)} className="w-4 h-4 object-contain" alt="" />}
-                                            <div className="text-gray-500 font-mono font-black text-[12px] tracking-tight">{displayPhone}</div>
+                                            {carrierLogo && <img src={convertGoogleDriveUrl(carrierLogo)} className="w-3.5 h-3.5 object-contain" alt="" />}
+                                            <div className="text-[#848E9C] font-bold text-[11px] tracking-tight">{displayPhone}</div>
                                         </div>
                                     </div>
                                 );
                             case 'productInfo':
                                 return (
-                                    <div className="px-6 py-2 w-full overflow-hidden flex items-center">
+                                    <div className="px-4 py-2 w-full overflow-hidden flex items-center">
                                         <div className="flex items-center gap-3 w-full">
-                                            <div className="flex -space-x-4 hover:space-x-1 transition-all duration-500 items-center shrink-0">
+                                            <div className="flex -space-x-2 items-center shrink-0">
                                                 {productThumbnails.slice(0, 3).map((p: any, i: number) => (
-                                                    <div key={i} className="relative group/prod">
-                                                        <div className="w-12 h-12 rounded-2xl bg-gray-800 border-2 border-[#020617] overflow-hidden shadow-2xl transition-all group-hover/prod:scale-110 group-hover/prod:z-10 group-hover/prod:border-blue-500/50">
-                                                            {p.img ? <img src={p.img} className="w-full h-full object-cover" alt="" /> : <div className="w-full h-full flex items-center justify-center text-[8px] text-gray-500 italic">No Pic</div>}
+                                                    <div key={i} className="relative">
+                                                        <div className="w-10 h-10 rounded bg-[#2B3139] border border-[#363C44] overflow-hidden">
+                                                            {p.img ? <img src={p.img} className="w-full h-full object-cover" alt="" /> : <div className="w-full h-full flex items-center justify-center text-[8px] text-[#848E9C]">No Pic</div>}
                                                         </div>
-                                                        <div className="absolute -top-1.5 -right-1.5 bg-blue-600 text-white text-[10px] font-black w-5 h-5 rounded-lg flex items-center justify-center border-2 border-[#020617] shadow-lg transform rotate-3 group-hover/prod:rotate-0 transition-transform">
+                                                        <div className="absolute -top-1 -right-1 bg-[#FCD535] text-[#181A20] text-[9px] font-bold px-1 rounded-sm border border-[#181A20]">
                                                             {p.quantity}
                                                         </div>
                                                     </div>
                                                 ))}
-                                                {order.Products.length > 3 && (
-                                                    <div className="w-12 h-12 rounded-2xl bg-[#0f172a] border-2 border-[#020617] flex items-center justify-center text-[11px] font-black text-blue-400 z-0 shadow-2xl">
-                                                        +{order.Products.length - 3}
-                                                    </div>
-                                                )}
                                             </div>
                                             <div className="flex-1 min-w-0 flex flex-col justify-center">
-                                                <div className="flex items-center gap-1.5 mb-0.5">
-                                                    <span className="text-[12px] font-black text-white truncate uppercase tracking-tight leading-none italic">{order.Products[0]?.name}</span>
-                                                    <div className="w-1 h-1 rounded-full bg-blue-500/40"></div>
+                                                <div className="flex items-center gap-1.5">
+                                                    <span className="text-[12px] font-bold text-[#EAECEF] truncate uppercase tracking-tight leading-none">{order.Products[0]?.name}</span>
                                                 </div>
-                                                <div className="flex items-center gap-2">
-                                                    <span className="text-[10px] font-bold text-gray-500 uppercase tracking-widest leading-none">{order.Products.length} Items</span>
+                                                <div className="flex items-center gap-2 mt-1">
+                                                    <span className="text-[10px] font-medium text-[#848E9C] uppercase tracking-wider leading-none">{order.Products.length} Items</span>
                                                 </div>
                                             </div>
                                         </div>
@@ -194,32 +163,32 @@ const OrderRow = (props: any) => {
                             case 'location':
                                 return (
                                     <div className="px-4 py-2 w-full overflow-hidden">
-                                        <div className="font-black text-gray-300 text-[13px] truncate leading-tight uppercase tracking-tight">{order.Location}</div>
-                                        <div className="text-[11px] text-gray-600 font-bold truncate mt-1 italic">{order['Address Details']}</div>
+                                        <div className="font-bold text-[#EAECEF] text-[12px] truncate leading-tight uppercase tracking-tight">{order.Location}</div>
+                                        <div className="text-[10px] text-[#848E9C] font-medium truncate mt-0.5">{order['Address Details']}</div>
                                     </div>
                                 );
                             case 'pageInfo':
                                 return (
-                                    <div className={`px-4 py-2 w-full flex items-center gap-3 ${tooltipTriggerClass}`}>
+                                    <div className={`px-4 py-2 w-full flex items-center gap-2.5 ${tooltipTriggerClass}`}>
                                         <div className="os-tooltip">{order.Page}</div>
-                                        {pageLogoUrl && <img src={pageLogoUrl} className="w-10 h-10 rounded-xl border border-white/5 object-cover shadow-xl" alt="" />}
-                                        <span className="font-black text-gray-500 text-[11px] uppercase truncate tracking-tighter">{order.Page}</span>
+                                        {pageLogoUrl && <img src={pageLogoUrl} className="w-8 h-8 rounded border border-[#2B3139] object-cover" alt="" />}
+                                        <span className="font-bold text-[#848E9C] text-[11px] uppercase truncate tracking-tight">{order.Page}</span>
                                     </div>
                                 );
                             case 'brandSales':
                             case 'fulfillment':
                                 return (
                                     <div className="px-4 py-2 w-full flex items-center overflow-hidden">
-                                        <span className="px-3 py-2 rounded-xl bg-indigo-500/5 border border-indigo-500/10 text-indigo-400 font-black text-[11px] uppercase tracking-tighter truncate block text-center w-full">
+                                        <span className="px-2 py-1 rounded bg-[#2B3139] text-[#EAECEF] font-bold text-[10px] uppercase tracking-tight truncate block text-center w-full">
                                             {order['Fulfillment Store']}
                                         </span>
                                     </div>
                                 );
                             case 'total':
                                 return (
-                                    <div className="px-6 py-2 w-full flex items-center">
-                                        <div className="font-black text-blue-400 text-[18px] tracking-tighter italic drop-shadow-[0_0_8px_rgba(37,99,235,0.2)]">
-                                            <span className="text-[12px] align-top mr-0.5">$</span>
+                                    <div className="px-4 py-2 w-full flex items-center">
+                                        <div className="font-bold text-[#EAECEF] text-[16px] tracking-tight">
+                                            <span className="text-[11px] mr-0.5">$</span>
                                             {(Number(order['Grand Total']) || 0).toFixed(2)}
                                         </div>
                                     </div>
@@ -228,22 +197,22 @@ const OrderRow = (props: any) => {
                                 return (
                                     <div className={`px-4 py-2 w-full flex items-center ${tooltipTriggerClass}`}>
                                         <div className="os-tooltip">{order['Internal Shipping Method']}</div>
-                                        <div className="flex items-center gap-2 bg-black/30 p-2 rounded-xl border border-white/5 shadow-inner overflow-hidden w-full">
-                                            <div className="w-8 h-8 bg-white/5 rounded-lg flex items-center justify-center flex-shrink-0">
-                                                {shippingLogo ? <img src={convertGoogleDriveUrl(shippingLogo)} className="w-6 h-6 object-contain opacity-90" alt="" /> : <span className="text-[10px] text-gray-600">N/A</span>}
+                                        <div className="flex items-center gap-2 bg-[#2B3139]/50 p-1.5 rounded border border-[#2B3139] overflow-hidden w-full">
+                                            <div className="w-6 h-6 bg-[#2B3139] rounded flex items-center justify-center flex-shrink-0">
+                                                {shippingLogo ? <img src={convertGoogleDriveUrl(shippingLogo)} className="w-4 h-4 object-contain" alt="" /> : <span className="text-[8px] text-[#848E9C]">N/A</span>}
                                             </div>
-                                            <span className="text-[11px] font-black text-gray-400 uppercase truncate tracking-tighter">{order['Internal Shipping Method'] || 'N/A'}</span>
+                                            <span className="text-[10px] font-bold text-[#848E9C] uppercase truncate tracking-tight">{order['Internal Shipping Method'] || 'N/A'}</span>
                                         </div>
                                     </div>
                                 );
                             case 'driver':
-                                return <div className="px-4 py-2 w-full font-black text-orange-400/80 text-[12px] uppercase truncate tracking-tight flex items-center">{order['Driver Name'] || order['Internal Shipping Details'] || 'Unassigned'}</div>;
+                                return <div className="px-4 py-2 w-full font-bold text-[#848E9C] text-[11px] uppercase truncate tracking-tight flex items-center">{order['Driver Name'] || order['Internal Shipping Details'] || 'Unassigned'}</div>;
                             case 'shippingCost':
-                                return <div className="px-4 py-2 w-full font-mono font-black text-orange-500/60 text-[14px] flex items-center">${(Number(order['Internal Cost']) || 0).toFixed(2)}</div>;
+                                return <div className="px-4 py-2 w-full font-bold text-[#848E9C] text-[12px] flex items-center">${(Number(order['Internal Cost']) || 0).toFixed(2)}</div>;
                             case 'status':
                                 return (
-                                    <div className="px-6 py-2 w-full flex items-center justify-center">
-                                        <span className={`px-4 py-2 rounded-2xl text-[11px] font-black uppercase tracking-widest border ${order['Payment Status'] === 'Paid' ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20 shadow-[0_0_15px_rgba(16,185,129,0.1)]' : 'bg-red-500/10 text-red-400 border-red-500/20 shadow-[0_0_15px_rgba(239,68,68,0.1)]'}`}>
+                                    <div className="px-4 py-2 w-full flex items-center justify-center">
+                                        <span className={`px-3 py-1 rounded text-[10px] font-bold uppercase tracking-wider ${order['Payment Status'] === 'Paid' ? 'bg-[#0ECB81]/10 text-[#0ECB81]' : 'bg-[#F6465D]/10 text-[#F6465D]'}`}>
                                             {order['Payment Status']}
                                         </span>
                                     </div>
@@ -251,40 +220,40 @@ const OrderRow = (props: any) => {
                             case 'date':
                                 return (
                                     <div className="px-2 py-2 w-full flex flex-col justify-center leading-tight">
-                                        <span className="font-black text-gray-400 text-[12px] tracking-tighter">{orderDate.toLocaleDateString('km-KH')}</span>
-                                        <span className="text-gray-600 font-bold text-[11px] uppercase tracking-widest">{orderDate.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', hour12: true })}</span>
+                                        <span className="font-bold text-[#EAECEF] text-[11px] tracking-tight">{orderDate.toLocaleDateString('km-KH')}</span>
+                                        <span className="text-[#848E9C] font-medium text-[10px] uppercase tracking-wider">{orderDate.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' })}</span>
                                     </div>
                                 );
                             case 'note':
                                 return (
-                                    <div className="px-4 py-2 w-full text-[12px] text-gray-500 font-medium truncate italic flex items-center group-hover:text-gray-300 transition-colors">
+                                    <div className="px-4 py-2 w-full text-[11px] text-[#848E9C] font-medium truncate flex items-center italic">
                                         {order.Note || '---'}
                                     </div>
                                 );
                             case 'print':
                                 return (
-                                    <div className="px-4 py-2 w-full flex items-center justify-center gap-2 opacity-40 group-hover:opacity-100 transition-opacity">
-                                        <button onClick={() => handleCopyTemplate(order)} className={`w-10 h-10 flex items-center justify-center rounded-xl transition-all border shadow-lg ${copiedTemplateId === order['Order ID'] ? 'bg-blue-600 border-blue-500 text-white' : 'bg-white/5 text-gray-500 hover:text-white border-white/5'}`} title="Copy Template"><svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}><path d="M8 5H6a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2v-1M8 5a2 2 0 002 2h2a2 2 0 002-2M8 5a2 2 0 012-2h2a2 2 0 012 2m0 0h2a2 2 0 012 2v3m2 4H10m0 0l3-3m-3 3l3 3" /></svg></button>
-                                        <button onClick={() => handlePrint(order)} className="w-10 h-10 flex items-center justify-center bg-white/5 hover:bg-emerald-600 text-gray-500 hover:text-white rounded-xl transition-all border border-white/5 shadow-lg" title="Print Label"><svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}><path d="M6 9V2h12v7M6 18H4a2 2 0 01-2-2v-5a2 2 0 012-2h16a2 2 0 012 2v5a2 2 0 01-2 2h-2m-2 4H8v-4h8v4z" /></svg></button>
+                                    <div className="px-4 py-2 w-full flex items-center justify-center gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
+                                        <button onClick={() => handleCopyTemplate(order)} className={`w-8 h-8 flex items-center justify-center rounded transition-all border ${copiedTemplateId === order['Order ID'] ? 'bg-[#FCD535] border-[#FCD535] text-[#181A20]' : 'bg-[#2B3139] text-[#848E9C] hover:text-white border-[#363C44]'}`} title="Copy Template"><svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path d="M8 5H6a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2v-1M8 5a2 2 0 002 2h2a2 2 0 002-2M8 5a2 2 0 012-2h2a2 2 0 012 2m0 0h2a2 2 0 012 2v3m2 4H10m0 0l3-3m-3 3l3 3" /></svg></button>
+                                        <button onClick={() => handlePrint(order)} className="w-8 h-8 flex items-center justify-center bg-[#2B3139] hover:bg-[#0ECB81] text-[#848E9C] hover:text-white rounded transition-all border border-[#363C44]" title="Print Label"><svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path d="M6 9V2h12v7M6 18H4a2 2 0 01-2-2v-5a2 2 0 012-2h16a2 2 0 012 2v5a2 2 0 01-2 2h-2m-2 4H8v-4h8v4z" /></svg></button>
                                     </div>
                                 );
                             case 'check':
                                 return (
                                     <div className="px-2 py-2 w-full flex items-center justify-center">
-                                        <div className={`h-8 w-8 rounded-xl border-2 flex items-center justify-center transition-all duration-500 shadow-lg ${isVerified ? 'bg-emerald-500 border-emerald-400 shadow-[0_0_15px_rgba(16,185,129,0.4)] rotate-[360deg]' : 'border-gray-800 hover:border-emerald-500/50'} ${canVerifyOrder() ? 'cursor-pointer' : 'cursor-not-allowed'}`} onClick={() => canVerifyOrder() && !updatingIds.has(order['Order ID']) && toggleOrderVerified(order['Order ID'], order.IsVerified)}>
-                                            {updatingIds.has(order['Order ID']) ? <Spinner size="xs" /> : isVerified && <svg className="w-5 h-5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={4}><path d="M5 13l4 4L19 7" /></svg>}
+                                        <div className={`h-6 w-6 rounded border flex items-center justify-center transition-all ${isVerified ? 'bg-[#0ECB81] border-[#0ECB81]' : 'border-[#474D57] hover:border-[#FCD535]'} ${canVerifyOrder() ? 'cursor-pointer' : 'cursor-not-allowed'}`} onClick={() => canVerifyOrder() && !updatingIds.has(order['Order ID']) && toggleOrderVerified(order['Order ID'], order.IsVerified)}>
+                                            {updatingIds.has(order['Order ID']) ? <Spinner size="xs" /> : isVerified && <svg className="w-3.5 h-3.5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={4}><path d="M5 13l4 4L19 7" /></svg>}
                                         </div>
                                     </div>
                                 );
                             case 'orderId':
-                                return <div className="px-2 py-2 w-full text-center flex items-center justify-center"><button onClick={() => handleCopy(order['Order ID'])} className="text-[11px] font-black font-mono text-gray-700 hover:text-blue-400 transition-colors uppercase tracking-tight">{order['Order ID'].substring(0, 6)}</button></div>;
+                                return <div className="px-2 py-2 w-full text-center flex items-center justify-center"><button onClick={() => handleCopy(order['Order ID'])} className="text-[10px] font-bold font-mono text-[#848E9C] hover:text-[#FCD535] transition-colors uppercase tracking-tight">{order['Order ID'].substring(0, 6)}</button></div>;
                             default:
                                 return null;
                         }
                     })();
 
                     return (
-                        <div key={k} style={{ width: `${width}px` }} className={`flex-shrink-0 flex items-center ${showBorders ? 'border-r border-white/10' : ''}`}>
+                        <div key={k} style={{ width: `${width}px` }} className={`flex-shrink-0 flex items-center ${showBorders ? 'border-r border-[#2B3139]' : ''}`}>
                             {content}
                         </div>
                     );

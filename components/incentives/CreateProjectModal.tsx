@@ -4,6 +4,7 @@ import { createProject, updateProject, deleteProject } from '../../services/ince
 import { AppContext } from '../../context/AppContext';
 import { translations } from '../../translations';
 import { IncentiveProject } from '../../types';
+import { X, Trash2, Save, Plus } from 'lucide-react';
 
 interface CreateProjectModalProps {
     isOpen: boolean;
@@ -17,7 +18,7 @@ const CreateProjectModal: React.FC<CreateProjectModalProps> = ({ isOpen, onClose
     const t = translations[language];
 
     const [projectName, setProjectName] = useState('');
-    const [colorCode, setColorCode] = useState('#3b82f6'); // default blue
+    const [colorCode, setColorCode] = useState('#FCD535'); // default yellow
     const [requirePeriod, setRequirePeriod] = useState(false);
     const [dataSource, setDataSource] = useState<'system' | 'manual'>('system');
     const [status, setStatus] = useState<string>('Draft');
@@ -28,7 +29,7 @@ const CreateProjectModal: React.FC<CreateProjectModalProps> = ({ isOpen, onClose
     useEffect(() => {
         if (initialData) {
             setProjectName(initialData.projectName || '');
-            setColorCode(initialData.colorCode || '#3b82f6');
+            setColorCode(initialData.colorCode || '#FCD535');
             setRequirePeriod(!!initialData.requirePeriodSelection);
             setDataSource(initialData.dataSource || 'system');
             setStatus(initialData.status || 'Draft');
@@ -37,7 +38,7 @@ const CreateProjectModal: React.FC<CreateProjectModalProps> = ({ isOpen, onClose
             setTargetTeam(initialData.targetTeam || '');
         } else {
             setProjectName('');
-            setColorCode('#3b82f6');
+            setColorCode('#FCD535');
             setRequirePeriod(false);
             setDataSource('system');
             setStatus('Draft');
@@ -100,85 +101,85 @@ const CreateProjectModal: React.FC<CreateProjectModalProps> = ({ isOpen, onClose
 
     return (
         <Modal isOpen={isOpen} onClose={onClose} maxWidth="max-w-md">
-            <div className="bg-slate-900 rounded-3xl border border-slate-700 shadow-2xl p-6">
-                <div className="flex justify-between items-center mb-6 border-b border-slate-800 pb-4">
+            <div className="ui-binance bg-card-bg rounded-md border border-[#2B3139] shadow-2xl overflow-hidden text-[#EAECEF] font-sans">
+                <div className="flex justify-between items-center px-6 py-4 bg-bg-black border-b border-[#2B3139]">
                     <div>
-                        <h2 className="text-xl font-black text-white uppercase tracking-tight">
+                        <h2 className="text-sm font-bold text-[#EAECEF] uppercase tracking-widest">
                             {initialData ? t.edit : t.create_project}
                         </h2>
-                        <p className="text-xs text-slate-400 font-bold mt-1">Configure your incentive or commission program</p>
+                        <p className="text-[9px] text-secondary font-bold uppercase tracking-wider mt-0.5">Configure Engine Node</p>
                     </div>
-                    <button onClick={onClose} className="p-2 bg-slate-800 hover:bg-slate-700 rounded-full transition-colors text-slate-400 hover:text-white">
-                        <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" /></svg>
+                    <button onClick={onClose} className="p-1.5 bg-bg-black hover:bg-[#474D57] rounded transition-colors text-secondary hover:text-[#EAECEF] border border-[#2B3139]">
+                        <X className="w-4 h-4" />
                     </button>
                 </div>
 
-                <form onSubmit={handleSubmit} className="space-y-5">
+                <form onSubmit={handleSubmit} className="p-6 space-y-5">
                     <div>
-                        <label className="block text-xs font-black text-slate-400 uppercase tracking-widest mb-2">{t.project_name}</label>
+                        <label className="block text-[10px] font-bold text-secondary uppercase tracking-widest mb-2">{t.project_name}</label>
                         <input 
                             type="text" 
                             value={projectName}
                             onChange={e => setProjectName(e.target.value)}
-                            className="w-full bg-slate-800 border border-slate-700 rounded-xl px-4 py-3 text-white font-bold focus:border-blue-500 focus:ring-1 focus:ring-blue-500/50 transition-all"
-                            placeholder="e.g., Marathon Sales Campaign 2026"
+                            className="w-full bg-bg-black border border-[#2B3139] rounded px-3 py-2.5 text-[11px] font-bold text-[#EAECEF] focus:border-primary outline-none transition-all uppercase"
+                            placeholder="e.g. PERFORMANCE ENGINE Q3"
                             required
                         />
                     </div>
 
                     <div className="grid grid-cols-2 gap-4">
                         <div>
-                            <label className="block text-xs font-black text-slate-400 uppercase tracking-widest mb-2">{t.color_theme}</label>
-                            <div className="flex items-center gap-3 bg-slate-800 p-2 rounded-xl border border-slate-700">
+                            <label className="block text-[10px] font-bold text-secondary uppercase tracking-widest mb-2">{t.color_theme}</label>
+                            <div className="flex items-center gap-3 bg-bg-black p-1.5 rounded border border-[#2B3139]">
                                 <input 
                                     type="color" 
                                     value={colorCode}
                                     onChange={e => setColorCode(e.target.value)}
-                                    className="w-8 h-8 rounded cursor-pointer border-0 bg-transparent p-0"
+                                    className="w-6 h-6 rounded cursor-pointer border-0 bg-transparent p-0"
                                 />
-                                <span className="text-[10px] font-mono text-slate-300">{colorCode}</span>
+                                <span className="text-[10px] font-mono text-secondary font-bold uppercase">{colorCode}</span>
                             </div>
                         </div>
                         <div>
-                            <label className="block text-xs font-black text-slate-400 uppercase tracking-widest mb-2">{t.status}</label>
+                            <label className="block text-[10px] font-bold text-secondary uppercase tracking-widest mb-2">{t.status}</label>
                             <select 
                                 value={status}
                                 onChange={e => setStatus(e.target.value as any)}
-                                className="w-full bg-slate-800 border border-slate-700 rounded-xl px-3 py-2 text-xs font-bold text-white focus:border-blue-500"
+                                className="w-full bg-bg-black border border-[#2B3139] rounded px-2 py-1.5 text-[11px] font-bold text-[#EAECEF] focus:border-primary outline-none"
                             >
-                                <option value="Draft">Draft</option>
-                                <option value="Active">Active</option>
-                                <option value="Disable">Disable</option>
+                                <option value="Draft">DRAFT</option>
+                                <option value="Active">ACTIVE</option>
+                                <option value="Disable">DISABLE</option>
                             </select>
                         </div>
                     </div>
 
-                    <div className="bg-slate-800/50 rounded-xl p-4 border border-slate-700/50 space-y-4">
+                    <div className="bg-bg-black rounded border border-[#2B3139] p-4 space-y-4">
                         <div className="flex items-center justify-between">
                             <div>
-                                <label className="text-sm font-bold text-white block">{t.require_period}</label>
-                                <span className="text-[10px] text-slate-400 block mt-0.5">{t.require_period_desc}</span>
+                                <label className="text-[11px] font-bold text-[#EAECEF] uppercase tracking-wide block">{t.require_period}</label>
+                                <span className="text-[9px] text-secondary font-bold uppercase tracking-wider block mt-0.5">{t.require_period_desc}</span>
                             </div>
                             <label className="relative inline-flex items-center cursor-pointer">
                                 <input type="checkbox" checked={requirePeriod} onChange={e => setRequirePeriod(e.target.checked)} className="sr-only peer" />
-                                <div className="w-11 h-6 bg-slate-700 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-blue-600"></div>
+                                <div className="w-9 h-5 bg-[#474D57] peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-primary"></div>
                             </label>
                         </div>
 
-                        <div className="pt-3 border-t border-slate-700/50">
-                            <label className="block text-xs font-black text-slate-400 uppercase tracking-widest mb-2">{t.data_source}</label>
-                            <div className="flex gap-3">
+                        <div className="pt-3 border-t border-[#2B3139]">
+                            <label className="block text-[10px] font-bold text-secondary uppercase tracking-widest mb-2">{t.data_source}</label>
+                            <div className="flex gap-2">
                                 <button
                                     type="button"
                                     onClick={() => setDataSource('system')}
-                                    className={`flex-1 py-2.5 rounded-xl text-xs font-bold border transition-all ${dataSource === 'system' ? 'bg-blue-600/20 border-blue-500/50 text-blue-400' : 'bg-slate-800 border-slate-700 text-slate-400 hover:text-slate-300 hover:bg-slate-700'}`}
+                                    className={`flex-1 py-1.5 rounded text-[10px] font-bold border transition-all ${dataSource === 'system' ? 'bg-primary text-bg-black border-primary' : 'bg-bg-black border-[#2B3139] text-secondary hover:text-[#EAECEF]'}`}
                                 >
                                     {t.system_data}
                                 </button>
                                 <button
                                     type="button"
                                     onClick={() => setDataSource('manual')}
-                                    className={`flex-1 py-2.5 rounded-xl text-xs font-bold border transition-all ${dataSource === 'manual' ? 'bg-blue-600/20 border-blue-500/50 text-blue-400' : 'bg-slate-800 border-slate-700 text-slate-400 hover:text-slate-300 hover:bg-slate-700'}`}
+                                    className={`flex-1 py-1.5 rounded text-[10px] font-bold border transition-all ${dataSource === 'manual' ? 'bg-primary text-bg-black border-primary' : 'bg-bg-black border-[#2B3139] text-secondary hover:text-[#EAECEF]'}`}
                                 >
                                     {t.manual_input}
                                 </button>
@@ -186,12 +187,13 @@ const CreateProjectModal: React.FC<CreateProjectModalProps> = ({ isOpen, onClose
                         </div>
                     </div>
 
-                    <div className="flex flex-col gap-3 pt-4">
+                    <div className="flex flex-col gap-2 pt-2">
                         <button 
                             type="submit"
                             disabled={!projectName.trim()}
-                            className="w-full py-3.5 bg-blue-600 hover:bg-blue-500 disabled:opacity-50 disabled:cursor-not-allowed text-white font-black rounded-xl uppercase tracking-widest transition-all shadow-[0_0_20px_rgba(37,99,235,0.3)]"
+                            className="w-full py-2.5 bg-primary hover:bg-[#f0c51d] disabled:opacity-50 text-bg-black font-bold rounded text-[11px] uppercase tracking-widest transition-all flex items-center justify-center gap-2"
                         >
+                            {initialData ? <Save className="w-4 h-4" /> : <Plus className="w-4 h-4" />}
                             {initialData ? t.save : t.create_project}
                         </button>
                         
@@ -199,8 +201,9 @@ const CreateProjectModal: React.FC<CreateProjectModalProps> = ({ isOpen, onClose
                             <button 
                                 type="button"
                                 onClick={handleDelete}
-                                className="w-full py-3 text-red-400 hover:text-white hover:bg-red-600 border border-red-500/30 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all"
+                                className="w-full py-2 text-red-500 hover:bg-red-500/10 border border-transparent rounded text-[10px] font-bold uppercase tracking-widest transition-all flex items-center justify-center gap-2"
                             >
+                                <Trash2 className="w-3.5 h-3.5" />
                                 {t.delete}
                             </button>
                         )}

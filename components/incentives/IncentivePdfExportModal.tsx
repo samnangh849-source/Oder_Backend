@@ -5,6 +5,7 @@ import { jsPDF } from 'jspdf';
 import 'jspdf-autotable';
 import Spinner from '../common/Spinner';
 import { translations } from '../../translations';
+import { FileText, X, Download } from 'lucide-react';
 
 interface IncentiveResult {
     username: string;
@@ -139,32 +140,38 @@ const IncentivePdfExportModal: React.FC<IncentivePdfExportModalProps> = ({
 
     return (
         <Modal isOpen={isOpen} onClose={onClose} maxWidth="max-w-md">
-            <div className="p-6 text-center">
-                <div className="w-20 h-20 bg-red-500/10 rounded-3xl flex items-center justify-center mx-auto mb-6 border border-red-500/20 shadow-xl">
-                    <svg className="w-10 h-10 text-red-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
-                    </svg>
-                </div>
-                
-                <h3 className="text-xl font-black text-white uppercase tracking-tight mb-2 italic">Confirm PDF Export</h3>
-                <p className="text-sm text-slate-400 mb-8 leading-relaxed">
-                    You are about to generate an official incentive report for <span className="text-white font-bold">{projectName}</span> for the period of <span className="text-indigo-400 font-bold">{selectedMonth}</span>.
-                </p>
+            <div className="ui-binance bg-card-bg border border-[#2B3139] rounded-md overflow-hidden">
+                <div className="p-6 text-center">
+                    <div className="w-16 h-16 bg-[#2B3139] rounded-md flex items-center justify-center mx-auto mb-6 border border-[#474D57]">
+                        <FileText className="w-8 h-8 text-primary" />
+                    </div>
+                    
+                    <h3 className="text-lg font-bold text-[#EAECEF] uppercase tracking-wider mb-2">{t.export || 'Confirm PDF Export'}</h3>
+                    <div className="bg-bg-black border border-[#2B3139] p-4 rounded-md mb-8">
+                        <p className="text-[11px] text-secondary leading-relaxed uppercase tracking-wider">
+                            Generating report for <span className="text-[#EAECEF] font-bold">{projectName}</span>
+                        </p>
+                        <div className="flex items-center justify-center gap-2 mt-2">
+                            <span className="text-[10px] text-secondary font-bold uppercase tracking-widest">Period:</span>
+                            <span className="text-primary font-mono text-[11px] font-bold uppercase">{selectedMonth}</span>
+                        </div>
+                    </div>
 
-                <div className="flex flex-col gap-3">
-                    <button 
-                        onClick={generatePDF}
-                        disabled={isGenerating}
-                        className="w-full py-4 bg-red-600 hover:bg-red-500 text-white rounded-2xl font-black uppercase text-xs tracking-[0.2em] transition-all shadow-xl shadow-red-900/20 flex items-center justify-center gap-3 disabled:opacity-50"
-                    >
-                        {isGenerating ? <><Spinner size="sm" /> Generating...</> : <>Download PDF Report</>}
-                    </button>
-                    <button 
-                        onClick={onClose}
-                        className="w-full py-4 bg-slate-800 text-slate-400 hover:text-white rounded-2xl font-black uppercase text-xs tracking-widest transition-all"
-                    >
-                        Cancel
-                    </button>
+                    <div className="flex flex-col gap-3">
+                        <button 
+                            onClick={generatePDF}
+                            disabled={isGenerating}
+                            className="w-full py-3 bg-primary hover:bg-[#f0c51d] text-bg-black rounded-md font-bold uppercase text-[11px] tracking-widest transition-all flex items-center justify-center gap-2 disabled:opacity-50"
+                        >
+                            {isGenerating ? <><Spinner size="sm" /> Processing...</> : <><Download className="w-4 h-4" /> Download PDF Report</>}
+                        </button>
+                        <button 
+                            onClick={onClose}
+                            className="w-full py-3 bg-bg-black text-secondary hover:text-[#EAECEF] rounded-md font-bold uppercase text-[11px] tracking-widest transition-all border border-[#2B3139]"
+                        >
+                            {t.cancel || 'Cancel'}
+                        </button>
+                    </div>
                 </div>
             </div>
         </Modal>

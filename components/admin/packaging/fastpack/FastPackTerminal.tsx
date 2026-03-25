@@ -332,7 +332,10 @@ const FastPackTerminal: React.FC<FastPackTerminalProps> = ({ order, onClose, onS
         setDetection(result);
         setAiFrameCount(prev => (prev + 1) % 100);
         if (isAiEnabled) {
-            if (result.barcodeBox && countdown === null) {
+            // Trigger 2s countdown for any detected QR Code
+            const isQRCode = result.barcodeFormat === 'qr_code';
+            
+            if (result.barcodeBox && isQRCode && countdown === null) {
                 const track = (videoRef.current.srcObject as MediaStream)?.getVideoTracks()[0];
                 if (track && Date.now() - lastActionTime.current > 1200) {
                     const videoArea = videoRef.current.videoWidth * videoRef.current.videoHeight;

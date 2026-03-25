@@ -14,6 +14,7 @@ export interface DetectionResult {
     isHand: boolean;
     barcodeBox?: { x: number, y: number, w: number, h: number } | null;
     barcodeValue?: string;
+    barcodeFormat?: string;
 }
 
 export class PackageDetector {
@@ -29,6 +30,7 @@ export class PackageDetector {
     private frameCount = 0;
     private lastBarcodeBox: { x: number, y: number, w: number, h: number } | null = null;
     private lastBarcodeValue = '';
+    private lastBarcodeFormat = '';
 
     private getScanContext(video: HTMLVideoElement) {
         if (!this.scanCanvas) {
@@ -49,7 +51,7 @@ export class PackageDetector {
             if ('BarcodeDetector' in window) {
                 try {
                     // @ts-ignore
-                    this.barcodeDetector = new window.BarcodeDetector({ formats: ['qr_code', 'code_128', 'ean_13', 'data_matrix'] });
+                    this.barcodeDetector = new window.BarcodeDetector({ formats: ['qr_code', 'code_128', 'ean_13', 'data_matrix', 'code_39', 'upc_a', 'upc_e'] });
                 } catch (e) { console.warn("BarcodeDetector formats unsupported"); }
             }
             console.log("AI: Initializing WebGL backend...");
@@ -105,14 +107,17 @@ export class PackageDetector {
         if (this.frameCount % 2 === 0) {
             let foundBox = null;
             let foundValue = '';
+            let foundFormat = '';
 
             if (this.barcodeDetector) {
                 try {
                     const barcodes = await this.barcodeDetector.detect(video);
                     if (barcodes.length > 0) {
-                        const box = barcodes[0].boundingBox;
+                        const b = barcodes[0];
+                        const box = b.boundingBox;
                         foundBox = { x: box.left, y: box.top, w: box.width, h: box.height };
-                        foundValue = barcodes[0].rawValue;
+                        foundValue = b.rawValue;
+                        foundFormat = b.format;
                     }
                 } catch (err) {}
             }
@@ -130,12 +135,14 @@ export class PackageDetector {
                         const maxY = Math.max(bottomLeftCorner.y, bottomRightCorner.y) / scale;
                         foundBox = { x: minX, y: minY, w: maxX - minX, h: maxY - minY };
                         foundValue = code.data;
+                        foundFormat = 'qr_code';
                     }
                 }
             }
 
             this.lastBarcodeBox = foundBox;
             this.lastBarcodeValue = foundValue;
+            this.lastBarcodeFormat = foundFormat;
         }
 
         if (this.detector) {
@@ -188,7 +195,8 @@ export class PackageDetector {
             gesture: gestureDetected,
             confidence,
             barcodeBox: this.lastBarcodeBox,
-            barcodeValue: this.lastBarcodeValue
+            barcodeValue: this.lastBarcodeValue,
+            barcodeFormat: this.lastBarcodeFormat
         };
     }
 }
