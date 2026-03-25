@@ -37,10 +37,12 @@ export class PackageDetector {
             this.scanCanvas = document.createElement('canvas');
             this.scanCtx = this.scanCanvas.getContext('2d', { willReadFrequently: true });
         }
-        const scale = 0.5; // Scale down for performance
+        const scale = 1.0; // Use maximum resolution for QR accuracy
         this.scanCanvas.width = video.videoWidth * scale;
         this.scanCanvas.height = video.videoHeight * scale;
-        this.scanCtx?.drawImage(video, 0, 0, this.scanCanvas.width, this.scanCanvas.height);
+        if (this.scanCtx) {
+            this.scanCtx.drawImage(video, 0, 0, this.scanCanvas.width, this.scanCanvas.height);
+        }
         return { ctx: this.scanCtx, width: this.scanCanvas.width, height: this.scanCanvas.height, scale };
     }
 
@@ -51,7 +53,7 @@ export class PackageDetector {
             if ('BarcodeDetector' in window) {
                 try {
                     // @ts-ignore
-                    this.barcodeDetector = new window.BarcodeDetector({ formats: ['qr_code', 'code_128', 'ean_13', 'data_matrix', 'code_39', 'upc_a', 'upc_e'] });
+                    this.barcodeDetector = new window.BarcodeDetector({ formats: ['qr_code', 'qr', 'code_128', 'ean_13', 'data_matrix', 'code_39', 'upc_a', 'upc_e'] });
                 } catch (e) { console.warn("BarcodeDetector formats unsupported"); }
             }
             console.log("AI: Initializing WebGL backend...");
@@ -103,47 +105,47 @@ export class PackageDetector {
 
         this.frameCount++;
         
-        // Process Barcodes every 2 frames to save CPU
-        if (this.frameCount % 2 === 0) {
-            let foundBox = null;
-            let foundValue = '';
-            let foundFormat = '';
+        // Process Barcodes every frame for maximum responsiveness
+        let foundBox = null;
+        let foundValue = '';
+        let foundFormat = '';
 
-            if (this.barcodeDetector) {
-                try {
-                    const barcodes = await this.barcodeDetector.detect(video);
-                    if (barcodes.length > 0) {
-                        const b = barcodes[0];
-                        const box = b.boundingBox;
-                        foundBox = { x: box.left, y: box.top, w: box.width, h: box.height };
-                        foundValue = b.rawValue;
-                        foundFormat = b.format;
-                    }
-                } catch (err) {}
-            }
+        if (this.barcodeDetector) {
+            try {
+                const barcodes = await this.barcodeDetector.detect(video);
+                if (barcodes.length > 0) {
+                    const b = barcodes[0];
+                    const box = b.boundingBox;
+                    foundBox = { x: box.left, y: box.top, w: box.width, h: box.height };
+                    foundValue = b.rawValue;
+                    // Normalize format
+                    const fmt = b.format.toLowerCase();
+                    foundFormat = (fmt === 'qr_code' || fmt === 'qr') ? 'qr_code' : fmt;
+                }
+            } catch (err) {}
+        }
 
-            if (!foundBox && jsQR) {
-                const { ctx, width, height, scale } = this.getScanContext(video);
-                if (ctx) {
-                    const imageData = ctx.getImageData(0, 0, width, height);
-                    const code = jsQR(imageData.data, width, height, { inversionAttempts: "dontInvert" });
-                    if (code) {
-                        const { topLeftCorner, topRightCorner, bottomLeftCorner, bottomRightCorner } = code.location;
-                        const minX = Math.min(topLeftCorner.x, bottomLeftCorner.x) / scale;
-                        const minY = Math.min(topLeftCorner.y, topRightCorner.y) / scale;
-                        const maxX = Math.max(topRightCorner.x, bottomRightCorner.x) / scale;
-                        const maxY = Math.max(bottomLeftCorner.y, bottomRightCorner.y) / scale;
-                        foundBox = { x: minX, y: minY, w: maxX - minX, h: maxY - minY };
-                        foundValue = code.data;
-                        foundFormat = 'qr_code';
-                    }
+        if (!foundBox && jsQR) {
+            const { ctx, width, height, scale } = this.getScanContext(video);
+            if (ctx) {
+                const imageData = ctx.getImageData(0, 0, width, height);
+                const code = jsQR(imageData.data, width, height, { inversionAttempts: "attemptBoth" });
+                if (code) {
+                    const { topLeftCorner, topRightCorner, bottomLeftCorner, bottomRightCorner } = code.location;
+                    const minX = Math.min(topLeftCorner.x, bottomLeftCorner.x) / scale;
+                    const minY = Math.min(topLeftCorner.y, topRightCorner.y) / scale;
+                    const maxX = Math.max(topRightCorner.x, bottomRightCorner.x) / scale;
+                    const maxY = Math.max(bottomLeftCorner.y, bottomRightCorner.y) / scale;
+                    foundBox = { x: minX, y: minY, w: maxX - minX, h: maxY - minY };
+                    foundValue = code.data;
+                    foundFormat = 'qr_code';
                 }
             }
-
-            this.lastBarcodeBox = foundBox;
-            this.lastBarcodeValue = foundValue;
-            this.lastBarcodeFormat = foundFormat;
         }
+
+        this.lastBarcodeBox = foundBox;
+        this.lastBarcodeValue = foundValue;
+        this.lastBarcodeFormat = foundFormat;
 
         if (this.detector) {
             try {

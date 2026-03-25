@@ -70,6 +70,7 @@ const FastPackTerminal: React.FC<FastPackTerminalProps> = ({ order, onClose, onS
     const [autoCaptureProgress, setAutoCaptureProgress] = useState(0);
     const [countdown, setCountdown] = useState<number | null>(null);
     const [aiFrameCount, setAiFrameCount] = useState(0);
+    const qrStabilityRef = useRef<number>(0);
     
     const videoRef = useRef<HTMLVideoElement>(null);
     const canvasRef = useRef<HTMLCanvasElement>(null);
@@ -333,11 +334,17 @@ const FastPackTerminal: React.FC<FastPackTerminalProps> = ({ order, onClose, onS
         setAiFrameCount(prev => (prev + 1) % 100);
         if (isAiEnabled) {
             // Trigger 2s countdown for any detected QR Code
-            const isQRCode = result.barcodeFormat === 'qr_code';
+            const isQRCode = result.barcodeFormat === 'qr_code' || result.barcodeFormat === 'qr' || result.barcodeFormat?.toLowerCase().includes('qr');
             
-            if (result.barcodeBox && isQRCode && countdown === null) {
+            if (result.barcodeBox && isQRCode) {
+                qrStabilityRef.current += 1;
+            } else {
+                qrStabilityRef.current = 0;
+            }
+
+            if (qrStabilityRef.current >= 5 && countdown === null && !previewImage) {
                 const track = (videoRef.current.srcObject as MediaStream)?.getVideoTracks()[0];
-                if (track && Date.now() - lastActionTime.current > 1200) {
+                if (track && Date.now() - lastActionTime.current > 1500) {
                     const videoArea = videoRef.current.videoWidth * videoRef.current.videoHeight;
                     const objectArea = result.barcodeBox.w * result.barcodeBox.h;
                     const areaRatio = objectArea / videoArea;
