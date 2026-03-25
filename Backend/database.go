@@ -2,7 +2,6 @@ package backend
 
 import (
 	"encoding/base64"
-	"fmt"
 	"log"
 	"net/url"
 	"os"
@@ -35,8 +34,7 @@ func InitDB() {
 	}
 
 	// Smart DSN parsing and parameter injection
-	u, err := url.Parse(rawDSN)
-	if err != nil {
+	if _, err := url.Parse(rawDSN); err != nil {
 		// If it's not a full URL (e.g. host=localhost...), fallback to string manipulation
 		log.Printf("⚠️ DSN is not a URL format, using string manipulation: %v", err)
 	}
@@ -85,6 +83,7 @@ func InitDB() {
 	}
 
 	var db *gorm.DB
+	var err error
 	maxRetries := GetEnvInt("DB_MAX_RETRIES", 10)
 
 	for i := 0; i < maxRetries; i++ {
