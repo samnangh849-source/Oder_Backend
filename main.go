@@ -2332,10 +2332,11 @@ func handleGetTeamSalesRanking(c *gin.Context) {
 
 	now := time.Now()
 
-	// Build date filter safely with parameterized values
-	db := DB.Table("revenue_entries").
-		Select("LOWER(TRIM(team)) as team_name, SUM(COALESCE(revenue, 0))::FLOAT as total_revenue").
+	// Query directly from orders table using grand_total (live revenue data)
+	db := DB.Table("orders").
+		Select("LOWER(TRIM(team)) as team_name, SUM(COALESCE(grand_total, 0)) as total_revenue").
 		Where("team IS NOT NULL AND team <> '' AND team <> 'Unassigned'").
+		Where("order_id NOT LIKE '%Opening_Balance%' AND order_id NOT LIKE '%Opening Balance%'").
 		Group("team_name").
 		Order("total_revenue DESC").
 		Limit(10)
@@ -2343,17 +2344,17 @@ func handleGetTeamSalesRanking(c *gin.Context) {
 	switch period {
 	case "today":
 		start := time.Date(now.Year(), now.Month(), now.Day(), 0, 0, 0, 0, now.Location())
-		db = db.Where("timestamp ~ '^\\d{4}-\\d{2}-\\d{2}' AND timestamp::date >= ?", start.Format("2006-01-02"))
+		db = db.Where("timestamp >= ?", start.Format("2006-01-02"))
 	case "this_week":
 		offset := int(now.Weekday()) - 1
 		if offset < 0 {
 			offset = 6
 		}
 		start := now.AddDate(0, 0, -offset)
-		db = db.Where("timestamp ~ '^\\d{4}-\\d{2}-\\d{2}' AND timestamp::date >= ?", start.Format("2006-01-02"))
+		db = db.Where("timestamp >= ?", start.Format("2006-01-02"))
 	case "this_month":
 		start := time.Date(now.Year(), now.Month(), 1, 0, 0, 0, 0, now.Location())
-		db = db.Where("timestamp ~ '^\\d{4}-\\d{2}-\\d{2}' AND timestamp::date >= ?", start.Format("2006-01-02"))
+		db = db.Where("timestamp >= ?", start.Format("2006-01-02"))
 		// "all" — no date filter
 	}
 
