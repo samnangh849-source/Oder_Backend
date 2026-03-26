@@ -25,8 +25,8 @@ type AppsScriptRequest struct {
 	FileData       string                 `json:"fileData,omitempty"`
 	Image          string                 `json:"image,omitempty"` // Alias for fileData
 	FileName       string                 `json:"fileName,omitempty"`
-	FileID         string                 `json:"fileID,omitempty"`   // Added for renameFile compatibility
-	NewName        string                 `json:"newName,omitempty"`  // Added for renameFile compatibility
+	FileID         string                 `json:"fileID,omitempty"`  // Added for renameFile compatibility
+	NewName        string                 `json:"newName,omitempty"` // Added for renameFile compatibility
 	MimeType       string                 `json:"mimeType,omitempty"`
 	UserName       string                 `json:"userName,omitempty"`
 	OrderData      interface{}            `json:"orderData,omitempty"`
@@ -226,6 +226,8 @@ func StopSyncManager() {
 }
 
 func processTask(workerID int, task SyncTask) {
+	log.Printf("🔄 SyncManager [Worker %d]: Processing task action=%s sheet=%s pk=%v", workerID, task.Request.Action, task.Request.SheetName, task.Request.PrimaryKey)
+
 	resp, err := CallAppsScriptPOST(task.Request)
 
 	if err != nil || resp.Status == "error" {
@@ -262,8 +264,6 @@ func processTask(workerID int, task SyncTask) {
 				task.Request.Action, task.Request.SheetName, task.Request.PrimaryKey)
 		}
 	} else {
-		// log.Printf("✅ SyncManager [Worker %d]: Task %s success on %s", workerID, task.Request.Action, task.Request.SheetName)
+		log.Printf("✅ SyncManager [Worker %d]: Task %s SUCCESS on sheet=%s pk=%v", workerID, task.Request.Action, task.Request.SheetName, task.Request.PrimaryKey)
 	}
 }
-
-
