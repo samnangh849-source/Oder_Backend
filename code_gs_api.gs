@@ -103,8 +103,15 @@ function doPost(e) {
         }
 
       case 'uploadImage':
-        const upRes = uploadImageToDrive(contents.fileData, contents.fileName, contents.mimeType, contents.uploadFolderID, contents.userName);
-        return createJsonResponse({ status: 'success', url: upRes.url, fileID: upRes.fileID });
+        console.log("📤 [uploadImage] Request received: fileName=" + contents.fileName + " mimeType=" + contents.mimeType + " folderID=" + contents.uploadFolderID);
+        try {
+          const upRes = uploadImageToDrive(contents.fileData, contents.fileName, contents.mimeType, contents.uploadFolderID, contents.userName);
+          console.log("📤 [uploadImage] SUCCESS: url=" + upRes.url + " fileID=" + upRes.fileID);
+          return createJsonResponse({ status: 'success', url: upRes.url, fileID: upRes.fileID, message: 'Upload completed successfully' });
+        } catch (e) {
+          console.error("📤 [uploadImage] FAILED: " + e.message);
+          return createJsonResponse({ status: 'error', message: 'Upload failed: ' + e.message });
+        }
         
       default:
          return createJsonResponse({ status: 'error', message: 'Action មិនត្រឹមត្រូវ' });
@@ -219,41 +226,65 @@ function handleDeleteRow(data) {
 }
 
 function handleUpdateSheet(data) {
-  const ss = SpreadsheetApp.getActiveSpreadsheet();
-  const sheet = ss.getSheetByName(data.sheetName);
-  if (!sheet) return createJsonResponse({ status: "error", message: "រកមិនឃើញ Sheet" }, 404);
-
-  const values = sheet.getDataRange().getValues();
-  const headers = values[0];
-  const normalizedHeaders = headers.map(h => normalizeKey(h));
+  console.log("📝 [UpdateSheet] Starting: sheetName=" + data.sheetName + " primaryKey=" + JSON.stringify(data.primaryKey) + " newData=" + JSON.stringify(data.newData));
   
-  let rowIndex = -1;
-  for (let i = 1; i < values.length; i++) {
-    let match = true;
-    for (const [pkKey, pkVal] of Object.entries(data.primaryKey)) {
-      const colIdx = normalizedHeaders.indexOf(normalizeKey(pkKey));
-      if (colIdx === -1 || String(values[i][colIdx]) !== String(pkVal)) {
-        match = false; break;
-      }
+  try {
+    const ss = SpreadsheetApp.getActiveSpreadsheet();
+    const sheet = ss.getSheetByName(data.sheetName);
+    if (!sheet) {
+      console.error("❌ [UpdateSheet] Sheet not found: " + data.sheetName);
+      return createJsonResponse({ status: "error", message: "រកមិនឃើញ Sheet: " + data.sheetName }, 404);
     }
-    if (match) { rowIndex = i + 1; break; }
-  }
+    
+    console.log("📋 [UpdateSheet] Sheet found: " + data.sheetName + " rows=" + sheet.getLastRow());
 
-  if (rowIndex !== -1) {
-    for (const [key, val] of Object.entries(data.newData)) {
-      const colIdx = normalizedHeaders.indexOf(normalizeKey(key));
-      if (colIdx !== -1) {
-        let v = val;
-        if (typeof v === 'string') {
-          if (v.toLowerCase() === 'true') v = true;
-          else if (v.toLowerCase() === 'false') v = false;
+    const values = sheet.getDataRange().getValues();
+    const headers = values[0];
+    const normalizedHeaders = headers.map(h => normalizeKey(h));
+    console.log("📑 [UpdateSheet] Headers: " + normalizedHeaders.join(", "));
+    
+    let rowIndex = -1;
+    for (let i = 1; i < values.length; i++) {
+      let match = true;
+      for (const [pkKey, pkVal] of Object.entries(data.primaryKey)) {
+        const colIdx = normalizedHeaders.indexOf(normalizeKey(pkKey));
+        if (colIdx === -1 || String(values[i][colIdx]) !== String(pkVal)) {
+          match = false; break;
         }
-        sheet.getRange(rowIndex, colIdx + 1).setValue(v);
+      }
+      if (match) { 
+        rowIndex = i + 1; 
+        console.log("✅ [UpdateSheet] Row found: " + rowIndex + " data=" + JSON.stringify(values[i]));
+        break; 
       }
     }
-    return createJsonResponse({ status: "success" });
+
+    if (rowIndex !== -1) {
+      let updatedCount = 0;
+      for (const [key, val] of Object.entries(data.newData)) {
+        const colIdx = normalizedHeaders.indexOf(normalizeKey(key));
+        if (colIdx !== -1) {
+          let v = val;
+          if (typeof v === 'string') {
+            if (v.toLowerCase() === 'true') v = true;
+            else if (v.toLowerCase() === 'false') v = false;
+          }
+          sheet.getRange(rowIndex, colIdx + 1).setValue(v);
+          updatedCount++;
+          console.log("📝 [UpdateSheet] Updated col " + (colIdx+1) + " (" + key + ") = " + v);
+        } else {
+          console.warn("⚠️ [UpdateSheet] Column not found in headers: " + key);
+        }
+      }
+      console.log("✅ [UpdateSheet] SUCCESS: Updated " + updatedCount + " columns in row " + rowIndex);
+      return createJsonResponse({ status: "success", updated: updatedCount });
+    }
+    console.error("❌ [UpdateSheet] Row not found with PK: " + JSON.stringify(data.primaryKey));
+    return createJsonResponse({ status: "error", message: "រកមិនឃើញជួរទិន្នន័យ (Row) ដើម្បីកែប្រែ" }, 404);
+  } catch (e) {
+    console.error("❌ [UpdateSheet] Exception: " + e.message);
+    return createJsonResponse({ status: "error", message: "Update failed: " + e.message }, 500);
   }
-  return createJsonResponse({ status: "error", message: "រកមិនឃើញជួរទិន្នន័យ (Row) ដើម្បីកែប្រែ" }, 404);
 }
 
 // --- ដំណើរការកម្មង់ (Order Processing Logic) ---
@@ -802,22 +833,63 @@ function extractDriveFolderID(idOrURL) {
 }
 
 function uploadImageToDrive(base64, name, mime, folderId, user) {
+  console.log("📤 [Drive Upload] Starting upload: name=" + name + " mime=" + mime + " folderId=" + folderId + " user=" + user);
+  
   try {
     const targetFolderId = extractDriveFolderID(folderId);
     let folder;
-    if (targetFolderId === "root") {
+    
+    // ✅ Validate folderId is not a placeholder or empty
+    if (!targetFolderId || targetFolderId === "root") {
+      console.log("📁 [Drive Upload] Using root folder (no target specified)");
+      folder = DriveApp.getRootFolder();
+    } else if (!isValidFolderId(targetFolderId)) {
+      console.warn("⚠️ [Drive Upload] Invalid Folder ID format: " + targetFolderId + ". Using root folder.");
       folder = DriveApp.getRootFolder();
     } else {
-      folder = DriveApp.getFolderById(targetFolderId);
+      try {
+        console.log("📁 [Drive Upload] Accessing folder: " + targetFolderId);
+        folder = DriveApp.getFolderById(targetFolderId);
+      } catch (folderError) {
+        console.warn("⚠️ [Drive Upload] Folder not accessible, attempting root folder: " + folderError.message);
+        folder = DriveApp.getRootFolder();
+      }
     }
+    
     const decoded = Utilities.base64Decode(base64.includes("base64,") ? base64.split("base64,")[1] : base64);
-    const file = folder.createFile(Utilities.newBlob(decoded, mime, name || "upload_" + new Date().getTime()));
+    const fileName = name || "upload_" + new Date().getTime();
+    console.log("💾 [Drive Upload] Creating file: " + fileName + " size=" + decoded.length + " bytes");
+    
+    const file = folder.createFile(Utilities.newBlob(decoded, mime, fileName));
     file.setSharing(DriveApp.Access.ANYONE, DriveApp.Permission.VIEW);
-    return { url: `https://drive.google.com/uc?id=${file.getId()}`, fileID: file.getId() };
+    
+    const result = { url: `https://drive.google.com/uc?id=${file.getId()}`, fileID: file.getId() };
+    console.log("✅ [Drive Upload] SUCCESS: fileID=" + result.fileID + " url=" + result.url);
+    
+    return result;
   } catch (e) {
-    console.error("Upload Error: " + e.message);
-    throw new Error("ការ Upload រូបភាពទៅ Google Drive បានបរាជ័យ: " + e.message);
+    console.error("❌ [Drive Upload] FAILED: " + e.message);
+    // ✅ Provide clearer error message for DriveApp access issues
+    let errorDetail = e.message;
+    if (e.message.indexOf("Access denied") !== -1 || e.message.indexOf("DriveApp") !== -1) {
+      errorDetail = "DriveApp មិនអាចប្រើបានទេ - សូមពិនិត្យ scopes ក្នុង appsscript.json ឱ្យបញ្ចូល https://www.googleapis.com/auth/drive";
+      console.error("🔧 [Drive Upload] Fix: Add 'https://www.googleapis.com/auth/drive' to oauthScopes in appsscript.json");
+    }
+    throw new Error("ការ Upload រូបភាពទៅ Google Drive បានបរាជ័យ: " + errorDetail);
   }
+}
+
+/**
+ * ពិនិត្យមើលថា folder ID មាន format ត្រឹមត្រូវឬទេ
+ * Google Drive folder IDs គឺជា string ប្រវែង 44 characters
+ */
+function isValidFolderId(id) {
+  if (!id || typeof id !== 'string') return false;
+  // Skip if it's placeholder text (Khmer characters)
+  if (/[\u1780-\u17FF]/.test(id)) return false;
+  // Skip if it's the actual placeholder message
+  if (id.indexOf("Folder_Google_Drive") !== -1) return false;
+  return true;
 }
 
 function logUserActivity(user, action, details) {

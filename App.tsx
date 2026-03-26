@@ -222,9 +222,10 @@ const AppContent: React.FC = () => {
     }, []);
 
     const shouldShowHeader = useMemo(() => {
+        if (isMobile && appState === 'user_journey') return false;
         if (appState === 'login' || appState === 'admin_dashboard' || appState === 'confirm_delivery' || appState === 'entertainment' || appState === 'watch' || appState === 'series_player' || appState === 'long_player' || appState === 'short_player') return false;
         return true;
-    }, [appState]);
+    }, [appState, isMobile]);
 
     const containerClass = useMemo(() => {
         if (appState === 'entertainment' || appState === 'watch' || appState === 'series_player' || appState === 'long_player' || appState === 'short_player') return 'w-full';

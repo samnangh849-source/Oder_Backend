@@ -156,7 +156,7 @@ const ShippingReport: React.FC<ShippingReportProps> = ({ orders, appData, dateFi
             methods[mName].cost += (Number(o['Internal Cost']) || 0);
             methods[mName].orders += 1;
 
-            const dName = o['Internal Shipping Details'] || 'N/A';
+            const dName = o['Driver Name'] || o['Internal Shipping Details'] || 'N/A';
             if (dName !== 'N/A') {
                 if (!drivers[dName]) {
                     const info = appData.drivers?.find(d => d.DriverName === dName);

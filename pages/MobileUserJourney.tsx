@@ -150,29 +150,16 @@ const MobileUserJourney: React.FC<MobileUserJourneyProps> = ({ onBackToRoleSelec
 
         return (
             <div className="min-h-full w-full flex flex-col pb-24 overflow-hidden" style={{ backgroundColor: bg }}>
-
-                <div className="px-4 py-3 flex items-center justify-between sticky top-0 z-50" style={headerStyle}>
-                    <div className="flex items-center gap-3">
-                        <button onClick={onBackToRoleSelect} className="p-2 active:scale-90" style={iconBtnStyle}>
-                            <ChevronLeft className="w-4 h-4" />
-                        </button>
-                        <div>
-                            <p className="text-[11px] font-bold leading-none" style={{ color: textMuted }}>Welcome back</p>
-                            <h2 className="text-sm font-black leading-tight mt-0.5" style={{ color: textPrimary }}>
-                                Choose a team to start
-                            </h2>
-                        </div>
-                    </div>
-                    <div
-                        className="flex items-center gap-1.5 px-3 py-1.5 border"
-                        style={{ borderRadius: `${Math.min(br, 20)}px`, borderColor, backgroundColor: `${greenOk}12` }}
+                <div className="px-4 pt-4 flex items-center">
+                    <button 
+                        onClick={onBackToRoleSelect}
+                        className="p-2 -ml-2 active:scale-90 transition-all"
+                        style={{ color: textMuted }}
                     >
-                        <span className="w-1.5 h-1.5 rounded-full animate-pulse" style={{ backgroundColor: greenOk }} />
-                        <span className="text-[9px] font-black uppercase tracking-wider" style={{ color: greenOk }}>Live</span>
-                    </div>
+                        <ChevronLeft className="w-6 h-6" />
+                    </button>
                 </div>
-
-                <div className="px-4 pt-4 pb-2 space-y-4">
+                <div className="px-4 pt-2 pb-2 space-y-4">
 
                     {/* Your Teams */}
                     <div>
@@ -338,7 +325,7 @@ const MobileUserJourney: React.FC<MobileUserJourneyProps> = ({ onBackToRoleSelec
 
                                                 <div className="flex items-center gap-2 shrink-0">
                                                     <span className="text-[13px] font-black" style={{ color: i === 0 ? accentColor : textPrimary }}>
-                                                        ${item.revenue >= 1000 ? `${(item.revenue / 1000).toFixed(1)}k` : item.revenue.toFixed(0)}
+                                                        {item.revenue >= 1000 ? `${(item.revenue / 1000).toFixed(1)}K` : item.revenue.toFixed(0)}
                                                     </span>
                                                     <ChevronDown
                                                         className="w-3.5 h-3.5"
@@ -364,7 +351,7 @@ const MobileUserJourney: React.FC<MobileUserJourneyProps> = ({ onBackToRoleSelec
                                                             {[
                                                                 {
                                                                     label: 'Total Sales',
-                                                                    value: item.revenue >= 1000 ? `$${(item.revenue / 1000).toFixed(2)}k` : `$${item.revenue.toFixed(2)}`,
+                                                                    value: item.revenue >= 1000 ? `${(item.revenue / 1000).toFixed(2)}K` : item.revenue.toFixed(2),
                                                                     highlight: i === 0,
                                                                 },
                                                                 {
@@ -401,7 +388,7 @@ const MobileUserJourney: React.FC<MobileUserJourneyProps> = ({ onBackToRoleSelec
                                                         <div>
                                                             <div className="flex justify-between items-center mb-1.5">
                                                                 <span className="text-[9px] font-bold uppercase tracking-widest" style={{ color: textMuted }}>
-                                                                    Market share vs. #1
+                                                                    {language === 'km' ? 'ចំណែកធៀបនឹង #1' : 'Share vs. #1'}
                                                                 </span>
                                                                 <span className="text-[10px] font-black" style={{ color: accentColor }}>
                                                                     {barPct.toFixed(0)}%
@@ -479,15 +466,20 @@ const MobileUserJourney: React.FC<MobileUserJourneyProps> = ({ onBackToRoleSelec
         <div className="flex flex-col min-h-full pb-20" style={{ backgroundColor: bg }}>
 
             <div className="px-4 py-3 flex items-center justify-between sticky top-0 z-30" style={headerStyle}>
-                <div className="flex items-center gap-3">
-                    <div className="w-2 h-8 rounded-full" style={{ backgroundColor: accentColor }} />
-                    <div>
-                        <span className="text-[11px] font-bold leading-none" style={{ color: textMuted }}>
-                            You're viewing
-                        </span>
-                        <h2 className="text-[15px] font-black leading-tight mt-0.5 tracking-tight" style={{ color: textPrimary }}>
-                            {selectedTeam}
-                        </h2>
+                <div className="flex items-center gap-2">
+                    <button onClick={handleSwitchTeam} className="p-2 -ml-2 active:scale-90" style={iconBtnStyle}>
+                        <ChevronLeft className="w-5 h-5" />
+                    </button>
+                    <div className="flex items-center gap-3">
+                        <div className="w-1.5 h-6 rounded-full" style={{ backgroundColor: accentColor }} />
+                        <div>
+                            <span className="text-[10px] font-bold leading-none" style={{ color: textMuted }}>
+                                You're viewing
+                            </span>
+                            <h2 className="text-[14px] font-black leading-tight mt-0.5 tracking-tight" style={{ color: textPrimary }}>
+                                {selectedTeam}
+                            </h2>
+                        </div>
                     </div>
                     <div
                         className="flex items-center gap-1.5 px-2 py-1 border ml-1"

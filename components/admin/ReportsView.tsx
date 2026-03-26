@@ -22,8 +22,100 @@ interface ReportsViewProps {
 }
 
 const ReportsView: React.FC<ReportsViewProps> = ({ orders, reportType, dateFilter, startDate, endDate, onNavigate, contextFilters }) => {
+    const { advancedSettings, appData } = useContext(AppContext);
+    
+    // Redirect to specialized Shipping Report if requested
+    if (reportType === 'shipping') {
+        return (
+            <ShippingReport 
+                orders={orders} 
+                appData={appData} 
+                dateFilter={dateFilter} 
+                startDate={startDate} 
+                endDate={endDate} 
+                onNavigate={onNavigate}
+                contextFilters={contextFilters}
+            />
+        );
+    }
+
     const uiTheme = advancedSettings?.uiTheme || 'default';
     const isLightMode = advancedSettings?.themeMode === 'light';
+
+    const [analysis, setAnalysis] = useState<string>('');
+    const [loadingAnalysis, setLoadingAnalysis] = useState(false);
+
+    const stats = useMemo(() => {
+        let revenue = 0;
+        let totalProfit = 0;
+        let paymentMap: Record<string, number> = { Paid: 0, Unpaid: 0 };
+        let teamMap: Record<string, { name: string, revenue: number, orders: number }> = {};
+        let userMap: Record<string, { name: string, revenue: number, orders: number, avatar?: string }> = {};
+        let dateMap: Record<string, number> = {};
+
+        orders.forEach(o => {
+            const rev = Number(o['Grand Total']) || 0;
+            const cost = Number(o['Internal Cost']) || 0;
+            revenue += rev;
+            totalProfit += (rev - cost);
+            
+            const status = o['Payment Status'] === 'Paid' ? 'Paid' : 'Unpaid';
+            paymentMap[status] = (paymentMap[status] || 0) + 1;
+
+            if (o.Team) {
+                if (!teamMap[o.Team]) teamMap[o.Team] = { name: o.Team, revenue: 0, orders: 0 };
+                teamMap[o.Team].revenue += rev;
+                teamMap[o.Team].orders += 1;
+            }
+
+            if (o.User) {
+                if (!userMap[o.User]) {
+                    const userMatch = appData.users?.find(u => u.FullName === o.User || u.UserName === o.User);
+                    userMap[o.User] = { name: o.User, revenue: 0, orders: 0, avatar: userMatch?.ProfilePictureURL };
+                }
+                userMap[o.User].revenue += rev;
+                userMap[o.User].orders += 1;
+            }
+
+            if (o.Timestamp) {
+                const date = o.Timestamp.split(' ')[0];
+                dateMap[date] = (dateMap[date] || 0) + rev;
+            }
+        });
+
+        const teamStats = Object.values(teamMap).sort((a, b) => b.revenue - a.revenue);
+        const topUsers = Object.values(userMap).sort((a, b) => b.revenue - a.revenue).slice(0, 5);
+        const margin = revenue > 0 ? (totalProfit / revenue) * 100 : 0;
+
+        const chartData = Object.keys(dateMap).sort().map(date => ({
+            name: date,
+            value: dateMap[date]
+        }));
+
+        return {
+            revenue,
+            totalOrders: orders.length,
+            totalProfit,
+            margin,
+            chartData,
+            teamStats,
+            paymentMap,
+            topUsers
+        };
+    }, [orders, appData.users]);
+
+    const handleAnalyze = async () => {
+        setLoadingAnalysis(true);
+        try {
+            const prompt = `Analyze this sales report for ${reportType}. Total Revenue: $${stats.revenue}, Orders: ${stats.totalOrders}, Margin: ${stats.margin}%. Top team: ${stats.teamStats[0]?.name}. Provide 3 short, high-impact business insights in uppercase KHMER language.`;
+            const result = await analyzeReportData(prompt);
+            setAnalysis(result);
+        } catch (e) {
+            setAnalysis("Analysis failed.");
+        } finally {
+            setLoadingAnalysis(false);
+        }
+    };
 
     // Theme-specific styles
     const getThemeStyles = () => {
@@ -68,8 +160,6 @@ const ReportsView: React.FC<ReportsViewProps> = ({ orders, reportType, dateFilte
     };
 
     const styles = getThemeStyles();
-
-    // ... (rest of the handleAnalyze logic)
 
     return (
         <div className="space-y-8 animate-fade-in pb-12 select-none">
