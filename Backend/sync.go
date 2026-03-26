@@ -88,8 +88,10 @@ func CallAppsScriptPOST(requestData AppsScriptRequest) (AppsScriptResponse, erro
 	if err != nil {
 		return AppsScriptResponse{}, fmt.Errorf("failed to marshal request: %w", err)
 	}
+	log.Printf("📡 [AppsScript] POST to %s action=%s", AppsScriptURL, requestData.Action)
 	resp, err := HTTPClient.Post(AppsScriptURL, "application/json", bytes.NewBuffer(jsonData))
 	if err != nil {
+		log.Printf("❌ [AppsScript] HTTP error: %v", err)
 		return AppsScriptResponse{}, err
 	}
 	defer resp.Body.Close()
@@ -98,8 +100,12 @@ func CallAppsScriptPOST(requestData AppsScriptRequest) (AppsScriptResponse, erro
 	if err != nil {
 		return AppsScriptResponse{}, fmt.Errorf("failed to read response: %w", err)
 	}
+
+	bodyStr := string(body)
+	log.Printf("📥 [AppsScript] Raw response (len=%d): %.500s", len(bodyStr), bodyStr)
+
 	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
-		bodyPreview := string(body)
+		bodyPreview := bodyStr
 		if len(bodyPreview) > 500 {
 			bodyPreview = bodyPreview[:500]
 		}
@@ -107,8 +113,10 @@ func CallAppsScriptPOST(requestData AppsScriptRequest) (AppsScriptResponse, erro
 	}
 	var scriptResponse AppsScriptResponse
 	if err := json.Unmarshal(body, &scriptResponse); err != nil {
+		log.Printf("❌ [AppsScript] JSON parse error: %v, body: %.200s", err, bodyStr)
 		return AppsScriptResponse{}, fmt.Errorf("invalid response from apps script: %v", err)
 	}
+	log.Printf("✅ [AppsScript] Parsed: status=%s url=%s fileID=%s", scriptResponse.Status, scriptResponse.URL, scriptResponse.FileID)
 	return scriptResponse, nil
 }
 
