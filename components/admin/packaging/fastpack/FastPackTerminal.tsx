@@ -71,6 +71,17 @@ const FastPackTerminal: React.FC<FastPackTerminalProps> = ({ order, onClose, onS
     const [countdown, setCountdown] = useState<number | null>(null);
     const [aiFrameCount, setAiFrameCount] = useState(0);
     const qrStabilityRef = useRef<number>(0);
+
+    // AI Refs to solve closure issues
+    const isAiEnabledRef = useRef(isAiEnabled);
+    const countdownRef = useRef<number | null>(null);
+    const previewImageRef = useRef<string | null>(null);
+    const uploadingRef = useRef(false);
+
+    useEffect(() => { isAiEnabledRef.current = isAiEnabled; }, [isAiEnabled]);
+    useEffect(() => { countdownRef.current = countdown; }, [countdown]);
+    useEffect(() => { previewImageRef.current = previewImage; }, [previewImage]);
+    useEffect(() => { uploadingRef.current = uploading; }, [uploading]);
     
     const videoRef = useRef<HTMLVideoElement>(null);
     const canvasRef = useRef<HTMLCanvasElement>(null);
@@ -104,7 +115,7 @@ const FastPackTerminal: React.FC<FastPackTerminalProps> = ({ order, onClose, onS
     }, []);
 
     const capturePhoto = useCallback(async () => {
-        if (!videoRef.current || !canvasRef.current || uploading) return;
+        if (!videoRef.current || !canvasRef.current || uploadingRef.current) return;
         const video = videoRef.current;
         const canvas = canvasRef.current;
         const context = canvas.getContext('2d');
@@ -166,7 +177,7 @@ const FastPackTerminal: React.FC<FastPackTerminalProps> = ({ order, onClose, onS
                 reader.readAsDataURL(compressedBlob);
             }, 'image/jpeg', 0.9);
         }
-    }, [stopCamera, uploading, order]);
+    }, [stopCamera, order, currentUser]);
 
     const uploadWithProgress = async (base64Data: string, fileName: string): Promise<any> => {
         const session = await CacheService.get<{ token: string }>(CACHE_KEYS.SESSION);
@@ -207,7 +218,7 @@ const FastPackTerminal: React.FC<FastPackTerminalProps> = ({ order, onClose, onS
     };
 
     const handleSubmit = useCallback(async () => {
-        if (!previewImage || !rawFile) return;
+        if (!previewImageRef.current || !rawFile) return;
         setUploading(true);
         setUploadProgress(0);
 
@@ -237,7 +248,7 @@ const FastPackTerminal: React.FC<FastPackTerminalProps> = ({ order, onClose, onS
             setUndoTimer(null);
             await executeFinalSubmit();
         }, gracePeriod * 1000);
-    }, [previewImage, rawFile, order, currentUser, advancedSettings]);
+    }, [rawFile, order, currentUser, advancedSettings]);
 
     const handleUndo = () => {
         if (submitTimeoutRef.current) {
@@ -261,7 +272,7 @@ const FastPackTerminal: React.FC<FastPackTerminalProps> = ({ order, onClose, onS
             const session = await CacheService.get<{ token: string }>(CACHE_KEYS.SESSION);
             const token = session?.token || '';
 
-            const base64Data = previewImage!.includes(',') ? previewImage!.split(',')[1] : previewImage!;
+            const base64Data = previewImageRef.current!.includes(',') ? previewImageRef.current!.split(',')[1] : previewImageRef.current!;
             const fileName = `Package_${order!['Order ID']}_${Date.now()}.jpg`;
 
             const uploadResult = await uploadWithProgress(base64Data, fileName);
@@ -312,7 +323,8 @@ const FastPackTerminal: React.FC<FastPackTerminalProps> = ({ order, onClose, onS
     };
 
     const startCountdown = useCallback((seconds: number = 3) => {
-        if (countdown !== null) return;
+        if (countdownRef.current !== null) return;
+        countdownRef.current = seconds; // set immediately to block re-entry before useEffect runs
         setCountdown(seconds);
         if (countdownIntervalRef.current) clearInterval(countdownIntervalRef.current);
         let count = seconds;
@@ -325,15 +337,16 @@ const FastPackTerminal: React.FC<FastPackTerminalProps> = ({ order, onClose, onS
                 capturePhoto();
             }
         }, 1000);
-    }, [countdown, capturePhoto]);
+    }, [capturePhoto]);
 
     const runAiLoop = useCallback(async () => {
-        if (!videoRef.current || !isCameraActive || previewImage) return;
+        if (!videoRef.current || !isCameraActive || previewImageRef.current) return;
+        
         const result = await packageDetector.detect(videoRef.current);
         setDetection(result);
         setAiFrameCount(prev => (prev + 1) % 100);
-        if (isAiEnabled) {
-            // Trigger 2s countdown for any detected QR Code
+
+        if (isAiEnabledRef.current) {
             const isQRCode = result.barcodeFormat === 'qr_code' || result.barcodeFormat === 'qr' || result.barcodeFormat?.toLowerCase().includes('qr');
             
             if (result.barcodeBox && isQRCode) {
@@ -342,11 +355,11 @@ const FastPackTerminal: React.FC<FastPackTerminalProps> = ({ order, onClose, onS
                 qrStabilityRef.current = 0;
             }
 
-            if (qrStabilityRef.current >= 5 && countdown === null && !previewImage) {
+            if (qrStabilityRef.current >= 2 && countdownRef.current === null && !previewImageRef.current) {
                 const track = (videoRef.current.srcObject as MediaStream)?.getVideoTracks()[0];
                 if (track && Date.now() - lastActionTime.current > 1500) {
                     const videoArea = videoRef.current.videoWidth * videoRef.current.videoHeight;
-                    const objectArea = result.barcodeBox.w * result.barcodeBox.h;
+                    const objectArea = result.barcodeBox!.w * result.barcodeBox!.h;
                     const areaRatio = objectArea / videoArea;
                     const minThreshold = 0.05;
                     const maxThreshold = 0.25;
@@ -355,10 +368,11 @@ const FastPackTerminal: React.FC<FastPackTerminalProps> = ({ order, onClose, onS
                     lastActionTime.current = Date.now();
                 }
                 startCountdown(2);
-            } else if (result.gesture === 'five_fingers' && countdown === null) {
+            } else if (result.gesture === 'five_fingers' && countdownRef.current === null) {
                 startCountdown(3);
             }
-            if (result.gesture === 'thumbs_up' && previewImage && !uploading) handleSubmit();
+
+            if (result.gesture === 'thumbs_up' && previewImageRef.current && !uploadingRef.current) handleSubmit();
 
             if (result.found && result.box && !result.barcodeBox) {
                 const track = (videoRef.current.srcObject as MediaStream)?.getVideoTracks()[0];
@@ -373,7 +387,7 @@ const FastPackTerminal: React.FC<FastPackTerminalProps> = ({ order, onClose, onS
                     lastActionTime.current = Date.now();
                 }
                 
-                if (countdown === null && result.stability > 0.95 && !previewImage && !result.isHand) {
+                if (countdownRef.current === null && result.stability > 0.95 && !previewImageRef.current && !result.isHand) {
                     setAutoCaptureProgress(prev => {
                         const next = prev + 3;
                         if (next >= 100) { capturePhoto(); return 0; }
@@ -383,7 +397,7 @@ const FastPackTerminal: React.FC<FastPackTerminalProps> = ({ order, onClose, onS
             }
         }
         aiLoopRef.current = requestAnimationFrame(runAiLoop);
-    }, [isCameraActive, isAiEnabled, previewImage, zoom, applyZoom, capturePhoto, countdown, startCountdown, handleSubmit, uploading]);
+    }, [isCameraActive, zoom, applyZoom, capturePhoto, startCountdown, handleSubmit]);
 
     const startCamera = async (overrideFacingMode?: 'environment' | 'user') => {
         const modeToUse = overrideFacingMode || facingMode;
@@ -536,7 +550,7 @@ const FastPackTerminal: React.FC<FastPackTerminalProps> = ({ order, onClose, onS
                             <div className="flex items-center gap-2 border-l border-[#2B3139] pl-3 pr-3">
                                 <span className="text-[9px] font-bold text-gray-500 uppercase tracking-widest whitespace-nowrap">Shipping:</span>
                                 <img src={convertGoogleDriveUrl(shippingMethod.LogoURL)} className="w-6 h-6 object-contain" title={shippingMethod.MethodName} alt="" />
-                                <span className="text-[11px] font-bold text-gray-200 uppercase tracking-widest whitespace-nowrap">{shippingMethod.MethodName}</span>
+                                <span className="text-xs font-bold text-gray-200 uppercase tracking-widest whitespace-nowrap">{shippingMethod.MethodName}</span>
                             </div>
                         )}
                         {driver && (
@@ -549,7 +563,7 @@ const FastPackTerminal: React.FC<FastPackTerminalProps> = ({ order, onClose, onS
                                     alt="" 
                                     onClick={() => showFullImage(convertGoogleDriveUrl(driver.ImageURL))}
                                 />
-                                <span className="text-[11px] font-bold text-gray-200 uppercase tracking-widest whitespace-nowrap">{driver.DriverName}</span>
+                                <span className="text-xs font-bold text-gray-200 uppercase tracking-widest whitespace-nowrap">{driver.DriverName}</span>
                             </div>
                         )}
                     </div>

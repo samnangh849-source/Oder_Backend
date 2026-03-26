@@ -2,6 +2,7 @@ import React, { useState, useEffect, useMemo, useContext } from 'react';
 import { IncentiveProject, ParsedOrder } from '../../types';
 import { translations } from '../../translations';
 import { AppContext } from '../../context/AppContext';
+import { X } from 'lucide-react';
 
 interface ManualDataInputProps {
     project: IncentiveProject;
@@ -58,24 +59,24 @@ const ManualDataInput: React.FC<ManualDataInputProps> = ({ project, onSave, onCl
     return (
         <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 ui-binance">
             <div className="absolute inset-0 bg-black/80 backdrop-blur-sm" onClick={onClose}></div>
-            <div className="bg-card-bg border border-border-light rounded-lg p-8 shadow-2xl relative z-10 w-full max-w-4xl max-h-[90vh] flex flex-col">
+            <div className="bg-card-bg border border-[#2B3139] rounded-md p-8 shadow-2xl relative z-10 w-full max-w-4xl max-h-[90vh] flex flex-col">
                 <div className="flex justify-between items-center mb-8">
                     <div>
-                        <h2 className="text-xl font-black text-white uppercase tracking-tight">Manual Data Entry</h2>
+                        <h2 className="text-xl font-bold text-[#EAECEF] uppercase tracking-wider">Manual Data Entry</h2>
                         <p className="text-[10px] text-secondary font-bold mt-1 uppercase tracking-widest">Input performance values for active metrics</p>
                     </div>
-                    <button onClick={onClose} className="p-2 bg-bg-black hover:bg-card-bg-hover text-secondary hover:text-white rounded-md border border-border-light transition-all">
-                        <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" /></svg>
+                    <button onClick={onClose} className="p-1.5 bg-bg-black hover:bg-[#474D57] text-secondary hover:text-[#EAECEF] rounded-md border border-[#2B3139] transition-all">
+                        <X className="w-4 h-4" />
                     </button>
                 </div>
-                
-                <div className="mb-8 flex items-center gap-4 bg-bg-black p-4 rounded-md border border-border-light">
-                    <label className="text-[10px] font-black text-secondary uppercase tracking-[0.2em]">Select Period:</label>
-                    <input 
-                        type="month" 
+
+                <div className="mb-8 flex items-center gap-4 bg-bg-black p-4 rounded-md border border-[#2B3139]">
+                    <label className="text-[10px] font-bold text-secondary uppercase tracking-widest">Select Period:</label>
+                    <input
+                        type="month"
                         value={period}
                         onChange={e => setPeriod(e.target.value)}
-                        className="bg-transparent border-none text-xs font-black text-primary p-0 focus:ring-0 cursor-pointer"
+                        className="bg-transparent border-none text-xs font-bold text-primary p-0 focus:ring-0 cursor-pointer"
                     />
                 </div>
 
@@ -85,22 +86,22 @@ const ManualDataInput: React.FC<ManualDataInputProps> = ({ project, onSave, onCl
                     ) : requiredMetrics.map(metric => (
                         <div key={metric} className="space-y-4">
                             <div className="flex items-center gap-3">
-                                <div className="h-px flex-grow bg-border-light"></div>
-                                <h3 className="text-[10px] font-black text-white uppercase tracking-[0.3em] whitespace-nowrap">{metric}</h3>
-                                <div className="h-px flex-grow bg-border-light"></div>
+                                <div className="h-px flex-grow bg-[#2B3139]"></div>
+                                <h3 className="text-[10px] font-bold text-[#EAECEF] uppercase tracking-widest whitespace-nowrap">{metric}</h3>
+                                <div className="h-px flex-grow bg-[#2B3139]"></div>
                             </div>
-                            
+
                             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
                                 {teams.map(team => (
-                                    <div key={`${metric}-${team}`} className="bg-bg-black p-3 rounded-md border border-border-light group focus-within:border-primary transition-all">
-                                        <label className="block text-[9px] font-black text-secondary uppercase tracking-widest mb-2 group-focus-within:text-primary">{team}</label>
+                                    <div key={`${metric}-${team}`} className="bg-bg-black p-3 rounded-md border border-[#2B3139] group focus-within:border-primary transition-all">
+                                        <label className="block text-[9px] font-bold text-secondary uppercase tracking-widest mb-2 group-focus-within:text-primary">{team}</label>
                                         <div className="relative">
-                                            <input 
+                                            <input
                                                 type="number"
                                                 placeholder="0.00"
                                                 value={data[metric]?.[team] || ''}
                                                 onChange={e => handleInputChange(metric, team, e.target.value)}
-                                                className="w-full bg-transparent border-none px-0 py-1 text-white font-mono text-sm focus:ring-0 text-right"
+                                                className="w-full bg-transparent border-none px-0 py-1 text-[#EAECEF] font-mono text-sm focus:ring-0 text-right"
                                             />
                                             <span className="absolute left-0 top-1/2 -translate-y-1/2 text-[9px] font-bold text-secondary uppercase">Input</span>
                                         </div>
@@ -111,9 +112,9 @@ const ManualDataInput: React.FC<ManualDataInputProps> = ({ project, onSave, onCl
                     ))}
                 </div>
 
-                <div className="flex gap-4 pt-4 border-t border-border-light">
-                    <button onClick={onClose} className="flex-1 py-3 bg-bg-black text-secondary hover:text-white border border-border-light rounded-md font-black uppercase tracking-[0.2em] text-[10px] transition-all active:scale-95">Cancel</button>
-                    <button onClick={handleSave} className="flex-1 py-3 bg-primary text-bg-black rounded-md font-black uppercase tracking-[0.2em] text-[10px] transition-all active:scale-95 hover:bg-[#f0c51d]">Save & Apply Data</button>
+                <div className="flex gap-4 pt-4 border-t border-[#2B3139]">
+                    <button onClick={onClose} className="flex-1 py-3 bg-bg-black text-secondary hover:text-[#EAECEF] border border-[#2B3139] rounded-md font-bold uppercase tracking-widest text-[10px] transition-all active:scale-95">Cancel</button>
+                    <button onClick={handleSave} className="flex-1 py-3 bg-primary text-bg-black rounded-md font-bold uppercase tracking-widest text-[10px] transition-all active:scale-95 hover:bg-[#f0c51d]">Save & Apply Data</button>
                 </div>
             </div>
         </div>

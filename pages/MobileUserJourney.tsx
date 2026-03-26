@@ -1,228 +1,533 @@
 
-import React, { useContext, useEffect, useState, useCallback } from 'react';
+import React, { useContext, useEffect, useState, useCallback, useMemo } from 'react';
 import { createPortal } from 'react-dom';
 import { AppContext } from '../context/AppContext';
 import { translations } from '../translations';
 import UserOrdersView from '../components/user/UserOrdersView';
 import { useSoundEffects } from '../hooks/useSoundEffects';
 import { WEB_APP_URL } from '../constants';
-import Spinner from '../components/common/Spinner';
+import {
+    ChevronLeft, ChevronRight, TrendingUp, Plus, LogOut,
+    ArrowLeftRight, ChevronDown, BarChart2, ExternalLink,
+} from 'lucide-react';
 
 interface MobileUserJourneyProps {
     onBackToRoleSelect: () => void;
     userTeams: string[];
 }
 
-const MobileUserJourney: React.FC<MobileUserJourneyProps> = ({ onBackToRoleSelect, userTeams }) => {
-    const { 
-        setChatVisibility, 
-        setMobilePageTitle, 
-        language, 
-        setAppState, 
-        selectedTeam, 
-        setSelectedTeam, 
-        hasPermission 
-    } = useContext(AppContext);
-    
-    const t = translations[language];
-    const { playClick, playTransition, playTeamSelect } = useSoundEffects();
+// Period label map — module scope, never changes
+const PERIOD_LABELS = {
+    today: 'Today',
+    this_week: 'This Week',
+    this_month: 'This Month',
+    all: 'All Time',
+} as const;
 
-    const [globalRanking, setGlobalRanking] = useState<{name: string, revenue: number}[]>([]);
+// Pure function — no closure over component state
+function getMedalStyle(
+    i: number,
+    accentColor: string,
+    accentText: string,
+    textMuted: string,
+    isLightMode: boolean,
+): React.CSSProperties {
+    if (i === 0) return { backgroundColor: accentColor, color: accentText };
+    if (i === 1) return { backgroundColor: '#C0C0C0', color: '#0d0d0d' };
+    if (i === 2) return { backgroundColor: '#CD7F32', color: '#ffffff' };
+    return { backgroundColor: isLightMode ? '#F0F0F0' : '#2B3139', color: textMuted };
+}
+
+const SkeletonRow: React.FC<{ isLight: boolean }> = ({ isLight }) => (
+    <div className="flex items-center gap-3 py-2">
+        <div className="w-7 h-7 rounded-lg shrink-0 animate-pulse" style={{ backgroundColor: isLight ? '#e2e8f0' : '#2B3139' }} />
+        <div className="flex-grow space-y-1.5">
+            <div className="h-2.5 rounded animate-pulse w-2/3" style={{ backgroundColor: isLight ? '#e2e8f0' : '#2B3139' }} />
+            <div className="h-1.5 rounded animate-pulse w-full"  style={{ backgroundColor: isLight ? '#edf2f7' : '#1E2329' }} />
+        </div>
+        <div className="w-12 h-2.5 rounded animate-pulse shrink-0" style={{ backgroundColor: isLight ? '#e2e8f0' : '#2B3139' }} />
+    </div>
+);
+
+const MobileUserJourney: React.FC<MobileUserJourneyProps> = ({ onBackToRoleSelect, userTeams }) => {
+    const {
+        setChatVisibility, setMobilePageTitle, language,
+        setAppState, selectedTeam, setSelectedTeam,
+        hasPermission, advancedSettings,
+    } = useContext(AppContext);
+
+    const t = translations[language];
+    const { playClick, playTeamSelect } = useSoundEffects();
+
+    // All derived design tokens in one memo — recomputes only when settings change
+    const theme = useMemo(() => {
+        const isLightMode  = advancedSettings?.themeMode === 'light';
+        const uiTheme      = advancedSettings?.uiTheme || 'default';
+        const br           = advancedSettings?.borderRadius ?? 16;
+
+        const accentColor =
+            uiTheme === 'netflix' ? '#e50914' :
+            uiTheme === 'samsung' ? '#0381fe' :
+            uiTheme === 'finance' ? '#10b981' :
+            uiTheme === 'binance' ? (isLightMode ? '#FCD535' : '#F0B90B') :
+                                    '#3b82f6';
+
+        const accentText  = (uiTheme === 'binance' || accentColor === '#FCD535' || accentColor === '#F0B90B')
+            ? '#1a1a2e' : '#ffffff';
+        const greenOk     = isLightMode ? '#02C076'  : '#0ECB81';
+        const bg          = isLightMode ? '#F5F5F5'  : '#0B0E11';
+        const cardBg      = isLightMode ? '#FFFFFF'  : '#1E2329';
+        const textPrimary = isLightMode ? '#1E2329'  : '#EAECEF';
+        const textMuted   = isLightMode ? '#707A8A'  : '#848E9C';
+        const borderColor = isLightMode ? '#E6E8EA'  : '#2B3139';
+
+        const headerStyle: React.CSSProperties = {
+            backgroundColor: isLightMode ? 'rgba(255,255,255,0.96)' : 'rgba(11,14,17,0.96)',
+            backdropFilter: 'blur(var(--glass-blur, 12px))',
+            WebkitBackdropFilter: 'blur(var(--glass-blur, 12px))',
+            borderBottom: `1px solid ${borderColor}`,
+        };
+
+        // Constant — same value every call, so no need for a factory function
+        const iconBtnStyle: React.CSSProperties = {
+            borderRadius: `${Math.min(br, 8)}px`,
+            backgroundColor: isLightMode ? '#F5F5F5' : '#2B3139',
+            color: textMuted,
+            border: `1px solid ${borderColor}`,
+            transition: 'all var(--anim-duration, 0.2s)',
+        };
+
+        return { isLightMode, uiTheme, br, accentColor, accentText, greenOk, bg, cardBg, textPrimary, textMuted, borderColor, headerStyle, iconBtnStyle };
+    }, [advancedSettings?.themeMode, advancedSettings?.uiTheme, advancedSettings?.borderRadius]);
+
+    const { isLightMode, uiTheme, br, accentColor, accentText, greenOk, bg, cardBg, textPrimary, textMuted, borderColor, headerStyle, iconBtnStyle } = theme;
+
+    const [globalRanking, setGlobalRanking] = useState<{ name: string; revenue: number }[]>([]);
     const [isRankingLoading, setIsRankingLoading] = useState(false);
     const [rankingPeriod, setRankingPeriod] = useState<'today' | 'this_week' | 'this_month' | 'all'>('today');
+    const [expandedRank, setExpandedRank] = useState<string | null>(null);
 
     const fetchRanking = useCallback(async () => {
         setIsRankingLoading(true);
         try {
             const token = localStorage.getItem('token');
-            const response = await fetch(`${WEB_APP_URL}/api/teams/ranking?period=${rankingPeriod}`, {
-                headers: token ? { 'Authorization': `Bearer ${token}` } : {}
+            const res = await fetch(`${WEB_APP_URL}/api/teams/ranking?period=${rankingPeriod}`, {
+                headers: token ? { Authorization: `Bearer ${token}` } : {},
             });
-            
-            if (response.ok) {
-                const result = await response.json();
+            if (res.ok) {
+                const result = await res.json();
                 if (result.status === 'success' && result.data) {
-                    setGlobalRanking(result.data.map((r: any) => ({ 
-                        name: r.Team || 'Unknown', 
-                        revenue: Number(r.Revenue) || 0 
-                    })));
+                    setGlobalRanking(
+                        result.data.map((r: any) => ({
+                            name: r.Team || 'Unknown',
+                            revenue: Number(r.Revenue) || 0,
+                        }))
+                    );
                 }
             }
         } catch (err) {
-            console.error("Failed to fetch team ranking:", err);
+            console.error('Failed to fetch team ranking:', err);
         } finally {
             setIsRankingLoading(false);
         }
     }, [rankingPeriod]);
 
-    useEffect(() => { 
-        setChatVisibility(true); 
-        if (selectedTeam) setMobilePageTitle('OPERATIONS');
-        else {
-            setMobilePageTitle(null);
-            fetchRanking();
-        }
+    useEffect(() => {
+        setChatVisibility(true);
+        if (selectedTeam) setMobilePageTitle(selectedTeam);
+        else { setMobilePageTitle(null); fetchRanking(); }
         return () => setMobilePageTitle(null);
     }, [selectedTeam, setChatVisibility, setMobilePageTitle, fetchRanking]);
 
-    const handleCreateOrder = () => {
-        if (!hasPermission('create_order')) return;
-        playClick();
-        setAppState('create_order');
-    };
-
-    const handleTeamSelect = (team: string) => {
-        playTeamSelect();
-        setSelectedTeam(team);
-    };
-
-    const handleSwitchTeam = () => {
-        playClick();
-        setSelectedTeam('');
-    };
+    const handleCreateOrder = () => { if (!hasPermission('create_order')) return; playClick(); setAppState('create_order'); };
+    const handleTeamSelect  = (team: string) => { playTeamSelect(); setSelectedTeam(team); };
+    const handleSwitchTeam  = () => { playClick(); setSelectedTeam(''); };
+    const toggleExpand      = (name: string) => setExpandedRank(prev => prev === name ? null : name);
 
     if (!selectedTeam) {
-        return (
-            <div className="min-h-full w-full flex flex-col items-center justify-start p-6 bg-binance relative overflow-hidden pb-20">
-                {/* Dynamic Background Elements */}
-                <div className="absolute top-[-10%] right-[-10%] w-[70%] h-[40%] bg-accent/5 blur-[120px] rounded-full pointer-events-none animate-pulse"></div>
-                <div className="absolute bottom-[-5%] left-[-5%] w-[60%] h-[30%] bg-accent/5 blur-[100px] rounded-full pointer-events-none"></div>
-                
-                <div className="w-full max-w-sm flex flex-col items-center gap-8 pt-12 pb-10 relative z-10">
-                    <div className="text-center space-y-4 animate-fade-in-up">
-                        <div className="inline-flex items-center gap-2.5 px-4 py-1.5 rounded-full bg-accent/5 border border-accent/10 backdrop-blur-md">
-                            <span className="flex h-2 w-2 relative">
-                                <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-accent opacity-75"></span>
-                                <span className="relative inline-flex rounded-full h-2 w-2 bg-accent"></span>
-                            </span>
-                            <span className="text-[9px] font-black text-accent/80 uppercase tracking-[0.3em]">Operational Access</span>
-                        </div>
-                        <h2 className="text-4xl font-black text-white italic uppercase tracking-tighter leading-none">
-                            Select <br/>
-                            <span className="text-accent underline decoration-accent/20 underline-offset-8">Team</span>
-                        </h2>
-                    </div>
+        // Single-pass max with reduce — no intermediate mapped array
+        const maxRevenue = globalRanking.reduce((m, r) => Math.max(m, r.revenue), 1);
 
-                    <div className="w-full grid grid-cols-1 gap-4 animate-fade-in-up" style={{ animationDelay: '0.2s' }}>
-                        {userTeams.map((team, idx) => {
-                            return (
-                                <button 
+        return (
+            <div className="min-h-full w-full flex flex-col pb-24 overflow-hidden" style={{ backgroundColor: bg }}>
+
+                <div className="px-4 py-3 flex items-center justify-between sticky top-0 z-50" style={headerStyle}>
+                    <div className="flex items-center gap-3">
+                        <button onClick={onBackToRoleSelect} className="p-2 active:scale-90" style={iconBtnStyle}>
+                            <ChevronLeft className="w-4 h-4" />
+                        </button>
+                        <div>
+                            <p className="text-[11px] font-bold leading-none" style={{ color: textMuted }}>Welcome back</p>
+                            <h2 className="text-sm font-black leading-tight mt-0.5" style={{ color: textPrimary }}>
+                                Choose a team to start
+                            </h2>
+                        </div>
+                    </div>
+                    <div
+                        className="flex items-center gap-1.5 px-3 py-1.5 border"
+                        style={{ borderRadius: `${Math.min(br, 20)}px`, borderColor, backgroundColor: `${greenOk}12` }}
+                    >
+                        <span className="w-1.5 h-1.5 rounded-full animate-pulse" style={{ backgroundColor: greenOk }} />
+                        <span className="text-[9px] font-black uppercase tracking-wider" style={{ color: greenOk }}>Live</span>
+                    </div>
+                </div>
+
+                <div className="px-4 pt-4 pb-2 space-y-4">
+
+                    {/* Your Teams */}
+                    <div>
+                        <p className="text-[10px] font-black uppercase tracking-widest mb-3" style={{ color: textMuted }}>
+                            Your Teams
+                        </p>
+                        <div className="space-y-2.5">
+                            {userTeams.map((team) => (
+                                <button
                                     key={team}
                                     onClick={() => handleTeamSelect(team)}
-                                    className="group relative p-[1px] rounded-[2rem] bg-gradient-to-b from-white/10 to-transparent active:scale-95 transition-all duration-500"
+                                    className="w-full text-left flex items-center gap-3.5 px-4 py-3.5 border active:scale-[0.985]"
+                                    style={{
+                                        borderRadius: `${br}px`,
+                                        backgroundColor: cardBg,
+                                        borderColor,
+                                        transition: 'all var(--anim-duration, 0.2s)',
+                                        boxShadow: isLightMode ? '0 1px 4px rgba(0,0,0,0.06)' : 'none',
+                                    }}
                                 >
-                                    <div className="relative flex items-center gap-5 p-5 rounded-[1.95rem] bg-[#1E2329]/60 backdrop-blur-3xl overflow-hidden border border-white/5">
-                                        <div className="w-14 h-14 rounded-[1.2rem] bg-accent flex items-center justify-center font-black text-[#181A20] italic text-2xl shadow-lg transform -rotate-3 transition-transform duration-500 group-hover:rotate-0">
-                                            {team.charAt(0).toUpperCase()}
-                                        </div>
-                                        <div className="text-left flex-grow">
-                                            <h3 className="text-xl font-black text-white uppercase italic tracking-tight group-hover:text-accent transition-colors">{team}</h3>
-                                            <p className="text-[9px] text-secondary font-black uppercase tracking-[0.2em] mt-1">Operational Node</p>
-                                        </div>
-                                        <div className="w-10 h-10 rounded-xl bg-white/5 flex items-center justify-center text-secondary border border-transparent group-hover:border-accent/20 group-hover:bg-accent/5">
-                                            <svg className="w-5 h-5 group-hover:text-accent transition-colors" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={3}><path d="M13 7l5 5-5 5M6 7l5 5-5 5" /></svg>
+                                    <div
+                                        className="w-11 h-11 shrink-0 flex items-center justify-center font-black text-lg"
+                                        style={{
+                                            borderRadius: `${Math.max(6, Math.round(br / 2))}px`,
+                                            backgroundColor: accentColor,
+                                            color: accentText,
+                                            boxShadow: `0 3px 10px ${accentColor}40`,
+                                        }}
+                                    >
+                                        {team.charAt(0).toUpperCase()}
+                                    </div>
+                                    <div className="flex-grow min-w-0">
+                                        <h3 className="text-[14px] font-black leading-none truncate" style={{ color: textPrimary }}>
+                                            {team}
+                                        </h3>
+                                        <div className="flex items-center gap-1.5 mt-1.5">
+                                            <span className="w-1.5 h-1.5 rounded-full" style={{ backgroundColor: greenOk }} />
+                                            <span className="text-[10px] font-bold" style={{ color: greenOk }}>Online</span>
                                         </div>
                                     </div>
+                                    <div
+                                        className="flex items-center gap-1 px-3 py-1.5 shrink-0"
+                                        style={{
+                                            borderRadius: `${Math.min(br, 8)}px`,
+                                            backgroundColor: accentColor,
+                                            color: accentText,
+                                        }}
+                                    >
+                                        <span className="text-[10px] font-black">Start</span>
+                                        <ChevronRight className="w-3 h-3" />
+                                    </div>
                                 </button>
-                            );
-                        })}
+                            ))}
+                        </div>
                     </div>
 
-                    {/* Mobile Ranking Section */}
-                    <div className="w-full space-y-5 mt-6 animate-fade-in-up" style={{ animationDelay: '0.4s' }}>
-                        <div className="flex items-center justify-between px-2 bg-white/[0.02] py-3 rounded-xl border border-white/5">
-                            <h3 className="text-[10px] font-black text-white uppercase tracking-[0.3em] italic ml-2">Market Vol.</h3>
-                            <div className="flex bg-white/5 p-0.5 rounded-lg border border-white/5 scale-90 origin-right mr-1">
+                    {/* Top Team Sales */}
+                    <div
+                        className="border overflow-hidden"
+                        style={{ borderRadius: `${br}px`, borderColor, backgroundColor: cardBg }}
+                    >
+                        <div
+                            className="px-4 pt-4 pb-3 flex items-start justify-between"
+                            style={{ borderBottom: `1px solid ${borderColor}` }}
+                        >
+                            <div>
+                                <div className="flex items-center gap-2">
+                                    <BarChart2 className="w-4 h-4" style={{ color: accentColor }} />
+                                    <span className="text-[13px] font-black" style={{ color: textPrimary }}>
+                                        Top Team Sales
+                                    </span>
+                                </div>
+                                <p className="text-[10px] mt-0.5" style={{ color: textMuted }}>
+                                    Ranked by total revenue · tap a team for details
+                                </p>
+                            </div>
+                            <div
+                                className="flex border shrink-0 ml-2"
+                                style={{
+                                    borderRadius: `${Math.min(br, 6)}px`,
+                                    borderColor,
+                                    backgroundColor: isLightMode ? '#F5F5F5' : '#0B0E11',
+                                    padding: '2px',
+                                }}
+                            >
                                 {(['today', 'this_week', 'this_month', 'all'] as const).map(p => (
-                                    <button 
-                                        key={p} 
-                                        onClick={() => setRankingPeriod(p)}
-                                        className={`px-3 py-1.5 text-[9px] font-black uppercase tracking-tighter rounded-md transition-all ${rankingPeriod === p ? 'bg-accent text-[#181A20] shadow-lg' : 'text-secondary'}`}
+                                    <button
+                                        key={p}
+                                        onClick={() => { setRankingPeriod(p); setExpandedRank(null); }}
+                                        className="px-1.5 py-0.5 text-[8px] font-black uppercase tracking-wider"
+                                        style={{
+                                            borderRadius: `${Math.max(2, Math.round(br / 6))}px`,
+                                            backgroundColor: rankingPeriod === p ? accentColor : 'transparent',
+                                            color: rankingPeriod === p ? accentText : textMuted,
+                                            transition: 'all var(--anim-duration, 0.2s)',
+                                        }}
                                     >
-                                        {p === 'today' ? 'Day' : p === 'this_week' ? 'Week' : p === 'this_month' ? 'Month' : 'All'}
+                                        {p === 'today' ? 'Day' : p === 'this_week' ? 'Wk' : p === 'this_month' ? 'Mo' : 'All'}
                                     </button>
                                 ))}
                             </div>
                         </div>
-                        
-                        <div className="grid grid-cols-1 gap-3">
+
+                        <div className="divide-y" style={{ borderColor }}>
                             {isRankingLoading ? (
-                                <div className="py-12 flex justify-center"><Spinner size="sm" /></div>
-                            ) : (globalRanking && globalRanking.length > 0) ? globalRanking.slice(0, 3).map((t, i) => (
-                                <div key={t.name} className="flex items-center justify-between p-5 bg-white/[0.02] border border-white/5 rounded-2xl relative overflow-hidden transition-all active:bg-white/5">
-                                    <div className="flex items-center gap-4 relative z-10">
-                                        <div className={`w-10 h-10 rounded-xl flex items-center justify-center text-[11px] font-black italic shadow-inner ${
-                                            i === 0 ? 'bg-accent text-[#181A20]' : 
-                                            i === 1 ? 'bg-[#EAECEF] text-[#181A20]' : 
-                                            'bg-[#C99400] text-white'
-                                        }`}>{i+1}</div>
-                                        <div>
-                                            <span className="text-base font-black text-white italic uppercase tracking-tight block leading-none">{t.name}</span>
-                                            <span className="text-[9px] text-secondary font-bold uppercase tracking-widest mt-1 block">Leader Node</span>
-                                        </div>
-                                    </div>
-                                    <div className="flex flex-col items-end relative z-10">
-                                        <span className="text-[16px] font-black text-white italic tracking-tighter leading-none">${(t.revenue/1000).toFixed(1)}k</span>
-                                        <span className="text-[8px] text-accent font-bold uppercase tracking-widest mt-1">Operational</span>
-                                    </div>
-                                    <div className="absolute right-[-5%] bottom-[-10%] text-white/[0.03] font-black italic text-7xl select-none pointer-events-none">{i+1}</div>
+                                <div className="px-4 py-3 space-y-4">
+                                    {[0, 1, 2].map(k => <SkeletonRow key={k} isLight={isLightMode} />)}
                                 </div>
-                            )) : (
-                                <div className="py-10 text-center border border-dashed border-white/5 rounded-2xl"><span className="text-[9px] font-bold text-secondary uppercase italic tracking-widest">Awaiting node synchronization...</span></div>
+                            ) : globalRanking.length > 0 ? (
+                                globalRanking.slice(0, 5).map((item, i) => {
+                                    const barPct   = (item.revenue / maxRevenue) * 100;
+                                    const isOpen   = expandedRank === item.name;
+                                    const isMyTeam = userTeams.includes(item.name);
+                                    const medal    = getMedalStyle(i, accentColor, accentText, textMuted, isLightMode);
+
+                                    return (
+                                        <div key={item.name} style={{ borderColor }}>
+                                            <button
+                                                onClick={() => toggleExpand(item.name)}
+                                                className="w-full text-left px-4 py-3.5 flex items-center gap-3"
+                                                style={{
+                                                    backgroundColor: isOpen ? (isLightMode ? '#FAFAFA' : '#252B33') : 'transparent',
+                                                    transition: 'background-color var(--anim-duration, 0.2s)',
+                                                }}
+                                            >
+                                                <div
+                                                    className="w-8 h-8 shrink-0 flex items-center justify-center text-[9px] font-black"
+                                                    style={{ borderRadius: `${Math.max(4, Math.round(br / 4))}px`, ...medal }}
+                                                >
+                                                    {i === 0 ? '1ST' : i === 1 ? '2ND' : i === 2 ? '3RD' : `#${i + 1}`}
+                                                </div>
+
+                                                <div className="flex-grow min-w-0">
+                                                    <div className="flex items-center gap-2 mb-1.5">
+                                                        <span className="text-[12px] font-black truncate leading-none" style={{ color: textPrimary }}>
+                                                            {item.name}
+                                                        </span>
+                                                        {isMyTeam && (
+                                                            <span
+                                                                className="text-[8px] font-black px-1.5 py-0.5 rounded-full shrink-0"
+                                                                style={{ backgroundColor: `${accentColor}22`, color: accentColor }}
+                                                            >
+                                                                My Team
+                                                            </span>
+                                                        )}
+                                                    </div>
+                                                    <div
+                                                        className="h-1 w-full rounded-full overflow-hidden"
+                                                        style={{ backgroundColor: isLightMode ? '#F0F0F0' : '#2B3139' }}
+                                                    >
+                                                        <div
+                                                            className="h-full rounded-full"
+                                                            style={{
+                                                                width: `${barPct}%`,
+                                                                backgroundColor: i < 3
+                                                                    ? (medal.backgroundColor as string)
+                                                                    : (isLightMode ? '#D0D0D0' : '#3D4550'),
+                                                                transition: 'width 0.8s cubic-bezier(.4,0,.2,1)',
+                                                            }}
+                                                        />
+                                                    </div>
+                                                </div>
+
+                                                <div className="flex items-center gap-2 shrink-0">
+                                                    <span className="text-[13px] font-black" style={{ color: i === 0 ? accentColor : textPrimary }}>
+                                                        ${item.revenue >= 1000 ? `${(item.revenue / 1000).toFixed(1)}k` : item.revenue.toFixed(0)}
+                                                    </span>
+                                                    <ChevronDown
+                                                        className="w-3.5 h-3.5"
+                                                        style={{
+                                                            color: textMuted,
+                                                            transform: isOpen ? 'rotate(180deg)' : 'rotate(0deg)',
+                                                            transition: 'transform var(--anim-duration, 0.2s)',
+                                                        }}
+                                                    />
+                                                </div>
+                                            </button>
+
+                                            {isOpen && (
+                                                <div
+                                                    className="px-4 pb-4"
+                                                    style={{
+                                                        backgroundColor: isLightMode ? '#FAFAFA' : '#252B33',
+                                                        borderTop: `1px solid ${borderColor}`,
+                                                    }}
+                                                >
+                                                    <div className="pt-3 space-y-3">
+                                                        <div className="grid grid-cols-2 gap-2">
+                                                            {[
+                                                                {
+                                                                    label: 'Total Sales',
+                                                                    value: item.revenue >= 1000 ? `$${(item.revenue / 1000).toFixed(2)}k` : `$${item.revenue.toFixed(2)}`,
+                                                                    highlight: i === 0,
+                                                                },
+                                                                {
+                                                                    label: 'Rank',
+                                                                    value: `#${i + 1}`,
+                                                                    sub: `of ${globalRanking.length}`,
+                                                                    highlight: false,
+                                                                },
+                                                            ].map(stat => (
+                                                                <div
+                                                                    key={stat.label}
+                                                                    className="p-3 border"
+                                                                    style={{
+                                                                        borderRadius: `${Math.min(br, 12)}px`,
+                                                                        backgroundColor: isLightMode ? '#FFFFFF' : '#1E2329',
+                                                                        borderColor,
+                                                                    }}
+                                                                >
+                                                                    <p className="text-[9px] font-bold uppercase tracking-widest mb-1" style={{ color: textMuted }}>
+                                                                        {stat.label}
+                                                                    </p>
+                                                                    <div className="flex items-baseline gap-1">
+                                                                        <p className="text-[16px] font-black leading-none" style={{ color: stat.highlight ? accentColor : textPrimary }}>
+                                                                            {stat.value}
+                                                                        </p>
+                                                                        {stat.sub && (
+                                                                            <p className="text-[10px] font-bold" style={{ color: textMuted }}>{stat.sub}</p>
+                                                                        )}
+                                                                    </div>
+                                                                </div>
+                                                            ))}
+                                                        </div>
+
+                                                        <div>
+                                                            <div className="flex justify-between items-center mb-1.5">
+                                                                <span className="text-[9px] font-bold uppercase tracking-widest" style={{ color: textMuted }}>
+                                                                    Market share vs. #1
+                                                                </span>
+                                                                <span className="text-[10px] font-black" style={{ color: accentColor }}>
+                                                                    {barPct.toFixed(0)}%
+                                                                </span>
+                                                            </div>
+                                                            <div
+                                                                className="h-2 w-full rounded-full overflow-hidden"
+                                                                style={{ backgroundColor: isLightMode ? '#F0F0F0' : '#2B3139' }}
+                                                            >
+                                                                <div
+                                                                    className="h-full rounded-full"
+                                                                    style={{
+                                                                        width: `${barPct}%`,
+                                                                        backgroundColor: accentColor,
+                                                                        transition: 'width 0.8s cubic-bezier(.4,0,.2,1)',
+                                                                    }}
+                                                                />
+                                                            </div>
+                                                        </div>
+
+                                                        <p className="text-[9px]" style={{ color: textMuted }}>
+                                                            Period:{' '}
+                                                            <span className="font-bold" style={{ color: textPrimary }}>
+                                                                {PERIOD_LABELS[rankingPeriod]}
+                                                            </span>
+                                                        </p>
+
+                                                        {isMyTeam && (
+                                                            <button
+                                                                onClick={() => handleTeamSelect(item.name)}
+                                                                className="w-full flex items-center justify-center gap-2 py-2.5 font-black text-[11px] uppercase tracking-wider active:scale-[0.98]"
+                                                                style={{
+                                                                    borderRadius: `${Math.min(br, 10)}px`,
+                                                                    backgroundColor: accentColor,
+                                                                    color: accentText,
+                                                                    transition: 'all var(--anim-duration, 0.2s)',
+                                                                }}
+                                                            >
+                                                                <ExternalLink className="w-3.5 h-3.5" />
+                                                                View Dashboard
+                                                            </button>
+                                                        )}
+                                                    </div>
+                                                </div>
+                                            )}
+                                        </div>
+                                    );
+                                })
+                            ) : (
+                                <div className="px-4 py-10 text-center">
+                                    <div
+                                        className="w-12 h-12 mx-auto mb-3 flex items-center justify-center"
+                                        style={{
+                                            borderRadius: `${Math.min(br, 12)}px`,
+                                            backgroundColor: isLightMode ? '#F0F0F0' : '#2B3139',
+                                        }}
+                                    >
+                                        <TrendingUp className="w-5 h-5" style={{ color: textMuted }} />
+                                    </div>
+                                    <p className="text-sm font-bold" style={{ color: textPrimary }}>No data yet</p>
+                                    <p className="text-[10px] mt-1" style={{ color: textMuted }}>
+                                        Sales data will appear here once orders are placed.
+                                    </p>
+                                </div>
                             )}
                         </div>
                     </div>
 
-                    <button 
-                        onClick={onBackToRoleSelect}
-                        className="mt-6 flex items-center gap-3 px-12 py-4 bg-white/[0.03] text-secondary rounded-[2.5rem] text-[10px] font-black uppercase tracking-[0.25em] border border-white/5 active:scale-95 transition-all hover:text-white"
-                    >
-                        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={3}><path d="M15 19l-7-7 7-7" /></svg>
-                        {t.back}
-                    </button>
                 </div>
             </div>
         );
     }
 
     return (
-        <div className="flex flex-col min-h-full animate-fade-in pb-20 bg-binance">
-            {/* Mobile Action Header */}
-            <div className="px-5 py-5 bg-[#0B0E11]/80 backdrop-blur-2xl border-b border-white/5 flex items-center justify-between sticky top-0 z-30">
-                <div className="flex items-center gap-4">
-                    <div className="w-1.5 h-6 bg-accent rounded-full shadow-[0_0_15px_rgba(252,213,53,0.3)]"></div>
-                    <div className="flex flex-col">
-                        <span className="text-[12px] font-black text-white uppercase tracking-wider leading-none">{selectedTeam}</span>
-                        <span className="text-[8px] font-bold text-accent uppercase tracking-[0.3em] mt-1">Operational Session</span>
+        <div className="flex flex-col min-h-full pb-20" style={{ backgroundColor: bg }}>
+
+            <div className="px-4 py-3 flex items-center justify-between sticky top-0 z-30" style={headerStyle}>
+                <div className="flex items-center gap-3">
+                    <div className="w-2 h-8 rounded-full" style={{ backgroundColor: accentColor }} />
+                    <div>
+                        <span className="text-[11px] font-bold leading-none" style={{ color: textMuted }}>
+                            You're viewing
+                        </span>
+                        <h2 className="text-[15px] font-black leading-tight mt-0.5 tracking-tight" style={{ color: textPrimary }}>
+                            {selectedTeam}
+                        </h2>
+                    </div>
+                    <div
+                        className="flex items-center gap-1.5 px-2 py-1 border ml-1"
+                        style={{ borderRadius: `${Math.min(br, 20)}px`, borderColor, backgroundColor: `${greenOk}12` }}
+                    >
+                        <span className="w-1.5 h-1.5 rounded-full animate-pulse" style={{ backgroundColor: greenOk }} />
+                        <span className="text-[9px] font-black" style={{ color: greenOk }}>Active</span>
                     </div>
                 </div>
-                
+
                 <div className="flex items-center gap-2">
-                    {userTeams && userTeams.length > 1 && (
-                        <button onClick={handleSwitchTeam} className="p-3 bg-white/5 rounded-2xl text-secondary active:scale-90 transition-all border border-white/5">
-                            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2.5}><path d="M8 7h12m0 0l-4-4m4 4l-4 4m0 6H4m0 0l4 4m-4-4l4-4" /></svg>
+                    {userTeams.length > 1 && (
+                        <button onClick={handleSwitchTeam} className="p-2 active:scale-90" style={iconBtnStyle} title="Switch team">
+                            <ArrowLeftRight className="w-4 h-4" />
                         </button>
                     )}
-                    <button onClick={onBackToRoleSelect} className="p-3 bg-accent/5 rounded-2xl text-accent active:scale-90 transition-all border border-accent/10">
-                        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2.5}><path d="M11 16l-4-4m0 0l4-4m-4 4h14m-5 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h7a3 3 0 013 3v1" /></svg>
+                    <button onClick={onBackToRoleSelect} className="p-2 active:scale-90" style={iconBtnStyle} title="Sign out">
+                        <LogOut className="w-4 h-4" />
                     </button>
                 </div>
             </div>
 
-            {/* Mobile Content Area */}
             <div className="flex-1 px-1">
                 <UserOrdersView onAdd={handleCreateOrder} />
             </div>
 
-            {/* Floating Create Button for Mobile */}
             {hasPermission('create_order') && createPortal(
-                <div className="fixed bottom-24 right-6 z-[60] pointer-events-none">
-                    <button 
+                <div className="fixed bottom-24 right-4 z-[60] pointer-events-none">
+                    <button
                         onClick={handleCreateOrder}
-                        className="w-18 h-18 bg-accent rounded-[2rem] shadow-[0_15px_40px_rgba(252,213,53,0.3)] flex items-center justify-center text-[#181A20] active:scale-90 transition-all border border-white/20 animate-bounce pointer-events-auto"
-                        style={{ width: '4.5rem', height: '4.5rem' }}
+                        className="w-14 h-14 shadow-xl flex items-center justify-center active:scale-90 pointer-events-auto"
+                        style={{
+                            borderRadius: `${Math.min(br, 16)}px`,
+                            backgroundColor: accentColor,
+                            color: accentText,
+                            boxShadow: `0 6px 20px ${accentColor}55`,
+                            transition: 'all var(--anim-duration, 0.2s)',
+                        }}
                     >
-                        <svg className="w-10 h-10" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={3}><path d="M12 4v16m8-8H4"/></svg>
+                        <Plus className="w-7 h-7" />
                     </button>
                 </div>,
                 document.body

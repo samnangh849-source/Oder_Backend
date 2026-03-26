@@ -60,15 +60,8 @@ func HandleLogin(c *gin.Context) {
 	}
 
 	if err := bcrypt.CompareHashAndPassword([]byte(user.Password), []byte(credentials.Password)); err != nil {
-		// Backward-compatible migration path for legacy plaintext passwords.
-		if user.Password != credentials.Password {
-			c.JSON(http.StatusUnauthorized, gin.H{"status": "error", "message": "លេខសម្ងាត់មិនត្រឹមត្រូវ"})
-			return
-		}
-		hashedPassword, hashErr := bcrypt.GenerateFromPassword([]byte(credentials.Password), bcrypt.DefaultCost)
-		if hashErr == nil {
-			_ = DB.Model(&User{}).Where("user_name = ?", user.UserName).Update("password", string(hashedPassword)).Error
-		}
+		c.JSON(http.StatusUnauthorized, gin.H{"status": "error", "message": "លេខសម្ងាត់មិនត្រឹមត្រូវ"})
+		return
 	}
 
 	tokenString, err := GenerateJWT(user)

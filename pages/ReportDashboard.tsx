@@ -20,9 +20,56 @@ interface ReportDashboardProps {
 }
 
 const ReportDashboard: React.FC<ReportDashboardProps> = ({ activeReport, onBack, onNavigate }) => {
-    const { appData, refreshTimestamp, setMobilePageTitle, orders, isOrdersLoading } = useContext(AppContext);
+    const { appData, refreshTimestamp, setMobilePageTitle, orders, isOrdersLoading, advancedSettings } = useContext(AppContext);
     const [usersList, setUsersList] = useState<User[]>([]);
     const [isFilterOpen, setIsFilterOpen] = useState(false);
+    
+    const uiTheme = advancedSettings?.uiTheme || 'default';
+    const isLightMode = advancedSettings?.themeMode === 'light';
+
+    // Theme-specific styles
+    const getThemeStyles = () => {
+        switch (uiTheme) {
+            case 'binance':
+                return {
+                    headerBg: 'bg-[#1E2329] border-[#2B3139]',
+                    accentText: 'text-[#FCD535]',
+                    accentBg: 'bg-[#FCD535]',
+                    dotColor: 'bg-[#FCD535]',
+                    filterBtn: 'border-[#2B3139] hover:bg-[#2B3139] text-[#848E9C]',
+                    modalBg: 'bg-[#0B0E11]',
+                    modalBorder: 'border-[#2B3139]',
+                    modalIndicator: 'bg-[#FCD535] shadow-[0_0_15px_rgba(252,213,53,0.4)]',
+                    primaryBtn: 'bg-[#FCD535] text-[#1E2329] hover:bg-[#f0c51d]'
+                };
+            case 'netflix':
+                return {
+                    headerBg: 'bg-[#141414] border-white/5',
+                    accentText: 'text-[#e50914]',
+                    accentBg: 'bg-[#e50914]',
+                    dotColor: 'bg-[#e50914]',
+                    filterBtn: 'border-white/10 hover:bg-white/5 text-gray-400',
+                    modalBg: 'bg-[#141414]',
+                    modalBorder: 'border-white/5',
+                    modalIndicator: 'bg-[#e50914] shadow-[0_0_15px_rgba(229,9,20,0.4)]',
+                    primaryBtn: 'bg-[#e50914] text-white hover:bg-[#b9090b]'
+                };
+            default:
+                return {
+                    headerBg: 'bg-gray-800/20 border-white/5',
+                    accentText: 'text-blue-400',
+                    accentBg: 'bg-blue-600',
+                    dotColor: 'bg-blue-500',
+                    filterBtn: 'border-gray-700 hover:bg-gray-700 text-gray-300',
+                    modalBg: 'bg-[#0f172a]',
+                    modalBorder: 'border-white/5',
+                    modalIndicator: 'bg-blue-600 shadow-[0_0_20px_rgba(37,99,235,0.5)]',
+                    primaryBtn: 'bg-blue-600 text-white hover:bg-blue-700'
+                };
+        }
+    };
+
+    const styles = getThemeStyles();
     
     // Updated titles to match user request (English, Uppercase to match style)
     const reportTitles: Record<ReportType, string> = {
@@ -210,19 +257,19 @@ const ReportDashboard: React.FC<ReportDashboardProps> = ({ activeReport, onBack,
         });
     }, [orders, filters, appData.pages]);
 
-    if (isOrdersLoading && orders.length === 0) return <div className="flex h-screen items-center justify-center bg-gray-950"><Spinner size="lg" /></div>;
+    if (isOrdersLoading && orders.length === 0) return <div className={`flex h-screen items-center justify-center ${uiTheme === 'binance' ? 'bg-[#0B0E11]' : 'bg-gray-950'}`}><Spinner size="lg" /></div>;
 
     const activeFilterCount = Object.values(filters).filter(v => v !== '' && v !== 'this_month' && v !== 'all').length;
 
     return (
-        <div className="animate-fade-in space-y-4 pb-20">
+        <div className="animate-fade-in space-y-4 pb-20 select-none">
             {/* Header (Compact) */}
-            <div className="flex flex-col sm:flex-row justify-between items-center gap-3 bg-gray-800/20 p-3 lg:p-4 rounded-2xl border border-white/5 backdrop-blur-md">
+            <div className={`flex flex-col sm:flex-row justify-between items-center gap-3 ${styles.headerBg} p-3 lg:p-4 rounded-md border backdrop-blur-md`}>
                 <div>
                     <h1 className="hidden sm:block text-lg font-black text-white uppercase tracking-tight italic leading-none">{reportTitles[activeReport]}</h1>
                     <div className="flex items-center gap-2 mt-1">
-                        <span className="w-1.5 h-1.5 rounded-full bg-blue-500 animate-pulse"></span>
-                        <p className="text-[9px] text-blue-400 font-black uppercase tracking-widest">
+                        <span className={`w-1.5 h-1.5 rounded-full ${styles.dotColor} animate-pulse`}></span>
+                        <p className={`text-[9px] ${styles.accentText} font-black uppercase tracking-widest`}>
                             {calculatedRange} {activeFilterCount > 0 && ` • ${activeFilterCount} Active`}
                         </p>
                     </div>
@@ -230,11 +277,11 @@ const ReportDashboard: React.FC<ReportDashboardProps> = ({ activeReport, onBack,
                 <div className="flex gap-2 w-full sm:w-auto">
                     <button 
                         onClick={() => setIsFilterOpen(true)} 
-                        className="relative flex-1 sm:flex-none btn btn-secondary !py-2 !px-4 rounded-xl border border-gray-700 flex items-center justify-center gap-2 transition-all hover:bg-gray-700 active:scale-95 text-[10px] font-black uppercase"
+                        className={`relative flex-1 sm:flex-none py-2 px-4 rounded-md border ${styles.filterBtn} flex items-center justify-center gap-2 transition-all active:scale-95 text-[10px] font-black uppercase`}
                     >
-                        <svg className="w-3.5 h-3.5 text-blue-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}><path d="M3 4a1 1 0 011-1h16a1 1 0 011 1v2.586a1 1 0 01-.293.707l-6.414 6.414a1 1 0 00-.293.707V17l-4 4v-6.586a1 1 0 00-.293-.707L3.293 7.293A1 1 0 013 6.586V4z" /></svg>
+                        <svg className={`w-3.5 h-3.5 ${styles.accentText}`} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}><path d="M3 4a1 1 0 011-1h16a1 1 0 011 1v2.586a1 1 0 01-.293.707l-6.414 6.414a1 1 0 00-.293.707V17l-4 4v-6.586a1 1 0 00-.293-.707L3.293 7.293A1 1 0 013 6.586V4z" /></svg>
                         Filters
-                        {activeFilterCount > 0 && <span className="absolute -top-1 -right-1 w-4 h-4 bg-blue-600 text-white text-[8px] font-black rounded-full flex items-center justify-center border border-gray-900">{activeFilterCount}</span>}
+                        {activeFilterCount > 0 && <span className={`absolute -top-1 -right-1 w-4 h-4 ${styles.accentBg} text-white text-[8px] font-black rounded-full flex items-center justify-center border border-gray-900`}>{activeFilterCount}</span>}
                     </button>
                 </div>
             </div>
@@ -273,16 +320,16 @@ const ReportDashboard: React.FC<ReportDashboardProps> = ({ activeReport, onBack,
 
             {/* Global Filter Modal */}
             <Modal isOpen={isFilterOpen} onClose={() => setIsFilterOpen(false)} maxWidth="max-w-5xl">
-                <div className="p-8 bg-[#0f172a] rounded-[2.5rem] overflow-hidden relative flex flex-col h-full">
+                <div className={`p-8 ${styles.modalBg} rounded-md border ${styles.modalBorder} overflow-hidden relative flex flex-col h-full`}>
                     <div className="flex justify-between items-center mb-8 relative z-10">
                         <div className="flex items-center gap-4">
-                            <div className="w-2 h-10 bg-blue-600 rounded-full shadow-[0_0_20px_rgba(37,99,235,0.5)]"></div>
+                            <div className={`w-1.5 h-10 ${styles.modalIndicator} rounded-full`}></div>
                             <div>
-                                <h2 className="text-3xl font-black text-white uppercase tracking-tighter italic leading-none">Filter Engine</h2>
-                                <p className="text-[10px] text-gray-500 font-bold uppercase tracking-[0.3em] mt-1 ml-0.5">Report Analysis Subsystem</p>
+                                <h2 className="text-2xl font-black text-white uppercase tracking-tighter italic leading-none">Filter Engine</h2>
+                                <p className="text-[9px] text-[#848E9C] font-bold uppercase tracking-[0.3em] mt-1.5 ml-0.5">Report Analysis Subsystem</p>
                             </div>
                         </div>
-                        <button onClick={() => setIsFilterOpen(false)} className="w-12 h-12 bg-white/5 rounded-2xl flex items-center justify-center text-gray-500 hover:text-white transition-all active:scale-90 border border-white/5 hover:bg-white/10 shadow-xl">&times;</button>
+                        <button onClick={() => setIsFilterOpen(false)} className="w-10 h-10 bg-white/5 rounded-lg flex items-center justify-center text-gray-500 hover:text-white transition-all active:scale-90 border border-white/5 hover:bg-white/10 shadow-xl">&times;</button>
                     </div>
                     
                     <div className="overflow-y-auto custom-scrollbar pr-4 relative z-10 flex-grow" style={{ maxHeight: 'calc(85vh - 250px)' }}>
@@ -296,16 +343,20 @@ const ReportDashboard: React.FC<ReportDashboardProps> = ({ activeReport, onBack,
                         />
                     </div>
                     
-                    <div className="mt-10 flex justify-center relative z-10 border-t border-white/5 pt-8">
+                    <div className={`mt-10 flex justify-center relative z-10 border-t ${styles.modalBorder} pt-8`}>
                         <button 
                             onClick={() => setIsFilterOpen(false)} 
-                            className="btn btn-primary w-full max-w-md py-5 text-[13px] font-black uppercase tracking-[0.25em] shadow-[0_20px_50px_rgba(37,99,235,0.3)] rounded-2xl active:scale-[0.98] transition-all"
+                            className={`${styles.primaryBtn} w-full max-w-md py-4 text-[11px] font-black uppercase tracking-[0.2em] rounded-md active:scale-[0.98] transition-all shadow-lg`}
                         >
                             Apply Report Parameters
                         </button>
                     </div>
-                    <div className="absolute -bottom-20 -right-20 w-80 h-80 bg-blue-600/10 rounded-full blur-[100px] pointer-events-none"></div>
-                    <div className="absolute -top-20 -left-20 w-60 h-60 bg-indigo-600/5 rounded-full blur-[80px] pointer-events-none"></div>
+                    {uiTheme !== 'binance' && (
+                        <>
+                            <div className="absolute -bottom-20 -right-20 w-80 h-80 bg-blue-600/10 rounded-full blur-[100px] pointer-events-none"></div>
+                            <div className="absolute -top-20 -left-20 w-60 h-60 bg-indigo-600/5 rounded-full blur-[80px] pointer-events-none"></div>
+                        </>
+                    )}
                 </div>
             </Modal>
         </div>

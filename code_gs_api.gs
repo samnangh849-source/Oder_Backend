@@ -301,7 +301,16 @@ function processOrder(data) {
   if (allOrdersSheet) appendRowMapped(allOrdersSheet, flatData);
   
   const revenueSheet = ss.getSheetByName(CONFIG.REVENUE_SHEET);
-  if (revenueSheet) revenueSheet.appendRow([flatData[normalizeKey("Timestamp")], team, orderRequest.page, orderRequest.grandTotal, fulfillmentStore]);
+  if (revenueSheet) {
+    const revenueData = {
+      "Timestamp": flatData[normalizeKey("Timestamp")],
+      "Team": team,
+      "Page": orderRequest.page,
+      "Revenue": orderRequest.grandTotal,
+      "FulfillmentStore": fulfillmentStore
+    };
+    appendRowMapped(revenueSheet, revenueData);
+  }
 
   // ផ្ញើសារទៅ Telegram 
   let shouldSendNow = true;

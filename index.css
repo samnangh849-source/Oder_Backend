@@ -35,9 +35,12 @@
     --bg-dark: #020617;
     --card-bg: rgba(15, 23, 42, 0.6);
     --border-light: rgba(255, 255, 255, 0.08);
-    --radius-standard: 1rem;
-    --radius-lg: 1.5rem;
-    --radius-xl: 2rem;
+    --radius-standard: var(--global-radius, 1rem);
+    --radius-lg: calc(var(--global-radius, 1rem) * 1.5);
+    --radius-xl: calc(var(--global-radius, 1rem) * 2);
+    --glass-blur: 20px;
+    --anim-duration: 0.3s;
+    --global-font: 'Kantumruy Pro', sans-serif;
 }
 
 /* --- LIGHT MODE --- */
@@ -311,7 +314,13 @@
 
 /* Global Transition */
 * {
-    transition: background-color 0.3s ease, color 0.3s ease, box-shadow 0.3s ease, border-radius 0.3s ease;
+    transition: background-color var(--anim-duration, 0.3s) ease, 
+                color var(--anim-duration, 0.3s) ease, 
+                box-shadow var(--anim-duration, 0.3s) ease, 
+                border-radius var(--anim-duration, 0.3s) ease,
+                backdrop-filter var(--anim-duration, 0.3s) ease,
+                -webkit-backdrop-filter var(--anim-duration, 0.3s) ease,
+                transform var(--anim-duration, 0.3s) cubic-bezier(0.4, 0, 0.2, 1);
 }
 
 * {
@@ -319,7 +328,7 @@
 }
 
 body {
-    font-family: 'Kantumruy Pro', sans-serif;
+    font-family: var(--global-font, 'Kantumruy Pro', sans-serif);
     background-color: var(--bg-dark);
     margin: 0;
     overflow-x: hidden;
@@ -335,10 +344,10 @@ body {
 /* Core Components */
 .page-card {
     background: var(--card-bg);
-    backdrop-filter: blur(20px) saturate(180%);
-    -webkit-backdrop-filter: blur(20px) saturate(180%);
+    backdrop-filter: blur(var(--glass-blur, 20px)) saturate(180%);
+    -webkit-backdrop-filter: blur(var(--glass-blur, 20px)) saturate(180%);
     border: 1px solid var(--border-light);
-    border-radius: 1.5rem;
+    border-radius: var(--radius-lg, 1.5rem);
     padding: 1.5rem;
     box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.5);
 }
@@ -349,11 +358,10 @@ body {
     align-items: center;
     justify-content: center;
     padding: 0.75rem 1.5rem;
-    border-radius: 0.75rem;
+    border-radius: var(--radius-standard, 0.75rem);
     font-weight: 700;
     text-transform: uppercase;
     letter-spacing: 0.05em;
-    transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
     cursor: pointer;
     border: 1px solid transparent;
 }

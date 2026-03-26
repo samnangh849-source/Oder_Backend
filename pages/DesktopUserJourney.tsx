@@ -6,6 +6,7 @@ import UserOrdersView from '../components/user/UserOrdersView';
 import { useSoundEffects } from '../hooks/useSoundEffects';
 import { WEB_APP_URL } from '../constants';
 import Spinner from '../components/common/Spinner';
+import { ChevronLeft, ChevronRight, TrendingUp, Info, Plus, LogOut, ArrowLeftRight } from 'lucide-react';
 
 interface DesktopUserJourneyProps {
     onBackToRoleSelect: () => void;
@@ -13,15 +14,15 @@ interface DesktopUserJourneyProps {
 }
 
 const DesktopUserJourney: React.FC<DesktopUserJourneyProps> = ({ onBackToRoleSelect, userTeams }) => {
-    const { 
-        setChatVisibility, 
-        language, 
-        setAppState, 
-        selectedTeam, 
-        setSelectedTeam, 
-        hasPermission 
+    const {
+        setChatVisibility,
+        language,
+        setAppState,
+        selectedTeam,
+        setSelectedTeam,
+        hasPermission
     } = useContext(AppContext);
-    
+
     const t = translations[language];
     const { playClick, playTransition, playHover, playTeamSelect } = useSoundEffects();
 
@@ -40,9 +41,9 @@ const DesktopUserJourney: React.FC<DesktopUserJourneyProps> = ({ onBackToRoleSel
             if (response.ok) {
                 const result = await response.json();
                 if (result.status === 'success' && result.data) {
-                    setGlobalRanking(result.data.map((r: any) => ({ 
-                        name: r.Team || 'Unknown', 
-                        revenue: Number(r.Revenue) || 0 
+                    setGlobalRanking(result.data.map((r: any) => ({
+                        name: r.Team || 'Unknown',
+                        revenue: Number(r.Revenue) || 0
                     })));
                 }
             }
@@ -57,6 +58,7 @@ const DesktopUserJourney: React.FC<DesktopUserJourneyProps> = ({ onBackToRoleSel
         setChatVisibility(true);
         if (!selectedTeam) fetchRanking();
     }, [setChatVisibility, selectedTeam, fetchRanking]);
+
     const handleCreateOrder = () => {
         if (!hasPermission('create_order')) return;
         playClick();
@@ -75,109 +77,161 @@ const DesktopUserJourney: React.FC<DesktopUserJourneyProps> = ({ onBackToRoleSel
 
     if (!selectedTeam) {
         return (
-            <div className="min-h-full w-full flex flex-col items-center justify-center relative py-12 animate-fade-in bg-binance">
-                <style>{`
-                    .team-btn {
-                        background: var(--card-bg);
-                        border: 1px solid var(--border-light);
-                        transition: all 0.2s ease;
-                        color: var(--text-primary);
-                    }
-                    .team-btn:hover {
-                        border-color: var(--primary);
-                        background: var(--card-bg-hover);
-                        transform: translateY(-2px);
-                    }
-                    .rank-card {
-                        background: var(--card-bg);
-                        border: 1px solid var(--border-light);
-                        color: var(--text-primary);
-                    }
-                `}</style>
-                <div className="w-full max-w-5xl grid grid-cols-1 lg:grid-cols-12 gap-10 px-6 relative z-10">
-                    <div className="lg:col-span-7 flex flex-col items-center lg:items-start gap-8">
-                        <div className="text-center lg:text-left">
-                            <h2 className="text-4xl font-bold text-white mb-3 tracking-tight">Select <span className="text-accent">Team</span></h2>
-                            <p className="text-secondary text-sm font-medium max-w-sm leading-relaxed">{t.team_desc}</p>
+            <div className="ui-binance min-h-full bg-bg-black text-[#EAECEF] font-sans relative overflow-hidden">
+                {/* Background Decoration */}
+                <div className="absolute top-[-10%] right-[-10%] w-[40%] h-[40%] bg-primary/5 rounded-full blur-[120px] pointer-events-none"></div>
+                <div className="absolute bottom-[-10%] left-[-10%] w-[30%] h-[30%] bg-blue-500/5 rounded-full blur-[100px] pointer-events-none"></div>
+                
+                {/* Sticky Header */}
+                <div className="sticky top-0 z-50 bg-[#1E2329]/80 border-b border-[#2B3139] backdrop-blur-xl px-4 sm:px-6 py-4">
+                    <div className="flex items-center justify-between max-w-[1400px] mx-auto">
+                        <div className="flex items-center gap-4">
+                            <button onClick={onBackToRoleSelect} className="p-2 hover:bg-[#2B3139] rounded-lg transition-all text-secondary hover:text-primary border border-[#2B3139] hover:border-primary/30">
+                                <ChevronLeft className="w-5 h-5" />
+                            </button>
+                            <div className="flex flex-col">
+                                <div className="flex items-center gap-2">
+                                    <div className="w-1.5 h-1.5 rounded-full bg-primary animate-pulse"></div>
+                                    <h1 className="text-sm font-black tracking-[0.2em] uppercase leading-none text-white">Command Center</h1>
+                                </div>
+                                <p className="text-[10px] text-secondary font-bold mt-1.5 uppercase tracking-widest opacity-60">Strategic Node Selection</p>
+                            </div>
                         </div>
-                        <div className="w-full grid grid-cols-1 sm:grid-cols-2 gap-4">
-                            {userTeams.map((team) => (
-                                <button key={team} onClick={() => handleTeamSelect(team)} onMouseEnter={playHover} className="team-btn group p-6 rounded-xl relative overflow-hidden flex items-center gap-5 shadow-lg">
-                                    <div className="w-14 h-14 shrink-0 rounded-xl bg-accent flex items-center justify-center text-[#181A20] font-black text-2xl shadow-inner transform -rotate-3 group-hover:rotate-0 transition-transform">
-                                        {team.charAt(0).toUpperCase()}
-                                    </div>
-                                    <div className="text-left flex-grow">
-                                        <h3 className="text-xl font-bold group-hover:text-accent transition-colors">{team}</h3>
-                                        <p className="text-[10px] text-secondary font-bold uppercase tracking-widest mt-1">Operational Node</p>
-                                    </div>
-                                    <div className="w-10 h-10 rounded-full flex items-center justify-center group-hover:bg-accent/10 transition-all border border-transparent group-hover:border-accent/20">
-                                        <svg className="w-5 h-5 text-secondary group-hover:text-accent" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={3}><path d="M9 5l7 7-7 7" /></svg>
-                                    </div>
-                                </button>
-                            ))}
+                        <div className="flex items-center gap-3">
+                            <div className="hidden sm:flex items-center gap-2 px-3 py-1.5 bg-[#2B3139]/50 rounded-md border border-[#2B3139]">
+                                <span className="w-2 h-2 rounded-full bg-[#0ECB81]"></span>
+                                <span className="text-[10px] font-bold text-secondary uppercase tracking-widest">System Online</span>
+                            </div>
+                            <span className="px-3 py-1.5 bg-primary/10 border border-primary/20 rounded-md text-[10px] font-bold text-primary uppercase tracking-wider">
+                                {userTeams.length} Nodes Active
+                            </span>
                         </div>
                     </div>
+                </div>
 
-                    <div className="lg:col-span-5 flex flex-col gap-6 pt-4 lg:pt-16">
-                        <div className="flex items-center justify-between mb-2 p-4 bg-white/[0.02] rounded-xl border border-white/5">
-                            <div className="flex items-center gap-3">
-                                <div className="w-8 h-8 rounded-lg bg-accent/10 flex items-center justify-center text-accent">
-                                    <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}><path d="M13 7h8m0 0v8m0-8l-8 8-4-4-6 6" /></svg>
-                                </div>
-                                <h3 className="text-xs font-black text-white uppercase tracking-wider">Top Performers</h3>
+                {/* Main Content */}
+                <div className="max-w-[1400px] mx-auto p-6 sm:p-10 lg:p-12 relative z-10">
+                    <div className="grid grid-cols-1 lg:grid-cols-12 gap-10">
+                        {/* Left: Team Cards */}
+                        <div className="lg:col-span-8 space-y-8">
+                            <div>
+                                <h2 className="text-2xl font-black text-white uppercase tracking-tighter mb-2">Initialize Session</h2>
+                                <p className="text-sm text-secondary font-medium max-w-md uppercase tracking-wider leading-relaxed opacity-70">Select an operational node to begin real-time order processing and performance tracking.</p>
                             </div>
-                            <div className="flex bg-white/5 p-1 rounded-lg scale-90 origin-right">
-                                {(['today', 'this_week', 'this_month', 'all'] as const).map(p => (
-                                    <button 
-                                        key={p} 
-                                        onClick={() => setRankingPeriod(p)}
-                                        className={`px-3 py-1.5 text-[10px] font-black uppercase tracking-tighter rounded-md transition-all ${rankingPeriod === p ? 'bg-accent text-[#181A20] shadow-lg' : 'text-secondary hover:text-white'}`}
+
+                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                                {userTeams.map((team) => (
+                                    <button
+                                        key={team}
+                                        onClick={() => handleTeamSelect(team)}
+                                        onMouseEnter={playHover}
+                                        className="group relative bg-[#1E2329]/40 hover:bg-[#1E2329]/60 border border-[#2B3139] hover:border-primary/50 rounded-xl p-6 transition-all duration-300 text-left overflow-hidden flex flex-col gap-4"
                                     >
-                                        {p === 'today' ? 'Today' : p === 'this_week' ? 'Week' : p === 'this_month' ? 'Month' : 'All'}
+                                        <div className="absolute top-0 right-0 p-4 opacity-10 group-hover:opacity-20 transition-opacity">
+                                            <div className="text-6xl font-black italic">{team.charAt(0)}</div>
+                                        </div>
+                                        
+                                        <div className="flex items-center gap-4 relative z-10">
+                                            <div className="w-14 h-14 shrink-0 rounded-xl bg-gradient-to-br from-primary to-[#f0c51d] flex items-center justify-center text-bg-black font-black text-2xl shadow-lg shadow-primary/20 group-hover:scale-110 transition-transform duration-500">
+                                                {team.charAt(0).toUpperCase()}
+                                            </div>
+                                            <div className="flex-grow">
+                                                <h3 className="text-lg font-black text-[#EAECEF] group-hover:text-primary transition-colors uppercase tracking-wider">{team}</h3>
+                                                <div className="flex items-center gap-2 mt-1">
+                                                    <span className="w-1.5 h-1.5 rounded-full bg-[#0ECB81]"></span>
+                                                    <p className="text-[10px] text-secondary font-bold uppercase tracking-widest">Active Node</p>
+                                                </div>
+                                            </div>
+                                        </div>
+
+                                        <div className="mt-4 pt-4 border-t border-[#2B3139]/50 flex items-center justify-between relative z-10">
+                                            <span className="text-[10px] font-bold text-secondary uppercase tracking-[0.2em] group-hover:text-primary/70 transition-colors">Enter Terminal</span>
+                                            <div className="w-8 h-8 rounded-lg bg-[#2B3139] flex items-center justify-center text-secondary group-hover:bg-primary group-hover:text-bg-black transition-all duration-300">
+                                                <ChevronRight className="w-5 h-5" />
+                                            </div>
+                                        </div>
+
+                                        {/* Hover Glow */}
+                                        <div className="absolute inset-0 bg-primary/5 opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none"></div>
                                     </button>
                                 ))}
                             </div>
                         </div>
 
-                        <div className="space-y-3">
-                            {isRankingLoading ? (
-                                <div className="py-12 flex justify-center"><Spinner size="md" /></div>
-                            ) : (globalRanking && globalRanking.length > 0) ? globalRanking.slice(0, 3).map((t, i) => (
-                                <div key={t.name} className="rank-card group p-5 rounded-xl flex items-center justify-between transition-all hover:bg-white/5 hover:border-accent/30 relative overflow-hidden">
-                                    <div className="flex items-center gap-5 relative z-10">
-                                        <div className={`w-10 h-10 rounded-xl flex items-center justify-center font-black text-sm italic ${
-                                            i === 0 ? 'bg-accent text-[#181A20]' : 
-                                            i === 1 ? 'bg-[#EAECEF] text-[#181A20]' : 
-                                            'bg-[#C99400] text-white'
-                                        }`}>
-                                            #{i + 1}
-                                        </div>
-                                        <div>
-                                            <h4 className="text-lg font-black text-white italic uppercase tracking-tight">{t.name}</h4>
-                                            <p className="text-[10px] text-secondary font-bold uppercase tracking-widest mt-1">Operational Leader</p>
-                                        </div>
-                                    </div>
-                                    <div className="text-right relative z-10">
-                                        <p className="text-[10px] text-secondary font-bold uppercase tracking-widest mb-1">Revenue</p>
-                                        <p className="text-2xl font-black text-white italic leading-none tracking-tighter">${(t.revenue/1000).toFixed(1)}k</p>
-                                    </div>
-                                    <div className="absolute right-[-5%] bottom-[-10%] text-white/[0.02] font-black italic text-8xl select-none pointer-events-none group-hover:text-accent/[0.03] transition-colors">{i+1}</div>
+                        {/* Right: Ranking */}
+                        <div className="lg:col-span-4 space-y-6">
+                            <div className="bg-[#1E2329]/60 backdrop-blur-md border border-[#2B3139] rounded-2xl p-6 overflow-hidden relative">
+                                <div className="absolute top-0 right-0 p-6 opacity-5">
+                                    <TrendingUp className="w-24 h-24" />
                                 </div>
-                            )) : (
-                                <div className="py-16 text-center bg-white/[0.01] rounded-xl border border-dashed border-white/10">
-                                    <p className="text-[10px] font-bold text-secondary uppercase tracking-[0.3em]">Establishing Data Nodes...</p>
-                                </div>
-                            )}
-                        </div>
 
-                        <div className="mt-2 p-5 rounded-xl bg-accent/5 border border-accent/10 backdrop-blur-md">
-                            <div className="flex items-start gap-4">
-                                <div className="w-10 h-10 rounded-xl bg-accent/20 flex items-center justify-center shrink-0 border border-accent/20">
-                                    <svg className="w-5 h-5 text-accent" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}><path d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
-                                </div>
-                                <div className="pt-1">
-                                    <h5 className="text-xs font-black text-accent uppercase tracking-widest mb-1.5">Terminal Notice</h5>
-                                    <p className="text-[11px] text-secondary font-medium leading-relaxed">System is operational. Access your designated node to manage live order streams and performance analytics.</p>
+                                <div className="flex flex-col gap-6 relative z-10">
+                                    <div className="flex items-center justify-between">
+                                        <div className="flex items-center gap-3">
+                                            <div className="w-1 h-5 bg-primary rounded-full"></div>
+                                            <h3 className="text-sm font-black text-white uppercase tracking-[0.2em]">Top Team Sales</h3>
+                                        </div>
+                                        <div className="flex bg-bg-black p-1 rounded-lg border border-[#2B3139]">
+                                            {(['today', 'this_week', 'this_month', 'all'] as const).map(p => (
+                                                <button
+                                                    key={p}
+                                                    onClick={() => setRankingPeriod(p)}
+                                                    className={`px-3 py-1.5 text-[9px] font-black uppercase tracking-wider rounded-md transition-all ${rankingPeriod === p ? 'bg-primary text-bg-black shadow-md' : 'text-secondary hover:text-white'}`}
+                                                >
+                                                    {p === 'today' ? 'Day' : p === 'this_week' ? 'Wk' : p === 'this_month' ? 'Mo' : 'All'}
+                                                </button>
+                                            ))}
+                                        </div>
+                                    </div>
+
+                                    <div className="space-y-3">
+                                        {isRankingLoading ? (
+                                            <div className="py-20 flex flex-col items-center justify-center gap-4">
+                                                <Spinner size="md" />
+                                                <span className="text-[10px] font-bold text-secondary uppercase tracking-widest animate-pulse">Retrieving Data...</span>
+                                            </div>
+                                        ) : (globalRanking && globalRanking.length > 0) ? globalRanking.slice(0, 5).map((item, i) => (
+                                            <div key={item.name} className="group bg-bg-black/40 hover:bg-bg-black/60 border border-[#2B3139] hover:border-primary/30 rounded-xl p-4 flex items-center justify-between transition-all duration-300">
+                                                <div className="flex items-center gap-4">
+                                                    <div className={`w-10 h-10 rounded-lg flex items-center justify-center font-black text-sm shadow-inner ${
+                                                        i === 0 ? 'bg-gradient-to-br from-primary to-[#f0c51d] text-bg-black' :
+                                                        i === 1 ? 'bg-[#EAECEF] text-bg-black' :
+                                                        i === 2 ? 'bg-[#C99400] text-[#EAECEF]' :
+                                                        'bg-[#2B3139] text-secondary'
+                                                    }`}>
+                                                        {i === 0 ? '1ST' : i === 1 ? '2ND' : i === 3 ? '3RD' : `#${i + 1}`}
+                                                    </div>
+                                                    <div>
+                                                        <h4 className="text-sm font-black text-[#EAECEF] uppercase tracking-wider group-hover:text-primary transition-colors">{item.name}</h4>
+                                                        <p className="text-[9px] text-secondary font-bold uppercase tracking-widest mt-1 opacity-60">Revenue Stream</p>
+                                                    </div>
+                                                </div>
+                                                <div className="text-right">
+                                                    <p className="text-base font-black text-white tracking-tighter">${(item.revenue/1000).toFixed(1)}K</p>
+                                                    <div className="flex items-center justify-end gap-1 mt-1">
+                                                        <TrendingUp className="w-3 h-3 text-[#0ECB81]" />
+                                                        <span className="text-[9px] font-bold text-[#0ECB81]">Live</span>
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        )) : (
+                                            <div className="py-16 text-center bg-bg-black/20 border border-dashed border-[#2B3139] rounded-xl">
+                                                <p className="text-[10px] font-bold text-secondary uppercase tracking-widest opacity-40">No ranking data detected</p>
+                                            </div>
+                                        )}
+                                    </div>
+
+                                    <div className="bg-primary/5 border border-primary/10 rounded-xl p-5">
+                                        <div className="flex items-start gap-4">
+                                            <div className="w-10 h-10 rounded-lg bg-primary/10 flex items-center justify-center shrink-0 border border-primary/20">
+                                                <Info className="w-5 h-5 text-primary" />
+                                            </div>
+                                            <div>
+                                                <h5 className="text-[11px] font-black text-primary uppercase tracking-[0.2em] mb-2">Protocol Status</h5>
+                                                <p className="text-[10px] text-secondary font-bold leading-relaxed uppercase tracking-wider opacity-80">All operational nodes are synchronized with the central database. Security protocols active.</p>
+                                            </div>
+                                        </div>
+                                    </div>
                                 </div>
                             </div>
                         </div>
@@ -188,36 +242,47 @@ const DesktopUserJourney: React.FC<DesktopUserJourneyProps> = ({ onBackToRoleSel
     }
 
     return (
-        <div className="w-full max-w-full mx-auto px-6 py-6 animate-fade-in flex flex-col min-h-full bg-binance">
-            <div className="flex-shrink-0 flex items-center justify-between mb-8 pb-6 border-b border-white/5">
-                <div className="flex items-center gap-5">
-                    <div className="w-1.5 h-6 bg-accent rounded-full shadow-[0_0_15px_rgba(252,213,53,0.5)]"></div>
-                    <div className="flex flex-col">
-                        <h2 className="text-lg font-black text-white uppercase italic tracking-tighter leading-none">{selectedTeam} <span className="text-accent ml-2">TERMINAL</span></h2>
-                        <span className="text-[9px] font-bold text-secondary uppercase tracking-[0.4em] mt-2">Active Operational Session</span>
+        <div className="ui-binance min-h-full bg-bg-black text-[#EAECEF] font-sans flex flex-col">
+            {/* Sticky Header */}
+            <div className="sticky top-0 z-50 bg-[#1E2329]/95 border-b border-[#2B3139] backdrop-blur-md px-4 sm:px-6 py-3">
+                <div className="flex items-center justify-between max-w-full">
+                    <div className="flex items-center gap-3">
+                        <button onClick={handleSwitchTeam} className="p-1.5 hover:bg-[#2B3139] rounded-md transition-all text-secondary hover:text-primary border border-transparent hover:border-[#2B3139]" title="Back to Team Select">
+                            <ChevronLeft className="w-5 h-5" />
+                        </button>
+                        <div className="w-1 h-3 bg-primary rounded-full"></div>
+                        <div>
+                            <h2 className="text-sm font-bold tracking-wider uppercase leading-none">{selectedTeam}</h2>
+                            <div className="flex items-center gap-2 text-[10px] text-secondary font-bold mt-1 uppercase tracking-wider">
+                                <span className="text-primary">OPS</span>
+                                <span className="opacity-30">|</span>
+                                <span>Active Session</span>
+                            </div>
+                        </div>
+                    </div>
+                    <div className="flex items-center gap-3">
+                        {hasPermission('create_order') && (
+                            <button onClick={handleCreateOrder} className="flex items-center gap-2 px-5 py-2 bg-primary hover:bg-[#f0c51d] text-bg-black rounded-md font-bold uppercase tracking-wider text-[11px] transition-all active:scale-95">
+                                <Plus className="w-4 h-4" />
+                                <span>{language === 'km' ? 'បង្កើតការកម្មង់' : 'Create Order'}</span>
+                            </button>
+                        )}
+                        {userTeams && userTeams.length > 1 && (
+                            <button onClick={handleSwitchTeam} className="p-2 bg-[#2B3139]/50 hover:bg-[#2B3139] text-secondary hover:text-[#EAECEF] rounded-md transition-all border border-[#2B3139]" title="Switch Team">
+                                <ArrowLeftRight className="w-4 h-4" />
+                            </button>
+                        )}
+                        <button onClick={onBackToRoleSelect} className="p-2 bg-[#2B3139]/50 hover:bg-[#2B3139] text-secondary hover:text-[#EAECEF] rounded-md transition-all border border-[#2B3139]" title="Switch Role">
+                            <LogOut className="w-4 h-4" />
+                        </button>
                     </div>
                 </div>
-                <div className="flex items-center gap-4">
-                    {hasPermission('create_order') && (
-                        <button onClick={handleCreateOrder} className="px-8 py-3 bg-accent text-[#181A20] rounded-xl text-xs font-black uppercase tracking-widest hover:bg-[#f0c51d] hover:shadow-[0_8px_20px_rgba(252,213,53,0.25)] transition-all active:scale-95 flex items-center gap-3">
-                            <div className="w-5 h-5 rounded-lg bg-[#181A20]/10 flex items-center justify-center">
-                                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={3}><path d="M12 4v16m8-8H4"/></svg>
-                            </div>
-                            <span>{language === 'km' ? 'បង្កើតការកម្មង់' : 'Create Order'}</span>
-                        </button>
-                    )}
-                    <div className="h-8 w-[1px] bg-white/5 mx-2"></div>
-                    <button onClick={onBackToRoleSelect} className="px-5 py-3 text-[10px] font-black uppercase tracking-widest text-accent bg-accent/5 hover:bg-accent/10 rounded-xl border border-accent/10 transition-all active:scale-95">
-                        {language === 'km' ? 'ប្ដូរ Role' : 'Switch Role'}
-                    </button>
-                    {userTeams && userTeams.length > 1 && (
-                        <button onClick={handleSwitchTeam} className="px-5 py-3 text-[10px] font-black uppercase tracking-widest text-secondary bg-white/5 hover:bg-white/10 rounded-xl border border-white/5 transition-all active:scale-95">
-                            {language === 'km' ? 'ប្ដូរក្រុម' : 'Switch Team'}
-                        </button>
-                    )}
-                </div>
             </div>
-            <div className="flex-1 transition-all duration-500"><UserOrdersView onAdd={handleCreateOrder} /></div>
+
+            {/* Content Area */}
+            <div className="flex-1 p-4 sm:p-6">
+                <UserOrdersView onAdd={handleCreateOrder} />
+            </div>
         </div>
     );
 };

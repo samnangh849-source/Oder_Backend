@@ -2,7 +2,6 @@ package backend
 
 import (
 	"bytes"
-	"context"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -249,13 +248,13 @@ func processTask(workerID int, task SyncTask) {
 			log.Printf("⏳ SyncManager: Retrying task %s in %v (Attempt %d/%d)", task.Request.Action, backoff, task.RetryCount, task.MaxRetries)
 
 			go func(t SyncTask, d time.Duration) {
-				time.Sleep(d)
-				// Re-enqueue without dedupe check for retries to ensure they aren't merged with NEW events
-				// that might have happened after the failure
 				select {
-				case SyncQueue <- t:
+				case <-time.After(d):
+					select {
+					case SyncQueue <- t:
+					case <-stopChan:
+					}
 				case <-stopChan:
-					return
 				}
 			}(task, backoff)
 		} else {
@@ -267,8 +266,4 @@ func processTask(workerID int, task SyncTask) {
 	}
 }
 
-func init() {
-	// Seed random for jitter
-	rand.Seed(time.Now().UnixNano())
-}
 

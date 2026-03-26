@@ -10,7 +10,7 @@ const extractText = (response: GenerateContentResponse): string => {
 export const summarizeText = async (text: string): Promise<string> => {
     if (!text) return "No text provided to summarize.";
     // Always initialize a new instance before call to ensure up-to-date config/key
-    const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
+    const ai = new GoogleGenAI({ apiKey: import.meta.env.VITE_GEMINI_API_KEY });
     try {
         const response = await ai.models.generateContent({
             model: "gemini-3-flash-preview",
@@ -25,7 +25,7 @@ export const summarizeText = async (text: string): Promise<string> => {
 
 export const generateProductDescription = async (productName: string): Promise<string> => {
     if (!productName) return "";
-    const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
+    const ai = new GoogleGenAI({ apiKey: import.meta.env.VITE_GEMINI_API_KEY });
     try {
         const response = await ai.models.generateContent({
             model: "gemini-3-flash-preview",
@@ -39,7 +39,7 @@ export const generateProductDescription = async (productName: string): Promise<s
 };
 
 export const analyzeReportData = async (reportData: any, filters: any): Promise<string> => {
-    const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
+    const ai = new GoogleGenAI({ apiKey: import.meta.env.VITE_GEMINI_API_KEY });
     try {
         const filtersSummary = [
             `Date Range: ${filters.datePreset === 'all' ? 'All Time' : `${filters.startDate} to ${filters.endDate}`}`,
@@ -80,7 +80,7 @@ export const generateSalesForecast = async (orders: ParsedOrder[]): Promise<stri
         return "ត្រូវការទិន្នន័យប្រតិបត្តិការណ៍យ៉ាងតិច ៥ ដើម្បីបង្កើតការព្យាករណ៍។";
     }
 
-    const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
+    const ai = new GoogleGenAI({ apiKey: import.meta.env.VITE_GEMINI_API_KEY });
 
     const monthlyData = orders.reduce((acc, order) => {
         const month = new Date(order.Timestamp).toISOString().slice(0, 7);

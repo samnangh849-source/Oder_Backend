@@ -61,13 +61,34 @@ const AppContent: React.FC = () => {
             notificationVolume: 0.5, 
             notificationSound: 'default',
             uiTheme: 'default',
-            themeMode: 'dark'
+            themeMode: 'dark',
+            glassIntensity: 20,
+            borderRadius: 24,
+            animationSpeed: 'normal',
+            fontStyle: 'standard'
         };
         if (saved) {
             try { return { ...defaultSettings, ...JSON.parse(saved) }; } catch (e) { return defaultSettings; }
         }
         return defaultSettings;
     });
+
+    // --- APPLY DYNAMIC CSS VARIABLES ---
+    useEffect(() => {
+        const root = document.documentElement;
+        root.style.setProperty('--glass-blur', `${(advancedSettings.glassIntensity || 20) / 2}px`);
+        root.style.setProperty('--global-radius', `${advancedSettings.borderRadius || 24}px`);
+        
+        const animDurations = { none: '0s', slow: '0.6s', normal: '0.3s', fast: '0.1s' };
+        root.style.setProperty('--anim-duration', animDurations[advancedSettings.animationSpeed || 'normal']);
+        
+        const fonts = { 
+            standard: "'Kantumruy Pro', sans-serif", 
+            modern: "'Inter', sans-serif", 
+            mono: "'JetBrains Mono', monospace" 
+        };
+        root.style.setProperty('--global-font', fonts[advancedSettings.fontStyle || 'standard']);
+    }, [advancedSettings.glassIntensity, advancedSettings.borderRadius, advancedSettings.animationSpeed, advancedSettings.fontStyle]);
 
     const tokenRef = useRef<string | null>(null);
     const isMobile = window.innerWidth < 768;

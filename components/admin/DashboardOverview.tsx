@@ -77,6 +77,121 @@ const DashboardOverview: React.FC<DashboardOverviewProps> = ({
         unpaid: filteredMetricsOrders.filter(o => o['Payment Status'] === 'Unpaid').length
     };
 
+    if (uiTheme === 'binance') {
+        return (
+            <div className="space-y-6 animate-reveal pb-20 select-none">
+                {/* Binance Terminal Header */}
+                <div className="bg-[#1E2329] border border-[#2B3139] p-6 rounded-md relative overflow-hidden group">
+                    <div className="absolute top-0 right-0 p-4 opacity-[0.03] pointer-events-none group-hover:opacity-[0.05] transition-opacity">
+                        <svg className="w-32 h-32" fill="currentColor" viewBox="0 0 24 24"><path d="M12 0l-12 12 12 12 12-12-12-12zm0 19.5l-7.5-7.5 7.5-7.5 7.5 7.5-7.5 7.5z"/></svg>
+                    </div>
+                    
+                    <div className="flex flex-col md:flex-row md:items-center justify-between gap-6 relative z-10">
+                        <div className="flex flex-col gap-2">
+                            <div className="flex items-center gap-3">
+                                <div className="w-1 h-5 bg-[#FCD535] rounded-full"></div>
+                                <h1 className="text-xl font-black text-[#EAECEF] uppercase tracking-[0.1em] leading-none">Market Overview</h1>
+                                <div className="flex items-center gap-1.5 px-2 py-0.5 bg-[#0ECB81]/10 border border-[#0ECB81]/20 rounded text-[9px] font-black text-[#0ECB81] uppercase tracking-widest">
+                                    <span className="w-1.5 h-1.5 rounded-full bg-[#0ECB81] animate-pulse"></span>
+                                    Node Integrity Optimal
+                                </div>
+                            </div>
+                            <div className="flex items-center gap-4 mt-1">
+                                <span className="text-[10px] text-[#848E9C] font-black uppercase tracking-widest">Operator: <span className="text-[#EAECEF]">{currentUser?.FullName}</span></span>
+                                <span className="text-[#2B3139]">|</span>
+                                <span className="text-[10px] text-[#848E9C] font-black uppercase tracking-widest leading-none">Last Sync: {new Date().toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}</span>
+                            </div>
+                        </div>
+
+                        <div className="flex items-center gap-2">
+                            <DateRangeFilter 
+                                dateRange={dateFilter.preset as DateRangePreset}
+                                onRangeChange={(r) => setDateFilter({ ...dateFilter, preset: r })}
+                                customStart={dateFilter.start}
+                                onCustomStartChange={(v) => setDateFilter({ ...dateFilter, start: v })}
+                                customEnd={dateFilter.end}
+                                onCustomEndChange={(v) => setDateFilter({ ...dateFilter, end: v })}
+                            />
+                        </div>
+                    </div>
+                </div>
+
+                {/* Performance Nodes - Binance Card Style */}
+                <div className="grid grid-cols-1 md:grid-cols-12 gap-4">
+                    <div className="md:col-span-4 bg-[#1E2329] border border-[#2B3139] hover:border-[#474D57] p-6 rounded-md transition-all group">
+                        <div className="flex justify-between items-start mb-6">
+                            <p className="text-[10px] font-black text-[#848E9C] uppercase tracking-[0.2em] group-hover:text-[#FCD535] transition-colors">Net Volume (USD)</p>
+                            <div className="p-1.5 bg-[#0ECB81]/10 rounded border border-[#0ECB81]/20 text-[#0ECB81]">
+                                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={3}><path d="M13 7h8m0 0v8m0-8l-8 8-4-4-6 6" /></svg>
+                            </div>
+                        </div>
+                        <div className="flex items-baseline gap-2">
+                            <span className="text-xl font-black text-[#FCD535]">$</span>
+                            <h3 className="text-4xl font-black text-[#EAECEF] tracking-tighter tabular-nums leading-none">
+                                {metrics.revenue.toLocaleString(undefined, {maximumFractionDigits: 0})}
+                            </h3>
+                        </div>
+                        <div className="mt-6 pt-6 border-t border-[#2B3139]/50 flex items-center justify-between">
+                            <span className="text-[9px] font-bold text-[#848E9C] uppercase tracking-widest">Aggregated Stream</span>
+                            <span className="text-[10px] font-black text-[#0ECB81]">+12.5%</span>
+                        </div>
+                    </div>
+
+                    <div className="md:col-span-4 bg-[#1E2329] border border-[#2B3139] hover:border-[#474D57] p-6 rounded-md transition-all group">
+                        <div className="flex justify-between items-start mb-6">
+                            <p className="text-[10px] font-black text-[#848E9C] uppercase tracking-[0.2em] group-hover:text-[#FCD535] transition-colors">Execution Count</p>
+                            <div className="p-1.5 bg-[#474D57]/20 rounded border border-[#474D57]/30 text-[#848E9C]">
+                                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={3}><path d="M4 7v10c0 2.21 3.582 4 8 4s8-1.79 8-4V7M4 7c0 2.21 3.582 4 8 4s8-1.79 8-4M4 7c0-2.21 3.582-4 8-4s8 1.79 8 4m0 5c0 2.21-3.582 4-8 4s-8-1.79-8-4" /></svg>
+                            </div>
+                        </div>
+                        <div className="flex items-baseline gap-2">
+                            <h3 className="text-4xl font-black text-[#EAECEF] tracking-tighter tabular-nums leading-none">{metrics.orders}</h3>
+                            <span className="text-xs font-black text-[#848E9C] uppercase tracking-widest">Nodes</span>
+                        </div>
+                        <div className="mt-6 pt-6 border-t border-[#2B3139]/50 flex items-center justify-between">
+                            <span className="text-[9px] font-bold text-[#848E9C] uppercase tracking-widest">Transaction Velocity</span>
+                            <span className="text-[10px] font-black text-[#0ECB81]">+5.2%</span>
+                        </div>
+                    </div>
+
+                    <div className="md:col-span-4 bg-[#1E2329] border border-[#2B3139] hover:border-[#474D57] p-6 rounded-md transition-all group">
+                        <div className="flex justify-between items-start mb-6">
+                            <p className="text-[10px] font-black text-[#848E9C] uppercase tracking-[0.2em] group-hover:text-[#F6465D] transition-colors">Risk Exposure</p>
+                            <div className="p-1.5 bg-[#F6465D]/10 rounded border border-[#F6465D]/20 text-[#F6465D]">
+                                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={3}><path d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" /></svg>
+                            </div>
+                        </div>
+                        <div className="flex items-baseline gap-2">
+                            <h3 className="text-4xl font-black text-[#F6465D] tracking-tighter tabular-nums leading-none">{metrics.unpaid}</h3>
+                            <span className="text-xs font-black text-[#848E9C] uppercase tracking-widest">Unpaid</span>
+                        </div>
+                        <div className="mt-6 pt-6 border-t border-[#2B3139]/50 flex items-center justify-between">
+                            <span className="text-[9px] font-bold text-[#848E9C] uppercase tracking-widest">Settlement Latency</span>
+                            <span className="text-[10px] font-black text-[#F6465D]">-2.1%</span>
+                        </div>
+                    </div>
+                </div>
+
+                {/* Core Analytics Blocks */}
+                <div className="space-y-4">
+                    <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
+                        <TeamRevenueTable stats={teamRevenueStats} onStatClick={onTeamClick} />
+                        <SalesStoreTable stats={brandStats} onStatClick={onBrandClick} />
+                        <FulfillmentStoreTable stats={storeStats} onStatClick={onStoreClick} />
+                    </div>
+
+                    <div className="grid grid-cols-1 xl:grid-cols-12 gap-4">
+                        <div className="xl:col-span-8">
+                            <ProvincialMap data={provinceStats} onProvinceClick={onProvinceClick} />
+                        </div>
+                        <div className="xl:col-span-4">
+                            <ProvincialSummaryList stats={provinceStats} onProvinceClick={onProvinceClick} />
+                        </div>
+                    </div>
+                </div>
+            </div>
+        );
+    }
     if (uiTheme === 'netflix') {
         return (
             <div className="space-y-12 animate-fade-in pb-20">

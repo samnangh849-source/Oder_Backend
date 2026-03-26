@@ -2,6 +2,8 @@ package backend
 
 import (
 	"encoding/json"
+	"log"
+	"sort"
 	"strings"
 )
 
@@ -91,7 +93,10 @@ func ResolveManualTarget(targetRaw string, userSet map[string]bool) (targetType 
 func CalculatePayout(calc IncentiveCalculator, val float64, subPeriod string) float64 {
 	var rules IncentiveRules
 	if calc.RulesJSON != "" {
-		json.Unmarshal([]byte(calc.RulesJSON), &rules)
+		if err := json.Unmarshal([]byte(calc.RulesJSON), &rules); err != nil {
+			log.Printf("CalculatePayout: failed to parse RulesJSON for calculator %s: %v", calc.Type, err)
+			return 0
+		}
 	}
 
 	if calc.Type == "Achievement" {
@@ -102,13 +107,9 @@ func CalculatePayout(calc IncentiveCalculator, val float64, subPeriod string) fl
 				activeTiers = append(activeTiers, t)
 			}
 		}
-		for i := 0; i < len(activeTiers); i++ {
-			for j := i + 1; j < len(activeTiers); j++ {
-				if activeTiers[i].Target < activeTiers[j].Target {
-					activeTiers[i], activeTiers[j] = activeTiers[j], activeTiers[i]
-				}
-			}
-		}
+		sort.Slice(activeTiers, func(i, j int) bool {
+			return activeTiers[i].Target > activeTiers[j].Target
+		})
 		for _, t := range activeTiers {
 			if val >= t.Target {
 				if t.RewardType == "Percentage" {

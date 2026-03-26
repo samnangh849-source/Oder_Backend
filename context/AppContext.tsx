@@ -16,6 +16,10 @@ export interface AdvancedSettings {
     packagingGracePeriod?: number; // Time in seconds, minimum 3
     uiTheme?: 'default' | 'neumorphism' | 'samsung' | 'netflix' | 'finance' | 'binance';
     themeMode?: 'light' | 'dark';
+    glassIntensity?: number; // 0 to 100
+    borderRadius?: number; // 0 to 40
+    animationSpeed?: 'none' | 'slow' | 'normal' | 'fast';
+    fontStyle?: 'standard' | 'modern' | 'mono';
 }
 
 export interface AppContextType {

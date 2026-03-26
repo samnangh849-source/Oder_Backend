@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useContext } from 'react';
 import { ParsedOrder, AppData } from '../../types';
 import { analyzeReportData } from '../../services/geminiService';
 import GeminiButton from '../common/GeminiButton';
@@ -8,6 +8,7 @@ import { FilterState } from '../orders/OrderFilters';
 import { APP_LOGO_URL } from '../../constants';
 import Spinner from '../common/Spinner';
 import { safeParseDate, getValidDate } from '../../utils/dateUtils';
+import { AppContext } from '../../context/AppContext';
 
 interface ShippingReportProps {
     orders: ParsedOrder[];
@@ -21,6 +22,10 @@ interface ShippingReportProps {
 }
 
 const ShippingReport: React.FC<ShippingReportProps> = ({ orders, appData, dateFilter: initialDateFilter, startDate: initialStartDate, endDate: initialEndDate, onNavigate, contextFilters, onBack }) => {
+    const { advancedSettings } = useContext(AppContext);
+    const uiTheme = advancedSettings?.uiTheme || 'default';
+    const isLightMode = advancedSettings?.themeMode === 'light';
+
     const [analysis, setAnalysis] = useState<string>('');
     const [loadingAnalysis, setLoadingAnalysis] = useState(false);
     const [storeFilter, setStoreFilter] = useState<string>('All');
@@ -29,6 +34,42 @@ const ShippingReport: React.FC<ShippingReportProps> = ({ orders, appData, dateFi
     const [dateFilter, setDateFilter] = useState(initialDateFilter || 'this_month');
     const [startDate, setStartDate] = useState(initialStartDate || new Date().toISOString().split('T')[0]);
     const [endDate, setEndDate] = useState(initialEndDate || new Date().toISOString().split('T')[0]);
+
+    // Theme-specific styles
+    const getThemeStyles = () => {
+        switch (uiTheme) {
+            case 'binance':
+                return {
+                    headerBg: 'bg-[#1E2329] border-[#2B3139]',
+                    cardBg: 'bg-[#1E2329] border-[#2B3139]',
+                    accent: '#FCD535',
+                    accentText: 'text-[#FCD535]',
+                    secondaryText: 'text-[#848E9C]',
+                    primaryText: 'text-[#EAECEF]',
+                    innerBg: 'bg-[#0B0E11]',
+                    tableRowHover: 'hover:bg-white/5',
+                    tableBorder: 'border-[#2B3139]',
+                    buttonSecondary: 'bg-[#2B3139] border-[#474D57] text-[#848E9C] hover:text-[#EAECEF]',
+                    buttonAccent: 'bg-[#FCD535] text-[#1E2329] hover:bg-[#f0c51d]'
+                };
+            default:
+                return {
+                    headerBg: 'bg-gray-900/40 border-white/5',
+                    cardBg: 'bg-gray-900/40 border-white/5',
+                    accent: '#3b82f6',
+                    accentText: 'text-blue-400',
+                    secondaryText: 'text-gray-500',
+                    primaryText: 'text-white',
+                    innerBg: 'bg-black/40',
+                    tableRowHover: 'hover:bg-white/5',
+                    tableBorder: 'border-white/5',
+                    buttonSecondary: 'bg-gray-800 border-gray-700 text-gray-400 hover:bg-gray-700',
+                    buttonAccent: 'bg-blue-600 text-white hover:bg-blue-700'
+                };
+        }
+    };
+
+    const styles = getThemeStyles();
 
     // Filter Navigation Handler
     const handleFilterNavigation = (key: string, value: string) => {
@@ -370,20 +411,20 @@ const ShippingReport: React.FC<ShippingReportProps> = ({ orders, appData, dateFi
     };
 
     return (
-        <div className="space-y-8 animate-fade-in pb-12">
+        <div className="space-y-8 animate-fade-in pb-12 select-none">
             
             {/* Header Actions */}
-            <div className="flex flex-col gap-4 bg-gray-900/40 p-5 rounded-[2rem] border border-white/5">
+            <div className={`flex flex-col gap-4 ${styles.headerBg} p-5 rounded-md border backdrop-blur-md`}>
                 <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
                     <div className="flex items-center gap-4">
                         {onBack && (
-                            <button onClick={onBack} className="bg-gray-800 p-3 rounded-2xl border border-gray-700 hover:bg-gray-700 active:scale-95 transition-all">
-                                <svg className="w-5 h-5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 19l-7-7m0 0l7-7m-7 7h18" /></svg>
+                            <button onClick={onBack} className={`p-3 rounded-md border ${styles.buttonSecondary} transition-all active:scale-95`}>
+                                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 19l-7-7m0 0l7-7m-7 7h18" /></svg>
                             </button>
                         )}
                         <div>
-                            <h2 className="text-xl font-black text-white uppercase tracking-tight">របាយការណ៍ដឹកជញ្ជូន</h2>
-                            <p className="text-xs text-gray-500 font-bold mt-1">Shipping & Fulfillment Cost Analysis</p>
+                            <h2 className={`text-xl font-black ${styles.primaryText} uppercase tracking-tight`}>របាយការណ៍ដឹកជញ្ជូន</h2>
+                            <p className={`text-[10px] ${styles.secondaryText} font-bold mt-1 uppercase tracking-widest`}>Shipping & Fulfillment Cost Analysis</p>
                         </div>
                     </div>
                     
@@ -392,14 +433,14 @@ const ShippingReport: React.FC<ShippingReportProps> = ({ orders, appData, dateFi
                             <button
                                 key={preset}
                                 onClick={() => setDateFilter(preset)}
-                                className={`px-4 py-2 text-[10px] font-black uppercase rounded-xl transition-all ${dateFilter === preset ? 'bg-blue-600 text-white shadow-lg' : 'bg-gray-800 text-gray-500 hover:text-white border border-white/5'}`}
+                                className={`px-4 py-2 text-[9px] font-black uppercase rounded-md transition-all ${dateFilter === preset ? styles.buttonAccent + ' shadow-lg' : styles.buttonSecondary}`}
                             >
                                 {preset.replace('_', ' ')}
                             </button>
                         ))}
                         <button
                             onClick={() => setDateFilter('custom')}
-                            className={`px-4 py-2 text-[10px] font-black uppercase rounded-xl transition-all ${dateFilter === 'custom' ? 'bg-blue-600 text-white shadow-lg' : 'bg-gray-800 text-gray-500 hover:text-white border border-white/5'}`}
+                            className={`px-4 py-2 text-[9px] font-black uppercase rounded-md transition-all ${dateFilter === 'custom' ? styles.buttonAccent + ' shadow-lg' : styles.buttonSecondary}`}
                         >
                             Custom
                         </button>
@@ -407,35 +448,35 @@ const ShippingReport: React.FC<ShippingReportProps> = ({ orders, appData, dateFi
                 </div>
 
                 {dateFilter === 'custom' && (
-                    <div className="flex items-center gap-3 bg-white/5 p-3 rounded-2xl border border-white/5 animate-fade-in-down">
+                    <div className={`flex items-center gap-3 ${styles.innerBg} p-3 rounded-md border ${styles.tableBorder} animate-fade-in-down`}>
                         <input 
                             type="date" 
                             value={startDate} 
                             onChange={e => setStartDate(e.target.value)} 
-                            className="bg-gray-900 border border-white/10 rounded-xl px-4 py-2 text-white text-xs font-bold focus:ring-2 focus:ring-blue-500" 
+                            className={`${styles.innerBg} border ${styles.tableBorder} rounded-md px-4 py-2 ${styles.primaryText} text-xs font-bold focus:ring-2 focus:ring-${uiTheme === 'binance' ? '[#FCD535]' : 'blue-500'}`} 
                         />
-                        <span className="text-gray-500 font-black text-xs uppercase tracking-widest">to</span>
+                        <span className={`${styles.secondaryText} font-black text-xs uppercase tracking-widest`}>to</span>
                         <input 
                             type="date" 
                             value={endDate} 
                             onChange={e => setEndDate(e.target.value)} 
-                            className="bg-gray-900 border border-white/10 rounded-xl px-4 py-2 text-white text-xs font-bold focus:ring-2 focus:ring-blue-500" 
+                            className={`${styles.innerBg} border ${styles.tableBorder} rounded-md px-4 py-2 ${styles.primaryText} text-xs font-bold focus:ring-2 focus:ring-${uiTheme === 'binance' ? '[#FCD535]' : 'blue-500'}`} 
                         />
                     </div>
                 )}
 
-                <div className="flex flex-col sm:flex-row justify-between items-center gap-4 pt-4 border-t border-white/5">
+                <div className={`flex flex-col sm:flex-row justify-between items-center gap-4 pt-4 border-t ${styles.tableBorder}`}>
                     <div className="flex items-center gap-3 w-full sm:w-auto">
-                        <div className="bg-gray-800 p-1 rounded-xl border border-white/10 flex items-center w-full sm:w-auto">
-                            <span className="text-[10px] font-bold text-gray-500 uppercase px-3 whitespace-nowrap">Store:</span>
+                        <div className={`p-1 rounded-md border ${styles.tableBorder} flex items-center w-full sm:w-auto ${styles.innerBg}`}>
+                            <span className={`text-[9px] font-bold ${styles.secondaryText} uppercase px-3 whitespace-nowrap`}>Store:</span>
                             <select 
                                 value={storeFilter} 
                                 onChange={(e) => setStoreFilter(e.target.value)}
-                                className="bg-transparent border-none text-xs font-black text-white focus:ring-0 cursor-pointer py-1.5 pr-8 pl-1 w-full"
+                                className={`bg-transparent border-none text-[11px] font-black ${styles.primaryText} focus:ring-0 cursor-pointer py-1.5 pr-8 pl-1 w-full uppercase`}
                             >
-                                <option value="All">All Stores</option>
+                                <option value="All" className={styles.innerBg}>All Stores</option>
                                 {appData.stores?.map(s => (
-                                    <option key={s.StoreName} value={s.StoreName}>{s.StoreName}</option>
+                                    <option key={s.StoreName} value={s.StoreName} className={styles.innerBg}>{s.StoreName}</option>
                                 ))}
                             </select>
                         </div>
@@ -444,56 +485,57 @@ const ShippingReport: React.FC<ShippingReportProps> = ({ orders, appData, dateFi
                     <div className="flex gap-2 w-full sm:w-auto">
                         <button 
                             onClick={handleExportExcel}
-                            className="flex-1 sm:flex-none justify-center px-4 py-2.5 bg-emerald-600/10 border border-emerald-500/30 text-emerald-400 rounded-xl font-black text-[10px] uppercase tracking-widest hover:bg-emerald-600 hover:text-white transition-all flex items-center gap-2 active:scale-95"
+                            className={`flex-1 sm:flex-none justify-center px-4 py-2.5 rounded-md font-black text-[10px] uppercase tracking-widest transition-all flex items-center gap-2 active:scale-95 ${uiTheme === 'binance' ? 'bg-[#0ECB81] text-[#1E2329] hover:bg-[#0bb371]' : 'bg-emerald-600 text-white hover:bg-emerald-700'}`}
                         >
                             <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" /></svg>
                             Excel
                         </button>
                         <button 
                             onClick={handleOpenPrintView}
-                            className="flex-1 sm:flex-none justify-center px-4 py-2.5 bg-red-600/10 border border-red-500/30 text-red-400 rounded-xl font-black text-[10px] uppercase tracking-widest hover:bg-red-600 hover:text-white transition-all flex items-center gap-2 active:scale-95"
+                            className={`flex-1 sm:flex-none justify-center px-4 py-2.5 rounded-md font-black text-[10px] uppercase tracking-widest transition-all flex items-center gap-2 active:scale-95 ${uiTheme === 'binance' ? 'bg-[#F6465D] text-white hover:bg-[#e03f54]' : 'bg-red-600 text-white hover:bg-red-700'}`}
                         >
                             <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 21h10a2 2 0 002-2V9.414a1 1 0 00-.293-.707l-5.414-5.414A1 1 0 0012.586 3H7a2 2 0 00-2 2v14a2 2 0 002 2z" /></svg>
-                            View & Print
+                            Print
                         </button>
                     </div>
                 </div>
             </div>
 
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-                <StatCard label="ចំណាយដឹកជញ្ជូនសរុប" value={`$${shippingStats.totalInternalCost.toLocaleString()}`} icon="🚚" colorClass="from-orange-600 to-red-500" />
-                <StatCard label="ថ្លៃដឹកពីអតិថិជន" value={`$${shippingStats.totalCustomerFee.toLocaleString()}`} icon="💰" colorClass="from-blue-600 to-indigo-500" />
-                <StatCard label="តុល្យភាព (Net)" value={`$${shippingStats.netShipping.toLocaleString()}`} icon="⚖️" colorClass={shippingStats.netShipping >= 0 ? "from-emerald-600 to-teal-500" : "from-red-600 to-pink-500"} />
-                <StatCard label="ចំនួនកញ្ចប់សរុប" value={shippingStats.totalOrders} icon="📦" colorClass="from-purple-600 to-blue-500" />
+                <StatCard label="ចំណាយដឹកជញ្ជូនសរុប" value={`$${shippingStats.totalInternalCost.toLocaleString()}`} icon="🚚" colorClass={uiTheme === 'binance' ? "from-[#F6465D] to-[#e03f54]" : "from-orange-600 to-red-500"} />
+                <StatCard label="ថ្លៃដឹកពីអតិថិជន" value={`$${shippingStats.totalCustomerFee.toLocaleString()}`} icon="💰" colorClass={uiTheme === 'binance' ? "from-[#FCD535] to-[#f0c51d] !text-[#1E2329]" : "from-blue-600 to-indigo-500"} />
+                <StatCard label="តុល្យភាព (Net)" value={`$${shippingStats.netShipping.toLocaleString()}`} icon="⚖️" colorClass={shippingStats.netShipping >= 0 ? (uiTheme === 'binance' ? "from-[#0ECB81] to-[#0bb371]" : "from-emerald-600 to-teal-500") : (uiTheme === 'binance' ? "from-[#F6465D] to-[#e03f54]" : "from-red-600 to-pink-500")} />
+                <StatCard label="ចំនួនកញ្ចប់សរុប" value={shippingStats.totalOrders} icon="📦" colorClass={uiTheme === 'binance' ? "from-[#2B3139] to-[#1E2329]" : "from-purple-600 to-blue-500"} />
             </div>
 
             <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
                 <div className="lg:col-span-8 space-y-6">
                     {/* Table 1: Methods (Shipping Companies) */}
-                    <div className="page-card !p-6 bg-gray-900/40 border-white/5">
-                        <h3 className="text-sm font-black text-white uppercase tracking-widest mb-6 flex items-center gap-2">សង្ខេបតាមក្រុមហ៊ុនដឹកជញ្ជូន</h3>
+                    <div className={`page-card !p-6 ${styles.cardBg} rounded-md border`}>
+                        <h3 className={`text-[11px] font-black ${styles.primaryText} uppercase tracking-widest mb-6 flex items-center gap-2`}>
+                            <div className={`w-1 h-4 ${styles.accent === '#FCD535' ? 'bg-[#FCD535]' : 'bg-blue-500'} rounded-full`}></div>
+                            សង្ខេបតាមក្រុមហ៊ុនដឹកជញ្ជូន
+                        </h3>
                         <div className="overflow-x-auto">
                             <table className="w-full text-sm text-left">
-                                <thead className="text-[10px] text-gray-500 font-black uppercase tracking-widest border-b border-gray-800">
+                                <thead className={`text-[9px] ${styles.secondaryText} font-black uppercase tracking-widest border-b ${styles.tableBorder}`}>
                                     <tr><th className="px-4 py-3">ក្រុមហ៊ុន</th><th className="px-4 py-3 text-center">ចំនួន Orders</th><th className="px-4 py-3 text-right">ទឹកប្រាក់បង់ ($)</th></tr>
                                 </thead>
-                                <tbody className="divide-y divide-gray-800">
+                                <tbody className={`divide-y ${styles.tableBorder}`}>
                                     {shippingStats.methods.map((m, i) => (
-                                        <tr key={i} className="hover:bg-white/5">
-                                            <td className="px-4 py-3 font-bold text-gray-200 flex items-center gap-3">
-                                                <img src={convertGoogleDriveUrl(m.logo)} className="w-8 h-8 rounded-lg object-contain bg-gray-800 p-1 border border-gray-700" alt="" />
-                                                {m.name}
+                                        <tr key={i} className={styles.tableRowHover}>
+                                            <td className={`px-4 py-3 font-bold ${styles.primaryText} flex items-center gap-3`}>
+                                                <img src={convertGoogleDriveUrl(m.logo)} className={`w-8 h-8 rounded-md object-contain ${styles.innerBg} p-1 border ${styles.tableBorder}`} alt="" />
+                                                <span className="text-[11px] uppercase tracking-wider">{m.name}</span>
                                             </td>
-                                            {/* Clickable Order Count */}
                                             <td 
-                                                className="px-4 py-3 text-center font-black text-blue-400 cursor-pointer hover:underline hover:text-blue-300 transition-colors"
+                                                className={`px-4 py-3 text-center font-black ${uiTheme === 'binance' ? 'text-[#FCD535]' : 'text-blue-400'} cursor-pointer hover:underline transition-colors tabular-nums`}
                                                 onClick={() => handleFilterNavigation('shippingFilter', m.name)}
                                             >
                                                 {m.orders}
                                             </td>
-                                            {/* Clickable Cost Amount */}
                                             <td 
-                                                className="px-4 py-3 text-right font-black text-white cursor-pointer hover:underline hover:text-gray-300 transition-colors"
+                                                className={`px-4 py-3 text-right font-black ${styles.primaryText} cursor-pointer hover:underline transition-colors tabular-nums`}
                                                 onClick={() => handleFilterNavigation('shippingFilter', m.name)}
                                             >
                                                 ${m.cost.toLocaleString(undefined, {minimumFractionDigits: 2})}
@@ -501,13 +543,13 @@ const ShippingReport: React.FC<ShippingReportProps> = ({ orders, appData, dateFi
                                         </tr>
                                     ))}
                                 </tbody>
-                                <tfoot className="bg-white/5 border-t-2 border-white/10">
+                                <tfoot className={`${styles.innerBg} border-t-2 ${styles.tableBorder}`}>
                                     <tr>
-                                        <td className="px-4 py-3 text-right text-[10px] font-black uppercase text-gray-400 tracking-widest">Grand Total</td>
-                                        <td className="px-4 py-3 text-center font-black text-blue-300 text-base">
+                                        <td className={`px-4 py-3 text-right text-[9px] font-black uppercase ${styles.secondaryText} tracking-widest`}>Aggregate Cost</td>
+                                        <td className={`px-4 py-3 text-center font-black ${uiTheme === 'binance' ? 'text-[#FCD535]' : 'text-blue-300'} text-base tabular-nums`}>
                                             {shippingStats.methods.reduce((sum, m) => sum + m.orders, 0)}
                                         </td>
-                                        <td className="px-4 py-3 text-right font-black text-emerald-400 text-base">
+                                        <td className={`px-4 py-3 text-right font-black ${uiTheme === 'binance' ? 'text-[#0ECB81]' : 'text-emerald-400'} text-base tabular-nums`}>
                                             ${shippingStats.methods.reduce((sum, m) => sum + m.cost, 0).toLocaleString(undefined, {minimumFractionDigits: 2})}
                                         </td>
                                     </tr>
@@ -517,30 +559,31 @@ const ShippingReport: React.FC<ShippingReportProps> = ({ orders, appData, dateFi
                     </div>
 
                     {/* Table 2: Drivers */}
-                    <div className="page-card !p-6 bg-gray-900/40 border-white/5">
-                        <h3 className="text-sm font-black text-white uppercase tracking-widest mb-6 flex items-center gap-2">សង្ខេបតាមអ្នកដឹក (Drivers)</h3>
+                    <div className={`page-card !p-6 ${styles.cardBg} rounded-md border`}>
+                        <h3 className={`text-[11px] font-black ${styles.primaryText} uppercase tracking-widest mb-6 flex items-center gap-2`}>
+                            <div className={`w-1 h-4 ${styles.accent === '#FCD535' ? 'bg-[#FCD535]' : 'bg-emerald-500'} rounded-full`}></div>
+                            សង្ខេបតាមអ្នកដឹក (Drivers)
+                        </h3>
                         <div className="overflow-x-auto">
                             <table className="w-full text-sm text-left">
-                                <thead className="text-[10px] text-gray-500 font-black uppercase tracking-widest border-b border-gray-800">
+                                <thead className={`text-[9px] ${styles.secondaryText} font-black uppercase tracking-widest border-b ${styles.tableBorder}`}>
                                     <tr><th className="px-4 py-3">អ្នកដឹក</th><th className="px-4 py-3 text-center">ចំនួន Orders</th><th className="px-4 py-3 text-right">ទឹកប្រាក់បង់ ($)</th></tr>
                                 </thead>
-                                <tbody className="divide-y divide-gray-800">
+                                <tbody className={`divide-y ${styles.tableBorder}`}>
                                     {shippingStats.drivers.map((d, i) => (
-                                        <tr key={i} className="hover:bg-white/5">
-                                            <td className="px-4 py-3 font-bold text-gray-200 flex items-center gap-3">
-                                                <img src={convertGoogleDriveUrl(d.photo)} className="w-8 h-8 rounded-full object-cover bg-gray-800 border border-gray-700" alt="" />
-                                                {d.name}
+                                        <tr key={i} className={styles.tableRowHover}>
+                                            <td className={`px-4 py-3 font-bold ${styles.primaryText} flex items-center gap-3`}>
+                                                <img src={convertGoogleDriveUrl(d.photo)} className={`w-8 h-8 rounded-full object-cover ${styles.innerBg} border ${styles.tableBorder}`} alt="" />
+                                                <span className="text-[11px] uppercase tracking-wider">{d.name}</span>
                                             </td>
-                                            {/* Clickable Order Count */}
                                             <td 
-                                                className="px-4 py-3 text-center font-black text-blue-400 cursor-pointer hover:underline hover:text-blue-300 transition-colors"
+                                                className={`px-4 py-3 text-center font-black ${uiTheme === 'binance' ? 'text-[#FCD535]' : 'text-blue-400'} cursor-pointer hover:underline transition-colors tabular-nums`}
                                                 onClick={() => handleFilterNavigation('driverFilter', d.name)}
                                             >
                                                 {d.orders}
                                             </td>
-                                            {/* Clickable Cost Amount */}
                                             <td 
-                                                className="px-4 py-3 text-right font-black text-white cursor-pointer hover:underline hover:text-gray-300 transition-colors"
+                                                className={`px-4 py-3 text-right font-black ${styles.primaryText} cursor-pointer hover:underline transition-colors tabular-nums`}
                                                 onClick={() => handleFilterNavigation('driverFilter', d.name)}
                                             >
                                                 ${d.cost.toLocaleString(undefined, {minimumFractionDigits: 2})}
@@ -548,13 +591,13 @@ const ShippingReport: React.FC<ShippingReportProps> = ({ orders, appData, dateFi
                                         </tr>
                                     ))}
                                 </tbody>
-                                <tfoot className="bg-white/5 border-t-2 border-white/10">
+                                <tfoot className={`${styles.innerBg} border-t-2 ${styles.tableBorder}`}>
                                     <tr>
-                                        <td className="px-4 py-3 text-right text-[10px] font-black uppercase text-gray-400 tracking-widest">Grand Total</td>
-                                        <td className="px-4 py-3 text-center font-black text-blue-300 text-base">
+                                        <td className={`px-4 py-3 text-right text-[9px] font-black uppercase ${styles.secondaryText} tracking-widest`}>Aggregate Cost</td>
+                                        <td className={`px-4 py-3 text-center font-black ${uiTheme === 'binance' ? 'text-[#FCD535]' : 'text-blue-300'} text-base tabular-nums`}>
                                             {shippingStats.drivers.reduce((sum, d) => sum + d.orders, 0)}
                                         </td>
-                                        <td className="px-4 py-3 text-right font-black text-emerald-400 text-base">
+                                        <td className={`px-4 py-3 text-right font-black ${uiTheme === 'binance' ? 'text-[#0ECB81]' : 'text-emerald-400'} text-base tabular-nums`}>
                                             ${shippingStats.drivers.reduce((sum, d) => sum + d.cost, 0).toLocaleString(undefined, {minimumFractionDigits: 2})}
                                         </td>
                                     </tr>
@@ -564,34 +607,35 @@ const ShippingReport: React.FC<ShippingReportProps> = ({ orders, appData, dateFi
                     </div>
 
                     {/* Table 3: Fulfillment Stores (Stock) */}
-                    <div className="page-card !p-6 bg-gray-900/40 border-white/5">
-                        <h3 className="text-sm font-black text-white uppercase tracking-widest mb-6 flex items-center gap-2">សង្ខេបតាម Fulfillment Store (Stock)</h3>
+                    <div className={`page-card !p-6 ${styles.cardBg} rounded-md border`}>
+                        <h3 className={`text-[11px] font-black ${styles.primaryText} uppercase tracking-widest mb-6 flex items-center gap-2`}>
+                            <div className={`w-1 h-4 ${styles.accent === '#FCD535' ? 'bg-[#FCD535]' : 'bg-orange-500'} rounded-full`}></div>
+                            សង្ខេបតាម Fulfillment Store (Stock)
+                        </h3>
                         <div className="overflow-x-auto">
                             <table className="w-full text-sm text-left">
-                                <thead className="text-[10px] text-gray-500 font-black uppercase tracking-widest border-b border-gray-800">
+                                <thead className={`text-[9px] ${styles.secondaryText} font-black uppercase tracking-widest border-b ${styles.tableBorder}`}>
                                     <tr>
                                         <th className="px-4 py-3">ឈ្មោះឃ្លាំង (Store)</th>
                                         <th className="px-4 py-3 text-center">ចំនួន Orders</th>
                                         <th className="px-4 py-3 text-right">ទឹកប្រាក់បង់ ($)</th>
                                     </tr>
                                 </thead>
-                                <tbody className="divide-y divide-gray-800">
+                                <tbody className={`divide-y ${styles.tableBorder}`}>
                                     {shippingStats.stores.map((s, i) => (
-                                        <tr key={i} className="hover:bg-white/5">
-                                            <td className="px-4 py-3 font-bold text-gray-200 flex items-center gap-3">
-                                                <span className="w-8 h-8 rounded-lg bg-gray-800 text-gray-400 flex items-center justify-center text-[10px] border border-gray-700">#{i + 1}</span>
-                                                {s.name}
+                                        <tr key={i} className={styles.tableRowHover}>
+                                            <td className={`px-4 py-3 font-bold ${styles.primaryText} flex items-center gap-3`}>
+                                                <span className={`w-8 h-8 rounded-md ${styles.innerBg} ${styles.secondaryText} flex items-center justify-center text-[9px] font-black border ${styles.tableBorder}`}>#{i + 1}</span>
+                                                <span className="text-[11px] uppercase tracking-wider">{s.name}</span>
                                             </td>
-                                            {/* Clickable Order Count */}
                                             <td 
-                                                className="px-4 py-3 text-center font-black text-blue-400 cursor-pointer hover:underline hover:text-blue-300 transition-colors"
+                                                className={`px-4 py-3 text-center font-black ${uiTheme === 'binance' ? 'text-[#FCD535]' : 'text-blue-400'} cursor-pointer hover:underline transition-colors tabular-nums`}
                                                 onClick={() => handleFilterNavigation('fulfillmentStore', s.name)}
                                             >
                                                 {s.orders}
                                             </td>
-                                            {/* Clickable Cost Amount */}
                                             <td 
-                                                className="px-4 py-3 text-right font-black text-white cursor-pointer hover:underline hover:text-gray-300 transition-colors"
+                                                className={`px-4 py-3 text-right font-black ${styles.primaryText} cursor-pointer hover:underline transition-colors tabular-nums`}
                                                 onClick={() => handleFilterNavigation('fulfillmentStore', s.name)}
                                             >
                                                 ${s.cost.toLocaleString(undefined, {minimumFractionDigits: 2})}
@@ -599,13 +643,13 @@ const ShippingReport: React.FC<ShippingReportProps> = ({ orders, appData, dateFi
                                         </tr>
                                     ))}
                                 </tbody>
-                                <tfoot className="bg-white/5 border-t-2 border-white/10">
+                                <tfoot className={`${styles.innerBg} border-t-2 ${styles.tableBorder}`}>
                                     <tr>
-                                        <td className="px-4 py-3 text-right text-[10px] font-black uppercase text-gray-400 tracking-widest">Grand Total</td>
-                                        <td className="px-4 py-3 text-center font-black text-blue-300 text-base">
+                                        <td className={`px-4 py-3 text-right text-[9px] font-black uppercase ${styles.secondaryText} tracking-widest`}>Aggregate Cost</td>
+                                        <td className={`px-4 py-3 text-center font-black ${uiTheme === 'binance' ? 'text-[#FCD535]' : 'text-blue-300'} text-base tabular-nums`}>
                                             {shippingStats.stores.reduce((sum, s) => sum + s.orders, 0)}
                                         </td>
-                                        <td className="px-4 py-3 text-right font-black text-emerald-400 text-base">
+                                        <td className={`px-4 py-3 text-right font-black ${uiTheme === 'binance' ? 'text-[#0ECB81]' : 'text-emerald-400'} text-base tabular-nums`}>
                                             ${shippingStats.stores.reduce((sum, s) => sum + s.cost, 0).toLocaleString(undefined, {minimumFractionDigits: 2})}
                                         </td>
                                     </tr>
@@ -616,14 +660,14 @@ const ShippingReport: React.FC<ShippingReportProps> = ({ orders, appData, dateFi
                 </div>
 
                 <div className="lg:col-span-4">
-                    <div className="page-card !p-6 bg-gray-900/40 border-white/5 h-full flex flex-col shadow-2xl relative overflow-hidden group">
+                    <div className={`page-card !p-6 ${styles.cardBg} rounded-md border h-full flex flex-col shadow-2xl relative overflow-hidden group`}>
                         <div className="flex justify-between items-center mb-8 relative z-10">
-                            <div><h3 className="text-sm font-black text-white uppercase tracking-widest">ការវិភាគដោយ AI</h3></div>
-                            <GeminiButton onClick={handleAnalyze} isLoading={loadingAnalysis}>Analyze</GeminiButton>
+                            <div><h3 className={`text-[11px] font-black ${styles.primaryText} uppercase tracking-widest`}>ការវិភាគដោយ AI</h3></div>
+                            <GeminiButton onClick={handleAnalyze} isLoading={loadingAnalysis} variant={uiTheme === 'binance' ? 'primary' : 'default'}>Compute</GeminiButton>
                         </div>
-                        <div className="flex-grow bg-black/40 rounded-3xl p-6 border border-white/5 overflow-y-auto custom-scrollbar min-h-[300px] relative z-10">
-                            {analysis ? (<div className="text-sm text-gray-300 whitespace-pre-wrap">{analysis}</div>) : (
-                                <div className="flex flex-col items-center justify-center h-full opacity-20 text-center"><p className="text-[10px] font-black uppercase tracking-[0.2em]">ចុច "Analyze" ដើម្បីវិភាគ</p></div>
+                        <div className={`flex-grow ${styles.innerBg} rounded-xl p-6 border ${styles.tableBorder} overflow-y-auto custom-scrollbar min-h-[300px] relative z-10 shadow-inner`}>
+                            {analysis ? (<div className={`text-[11px] ${styles.secondaryText} font-bold leading-relaxed uppercase tracking-wide`}>{analysis}</div>) : (
+                                <div className="flex flex-col items-center justify-center h-full opacity-20 text-center"><p className="text-[9px] font-black uppercase tracking-[0.2em]">Idle - Ready for Input</p></div>
                             )}
                         </div>
                     </div>

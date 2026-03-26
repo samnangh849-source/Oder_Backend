@@ -44,19 +44,10 @@ const DesktopAdminLayout: React.FC<DesktopAdminLayoutProps> = ({
     const dropdownRef = useRef<HTMLDivElement>(null);
     const t = translations[language];
 
-    // Check if we should hide header (user requested no header for DesktopAdminDashboard)
-    const isCustomUI = advancedSettings.uiTheme && advancedSettings.uiTheme !== 'default';
-    const showHeader = false;
-
-    useEffect(() => {
-        const handleClickOutside = (event: MouseEvent) => {
-            if (dropdownRef.current && !dropdownRef.current.contains(event.target as Node)) {
-                setDropdownOpen(false);
-            }
-        };
-        document.addEventListener('mousedown', handleClickOutside);
-        return () => document.removeEventListener('mousedown', handleClickOutside);
-    }, []);
+    const uiTheme = advancedSettings?.uiTheme || 'default';
+    const isLightMode = advancedSettings?.themeMode === 'light';
+    const isCustomUI = advancedSettings?.uiTheme && advancedSettings?.uiTheme !== 'default';
+    const showHeader = uiTheme === 'default';
 
     const handleTestNotification = async () => {
         await requestNotificationPermission();
@@ -64,8 +55,15 @@ const DesktopAdminLayout: React.FC<DesktopAdminLayoutProps> = ({
         setDropdownOpen(false);
     };
 
+    // Theme-specific Background
+    const getPageBg = () => {
+        if (uiTheme === 'binance') return 'bg-[#0B0E11]';
+        if (uiTheme === 'netflix') return 'bg-[#141414]';
+        return 'bg-gray-950';
+    };
+
     return (
-        <div className={`flex h-screen w-full bg-gray-950 overflow-hidden ${isCustomUI ? 'custom-ui-active' : ''}`}>
+        <div className={`flex h-screen w-full ${getPageBg()} overflow-hidden ${isCustomUI ? 'custom-ui-active' : ''}`}>
             {/* Fixed Sidebar */}
             <Sidebar 
                 activeDashboard={activeDashboard}
@@ -81,7 +79,7 @@ const DesktopAdminLayout: React.FC<DesktopAdminLayoutProps> = ({
             />
             
             {/* Main Content with its own Header */}
-            <main className={`flex-1 flex flex-col h-screen transition-all duration-300 ease-in-out ${isSidebarCollapsed ? 'pl-20' : 'pl-64'} overflow-hidden`}>
+            <main className={`flex-1 flex flex-col h-screen transition-all duration-300 ease-in-out ${isSidebarCollapsed ? (uiTheme === 'binance' ? 'pl-16' : 'pl-20') : (uiTheme === 'binance' ? 'pl-60' : 'pl-64')} overflow-hidden`}>
                 
                 {/* Desktop Header - Conditionally Hidden */}
                 {showHeader && (
@@ -158,11 +156,13 @@ const DesktopAdminLayout: React.FC<DesktopAdminLayoutProps> = ({
                     </header>
                 )}
 
-                <div className={`flex-1 overflow-hidden relative ${!showHeader ? 'pt-6' : ''}`}>
-                    {/* Ambient Background Effect for Desktop */}
-                    <div className="fixed inset-0 pointer-events-none opacity-50 overflow-hidden">
-                        <div className="absolute top-[-10%] right-[-10%] w-[500px] h-[500px] bg-blue-600/5 rounded-full blur-[120px]"></div>
-                    </div>
+                <div className={`flex-1 overflow-hidden relative ${!showHeader ? 'pt-4 sm:pt-6' : ''}`}>
+                    {/* Ambient Background Effect - Adjusted for Binance */}
+                    {uiTheme !== 'binance' && uiTheme !== 'netflix' && (
+                        <div className="fixed inset-0 pointer-events-none opacity-50 overflow-hidden">
+                            <div className="absolute top-[-10%] right-[-10%] w-[500px] h-[500px] bg-blue-600/5 rounded-full blur-[120px]"></div>
+                        </div>
+                    )}
                     
                     {/* Intelligent Layout Container */}
                     <div className="p-2 md:p-3 lg:p-4 xl:p-5 2xl:p-6 max-w-[2400px] mx-auto h-full w-full relative z-10 transition-all duration-300 flex flex-col overflow-y-auto overflow-x-hidden custom-scrollbar">
