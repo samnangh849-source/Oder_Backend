@@ -2359,12 +2359,14 @@ func handleGetTeamSalesRanking(c *gin.Context) {
 	now := time.Now()
 
 	// Query directly from orders table using grand_total (live revenue data)
+	// NOTE: PostgreSQL does NOT support GROUP BY/ORDER BY with SELECT aliases,
+	// so we must repeat the expressions explicitly.
 	db := DB.Table("orders").
 		Select("LOWER(TRIM(team)) as team_name, SUM(COALESCE(grand_total, 0)) as total_revenue").
 		Where("team IS NOT NULL AND team <> '' AND team <> 'Unassigned'").
 		Where("order_id NOT LIKE '%Opening_Balance%' AND order_id NOT LIKE '%Opening Balance%'").
-		Group("team_name").
-		Order("total_revenue DESC").
+		Group("LOWER(TRIM(team))").
+		Order("SUM(COALESCE(grand_total, 0)) DESC").
 		Limit(10)
 
 	switch period {
