@@ -4,6 +4,7 @@ import (
 	"bufio"
 	"bytes"
 	"context"
+	"crypto/subtle"
 	"encoding/base64"
 	"encoding/json"
 	"fmt"
@@ -310,6 +311,20 @@ func getTableName(sheetName string) string {
 		return "orders"
 	}
 	return ""
+}
+
+// isValidDBIdentifier allows only lowercase letters, digits, and underscores
+// to prevent SQL injection via dynamically constructed column/table identifiers.
+func isValidDBIdentifier(s string) bool {
+	if s == "" {
+		return false
+	}
+	for _, r := range s {
+		if !((r >= 'a' && r <= 'z') || (r >= '0' && r <= '9') || r == '_') {
+			return false
+		}
+	}
+	return true
 }
 
 func isValidOrderColumn(col string) bool {
@@ -628,7 +643,10 @@ func handleCalculateIncentive(c *gin.Context) {
 
 		var rules IncentiveRules
 		if calc.RulesJSON != "" {
-			json.Unmarshal([]byte(calc.RulesJSON), &rules)
+			if err := json.Unmarshal([]byte(calc.RulesJSON), &rules); err != nil {
+				log.Printf("incentive calc: failed to parse RulesJSON for calculator id=%v: %v", calc.ID, err)
+				continue
+			}
 		}
 
 		// Identify eligible users for this calculator
@@ -2185,6 +2203,10 @@ func handleAdminUpdateSheet(c *gin.Context) {
 		pkVal = v
 		originalPKKey = k
 	}
+	if !isValidDBIdentifier(pkCol) {
+		c.JSON(http.StatusBadRequest, gin.H{"status": "error", "message": "Invalid primary key field"})
+		return
+	}
 	mappedData := make(map[string]interface{})
 	for k, v := range req.NewData {
 		dbCol := mapToDBColumn(k)
@@ -2195,7 +2217,7 @@ func handleAdminUpdateSheet(c *gin.Context) {
 		// ✅ Prevent overwriting a permanent Google Drive URL with a temporary URL
 		if strVal, ok := v.(string); ok && strings.Contains(strVal, "/api/images/temp/") {
 			var currentVal string
-			if pkCol != "" && pkVal != nil {
+			if pkVal != nil {
 				DB.Table(tableName).Where(pkCol+" = ?", pkVal).Select(dbCol).Scan(&currentVal)
 				if strings.Contains(currentVal, "drive.google.com") {
 					continue // Skip updating this column as we already have the permanent Drive URL
@@ -2281,6 +2303,10 @@ func handleAdminDeleteRow(c *gin.Context) {
 	for k, v := range req.PrimaryKey {
 		pkCol = mapToDBColumn(k)
 		pkVal = v
+	}
+	if !isValidDBIdentifier(pkCol) {
+		c.JSON(http.StatusBadRequest, gin.H{"status": "error", "message": "Invalid primary key field"})
+		return
 	}
 
 	if req.SheetName == "Roles" && strings.EqualFold(fmt.Sprintf("%v", pkVal), "Admin") {
@@ -2462,8 +2488,7 @@ func handleChangePassword(c *gin.Context) {
 
 	go func() {
 		if appsScriptURL != "" {
-			// Sync with Google Sheets via managed queue
-			enqueueSync("updateSheet", map[string]interface{}{"Password": string(hashedPassword)}, "Users", map[string]string{"UserName": req.UserName})
+			enqueueSync("updateSheet", map[string]interface{}{"PasswordChanged": true}, "Users", map[string]string{"UserName": req.UserName})
 		}
 	}()
 
@@ -3643,7 +3668,7 @@ func handleSheetsWebhook(c *gin.Context) {
 		return
 	}
 
-	if req.Secret != appsScriptSecret {
+	if subtle.ConstantTimeCompare([]byte(req.Secret), []byte(appsScriptSecret)) != 1 {
 		c.JSON(401, gin.H{"status": "error", "message": "Unauthorized"})
 		return
 	}
