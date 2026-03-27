@@ -10,6 +10,7 @@ import (
 	"math/rand"
 	"net/http"
 	"os"
+	"regexp"
 	"strconv"
 	"strings"
 	"sync"
@@ -387,6 +388,15 @@ func handleGetIncentiveResults(c *gin.Context) {
 func handleGetIncentiveManualData(c *gin.Context) {
 	projectId := c.Query("projectId")
 	month := c.Query("month")
+
+	if month != "" {
+		matched, _ := regexp.MatchString(`^\d{4}-\d{2}$`, month)
+		if !matched {
+			c.JSON(400, gin.H{"status": "error", "message": "ទម្រង់ខែមិនត្រឹមត្រូវ (ត្រូវប្រើ YYYY-MM)"})
+			return
+		}
+	}
+
 	var data []IncentiveManualData
 	query := DB.Model(&IncentiveManualData{})
 	if projectId != "" {
@@ -406,6 +416,13 @@ func handleSaveIncentiveManualData(c *gin.Context) {
 		return
 	}
 
+	// Validate Month format (YYYY-MM)
+	matched, _ := regexp.MatchString(`^\d{4}-\d{2}$`, req.Month)
+	if !matched {
+		c.JSON(400, gin.H{"status": "error", "message": "ទម្រង់ខែមិនត្រឹមត្រូវ (ត្រូវប្រើ YYYY-MM)"})
+		return
+	}
+
 	var existing IncentiveManualData
 	err := DB.Where("project_id = ? AND month = ? AND metric_type = ? AND data_key = ?", req.ProjectID, req.Month, req.MetricType, req.DataKey).First(&existing).Error
 	if err == nil {
@@ -419,6 +436,15 @@ func handleSaveIncentiveManualData(c *gin.Context) {
 func handleGetIncentiveCustomPayouts(c *gin.Context) {
 	projectId := c.Query("projectId")
 	month := c.Query("month")
+
+	if month != "" {
+		matched, _ := regexp.MatchString(`^\d{4}-\d{2}$`, month)
+		if !matched {
+			c.JSON(400, gin.H{"status": "error", "message": "ទម្រង់ខែមិនត្រឹមត្រូវ (ត្រូវប្រើ YYYY-MM)"})
+			return
+		}
+	}
+
 	var payouts []IncentiveCustomPayout
 	query := DB.Model(&IncentiveCustomPayout{})
 	if projectId != "" {
@@ -435,6 +461,13 @@ func handleSaveIncentiveCustomPayout(c *gin.Context) {
 	var req IncentiveCustomPayout
 	if err := c.ShouldBindJSON(&req); err != nil {
 		c.JSON(400, gin.H{"status": "error", "message": "ទិន្នន័យមិនត្រឹមត្រូវ"})
+		return
+	}
+
+	// Validate Month format (YYYY-MM)
+	matched, _ := regexp.MatchString(`^\d{4}-\d{2}$`, req.Month)
+	if !matched {
+		c.JSON(400, gin.H{"status": "error", "message": "ទម្រង់ខែមិនត្រឹមត្រូវ (ត្រូវប្រើ YYYY-MM)"})
 		return
 	}
 
@@ -456,6 +489,13 @@ func handleLockIncentivePayout(c *gin.Context) {
 	}
 	if err := c.ShouldBindJSON(&req); err != nil {
 		c.JSON(400, gin.H{"status": "error", "message": "ទិន្នន័យមិនត្រឹមត្រូវ"})
+		return
+	}
+
+	// Validate Month format (YYYY-MM)
+	matched, _ := regexp.MatchString(`^\d{4}-\d{2}$`, req.Month)
+	if !matched {
+		c.JSON(400, gin.H{"status": "error", "message": "ទម្រង់ខែមិនត្រឹមត្រូវ (ត្រូវប្រើ YYYY-MM)"})
 		return
 	}
 
@@ -503,6 +543,13 @@ func handleCalculateIncentive(c *gin.Context) {
 	}
 	if err := c.ShouldBindJSON(&req); err != nil {
 		c.JSON(400, gin.H{"status": "error", "message": "ទិន្នន័យមិនត្រឹមត្រូវ"})
+		return
+	}
+
+	// Validate Month format (YYYY-MM)
+	matched, _ := regexp.MatchString(`^\d{4}-\d{2}$`, req.Month)
+	if !matched {
+		c.JSON(400, gin.H{"status": "error", "message": "ទម្រង់ខែមិនត្រឹមត្រូវ (ត្រូវប្រើ YYYY-MM)"})
 		return
 	}
 
