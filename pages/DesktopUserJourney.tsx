@@ -31,7 +31,7 @@ const DesktopUserJourney: React.FC<DesktopUserJourneyProps> = ({ onBackToRoleSel
     const theme = useMemo(() => {
         const isLightMode = advancedSettings?.themeMode === 'light';
         const uiTheme = advancedSettings?.uiTheme || 'default';
-        const br = advancedSettings?.borderRadius ?? 12;
+        const br = uiTheme === 'binance' ? 2 : (advancedSettings?.borderRadius ?? 12);
 
         const accentColor =
             uiTheme === 'netflix' ? '#e50914' :
@@ -111,8 +111,7 @@ const DesktopUserJourney: React.FC<DesktopUserJourneyProps> = ({ onBackToRoleSel
         return (
             <div className="min-h-full font-sans relative" style={{ backgroundColor: bg, color: textPrimary }}>
 
-                {/* Top padding to clear fixed Header */}
-                <div className="pt-16 sm:pt-[72px]" />
+
 
                 {/* Content */}
                 <div className="max-w-[1400px] mx-auto px-6 sm:px-10 py-6 sm:py-8">
@@ -120,10 +119,15 @@ const DesktopUserJourney: React.FC<DesktopUserJourneyProps> = ({ onBackToRoleSel
                     {/* Page Title Row */}
                     <div className="flex items-end justify-between mb-8">
                         <div className="flex items-start gap-4">
-                            <button 
+                            <button
                                 onClick={onBackToRoleSelect}
-                                className="mt-1 p-2 rounded-xl border border-white/5 bg-white/5 hover:bg-white/10 active:scale-90 transition-all"
-                                style={{ color: textMuted }}
+                                className="mt-1 p-2 active:scale-90 transition-all"
+                                style={{
+                                    borderRadius: `${Math.min(br, 12)}px`,
+                                    backgroundColor: isLightMode ? '#F0F0F0' : '#2B3139',
+                                    color: textMuted,
+                                    border: `1px solid ${borderColor}`,
+                                }}
                             >
                                 <ChevronLeft className="w-6 h-6" />
                             </button>
@@ -374,14 +378,13 @@ const DesktopUserJourney: React.FC<DesktopUserJourneyProps> = ({ onBackToRoleSel
 
     // ─── Active Team View ───
     return (
-        <div className="min-h-full font-sans flex flex-col" style={{ backgroundColor: bg, color: textPrimary }}>
+        <div className="min-h-full flex flex-col" style={{ backgroundColor: bg, color: textPrimary, fontFamily: theme.uiTheme === 'binance' ? "'Inter', sans-serif" : undefined }}>
             {/* Team Header Bar */}
             <div
                 className="sticky top-0 z-50 px-4 sm:px-6 py-3 flex items-center justify-between"
                 style={{
-                    backgroundColor: isLightMode ? 'rgba(255,255,255,0.95)' : 'rgba(30,35,41,0.95)',
-                    backdropFilter: 'blur(12px)',
-                    WebkitBackdropFilter: 'blur(12px)',
+                    backgroundColor: theme.uiTheme === 'binance' ? (isLightMode ? '#FFFFFF' : '#1E2329') : (isLightMode ? 'rgba(255,255,255,0.95)' : 'rgba(30,35,41,0.95)'),
+                    ...(theme.uiTheme !== 'binance' ? { backdropFilter: 'blur(12px)', WebkitBackdropFilter: 'blur(12px)' } : {}),
                     borderBottom: `1px solid ${borderColor}`,
                 }}
             >
@@ -442,7 +445,7 @@ const DesktopUserJourney: React.FC<DesktopUserJourneyProps> = ({ onBackToRoleSel
             </div>
 
             {/* Content Area */}
-            <div className="flex-1 p-4 sm:p-6">
+            <div className="flex-1">
                 <UserOrdersView onAdd={handleCreateOrder} />
             </div>
         </div>

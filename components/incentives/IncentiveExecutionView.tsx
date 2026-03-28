@@ -259,7 +259,18 @@ const IncentiveExecutionView: React.FC<IncentiveExecutionViewProps> = ({ project
                                 <h1 className="text-xl font-bold text-[#EAECEF] tracking-wider uppercase">{project.projectName || (project as any).name}</h1>
                                 <div className="flex items-center gap-3 mt-1">
                                     <div className="flex items-center bg-bg-black px-2 py-1 rounded border border-[#2B3139]">
-                                        <input type="month" value={selectedMonth} onChange={e => setSelectedMonth(e.target.value)} className="bg-transparent border-none p-0 text-primary text-[10px] font-bold uppercase focus:ring-0 cursor-pointer" />
+                                        <input 
+                                            type="month" 
+                                            value={selectedMonth} 
+                                            onChange={e => {
+                                                const val = e.target.value;
+                                                // Only update if it's a valid year-month or empty (for typing)
+                                                if (!val || /^\d{4}-\d{2}$/.test(val) || val.length < 7) {
+                                                    setSelectedMonth(val);
+                                                }
+                                            }} 
+                                            className="bg-transparent border-none p-0 text-primary text-[10px] font-bold uppercase focus:ring-0 cursor-pointer" 
+                                        />
                                     </div>
                                     <span className="text-[#2B3139]">|</span>
                                     <span className="text-[10px] font-bold text-secondary uppercase tracking-widest">{t.total_payout}: <span className="text-primary font-mono ml-1">${totalPayout.toLocaleString(undefined, { minimumFractionDigits: 2 })}</span></span>

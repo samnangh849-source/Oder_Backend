@@ -3,12 +3,13 @@ import { AppContext } from '@/context/AppContext';
 import { WEB_APP_URL } from '@/constants';
 import Spinner from '@/components/common/Spinner';
 import { ParsedOrder } from '@/types';
-import { compressImage } from '@/utils/imageCompressor';
+import { useOptimisticImage } from '@/hooks/useOptimisticImage';
 import { convertGoogleDriveUrl } from '@/utils/fileUtils';
 import { useSmartZoom } from '@/hooks/useSmartZoom';
 import { packageDetector, DetectionResult } from '@/utils/visionAlgorithm';
 import { CacheService, CACHE_KEYS } from '@/services/cacheService';
 import OrderGracePeriod from '@/components/orders/OrderGracePeriod';
+import { compressImage } from '@/utils/imageCompressor';
 
 import OrderSummaryPanel from './OrderSummaryPanel';
 import CameraViewport from './CameraViewport';
@@ -23,288 +24,113 @@ interface FastPackTerminalProps {
 }
 
 const FastPackTerminal: React.FC<FastPackTerminalProps> = ({ order, onClose, onSuccess }) => {
-    const { currentUser, appData, previewImage: showFullImage, advancedSettings } = useContext(AppContext);
+    const { currentUser, appData, previewImage: showFullImage, refreshData } = useContext(AppContext);
     
     // Workflow State
     const [step, setStep] = useState<PackStep>('VERIFYING');
     const [verifiedItems, setVerifiedItems] = useState<Record<string, number>>({}); 
     const hasAutoAdvanced = useRef(false);
 
+    // Optimistic Image Hook
+    const { prepareImage, startUpload } = useOptimisticImage({
+        onUploadSuccess: (id, tempUrl) => {
+            console.log("Packaging photo upload started:", id, tempUrl);
+        },
+        onUploadError: (id, err) => {
+            alert("រូបភាពកញ្ចប់បញ្ជូនមិនបានជោគជ័យ: " + (err.message || err));
+        }
+    });
+
     const isOrderVerified = useMemo(() => {
         if (!order) return false;
         return order.Products.every(p => (verifiedItems[p.name] || 0) >= p.quantity);
     }, [order, verifiedItems]);
-
-    useEffect(() => {
-        if (isOrderVerified && step === 'VERIFYING' && !hasAutoAdvanced.current) {
-            const timer = setTimeout(() => {
-                setStep('LABELING');
-                hasAutoAdvanced.current = true;
-            }, 800);
-            return () => clearTimeout(timer);
-        }
-    }, [isOrderVerified, step]);
-
-    const verifyItem = useCallback((productName: string, quantity: number = 1) => {
-        setVerifiedItems(prev => {
-            const current = prev[productName] || 0;
-            const target = order?.Products.find(p => p.name === productName)?.quantity || 1;
-            if (current >= target) return prev;
-            if (navigator.vibrate) navigator.vibrate(50);
-            return { ...prev, [productName]: Math.min(target, current + quantity) };
-        });
-    }, [order]);
-
-    const [uploading, setUploading] = useState(false);
-    const [uploadProgress, setUploadProgress] = useState(0);
-    const [previewImage, setPreviewImage] = useState<string | null>(null);
-    const [isCameraActive, setIsCameraActive] = useState(false);
-    const [hasGeneratedLabel, setHasGeneratedLabel] = useState(false);
-    const [copiedField, setCopiedField] = useState<string | null>(null);
-    const [facingMode, setFacingMode] = useState<'environment' | 'user'>('environment');
     
-    // AI & Smart Features State
+    // Refs
+    const videoRef = useRef<HTMLVideoElement>(null);
+    const canvasRef = useRef<HTMLCanvasElement>(null);
+    const fileInputRef = useRef<HTMLInputElement>(null);
+    const countdownRef = useRef<number | null>(null);
+    const countdownIntervalRef = useRef<any>(null);
+    const aiLoopRef = useRef<number | null>(null);
+    const isAiEnabledRef = useRef(true);
+    const qrStabilityRef = useRef(0);
+    const lastActionTime = useRef(0);
+    const previewImageRef = useRef<string | null>(null);
+    const uploadingRef = useRef(false);
+
+    // AI & Camera State
     const [isAiEnabled, setIsAiEnabled] = useState(true);
     const [isAiLoading, setIsAiLoading] = useState(false);
     const [detection, setDetection] = useState<DetectionResult | null>(null);
     const [autoCaptureProgress, setAutoCaptureProgress] = useState(0);
     const [countdown, setCountdown] = useState<number | null>(null);
+    const [facingMode, setFacingMode] = useState<'environment' | 'user'>('environment');
+    const [zoom, setZoom] = useState(1.0);
     const [aiFrameCount, setAiFrameCount] = useState(0);
-    const qrStabilityRef = useRef<number>(0);
 
-    // AI Refs to solve closure issues
-    const isAiEnabledRef = useRef(isAiEnabled);
-    const countdownRef = useRef<number | null>(null);
-    const previewImageRef = useRef<string | null>(null);
-    const uploadingRef = useRef(false);
+    // UI State
+    const [uploading, setUploading] = useState(false);
+    const [uploadProgress, setUploadProgress] = useState(0);
+    const [previewImage, setPreviewImage] = useState<string | null>(null);
+    const [isCameraActive, setIsCameraActive] = useState(false);
+    const [rawFile, setRawFile] = useState<File | null>(null);
+    const [hasGeneratedLabel, setHasGeneratedLabel] = useState(false);
+    const [copiedField, setCopiedField] = useState<string | null>(null);
+    
+    // Grace Period / Undo State
+    const [undoTimer, setUndoTimer] = useState<number | null>(null);
+    const [isUndoing, setIsUndoing] = useState(false);
+    const maxUndoTimer = 5;
 
     useEffect(() => { isAiEnabledRef.current = isAiEnabled; }, [isAiEnabled]);
-    useEffect(() => { countdownRef.current = countdown; }, [countdown]);
-    useEffect(() => { previewImageRef.current = previewImage; }, [previewImage]);
     useEffect(() => { uploadingRef.current = uploading; }, [uploading]);
-    
-    const videoRef = useRef<HTMLVideoElement>(null);
-    const canvasRef = useRef<HTMLCanvasElement>(null);
-    const fileInputRef = useRef<HTMLInputElement>(null);
-    const aiLoopRef = useRef<number | null>(null);
-    const lastActionTime = useRef<number>(0);
-    const countdownIntervalRef = useRef<NodeJS.Timeout | null>(null);
 
-    const { zoom, applyZoom } = useSmartZoom();
-    const [rawFile, setRawFile] = useState<File | null>(null);
-
-    // Undo Timer State
-    const [undoTimer, setUndoTimer] = useState<number | null>(null);
-    const [maxUndoTimer, setMaxUndoTimer] = useState<number>(3);
-    const [isUndoing, setIsUndoing] = useState(false);
-    const submitTimeoutRef = useRef<NodeJS.Timeout | null>(null);
-    const submitIntervalRef = useRef<NodeJS.Timeout | null>(null);
-
-    const stopCamera = useCallback(() => {
-        if (aiLoopRef.current) cancelAnimationFrame(aiLoopRef.current);
-        if (countdownIntervalRef.current) clearInterval(countdownIntervalRef.current);
-        if (videoRef.current && videoRef.current.srcObject) {
-            const stream = videoRef.current.srcObject as MediaStream;
-            stream.getTracks().forEach(track => track.stop());
-            videoRef.current.srcObject = null;
-        }
-        setIsCameraActive(false);
-        setDetection(null);
-        setAutoCaptureProgress(0);
-        setCountdown(null);
-    }, []);
-
-    const capturePhoto = useCallback(async () => {
-        if (!videoRef.current || !canvasRef.current || uploadingRef.current) return;
-        const video = videoRef.current;
-        const canvas = canvasRef.current;
-        const context = canvas.getContext('2d');
-        if (context) {
-            canvas.width = video.videoWidth;
-            canvas.height = video.videoHeight;
-            
-            context.drawImage(video, 0, 0, canvas.width, canvas.height);
-            
-            const padding = 20;
-            const fontSize = Math.max(12, canvas.width / 65);
-            const dateStr = new Date().toLocaleString('en-GB'); 
-            const packerName = currentUser?.FullName || 'Auto-Packer';
-            
-            // --- TOP HUD BAR ---
-            context.fillStyle = 'rgba(11, 14, 17, 0.85)';
-            context.fillRect(0, 0, canvas.width, fontSize * 4.5);
-
-            context.font = `bold ${fontSize}px monospace`;
-            context.textAlign = 'left';
-            context.fillStyle = '#FCD535';
-            context.fillText(`[ FAST PACK TERMINAL v4.3 ]`, padding, fontSize * 2.0);
-            
-            context.fillStyle = '#FFFFFF';
-            context.fillText(`NODE: ${order?.['Fulfillment Store'] || 'UNKNOWN'} | TIME: ${dateStr}`, padding, fontSize * 3.8);
-
-            context.textAlign = 'right';
-            context.fillText(`OP_ID: ${packerName}`, canvas.width - padding, fontSize * 3.8);
-
-            // --- BOTTOM SECURE HUD BAR ---
-            context.fillStyle = 'rgba(11, 14, 17, 0.85)';
-            context.fillRect(0, canvas.height - (fontSize * 4.5), canvas.width, fontSize * 4.5);
-
-            context.textAlign = 'left';
-            context.fillStyle = '#0ECB81';
-            context.fillText(`/// SYS_SECURE_CAPTURE ///  ID: ${order?.['Order ID'].substring(0, 15)}`, padding, canvas.height - (fontSize * 2.8));
-
-            context.fillStyle = '#FFFFFF';
-            context.fillText(`NAME: ${order?.['Customer Name']?.substring(0, 20)} | PHONE: ${order?.['Customer Phone']}`, padding, canvas.height - (fontSize * 1.0));
-            
-            context.textAlign = 'right';
-            context.fillText(`MTD: ${order?.['Internal Shipping Method']?.substring(0, 15)}`, canvas.width - padding, canvas.height - (fontSize * 2.8));
-
-            context.fillStyle = '#FCD535';
-            context.fillText(`TOTAL: $${(Number(order?.['Grand Total']) || 0).toFixed(2)}`, canvas.width - padding, canvas.height - (fontSize * 1.0));
-            
-            context.textAlign = 'left'; // Reset
-            
-            canvas.toBlob(async (blob) => {
-                if (!blob) return;
-                const file = new File([blob], "capture.jpg", { type: "image/jpeg" });
-                const compressedBlob = await compressImage(file, 'high-detail');
-                const reader = new FileReader();
-                reader.onloadend = () => {
-                    setPreviewImage(reader.result as string);
-                    setRawFile(file);
-                    stopCamera();
-                };
-                reader.readAsDataURL(compressedBlob);
-            }, 'image/jpeg', 0.9);
-        }
-    }, [stopCamera, order, currentUser]);
-
-    const uploadWithProgress = async (base64Data: string, fileName: string): Promise<any> => {
-        const session = await CacheService.get<{ token: string }>(CACHE_KEYS.SESSION);
-        const token = session?.token || '';
-
-        return new Promise((resolve, reject) => {
-            const xhr = new XMLHttpRequest();
-            xhr.open('POST', `${WEB_APP_URL}/api/upload-image`, true);
-            xhr.setRequestHeader('Content-Type', 'application/json');
-            if (token) xhr.setRequestHeader('Authorization', `Bearer ${token}`);
-
-            xhr.upload.onprogress = (e) => {
-                if (e.lengthComputable) {
-                    const percent = Math.round((e.loaded / e.total) * 100);
-                    setUploadProgress(percent);
-                }
+    const verifyItem = (name: string) => {
+        setVerifiedItems(prev => {
+            const product = order?.Products.find(p => p.name === name);
+            const current = prev[name] || 0;
+            const max = product?.quantity || 0;
+            if (current >= max) return prev;
+            return {
+                ...prev,
+                [name]: current + 1
             };
-
-            xhr.onload = () => {
-                try {
-                    const resp = JSON.parse(xhr.responseText);
-                    if (xhr.status === 200 && resp.status === 'success') resolve(resp);
-                    else reject(new Error(resp.message || 'Upload Failed'));
-                } catch (e) { reject(new Error('Response Parse Error')); }
-            };
-
-            xhr.onerror = () => reject(new Error('Network Connection Error'));
-            
-            xhr.send(JSON.stringify({ 
-                fileData: base64Data,
-                fileName: fileName,
-                mimeType: 'image/jpeg',
-                userName: currentUser?.FullName || 'Packer',
-                orderId: order!['Order ID'],
-                targetColumn: 'Package Photo URL'
-            }));
         });
-    };
-
-    const handleSubmit = useCallback(async () => {
-        if (!previewImageRef.current || !rawFile) return;
-        setUploading(true);
-        setUploadProgress(0);
-
-        const gracePeriod = advancedSettings?.packagingGracePeriod || 3;
-        setMaxUndoTimer(gracePeriod);
-        setUndoTimer(gracePeriod);
-
-        let secondsLeft = gracePeriod;
-        if (submitIntervalRef.current) clearInterval(submitIntervalRef.current);
-        submitIntervalRef.current = setInterval(() => {
-            secondsLeft -= 1;
-            setUndoTimer(secondsLeft);
-            if (secondsLeft <= 0) {
-                if (submitIntervalRef.current) {
-                    clearInterval(submitIntervalRef.current);
-                    submitIntervalRef.current = null;
-                }
-            }
-        }, 1000);
-
-        if (submitTimeoutRef.current) clearTimeout(submitTimeoutRef.current);
-        submitTimeoutRef.current = setTimeout(async () => {
-            if (submitIntervalRef.current) {
-                clearInterval(submitIntervalRef.current);
-                submitIntervalRef.current = null;
-            }
-            setUndoTimer(null);
-            await executeFinalSubmit();
-        }, gracePeriod * 1000);
-    }, [rawFile, order, currentUser, advancedSettings]);
-
-    const handleUndo = () => {
-        if (submitTimeoutRef.current) {
-            clearTimeout(submitTimeoutRef.current);
-            submitTimeoutRef.current = null;
-        }
-        if (submitIntervalRef.current) {
-            clearInterval(submitIntervalRef.current);
-            submitIntervalRef.current = null;
-        }
-        setIsUndoing(true);
-        setTimeout(() => {
-            setUndoTimer(null);
-            setUploading(false);
-            setIsUndoing(false);
-        }, 500);
     };
 
     const executeFinalSubmit = async () => {
         try {
-            const session = await CacheService.get<{ token: string }>(CACHE_KEYS.SESSION);
-            const token = session?.token || '';
+            if (!rawFile || !order) return;
+            setUploading(true);
+            
+            const { blob } = await prepareImage(rawFile, 'high-detail');
+            const fileName = `Package_${order['Order ID']}_${Date.now()}.jpg`;
 
-            const base64Data = previewImageRef.current!.includes(',') ? previewImageRef.current!.split(',')[1] : previewImageRef.current!;
-            const fileName = `Package_${order!['Order ID']}_${Date.now()}.jpg`;
-
-            const uploadResult = await uploadWithProgress(base64Data, fileName);
-            const tempUrl = uploadResult.tempUrl;
-
-            const updateRes = await fetch(`${WEB_APP_URL}/api/admin/update-order`, {
-                method: 'POST',
-                headers: { 
-                    'Content-Type': 'application/json',
-                    'Authorization': `Bearer ${token}`
-                },
-                body: JSON.stringify({
-                    orderId: order!['Order ID'],
-                    team: order!.Team, 
-                    userName: currentUser?.FullName || 'Packer',
-                    newData: { 
+            // Trigger background upload with metadata for final update
+            await startUpload(
+                `pack_${order['Order ID']}`,
+                blob,
+                fileName,
+                {
+                    orderId: order['Order ID'],
+                    targetColumn: 'Package Photo URL',
+                    newData: {
                         'Fulfillment Status': 'Ready to Ship',
                         'Packed By': currentUser?.FullName || 'Packer',
-                        'Packed Time': new Date().toLocaleString('km-KH'),
-                        'Package Photo URL': tempUrl 
+                        'Packed Time': new Date().toLocaleString('km-KH')
                     }
-                })
-            });
+                }
+            );
 
-            const updateData = await updateRes.json();
-            if (updateRes.status === 401) throw new Error("Token expired. Please login again.");
-            if (updateData.status !== 'success') throw new Error("Order update failed!");
+            onSuccess();
             
-            onSuccess(tempUrl);
+            const id = order['Order ID'].substring(0,8);
+            const chatMsg = `📦 **[PACKED]** កញ្ចប់ #${id} (${order['Customer Name']}) វេចខ្ចប់រួចរាល់ (កំពុង Upload រូបភាព)`;
             
-            const id = order!['Order ID'].substring(0,8);
-            const chatMsg = `📦 **[PACKED]** កញ្ចប់ #${id} (${order!['Customer Name']}) វេចខ្ចប់រួចរាល់`;
+            const session = await CacheService.get<{ token: string }>(CACHE_KEYS.SESSION);
+            const token = session?.token || '';
+            
             fetch(`${WEB_APP_URL}/api/chat/send`, {
                 method: 'POST',
                 headers: { 
@@ -322,9 +148,32 @@ const FastPackTerminal: React.FC<FastPackTerminalProps> = ({ order, onClose, onS
         }
     };
 
+    const capturePhoto = useCallback(() => {
+        if (!videoRef.current || !canvasRef.current) return;
+        const video = videoRef.current;
+        const canvas = canvasRef.current;
+        canvas.width = video.videoWidth;
+        canvas.height = video.videoHeight;
+        const ctx = canvas.getContext('2d');
+        if (ctx) {
+            ctx.drawImage(video, 0, 0);
+            const dataUrl = canvas.toDataURL('image/jpeg', 0.8);
+            setPreviewImage(dataUrl);
+            previewImageRef.current = dataUrl;
+            
+            // Convert dataUrl to File for submission
+            fetch(dataUrl)
+                .then(res => res.blob())
+                .then(blob => {
+                    const file = new File([blob], "capture.jpg", { type: "image/jpeg" });
+                    setRawFile(file);
+                });
+        }
+    }, []);
+
     const startCountdown = useCallback((seconds: number = 3) => {
         if (countdownRef.current !== null) return;
-        countdownRef.current = seconds; // set immediately to block re-entry before useEffect runs
+        countdownRef.current = seconds;
         setCountdown(seconds);
         if (countdownIntervalRef.current) clearInterval(countdownIntervalRef.current);
         let count = seconds;
@@ -334,10 +183,48 @@ const FastPackTerminal: React.FC<FastPackTerminalProps> = ({ order, onClose, onS
             if (count <= 0) {
                 if (countdownIntervalRef.current) clearInterval(countdownIntervalRef.current);
                 setCountdown(null);
+                countdownRef.current = null;
                 capturePhoto();
             }
         }, 1000);
     }, [capturePhoto]);
+
+    const applyZoom = useCallback(async (track: MediaStreamTrack, value: number) => {
+        const capabilities = track.getCapabilities() as any;
+        if (!capabilities.zoom) return;
+        const min = capabilities.zoom.min || 1;
+        const max = capabilities.zoom.max || 3;
+        const clamped = Math.max(min, Math.min(max, value));
+        try {
+            await track.applyConstraints({ advanced: [{ zoom: clamped }] } as any);
+            setZoom(clamped);
+        } catch (e) {
+            console.warn("Zoom not supported on this device/browser");
+        }
+    }, []);
+
+    const handleSubmit = useCallback(() => {
+        if (!previewImage) return;
+        setUndoTimer(maxUndoTimer);
+    }, [previewImage]);
+
+    const handleUndo = () => {
+        setIsUndoing(true);
+        setTimeout(() => {
+            setUndoTimer(null);
+            setIsUndoing(false);
+        }, 500);
+    };
+
+    const stopCamera = useCallback(() => {
+        setIsCameraActive(false);
+        if (aiLoopRef.current) cancelAnimationFrame(aiLoopRef.current);
+        if (videoRef.current && videoRef.current.srcObject) {
+            const stream = videoRef.current.srcObject as MediaStream;
+            stream.getTracks().forEach(track => track.stop());
+            videoRef.current.srcObject = null;
+        }
+    }, []);
 
     const runAiLoop = useCallback(async () => {
         if (!videoRef.current || !isCameraActive || previewImageRef.current) return;
@@ -411,6 +298,7 @@ const FastPackTerminal: React.FC<FastPackTerminalProps> = ({ order, onClose, onS
 
         setIsCameraActive(true);
         setPreviewImage(null);
+        previewImageRef.current = null;
         if (!packageDetector.isReady()) {
             setIsAiLoading(true);
             await packageDetector.init();
@@ -435,10 +323,25 @@ const FastPackTerminal: React.FC<FastPackTerminalProps> = ({ order, onClose, onS
     useEffect(() => {
         if (step === 'CAPTURING') {
             startCamera();
+        } else {
+            stopCamera();
         }
     }, [step]);
 
     useEffect(() => { return () => stopCamera(); }, [stopCamera]);
+
+    useEffect(() => {
+        let interval: any;
+        if (undoTimer !== null && undoTimer > 0 && !isUndoing) {
+            interval = setInterval(() => {
+                setUndoTimer(prev => (prev !== null ? prev - 1 : null));
+            }, 1000);
+        } else if (undoTimer === 0) {
+            setUndoTimer(null);
+            executeFinalSubmit();
+        }
+        return () => clearInterval(interval);
+    }, [undoTimer, isUndoing]);
 
     const fulfillmentStore = appData.stores?.find(s => s.StoreName === order?.['Fulfillment Store']);
     const basePrinterURL = fulfillmentStore?.LabelPrinterURL;
@@ -475,11 +378,17 @@ const FastPackTerminal: React.FC<FastPackTerminalProps> = ({ order, onClose, onS
             try {
                 const compressedBlob = await compressImage(file, 'balanced');
                 const reader = new FileReader();
-                reader.onloadend = () => setPreviewImage(reader.result as string);
+                reader.onloadend = () => {
+                    setPreviewImage(reader.result as string);
+                    previewImageRef.current = reader.result as string;
+                };
                 reader.readAsDataURL(compressedBlob);
             } catch (error) {
                 const reader = new FileReader();
-                reader.onloadend = () => setPreviewImage(reader.result as string);
+                reader.onloadend = () => {
+                    setPreviewImage(reader.result as string);
+                    previewImageRef.current = reader.result as string;
+                };
                 reader.readAsDataURL(file);
             }
         }
@@ -524,7 +433,7 @@ const FastPackTerminal: React.FC<FastPackTerminalProps> = ({ order, onClose, onS
                     }} className="px-4 py-2 bg-[#0B0E11] hover:bg-gray-800 text-gray-400 hover:text-white rounded-sm flex items-center gap-2 transition-colors border border-[#2B3139]">
                         <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" /></svg>
                         <span className="font-bold text-xs tracking-widest uppercase">
-                            {step === 'VERIFYING' ? 'BACK' : 'BACK'}
+                            BACK
                         </span>
                     </button>
                     <div>

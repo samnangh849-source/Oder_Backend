@@ -5,10 +5,10 @@ import Spinner from '@/components/common/Spinner';
 import { ParsedOrder } from '@/types';
 import { convertGoogleDriveUrl } from '@/utils/fileUtils';
 import Modal from '@/components/common/Modal';
-import { compressImage } from '@/utils/imageCompressor';
+import { useOptimisticImage } from '@/hooks/useOptimisticImage';
 
 const DriverDeliveryView: React.FC<{ onOpenDeliveryList?: () => void }> = ({ onOpenDeliveryList }) => {
-    const { setMobilePageTitle, refreshData, orders, previewImage: showFullImage, appData } = useContext(AppContext);
+    const { setMobilePageTitle, refreshData, orders, previewImage: showFullImage, appData, currentUser } = useContext(AppContext);
     
     // Store Selection State
     const [selectedStore, setSelectedStore] = useState<string>('');
@@ -17,27 +17,32 @@ const DriverDeliveryView: React.FC<{ onOpenDeliveryList?: () => void }> = ({ onO
     const [foundOrder, setFoundOrder] = useState<ParsedOrder | null>(null);
     const [viewingOrder, setViewingOrder] = useState<ParsedOrder | null>(null);
     const [loading, setLoading] = useState(false);
-    const [uploading, setUploading] = useState(false);
     const [previewImage, setPreviewImage] = useState<string | null>(null);
     const [rawFile, setRawFile] = useState<File | null>(null);
     const fileInputRef = useRef<HTMLInputElement>(null);
 
-    // Grace Period State
+    // Optimistic Image Hook
+    const { prepareImage, startUpload, isUploading } = useOptimisticImage({
+        onUploadSuccess: (id, tempUrl) => {
+            console.log("Optimistic upload started:", id, tempUrl);
+            // We don't need to do anything here because the backend handles the final update
+        },
+        onUploadError: (id, err) => {
+            alert("រូបភាពបញ្ជូនមិនបានជោគជ័យ: " + (err.message || err));
+        }
+    });
+
+    const [uploading, setUploading] = useState(false); // Legacy state for the button spinner
+
+    // Undo / Grace Period State
     const [undoTimer, setUndoTimer] = useState<number | null>(null);
     const [isUndoing, setIsUndoing] = useState(false);
+    const maxUndoTimer = 3;
 
     useEffect(() => {
         setMobilePageTitle(selectedStore ? `ដឹកជញ្ជូន: ${selectedStore}` : 'ជ្រើសរើសឃ្លាំងដឹកជញ្ជូន');
         return () => setMobilePageTitle(null);
     }, [setMobilePageTitle, selectedStore]);
-
-    const handleUndoAction = () => {
-        setIsUndoing(true);
-        setTimeout(() => {
-            setUndoTimer(null);
-            setIsUndoing(false);
-        }, 500);
-    };
 
     const availableStores = useMemo(() => {
         const stores = appData.stores ? appData.stores.map((s: any) => s.StoreName) : [];
@@ -74,82 +79,46 @@ const DriverDeliveryView: React.FC<{ onOpenDeliveryList?: () => void }> = ({ onO
         }
     };
 
-    const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
         const file = e.target.files?.[0];
         if (file) {
             setRawFile(file);
-            const reader = new FileReader();
-            reader.onloadend = () => setPreviewImage(reader.result as string);
-            reader.readAsDataURL(file);
+            try {
+                const { previewUrl } = await prepareImage(file, 'balanced');
+                setPreviewImage(previewUrl);
+            } catch (err) {
+                console.error("Prep error:", err);
+            }
         }
     };
 
-    const handleSubmitDelivery = async () => {
+    const handleSubmitDelivery = () => {
         if (!foundOrder || !previewImage || !rawFile) return;
+        setUndoTimer(maxUndoTimer);
+    };
+
+    const executeFinalDelivery = async () => {
+        if (!foundOrder || !rawFile) return;
 
         setUploading(true);
         try {
-            const token = localStorage.getItem('token');
-            const compressedBlob = await compressImage(rawFile, 'balanced');
-            
-            // Convert blob to base64
-            const base64Data = await new Promise<string>((resolve) => {
-                const reader = new FileReader();
-                reader.onloadend = () => {
-                    const base64String = (reader.result as string).split(',')[1];
-                    resolve(base64String);
-                };
-                reader.readAsDataURL(compressedBlob);
-            });
+            const { blob } = await prepareImage(rawFile, 'balanced');
 
-            const uploadRes = await fetch(`${WEB_APP_URL}/api/upload-image`, {
-                method: 'POST',
-                headers: { 
-                    'Content-Type': 'application/json',
-                    ...(token ? { 'Authorization': `Bearer ${token}` } : {})
-                },
-                body: JSON.stringify({ 
-                    fileData: base64Data,
-                    fileName: rawFile.name,
-                    mimeType: compressedBlob.type,
+            await startUpload(
+                `delivery_${foundOrder['Order ID']}`,
+                blob,
+                `Delivery_${foundOrder['Order ID']}.jpg`,
+                {
                     orderId: foundOrder['Order ID'],
-                    targetColumn: 'Delivery Photo URL'
-                })
-            });
-            const uploadResult = await uploadRes.json();
-            if (!uploadRes.ok || !uploadResult.url) throw new Error(uploadResult.message || "Upload failed");
-
-            const updateRes = await fetch(`${WEB_APP_URL}/api/admin/update-sheet`, {
-                method: 'POST',
-                headers: { 
-                    'Content-Type': 'application/json',
-                    ...(token ? { 'Authorization': `Bearer ${token}` } : {})
-                },
-                body: JSON.stringify({
-                    sheetName: 'AllOrders',
-                    primaryKey: { 'Order ID': foundOrder['Order ID'] },
-                    newData: { 
+                    targetColumn: 'Delivery Photo URL',
+                    newData: {
                         'Fulfillment Status': 'Delivered',
-                        'Delivery Photo URL': uploadResult.url,
                         'Delivered Time': new Date().toLocaleString('km-KH')
                     }
-                })
-            });
+                }
+            );
 
-            if (!updateRes.ok) throw new Error("Update failed");
-
-            // Broadcast to Chat
-            try {
-                const id = foundOrder['Order ID'].substring(0,8);
-                const chatMsg = `✅ **[DELIVERED]** កញ្ចប់ #${id} (${foundOrder['Customer Name']}) ដឹកជូនអតិថិជនជោគជ័យ!`;
-                await fetch(`${WEB_APP_URL}/api/chat/send`, {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ UserName: 'System', MessageType: 'Text', Content: chatMsg })
-                });
-            } catch (e) { console.warn("Chat broadcast failed", e); }
-
-            alert("Delivery confirmed for #" + foundOrder['Order ID'].substring(0,8));
+            alert("ការដឹកជញ្ជូនត្រូវបានកត់ត្រាជោគជ័យ! (កំពុង Upload រូបភាពក្នុង Background)");
             setFoundOrder(null);
             setOrderIdInput('');
             setPreviewImage(null);
@@ -160,6 +129,27 @@ const DriverDeliveryView: React.FC<{ onOpenDeliveryList?: () => void }> = ({ onO
             setUploading(false);
         }
     };
+
+    const handleUndoAction = () => {
+        setIsUndoing(true);
+        setTimeout(() => {
+            setUndoTimer(null);
+            setIsUndoing(false);
+        }, 500);
+    };
+
+    useEffect(() => {
+        let interval: any;
+        if (undoTimer !== null && undoTimer > 0 && !isUndoing) {
+            interval = setInterval(() => {
+                setUndoTimer(prev => (prev !== null ? prev - 1 : null));
+            }, 1000);
+        } else if (undoTimer === 0) {
+            setUndoTimer(null);
+            executeFinalDelivery();
+        }
+        return () => clearInterval(interval);
+    }, [undoTimer, isUndoing]);
 
     if (!selectedStore) {
         return (
@@ -417,7 +407,7 @@ const DriverDeliveryView: React.FC<{ onOpenDeliveryList?: () => void }> = ({ onO
                         <div className="relative w-24 h-24 mx-auto mb-6 flex items-center justify-center border-4 border-[#2B3139] rounded-sm">
                             <div 
                                 className="absolute inset-x-0 bottom-0 bg-[#FCD535]/20 transition-all duration-1000 ease-linear"
-                                style={{ height: `${(undoTimer / 3) * 100}%` }}
+                                style={{ height: `${((undoTimer ?? 0) / maxUndoTimer) * 100}%` }}
                             ></div>
                             <span className="text-3xl font-mono text-[#FCD535] z-10">{undoTimer}</span>
                         </div>

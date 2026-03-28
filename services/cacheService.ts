@@ -7,8 +7,23 @@ export const CACHE_KEYS = {
     GEOJSON: 'cambodiaGeoJsonCache'
 };
 
-// Default expiration set to 15 days (15 * 24 * 60 * 60 * 1000)
-const DEFAULT_EXPIRY = 15 * 24 * 60 * 60 * 1000; 
+/**
+ * Expiration Times (in milliseconds)
+ * SESSION: 30 Days (Match Backend JWT)
+ * APP_DATA: 24 Hours (Fresh config)
+ * GEOJSON: 90 Days (Static maps)
+ * CHAT: 7 Days
+ */
+export const EXPIRY_TIMES = {
+    SESSION: 30 * 24 * 60 * 60 * 1000,
+    APP_DATA: 24 * 60 * 60 * 1000,
+    GEOJSON: 90 * 24 * 60 * 60 * 1000,
+    CHAT: 7 * 24 * 60 * 60 * 1000,
+    DEFAULT: 30 * 24 * 60 * 60 * 1000 // 1 Month
+};
+
+// Default expiration set to 30 days
+const DEFAULT_EXPIRY = EXPIRY_TIMES.DEFAULT; 
 
 // IndexedDB Configuration
 const DB_NAME = 'OrderSystemDB';
@@ -33,7 +48,7 @@ export const CacheService = {
      * Save data to IndexedDB with timestamp and expiry duration
      * @param key Storage key
      * @param data Data to store
-     * @param expiry Duration in milliseconds (default 48h)
+     * @param expiry Duration in milliseconds
      */
     set: async (key: string, data: any, expiry: number = DEFAULT_EXPIRY) => {
         try {

@@ -12,6 +12,23 @@ interface StatCardProps {
 const StatCard: React.FC<StatCardProps> = ({ label, value, icon, colorClass }) => {
     const { advancedSettings } = useContext(AppContext);
     const isLightMode = advancedSettings?.themeMode === 'light';
+    const uiTheme = advancedSettings?.uiTheme || 'default';
+
+    if (uiTheme === 'binance') {
+        return (
+            <div className="bg-[#1E2329] border border-[#2B3139] p-5 transition-all hover:border-[#474D57]" style={{ borderRadius: '2px' }}>
+                <div className="flex justify-between items-center gap-4">
+                    <div>
+                        <p className="text-[11px] text-[#848E9C] uppercase tracking-wider font-medium mb-2">{label}</p>
+                        <h3 className="text-3xl font-bold text-[#EAECEF] tabular-nums">{value}</h3>
+                    </div>
+                    <div className="w-10 h-10 bg-[#2B3139] flex items-center justify-center text-[#FCD535] flex-shrink-0" style={{ borderRadius: '2px' }}>
+                        {icon}
+                    </div>
+                </div>
+            </div>
+        );
+    }
 
     return (
         <div className={`relative group overflow-hidden ${isLightMode ? 'bg-white shadow-md border-gray-100' : 'bg-gray-800/30 border-white/5 backdrop-blur-xl'} border p-6 rounded-[2rem] transition-all duration-500 hover:shadow-2xl ${isLightMode ? 'hover:bg-gray-50 hover:border-blue-100' : 'hover:bg-gray-800/50 hover:border-white/10'}`}>

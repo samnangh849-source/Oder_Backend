@@ -29,9 +29,9 @@ const Sidebar: React.FC<SidebarProps> = ({
     setEditProfileModalOpen, setAdvancedSettingsOpen, isMobile = false
 }) => {
     const { 
-        currentUser, logout, refreshData, isSidebarCollapsed, setIsSidebarCollapsed, 
+        currentUser, logout, refreshData, isSidebarCollapsed, setIsSidebarCollapsed,
         setAppState, setIsChatOpen, unreadCount,
-        language, setLanguage, showNotification, hasPermission, advancedSettings
+        language, setLanguage, showNotification, hasPermission, advancedSettings, originalAdminUser
     } = useContext(AppContext);
 
     const [isRefreshing, setIsRefreshing] = useState(false);
@@ -85,9 +85,9 @@ const Sidebar: React.FC<SidebarProps> = ({
         switch (uiTheme) {
             case 'binance':
                 return {
-                    container: isMobile ? "bg-[#1E2329]" : `bg-[#1E2329] border-[#2B3139] ${isSidebarCollapsed ? 'w-16' : 'w-60'}`,
-                    itemActive: "text-[#FCD535] bg-[#2B3139]/50 border-[#FCD535]",
-                    itemHover: "text-[#848E9C] hover:text-[#EAECEF] hover:bg-[#2B3139]/30",
+                    container: isMobile ? "bg-[#1E2329]" : `bg-[#1E2329] border-[#2B3139] rounded-none ${isSidebarCollapsed ? 'w-16' : 'w-60'}`,
+                    itemActive: "text-[#FCD535] bg-[#FCD535]/[0.08] border-[#FCD535] rounded-none",
+                    itemHover: "text-[#848E9C] hover:text-[#EAECEF] hover:bg-[#2B3139]/30 rounded-none",
                     accent: "#FCD535",
                     textPrimary: "text-[#EAECEF]",
                     textSecondary: "text-[#848E9C]",
@@ -131,14 +131,14 @@ const Sidebar: React.FC<SidebarProps> = ({
             {/* Desktop Header (Logo) */}
             {!isMobile && (
                 <div className={`h-16 flex items-center ${isSidebarCollapsed ? 'justify-center' : 'px-5'} border-b ${styles.border} overflow-hidden shrink-0`}>
-                    <div className={`w-8 h-8 ${styles.logoBg} rounded-md flex items-center justify-center flex-shrink-0 shadow-lg`}>
+                    <div className={`w-8 h-8 ${styles.logoBg} ${uiTheme === 'binance' ? 'rounded-[2px]' : 'rounded-md'} flex items-center justify-center flex-shrink-0 shadow-lg`}>
                         <img src={convertGoogleDriveUrl(APP_LOGO_URL)} alt="Logo" className="w-5 h-5 object-contain" />
                     </div>
                     
                     {!isSidebarCollapsed && (
                         <div className="ml-3 flex flex-col min-w-0 animate-in fade-in slide-in-from-left-2">
                             <h1 className={`text-sm font-black ${styles.textPrimary} uppercase tracking-tighter leading-none`}>
-                                {uiTheme === 'binance' ? 'Binance Cloud' : 'O-System'}
+                                O-System
                             </h1>
                             <span className={`text-[9px] ${uiTheme === 'binance' ? 'text-[#FCD535]' : 'text-blue-400'} font-black uppercase tracking-[0.2em] mt-1`}>Admin Terminal</span>
                         </div>
@@ -253,9 +253,15 @@ const Sidebar: React.FC<SidebarProps> = ({
                                 <svg className={`w-4 h-4 ${uiTheme === 'binance' ? 'text-[#FCD535]' : 'text-emerald-400'} ${isRefreshing ? 'animate-spin' : ''}`} fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" /></svg>
                                 Sync Data
                             </button>
-                            <button onClick={logout} className="w-full flex items-center gap-3 px-3 py-2 text-[10px] font-bold text-[#F6465D] hover:bg-[#F6465D]/10 rounded transition-all uppercase tracking-wider mt-2 border-t border-[#2B3139] pt-3">
+                            {!originalAdminUser && (
+                                <button onClick={() => setAppState('role_selection')} className={`w-full flex items-center gap-3 px-3 py-2 text-[10px] font-bold ${uiTheme === 'binance' ? 'text-[#FCD535] hover:bg-[#FCD535]/10' : 'text-yellow-400 hover:bg-yellow-500/10'} rounded transition-all uppercase tracking-wider mt-2 border-t border-[#2B3139] pt-3`}>
+                                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7h12m0 0l-4-4m4 4l-4 4m0 6H4m0 0l4 4m-4-4l4-4" /></svg>
+                                    {language === 'km' ? 'ប្តូរតួនាទី' : 'Switch Role'}
+                                </button>
+                            )}
+                            <button onClick={logout} className={`w-full flex items-center gap-3 px-3 py-2 text-[10px] font-bold text-[#F6465D] hover:bg-[#F6465D]/10 rounded transition-all uppercase tracking-wider ${originalAdminUser ? 'mt-2 border-t border-[#2B3139] pt-3' : 'mt-1'}`}>
                                 <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" /></svg>
-                                Logout
+                                {language === 'km' ? 'ចាកចេញ' : 'Logout'}
                             </button>
                         </div>
                     </div>

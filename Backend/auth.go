@@ -23,7 +23,8 @@ type Claims struct {
 }
 
 func GenerateJWT(user User) (string, error) {
-	expirationTime := time.Now().Add(30 * 24 * time.Hour)
+	// Add exactly one month (handles 28, 29, 30, or 31 days based on the current month)
+	expirationTime := time.Now().AddDate(0, 1, 0)
 	claims := &Claims{
 		UserName:      user.UserName,
 		Team:          user.Team,

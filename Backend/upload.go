@@ -190,24 +190,35 @@ func HandleImageUploadProxy(c *gin.Context) {
 			if UploadIsValidOrderColumnFunc(dbCol) {
 				var order Order
 				team := ""
+				updateMap := map[string]interface{}{dbCol: driveURL}
+				broadcastData := map[string]interface{}{r.TargetColumn: driveURL}
+
+				// Merge extra NewData if provided
+				if r.NewData != nil {
+					for k, v := range r.NewData {
+						updateMap[UploadMapToDBColumnFunc(k)] = v
+						broadcastData[k] = v
+					}
+				}
+
 				if err := DB.Where("order_id = ?", r.OrderID).First(&order).Error; err == nil {
 					team = order.Team
-					DB.Model(&order).UpdateColumn(dbCol, driveURL)
+					DB.Model(&order).Updates(updateMap)
 				} else {
-					DB.Model(&Order{}).Where("order_id = ?", r.OrderID).UpdateColumn(dbCol, driveURL)
+					DB.Model(&Order{}).Where("order_id = ?", r.OrderID).Updates(updateMap)
 				}
 
 				event, _ := json.Marshal(map[string]interface{}{
 					"type":    "update_order",
 					"orderId": r.OrderID,
-					"newData": map[string]interface{}{r.TargetColumn: driveURL},
+					"newData": broadcastData,
 				})
 				HubGlobal.Broadcast <- event
 
 				EnqueueSync("updateOrderTelegram", map[string]interface{}{
 					"orderId":       r.OrderID,
 					"team":          team,
-					"updatedFields": map[string]interface{}{r.TargetColumn: driveURL},
+					"updatedFields": broadcastData,
 				}, "", nil)
 			}
 		}

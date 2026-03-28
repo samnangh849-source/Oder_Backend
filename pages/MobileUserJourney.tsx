@@ -24,6 +24,11 @@ const PERIOD_LABELS = {
     all: 'All Time',
 } as const;
 
+// Binance-style gold accent
+const BNB_ACCENT_DARK  = '#F0B90B';
+const BNB_ACCENT_LIGHT = '#FCD535';
+const BNB_ACCENT_TEXT  = '#1a1a2e';
+
 // Pure function — no closure over component state
 function getMedalStyle(
     i: number,
@@ -63,44 +68,47 @@ const MobileUserJourney: React.FC<MobileUserJourneyProps> = ({ onBackToRoleSelec
     const theme = useMemo(() => {
         const isLightMode  = advancedSettings?.themeMode === 'light';
         const uiTheme      = advancedSettings?.uiTheme || 'default';
-        const br           = advancedSettings?.borderRadius ?? 16;
+        const br           = uiTheme === 'binance' ? 2 : 4; // sharp corners (trading terminal style)
 
-        const accentColor =
+        const accentColor  =
             uiTheme === 'netflix' ? '#e50914' :
             uiTheme === 'samsung' ? '#0381fe' :
             uiTheme === 'finance' ? '#10b981' :
-            uiTheme === 'binance' ? (isLightMode ? '#FCD535' : '#F0B90B') :
-                                    '#3b82f6';
+            uiTheme === 'binance' ? (isLightMode ? BNB_ACCENT_LIGHT : BNB_ACCENT_DARK) :
+            '#3b82f6';
+        const accentText   = (uiTheme === 'binance' || accentColor === BNB_ACCENT_LIGHT || accentColor === BNB_ACCENT_DARK)
+            ? BNB_ACCENT_TEXT : '#ffffff';
+        const greenOk      = isLightMode ? '#02C076' : '#0ECB81';
+        const redAlert     = '#F6465D';
+        const bg           = isLightMode ? '#F5F5F5' : '#0B0E11';
+        const cardBg       = isLightMode ? '#FFFFFF'  : '#1E2329';
+        const textPrimary  = isLightMode ? '#1E2329'  : '#EAECEF';
+        const textMuted    = isLightMode ? '#707A8A'  : '#848E9C';
+        const borderColor  = isLightMode ? '#E6E8EA'  : '#2B3139';
 
-        const accentText  = (uiTheme === 'binance' || accentColor === '#FCD535' || accentColor === '#F0B90B')
-            ? '#1a1a2e' : '#ffffff';
-        const greenOk     = isLightMode ? '#02C076'  : '#0ECB81';
-        const bg          = isLightMode ? '#F5F5F5'  : '#0B0E11';
-        const cardBg      = isLightMode ? '#FFFFFF'  : '#1E2329';
-        const textPrimary = isLightMode ? '#1E2329'  : '#EAECEF';
-        const textMuted   = isLightMode ? '#707A8A'  : '#848E9C';
-        const borderColor = isLightMode ? '#E6E8EA'  : '#2B3139';
-
-        const headerStyle: React.CSSProperties = {
-            backgroundColor: isLightMode ? 'rgba(255,255,255,0.96)' : 'rgba(11,14,17,0.96)',
+        const headerStyle: React.CSSProperties = uiTheme === 'binance' ? {
+            backgroundColor: isLightMode ? '#FFFFFF' : '#1E2329',
+            borderBottom: `1px solid ${borderColor}`,
+            fontFamily: "'Inter', sans-serif",
+        } : {
+            backgroundColor: isLightMode ? 'rgba(255,255,255,0.97)' : 'rgba(11,14,17,0.97)',
             backdropFilter: 'blur(var(--glass-blur, 12px))',
             WebkitBackdropFilter: 'blur(var(--glass-blur, 12px))',
             borderBottom: `1px solid ${borderColor}`,
         };
 
-        // Constant — same value every call, so no need for a factory function
         const iconBtnStyle: React.CSSProperties = {
-            borderRadius: `${Math.min(br, 8)}px`,
-            backgroundColor: isLightMode ? '#F5F5F5' : '#2B3139',
+            borderRadius: `${br}px`,
+            backgroundColor: isLightMode ? '#F0F0F0' : '#2B3139',
             color: textMuted,
             border: `1px solid ${borderColor}`,
             transition: 'all var(--anim-duration, 0.2s)',
         };
 
-        return { isLightMode, uiTheme, br, accentColor, accentText, greenOk, bg, cardBg, textPrimary, textMuted, borderColor, headerStyle, iconBtnStyle };
-    }, [advancedSettings?.themeMode, advancedSettings?.uiTheme, advancedSettings?.borderRadius]);
+        return { isLightMode, br, accentColor, accentText, greenOk, redAlert, bg, cardBg, textPrimary, textMuted, borderColor, headerStyle, iconBtnStyle };
+    }, [advancedSettings?.themeMode, advancedSettings?.uiTheme]);
 
-    const { isLightMode, uiTheme, br, accentColor, accentText, greenOk, bg, cardBg, textPrimary, textMuted, borderColor, headerStyle, iconBtnStyle } = theme;
+    const { isLightMode, br, accentColor, accentText, greenOk, bg, cardBg, textPrimary, textMuted, borderColor, headerStyle, iconBtnStyle } = theme;
 
     const [globalRanking, setGlobalRanking] = useState<{ name: string; revenue: number }[]>([]);
     const [isRankingLoading, setIsRankingLoading] = useState(false);
@@ -164,7 +172,7 @@ const MobileUserJourney: React.FC<MobileUserJourneyProps> = ({ onBackToRoleSelec
                     {/* Your Teams */}
                     <div>
                         <p className="text-[10px] font-black uppercase tracking-widest mb-3" style={{ color: textMuted }}>
-                            Your Teams
+                            My Teams
                         </p>
                         <div className="space-y-2.5">
                             {userTeams.map((team) => (
@@ -197,18 +205,20 @@ const MobileUserJourney: React.FC<MobileUserJourneyProps> = ({ onBackToRoleSelec
                                         </h3>
                                         <div className="flex items-center gap-1.5 mt-1.5">
                                             <span className="w-1.5 h-1.5 rounded-full" style={{ backgroundColor: greenOk }} />
-                                            <span className="text-[10px] font-bold" style={{ color: greenOk }}>Online</span>
+                                            <span className="text-[10px] font-bold" style={{ color: greenOk }}>Active</span>
                                         </div>
                                     </div>
                                     <div
                                         className="flex items-center gap-1 px-3 py-1.5 shrink-0"
                                         style={{
-                                            borderRadius: `${Math.min(br, 8)}px`,
+                                            borderRadius: `${br}px`,
                                             backgroundColor: accentColor,
                                             color: accentText,
+                                            fontFamily: 'monospace',
+                                            letterSpacing: '0.05em',
                                         }}
                                     >
-                                        <span className="text-[10px] font-black">Start</span>
+                                        <span className="text-[10px] font-black">OPEN</span>
                                         <ChevronRight className="w-3 h-3" />
                                     </div>
                                 </button>
@@ -229,11 +239,11 @@ const MobileUserJourney: React.FC<MobileUserJourneyProps> = ({ onBackToRoleSelec
                                 <div className="flex items-center gap-2">
                                     <BarChart2 className="w-4 h-4" style={{ color: accentColor }} />
                                     <span className="text-[13px] font-black" style={{ color: textPrimary }}>
-                                        Top Team Sales
+                                        Sales Ranking
                                     </span>
                                 </div>
                                 <p className="text-[10px] mt-0.5" style={{ color: textMuted }}>
-                                    Ranked by total revenue · tap a team for details
+                                    By revenue · tap to expand
                                 </p>
                             </div>
                             <div
@@ -251,13 +261,13 @@ const MobileUserJourney: React.FC<MobileUserJourneyProps> = ({ onBackToRoleSelec
                                         onClick={() => { setRankingPeriod(p); setExpandedRank(null); }}
                                         className="px-1.5 py-0.5 text-[8px] font-black uppercase tracking-wider"
                                         style={{
-                                            borderRadius: `${Math.max(2, Math.round(br / 6))}px`,
+                                            borderRadius: `${br}px`,
                                             backgroundColor: rankingPeriod === p ? accentColor : 'transparent',
                                             color: rankingPeriod === p ? accentText : textMuted,
                                             transition: 'all var(--anim-duration, 0.2s)',
                                         }}
                                     >
-                                        {p === 'today' ? 'Day' : p === 'this_week' ? 'Wk' : p === 'this_month' ? 'Mo' : 'All'}
+                                        {p === 'today' ? '1D' : p === 'this_week' ? '1W' : p === 'this_month' ? '1M' : 'ALL'}
                                     </button>
                                 ))}
                             </div>
@@ -287,9 +297,9 @@ const MobileUserJourney: React.FC<MobileUserJourneyProps> = ({ onBackToRoleSelec
                                             >
                                                 <div
                                                     className="w-8 h-8 shrink-0 flex items-center justify-center text-[9px] font-black"
-                                                    style={{ borderRadius: `${Math.max(4, Math.round(br / 4))}px`, ...medal }}
+                                                    style={{ borderRadius: `${br}px`, ...medal }}
                                                 >
-                                                    {i === 0 ? '1ST' : i === 1 ? '2ND' : i === 2 ? '3RD' : `#${i + 1}`}
+                                                    {i === 0 ? '#1' : i === 1 ? '#2' : i === 2 ? '#3' : `#${i + 1}`}
                                                 </div>
 
                                                 <div className="flex-grow min-w-0">
@@ -299,10 +309,10 @@ const MobileUserJourney: React.FC<MobileUserJourneyProps> = ({ onBackToRoleSelec
                                                         </span>
                                                         {isMyTeam && (
                                                             <span
-                                                                className="text-[8px] font-black px-1.5 py-0.5 rounded-full shrink-0"
-                                                                style={{ backgroundColor: `${accentColor}22`, color: accentColor }}
+                                                                className="text-[8px] font-black px-1.5 py-0.5 shrink-0"
+                                                                style={{ borderRadius: `${br}px`, backgroundColor: `${accentColor}28`, color: accentColor }}
                                                             >
-                                                                My Team
+                                                                MINE
                                                             </span>
                                                         )}
                                                     </div>
@@ -350,14 +360,14 @@ const MobileUserJourney: React.FC<MobileUserJourneyProps> = ({ onBackToRoleSelec
                                                         <div className="grid grid-cols-2 gap-2">
                                                             {[
                                                                 {
-                                                                    label: 'Total Sales',
+                                                                    label: 'Revenue',
                                                                     value: item.revenue >= 1000 ? `${(item.revenue / 1000).toFixed(2)}K` : item.revenue.toFixed(2),
                                                                     highlight: i === 0,
                                                                 },
                                                                 {
                                                                     label: 'Rank',
                                                                     value: `#${i + 1}`,
-                                                                    sub: `of ${globalRanking.length}`,
+                                                                    sub: `/ ${globalRanking.length}`,
                                                                     highlight: false,
                                                                 },
                                                             ].map(stat => (
@@ -365,7 +375,7 @@ const MobileUserJourney: React.FC<MobileUserJourneyProps> = ({ onBackToRoleSelec
                                                                     key={stat.label}
                                                                     className="p-3 border"
                                                                     style={{
-                                                                        borderRadius: `${Math.min(br, 12)}px`,
+                                                                        borderRadius: `${br}px`,
                                                                         backgroundColor: isLightMode ? '#FFFFFF' : '#1E2329',
                                                                         borderColor,
                                                                     }}
@@ -388,7 +398,7 @@ const MobileUserJourney: React.FC<MobileUserJourneyProps> = ({ onBackToRoleSelec
                                                         <div>
                                                             <div className="flex justify-between items-center mb-1.5">
                                                                 <span className="text-[9px] font-bold uppercase tracking-widest" style={{ color: textMuted }}>
-                                                                    {language === 'km' ? 'ចំណែកធៀបនឹង #1' : 'Share vs. #1'}
+                                                                    {language === 'km' ? 'ចំណែកធៀបនឹង #1' : 'vs #1'}
                                                                 </span>
                                                                 <span className="text-[10px] font-black" style={{ color: accentColor }}>
                                                                     {barPct.toFixed(0)}%
@@ -421,14 +431,15 @@ const MobileUserJourney: React.FC<MobileUserJourneyProps> = ({ onBackToRoleSelec
                                                                 onClick={() => handleTeamSelect(item.name)}
                                                                 className="w-full flex items-center justify-center gap-2 py-2.5 font-black text-[11px] uppercase tracking-wider active:scale-[0.98]"
                                                                 style={{
-                                                                    borderRadius: `${Math.min(br, 10)}px`,
+                                                                    borderRadius: `${br}px`,
                                                                     backgroundColor: accentColor,
                                                                     color: accentText,
+                                                                    letterSpacing: '0.08em',
                                                                     transition: 'all var(--anim-duration, 0.2s)',
                                                                 }}
                                                             >
                                                                 <ExternalLink className="w-3.5 h-3.5" />
-                                                                View Dashboard
+                                                                Open
                                                             </button>
                                                         )}
                                                     </div>
@@ -463,7 +474,10 @@ const MobileUserJourney: React.FC<MobileUserJourneyProps> = ({ onBackToRoleSelec
     }
 
     return (
-        <div className="flex flex-col min-h-full pb-20" style={{ backgroundColor: bg }}>
+        <div className="flex flex-col min-h-full" style={{ 
+          backgroundColor: bg,
+          paddingBottom: 'calc(80px + env(safe-area-inset-bottom, 0px))'
+        }}>
 
             <div className="px-4 py-3 flex items-center justify-between sticky top-0 z-30" style={headerStyle}>
                 <div className="flex items-center gap-2">
@@ -471,10 +485,10 @@ const MobileUserJourney: React.FC<MobileUserJourneyProps> = ({ onBackToRoleSelec
                         <ChevronLeft className="w-5 h-5" />
                     </button>
                     <div className="flex items-center gap-3">
-                        <div className="w-1.5 h-6 rounded-full" style={{ backgroundColor: accentColor }} />
+                        <div className="w-1 h-6" style={{ backgroundColor: accentColor }} />
                         <div>
-                            <span className="text-[10px] font-bold leading-none" style={{ color: textMuted }}>
-                                You're viewing
+                            <span className="text-[9px] font-bold leading-none uppercase tracking-widest" style={{ color: textMuted }}>
+                                Team
                             </span>
                             <h2 className="text-[14px] font-black leading-tight mt-0.5 tracking-tight" style={{ color: textPrimary }}>
                                 {selectedTeam}
@@ -483,20 +497,20 @@ const MobileUserJourney: React.FC<MobileUserJourneyProps> = ({ onBackToRoleSelec
                     </div>
                     <div
                         className="flex items-center gap-1.5 px-2 py-1 border ml-1"
-                        style={{ borderRadius: `${Math.min(br, 20)}px`, borderColor, backgroundColor: `${greenOk}12` }}
+                        style={{ borderRadius: `${br}px`, borderColor, backgroundColor: `${greenOk}18` }}
                     >
                         <span className="w-1.5 h-1.5 rounded-full animate-pulse" style={{ backgroundColor: greenOk }} />
-                        <span className="text-[9px] font-black" style={{ color: greenOk }}>Active</span>
+                        <span className="text-[9px] font-black uppercase" style={{ color: greenOk }}>Live</span>
                     </div>
                 </div>
 
                 <div className="flex items-center gap-2">
                     {userTeams.length > 1 && (
-                        <button onClick={handleSwitchTeam} className="p-2 active:scale-90" style={iconBtnStyle} title="Switch team">
+                        <button onClick={handleSwitchTeam} className="p-2 active:scale-90" style={iconBtnStyle} title="Switch Team">
                             <ArrowLeftRight className="w-4 h-4" />
                         </button>
                     )}
-                    <button onClick={onBackToRoleSelect} className="p-2 active:scale-90" style={iconBtnStyle} title="Sign out">
+                    <button onClick={onBackToRoleSelect} className="p-2 active:scale-90" style={iconBtnStyle} title="Exit">
                         <LogOut className="w-4 h-4" />
                     </button>
                 </div>

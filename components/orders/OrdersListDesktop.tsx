@@ -42,11 +42,11 @@ const OrderRow = (props: any) => {
 
     if (item.type === 'header') {
         return (
-            <div style={style} className="bg-white/[0.03] backdrop-blur-md border-y border-white/5 flex items-center px-6 z-10">
+            <div style={style} className={`${data.isBinance ? 'bg-[#1E2329] border-y border-[#2B3139]' : 'bg-white/[0.03] backdrop-blur-md border-y border-white/5'} flex items-center px-6 z-10`}>
                 <div className="flex items-center gap-3">
-                    <div className="w-1.5 h-5 bg-blue-500 rounded-full"></div>
-                    <span className="text-xs font-black text-white uppercase tracking-[0.3em] italic">
-                        {groupByLabel}: <span className="text-blue-400 ml-1">{item.label}</span>
+                    <div className={`w-1.5 h-5 ${data.isBinance ? 'bg-[#FCD535]' : 'bg-blue-500 rounded-full'}`} style={data.isBinance ? { borderRadius: '1px' } : undefined}></div>
+                    <span className={`text-xs font-bold ${data.isBinance ? 'text-[#EAECEF]' : 'text-white italic'} uppercase tracking-wider`}>
+                        {groupByLabel}: <span className={`${data.isBinance ? 'text-[#FCD535]' : 'text-blue-400'} ml-1`}>{item.label}</span>
                     </span>
                 </div>
             </div>
@@ -268,10 +268,11 @@ const OrdersListDesktop: React.FC<OrdersListDesktopProps> = ({
     onEdit, onView, handlePrint, handleCopy, handleCopyTemplate, copiedId, copiedTemplateId,
     toggleOrderVerified, updatingIds, showBorders = false, groupBy = 'none'
 }) => {
-    const { appData, currentUser, hasPermission, language } = useContext(AppContext);
+    const { appData, currentUser, hasPermission, language, advancedSettings } = useContext(AppContext);
     const t = translations[language];
-    
-    const ROW_HEIGHT = 88;
+    const isBinance = advancedSettings?.uiTheme === 'binance';
+
+    const ROW_HEIGHT = isBinance ? 72 : 88;
     const GROUP_HEADER_HEIGHT = 45;
 
     const checkColumnVisible = useCallback((key: string) => !visibleColumns || visibleColumns.has(key), [visibleColumns]);
@@ -418,22 +419,23 @@ const OrdersListDesktop: React.FC<OrdersListDesktopProps> = ({
         copiedTemplateId,
         appData,
         t,
-        groupByLabel: groupBy
+        groupByLabel: groupBy,
+        isBinance
     }), [
-        enrichedItems, visibleCols, getColWidth, onToggleSelect, selectedIds, 
+        enrichedItems, visibleCols, getColWidth, onToggleSelect, selectedIds,
         onView, onEdit, handleCopyTemplate, handlePrint, handleCopy,
         toggleOrderVerified, updatingIds, canVerifyOrder, canEditOrder,
-        showBorders, copiedTemplateId, appData, t, groupBy
+        showBorders, copiedTemplateId, appData, t, groupBy, isBinance
     ]);
 
     return (
-        <div className="bg-[#020617] rounded-none border border-white/5 flex flex-col h-full min-h-[400px] overflow-hidden shadow-2xl relative">
+        <div className={`${isBinance ? 'bg-[#0B0E11] border-[#2B3139]' : 'bg-[#020617] border-white/5 shadow-2xl'} rounded-none border flex flex-col h-full min-h-[400px] overflow-hidden relative`}>
             <div className="flex-grow overflow-auto custom-scrollbar overscroll-contain">
                 <div style={{ minWidth: `${totalTableWidth}px`, height: '100%', display: 'flex', flexDirection: 'column' }}>
                     {/* Sticky Table Header & Total Row */}
-                    <div className="sticky top-0 z-40 shadow-[0_15px_30px_rgba(0,0,0,0.5)] flex-shrink-0">
+                    <div className={`sticky top-0 z-40 ${isBinance ? '' : 'shadow-[0_15px_30px_rgba(0,0,0,0.5)]'} flex-shrink-0`}>
                         {/* Table Column Headers */}
-                        <div className="bg-[#0f172a]/95 backdrop-blur-3xl border-b border-white/10">
+                        <div className={`${isBinance ? 'bg-[#1E2329] border-b border-[#2B3139]' : 'bg-[#0f172a]/95 backdrop-blur-3xl border-b border-white/10'}`}>
                             <div className="flex w-full">
                                 {onToggleSelectAll && (
                                     <div className="flex-shrink-0 flex items-center justify-center py-5" style={{ width: '40px' }}>
@@ -449,7 +451,7 @@ const OrdersListDesktop: React.FC<OrdersListDesktopProps> = ({
                                     <div 
                                         key={k} 
                                         style={{ width: `${getColWidth(k)}px` }} 
-                                        className={`px-4 py-5 font-black uppercase tracking-widest text-gray-500 text-[11px] flex items-center ${k === 'index' || k === 'actions' || k === 'status' || k === 'print' || k === 'check' || k === 'orderId' ? 'justify-center text-center' : 'justify-start text-left'}`}
+                                        className={`px-4 ${isBinance ? 'py-3' : 'py-5'} ${isBinance ? 'font-semibold tracking-wider text-[#848E9C]' : 'font-black tracking-widest text-gray-500'} uppercase text-[11px] flex items-center ${k === 'index' || k === 'actions' || k === 'status' || k === 'print' || k === 'check' || k === 'orderId' ? 'justify-center text-center' : 'justify-start text-left'}`}
                                     >
                                         {(t as any)[`col_${k}`] || (t as any)[k] || k}
                                     </div>
@@ -458,7 +460,7 @@ const OrdersListDesktop: React.FC<OrdersListDesktopProps> = ({
                         </div>
 
                         {/* Grand Total Row */}
-                        <div className="bg-[#0f172a]/80 backdrop-blur-2xl border-b border-blue-500/20">
+                        <div className={`${isBinance ? 'bg-[#1E2329] border-b-2 border-[#FCD535]/30' : 'bg-[#0f172a]/80 backdrop-blur-2xl border-b border-blue-500/20'}`}>
                             <table className="w-full border-collapse" style={{ tableLayout: 'fixed' }}>
                                 <colgroup>
                                     {onToggleSelectAll && <col style={{ width: '40px' }} />}

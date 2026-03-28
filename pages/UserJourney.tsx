@@ -18,12 +18,29 @@ const UserJourney: React.FC<{ onBackToRoleSelect: () => void }> = ({ onBackToRol
     // Responsive State
     const [isMobile, setIsMobile] = React.useState(window.innerWidth < 768);
     const [showDisplaySettings, setShowDisplaySettings] = React.useState(false);
+    const themeSwitcherRef = React.useRef<HTMLDivElement>(null);
 
     React.useEffect(() => {
         const handleResize = () => setIsMobile(window.innerWidth < 768);
         window.addEventListener('resize', handleResize);
         return () => window.removeEventListener('resize', handleResize);
     }, []);
+
+    // Click-outside handler for theme switcher popup (supports both mouse + touch)
+    React.useEffect(() => {
+        if (!showDisplaySettings) return;
+        const handler = (e: MouseEvent | TouchEvent) => {
+            if (themeSwitcherRef.current && !themeSwitcherRef.current.contains(e.target as Node)) {
+                setShowDisplaySettings(false);
+            }
+        };
+        document.addEventListener('mousedown', handler);
+        document.addEventListener('touchstart', handler);
+        return () => {
+            document.removeEventListener('mousedown', handler);
+            document.removeEventListener('touchstart', handler);
+        };
+    }, [showDisplaySettings]);
 
     const uiTheme = advancedSettings?.uiTheme || 'default';
 
@@ -38,15 +55,21 @@ const UserJourney: React.FC<{ onBackToRoleSelect: () => void }> = ({ onBackToRol
     const borderColor = isLightMode ? '#E6E8EA' : '#2B3139';
     const textPrimary = isLightMode ? '#1E2329' : '#EAECEF';
     const textMuted = isLightMode ? '#707A8A' : '#848E9C';
-    const accentColor = uiTheme === 'binance' ? (isLightMode ? '#FCD535' : '#F0B90B') : '#3b82f6';
-    const accentText = (uiTheme === 'binance') ? '#181A20' : '#ffffff';
+    const accentColor =
+        uiTheme === 'netflix' ? '#e50914' :
+        uiTheme === 'samsung' ? '#0381fe' :
+        uiTheme === 'finance' ? '#10b981' :
+        uiTheme === 'binance' ? (isLightMode ? '#FCD535' : '#F0B90B') :
+        '#3b82f6';
+    const accentText = (uiTheme === 'binance' || accentColor === '#FCD535' || accentColor === '#F0B90B')
+        ? '#181A20' : '#ffffff';
 
     // 1. Permission Check
     if (!hasPermission('access_sales_portal')) {
         return (
             <div className={`min-h-screen flex items-center justify-center p-6 ui-${uiTheme}`} style={{ backgroundColor: bg }}>
-                <div className="rounded-lg p-10 text-center max-w-md w-full" style={{ backgroundColor: cardBg, border: `1px solid ${borderColor}` }}>
-                    <div className="w-12 h-12 rounded-lg flex items-center justify-center mb-6 mx-auto" style={{ backgroundColor: bg, border: `1px solid ${borderColor}` }}>
+                <div className="p-10 text-center max-w-md w-full" style={{ borderRadius: uiTheme === 'binance' ? '2px' : '0.5rem', backgroundColor: cardBg, border: `1px solid ${borderColor}` }}>
+                    <div className="w-12 h-12 flex items-center justify-center mb-6 mx-auto" style={{ borderRadius: uiTheme === 'binance' ? '2px' : '0.5rem', backgroundColor: bg, border: `1px solid ${borderColor}` }}>
                         <ShieldX className="w-6 h-6 text-[#F6465D]" />
                     </div>
                     <h2 className="text-lg font-bold mb-3" style={{ color: textPrimary }}>
@@ -59,8 +82,8 @@ const UserJourney: React.FC<{ onBackToRoleSelect: () => void }> = ({ onBackToRol
                     </p>
                     <button
                         onClick={onBackToRoleSelect}
-                        className="flex items-center gap-2 px-6 py-2.5 rounded-md font-semibold text-sm transition-all mx-auto active:scale-95"
-                        style={{ backgroundColor: accentColor, color: accentText }}
+                        className="flex items-center gap-2 px-6 py-2.5 font-semibold text-sm transition-all mx-auto active:scale-95"
+                        style={{ borderRadius: uiTheme === 'binance' ? '2px' : '0.375rem', backgroundColor: accentColor, color: accentText }}
                     >
                         <ChevronLeft className="w-4 h-4" />
                         {t.back}
@@ -74,8 +97,8 @@ const UserJourney: React.FC<{ onBackToRoleSelect: () => void }> = ({ onBackToRol
     if (userTeams.length === 0) {
         return (
             <div className={`min-h-screen flex items-center justify-center p-6 ui-${uiTheme}`} style={{ backgroundColor: bg }}>
-                <div className="rounded-lg p-10 text-center max-w-md w-full" style={{ backgroundColor: cardBg, border: `1px solid ${borderColor}` }}>
-                    <div className="w-12 h-12 rounded-lg flex items-center justify-center mb-6 mx-auto" style={{ backgroundColor: bg, border: `1px solid ${borderColor}` }}>
+                <div className="p-10 text-center max-w-md w-full" style={{ borderRadius: uiTheme === 'binance' ? '2px' : '0.5rem', backgroundColor: cardBg, border: `1px solid ${borderColor}` }}>
+                    <div className="w-12 h-12 flex items-center justify-center mb-6 mx-auto" style={{ borderRadius: uiTheme === 'binance' ? '2px' : '0.5rem', backgroundColor: bg, border: `1px solid ${borderColor}` }}>
                         <AlertCircle className="w-6 h-6 text-[#F6465D]" />
                     </div>
                     <h2 className="text-lg font-bold mb-3" style={{ color: textPrimary }}>
@@ -88,8 +111,8 @@ const UserJourney: React.FC<{ onBackToRoleSelect: () => void }> = ({ onBackToRol
                     </p>
                     <button
                         onClick={onBackToRoleSelect}
-                        className="flex items-center gap-2 px-6 py-2.5 rounded-md font-semibold text-sm transition-all mx-auto active:scale-95"
-                        style={{ backgroundColor: accentColor, color: accentText }}
+                        className="flex items-center gap-2 px-6 py-2.5 font-semibold text-sm transition-all mx-auto active:scale-95"
+                        style={{ borderRadius: uiTheme === 'binance' ? '2px' : '0.375rem', backgroundColor: accentColor, color: accentText }}
                     >
                         <ChevronLeft className="w-4 h-4" />
                         {t.back}
@@ -99,65 +122,67 @@ const UserJourney: React.FC<{ onBackToRoleSelect: () => void }> = ({ onBackToRol
         );
     }
 
-    const ThemeSwitcher = () => (
-        <div className="fixed bottom-6 left-6 z-[70] group">
-            <button
-                onClick={() => setShowDisplaySettings(!showDisplaySettings)}
-                className="w-11 h-11 rounded-full flex items-center justify-center transition-all shadow-lg active:scale-90"
-                style={{
-                    backgroundColor: cardBg,
-                    border: `1px solid ${borderColor}`,
-                    color: textMuted,
-                }}
-                title={language === 'km' ? 'ការកំណត់ UI' : 'UI Settings'}
-            >
-                <Monitor className="w-4.5 h-4.5" />
-            </button>
-
-            {showDisplaySettings && (
-                <div className="absolute bottom-14 left-0 rounded-lg p-3 w-48 shadow-2xl" style={{ backgroundColor: cardBg, border: `1px solid ${borderColor}` }}>
-                    <div className="flex items-center gap-2 mb-3 pb-2" style={{ borderBottom: `1px solid ${borderColor}` }}>
-                        <Palette className="w-3.5 h-3.5" style={{ color: accentColor }} />
-                        <span className="text-[11px] font-semibold" style={{ color: textPrimary }}>
-                            {language === 'km' ? 'រចនាប័ទ្ម' : 'UI Display'}
-                        </span>
-                    </div>
-                    <div className="grid grid-cols-1 gap-1">
-                        {[
-                            { id: 'default', label: 'Default', icon: '🏠' },
-                            { id: 'binance', label: 'Finance Pro', icon: '🪙' },
-                            { id: 'netflix', label: 'Entertainment', icon: '🎬' },
-                            { id: 'finance', label: 'Market', icon: '💎' }
-                        ].map(themeOption => (
-                            <button
-                                key={themeOption.id}
-                                onClick={() => {
-                                    handleThemeChange(themeOption.id);
-                                    setShowDisplaySettings(false);
-                                }}
-                                className="flex items-center justify-between px-3 py-2 rounded-md text-[11px] font-medium transition-all"
-                                style={{
-                                    backgroundColor: uiTheme === themeOption.id ? accentColor : 'transparent',
-                                    color: uiTheme === themeOption.id ? accentText : textMuted,
-                                }}
-                            >
-                                <div className="flex items-center gap-2">
-                                    <span>{themeOption.icon}</span>
-                                    <span>{themeOption.label}</span>
-                                </div>
-                                {uiTheme === themeOption.id && <div className="w-1.5 h-1.5 rounded-full" style={{ backgroundColor: accentText, opacity: 0.5 }} />}
-                            </button>
-                        ))}
-                    </div>
-                </div>
-            )}
-        </div>
-    );
-
     // 3. Render Appropriate View
     return (
         <div className={`user-journey-container h-full w-full relative ui-${uiTheme}`}>
-            <ThemeSwitcher />
+            {/* Theme Switcher — inline to avoid remount on every render */}
+            <div ref={themeSwitcherRef} className="hidden md:block fixed z-[70] group" style={{ bottom: 'calc(1.5rem + env(safe-area-inset-bottom, 0px))', left: '1.5rem' }}>
+                <button
+                    onClick={() => setShowDisplaySettings(!showDisplaySettings)}
+                    className={`w-12 h-12 ${uiTheme === 'binance' ? '' : 'rounded-full'} flex items-center justify-center transition-all shadow-lg active:scale-90 hover:shadow-xl`}
+                    style={{
+                        borderRadius: uiTheme === 'binance' ? '2px' : undefined,
+                        backgroundColor: showDisplaySettings ? accentColor : cardBg,
+                        border: `1px solid ${showDisplaySettings ? accentColor : borderColor}`,
+                        color: showDisplaySettings ? accentText : textMuted,
+                    }}
+                    title={language === 'km' ? 'ការកំណត់ UI' : 'UI Settings'}
+                >
+                    <Monitor className="w-5 h-5" />
+                </button>
+
+                {showDisplaySettings && (
+                    <div className={`absolute bottom-16 left-0 ${uiTheme === 'binance' ? '' : 'rounded-xl'} p-3 w-52 shadow-2xl`} style={{ borderRadius: uiTheme === 'binance' ? '2px' : undefined, backgroundColor: cardBg, border: `1px solid ${borderColor}` }}>
+                        <div className="flex items-center gap-2 mb-3 pb-2" style={{ borderBottom: `1px solid ${borderColor}` }}>
+                            <Palette className="w-4 h-4" style={{ color: accentColor }} />
+                            <span className="text-xs font-semibold" style={{ color: textPrimary }}>
+                                {language === 'km' ? 'រចនាប័ទ្ម' : 'UI Display'}
+                            </span>
+                        </div>
+                        <div className="grid grid-cols-1 gap-1">
+                            {[
+                                { id: 'default', label: 'Default', icon: '🏠' },
+                                { id: 'binance', label: 'Finance Pro', icon: '🪙' },
+                                { id: 'netflix', label: 'Entertainment', icon: '🎬' },
+                                { id: 'finance', label: 'Market', icon: '💎' },
+                                { id: 'samsung', label: 'Samsung', icon: '📱' },
+                                { id: 'neumorphism', label: 'Soft UI', icon: '🔘' },
+                            ].map(themeOption => (
+                                <button
+                                    key={themeOption.id}
+                                    onClick={() => {
+                                        handleThemeChange(themeOption.id);
+                                        setShowDisplaySettings(false);
+                                    }}
+                                    className={`flex items-center justify-between px-3 py-2.5 ${uiTheme === 'binance' ? '' : 'rounded-lg'} text-xs font-medium transition-all active:scale-95`}
+
+                                    style={{
+                                        borderRadius: uiTheme === 'binance' ? '2px' : undefined,
+                                        backgroundColor: uiTheme === themeOption.id ? accentColor : 'transparent',
+                                        color: uiTheme === themeOption.id ? accentText : textMuted,
+                                    }}
+                                >
+                                    <div className="flex items-center gap-2.5">
+                                        <span className="text-base">{themeOption.icon}</span>
+                                        <span>{themeOption.label}</span>
+                                    </div>
+                                    {uiTheme === themeOption.id && <div className="w-2 h-2 rounded-full" style={{ backgroundColor: accentText, opacity: 0.5 }} />}
+                                </button>
+                            ))}
+                        </div>
+                    </div>
+                )}
+            </div>
             {isMobile ? (
                 <MobileUserJourney onBackToRoleSelect={onBackToRoleSelect} userTeams={userTeams} />
             ) : (

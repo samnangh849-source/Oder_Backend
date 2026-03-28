@@ -1,16 +1,39 @@
 
-import React, { useState, useContext } from 'react';
+import React, { useState, useContext, useEffect } from 'react';
 import { AppContext } from '../../../context/AppContext';
 import { WEB_APP_URL } from '../../../constants';
 import Spinner from '../../common/Spinner';
 import { CacheService, CACHE_KEYS } from '../../../services/cacheService';
 
 const DatabaseManagement: React.FC = () => {
-    const { refreshData, showNotification } = useContext(AppContext);
+    const { refreshData, showNotification, lastMessage } = useContext(AppContext);
     const [isMigrating, setIsMigrating] = useState(false);
     const [isMigratingMovies, setIsMigratingMovies] = useState(false);
     const [isClearingCache, setIsClearingCache] = useState(false);
+    // Separate status states so they don't override each other
     const [status, setStatus] = useState<{ type: 'success' | 'error' | 'idle', message: string }>({ type: 'idle', message: '' });
+    const [movieStatus, setMovieStatus] = useState<{ type: 'success' | 'error' | 'idle', message: string }>({ type: 'idle', message: '' });
+
+    // Listen for real-time WebSocket result from the background goroutine
+    useEffect(() => {
+        if (!lastMessage) return;
+        try {
+            const data = typeof lastMessage === 'string' ? JSON.parse(lastMessage) : lastMessage;
+            if (data?.type === 'movie_migration_complete') {
+                setIsMigratingMovies(false);
+                if (data.success) {
+                    setMovieStatus({ type: 'success', message: data.message || 'Sync ជោគជ័យ!' });
+                    showNotification(`Movie Sync Complete (${data.count} movies)`, 'success');
+                    refreshData();
+                } else {
+                    setMovieStatus({ type: 'error', message: data.message || 'Sync បរាជ័យ!' });
+                    showNotification('Movie Sync Failed', 'error');
+                }
+            }
+        } catch (_) {
+            // ignore non-JSON messages
+        }
+    }, [lastMessage]);
 
     const handleMigrateData = async () => {
         if (!window.confirm("តើអ្នកចង់ Sync ទិន្នន័យពី Google Sheet ចូលទៅកាន់ Database ឥឡូវនេះមែនទេ? (ទិន្នន័យដែលមានស្រាប់នឹងត្រូវបាន Update)")) return;
@@ -52,10 +75,10 @@ const DatabaseManagement: React.FC = () => {
 
     const handleMigrateMovies = async () => {
         if (!window.confirm("តើអ្នកចង់ Sync ទិន្នន័យ Movie ពី Google Sheet ចូលទៅកាន់ Database ឥឡូវនេះមែនទេ?")) return;
-        
+
         setIsMigratingMovies(true);
-        setStatus({ type: 'idle', message: 'កំពុងទាញយកទិន្នន័យ Movie ពី Google Sheet...' });
-        
+        setMovieStatus({ type: 'idle', message: 'កំពុងបញ្ជូន request... (លទ្ធផល​នឹងបង្ហាញដោយស្វ័យប្រវត្តិ)' });
+
         try {
             const session = await CacheService.get<{ token: string }>(CACHE_KEYS.SESSION);
             const token = session?.token;
@@ -66,24 +89,20 @@ const DatabaseManagement: React.FC = () => {
                 method: 'POST',
                 headers
             });
-            
+
             const result = await response.json();
-            
-            if (response.ok && result.status === 'success') {
-                setStatus({ type: 'success', message: 'ការ Sync ទិន្នន័យ Movie បានចាប់ផ្តើមដោយជោគជ័យ! សូមរង់ចាំមួយស្របក់...' });
-                showNotification("Movie Migration Started", "success");
-                
-                setTimeout(async () => {
-                    await refreshData();
-                }, 3000);
-            } else {
+
+            if (!response.ok || result.status !== 'success') {
                 throw new Error(result.message || 'Movie migration request failed');
             }
+            // ✅ Server accepted the job — goroutine is running in background.
+            // We DO NOT setIsMigratingMovies(false) here; the WebSocket event will do it.
+            setMovieStatus({ type: 'idle', message: 'Server បានទទួល request ហើយ! កំពុង Sync នៅ Background... (រង់ចាំ)' });
+            showNotification('Movie Sync Started', 'success');
         } catch (err: any) {
-            setStatus({ type: 'error', message: 'បរាជ័យ: ' + err.message });
-            showNotification("Movie Migration Failed", "error");
-        } finally {
             setIsMigratingMovies(false);
+            setMovieStatus({ type: 'error', message: 'Request បរាជ័យ: ' + err.message });
+            showNotification('Movie Sync Failed', 'error');
         }
     };
 
@@ -106,145 +125,143 @@ const DatabaseManagement: React.FC = () => {
     };
 
     return (
-        <div className="bg-gray-800/30 border border-gray-700/50 rounded-[3rem] p-8 shadow-2xl backdrop-blur-md animate-fade-in">
-            <div className="max-w-2xl mx-auto space-y-10 py-10">
-                <div className="text-center space-y-4">
-                    <div className="w-24 h-24 bg-blue-600/10 rounded-[2.5rem] flex items-center justify-center mx-auto border-2 border-blue-500/20 shadow-2xl">
-                        <svg className="w-12 h-12 text-blue-500" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                            <path strokeLinecap="round" strokeLinejoin="round" d="M4 7v10c0 2.21 3.582 4 8 4s8-1.79 8-4V7M4 7c0 2.21 3.582 4 8 4s8-1.79 8-4M4 7c0-2.21 3.582-4 8-4s8 1.79 8 4m0 5c0 2.21-3.582 4-8 4s-8-1.79-8-4" />
-                        </svg>
-                    </div>
-                    <h2 className="text-3xl font-black text-white uppercase tracking-tighter italic">ប្រព័ន្ធគ្រប់គ្រងទិន្នន័យ</h2>
-                    <p className="text-gray-500 font-bold uppercase tracking-widest text-xs">Google Sheet & Database Synchronization Portal</p>
+        <div className="bg-[#181a20] p-6 lg:p-10 min-h-full font-sans animate-fade-in w-full">
+            <div className="max-w-4xl mx-auto space-y-8">
+                {/* Header */}
+                <div className="border-b border-[#2b3139] pb-6">
+                    <h2 className="text-2xl font-semibold text-[#eaecef]">Data Management</h2>
+                    <p className="text-[#848e9c] mt-2 text-sm">Google Sheet & Database Synchronization Portal</p>
                 </div>
 
-                <div className="grid grid-cols-1 gap-6">
+                <div className="space-y-4">
                     {/* Sync Section */}
-                    <div className="bg-blue-600/5 border border-blue-500/20 rounded-[2.5rem] p-8 space-y-6 shadow-inner relative overflow-hidden">
-                        <div className="absolute top-0 right-0 w-32 h-32 bg-blue-600/10 blur-[60px] -mr-16 -mt-16"></div>
-                        
-                        <div className="space-y-4 relative z-10">
-                            <h3 className="text-lg font-black text-blue-400 uppercase tracking-widest flex items-center gap-3">
-                                <span className="w-2 h-2 rounded-full bg-blue-500 animate-pulse"></span>
-                                Sync with Google Sheet
-                            </h3>
-                            <p className="text-gray-400 text-sm leading-relaxed font-medium">
-                                មុខងារនេះនឹងធ្វើការទាញយកទិន្នន័យចុងក្រោយបំផុតពី Google Sheet រួមមាន (Users, Products, Stores, Orders, ...) មកធ្វើបច្ចុប្បន្នភាពក្នុង Database (PostgreSQL) ភ្លាមៗ។
-                            </p>
-                        </div>
+                    <div className="bg-[#1e2329] border border-[#2b3139] hover:border-[#474d57] transition-colors rounded-sm p-6">
+                        <div className="flex flex-col md:flex-row md:items-center justify-between gap-6">
+                            <div className="space-y-2 flex-1">
+                                <div className="flex items-center gap-3">
+                                    <div className="w-8 h-8 rounded bg-[#2b3139] flex items-center justify-center">
+                                        <svg className="w-4 h-4 text-[#fcd535]" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" /></svg>
+                                    </div>
+                                    <h3 className="text-base font-medium text-[#eaecef]">Full Synchronization</h3>
+                                </div>
+                                <p className="text-[#848e9c] text-sm leading-relaxed md:ml-11">
+                                    មុខងារនេះនឹងធ្វើការទាញយកទិន្នន័យចុងក្រោយបំផុតពី Google Sheet រួមមាន (Users, Products, Stores, Orders, ...) មកធ្វើបច្ចុប្បន្នភាពក្នុង Database ភ្លាមៗ។
+                                </p>
+                            </div>
 
-                        <div className="pt-4 relative z-10">
                             <button 
                                 onClick={handleMigrateData}
                                 disabled={isMigrating}
                                 className={`
-                                    w-full py-5 rounded-[1.8rem] font-black uppercase text-sm tracking-[0.2em] transition-all flex items-center justify-center gap-4 shadow-2xl
+                                    shrink-0 px-6 py-2.5 rounded-sm font-medium text-sm transition-colors flex items-center justify-center gap-2 min-w-[200px]
                                     ${isMigrating 
-                                        ? 'bg-gray-800 text-gray-500 cursor-not-allowed border border-white/5' 
-                                        : 'bg-gradient-to-r from-blue-600 to-indigo-700 text-white hover:scale-[1.02] active:scale-95 border border-white/10'
+                                        ? 'bg-[#2b3139] text-[#848e9c] cursor-not-allowed' 
+                                        : 'bg-[#fcd535] text-[#181a20] hover:bg-[#f0c929]'
                                     }
                                 `}
                             >
-                                {isMigrating ? <Spinner size="sm" /> : <svg className="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={3}><path strokeLinecap="round" strokeLinejoin="round" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" /></svg>}
-                                {isMigrating ? 'កំពុងដំណើរការ...' : 'MIGRATE DATA / SYNC NOW'}
+                                {isMigrating ? <Spinner size="sm" /> : null}
+                                {isMigrating ? 'Processing...' : 'Sync Now'}
                             </button>
                         </div>
-
+                        {/* Status Message */}
                         {status.type !== 'idle' && (
-                            <div className={`
-                                mt-6 p-5 rounded-2xl border flex items-start gap-4 animate-fade-in
-                                ${status.type === 'success' ? 'bg-emerald-500/10 border-emerald-500/20 text-emerald-400' : 'bg-red-500/10 border-red-500/20 text-red-400'}
-                            `}>
-                                <div className="shrink-0 mt-0.5">
-                                    {status.type === 'success' ? (
-                                        <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={3}><path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" /></svg>
-                                    ) : (
-                                        <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={3}><path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" /></svg>
-                                    )}
-                                </div>
-                                <p className="text-xs font-bold leading-relaxed">{status.message}</p>
+                            <div className={`mt-4 md:ml-11 p-3 rounded-sm text-sm border-l-2 ${status.type === 'success' ? 'bg-[#032a22] border-[#0ecb81] text-[#0ecb81]' : 'bg-[#3f1619] border-[#f6465d] text-[#f6465d]'}`}>
+                                {status.message}
                             </div>
                         )}
                     </div>
 
                     {/* Movie Sync Section */}
-                    <div className="bg-purple-600/5 border border-purple-500/20 rounded-[2.5rem] p-8 space-y-6 shadow-inner relative overflow-hidden">
-                        <div className="absolute top-0 right-0 w-32 h-32 bg-purple-600/10 blur-[60px] -mr-16 -mt-16"></div>
-                        
-                        <div className="space-y-4 relative z-10">
-                            <h3 className="text-lg font-black text-purple-400 uppercase tracking-widest flex items-center gap-3">
-                                <span className="w-2 h-2 rounded-full bg-purple-500 animate-pulse"></span>
-                                Sync Movie Sheet Only
-                            </h3>
-                            <p className="text-gray-400 text-sm leading-relaxed font-medium">
-                                មុខងារនេះនឹងធ្វើការទាញយកតែទិន្នន័យពី Sheet "Movies" ប៉ុណ្ណោះ។ វារហ័ស និងមិនប៉ះពាល់ដល់ទិន្នន័យផ្សេងៗទៀតឡើយ។
-                            </p>
-                        </div>
+                    <div className="bg-[#1e2329] border border-[#2b3139] hover:border-[#474d57] transition-colors rounded-sm p-6">
+                        <div className="flex flex-col md:flex-row md:items-center justify-between gap-6">
+                            <div className="space-y-2 flex-1">
+                                <div className="flex items-center gap-3">
+                                    <div className="w-8 h-8 rounded bg-[#2b3139] flex items-center justify-center">
+                                        <svg className="w-4 h-4 text-[#eaecef]" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M7 4v16M17 4v16M3 8h4m10 0h4M3 12h18M3 16h4m10 0h4M4 20h16a1 1 0 001-1V5a1 1 0 00-1-1H4a1 1 0 00-1 1v14a1 1 0 001 1z" /></svg>
+                                    </div>
+                                    <h3 className="text-base font-medium text-[#eaecef]">Movie Sheet Synchronization</h3>
+                                </div>
+                                <p className="text-[#848e9c] text-sm leading-relaxed md:ml-11">
+                                    មុខងារនេះនឹងធ្វើការទាញយកតែទិន្នន័យពី Sheet "Movies" ប៉ុណ្ណោះ។ វារហ័ស និងមិនប៉ះពាល់ដល់ទិន្នន័យផ្សេងៗទៀតឡើយ។
+                                </p>
+                            </div>
 
-                        <div className="pt-4 relative z-10">
                             <button 
                                 onClick={handleMigrateMovies}
                                 disabled={isMigratingMovies}
                                 className={`
-                                    w-full py-5 rounded-[1.8rem] font-black uppercase text-sm tracking-[0.2em] transition-all flex items-center justify-center gap-4 shadow-2xl
+                                    shrink-0 px-6 py-2.5 rounded-sm font-medium text-sm transition-colors flex items-center justify-center gap-2 min-w-[200px]
                                     ${isMigratingMovies 
-                                        ? 'bg-gray-800 text-gray-500 cursor-not-allowed border border-white/5' 
-                                        : 'bg-gradient-to-r from-purple-600 to-indigo-700 text-white hover:scale-[1.02] active:scale-95 border border-white/10'
+                                        ? 'bg-[#2b3139] text-[#848e9c] cursor-not-allowed' 
+                                        : 'bg-[#2b3139] text-[#eaecef] hover:bg-[#474d57]'
                                     }
                                 `}
                             >
-                                {isMigratingMovies ? <Spinner size="sm" /> : <svg className="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={3}><path strokeLinecap="round" strokeLinejoin="round" d="M7 4v16M17 4v16M3 8h4m10 0h4M3 12h18M3 16h4m10 0h4M4 20h16a1 1 0 001-1V5a1 1 0 00-1-1H4a1 1 0 00-1 1v14a1 1 0 001 1z" /></svg>}
-                                {isMigratingMovies ? 'កំពុងដំណើរការ...' : 'SYNC MOVIES ONLY'}
+                                {isMigratingMovies ? <Spinner size="sm" /> : null}
+                                {isMigratingMovies ? 'Processing...' : 'Sync Movies Only'}
                             </button>
                         </div>
+
+                        {movieStatus.type !== 'idle' && (
+                            <div className={`mt-4 md:ml-11 p-3 rounded-sm text-sm border-l-2 ${movieStatus.type === 'success' ? 'bg-[#032a22] border-[#0ecb81] text-[#0ecb81]' : 'bg-[#3f1619] border-[#f6465d] text-[#f6465d]'}`}>
+                                {movieStatus.message}
+                            </div>
+                        )}
                     </div>
 
                     {/* Cache Section */}
-                    <div className="bg-amber-600/5 border border-amber-500/20 rounded-[2.5rem] p-8 space-y-6 shadow-inner relative overflow-hidden">
-                        <div className="absolute top-0 right-0 w-32 h-32 bg-amber-600/10 blur-[60px] -mr-16 -mt-16"></div>
-                        
-                        <div className="space-y-4 relative z-10">
-                            <h3 className="text-lg font-black text-amber-400 uppercase tracking-widest flex items-center gap-3">
-                                <span className="w-2 h-2 rounded-full bg-amber-500 animate-pulse"></span>
-                                Clear System Cache
-                            </h3>
-                            <p className="text-gray-400 text-sm leading-relaxed font-medium">
-                                សម្អាតទិន្នន័យដែលបានរក្សាទុកក្នុង Browser របស់អ្នក (IndexedDB)។ មុខងារនេះជួយដោះស្រាយបញ្ហាទិន្នន័យចាស់មិនព្រមបាត់ ឬបញ្ហាកម្មវិធីគាំង។
-                            </p>
-                        </div>
+                    <div className="bg-[#1e2329] border border-[#2b3139] hover:border-[#474d57] transition-colors rounded-sm p-6">
+                        <div className="flex flex-col md:flex-row md:items-center justify-between gap-6">
+                            <div className="space-y-2 flex-1">
+                                <div className="flex items-center gap-3">
+                                    <div className="w-8 h-8 rounded bg-[#2b3139] flex items-center justify-center">
+                                        <svg className="w-4 h-4 text-[#eaecef]" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg>
+                                    </div>
+                                    <h3 className="text-base font-medium text-[#eaecef]">Clear System Cache</h3>
+                                </div>
+                                <p className="text-[#848e9c] text-sm leading-relaxed md:ml-11">
+                                    សម្អាតទិន្នន័យដែលបានរក្សាទុកក្នុង Browser របស់អ្នក (IndexedDB)។ មុខងារនេះជួយដោះស្រាយបញ្ហាទិន្នន័យចាស់មិនព្រមបាត់ ឬបញ្ហាកម្មវិធីគាំង។
+                                </p>
+                            </div>
 
-                        <div className="pt-4 relative z-10">
                             <button 
                                 onClick={handleClearCache}
                                 disabled={isClearingCache}
                                 className={`
-                                    w-full py-5 rounded-[1.8rem] font-black uppercase text-sm tracking-[0.2em] transition-all flex items-center justify-center gap-4 shadow-2xl
+                                    shrink-0 px-6 py-2.5 rounded-sm font-medium text-sm transition-colors flex items-center justify-center gap-2 min-w-[200px]
                                     ${isClearingCache 
-                                        ? 'bg-gray-800 text-gray-500 cursor-not-allowed border border-white/5' 
-                                        : 'bg-gradient-to-r from-amber-600 to-orange-700 text-white hover:scale-[1.02] active:scale-95 border border-white/10'
+                                        ? 'bg-[#2b3139] text-[#848e9c] cursor-not-allowed' 
+                                        : 'bg-[#2b3139] text-[#eaecef] hover:bg-[#474d57]'
                                     }
                                 `}
                             >
-                                {isClearingCache ? <Spinner size="sm" /> : <svg className="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={3}><path strokeLinecap="round" strokeLinejoin="round" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg>}
-                                {isClearingCache ? 'កំពុងសម្អាត...' : 'CLEAR ALL CACHE'}
+                                {isClearingCache ? <Spinner size="sm" /> : null}
+                                {isClearingCache ? 'Clearing...' : 'Clear All Cache'}
                             </button>
                         </div>
                     </div>
                 </div>
 
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-6 pt-4">
-                    <div className="bg-gray-900/60 border border-white/5 p-6 rounded-3xl space-y-3">
-                        <h4 className="text-[10px] font-black text-gray-500 uppercase tracking-widest">Database Health</h4>
-                        <div className="flex items-center justify-between">
-                            <span className="text-sm font-bold text-gray-300">Connection</span>
-                            <span className="text-xs font-black text-emerald-500 uppercase">Stable</span>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4 pt-4">
+                    <div className="bg-[#1e2329] border border-[#2b3139] p-5 rounded-sm flex items-center justify-between">
+                        <div className="space-y-1">
+                            <h4 className="text-xs font-semibold text-[#848e9c] uppercase tracking-wider">Database Health</h4>
+                            <div className="text-sm font-medium text-[#eaecef]">Connection</div>
+                        </div>
+                        <div className="flex items-center gap-2">
+                            <span className="w-2 h-2 rounded-full bg-[#0ecb81] shadow-[0_0_8px_rgba(14,203,129,0.5)]"></span>
+                            <span className="text-sm font-medium text-[#0ecb81]">Stable</span>
                         </div>
                     </div>
-                    <div className="bg-gray-900/60 border border-white/5 p-6 rounded-3xl space-y-3">
-                        <h4 className="text-[10px] font-black text-gray-500 uppercase tracking-widest">Google Sheet API</h4>
-                        <div className="flex items-center justify-between">
-                            <span className="text-sm font-bold text-gray-300">Auth Status</span>
-                            <span className="text-xs font-black text-emerald-500 uppercase">Authorized</span>
+                    <div className="bg-[#1e2329] border border-[#2b3139] p-5 rounded-sm flex items-center justify-between">
+                        <div className="space-y-1">
+                            <h4 className="text-xs font-semibold text-[#848e9c] uppercase tracking-wider">Google Sheet API</h4>
+                            <div className="text-sm font-medium text-[#eaecef]">Auth Status</div>
+                        </div>
+                        <div className="flex items-center gap-2">
+                            <span className="w-2 h-2 rounded-full bg-[#0ecb81] shadow-[0_0_8px_rgba(14,203,129,0.5)]"></span>
+                            <span className="text-sm font-medium text-[#0ecb81]">Authorized</span>
                         </div>
                     </div>
                 </div>

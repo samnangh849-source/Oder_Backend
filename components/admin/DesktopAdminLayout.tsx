@@ -8,6 +8,7 @@ import UserAvatar from '../common/UserAvatar';
 import { translations } from '../../translations';
 import Spinner from '../common/Spinner';
 import { requestNotificationPermission, sendSystemNotification } from '../../utils/notificationUtils';
+import BinanceLiveIndicator from './BinanceLiveIndicator';
 
 interface DesktopAdminLayoutProps {
     children: React.ReactNode;
@@ -81,6 +82,32 @@ const DesktopAdminLayout: React.FC<DesktopAdminLayoutProps> = ({
             {/* Main Content with its own Header */}
             <main className={`flex-1 flex flex-col h-screen transition-all duration-300 ease-in-out ${isSidebarCollapsed ? (uiTheme === 'binance' ? 'pl-16' : 'pl-20') : (uiTheme === 'binance' ? 'pl-60' : 'pl-64')} overflow-hidden`}>
                 
+                {/* Binance Top Bar */}
+                {uiTheme === 'binance' && (
+                    <header className="flex-shrink-0 z-[60] bg-[#0B0E11] border-b border-[#2B3139] px-6 py-2 flex justify-between items-center" style={originalAdminUser ? { top: '40px' } : {}}>
+                        <div className="flex items-center gap-3">
+                            <h1 className="text-sm font-bold text-[#EAECEF] uppercase tracking-tight flex items-center gap-2">
+                                <span>O-System</span>
+                                <span className="text-[10px] bg-[#FCD535] text-[#181A20] px-1.5 py-0.5 font-black uppercase tracking-wider" style={{ borderRadius: '2px' }}>PRO</span>
+                            </h1>
+                        </div>
+                        <div className="flex items-center gap-4">
+                            <BinanceLiveIndicator isSyncing={false} language={language} />
+                            <div className="flex items-center gap-2">
+                                <UserAvatar
+                                    avatarUrl={currentUser?.ProfilePictureURL}
+                                    name={currentUser?.FullName || ''}
+                                    className="w-7 h-7 border border-[#2B3139]"
+                                />
+                                <span className="text-[11px] font-semibold text-[#EAECEF]">{currentUser?.FullName}</span>
+                            </div>
+                            <button onClick={() => setAdvancedSettingsOpen(true)} className="text-[#848E9C] hover:text-[#FCD535] transition-colors">
+                                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" /><path d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" /></svg>
+                            </button>
+                        </div>
+                    </header>
+                )}
+
                 {/* Desktop Header - Conditionally Hidden */}
                 {showHeader && (
                     <header className="flex-shrink-0 z-[60] bg-[#0f172a]/80 backdrop-blur-2xl border-b border-white/5 px-6 py-3 flex justify-between items-center shadow-lg relative" style={originalAdminUser ? { top: '40px' } : {}}>
@@ -165,7 +192,7 @@ const DesktopAdminLayout: React.FC<DesktopAdminLayoutProps> = ({
                     )}
                     
                     {/* Intelligent Layout Container */}
-                    <div className="p-2 md:p-3 lg:p-4 xl:p-5 2xl:p-6 max-w-[2400px] mx-auto h-full w-full relative z-10 transition-all duration-300 flex flex-col overflow-y-auto overflow-x-hidden custom-scrollbar">
+                    <div className={`${uiTheme === 'binance' ? 'p-2 md:p-3' : 'p-2 md:p-3 lg:p-4 xl:p-5 2xl:p-6'} max-w-[2400px] mx-auto h-full w-full relative z-10 transition-all duration-300 flex flex-col overflow-y-auto overflow-x-hidden custom-scrollbar`}>
                         {children}
                     </div>
                 </div>

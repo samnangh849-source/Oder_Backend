@@ -27,6 +27,7 @@ import { AppContext, AdvancedSettings } from './context/AppContext';
 import { UIProvider, useUI } from './context/UIContext';
 import { UserProvider, useUser } from './context/UserContext';
 import { OrderProvider, useOrder } from './context/OrderContext';
+import { localDbService } from './services/localDbService';
 import { translations } from './translations';
 
 const AppContent: React.FC = () => {
@@ -88,7 +89,13 @@ const AppContent: React.FC = () => {
             mono: "'JetBrains Mono', monospace" 
         };
         root.style.setProperty('--global-font', fonts[advancedSettings.fontStyle || 'standard']);
-    }, [advancedSettings.glassIntensity, advancedSettings.borderRadius, advancedSettings.animationSpeed, advancedSettings.fontStyle]);
+
+        // Binance theme overrides — force sharp edges and Inter font
+        if (advancedSettings.uiTheme === 'binance') {
+            root.style.setProperty('--global-radius', '2px');
+            root.style.setProperty('--global-font', "'Inter', sans-serif");
+        }
+    }, [advancedSettings.glassIntensity, advancedSettings.borderRadius, advancedSettings.animationSpeed, advancedSettings.fontStyle, advancedSettings.uiTheme]);
 
     const tokenRef = useRef<string | null>(null);
     const isMobile = window.innerWidth < 768;
@@ -174,6 +181,9 @@ const AppContent: React.FC = () => {
     useEffect(() => {
         const initSession = async () => {
             try {
+                // Clear old images from IndexedDB
+                localDbService.clearOldImages().catch(e => console.warn("IDB clear error:", e));
+
                 const session = await CacheService.get<{ user: User, token: string, timestamp: number }>(CACHE_KEYS.SESSION);
                 if (session && session.user) {
                     let userWithPerms = { ...session.user };
@@ -222,14 +232,13 @@ const AppContent: React.FC = () => {
     }, []);
 
     const shouldShowHeader = useMemo(() => {
-        if (isMobile && appState === 'user_journey') return false;
-        if (appState === 'login' || appState === 'admin_dashboard' || appState === 'confirm_delivery' || appState === 'entertainment' || appState === 'watch' || appState === 'series_player' || appState === 'long_player' || appState === 'short_player') return false;
+        if (appState === 'login' || appState === 'user_journey' || appState === 'admin_dashboard' || appState === 'confirm_delivery' || appState === 'entertainment' || appState === 'watch' || appState === 'series_player' || appState === 'long_player' || appState === 'short_player') return false;
         return true;
-    }, [appState, isMobile]);
+    }, [appState]);
 
     const containerClass = useMemo(() => {
         if (appState === 'entertainment' || appState === 'watch' || appState === 'series_player' || appState === 'long_player' || appState === 'short_player') return 'w-full';
-        return (appState === 'admin_dashboard' || appState === 'role_selection' || (appState === 'user_journey' && !selectedTeam)) ? 'w-full' : 'w-full px-2 sm:px-6';
+        return (appState === 'admin_dashboard' || appState === 'role_selection' || appState === 'user_journey') ? 'w-full' : 'w-full px-2 sm:px-6';
     }, [appState, selectedTeam]);
 
     const paddingClass = useMemo(() => {

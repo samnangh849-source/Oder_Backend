@@ -214,23 +214,26 @@ const SettingsDashboard: React.FC<SettingsDashboardProps> = ({ onBack, initialSe
     // Mobile Categories View
     if (!activeId) {
         return (
-            <div className="p-4 md:hidden animate-fade-in pb-10">
-                <div className="flex justify-between items-center mb-8">
+            <div className="p-4 md:hidden animate-fade-in pb-10 bg-[#181a20] min-h-screen">
+                <div className="flex justify-between items-center mb-6">
                     <div>
-                        <h1 className="hidden text-2xl font-black text-white">ការកំណត់</h1>
-                        <p className="text-xs text-gray-500 font-bold uppercase tracking-widest mt-1">Settings & Management</p>
+                        <h1 className="text-xl font-bold text-[#eaecef] flex items-center gap-2">
+                            <div className="w-1 h-5 bg-[#fcd535] rounded-sm"></div>
+                            {t.settings || 'ការកំណត់'}
+                        </h1>
+                        <p className="text-[11px] text-[#848e9c] font-medium mt-1 uppercase tracking-widest">Settings & Management</p>
                     </div>
-                    <button onClick={onBack} className="p-2 bg-gray-800 text-gray-400 rounded-xl border border-gray-700 active:scale-95 transition-all"><svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M6 18L18 6M6 6l12 12" /></svg></button>
+                    <button onClick={onBack} className="p-2 text-[#848e9c] hover:text-[#eaecef] transition-all"><svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" /></svg></button>
                 </div>
-                <div className="grid grid-cols-1 gap-3">
+                <div className="grid grid-cols-1 border-t border-[#2b3139]">
                     {configSections.map(s => (
-                        <button key={s.id} onClick={() => setMobileSection(s.id)} className="flex items-center gap-4 bg-gray-800/40 border border-gray-700/50 p-4 rounded-2xl hover:bg-gray-700/40 active:scale-[0.98] transition-all text-left">
-                            <span className="text-3xl bg-gray-800 p-3 rounded-xl shadow-inner border border-gray-700">{s.icon}</span>
+                        <button key={s.id} onClick={() => setMobileSection(s.id)} className="flex items-center gap-4 bg-transparent border-b border-[#2b3139] p-4 hover:bg-[#2b3139]/30 active:bg-[#2b3139]/60 transition-all text-left group">
+                            <span className="text-2xl grayscale opacity-70 group-hover:grayscale-0 group-hover:opacity-100 transition-all">{s.icon}</span>
                             <div className="flex-grow">
-                                <h3 className="text-base font-black text-white leading-tight">{t[`section_${s.id}`] || s.title}</h3>
-                                <p className="text-xs text-gray-500 mt-0.5 line-clamp-1">{t[`desc_${s.id}`] || s.description}</p>
+                                <h3 className="text-sm font-semibold text-[#eaecef] leading-tight group-hover:text-white transition-colors">{t[`section_${s.id}`] || s.title}</h3>
+                                <p className="text-[11px] text-[#5e6673] mt-0.5 line-clamp-1">{t[`desc_${s.id}`] || s.description}</p>
                             </div>
-                            <svg className="w-5 h-5 text-gray-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M9 5l7 7-7 7" /></svg>
+                            <svg className="w-5 h-5 text-[#5e6673] group-hover:text-[#fcd535] transition-colors" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" /></svg>
                         </button>
                     ))}
                 </div>
@@ -285,11 +288,20 @@ const SettingsDashboard: React.FC<SettingsDashboardProps> = ({ onBack, initialSe
             </div>
 
             <div className="flex-1 flex flex-col md:flex-row gap-6 overflow-hidden">
-                <aside className="hidden md:flex flex-col gap-2 w-72 flex-shrink-0 overflow-y-auto no-scrollbar pb-20">
+                <aside className="hidden md:flex flex-col w-64 flex-shrink-0 overflow-y-auto no-scrollbar pb-20 border-r border-[#2b3139] bg-[#181a20]">
                     {configSections.map(s => (
-                        <button key={s.id} onClick={() => { setDesktopSection(s.id); setLocalData([]); }} className={`flex items-center gap-4 p-4 rounded-2xl transition-all ${desktopSection === s.id ? 'bg-blue-600 text-white shadow-xl shadow-blue-600/20' : 'text-gray-400 hover:bg-gray-800'}`}>
-                            <span className="text-xl">{s.icon}</span>
-                            <span className="font-black text-sm uppercase tracking-wider">{t[`section_${s.id}`] || s.title}</span>
+                        <button 
+                            key={s.id} 
+                            onClick={() => { setDesktopSection(s.id); setLocalData([]); }} 
+                            className={`group relative flex items-center gap-4 px-5 py-4 transition-all hover:bg-[#2b3139]/40 outline-none border-t border-[#2b3139]/20 first:border-0 ${
+                                desktopSection === s.id 
+                                ? 'bg-[#2b3139]/80 text-[#eaecef]' 
+                                : 'text-[#848e9c]'
+                            }`}
+                        >
+                            {desktopSection === s.id && <div className="absolute left-0 top-0 bottom-0 w-[4px] bg-[#fcd535]" />}
+                            <span className={`text-xl transition-all ${desktopSection === s.id ? 'scale-110 grayscale-0 opacity-100' : 'grayscale opacity-50 group-hover:grayscale-0 group-hover:opacity-80 scale-95'}`}>{s.icon}</span>
+                            <span className={`text-xs uppercase tracking-widest font-bold ${desktopSection === s.id ? 'text-[#eaecef]' : 'text-[#848e9c] group-hover:text-[#eaecef]'}`}>{t[`section_${s.id}`] || s.title}</span>
                         </button>
                     ))}
                 </aside>
