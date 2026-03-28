@@ -213,13 +213,31 @@ func HandleDeleteMovie(c *gin.Context) {
 
 // HandleMigrateMovies migrates Movie data from Google Sheets to the database (Admin only).
 // Requires VideoFetchSheetFunc to be set.
+// After completion (success or failure), broadcasts a "movie_migration_complete" WebSocket
+// event so the frontend can update its UI without relying on a blind timeout.
 func HandleMigrateMovies(c *gin.Context) {
 	go func() {
 		ctx := context.Background()
 		_ = ctx // kept for future sheetsService init if needed
 
+		// broadcastResult sends a WebSocket event to all connected clients so the
+		// frontend knows the outcome of the background goroutine.
+		broadcastResult := func(success bool, message string, count int) {
+			if HubGlobal == nil {
+				return
+			}
+			payload, _ := json.Marshal(map[string]interface{}{
+				"type":    "movie_migration_complete",
+				"success": success,
+				"message": message,
+				"count":   count,
+			})
+			HubGlobal.Broadcast <- payload
+		}
+
 		if VideoFetchSheetFunc == nil {
 			log.Println("❌ Movie Migration: VideoFetchSheetFunc is not set")
+			broadcastResult(false, "Server configuration error: VideoFetchSheetFunc not set.", 0)
 			return
 		}
 
@@ -227,6 +245,7 @@ func HandleMigrateMovies(c *gin.Context) {
 		defer func() {
 			if r := recover(); r != nil {
 				tx.Rollback()
+				broadcastResult(false, fmt.Sprintf("Panic during migration: %v", r), 0)
 			}
 		}()
 
@@ -239,6 +258,7 @@ func HandleMigrateMovies(c *gin.Context) {
 		if err := VideoFetchSheetFunc("Movies", &movies); err != nil {
 			tx.Rollback()
 			log.Println("❌ Movie Migration failed for Movies:", err)
+			broadcastResult(false, "Failed to fetch data from Google Sheet: "+err.Error(), 0)
 			return
 		}
 
@@ -255,14 +275,17 @@ func HandleMigrateMovies(c *gin.Context) {
 			if err := tx.CreateInBatches(validMovies, 100).Error; err != nil {
 				tx.Rollback()
 				log.Println("❌ Movie Migration failed to save Movies:", err)
+				broadcastResult(false, "Failed to save movies to database: "+err.Error(), 0)
 				return
 			}
 		}
 
 		if err := tx.Commit().Error; err != nil {
 			log.Println("❌ Movie Migration failed on commit:", err)
+			broadcastResult(false, "Database commit failed: "+err.Error(), 0)
 		} else {
-			log.Println("🎉 Movie Migration ជោគជ័យ!")
+			log.Printf("🎉 Movie Migration ជោគជ័យ! Saved %d movies.", len(validMovies))
+			broadcastResult(true, fmt.Sprintf("Sync ជោគជ័យ! បានរក្សាទុក %d ភាពយន្ត។", len(validMovies)), len(validMovies))
 		}
 	}()
 
