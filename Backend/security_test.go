@@ -124,8 +124,8 @@ func TestEnqueueSyncDoesNotBlockWhenQueueFull(t *testing.T) {
 	originalQueue := SyncQueue
 	defer func() { SyncQueue = originalQueue }()
 
-	SyncQueue = make(chan SyncTask, 1)
-	SyncQueue <- SyncTask{}
+	SyncQueue = make(chan *SyncTask, 1)
+	SyncQueue <- &SyncTask{}
 
 	done := make(chan struct{})
 	go func() {
