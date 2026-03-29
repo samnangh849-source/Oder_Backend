@@ -1344,11 +1344,12 @@ func handleAdminUpdateOrder(c *gin.Context) {
 			fill("Delivery Photo URL", current.DeliveryPhotoURL)
 		}
 
-		enqueueSync("updateSheet", sheetData, "AllOrders", map[string]string{"Order ID": r.OrderID})
-
+		// SINGLE Sync call to Google Sheets and Telegram.
+		// Apps Script's updateOrderTelegram already handles updating AllOrders and the team's specific sheet.
+		// This saves Apps Script execution time and quota.
 		enqueueSync("updateOrderTelegram", map[string]interface{}{
 			"orderId":       r.OrderID,
-			"updatedFields": r.NewData,
+			"updatedFields": sheetData,
 			"team":          originalOrder.Team,
 		}, "", nil)
 	}()
