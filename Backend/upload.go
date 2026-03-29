@@ -215,6 +215,8 @@ func HandleImageUploadProxy(c *gin.Context) {
 				})
 				HubGlobal.Broadcast <- event
 
+				EnqueueSync("updateSheet", broadcastData, "AllOrders", map[string]string{"Order ID": r.OrderID})
+
 				EnqueueSync("updateOrderTelegram", map[string]interface{}{
 					"orderId":       r.OrderID,
 					"team":          team,
