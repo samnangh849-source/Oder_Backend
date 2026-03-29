@@ -141,6 +141,8 @@ func convertSheetValuesToMaps(sheetName string, values *sheets.ValueRange) ([]ma
 	dataRows := values.Values[1:]
 	result := make([]map[string]interface{}, 0, len(dataRows))
 
+	isIncentiveSheet := strings.HasPrefix(sheetName, "Incentive")
+
 	for _, row := range dataRows {
 		if len(row) == 0 || (len(row) == 1 && row[0] == "") {
 			continue
@@ -150,41 +152,64 @@ func convertSheetValuesToMaps(sheetName string, values *sheets.ValueRange) ([]ma
 			if i < len(headers) {
 				header := strings.TrimSpace(fmt.Sprintf("%v", headers[i]))
 				if header != "" {
+					// For incentive sheets, we normalize headers to camelCase to match the new tags
+					targetHeader := header
+					if isIncentiveSheet {
+						if header == "ID" { targetHeader = "id" }
+						if header == "ProjectID" { targetHeader = "projectId" }
+						if header == "CalculatorID" { targetHeader = "calculatorId" }
+						if header == "RulesJSON" { targetHeader = "rulesJson" }
+						if header == "BreakdownJSON" { targetHeader = "breakdownJson" }
+						if header == "UserName" { targetHeader = "userName" }
+						if header == "TotalOrders" { targetHeader = "totalOrders" }
+						if header == "TotalRevenue" { targetHeader = "totalRevenue" }
+						if header == "TotalProfit" { targetHeader = "totalProfit" }
+						if header == "CalculatedValue" { targetHeader = "calculatedValue" }
+						if header == "IsCustom" { targetHeader = "isCustom" }
+						if header == "MetricType" { targetHeader = "metricType" }
+						if header == "DataKey" { targetHeader = "dataKey" }
+						if header == "Month" { targetHeader = "month" }
+						// Also handle first character lowercase for others
+						if targetHeader == header && len(header) > 0 {
+							targetHeader = strings.ToLower(header[:1]) + header[1:]
+						}
+					}
+
 					if cellStr, ok := cell.(string); ok {
 						if IsNumericHeader(header) {
 							cleaned := strings.ReplaceAll(strings.ReplaceAll(strings.TrimSpace(cellStr), "$", ""), ",", "")
 							if f, err := strconv.ParseFloat(cleaned, 64); err == nil {
-								rowData[header] = f
+								rowData[targetHeader] = f
 							} else {
-								rowData[header] = 0.0
+								rowData[targetHeader] = 0.0
 							}
 						} else if IsBoolHeader(header) {
-							rowData[header] = strings.ToUpper(strings.TrimSpace(cellStr)) == "TRUE"
+							rowData[targetHeader] = strings.ToUpper(strings.TrimSpace(cellStr)) == "TRUE"
 						} else {
 							if strings.ToLower(header) == "value" && (strings.TrimSpace(cellStr) == "" || strings.TrimSpace(cellStr) == "-") {
-								rowData[header] = "0"
+								rowData[targetHeader] = "0"
 							} else {
-								rowData[header] = cellStr
+								rowData[targetHeader] = cellStr
 							}
 						}
 					} else {
 						if IsBoolHeader(header) {
 							if b, ok := cell.(bool); ok {
-								rowData[header] = b
+								rowData[targetHeader] = b
 							} else {
-								rowData[header] = false
+								rowData[targetHeader] = false
 							}
 						} else {
 							if b, ok := cell.(bool); ok {
 								if b {
-									rowData[header] = "TRUE"
+									rowData[targetHeader] = "TRUE"
 								} else {
-									rowData[header] = "FALSE"
+									rowData[targetHeader] = "FALSE"
 								}
 							} else if f, ok := cell.(float64); ok {
-								rowData[header] = f
+								rowData[targetHeader] = f
 							} else {
-								rowData[header] = fmt.Sprintf("%v", cell)
+								rowData[targetHeader] = fmt.Sprintf("%v", cell)
 							}
 						}
 					}
@@ -193,7 +218,7 @@ func convertSheetValuesToMaps(sheetName string, values *sheets.ValueRange) ([]ma
 					if lowHeader == "telegram message id 1" || lowHeader == "telegram message id 2" ||
 						lowHeader == "order id" || lowHeader == "customer phone" ||
 						lowHeader == "barcode" || (sheetName == "Movies" && lowHeader == "id") {
-						rowData[header] = fmt.Sprintf("%v", cell)
+						rowData[targetHeader] = fmt.Sprintf("%v", cell)
 					}
 				}
 			}

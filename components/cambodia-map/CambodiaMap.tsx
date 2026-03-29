@@ -115,10 +115,10 @@ const CambodiaMap: React.FC<CambodiaMapProps> = ({ onBack, orders, themeMode, da
   const isDark = themeMode !== 'light'; // Binance is always dark by default
 
   const themeVars: React.CSSProperties = {
-    '--cm-bg': '#0B0E11',
-    '--cm-card-bg': '#1E2329',
-    '--cm-card-bg2': '#181A20',
-    '--cm-border': '#2B3139',
+    '--cm-bg': '#050505',
+    '--cm-card-bg': '#121212',
+    '--cm-card-bg2': '#080808',
+    '--cm-border': '#1A1A1A',
     '--cm-border-subtle': 'rgba(43,49,57,0.6)',
     '--cm-text-primary': '#EAECEF',
     '--cm-text-secondary': '#B7BDC6',
@@ -253,7 +253,7 @@ const CambodiaMap: React.FC<CambodiaMapProps> = ({ onBack, orders, themeMode, da
     if (!tableShowAll) {
       // Show top 10 instead of filtering out 0-order provinces entirely to keep it interactive
       rows = rows.filter(r => r.orders_count > 0);
-      if (rows.length === 0) rows = Object.values(provinceOrderStats).slice(0, 10);
+      if (rows.length === 0) rows = (Object.values(provinceOrderStats) as ProvinceOrderStats[]).slice(0, 10);
     }
     rows = [...rows].sort((a, b) => {
       let va = 0, vb = 0;
@@ -600,8 +600,10 @@ const CambodiaMap: React.FC<CambodiaMapProps> = ({ onBack, orders, themeMode, da
           font-family: 'Inter', 'Noto Sans Khmer', sans-serif;
           background: var(--cm-bg);
           color: var(--cm-text-primary);
-          min-height: 100vh;
+          min-height: 100svh;
           width: 100%;
+          overflow: hidden;
+          position: relative;
         }
 
         /* ── Header ── */
@@ -1128,9 +1130,13 @@ const CambodiaMap: React.FC<CambodiaMapProps> = ({ onBack, orders, themeMode, da
           transition: all 0.1s;
         }
         .cm-details-close:hover { background: var(--cm-border); color: var(--cm-text-primary); }
-        .cm-details-province-name { font-size: 18px; font-weight: 800; color: var(--cm-text-primary); margin-bottom: 2px; padding-right: 28px; }
-        .cm-details-province-en { font-size: 12px; color: var(--cm-text-muted); }
-        .cm-details-body { padding: 14px; }
+        .cm-details-province-name { font-size: 18px; font-weight: 800; color: var(--cm-text-primary); margin-bottom: 2px; padding-right: 28px; font-family: 'Noto Sans Khmer', sans-serif; }
+        .cm-details-province-en { font-size: 12px; color: var(--cm-text-muted); font-weight: 500; }
+        .cm-details-body { 
+          padding: 14px; 
+          padding-bottom: calc(20px + env(safe-area-inset-bottom)); 
+          flex: 1;
+        }
         .cm-details-section { margin-bottom: 16px; }
         .cm-details-section-title {
           font-size: 10px;
@@ -1247,15 +1253,112 @@ const CambodiaMap: React.FC<CambodiaMapProps> = ({ onBack, orders, themeMode, da
           .cm-metric-tab { padding: 0 10px; font-size: 11px; }
         }
         @media (max-width: 900px) {
-          .cm-layout { flex-direction: column; height: auto; overflow: visible; }
-          .cm-map-area { overflow: visible; }
-          .cm-sidebar { width: 100%; min-width: 100%; max-height: 200px; border-right: none; border-bottom: 1px solid var(--cm-border); }
-          .cm-sidebar.collapsed { max-height: 0; overflow: hidden; }
-          .cm-details-panel { width: 100%; min-width: 100%; border-left: none; border-top: 1px solid var(--cm-border); }
-          .cm-header { padding: 0 12px; }
+          .cm-layout { flex-direction: column; height: auto; overflow: visible; position: relative; }
+          .cm-map-area { overflow: visible; height: calc(100svh - 150px); }
+          .cm-sidebar { 
+            position: absolute; 
+            top: 0; left: 0; 
+            width: 100%; height: 100%; 
+            z-index: 300; 
+            transition: transform 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+            transform: translateX(-100%);
+            border-right: none;
+            background: rgba(11, 14, 17, 0.98);
+            backdrop-filter: blur(10px);
+          }
+          .cm-sidebar:not(.collapsed) { transform: translateX(0); }
+          
+          /* Bottom Sheet with Safe Area Support for Pixel 9 Pro */
+          .cm-details-panel { 
+            position: fixed;
+            bottom: 0; left: 0;
+            width: 100%; min-width: 100%;
+            height: clamp(50svh, 70svh, 85svh);
+            z-index: 400;
+            border-left: none;
+            border-top: 1px solid var(--cm-accent);
+            border-radius: 12px 12px 0 0;
+            transform: translateY(100%);
+            transition: transform 0.4s cubic-bezier(0.075, 0.82, 0.165, 1);
+            box-shadow: 0 -10px 40px rgba(0,0,0,0.9);
+            background: #0B0E11;
+            display: flex;
+            flex-direction: column;
+          }
+          .cm-details-panel:not(.collapsed) { transform: translateY(0); }
+          .cm-details-handle {
+             width: 36px; height: 4px;
+             background: rgba(255,255,255,0.15);
+             border-radius: 2px;
+             margin: 10px auto 4px auto;
+             flex-shrink: 0;
+          }
+
+          .cm-header { 
+            padding: calc(4px + env(safe-area-inset-top)) 12px 8px 12px; 
+            gap: 8px; 
+            background: #0B0E11;
+          }
+          .cm-header-title h1 { font-size: 11px; font-weight: 800; letter-spacing: 0.02em; }
           .cm-metric-tabs { display: none; }
-          .cm-map-container { min-height: 320px; padding: 10px; }
+          .cm-header-actions { gap: 4px; }
+          .cm-team-select { width: 75px; font-size: 10px; height: 28px; }
+          
+          .cm-map-container { height: 100%; min-height: calc(100svh - 220px); padding: 0; background: #050505; }
+          
+          /* High-Contrast Ticker for OLED */
+          .cm-kpi-bar {
+            padding: 6px 0;
+            background: #000000;
+            border-bottom: 1px solid #1a1a1a;
+          }
+          .cm-kpi-cell {
+            padding: 8px 16px;
+            border-right: 1px solid #1a1a1a;
+            position: relative;
+            overflow: hidden;
+          }
+          .cm-kpi-value { font-size: 15px; font-weight: 800; }
+          
+          .cm-table-section { border-top: 1px solid #1a1a1a; background: #080808; }
           .cm-th.hide-mobile, .cm-td.hide-mobile { display: none; }
+          
+          /* Refined Shimmer for OLED */
+          @keyframes cm-shimmer {
+            0% { transform: translateX(-150%); opacity: 0; }
+            50% { opacity: 0.4; }
+            100% { transform: translateX(150%); opacity: 0; }
+          }
+          .cm-kpi-cell::after {
+            content: "";
+            position: absolute;
+            top: 0; left: 0; width: 100%; height: 100%;
+            background: linear-gradient(90deg, transparent, rgba(240,185,11,0.08), transparent);
+            animation: cm-shimmer 4s infinite ease-out;
+            pointer-events: none;
+          }
+
+          /* Mobile Filter Bar for Time Period */
+          .cm-mobile-filter-bar {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            padding: 8px 12px;
+            background: #0B0E11;
+            border-bottom: 1px solid #1A1A1A;
+            overflow-x: auto;
+            scrollbar-width: none; /* Hide scrollbar Firefox */
+            -ms-overflow-style: none; /* Hide scrollbar IE/Edge */
+            max-width: 100%;
+          }
+          .cm-mobile-filter-bar::-webkit-scrollbar { display: none; } /* Hide scrollbar Chrome/Safari */
+          .cm-mobile-filter-label {
+            font-size: 10px;
+            text-transform: uppercase;
+            font-weight: 800;
+            color: var(--cm-text-muted);
+            white-space: nowrap;
+          }
         }
         @media print {
           .cm-sidebar, .cm-details-panel, .cm-header, .cm-kpi-bar, .cm-table-section { display: none; }
@@ -1300,9 +1403,25 @@ const CambodiaMap: React.FC<CambodiaMapProps> = ({ onBack, orders, themeMode, da
         </div>
 
         <div className="cm-header-actions">
-          {/* Filters Integrated next to Language Switch */}
+          {/* Mobile Metric Selector */}
+          <div className="md:hidden">
+            <select
+              value={selectedMetric}
+              onChange={(e) => setSelectedMetric(e.target.value as MetricKey)}
+              className="cm-team-select"
+              style={{ width: 'auto', marginRight: '4px' }}
+            >
+              {Object.entries(METRICS).map(([key, config]) => (
+                <option key={key} value={key}>
+                  {language === 'km' ? config.label_km : config.label_en}
+                </option>
+              ))}
+            </select>
+          </div>
+
+          {/* Desktop Filters (Hidden on Mobile) */}
           {dateFilter && setDateFilter && (
-            <div className="cm-header-filter-group">
+            <div className="cm-header-filter-group hidden md:flex">
                {teams && selectedTeam && setSelectedTeam && (
                   <select 
                     value={selectedTeam}
@@ -1310,7 +1429,7 @@ const CambodiaMap: React.FC<CambodiaMapProps> = ({ onBack, orders, themeMode, da
                     className="cm-team-select"
                   >
                     {teams.map(t => (
-                      <option key={t} value={t}>{t === 'All' ? (language === 'km' ? 'ក្រុមទាំងអស់' : 'All Teams') : t}</option>
+                      <option key={t} value={t}>{t === 'All' ? (language === 'km' ? 'ក្រុម' : 'Team') : t}</option>
                     ))}
                   </select>
                )}
@@ -1330,6 +1449,7 @@ const CambodiaMap: React.FC<CambodiaMapProps> = ({ onBack, orders, themeMode, da
             className="cm-icon-btn"
             onClick={() => setIsSidebarOpen(v => !v)}
             aria-label="Toggle sidebar"
+            style={{ color: isSidebarOpen ? 'var(--cm-accent)' : 'inherit', borderColor: isSidebarOpen ? 'var(--cm-accent)' : 'inherit' }}
           >
             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
               <rect x="3" y="3" width="18" height="18" rx="2"/><line x1="9" y1="3" x2="9" y2="21"/>
@@ -1344,6 +1464,36 @@ const CambodiaMap: React.FC<CambodiaMapProps> = ({ onBack, orders, themeMode, da
           </button>
         </div>
       </header>
+      
+      {/* ── MOBILE FILTER BAR (Dedicated to Time Period) ── */}
+      <div className="cm-mobile-filter-bar md:hidden" role="navigation" aria-label="Filters">
+        <div className="cm-mobile-filter-label">{language === 'km' ? 'រយៈពេល' : 'Period'}</div>
+        {dateFilter && setDateFilter && (
+           <DateRangeFilter
+             variant="binance"
+             dateRange={dateFilter.preset}
+             onRangeChange={(r) => setDateFilter({ ...dateFilter, preset: r })}
+             customStart={dateFilter.start}
+             onCustomStartChange={(v) => setDateFilter({ ...dateFilter, start: v })}
+             customEnd={dateFilter.end}
+             onCustomEndChange={(v) => setDateFilter({ ...dateFilter, end: v })}
+           />
+        )}
+        <div style={{ paddingLeft: 4 }}>
+           {teams && selectedTeam && setSelectedTeam && (
+              <select 
+                value={selectedTeam}
+                onChange={(e) => setSelectedTeam(e.target.value)}
+                className="cm-team-select"
+                style={{ height: 28, fontSize: 10 }}
+              >
+                {teams.map(t => (
+                  <option key={t} value={t}>{t === 'All' ? (language === 'km' ? 'ក្រុម' : 'Team') : t}</option>
+                ))}
+              </select>
+           )}
+        </div>
+      </div>
 
       {/* ── KPI TICKER BAR ── */}
       <div className="cm-kpi-bar" role="region" aria-label="Key metrics">
@@ -1658,8 +1808,9 @@ const CambodiaMap: React.FC<CambodiaMapProps> = ({ onBack, orders, themeMode, da
           </div>
         </div>
 
-        {/* RIGHT DETAILS PANEL */}
-        <div className={`cm-details-panel ${!selectedProvince ? 'collapsed' : ''}`} role="complementary" aria-label={t('detail')}>
+        {/* RIGHT DETAILS PANEL / MOBILE BOTTOM SHEET */}
+        <aside className={`cm-details-panel ${!selectedProvince ? 'collapsed' : ''}`} role="complementary" aria-label={t('detail')}>
+          <div className="cm-details-handle md:hidden" />
           {selectedProvince && (() => {
             const orderStat = provinceOrderStats[selectedProvince.province_id];
             const paidPct = orderStat?.orders_count ? orderStat.paid_count / orderStat.orders_count : 0;
@@ -1674,7 +1825,9 @@ const CambodiaMap: React.FC<CambodiaMapProps> = ({ onBack, orders, themeMode, da
                     onClick={() => setSelectedProvince(null)}
                     aria-label="Close details"
                   >
-                    ✕
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
+                      <path d="M18 6L6 18M6 6l12 12"/>
+                    </svg>
                   </button>
                   <div className="cm-details-province-name">
                     {language === 'km' ? selectedProvince.name_km : selectedProvince.name_en}
@@ -1684,8 +1837,7 @@ const CambodiaMap: React.FC<CambodiaMapProps> = ({ onBack, orders, themeMode, da
                   </div>
                 </div>
 
-                <div className="cm-details-body">
-                  {/* ORDER STATS */}
+                <div className="cm-details-body custom-scrollbar">
                   <div className="cm-details-section">
                     <div className="cm-details-section-title">{t('order_stats')}</div>
                     {hasOrders ? (
@@ -1693,15 +1845,14 @@ const CambodiaMap: React.FC<CambodiaMapProps> = ({ onBack, orders, themeMode, da
                         <div className="cm-stat-grid" style={{ marginBottom: 12 }}>
                           <div className="cm-stat-card">
                             <div className="cm-stat-label">{t('revenue')}</div>
-                            <div className="cm-stat-value green">${formatNumber(orderStat.revenue)}</div>
+                            <div className="cm-stat-value green">${formatNumber(orderStat.revenue || 0)}</div>
                           </div>
                           <div className="cm-stat-card">
                             <div className="cm-stat-label">{t('orders')}</div>
-                            <div className="cm-stat-value accent">{orderStat.orders_count.toLocaleString()}</div>
+                            <div className="cm-stat-value accent">{(orderStat.orders_count || 0).toLocaleString()}</div>
                           </div>
                         </div>
 
-                        {/* Progress bars */}
                         <div className="cm-progress-row">
                           <div className="cm-progress-label-row">
                             <span>{t('paid')}</span>
@@ -1710,7 +1861,7 @@ const CambodiaMap: React.FC<CambodiaMapProps> = ({ onBack, orders, themeMode, da
                             </span>
                           </div>
                           <div className="cm-progress-bar">
-                            <div className="cm-progress-fill green" style={{ width: `${paidPct * 100}%` }} />
+                            <div className="cm-progress-fill yellow" style={{ width: `${paidPct * 100}%` }} />
                           </div>
                         </div>
                         <div className="cm-progress-row">
@@ -1721,11 +1872,10 @@ const CambodiaMap: React.FC<CambodiaMapProps> = ({ onBack, orders, themeMode, da
                             </span>
                           </div>
                           <div className="cm-progress-bar">
-                            <div className="cm-progress-fill yellow" style={{ width: `${delivPct * 100}%` }} />
+                            <div className="cm-progress-fill green" style={{ width: `${delivPct * 100}%` }} />
                           </div>
                         </div>
 
-                        {/* Top User */}
                         {orderStat.top_user && (
                           <div style={{ marginTop: 10 }}>
                             <div className="cm-stat-label" style={{ marginBottom: 5 }}>{t('top_user')}</div>
@@ -1738,19 +1888,16 @@ const CambodiaMap: React.FC<CambodiaMapProps> = ({ onBack, orders, themeMode, da
                           </div>
                         )}
 
-                        {/* Recent Orders */}
                         {orderStat.recent_orders.length > 0 && (
                           <div style={{ marginTop: 14 }}>
                             <div className="cm-stat-label" style={{ marginBottom: 8 }}>{t('recent_orders')}</div>
                             {orderStat.recent_orders.map((ro, i) => (
                               <div key={i} className="cm-recent-order-item">
-                                <span className="cm-order-id">{ro.order_id}</span>
+                                <span className="cm-order-id">#{ro.order_id.slice(-6)}</span>
                                 <span className="cm-order-date">{formatDate(ro.timestamp)}</span>
-                                <span className="cm-order-amount">${ro.grand_total.toFixed(0)}</span>
+                                <span className="cm-order-amount">${ro.grand_total.toLocaleString()}</span>
                                 <span className={`cm-order-badge ${ro.payment_status.toLowerCase() === 'paid' ? 'paid' : 'unpaid'}`}>
-                                  {ro.payment_status.toLowerCase() === 'paid'
-                                    ? (language === 'km' ? 'បានបង់' : 'Paid')
-                                    : (language === 'km' ? 'មិនទាន់' : 'Unpaid')}
+                                  {ro.payment_status}
                                 </span>
                               </div>
                             ))}
@@ -1765,7 +1912,6 @@ const CambodiaMap: React.FC<CambodiaMapProps> = ({ onBack, orders, themeMode, da
                     )}
                   </div>
 
-                  {/* GEOGRAPHIC STATS */}
                   <div className="cm-details-section">
                     <div className="cm-details-section-title">{t('detail')}</div>
                     <div className="cm-stat-grid">
@@ -1791,12 +1937,6 @@ const CambodiaMap: React.FC<CambodiaMapProps> = ({ onBack, orders, themeMode, da
                         <div className="cm-stat-label">{t('unemployment')}</div>
                         <div className="cm-stat-value">{selectedProvince.unemployment_rate}%</div>
                       </div>
-                      <div className="cm-stat-card">
-                        <div className="cm-stat-label">{language === 'km' ? 'ដង់ស៊ីតេ' : 'Density'}</div>
-                        <div className="cm-stat-value">
-                          {Math.round(selectedProvince.population / selectedProvince.area_km2).toLocaleString()}/km²
-                        </div>
-                      </div>
                       <div className="cm-stat-card full">
                         <div className="cm-stat-label">{t('sector')}</div>
                         <div style={{ marginTop: 5 }}>
@@ -1809,7 +1949,7 @@ const CambodiaMap: React.FC<CambodiaMapProps> = ({ onBack, orders, themeMode, da
               </>
             );
           })()}
-        </div>
+        </aside>
       </div>
     </div>
   );

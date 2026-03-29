@@ -34,9 +34,20 @@ var (
 // ── Helper Functions ──────────────────────────────────────────────────────
 
 func ParseBase64(b64 string) ([]byte, error) {
+	// 1. Remove data URI prefix if present (e.g. "data:image/jpeg;base64,")
+	if strings.Contains(b64, ",") {
+		parts := strings.Split(b64, ",")
+		if len(parts) > 1 {
+			b64 = parts[1]
+		}
+	}
+
+	// 2. Clean whitespace/newlines
 	cleanB64 := strings.ReplaceAll(b64, " ", "+")
 	cleanB64 = strings.ReplaceAll(cleanB64, "\n", "")
 	cleanB64 = strings.ReplaceAll(cleanB64, "\r", "")
+	cleanB64 = strings.TrimSpace(cleanB64)
+
 	return base64.StdEncoding.DecodeString(cleanB64)
 }
 
@@ -47,11 +58,21 @@ func ExtractFileIDFromURL(url string) string {
 			return strings.Split(parts[1], "&")[0]
 		}
 	}
+	// Also handle /d/ format
+	if strings.Contains(url, "/d/") {
+		parts := strings.Split(url, "/d/")
+		if len(parts) > 1 {
+			return strings.Split(parts[1], "/")[0]
+		}
+	}
 	return ""
 }
 
 func ExtractDriveFolderID(idOrURL string) string {
 	idOrURL = strings.TrimSpace(idOrURL)
+	if idOrURL == "" {
+		return "root"
+	}
 	if strings.Contains(idOrURL, "drive.google.com") {
 		if strings.Contains(idOrURL, "folders/") {
 			parts := strings.Split(idOrURL, "folders/")
@@ -66,6 +87,7 @@ func ExtractDriveFolderID(idOrURL string) string {
 			}
 		}
 	}
+	// If it's a raw ID (usually ~33 chars), return as is
 	return idOrURL
 }
 
@@ -80,15 +102,15 @@ func UploadToGoogleDriveDirectly(base64Data string, fileName string, mimeType st
 	}
 
 	// Resolve target folder ID (env > DB setting exported from migration.go)
-	targetFolder := ""
+	targetFolder := "root"
 	if envFolderID := os.Getenv("UPLOAD_FOLDER_ID"); envFolderID != "" {
 		targetFolder = ExtractDriveFolderID(envFolderID)
-		log.Printf("📁 [Drive Upload] Folder from UPLOAD_FOLDER_ID env: %q", targetFolder)
-	} else if UploadFolderID != "" {
+		log.Printf("📁 [Drive Upload] Using folder from UPLOAD_FOLDER_ID env: %q", targetFolder)
+	} else if UploadFolderID != "" && !strings.Contains(UploadFolderID, "Folder_Google_Drive") {
 		targetFolder = ExtractDriveFolderID(UploadFolderID)
-		log.Printf("📁 [Drive Upload] Folder from DB setting: %q", targetFolder)
+		log.Printf("📁 [Drive Upload] Using folder from DB setting: %q", targetFolder)
 	} else {
-		log.Println("⚠️ [Drive Upload] No UPLOAD_FOLDER_ID set — uploading to Drive root")
+		log.Println("⚠️ [Drive Upload] No valid UPLOAD_FOLDER_ID set — uploading to Drive root")
 	}
 
 	// Call Apps Script to upload via Google user quota (not Service Account quota)
@@ -103,15 +125,15 @@ func UploadToGoogleDriveDirectly(base64Data string, fileName string, mimeType st
 	log.Printf("🚀 [Drive Upload] Calling Apps Script uploadImage action...")
 	resp, err := CallAppsScriptPOST(req)
 	if err != nil {
-		log.Printf("❌ [Drive Upload] Apps Script call error: %v", err)
+		log.Printf("❌ [Drive Upload] Apps Script HTTP call error: %v", err)
 		return "", "", fmt.Errorf("apps script upload error: %v", err)
 	}
 	if resp.Status != "success" || resp.URL == "" {
-		log.Printf("❌ [Drive Upload] Apps Script returned error: %s", resp.Message)
+		log.Printf("❌ [Drive Upload] Apps Script returned failure: %s", resp.Message)
 		return "", "", fmt.Errorf("apps script upload failed: %s", resp.Message)
 	}
 
-	log.Printf("✅ [Drive Upload] SUCCESS via Apps Script: fileID=%s url=%s", resp.FileID, resp.URL)
+	log.Printf("✅ [Drive Upload] SUCCESS: fileID=%s url=%s", resp.FileID, resp.URL)
 	return resp.URL, resp.FileID, nil
 }
 
@@ -174,18 +196,20 @@ func HandleImageUploadProxy(c *gin.Context) {
 			}
 		}
 		if len(immediateMap) > 0 {
-			if res := DB.Model(&Order{}).Where("order_id = ?", req.OrderID).Updates(immediateMap); res.Error != nil {
+			// Use UpdateColumns (plural) to skip GORM hooks and update only these columns immediately
+			if res := DB.Model(&Order{}).Where("order_id = ?", req.OrderID).UpdateColumns(immediateMap); res.Error != nil {
 				log.Printf("⚠️ [Upload] Immediate DB update failed for order %s: %v", req.OrderID, res.Error)
 			} else {
-				log.Printf("✅ [Upload] Immediate DB update: orderId=%s fields=%v", req.OrderID, immediateBroadcast)
+				log.Printf("✅ [Upload] Immediate DB update SUCCESS: orderId=%s fields=%v", req.OrderID, immediateBroadcast)
 			}
+			
+			// Broadcast update so all clients see the status change immediately
 			event, _ := json.Marshal(map[string]interface{}{
 				"type":    "update_order",
 				"orderId": req.OrderID,
 				"newData": immediateBroadcast,
 			})
 			HubGlobal.Broadcast <- event
-			EnqueueSync("updateSheet", immediateBroadcast, "AllOrders", map[string]string{"Order ID": req.OrderID})
 		}
 	}
 
@@ -205,55 +229,69 @@ func HandleImageUploadProxy(c *gin.Context) {
 
 		log.Printf("⏳ [Background Upload] Starting for tempID=%s file=%q mime=%q", tid, r.FileName, r.MimeType)
 		driveURL, fileID, err := UploadToGoogleDriveDirectly(rawData, r.FileName, r.MimeType)
+
 		if err != nil {
 			log.Printf("❌ [Background Upload] FAILED for tempID=%s: %v", tid, err)
-			return
+			// Do not return yet if it's an Order update; we still need to sync the status (NewData).
+		} else {
+			log.Printf("✅ [Background Upload] SUCCESS tempID=%s fileID=%s driveURL=%s", tid, fileID, driveURL)
+			// Save the resolved DriveURL in TempImage for later retrieval (if needed by CreateMovie)
+			DB.Model(&TempImage{}).Where("id = ?", tid).UpdateColumn("drive_url", driveURL)
 		}
-		log.Printf("✅ [Background Upload] SUCCESS tempID=%s fileID=%s driveURL=%s", tid, fileID, driveURL)
-
-		// Save the resolved DriveURL in TempImage for later retrieval (if needed by CreateMovie)
-		DB.Model(&TempImage{}).Where("id = ?", tid).UpdateColumn("drive_url", driveURL)
 
 		// 1. Specialized Order Update (Needs Team for Telegram)
-		if r.OrderID != "" && r.TargetColumn != "" {
-			log.Printf("📦 [Background Update] Specialized Order update: orderId=%s col=%s", r.OrderID, r.TargetColumn)
-			dbCol := UploadMapToDBColumnFunc(r.TargetColumn)
-			if UploadIsValidOrderColumnFunc(dbCol) {
-				var order Order
-				team := ""
-				updateMap := map[string]interface{}{dbCol: driveURL}
-				broadcastData := map[string]interface{}{r.TargetColumn: driveURL}
+		if r.OrderID != "" {
+			log.Printf("📦 [Background Update] Specialized Order update: orderId=%s", r.OrderID)
 
-				// Merge extra NewData if provided
-				if r.NewData != nil {
-					for k, v := range r.NewData {
-						updateMap[UploadMapToDBColumnFunc(k)] = v
-						broadcastData[k] = v
-					}
+			// Prepare combined update data for final sync
+			broadcastData := map[string]interface{}{}
+			dbUpdateMap := map[string]interface{}{}
+
+			// 1a. Include NewData if provided (e.g. Fulfillment Status, Packed By)
+			if r.NewData != nil {
+				for k, v := range r.NewData {
+					broadcastData[k] = v
+					dbUpdateMap[UploadMapToDBColumnFunc(k)] = v
 				}
-
-				if err := DB.Where("order_id = ?", r.OrderID).First(&order).Error; err == nil {
-					team = order.Team
-					DB.Model(&order).Updates(updateMap)
-				} else {
-					DB.Model(&Order{}).Where("order_id = ?", r.OrderID).Updates(updateMap)
-				}
-
-				event, _ := json.Marshal(map[string]interface{}{
-					"type":    "update_order",
-					"orderId": r.OrderID,
-					"newData": broadcastData,
-				})
-				HubGlobal.Broadcast <- event
-
-				EnqueueSync("updateSheet", broadcastData, "AllOrders", map[string]string{"Order ID": r.OrderID})
-
-				EnqueueSync("updateOrderTelegram", map[string]interface{}{
-					"orderId":       r.OrderID,
-					"team":          team,
-					"updatedFields": broadcastData,
-				}, "", nil)
 			}
+
+			// 1b. Include Drive URL if upload succeeded
+			if err == nil && r.TargetColumn != "" {
+				broadcastData[r.TargetColumn] = driveURL
+				dbUpdateMap[UploadMapToDBColumnFunc(r.TargetColumn)] = driveURL
+			}
+
+			var order Order
+			team := ""
+			if res := DB.Where("order_id = ?", r.OrderID).First(&order); res.Error == nil {
+				team = order.Team
+				DB.Model(&order).Updates(dbUpdateMap)
+			} else {
+				DB.Model(&Order{}).Where("order_id = ?", r.OrderID).Updates(dbUpdateMap)
+			}
+
+			// Broadcast final status update
+			event, _ := json.Marshal(map[string]interface{}{
+				"type":    "update_order",
+				"orderId": r.OrderID,
+				"newData": broadcastData,
+			})
+			HubGlobal.Broadcast <- event
+
+			// SINGLE Sync call to Google Sheets and Telegram.
+			// Apps Script's updateOrderTelegram already handles updating all relevant sheets.
+			EnqueueSync("updateOrderTelegram", map[string]interface{}{
+				"orderId":       r.OrderID,
+				"team":          team,
+				"updatedFields": broadcastData,
+			}, "", nil)
+
+			return // Finished order processing
+		}
+
+		// For other types, stop if upload failed
+		if err != nil {
+			return
 		}
 
 		// 2. Specialized User Profile Update

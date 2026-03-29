@@ -282,12 +282,13 @@ const ChatWidget: React.FC<ChatWidgetProps> = ({ isOpen, onClose }) => {
         
         const connectWS = async () => {
             if (isDisposed) return;
-            const protocol = WEB_APP_URL.startsWith('https') ? 'wss' : 'ws';
+            // Use wss if the backend URL is https, otherwise follow frontend protocol
+            const protocol = WEB_APP_URL.startsWith('https') ? 'wss' : (window.location.protocol === 'https:' ? 'wss' : 'ws');
             const host = WEB_APP_URL.replace(/^https?:\/\//, '');
             
             try {
                 const session = await CacheService.get<{ token: string }>(CACHE_KEYS.SESSION);
-                const token = session?.token || '';
+                const token = session?.token || localStorage.getItem('token') || '';
                 
                 ws = new WebSocket(`${protocol}://${host}/api/chat/ws?token=${encodeURIComponent(token)}`);
                 wsRef.current = ws;

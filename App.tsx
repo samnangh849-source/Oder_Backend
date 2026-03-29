@@ -114,7 +114,8 @@ const AppContent: React.FC = () => {
             const token = session?.token || localStorage.getItem('token');
             if (!token) return;
 
-            const protocol = window.location.protocol === 'https:' ? 'wss' : 'ws';
+            // Use wss if the backend URL is https, otherwise follow frontend protocol
+            const protocol = WEB_APP_URL.startsWith('https') ? 'wss' : (window.location.protocol === 'https:' ? 'wss' : 'ws');
             const host = WEB_APP_URL.replace(/^https?:\/\//, '');
             
             try {

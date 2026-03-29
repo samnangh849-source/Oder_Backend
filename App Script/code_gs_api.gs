@@ -836,46 +836,60 @@ function uploadImageToDrive(base64, name, mime, folderId, user) {
   console.log("📤 [Drive Upload] Starting upload: name=" + name + " mime=" + mime + " folderId=" + folderId + " user=" + user);
   
   try {
-    const targetFolderId = extractDriveFolderID(folderId);
+    // 1. Clean and validate the folder ID
+    let targetFolderId = extractDriveFolderID(folderId);
     let folder;
     
-    // ✅ Validate folderId is not a placeholder or empty
-    if (!targetFolderId || targetFolderId === "root") {
-      console.log("📁 [Drive Upload] Using root folder (no target specified)");
-      folder = DriveApp.getRootFolder();
-    } else if (!isValidFolderId(targetFolderId)) {
-      console.warn("⚠️ [Drive Upload] Invalid Folder ID format: " + targetFolderId + ". Using root folder.");
+    if (!targetFolderId || targetFolderId === "root" || targetFolderId === "undefined") {
+      console.log("📁 [Drive Upload] Using root folder (no valid target specified)");
       folder = DriveApp.getRootFolder();
     } else {
       try {
-        console.log("📁 [Drive Upload] Accessing folder: " + targetFolderId);
+        console.log("📁 [Drive Upload] Attempting to access folder ID: " + targetFolderId);
         folder = DriveApp.getFolderById(targetFolderId);
       } catch (folderError) {
-        console.warn("⚠️ [Drive Upload] Folder not accessible, attempting root folder: " + folderError.message);
+        console.warn("⚠️ [Drive Upload] Folder ID '" + targetFolderId + "' not accessible or doesn't exist. Error: " + folderError.message + ". Falling back to root.");
         folder = DriveApp.getRootFolder();
       }
     }
     
-    const decoded = Utilities.base64Decode(base64.includes("base64,") ? base64.split("base64,")[1] : base64);
+    // 2. Decode the base64 data
+    // Remove potential data URL prefix if it leaked through from the backend
+    let rawBase64 = base64;
+    if (rawBase64.indexOf(",") !== -1) {
+      rawBase64 = rawBase64.split(",")[1];
+    }
+    
+    const decoded = Utilities.base64Decode(rawBase64);
     const fileName = name || "upload_" + new Date().getTime();
     console.log("💾 [Drive Upload] Creating file: " + fileName + " size=" + decoded.length + " bytes");
     
-    const file = folder.createFile(Utilities.newBlob(decoded, mime, fileName));
-    file.setSharing(DriveApp.Access.ANYONE, DriveApp.Permission.VIEW);
+    // 3. Create the file and set permissions
+    const blob = Utilities.newBlob(decoded, mime, fileName);
+    const file = folder.createFile(blob);
     
-    const result = { url: `https://drive.google.com/uc?id=${file.getId()}`, fileID: file.getId() };
+    try {
+      file.setSharing(DriveApp.Access.ANYONE, DriveApp.Permission.VIEW);
+    } catch (shareErr) {
+      console.warn("⚠️ [Drive Upload] Could not set public sharing (this is normal if your organization restricts it): " + shareErr.message);
+    }
+    
+    const result = { 
+      url: `https://drive.google.com/uc?id=${file.getId()}`, 
+      fileID: file.getId() 
+    };
+    
     console.log("✅ [Drive Upload] SUCCESS: fileID=" + result.fileID + " url=" + result.url);
-    
     return result;
+    
   } catch (e) {
     console.error("❌ [Drive Upload] FAILED: " + e.message);
-    // ✅ Provide clearer error message for DriveApp access issues
+    // Provide clearer error message for DriveApp access issues
     let errorDetail = e.message;
     if (e.message.indexOf("Access denied") !== -1 || e.message.indexOf("DriveApp") !== -1) {
-      errorDetail = "DriveApp មិនអាចប្រើបានទេ - សូមពិនិត្យ scopes ក្នុង appsscript.json ឱ្យបញ្ចូល https://www.googleapis.com/auth/drive";
-      console.error("🔧 [Drive Upload] Fix: Add 'https://www.googleapis.com/auth/drive' to oauthScopes in appsscript.json");
+      errorDetail = "Google Drive access denied. Please ensure the script has 'https://www.googleapis.com/auth/drive' scope and the folder is shared with the script owner.";
     }
-    throw new Error("ការ Upload រូបភាពទៅ Google Drive បានបរាជ័យ: " + errorDetail);
+    throw new Error("Google Drive Upload Error: " + errorDetail);
   }
 }
 

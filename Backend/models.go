@@ -243,57 +243,57 @@ type RolePermission struct {
 }
 
 type IncentiveCalculator struct {
-	ID        uint    `gorm:"primaryKey" json:"ID"`
-	ProjectID uint    `gorm:"index" json:"ProjectID"`
-	Name      string  `json:"Name"`
-	Type      string  `json:"Type"`
-	Value     float64 `json:"Value"`
-	Status    string  `json:"Status"`
-	RulesJSON string  `gorm:"type:text" json:"RulesJSON"`
+	ID        uint    `gorm:"primaryKey" json:"id"`
+	ProjectID uint    `gorm:"index" json:"projectId"`
+	Name      string  `json:"name"`
+	Type      string  `json:"type"`
+	Value     float64 `json:"value"`
+	Status    string  `json:"status"`
+	RulesJSON string  `gorm:"type:text" json:"rulesJson"`
 }
 
 type IncentiveProject struct {
-	ID                     uint                  `gorm:"primaryKey" json:"ID"`
-	ProjectName            string                `json:"ProjectName"`
-	CalculatorID           uint                  `json:"CalculatorID"`
-	StartDate              string                `json:"StartDate"`
-	EndDate                string                `json:"EndDate"`
-	TargetTeam             string                `json:"TargetTeam"`
-	Status                 string                `json:"Status"`
-	ColorCode              string                `json:"ColorCode"`
-	RequirePeriodSelection bool                  `json:"RequirePeriodSelection"`
-	DataSource             string                `json:"DataSource"`
-	CreatedAt              string                `json:"CreatedAt"`
-	Calculators            []IncentiveCalculator `gorm:"foreignKey:ProjectID" json:"Calculators"`
+	ID                     uint                  `gorm:"primaryKey" json:"id"`
+	ProjectName            string                `json:"projectName"`
+	CalculatorID           uint                  `json:"calculatorId"`
+	StartDate              string                `json:"startDate"`
+	EndDate                string                `json:"endDate"`
+	TargetTeam             string                `json:"targetTeam"`
+	Status                 string                `json:"status"`
+	ColorCode              string                `json:"colorCode"`
+	RequirePeriodSelection bool                  `json:"requirePeriodSelection"`
+	DataSource             string                `json:"dataSource"`
+	CreatedAt              string                `json:"createdAt"`
+	Calculators            []IncentiveCalculator `gorm:"foreignKey:ProjectID" json:"calculators"`
 }
 
 type IncentiveResult struct {
-	ID              uint    `gorm:"primaryKey" json:"ID"`
-	ProjectID       uint    `gorm:"index" json:"ProjectID"`
-	UserName        string  `json:"UserName"`
-	TotalOrders     int     `json:"TotalOrders"`
-	TotalRevenue    float64 `json:"TotalRevenue"`
-	TotalProfit     float64 `json:"TotalProfit"`
-	CalculatedValue float64 `json:"CalculatedValue"`
-	IsCustom        bool    `json:"IsCustom"`
-	BreakdownJSON   string  `gorm:"type:text" json:"BreakdownJSON"`
+	ID              uint    `gorm:"primaryKey" json:"id"`
+	ProjectID       uint    `gorm:"index" json:"projectId"`
+	UserName        string  `json:"userName"`
+	TotalOrders     int     `json:"totalOrders"`
+	TotalRevenue    float64 `json:"totalRevenue"`
+	TotalProfit     float64 `json:"totalProfit"`
+	CalculatedValue float64 `json:"calculatedValue"`
+	IsCustom        bool    `json:"isCustom"`
+	BreakdownJSON   string  `gorm:"type:text" json:"breakdownJson"`
 }
 
 type IncentiveManualData struct {
-	ID         uint    `gorm:"primaryKey" json:"ID"`
-	ProjectID  uint    `gorm:"index" json:"ProjectID"`
-	Month      string  `gorm:"index" json:"Month"` // Format: YYYY-MM
-	MetricType string  `json:"MetricType"`
-	DataKey    string  `json:"DataKey"` // Format: {period}_{targetId} e.g. "month_TeamA", "W1_user1"
-	Value      float64 `json:"Value"`
+	ID         uint    `gorm:"primaryKey" json:"id"`
+	ProjectID  uint    `gorm:"index" json:"projectId"`
+	Month      string  `gorm:"index" json:"month"` // Format: YYYY-MM
+	MetricType string  `json:"metricType"`
+	DataKey    string  `json:"dataKey"` // Format: {period}_{targetId} e.g. "month_TeamA", "W1_user1"
+	Value      float64 `json:"value"`
 }
 
 type IncentiveCustomPayout struct {
-	ID        uint    `gorm:"primaryKey" json:"ID"`
-	ProjectID uint    `gorm:"index" json:"ProjectID"`
-	Month     string  `gorm:"index" json:"Month"` // Format: YYYY-MM
-	UserName  string  `json:"UserName"`
-	Value     float64 `json:"Value"`
+	ID        uint    `gorm:"primaryKey" json:"id"`
+	ProjectID uint    `gorm:"index" json:"projectId"`
+	Month     string  `gorm:"index" json:"month"` // Format: YYYY-MM
+	UserName  string  `json:"userName"`
+	Value     float64 `json:"value"`
 }
 
 type DeleteOrderRequest struct {

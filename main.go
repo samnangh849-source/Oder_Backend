@@ -21,7 +21,7 @@ import (
 	"github.com/gin-gonic/gin"
 	"golang.org/x/crypto/bcrypt"
 
-	"github.com/samnangh849-source/Oder_Backend-2-/Backend"
+	backend "github.com/samnangh849-source/Oder_Backend-2-/Backend"
 
 	// Import GORM
 	"gorm.io/gorm"
@@ -553,302 +553,10 @@ func handleCalculateIncentive(c *gin.Context) {
 		return
 	}
 
-	var project IncentiveProject
-	if err := DB.Preload("Calculators").First(&project, req.ProjectID).Error; err != nil {
-		c.JSON(404, gin.H{"status": "error", "message": "រកគម្រោងមិនឃើញ"})
+	results, err := backend.ProcessIncentiveCalculation(DB, req.ProjectID, req.Month)
+	if err != nil {
+		c.JSON(500, gin.H{"status": "error", "message": err.Error()})
 		return
-	}
-
-	// Fetch all users once
-	var allUsers []User
-	DB.Find(&allUsers)
-
-	// Fetch orders for the month
-	startDate := req.Month + "-01T00:00:00Z"
-	endDate := req.Month + "-31T23:59:59Z"
-	parts := strings.Split(req.Month, "-")
-	if len(parts) == 2 {
-		year, _ := strconv.Atoi(parts[0])
-		month, _ := strconv.Atoi(parts[1])
-		firstDay := time.Date(year, time.Month(month), 1, 0, 0, 0, 0, time.UTC)
-		lastDay := firstDay.AddDate(0, 1, -1)
-		endDate = lastDay.Format("2006-01-02") + "T23:59:59Z"
-	}
-
-	var orders []Order
-	DB.Where("fulfillment_status = ? AND timestamp >= ? AND timestamp <= ?", "Delivered", startDate, endDate).Find(&orders)
-
-	// Fetch Manual Data
-	var manualData []IncentiveManualData
-	DB.Where("project_id = ? AND month = ?", req.ProjectID, req.Month).Find(&manualData)
-
-	// Custom Payouts
-	var customPayouts []IncentiveCustomPayout
-	DB.Where("project_id = ? AND month = ?", req.ProjectID, req.Month).Find(&customPayouts)
-	customPayoutMap := make(map[string]float64)
-	for _, cp := range customPayouts {
-		customPayoutMap[cp.UserName] = cp.Value
-	}
-
-	// Group results by User
-	userRewards := make(map[string]float64)
-	userOrders := make(map[string]int)
-	userRevenue := make(map[string]float64)
-	userProfit := make(map[string]float64)
-	userBreakdown := make(map[string][]map[string]interface{})
-
-	// Pre-calculate base stats for all users who have orders
-	for _, o := range orders {
-		userOrders[o.User]++
-		userRevenue[o.User] += o.GrandTotal
-		orderProfit := o.GrandTotal - o.TotalProductCost - o.InternalCost
-		userProfit[o.User] += orderProfit
-	}
-
-	// Process each active calculator
-	for _, calc := range project.Calculators {
-		if calc.Status == "Disable" {
-			continue
-		}
-
-		var rules IncentiveRules
-		if calc.RulesJSON != "" {
-			if err := json.Unmarshal([]byte(calc.RulesJSON), &rules); err != nil {
-				log.Printf("incentive calc: failed to parse RulesJSON for calculator id=%v: %v", calc.ID, err)
-				continue
-			}
-		}
-
-		// Identify eligible users for this calculator
-		eligibleUsers := []User{}
-		for _, u := range allUsers {
-			isEligible := false
-			if len(rules.ApplyTo) == 0 {
-				isEligible = true // Applies to all if not specified
-			} else {
-				for _, target := range rules.ApplyTo {
-					if strings.HasPrefix(target, "Role:") && u.Role == strings.TrimPrefix(target, "Role:") {
-						isEligible = true
-						break
-					}
-					if strings.HasPrefix(target, "Team:") {
-						targetTeam := strings.TrimPrefix(target, "Team:")
-						userTeams := strings.Split(u.Team, ",")
-						for _, ut := range userTeams {
-							if strings.EqualFold(strings.TrimSpace(ut), strings.TrimSpace(targetTeam)) {
-								isEligible = true
-								break
-							}
-						}
-						if isEligible {
-							break
-						}
-					}
-					if strings.HasPrefix(target, "User:") && u.UserName == strings.TrimPrefix(target, "User:") {
-						isEligible = true
-						break
-					}
-				}
-			}
-			if isEligible {
-				eligibleUsers = append(eligibleUsers, u)
-			}
-		}
-
-		if len(eligibleUsers) == 0 {
-			continue
-		}
-
-		// Metric Calculation
-		metricType := rules.MetricType
-		if metricType == "" {
-			metricType = "Sales Amount"
-		}
-
-		// Pre-calculate member counts for teams to distribute team manual data
-		teamMemberCount := make(map[string]int)
-		for _, u := range eligibleUsers {
-			if u.Team != "" {
-				userTeams := strings.Split(u.Team, ",")
-				for _, ut := range userTeams {
-					teamName := normalizeTeamKey(ut)
-					if teamName != "" {
-						teamMemberCount[teamName]++
-					}
-				}
-			}
-		}
-
-		userSet := make(map[string]bool, len(allUsers))
-		for _, u := range allUsers {
-			userSet[u.UserName] = true
-		}
-
-		// Map to store manual data for both users and teams
-		userManualPerf := make(map[string]float64)
-		teamManualPerf := make(map[string]float64)
-		for _, md := range manualData {
-			if md.MetricType == metricType {
-				_, targetRaw, ok := parseManualDataKey(md.DataKey)
-				if !ok {
-					continue
-				}
-				targetType, targetID := resolveManualTarget(targetRaw, userSet)
-				if targetType == "user" {
-					userManualPerf[targetID] += md.Value
-				} else {
-					teamManualPerf[targetID] += md.Value
-				}
-			}
-		}
-
-		// Calculate performance for each eligible user
-		perfMap := make(map[string]float64)
-		for _, u := range eligibleUsers {
-			var baseVal float64
-			mType := strings.ToLower(strings.TrimSpace(metricType))
-			if mType == "sales amount" || mType == "revenue" {
-				baseVal = userRevenue[u.UserName]
-			} else if mType == "profit" {
-				baseVal = userProfit[u.UserName]
-			} else if mType == "orders" || mType == "order count" {
-				baseVal = float64(userOrders[u.UserName])
-			} else {
-				// Default or unrecognized metric
-				baseVal = float64(userOrders[u.UserName])
-			}
-
-			val := baseVal + userManualPerf[u.UserName]
-
-			// If distribution is Individual, we also add a proportional share of Team Manual Data
-			if rules.DistributionRule.Method == "" || rules.DistributionRule.Method == "Individual" {
-				if u.Team != "" {
-					userTeams := strings.Split(u.Team, ",")
-					for _, ut := range userTeams {
-						teamName := normalizeTeamKey(ut)
-						if teamName != "" && teamManualPerf[teamName] > 0 && teamMemberCount[teamName] > 0 {
-							share := teamManualPerf[teamName] / float64(teamMemberCount[teamName])
-							val += share
-						}
-					}
-				}
-			}
-
-			perfMap[u.UserName] = val
-		}
-
-		// Distribution Logic
-		distMethod := rules.DistributionRule.Method
-		if distMethod == "" {
-			distMethod = "Individual" // Default
-		}
-
-		if distMethod == "Equal Split" || distMethod == "Percentage Allocation" {
-			// Calculate Group Total Performance (Sum of Individual Perfs + Team Manual Data)
-			var groupTotalPerf float64
-			for _, v := range perfMap {
-				groupTotalPerf += v
-			}
-			// Add Team Manual Data that hasn't been added to individual perfs yet
-			for teamID, teamVal := range teamManualPerf {
-				// Only add if at least one member of this team is in the eligible group
-				if teamMemberCount[teamID] > 0 {
-					groupTotalPerf += teamVal
-				}
-			}
-
-			// Calculate Pool Reward
-			poolReward := calculatePayout(calc, groupTotalPerf, "")
-
-			if distMethod == "Equal Split" {
-				share := poolReward / float64(len(eligibleUsers))
-				for _, u := range eligibleUsers {
-					userRewards[u.UserName] += share
-					userBreakdown[u.UserName] = append(userBreakdown[u.UserName], map[string]interface{}{
-						"name":         calc.Name,
-						"calculatorId": calc.ID,
-						"key":          fmt.Sprintf("%s#%d", calc.Name, calc.ID),
-						"metricType":   metricType,
-						"amount":       share,
-					})
-				}
-			} else if distMethod == "Percentage Allocation" {
-				for _, u := range eligibleUsers {
-					// Find allocation for this user
-					found := false
-					for _, alloc := range rules.DistributionRule.Allocations {
-						if alloc.MemberRoleOrName == u.UserName || alloc.MemberRoleOrName == u.Role {
-							share := poolReward * (alloc.Percentage / 100.0)
-							userRewards[u.UserName] += share
-							userBreakdown[u.UserName] = append(userBreakdown[u.UserName], map[string]interface{}{
-								"name":         calc.Name,
-								"calculatorId": calc.ID,
-								"key":          fmt.Sprintf("%s#%d", calc.Name, calc.ID),
-								"metricType":   metricType,
-								"amount":       share,
-							})
-							found = true
-							break
-						}
-					}
-					if !found {
-						// Fallback or skip
-					}
-				}
-			}
-		} else {
-			// Individual Calculation (Performance-Based or Default)
-			for _, u := range eligibleUsers {
-				share := calculatePayout(calc, perfMap[u.UserName], "")
-				userRewards[u.UserName] += share
-				userBreakdown[u.UserName] = append(userBreakdown[u.UserName], map[string]interface{}{
-					"name":         calc.Name,
-					"calculatorId": calc.ID,
-					"key":          fmt.Sprintf("%s#%d", calc.Name, calc.ID),
-					"metricType":   metricType,
-					"amount":       share,
-				})
-			}
-		}
-	}
-
-	// Final Results Consolidation
-	var results []IncentiveResult
-	// We need to decide which users to show. Let's show any user that has any stat or reward.
-	uniqueUsers := make(map[string]bool)
-	for u := range userRewards {
-		uniqueUsers[u] = true
-	}
-	for u := range userOrders {
-		uniqueUsers[u] = true
-	}
-	for u := range userRevenue {
-		uniqueUsers[u] = true
-	}
-	for u := range userProfit {
-		uniqueUsers[u] = true
-	}
-
-	for user := range uniqueUsers {
-		payout := userRewards[user]
-		isCustom := false
-		if customVal, exists := customPayoutMap[user]; exists {
-			payout = customVal
-			isCustom = true
-		}
-
-		breakdownJSON, _ := json.Marshal(userBreakdown[user])
-
-		results = append(results, IncentiveResult{
-			ProjectID:       project.ID,
-			UserName:        user,
-			TotalOrders:     userOrders[user],
-			TotalRevenue:    userRevenue[user],
-			TotalProfit:     userProfit[user],
-			CalculatedValue: payout,
-			IsCustom:        isCustom,
-			BreakdownJSON:   string(breakdownJSON),
-		})
 	}
 
 	c.JSON(200, gin.H{"status": "success", "data": results})
@@ -1344,8 +1052,9 @@ func handleAdminUpdateOrder(c *gin.Context) {
 			fill("Delivery Photo URL", current.DeliveryPhotoURL)
 		}
 
-		enqueueSync("updateSheet", sheetData, "AllOrders", map[string]string{"Order ID": r.OrderID})
-
+		// SINGLE Sync call to Google Sheets and Telegram.
+		// Apps Script's updateOrderTelegram already handles updating AllOrders and the team's specific sheet.
+		// This saves Apps Script execution time and quota.
 		enqueueSync("updateOrderTelegram", map[string]interface{}{
 			"orderId":       r.OrderID,
 			"updatedFields": sheetData,
@@ -2049,6 +1758,10 @@ func main() {
 	backend.UploadMapToDBColumnFunc = mapToDBColumn
 	backend.UploadGetTableNameFunc = getTableName
 	backend.UploadIsValidOrderColumnFunc = isValidOrderColumn
+	
+	// Pre-initialize UploadFolderID from environment for immediate use
+	backend.UploadFolderID = os.Getenv("UPLOAD_FOLDER_ID")
+	
 	jwtSecretEnv := os.Getenv("JWT_SECRET")
 	if jwtSecretEnv == "" {
 		jwtSecretEnv = "change-me-in-production"

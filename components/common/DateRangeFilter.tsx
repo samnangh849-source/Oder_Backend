@@ -33,7 +33,7 @@ const DateRangeFilter: React.FC<DateRangeFilterProps> = ({
     };
 
     const getContainerBg = () => {
-        if (uiTheme === 'binance') return 'bg-[#0B0E11] border-[#2B3139]';
+        if (uiTheme === 'binance') return 'bg-[#050505] border-[#1A1A1A]';
         if (uiTheme === 'netflix') return isLightMode ? 'bg-gray-100 border-gray-200' : 'bg-gray-900/80 border-gray-800';
         return isLightMode ? 'bg-gray-50 border-gray-200' : 'bg-gray-800/80 border-gray-700';
     };
@@ -41,7 +41,7 @@ const DateRangeFilter: React.FC<DateRangeFilterProps> = ({
     const getButtonClass = (active: boolean) => {
         if (uiTheme === 'binance') {
             if (active) return 'bg-[#F0B90B] text-[#000]';
-            return 'text-[#848E9C] hover:text-[#EAECEF] hover:bg-[#2B3139]';
+            return 'text-[#848E9C] hover:text-[#EAECEF] hover:bg-[#1A1A1A]';
         }
         if (uiTheme === 'netflix') {
             if (active) return 'bg-[#e50914] text-white shadow-lg';
@@ -54,8 +54,8 @@ const DateRangeFilter: React.FC<DateRangeFilterProps> = ({
     const isBinance = uiTheme === 'binance';
 
     return (
-        <div className={isBinance ? "flex items-center gap-2" : "space-y-4"}>
-            <div className="flex flex-wrap items-center gap-2">
+        <div className={isBinance ? "flex items-center gap-2 max-w-full" : "space-y-4"}>
+            <div className={`flex items-center gap-2 ${isBinance ? 'overflow-x-auto scrollbar-hide' : 'flex-wrap'}`}>
                 <div className={`flex items-center gap-0.5 p-0.5 ${isBinance ? 'rounded-lg' : 'rounded-2xl'} border shadow-inner transition-colors duration-500 ${getContainerBg()}`}>
                     {(['today', 'this_week', 'this_month', 'custom'] as const).map(p => (
                         <button 
