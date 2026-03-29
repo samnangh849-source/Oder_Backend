@@ -912,7 +912,7 @@ func startOrderWorker() {
 }
 
 func startScheduler() {
-	ticker := time.NewTicker(1 * time.Minute)
+	ticker := time.NewTicker(2 * time.Minute)
 	cleanupTicker := time.NewTicker(5 * time.Minute)
 
 	go func() {
