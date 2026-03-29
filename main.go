@@ -1975,14 +1975,10 @@ func main() {
 	api.GET("/teams/ranking", handleGetTeamSalesRanking)
 	api.GET("/settings", handleGetSettings)
 	// ── Entertainment / Video Player routes (Backend/video.go) ────────────────────────
-	// Public routes are registered here; admin routes registered inside admin block below.
 	// All video handler logic lives in Backend/video.go (package backend).
-	api.GET("/movies", backend.HandleGetMovies)
-	api.GET("/extract-m3u8", backend.HandleExtractM3U8)
-	api.GET("/proxy-m3u8", backend.HandleProxyM3U8)
-	api.GET("/proxy-ts", backend.HandleProxyTS)
-	api.GET("/proxy-video", backend.HandleProxyVideo)
-	api.Any("/fetch-json", backend.HandleFetchJSON)
+	// We call RegisterVideoRoutes to set up both public and admin routes.
+	// We pass the public group (api) and the admin group (admin) which already has AdminOnlyMiddleware.
+	// But admin group is defined inside protected block, so we'll call it there.
 	api.POST("/webhook/sheets-sync", handleSheetsWebhook)
 	protected := api.Group("/")
 	protected.Use(AuthMiddleware())
@@ -2004,12 +2000,13 @@ func main() {
 		admin := protected.Group("/admin")
 		admin.Use(AdminOnlyMiddleware())
 		{
+			// Video/Movie admin routes from backend package
+			// This registers both public (/api) and admin (/api/admin) movie routes
+			backend.RegisterVideoRoutes(api, admin)
+
 			admin.GET("/orders", RequirePermission("view_order_list"), handleGetAllOrders)
 			admin.POST("/update-order", RequirePermission("edit_order"), handleAdminUpdateOrder)
 			admin.POST("/migrate-data", backend.HandleMigrateData)
-			admin.POST("/migrate-movies", backend.HandleMigrateMovies)
-			admin.POST("/movies", backend.HandleCreateMovie)
-			admin.DELETE("/movies/:id", backend.HandleDeleteMovie)
 			admin.GET("/revenue-summary", handleGetRevenueSummary)
 			admin.POST("/update-sheet", handleAdminUpdateSheet)
 			admin.POST("/add-row", handleAdminAddRow)
