@@ -66,7 +66,7 @@ var (
 	updateMutex    sync.Mutex
 
 	HTTPClient = &http.Client{
-		Timeout: 45 * time.Second,
+		Timeout: 120 * time.Second,
 		Transport: &http.Transport{
 			MaxIdleConns:        100,
 			IdleConnTimeout:     90 * time.Second,
