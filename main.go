@@ -131,8 +131,10 @@ func mapToDBColumn(key string) string {
 		"Driver Name":               "driver_name",
 		"Tracking Number":           "tracking_number",
 		"Dispatched Time":           "dispatched_time",
+		"Dispatched By":             "dispatched_by",
 		"Delivered Time":            "delivered_time",
 		"Packed By":                 "packed_by",
+		"Packed Time":               "packed_time",
 		"IsVerified":                "is_verified",
 		"UserName":                  "user_name",
 		"FullName":                  "full_name",
@@ -266,8 +268,8 @@ func isValidOrderColumn(col string) bool {
 		"delivery_unpaid": true, "delivery_paid": true, "total_product_cost": true,
 		"telegram_message_id1": true, "telegram_message_id2": true, "scheduled_time": true,
 		"fulfillment_store": true, "team": true, "is_verified": true, "fulfillment_status": true,
-		"packed_by": true, "package_photo_url": true, "driver_name": true, "tracking_number": true,
-		"dispatched_time": true, "delivered_time": true, "delivery_photo_url": true,
+		"packed_by": true, "packed_time": true, "package_photo_url": true, "driver_name": true, "tracking_number": true,
+		"dispatched_time": true, "dispatched_by": true, "delivered_time": true, "delivery_photo_url": true,
 	}
 	return validCols[col]
 }
@@ -1203,6 +1205,73 @@ func handleAdminUpdateOrder(c *gin.Context) {
 	if err := DB.Where("order_id = ?", r.OrderID).First(&originalOrder).Error; err != nil {
 		c.JSON(http.StatusNotFound, gin.H{"status": "error", "message": "រកមិនឃើញការកម្មង់"})
 		return
+	}
+
+	// ✅ Validate status transitions — only allow valid state machine transitions
+	if newStatusRaw, ok := r.NewData["Fulfillment Status"]; ok {
+		newStatus := strings.TrimSpace(fmt.Sprintf("%v", newStatusRaw))
+		currentStatus := strings.TrimSpace(originalOrder.FulfillmentStatus)
+		if currentStatus == "" {
+			currentStatus = "Pending"
+		}
+
+		validTransitions := map[string][]string{
+			"Pending":       {"Ready to Ship"},
+			"Ready to Ship": {"Shipped", "Pending"},
+			"Shipped":       {"Delivered", "Ready to Ship"},
+			"Delivered":     {},
+			"Cancelled":     {},
+		}
+
+		allowed, ok := validTransitions[currentStatus]
+		if !ok {
+			c.JSON(http.StatusBadRequest, gin.H{"status": "error", "message": "ស្ថានភាពបច្ចុប្បន្នមិនត្រឹមត្រូវ"})
+			return
+		}
+		transitionValid := false
+		for _, s := range allowed {
+			if s == newStatus {
+				transitionValid = true
+				break
+			}
+		}
+		if !transitionValid {
+			c.JSON(http.StatusBadRequest, gin.H{"status": "error", "message": fmt.Sprintf("មិនអាចផ្លាស់ប្តូរពី '%s' ទៅ '%s' បានទេ", currentStatus, newStatus)})
+			return
+		}
+
+		// ✅ Validate required fields for each transition
+		switch newStatus {
+		case "Ready to Ship":
+			packedBy, _ := r.NewData["Packed By"]
+			if packedBy == nil || strings.TrimSpace(fmt.Sprintf("%v", packedBy)) == "" {
+				if strings.TrimSpace(originalOrder.PackedBy) == "" {
+					c.JSON(http.StatusBadRequest, gin.H{"status": "error", "message": "ត្រូវការឈ្មោះអ្នកវេចខ្ចប់ (Packed By)"})
+					return
+				}
+			}
+		case "Shipped":
+			dispatchedBy, _ := r.NewData["Dispatched By"]
+			if dispatchedBy == nil || strings.TrimSpace(fmt.Sprintf("%v", dispatchedBy)) == "" {
+				if strings.TrimSpace(originalOrder.DispatchedBy) == "" {
+					c.JSON(http.StatusBadRequest, gin.H{"status": "error", "message": "ត្រូវការឈ្មោះអ្នកបញ្ជូន (Dispatched By)"})
+					return
+				}
+			}
+			driverName, _ := r.NewData["Driver Name"]
+			if driverName == nil || strings.TrimSpace(fmt.Sprintf("%v", driverName)) == "" {
+				if strings.TrimSpace(originalOrder.DriverName) == "" {
+					c.JSON(http.StatusBadRequest, gin.H{"status": "error", "message": "ត្រូវការអ្នកដឹកជញ្ជូន (Driver Name)"})
+					return
+				}
+			}
+		case "Delivered":
+			_, hasDriver := r.NewData["Driver Name"]
+			if !hasDriver && strings.TrimSpace(originalOrder.DriverName) == "" {
+				c.JSON(http.StatusBadRequest, gin.H{"status": "error", "message": "ត្រូវការអ្នកដឹកជញ្ជូន (Driver Name) មុនពេលបញ្ជាក់ការដឹកជញ្ជូន"})
+				return
+			}
+		}
 	}
 
 	mappedData := make(map[string]interface{})
