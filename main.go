@@ -21,7 +21,6 @@ import (
 	"github.com/gin-gonic/gin"
 	"golang.org/x/crypto/bcrypt"
 
-
 	"github.com/samnangh849-source/Oder_Backend-2-/Backend"
 
 	// Import GORM
@@ -34,7 +33,6 @@ var (
 	appsScriptURL    string
 	appsScriptSecret string
 )
-
 
 // =========================================================================
 // ម៉ូដែលទិន្នន័យ (GORM Models) - Aliased to Backend package
@@ -1499,8 +1497,11 @@ func handleGetTeamSalesRanking(c *gin.Context) {
 		}
 		start := now.AddDate(0, 0, -offset)
 		db = db.Where("timestamp >= ?", start.Format("2006-01-02"))
-	case "this_month":
+	case "this_month", "month":
 		start := time.Date(now.Year(), now.Month(), 1, 0, 0, 0, 0, now.Location())
+		db = db.Where("timestamp >= ?", start.Format("2006-01-02"))
+	case "year":
+		start := time.Date(now.Year(), 1, 1, 0, 0, 0, 0, now.Location())
 		db = db.Where("timestamp >= ?", start.Format("2006-01-02"))
 		// "all" — no date filter
 	}
@@ -1509,6 +1510,22 @@ func handleGetTeamSalesRanking(c *gin.Context) {
 		log.Printf("[ERROR] Team Ranking Query Failed: %v", err)
 		c.JSON(500, gin.H{"status": "error", "message": "Query failed"})
 		return
+	}
+
+	// DIAGNOSTIC: Log raw team values from DB to verify data integrity
+	log.Printf("[DIAGNOSTIC] Team Ranking Results (period=%s, count=%d):", period, len(rows))
+	for i, row := range rows {
+		log.Printf("[DIAGNOSTIC]   #%d: team_name=%q revenue=%.2f", i+1, row.TeamName, row.TotalRevenue)
+	}
+	// Also log sample team vs page values to detect data contamination
+	var sampleCheck []struct {
+		Team string `gorm:"column:team"`
+		Page string `gorm:"column:page"`
+	}
+	DB.Table("orders").Select("DISTINCT team, page").Where("team IS NOT NULL AND team <> ''").Limit(10).Scan(&sampleCheck)
+	log.Printf("[DIAGNOSTIC] Sample team vs page values from orders table:")
+	for _, s := range sampleCheck {
+		log.Printf("[DIAGNOSTIC]   team=%q page=%q match=%v", s.Team, s.Page, strings.EqualFold(s.Team, s.Page))
 	}
 
 	// Build response with proper Title Case display names
