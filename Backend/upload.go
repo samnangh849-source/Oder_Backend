@@ -34,9 +34,20 @@ var (
 // ── Helper Functions ──────────────────────────────────────────────────────
 
 func ParseBase64(b64 string) ([]byte, error) {
+	// 1. Remove data URI prefix if present (e.g. "data:image/jpeg;base64,")
+	if strings.Contains(b64, ",") {
+		parts := strings.Split(b64, ",")
+		if len(parts) > 1 {
+			b64 = parts[1]
+		}
+	}
+
+	// 2. Clean whitespace/newlines
 	cleanB64 := strings.ReplaceAll(b64, " ", "+")
 	cleanB64 = strings.ReplaceAll(cleanB64, "\n", "")
 	cleanB64 = strings.ReplaceAll(cleanB64, "\r", "")
+	cleanB64 = strings.TrimSpace(cleanB64)
+
 	return base64.StdEncoding.DecodeString(cleanB64)
 }
 
@@ -47,11 +58,21 @@ func ExtractFileIDFromURL(url string) string {
 			return strings.Split(parts[1], "&")[0]
 		}
 	}
+	// Also handle /d/ format
+	if strings.Contains(url, "/d/") {
+		parts := strings.Split(url, "/d/")
+		if len(parts) > 1 {
+			return strings.Split(parts[1], "/")[0]
+		}
+	}
 	return ""
 }
 
 func ExtractDriveFolderID(idOrURL string) string {
 	idOrURL = strings.TrimSpace(idOrURL)
+	if idOrURL == "" {
+		return "root"
+	}
 	if strings.Contains(idOrURL, "drive.google.com") {
 		if strings.Contains(idOrURL, "folders/") {
 			parts := strings.Split(idOrURL, "folders/")
@@ -66,6 +87,7 @@ func ExtractDriveFolderID(idOrURL string) string {
 			}
 		}
 	}
+	// If it's a raw ID (usually ~33 chars), return as is
 	return idOrURL
 }
 
@@ -80,15 +102,15 @@ func UploadToGoogleDriveDirectly(base64Data string, fileName string, mimeType st
 	}
 
 	// Resolve target folder ID (env > DB setting exported from migration.go)
-	targetFolder := ""
+	targetFolder := "root"
 	if envFolderID := os.Getenv("UPLOAD_FOLDER_ID"); envFolderID != "" {
 		targetFolder = ExtractDriveFolderID(envFolderID)
-		log.Printf("📁 [Drive Upload] Folder from UPLOAD_FOLDER_ID env: %q", targetFolder)
-	} else if UploadFolderID != "" {
+		log.Printf("📁 [Drive Upload] Using folder from UPLOAD_FOLDER_ID env: %q", targetFolder)
+	} else if UploadFolderID != "" && !strings.Contains(UploadFolderID, "Folder_Google_Drive") {
 		targetFolder = ExtractDriveFolderID(UploadFolderID)
-		log.Printf("📁 [Drive Upload] Folder from DB setting: %q", targetFolder)
+		log.Printf("📁 [Drive Upload] Using folder from DB setting: %q", targetFolder)
 	} else {
-		log.Println("⚠️ [Drive Upload] No UPLOAD_FOLDER_ID set — uploading to Drive root")
+		log.Println("⚠️ [Drive Upload] No valid UPLOAD_FOLDER_ID set — uploading to Drive root")
 	}
 
 	// Call Apps Script to upload via Google user quota (not Service Account quota)
@@ -103,15 +125,15 @@ func UploadToGoogleDriveDirectly(base64Data string, fileName string, mimeType st
 	log.Printf("🚀 [Drive Upload] Calling Apps Script uploadImage action...")
 	resp, err := CallAppsScriptPOST(req)
 	if err != nil {
-		log.Printf("❌ [Drive Upload] Apps Script call error: %v", err)
+		log.Printf("❌ [Drive Upload] Apps Script HTTP call error: %v", err)
 		return "", "", fmt.Errorf("apps script upload error: %v", err)
 	}
 	if resp.Status != "success" || resp.URL == "" {
-		log.Printf("❌ [Drive Upload] Apps Script returned error: %s", resp.Message)
+		log.Printf("❌ [Drive Upload] Apps Script returned failure: %s", resp.Message)
 		return "", "", fmt.Errorf("apps script upload failed: %s", resp.Message)
 	}
 
-	log.Printf("✅ [Drive Upload] SUCCESS via Apps Script: fileID=%s url=%s", resp.FileID, resp.URL)
+	log.Printf("✅ [Drive Upload] SUCCESS: fileID=%s url=%s", resp.FileID, resp.URL)
 	return resp.URL, resp.FileID, nil
 }
 
