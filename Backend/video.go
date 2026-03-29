@@ -23,7 +23,6 @@ package backend
 import (
 	"bufio"
 	"bytes"
-	"context"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -36,7 +35,6 @@ import (
 	"time"
 
 	"github.com/gin-gonic/gin"
-	"gorm.io/gorm"
 )
 
 // ── Injectable Dependencies ───────────────────────────────────────────────
