@@ -1,11 +1,13 @@
 
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useContext } from 'react';
 import { FilterState } from './OrderFilters';
 import { ParsedOrder, User, AppData } from '../../types';
 import SelectFilter from './filters/SelectFilter';
 import DateWindowFilter from './filters/DateWindowFilter';
 import SearchableProductDropdown from '../common/SearchableProductDropdown';
 import { useSoundEffects } from '../../hooks/useSoundEffects';
+import { AppContext } from '../../context/AppContext';
+import { Calendar, User as UserIcon, Users, CreditCard, Truck, Warehouse, MapPin, Package, RotateCcw, Check } from 'lucide-react';
 
 interface MobileFilterEngineProps {
     filters: FilterState;
@@ -20,6 +22,7 @@ interface MobileFilterEngineProps {
 const MobileFilterEngine: React.FC<MobileFilterEngineProps> = ({
     filters, setFilters, orders, usersList, appData, calculatedRange, onApply
 }) => {
+    const { language } = useContext(AppContext);
     const { playClick, playPop } = useSoundEffects();
     const [activeCategory, setActiveCategory] = useState<string | null>('date');
 
@@ -70,31 +73,31 @@ const MobileFilterEngine: React.FC<MobileFilterEngineProps> = ({
     // Logical grouping of categories for better UX
     const sections = [
         {
-            title: 'Time & Customers',
+            title: language === 'km' ? 'ពេលវេលា និងអតិថិជន' : 'Time & Customers',
             items: [
-                { id: 'date', label: 'Time Window', icon: '📅', value: filters.datePreset === 'custom' ? `${filters.startDate} - ${filters.endDate}` : filters.datePreset },
-                { id: 'customer', label: 'Customer Search', icon: '👤', value: filters.customerName }
+                { id: 'date', label: language === 'km' ? 'ចន្លោះកាលបរិច្ឆេទ' : 'Time Window', icon: <Calendar size={18} />, value: filters.datePreset === 'custom' ? `${filters.startDate} - ${filters.endDate}` : filters.datePreset },
+                { id: 'customer', label: language === 'km' ? 'ស្វែងរកអតិថិជន' : 'Customer Search', icon: <UserIcon size={18} />, value: filters.customerName }
             ]
         },
         {
-            title: 'Operations & Teams',
+            title: language === 'km' ? 'ប្រតិបត្តិការ និងក្រុម' : 'Operations & Teams',
             items: [
-                { id: 'team', label: 'Team & User', icon: '👥', value: filters.team || filters.user ? 'Configured' : '' },
-                { id: 'payment', label: 'Payment Status', icon: '💰', value: filters.paymentStatus }
+                { id: 'team', label: language === 'km' ? 'ក្រុម និងអ្នកប្រើប្រាស់' : 'Team & User', icon: <Users size={18} />, value: filters.team || filters.user ? 'Configured' : '' },
+                { id: 'payment', label: language === 'km' ? 'ស្ថានភាពបង់ប្រាក់' : 'Payment Status', icon: <CreditCard size={18} />, value: filters.paymentStatus }
             ]
         },
         {
-            title: 'Logistics & Warehouse',
+            title: language === 'km' ? 'ដឹកជញ្ជូន និងឃ្លាំង' : 'Logistics & Warehouse',
             items: [
-                { id: 'logistics', label: 'Shipping & Driver', icon: '🚚', value: filters.shippingService || filters.driver ? 'Configured' : '' },
-                { id: 'inventory', label: 'Warehouse Node', icon: '📦', value: filters.fulfillmentStore },
-                { id: 'location', label: 'Region/Location', icon: '📍', value: filters.location }
+                { id: 'logistics', label: language === 'km' ? 'សេវាដឹក និងអ្នកដឹក' : 'Shipping & Driver', icon: <Truck size={18} />, value: filters.shippingService || filters.driver ? 'Configured' : '' },
+                { id: 'inventory', label: language === 'km' ? 'ឃ្លាំងទំនិញ' : 'Warehouse Node', icon: <Warehouse size={18} />, value: filters.fulfillmentStore },
+                { id: 'location', label: language === 'km' ? 'តំបន់/ទីតាំង' : 'Region/Location', icon: <MapPin size={18} />, value: filters.location }
             ]
         },
         {
-            title: 'Product Assets',
+            title: language === 'km' ? 'ព័ត៌មានទំនិញ' : 'Product Assets',
             items: [
-                { id: 'product', label: 'Product Items', icon: '🏷️', value: filters.product }
+                { id: 'product', label: language === 'km' ? 'មុខទំនិញ' : 'Product Items', icon: <Package size={18} />, value: filters.product }
             ]
         }
     ];
@@ -120,60 +123,59 @@ const MobileFilterEngine: React.FC<MobileFilterEngineProps> = ({
     }, [filters, sections]);
 
     return (
-        <div className="flex flex-col h-full bg-[#0f172a] relative overflow-hidden font-['Kantumruy_Pro']">
+        <div className="flex flex-col h-full bg-[#0B0E11] relative overflow-hidden">
             <style>{`
                 .filter-category-card {
-                    background: rgba(255, 255, 255, 0.02);
-                    border: 1px solid rgba(255, 255, 255, 0.05);
-                    transition: all 0.4s cubic-bezier(0.23, 1, 0.32, 1);
+                    background: #1E2329;
+                    border: 1px solid #2B3139;
+                    border-radius: 2px;
+                    transition: all 0.15s ease-in-out;
                 }
                 .filter-category-card.active {
-                    background: rgba(59, 130, 246, 0.08);
-                    border-color: rgba(59, 130, 246, 0.3);
-                    box-shadow: 0 10px 30px rgba(0,0,0,0.2);
-                }
-                .apply-button-shadow {
-                    box-shadow: 0 -20px 40px rgba(15, 23, 42, 0.95), 0 -10px 20px rgba(15, 23, 42, 0.8);
+                    border-color: var(--cm-accent);
+                    background: #181A20;
                 }
                 .section-title {
-                    font-size: 9px;
-                    font-weight: 900;
+                    font-size: 10px;
+                    font-weight: 800;
                     text-transform: uppercase;
-                    letter-spacing: 0.25em;
-                    color: rgba(255, 255, 255, 0.25);
-                    margin-bottom: 10px;
-                    margin-left: 8px;
+                    letter-spacing: 0.1em;
+                    color: var(--cm-text-muted);
+                    margin-bottom: 12px;
+                    margin-left: 4px;
                     display: flex;
                     align-items: center;
-                    gap: 8px;
+                    gap: 10px;
                 }
                 .section-title::after {
                     content: '';
                     flex: 1;
                     height: 1px;
-                    background: rgba(255, 255, 255, 0.05);
+                    background: #2B3139;
                 }
             `}</style>
 
             {/* Summary Header */}
-            <div className="flex-shrink-0 px-6 py-4 bg-white/[0.02] border-b border-white/5 flex justify-between items-center">
+            <div className="flex-shrink-0 px-5 py-4 bg-[#1E2329] border-b border-[#2B3139] flex justify-between items-center sticky top-0 z-20">
                 <div className="flex items-center gap-3">
-                    <div className="w-1.5 h-5 bg-blue-600 rounded-full shadow-[0_0_15px_rgba(37,99,235,0.5)]"></div>
+                    <div className="w-1 h-6 bg-[var(--cm-accent)] rounded-full"></div>
                     <div>
-                        <h3 className="text-xs font-black text-white uppercase tracking-widest">Filter Engine</h3>
-                        <p className="text-[8px] font-bold text-blue-400/60 uppercase tracking-tighter">
-                            {totalActiveFilters > 0 ? `${totalActiveFilters} Parameters Active` : 'All context visible'}
+                        <h3 className="text-xs font-black text-[#EAECEF] uppercase tracking-widest">{language === 'km' ? 'ម៉ាស៊ីនចម្រោះ' : 'Filter Engine'}</h3>
+                        <p className="text-[9px] font-bold text-[var(--cm-accent)] uppercase">
+                            {totalActiveFilters > 0 ? `${totalActiveFilters} ${language === 'km' ? 'ប៉ារ៉ាម៉ែត្រកំពុងសកម្ម' : 'Parameters Active'}` : (language === 'km' ? 'បង្ហាញទិន្នន័យទាំងអស់' : 'All context visible')}
                         </p>
                     </div>
                 </div>
-                <button onClick={handleReset} className="px-3 py-1.5 bg-red-500/10 text-red-400 rounded-lg text-[9px] font-black uppercase tracking-widest border border-red-500/10 active:scale-90 transition-all">Reset</button>
+                <button onClick={handleReset} className="p-2 bg-[#2B3139] text-[#F6465D] rounded-sm active:scale-90 transition-all border border-transparent active:border-[#F6465D]/30">
+                    <RotateCcw size={16} />
+                </button>
             </div>
 
-            <div className="flex-grow overflow-y-auto custom-scrollbar px-4 pt-6 pb-44 space-y-8">
+            <div className="flex-grow overflow-y-auto custom-scrollbar px-4 pt-6 pb-32 space-y-8">
                 {sections.map((section, sIdx) => (
-                    <div key={sIdx} className="animate-reveal" style={{ animationDelay: `${sIdx * 0.1}s` }}>
+                    <div key={sIdx}>
                         <h4 className="section-title">{section.title}</h4>
-                        <div className="grid grid-cols-1 gap-2.5">
+                        <div className="grid grid-cols-1 gap-2">
                             {section.items.map(cat => {
                                 const isActive = activeCategory === cat.id;
                                 const count = getActiveCount(cat.id);
@@ -181,25 +183,25 @@ const MobileFilterEngine: React.FC<MobileFilterEngineProps> = ({
                                     <div key={cat.id} className="flex flex-col">
                                         <button 
                                             onClick={() => { playClick(); setActiveCategory(isActive ? null : cat.id); }}
-                                            className={`filter-category-card flex items-center justify-between p-4 rounded-[1.5rem] ${isActive ? 'active' : ''}`}
+                                            className={`filter-category-card flex items-center justify-between p-4 ${isActive ? 'active' : ''}`}
                                         >
                                             <div className="flex items-center gap-4">
-                                                <div className={`w-10 h-10 rounded-xl flex items-center justify-center text-xl transition-all ${isActive ? 'bg-blue-600 shadow-lg shadow-blue-900/40 rotate-0' : 'bg-white/5 grayscale opacity-60'}`}>
+                                                <div className={`w-8 h-8 rounded-sm flex items-center justify-center transition-all ${isActive ? 'text-[var(--cm-accent)]' : 'text-[#707A8A]'}`}>
                                                     {cat.icon}
                                                 </div>
                                                 <div className="text-left">
-                                                    <p className={`text-[11px] font-black uppercase tracking-widest leading-none ${isActive ? 'text-blue-400' : 'text-white'}`}>{cat.label}</p>
-                                                    {cat.value && !isActive && <p className="text-[9px] text-blue-400 font-bold mt-1.5 truncate max-w-[180px]">{cat.value.replace(/,/g, ', ')}</p>}
+                                                    <p className={`text-[12px] font-bold uppercase tracking-tight ${isActive ? 'text-[var(--cm-accent)]' : 'text-[#EAECEF]'}`}>{cat.label}</p>
+                                                    {cat.value && !isActive && <p className="text-[10px] text-[var(--cm-accent)] font-medium mt-1 truncate max-w-[180px] opacity-80">{cat.value.replace(/,/g, ', ')}</p>}
                                                 </div>
                                             </div>
                                             <div className="flex items-center gap-3">
-                                                {count > 0 && <span className="bg-blue-600 text-white text-[9px] font-black px-2 py-0.5 rounded-full shadow-lg">{count}</span>}
-                                                <svg className={`w-4 h-4 text-gray-600 transition-transform duration-500 ${isActive ? 'rotate-180 text-blue-400' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24"><path d="M19 9l-7 7-7-7" strokeWidth={3} /></svg>
+                                                {count > 0 && <span className="bg-[var(--cm-accent)] text-[#181A20] text-[10px] font-black px-1.5 py-0.5 rounded-sm">{count}</span>}
+                                                <svg className={`w-4 h-4 text-[#474D57] transition-transform duration-300 ${isActive ? 'rotate-180 text-[var(--cm-accent)]' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24"><path d="M19 9l-7 7-7-7" strokeWidth={3} /></svg>
                                             </div>
                                         </button>
 
                                         {isActive && (
-                                            <div className="mt-2 mb-2 p-4 bg-black/20 rounded-[1.8rem] border border-white/5 animate-reveal space-y-4 shadow-inner">
+                                            <div className="mt-1 mb-3 p-4 bg-[#181A20] border border-[#2B3139] space-y-4 shadow-inner animate-reveal">
                                                 {cat.id === 'date' && (
                                                     <DateWindowFilter 
                                                         datePreset={filters.datePreset}
@@ -212,32 +214,32 @@ const MobileFilterEngine: React.FC<MobileFilterEngineProps> = ({
                                                     />
                                                 )}
                                                 {cat.id === 'customer' && (
-                                                    <SelectFilter label="Customer Search" value={filters.customerName} onChange={v => updateFilter('customerName', v)} options={uniqueValues.customerOptions} multiple={true} isInline={true} />
+                                                    <SelectFilter label={language === 'km' ? 'ស្វែងរកអតិថិជន' : 'Customer Search'} value={filters.customerName} onChange={v => updateFilter('customerName', v)} options={uniqueValues.customerOptions} multiple={true} isInline={true} />
                                                 )}
                                                 {cat.id === 'payment' && (
-                                                    <SelectFilter label="Payment Status" value={filters.paymentStatus} onChange={v => updateFilter('paymentStatus', v)} options={[{label:'Paid', value:'Paid'}, {label:'Unpaid', value:'Unpaid'}]} multiple={true} variant="payment" isInline={true} />
+                                                    <SelectFilter label={language === 'km' ? 'ស្ថានភាពបង់ប្រាក់' : 'Payment Status'} value={filters.paymentStatus} onChange={v => updateFilter('paymentStatus', v)} options={[{label:language === 'km' ? 'បានបង់' : 'Paid', value:'Paid'}, {label:language === 'km' ? 'មិនទាន់បង់' : 'Unpaid', value:'Unpaid'}]} multiple={true} variant="payment" isInline={true} />
                                                 )}
                                                 {cat.id === 'team' && (
                                                     <div className="space-y-6">
-                                                        <SelectFilter label="Team Allocation" value={filters.team} onChange={v => updateFilter('team', v)} options={uniqueValues.teams} multiple={true} isInline={true} />
-                                                        <SelectFilter label="Registered User" value={filters.user} onChange={v => updateFilter('user', v)} options={usersList.map(u => ({ label: u.FullName, value: u.UserName }))} multiple={true} isInline={true} />
+                                                        <SelectFilter label={language === 'km' ? 'បែងចែកតាមក្រុម' : 'Team Allocation'} value={filters.team} onChange={v => updateFilter('team', v)} options={uniqueValues.teams} multiple={true} isInline={true} />
+                                                        <SelectFilter label={language === 'km' ? 'អ្នកប្រើប្រាស់' : 'Registered User'} value={filters.user} onChange={v => updateFilter('user', v)} options={usersList.map(u => ({ label: u.FullName, value: u.UserName }))} multiple={true} isInline={true} />
                                                     </div>
                                                 )}
                                                 {cat.id === 'inventory' && (
-                                                    <SelectFilter label="Fulfillment Center" value={filters.fulfillmentStore} onChange={v => updateFilter('fulfillmentStore', v)} options={uniqueValues.fulfillmentStores} multiple={true} isInline={true} />
+                                                    <SelectFilter label={language === 'km' ? 'ឃ្លាំងទំនិញ' : 'Fulfillment Center'} value={filters.fulfillmentStore} onChange={v => updateFilter('fulfillmentStore', v)} options={uniqueValues.fulfillmentStores} multiple={true} isInline={true} />
                                                 )}
                                                 {cat.id === 'location' && (
-                                                    <SelectFilter label="Geographic Region" value={filters.location} onChange={v => updateFilter('location', v)} options={uniqueValues.locations} multiple={true} isInline={true} />
+                                                    <SelectFilter label={language === 'km' ? 'ទីតាំងភូមិសាស្ត្រ' : 'Geographic Region'} value={filters.location} onChange={v => updateFilter('location', v)} options={uniqueValues.locations} multiple={true} isInline={true} />
                                                 )}
                                                 {cat.id === 'logistics' && (
                                                     <div className="space-y-6">
-                                                        <SelectFilter label="Shipping Method" value={filters.shippingService} onChange={v => updateFilter('shippingService', v)} options={uniqueValues.shippingMethods} multiple={true} isInline={true} />
-                                                        <SelectFilter label="Driver Selection" value={filters.driver} onChange={v => updateFilter('driver', v)} options={uniqueValues.drivers} multiple={true} isInline={true} />
+                                                        <SelectFilter label={language === 'km' ? 'វិធីសាស្រ្តដឹកជញ្ជូន' : 'Shipping Method'} value={filters.shippingService} onChange={v => updateFilter('shippingService', v)} options={uniqueValues.shippingMethods} multiple={true} isInline={true} />
+                                                        <SelectFilter label={language === 'km' ? 'អ្នកដឹកជញ្ជូន' : 'Driver Selection'} value={filters.driver} onChange={v => updateFilter('driver', v)} options={uniqueValues.drivers} multiple={true} isInline={true} />
                                                     </div>
                                                 )}
                                                 {cat.id === 'product' && (
                                                     <div className="px-1">
-                                                        <label className="text-[10px] font-black text-gray-500 mb-3 block uppercase tracking-widest ml-1">Asset Search</label>
+                                                        <label className="text-[10px] font-black text-[#707A8A] mb-3 block uppercase tracking-widest ml-1">{language === 'km' ? 'ស្វែងរកទំនិញ' : 'Asset Search'}</label>
                                                         <SearchableProductDropdown products={appData.products} selectedProductName={filters.product} onSelect={v => updateFilter('product', v)} showTagEditor={false} />
                                                     </div>
                                                 )}
@@ -252,13 +254,13 @@ const MobileFilterEngine: React.FC<MobileFilterEngineProps> = ({
             </div>
 
             {/* Premium Floating Apply Button */}
-            <div className="absolute bottom-0 left-0 right-0 px-6 pt-10 pb-8 bg-gradient-to-t from-[#0f172a] via-[#0f172a]/95 to-transparent z-[110] pointer-events-none apply-button-shadow border-t border-white/[0.03]">
+            <div className="absolute bottom-0 left-0 right-0 px-6 py-6 bg-gradient-to-t from-[#0B0E11] via-[#0B0E11]/90 to-transparent z-30">
                 <button 
                     onClick={() => { playPop(); onApply(); }}
-                    className="w-full py-4.5 bg-blue-600 hover:bg-blue-500 text-white font-black uppercase text-[13px] tracking-[0.25em] rounded-2xl shadow-[0_20px_50px_rgba(37,99,235,0.4)] transition-all active:scale-95 pointer-events-auto flex items-center justify-center gap-3 border border-blue-400/20 ring-1 ring-white/10"
+                    className="w-full py-4 bg-[var(--cm-accent)] text-[#181A20] font-black uppercase text-[13px] tracking-[0.15em] rounded-sm shadow-xl active:scale-[0.98] transition-all flex items-center justify-center gap-3 border border-transparent"
                 >
-                    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={3}><path d="M5 13l4 4L19 7" /></svg>
-                    Update Environment
+                    <Check size={18} strokeWidth={3} />
+                    {language === 'km' ? 'អនុវត្តការចម្រោះ' : 'Apply Filters'}
                 </button>
             </div>
         </div>

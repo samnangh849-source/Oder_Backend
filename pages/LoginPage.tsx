@@ -93,7 +93,7 @@ const LoginPage: React.FC = () => {
     // --- 3D CRYSTAL CORE INTRO (Visuals Preserved) ---
     if (showIntro) {
         return (
-            <div className="fixed inset-0 z-[100] bg-[#020617] flex flex-col items-center justify-center overflow-hidden">
+            <div className="fixed inset-0 z-[100] bg-[#080808] flex flex-col items-center justify-center overflow-hidden">
                 <div className="absolute inset-0 pointer-events-none">
                     <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-full h-full opacity-30">
                         <div className="absolute w-1 h-1 bg-blue-500 rounded-full animate-pulse top-1/4 left-1/3"></div>
@@ -136,7 +136,7 @@ const LoginPage: React.FC = () => {
     }
 
     return (
-        <div className="min-h-screen flex items-center justify-center p-5 relative overflow-hidden bg-[#020617] selection:bg-blue-500/30">
+        <div className="min-h-screen flex items-center justify-center p-5 relative overflow-hidden bg-[#080808] selection:bg-blue-500/30">
             {/* AMBIENT BACKGROUND */}
             <div className="absolute inset-0 z-0">
                  <div className="absolute top-[-10%] left-[-10%] w-[70%] h-[70%] bg-blue-600/10 rounded-full blur-[100px] animate-pulse"></div>
@@ -151,7 +151,7 @@ const LoginPage: React.FC = () => {
                         transition: 'transform 0.4s cubic-bezier(0.16, 1, 0.3, 1)' 
                     }}
                 >
-                    <div className="bg-[#0f172a]/90 backdrop-blur-[60px] rounded-[3rem] p-8 sm:p-14 space-y-10 overflow-hidden relative border border-white/5 shadow-inner">
+                    <div className="bg-[#121212]/90 backdrop-blur-[60px] rounded-[3rem] p-8 sm:p-14 space-y-10 overflow-hidden relative border border-white/5 shadow-inner">
                         
                         {/* Mobile Optimized Header */}
                         <div className="text-center space-y-5">

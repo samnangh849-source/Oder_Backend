@@ -21,7 +21,6 @@ import (
 	"github.com/gin-gonic/gin"
 	"golang.org/x/crypto/bcrypt"
 
-
 	"github.com/samnangh849-source/Oder_Backend-2-/Backend"
 
 	// Import GORM
@@ -34,7 +33,6 @@ var (
 	appsScriptURL    string
 	appsScriptSecret string
 )
-
 
 // =========================================================================
 // ម៉ូដែលទិន្នន័យ (GORM Models) - Aliased to Backend package
@@ -133,8 +131,10 @@ func mapToDBColumn(key string) string {
 		"Driver Name":               "driver_name",
 		"Tracking Number":           "tracking_number",
 		"Dispatched Time":           "dispatched_time",
+		"Dispatched By":             "dispatched_by",
 		"Delivered Time":            "delivered_time",
 		"Packed By":                 "packed_by",
+		"Packed Time":               "packed_time",
 		"IsVerified":                "is_verified",
 		"UserName":                  "user_name",
 		"FullName":                  "full_name",
@@ -268,8 +268,8 @@ func isValidOrderColumn(col string) bool {
 		"delivery_unpaid": true, "delivery_paid": true, "total_product_cost": true,
 		"telegram_message_id1": true, "telegram_message_id2": true, "scheduled_time": true,
 		"fulfillment_store": true, "team": true, "is_verified": true, "fulfillment_status": true,
-		"packed_by": true, "package_photo_url": true, "driver_name": true, "tracking_number": true,
-		"dispatched_time": true, "delivered_time": true, "delivery_photo_url": true,
+		"packed_by": true, "packed_time": true, "package_photo_url": true, "driver_name": true, "tracking_number": true,
+		"dispatched_time": true, "dispatched_by": true, "delivered_time": true, "delivery_photo_url": true,
 	}
 	return validCols[col]
 }
@@ -914,7 +914,7 @@ func startOrderWorker() {
 }
 
 func startScheduler() {
-	ticker := time.NewTicker(1 * time.Minute)
+	ticker := time.NewTicker(2 * time.Minute)
 	cleanupTicker := time.NewTicker(5 * time.Minute)
 
 	go func() {
@@ -1207,6 +1207,82 @@ func handleAdminUpdateOrder(c *gin.Context) {
 		return
 	}
 
+	// ✅ Validate status transitions — only allow valid state machine transitions
+	if newStatusRaw, ok := r.NewData["Fulfillment Status"]; ok {
+		newStatus := strings.TrimSpace(fmt.Sprintf("%v", newStatusRaw))
+		currentStatus := strings.TrimSpace(originalOrder.FulfillmentStatus)
+		if currentStatus == "" {
+			currentStatus = "Pending"
+		}
+
+		validTransitions := map[string][]string{
+			"Pending":       {"Ready to Ship"},
+			"Ready to Ship": {"Shipped", "Pending"},
+			"Shipped":       {"Delivered", "Ready to Ship"},
+			"Delivered":     {},
+			"Cancelled":     {},
+		}
+
+		allowed, ok := validTransitions[currentStatus]
+		if !ok {
+			c.JSON(http.StatusBadRequest, gin.H{"status": "error", "message": "ស្ថានភាពបច្ចុប្បន្នមិនត្រឹមត្រូវ"})
+			return
+		}
+		transitionValid := false
+		for _, s := range allowed {
+			if s == newStatus {
+				transitionValid = true
+				break
+			}
+		}
+		if !transitionValid {
+			c.JSON(http.StatusBadRequest, gin.H{"status": "error", "message": fmt.Sprintf("មិនអាចផ្លាស់ប្តូរពី '%s' ទៅ '%s' បានទេ", currentStatus, newStatus)})
+			return
+		}
+
+		// ✅ Validate required fields for each transition
+		switch newStatus {
+		case "Ready to Ship":
+			packedBy, _ := r.NewData["Packed By"]
+			if packedBy == nil || strings.TrimSpace(fmt.Sprintf("%v", packedBy)) == "" {
+				if strings.TrimSpace(originalOrder.PackedBy) == "" {
+					c.JSON(http.StatusBadRequest, gin.H{"status": "error", "message": "ត្រូវការឈ្មោះអ្នកវេចខ្ចប់ (Packed By)"})
+					return
+				}
+			}
+		case "Shipped":
+			dispatchedBy, _ := r.NewData["Dispatched By"]
+			if dispatchedBy == nil || strings.TrimSpace(fmt.Sprintf("%v", dispatchedBy)) == "" {
+				if strings.TrimSpace(originalOrder.DispatchedBy) == "" {
+					c.JSON(http.StatusBadRequest, gin.H{"status": "error", "message": "ត្រូវការឈ្មោះអ្នកបញ្ជូន (Dispatched By)"})
+					return
+				}
+			}
+			driverName, _ := r.NewData["Driver Name"]
+			if driverName == nil || strings.TrimSpace(fmt.Sprintf("%v", driverName)) == "" {
+				if strings.TrimSpace(originalOrder.DriverName) == "" {
+					c.JSON(http.StatusBadRequest, gin.H{"status": "error", "message": "ត្រូវការអ្នកដឹកជញ្ជូន (Driver Name)"})
+					return
+				}
+			}
+		case "Delivered":
+			_, hasDriver := r.NewData["Driver Name"]
+			if !hasDriver && strings.TrimSpace(originalOrder.DriverName) == "" {
+				c.JSON(http.StatusBadRequest, gin.H{"status": "error", "message": "ត្រូវការអ្នកដឹកជញ្ជូន (Driver Name) មុនពេលបញ្ជាក់ការដឹកជញ្ជូន"})
+				return
+			}
+		}
+	}
+
+	// Auto-set Delivered Time when transitioning to Delivered (if not already provided)
+	if newStatusRaw, ok := r.NewData["Fulfillment Status"]; ok {
+		if strings.TrimSpace(fmt.Sprintf("%v", newStatusRaw)) == "Delivered" {
+			if _, hasTime := r.NewData["Delivered Time"]; !hasTime {
+				r.NewData["Delivered Time"] = time.Now().Format("2006-01-02 15:04:05")
+			}
+		}
+	}
+
 	mappedData := make(map[string]interface{})
 	for k, v := range r.NewData {
 		dbCol := mapToDBColumn(k)
@@ -1243,18 +1319,38 @@ func handleAdminUpdateOrder(c *gin.Context) {
 	hub.Broadcast <- eventBytes
 
 	go func() {
-		// Sync with Google Sheets via managed queue
-		// Note: "AllOrders" is the sheet name for orders.
-		// The primary key for an order in the sheet is "Order ID".
-		enqueueSync("updateSheet", r.NewData, "AllOrders", map[string]string{"Order ID": r.OrderID})
+		// Build comprehensive sheet data: start from r.NewData then fill missing
+		// fulfillment fields from DB (e.g. Driver Name set in a prior step).
+		sheetData := make(map[string]interface{})
+		for k, v := range r.NewData {
+			sheetData[k] = v
+		}
+		var current Order
+		if err := DB.Where("order_id = ?", r.OrderID).First(&current).Error; err == nil {
+			fill := func(key, val string) {
+				if val != "" {
+					if _, exists := sheetData[key]; !exists {
+						sheetData[key] = val
+					}
+				}
+			}
+			fill("Packed By", current.PackedBy)
+			fill("Package Photo URL", current.PackagePhotoURL)
+			fill("Driver Name", current.DriverName)
+			fill("Tracking Number", current.TrackingNumber)
+			fill("Dispatched Time", current.DispatchedTime)
+			fill("Dispatched By", current.DispatchedBy)
+			fill("Delivered Time", current.DeliveredTime)
+			fill("Delivery Photo URL", current.DeliveryPhotoURL)
+		}
 
-		// Also send to Telegram via Apps Script (this is a separate action)
-		// Sync with Telegram via Apps Script (keep separate for now)
+		enqueueSync("updateSheet", sheetData, "AllOrders", map[string]string{"Order ID": r.OrderID})
+
 		enqueueSync("updateOrderTelegram", map[string]interface{}{
 			"orderId":       r.OrderID,
-			"updatedFields": r.NewData,
+			"updatedFields": sheetData,
 			"team":          originalOrder.Team,
-		}, "", nil) // SheetName and PrimaryKey are not directly applicable for Telegram update action
+		}, "", nil)
 	}()
 
 	c.JSON(200, gin.H{"status": "success"})
@@ -1499,8 +1595,11 @@ func handleGetTeamSalesRanking(c *gin.Context) {
 		}
 		start := now.AddDate(0, 0, -offset)
 		db = db.Where("timestamp >= ?", start.Format("2006-01-02"))
-	case "this_month":
+	case "this_month", "month":
 		start := time.Date(now.Year(), now.Month(), 1, 0, 0, 0, 0, now.Location())
+		db = db.Where("timestamp >= ?", start.Format("2006-01-02"))
+	case "year":
+		start := time.Date(now.Year(), 1, 1, 0, 0, 0, 0, now.Location())
 		db = db.Where("timestamp >= ?", start.Format("2006-01-02"))
 		// "all" — no date filter
 	}
@@ -1509,6 +1608,22 @@ func handleGetTeamSalesRanking(c *gin.Context) {
 		log.Printf("[ERROR] Team Ranking Query Failed: %v", err)
 		c.JSON(500, gin.H{"status": "error", "message": "Query failed"})
 		return
+	}
+
+	// DIAGNOSTIC: Log raw team values from DB to verify data integrity
+	log.Printf("[DIAGNOSTIC] Team Ranking Results (period=%s, count=%d):", period, len(rows))
+	for i, row := range rows {
+		log.Printf("[DIAGNOSTIC]   #%d: team_name=%q revenue=%.2f", i+1, row.TeamName, row.TotalRevenue)
+	}
+	// Also log sample team vs page values to detect data contamination
+	var sampleCheck []struct {
+		Team string `gorm:"column:team"`
+		Page string `gorm:"column:page"`
+	}
+	DB.Table("orders").Select("DISTINCT team, page").Where("team IS NOT NULL AND team <> ''").Limit(10).Scan(&sampleCheck)
+	log.Printf("[DIAGNOSTIC] Sample team vs page values from orders table:")
+	for _, s := range sampleCheck {
+		log.Printf("[DIAGNOSTIC]   team=%q page=%q match=%v", s.Team, s.Page, strings.EqualFold(s.Team, s.Page))
 	}
 
 	// Build response with proper Title Case display names
@@ -1975,14 +2090,10 @@ func main() {
 	api.GET("/teams/ranking", handleGetTeamSalesRanking)
 	api.GET("/settings", handleGetSettings)
 	// ── Entertainment / Video Player routes (Backend/video.go) ────────────────────────
-	// Public routes are registered here; admin routes registered inside admin block below.
 	// All video handler logic lives in Backend/video.go (package backend).
-	api.GET("/movies", backend.HandleGetMovies)
-	api.GET("/extract-m3u8", backend.HandleExtractM3U8)
-	api.GET("/proxy-m3u8", backend.HandleProxyM3U8)
-	api.GET("/proxy-ts", backend.HandleProxyTS)
-	api.GET("/proxy-video", backend.HandleProxyVideo)
-	api.Any("/fetch-json", backend.HandleFetchJSON)
+	// We call RegisterVideoRoutes to set up both public and admin routes.
+	// We pass the public group (api) and the admin group (admin) which already has AdminOnlyMiddleware.
+	// But admin group is defined inside protected block, so we'll call it there.
 	api.POST("/webhook/sheets-sync", handleSheetsWebhook)
 	protected := api.Group("/")
 	protected.Use(AuthMiddleware())
@@ -2004,12 +2115,13 @@ func main() {
 		admin := protected.Group("/admin")
 		admin.Use(AdminOnlyMiddleware())
 		{
+			// Video/Movie admin routes from backend package
+			// This registers both public (/api) and admin (/api/admin) movie routes
+			backend.RegisterVideoRoutes(api, admin)
+
 			admin.GET("/orders", RequirePermission("view_order_list"), handleGetAllOrders)
 			admin.POST("/update-order", RequirePermission("edit_order"), handleAdminUpdateOrder)
 			admin.POST("/migrate-data", backend.HandleMigrateData)
-			admin.POST("/migrate-movies", backend.HandleMigrateMovies)
-			admin.POST("/movies", backend.HandleCreateMovie)
-			admin.DELETE("/movies/:id", backend.HandleDeleteMovie)
 			admin.GET("/revenue-summary", handleGetRevenueSummary)
 			admin.POST("/update-sheet", handleAdminUpdateSheet)
 			admin.POST("/add-row", handleAdminAddRow)

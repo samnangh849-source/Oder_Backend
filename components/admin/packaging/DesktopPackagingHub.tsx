@@ -25,6 +25,7 @@ interface DesktopPackagingHubProps {
     onPack: (order: ParsedOrder) => void;
     onShip: (order: ParsedOrder) => void;
     onUndo: (order: ParsedOrder) => void;
+    onUndoShipped: (order: ParsedOrder) => void;
     onView: (order: ParsedOrder) => void;
     onPrintManifest: () => void;
     onSwitchHub: () => void;
@@ -46,7 +47,7 @@ interface DesktopPackagingHubProps {
 
 const DesktopPackagingHub: React.FC<DesktopPackagingHubProps> = ({
     orders, activeTab, setActiveTab, searchTerm, setSearchTerm,
-    onPack, onShip, onUndo, onView, onPrintManifest, onSwitchHub, onExit, selectedStore,
+    onPack, onShip, onUndo, onUndoShipped, onView, onPrintManifest, onSwitchHub, onExit, selectedStore,
     progressStats, viewMode, setViewMode, setIsFilterModalOpen, loadingActionId, tabCounts,
     selectedOrderIds, toggleOrderSelection, clearSelection, onBulkShip, isBulkProcessing,
     onToggleSelectAll
@@ -280,7 +281,7 @@ const DesktopPackagingHub: React.FC<DesktopPackagingHubProps> = ({
                                                         </div>
                                                     </div>
 
-                                                    <div className={`p-2 border-t ${B_BORDER} bg-[#0B0E11] grid ${activeTab === 'Pending' ? 'grid-cols-2 gap-2' : activeTab === 'Ready to Ship' ? 'grid-cols-3 gap-2' : 'grid-cols-1'}`}>
+                                                    <div className={`p-2 border-t ${B_BORDER} bg-[#0B0E11] grid ${activeTab === 'Pending' ? 'grid-cols-2 gap-2' : activeTab === 'Ready to Ship' ? 'grid-cols-3 gap-2' : 'grid-cols-2 gap-2'}`}>
                                                         <button onClick={(e) => { e.stopPropagation(); onView(order); }} className={`w-full py-1.5 bg-[#2B3139] hover:bg-[#3B424A] ${B_TEXT_PRIMARY} text-[10px] font-medium transition-colors rounded-sm`}>Details</button>
                                                         {activeTab === 'Pending' && <button onClick={(e) => { e.stopPropagation(); onPack(order); }} className={`w-full py-1.5 ${B_ACCENT_BG} text-[10px] font-bold uppercase transition-colors rounded-sm`}>Pack</button>}
                                                         {activeTab === 'Ready to Ship' && (
@@ -288,6 +289,9 @@ const DesktopPackagingHub: React.FC<DesktopPackagingHubProps> = ({
                                                                 <button onClick={(e) => { e.stopPropagation(); onUndo(order); }} className={`w-full py-1.5 bg-[#F6465D]/10 hover:bg-[#F6465D]/20 ${B_RED} text-[10px] font-bold uppercase transition-colors rounded-sm`}>Undo</button>
                                                                 <button onClick={(e) => { e.stopPropagation(); onShip(order); }} className={`w-full py-1.5 bg-amber-500 hover:bg-amber-400 text-black text-[10px] font-bold uppercase transition-colors rounded-sm`}>Ship</button>
                                                             </>
+                                                        )}
+                                                        {activeTab === 'Shipped' && (
+                                                            <button onClick={(e) => { e.stopPropagation(); onUndoShipped(order); }} className={`w-full py-1.5 bg-[#F6465D]/10 hover:bg-[#F6465D]/20 ${B_RED} text-[10px] font-bold uppercase transition-colors rounded-sm`}>Undo</button>
                                                         )}
                                                     </div>
                                                 </div>
@@ -325,6 +329,9 @@ const DesktopPackagingHub: React.FC<DesktopPackagingHubProps> = ({
                                                                 <button onClick={(e) => { e.stopPropagation(); onUndo(order); }} className={`px-3 py-1 bg-[#F6465D]/10 hover:bg-[#F6465D]/20 ${B_RED} text-[10px] font-bold uppercase rounded-sm transition-colors`}>Undo</button>
                                                                 <button onClick={(e) => { e.stopPropagation(); onShip(order); }} className={`px-4 py-1 bg-amber-500 hover:bg-amber-400 text-[#0B0E11] text-[10px] font-bold uppercase rounded-sm`}>Ship</button>
                                                             </>
+                                                        )}
+                                                        {activeTab === 'Shipped' && (
+                                                            <button onClick={(e) => { e.stopPropagation(); onUndoShipped(order); }} className={`px-3 py-1 bg-[#F6465D]/10 hover:bg-[#F6465D]/20 ${B_RED} text-[10px] font-bold uppercase rounded-sm transition-colors`}>Undo</button>
                                                         )}
                                                     </div>
                                                 </div>

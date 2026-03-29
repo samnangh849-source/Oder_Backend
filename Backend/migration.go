@@ -25,6 +25,7 @@ import (
 	"os"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/gin-gonic/gin"
 	"google.golang.org/api/drive/v3"
@@ -284,7 +285,9 @@ func PerformDataMigration() {
 	// ── Users ──
 	var users []User
 	if err := FetchSheetDataToStruct("Users", &users); err != nil {
-		tx.Rollback(); log.Println("❌ Migration failed for Users (fetch):", err); return
+		tx.Rollback()
+		log.Println("❌ Migration failed for Users (fetch):", err)
+		return
 	}
 	log.Printf("📊 Users: Fetched %d rows from sheet", len(users))
 	var validUsers []User
@@ -297,7 +300,9 @@ func PerformDataMigration() {
 	}
 	if len(validUsers) > 0 {
 		if err := tx.CreateInBatches(validUsers, 100).Error; err != nil {
-			tx.Rollback(); log.Println("❌ Migration failed for Users (save):", err); return
+			tx.Rollback()
+			log.Println("❌ Migration failed for Users (save):", err)
+			return
 		}
 		log.Printf("✅ Users: Saved %d valid rows", len(validUsers))
 	} else {
@@ -307,7 +312,9 @@ func PerformDataMigration() {
 	// ── Stores ──
 	var stores []Store
 	if err := FetchSheetDataToStruct("Stores", &stores); err != nil {
-		tx.Rollback(); log.Println("❌ Migration failed for Stores (fetch):", err); return
+		tx.Rollback()
+		log.Println("❌ Migration failed for Stores (fetch):", err)
+		return
 	}
 	log.Printf("📊 Stores: Fetched %d rows from sheet", len(stores))
 	var validStores []Store
@@ -320,7 +327,9 @@ func PerformDataMigration() {
 	}
 	if len(validStores) > 0 {
 		if err := tx.CreateInBatches(validStores, 100).Error; err != nil {
-			tx.Rollback(); log.Println("❌ Migration failed for Stores (save):", err); return
+			tx.Rollback()
+			log.Println("❌ Migration failed for Stores (save):", err)
+			return
 		}
 		log.Printf("✅ Stores: Saved %d valid rows", len(validStores))
 	}
@@ -328,12 +337,16 @@ func PerformDataMigration() {
 	// ── Settings ──
 	var settings []Setting
 	if err := FetchSheetDataToStruct("Settings", &settings); err != nil {
-		tx.Rollback(); log.Println("❌ Migration failed for Settings:", err); return
+		tx.Rollback()
+		log.Println("❌ Migration failed for Settings:", err)
+		return
 	}
 	for _, s := range settings {
 		if s.ConfigKey != "" {
 			if err := tx.Save(&s).Error; err != nil {
-				tx.Rollback(); log.Println("❌ Migration failed to save Setting:", s.ConfigKey, err); return
+				tx.Rollback()
+				log.Println("❌ Migration failed to save Setting:", s.ConfigKey, err)
+				return
 			}
 			if s.ConfigKey == "UploadFolderID" {
 				if envVal := os.Getenv("UPLOAD_FOLDER_ID"); envVal != "" {
@@ -348,7 +361,9 @@ func PerformDataMigration() {
 	// ── TeamsPages ──
 	var pages []TeamPage
 	if err := FetchSheetDataToStruct("TeamsPages", &pages); err != nil {
-		tx.Rollback(); log.Println("❌ Migration failed for TeamsPages (fetch):", err); return
+		tx.Rollback()
+		log.Println("❌ Migration failed for TeamsPages (fetch):", err)
+		return
 	}
 	log.Printf("📊 TeamsPages: Fetched %d rows from sheet", len(pages))
 	var validPages []TeamPage
@@ -363,7 +378,9 @@ func PerformDataMigration() {
 	}
 	if len(validPages) > 0 {
 		if err := tx.CreateInBatches(validPages, 100).Error; err != nil {
-			tx.Rollback(); log.Println("❌ Migration failed for TeamsPages (save):", err); return
+			tx.Rollback()
+			log.Println("❌ Migration failed for TeamsPages (save):", err)
+			return
 		}
 		log.Printf("✅ TeamsPages: Saved %d valid rows", len(validPages))
 	}
@@ -371,7 +388,9 @@ func PerformDataMigration() {
 	// ── Products ──
 	var products []Product
 	if err := FetchSheetDataToStruct("Products", &products); err != nil {
-		tx.Rollback(); log.Println("❌ Migration failed for Products (fetch):", err); return
+		tx.Rollback()
+		log.Println("❌ Migration failed for Products (fetch):", err)
+		return
 	}
 	log.Printf("📊 Products: Fetched %d rows from sheet", len(products))
 	var validProducts []Product
@@ -384,7 +403,9 @@ func PerformDataMigration() {
 	}
 	if len(validProducts) > 0 {
 		if err := tx.CreateInBatches(validProducts, 100).Error; err != nil {
-			tx.Rollback(); log.Println("❌ Migration failed for Products (save):", err); return
+			tx.Rollback()
+			log.Println("❌ Migration failed for Products (save):", err)
+			return
 		}
 		log.Printf("✅ Products: Saved %d valid rows", len(validProducts))
 	}
@@ -392,7 +413,9 @@ func PerformDataMigration() {
 	// ── Locations ──
 	var locations []Location
 	if err := FetchSheetDataToStruct("Locations", &locations); err != nil {
-		tx.Rollback(); log.Println("❌ Migration failed for Locations:", err); return
+		tx.Rollback()
+		log.Println("❌ Migration failed for Locations:", err)
+		return
 	}
 	var validLocations []Location
 	seenLocations := make(map[uint]bool)
@@ -406,14 +429,18 @@ func PerformDataMigration() {
 	}
 	if len(validLocations) > 0 {
 		if err := tx.CreateInBatches(validLocations, 100).Error; err != nil {
-			tx.Rollback(); log.Println("❌ Migration failed to save Locations:", err); return
+			tx.Rollback()
+			log.Println("❌ Migration failed to save Locations:", err)
+			return
 		}
 	}
 
 	// ── ShippingMethods ──
 	var shipping []ShippingMethod
 	if err := FetchSheetDataToStruct("ShippingMethods", &shipping); err != nil {
-		tx.Rollback(); log.Println("❌ Migration failed for ShippingMethods:", err); return
+		tx.Rollback()
+		log.Println("❌ Migration failed for ShippingMethods:", err)
+		return
 	}
 	var validShipping []ShippingMethod
 	seenShipping := make(map[string]bool)
@@ -425,14 +452,18 @@ func PerformDataMigration() {
 	}
 	if len(validShipping) > 0 {
 		if err := tx.CreateInBatches(validShipping, 100).Error; err != nil {
-			tx.Rollback(); log.Println("❌ Migration failed to save ShippingMethods:", err); return
+			tx.Rollback()
+			log.Println("❌ Migration failed to save ShippingMethods:", err)
+			return
 		}
 	}
 
 	// ── Colors ──
 	var colors []Color
 	if err := FetchSheetDataToStruct("Colors", &colors); err != nil {
-		tx.Rollback(); log.Println("❌ Migration failed for Colors:", err); return
+		tx.Rollback()
+		log.Println("❌ Migration failed for Colors:", err)
+		return
 	}
 	var validColors []Color
 	seenColors := make(map[string]bool)
@@ -444,14 +475,18 @@ func PerformDataMigration() {
 	}
 	if len(validColors) > 0 {
 		if err := tx.CreateInBatches(validColors, 100).Error; err != nil {
-			tx.Rollback(); log.Println("❌ Migration failed to save Colors:", err); return
+			tx.Rollback()
+			log.Println("❌ Migration failed to save Colors:", err)
+			return
 		}
 	}
 
 	// ── Drivers ──
 	var drivers []Driver
 	if err := FetchSheetDataToStruct("Drivers", &drivers); err != nil {
-		tx.Rollback(); log.Println("❌ Migration failed for Drivers:", err); return
+		tx.Rollback()
+		log.Println("❌ Migration failed for Drivers:", err)
+		return
 	}
 	var validDrivers []Driver
 	seenDrivers := make(map[string]bool)
@@ -463,14 +498,18 @@ func PerformDataMigration() {
 	}
 	if len(validDrivers) > 0 {
 		if err := tx.CreateInBatches(validDrivers, 100).Error; err != nil {
-			tx.Rollback(); log.Println("❌ Migration failed to save Drivers:", err); return
+			tx.Rollback()
+			log.Println("❌ Migration failed to save Drivers:", err)
+			return
 		}
 	}
 
 	// ── BankAccounts ──
 	var banks []BankAccount
 	if err := FetchSheetDataToStruct("BankAccounts", &banks); err != nil {
-		tx.Rollback(); log.Println("❌ Migration failed for BankAccounts:", err); return
+		tx.Rollback()
+		log.Println("❌ Migration failed for BankAccounts:", err)
+		return
 	}
 	var validBanks []BankAccount
 	seenBanks := make(map[string]bool)
@@ -482,14 +521,18 @@ func PerformDataMigration() {
 	}
 	if len(validBanks) > 0 {
 		if err := tx.CreateInBatches(validBanks, 100).Error; err != nil {
-			tx.Rollback(); log.Println("❌ Migration failed to save BankAccounts:", err); return
+			tx.Rollback()
+			log.Println("❌ Migration failed to save BankAccounts:", err)
+			return
 		}
 	}
 
 	// ── PhoneCarriers ──
 	var carriers []PhoneCarrier
 	if err := FetchSheetDataToStruct("PhoneCarriers", &carriers); err != nil {
-		tx.Rollback(); log.Println("❌ Migration failed for PhoneCarriers:", err); return
+		tx.Rollback()
+		log.Println("❌ Migration failed for PhoneCarriers:", err)
+		return
 	}
 	var validCarriers []PhoneCarrier
 	seenCarriers := make(map[string]bool)
@@ -501,14 +544,18 @@ func PerformDataMigration() {
 	}
 	if len(validCarriers) > 0 {
 		if err := tx.CreateInBatches(validCarriers, 100).Error; err != nil {
-			tx.Rollback(); log.Println("❌ Migration failed to save PhoneCarriers:", err); return
+			tx.Rollback()
+			log.Println("❌ Migration failed to save PhoneCarriers:", err)
+			return
 		}
 	}
 
 	// ── TelegramTemplates ──
 	var templates []TelegramTemplate
 	if err := FetchSheetDataToStruct("TelegramTemplates", &templates); err != nil {
-		tx.Rollback(); log.Println("❌ Migration failed for TelegramTemplates:", err); return
+		tx.Rollback()
+		log.Println("❌ Migration failed for TelegramTemplates:", err)
+		return
 	}
 	var validTemplates []TelegramTemplate
 	seenTemplates := make(map[uint]bool)
@@ -522,14 +569,18 @@ func PerformDataMigration() {
 	}
 	if len(validTemplates) > 0 {
 		if err := tx.CreateInBatches(validTemplates, 100).Error; err != nil {
-			tx.Rollback(); log.Println("❌ Migration failed to save TelegramTemplates:", err); return
+			tx.Rollback()
+			log.Println("❌ Migration failed to save TelegramTemplates:", err)
+			return
 		}
 	}
 
 	// ── Inventory ──
 	var inventory []Inventory
 	if err := FetchSheetDataToStruct("Inventory", &inventory); err != nil {
-		tx.Rollback(); log.Println("❌ Migration failed for Inventory:", err); return
+		tx.Rollback()
+		log.Println("❌ Migration failed for Inventory:", err)
+		return
 	}
 	var validInventory []Inventory
 	seenInventory := make(map[uint]bool)
@@ -543,14 +594,18 @@ func PerformDataMigration() {
 	}
 	if len(validInventory) > 0 {
 		if err := tx.CreateInBatches(validInventory, 100).Error; err != nil {
-			tx.Rollback(); log.Println("❌ Migration failed to save Inventory:", err); return
+			tx.Rollback()
+			log.Println("❌ Migration failed to save Inventory:", err)
+			return
 		}
 	}
 
 	// ── StockTransfers ──
 	var transfers []StockTransfer
 	if err := FetchSheetDataToStruct("StockTransfers", &transfers); err != nil {
-		tx.Rollback(); log.Println("❌ Migration failed for StockTransfers:", err); return
+		tx.Rollback()
+		log.Println("❌ Migration failed for StockTransfers:", err)
+		return
 	}
 	var validTransfers []StockTransfer
 	seenTransfers := make(map[string]bool)
@@ -562,14 +617,18 @@ func PerformDataMigration() {
 	}
 	if len(validTransfers) > 0 {
 		if err := tx.CreateInBatches(validTransfers, 100).Error; err != nil {
-			tx.Rollback(); log.Println("❌ Migration failed to save StockTransfers:", err); return
+			tx.Rollback()
+			log.Println("❌ Migration failed to save StockTransfers:", err)
+			return
 		}
 	}
 
 	// ── Returns ──
 	var returns []ReturnItem
 	if err := FetchSheetDataToStruct("Returns", &returns); err != nil {
-		tx.Rollback(); log.Println("❌ Migration failed for Returns:", err); return
+		tx.Rollback()
+		log.Println("❌ Migration failed for Returns:", err)
+		return
 	}
 	var validReturns []ReturnItem
 	seenReturns := make(map[string]bool)
@@ -581,14 +640,18 @@ func PerformDataMigration() {
 	}
 	if len(validReturns) > 0 {
 		if err := tx.CreateInBatches(validReturns, 100).Error; err != nil {
-			tx.Rollback(); log.Println("❌ Migration failed to save Returns:", err); return
+			tx.Rollback()
+			log.Println("❌ Migration failed to save Returns:", err)
+			return
 		}
 	}
 
 	// ── RevenueDashboard ──
 	var revs []RevenueEntry
 	if err := FetchSheetDataToStruct("RevenueDashboard", &revs); err != nil {
-		tx.Rollback(); log.Println("❌ Migration failed for RevenueDashboard:", err); return
+		tx.Rollback()
+		log.Println("❌ Migration failed for RevenueDashboard:", err)
+		return
 	}
 	var validRevs []RevenueEntry
 	seenRevs := make(map[uint]bool)
@@ -602,14 +665,18 @@ func PerformDataMigration() {
 	}
 	if len(validRevs) > 0 {
 		if err := tx.CreateInBatches(validRevs, 100).Error; err != nil {
-			tx.Rollback(); log.Println("❌ Migration failed to save RevenueDashboard:", err); return
+			tx.Rollback()
+			log.Println("❌ Migration failed to save RevenueDashboard:", err)
+			return
 		}
 	}
 
 	// ── ChatMessages ──
 	var chats []ChatMessage
 	if err := FetchSheetDataToStruct("ChatMessages", &chats); err != nil {
-		tx.Rollback(); log.Println("❌ Migration failed for ChatMessages:", err); return
+		tx.Rollback()
+		log.Println("❌ Migration failed for ChatMessages:", err)
+		return
 	}
 	var validChats []ChatMessage
 	seenChats := make(map[uint]bool)
@@ -623,14 +690,18 @@ func PerformDataMigration() {
 	}
 	if len(validChats) > 0 {
 		if err := tx.CreateInBatches(validChats, 100).Error; err != nil {
-			tx.Rollback(); log.Println("❌ Migration failed to save ChatMessages:", err); return
+			tx.Rollback()
+			log.Println("❌ Migration failed to save ChatMessages:", err)
+			return
 		}
 	}
 
 	// ── EditLogs ──
 	var editLogs []EditLog
 	if err := FetchSheetDataToStruct("EditLogs", &editLogs); err != nil {
-		tx.Rollback(); log.Println("❌ Migration failed for EditLogs:", err); return
+		tx.Rollback()
+		log.Println("❌ Migration failed for EditLogs:", err)
+		return
 	}
 	var validEditLogs []EditLog
 	seenEditLogs := make(map[uint]bool)
@@ -644,14 +715,18 @@ func PerformDataMigration() {
 	}
 	if len(validEditLogs) > 0 {
 		if err := tx.CreateInBatches(validEditLogs, 100).Error; err != nil {
-			tx.Rollback(); log.Println("❌ Migration failed to save EditLogs:", err); return
+			tx.Rollback()
+			log.Println("❌ Migration failed to save EditLogs:", err)
+			return
 		}
 	}
 
 	// ── UserActivityLogs ──
 	var actLogs []UserActivityLog
 	if err := FetchSheetDataToStruct("UserActivityLogs", &actLogs); err != nil {
-		tx.Rollback(); log.Println("❌ Migration failed for UserActivityLogs:", err); return
+		tx.Rollback()
+		log.Println("❌ Migration failed for UserActivityLogs:", err)
+		return
 	}
 	var validActLogs []UserActivityLog
 	seenActLogs := make(map[uint]bool)
@@ -665,14 +740,18 @@ func PerformDataMigration() {
 	}
 	if len(validActLogs) > 0 {
 		if err := tx.CreateInBatches(validActLogs, 100).Error; err != nil {
-			tx.Rollback(); log.Println("❌ Migration failed to save UserActivityLogs:", err); return
+			tx.Rollback()
+			log.Println("❌ Migration failed to save UserActivityLogs:", err)
+			return
 		}
 	}
 
 	// ── DriverRecommendations ──
 	var recs []DriverRecommendation
 	if err := FetchSheetDataToStruct("DriverRecommendations", &recs); err != nil {
-		tx.Rollback(); log.Println("❌ Migration failed for DriverRecommendations:", err); return
+		tx.Rollback()
+		log.Println("❌ Migration failed for DriverRecommendations:", err)
+		return
 	}
 	var validRecs []DriverRecommendation
 	seenRecs := make(map[uint]bool)
@@ -686,14 +765,18 @@ func PerformDataMigration() {
 	}
 	if len(validRecs) > 0 {
 		if err := tx.CreateInBatches(validRecs, 100).Error; err != nil {
-			tx.Rollback(); log.Println("❌ Migration failed to save DriverRecommendations:", err); return
+			tx.Rollback()
+			log.Println("❌ Migration failed to save DriverRecommendations:", err)
+			return
 		}
 	}
 
 	// ── Roles ──
 	var roles []Role
 	if err := FetchSheetDataToStruct("Roles", &roles); err != nil {
-		tx.Rollback(); log.Println("❌ Migration failed for Roles:", err); return
+		tx.Rollback()
+		log.Println("❌ Migration failed for Roles:", err)
+		return
 	}
 	var validRoles []Role
 	seenRoles := make(map[uint]bool)
@@ -707,14 +790,18 @@ func PerformDataMigration() {
 	}
 	if len(validRoles) > 0 {
 		if err := tx.CreateInBatches(validRoles, 100).Error; err != nil {
-			tx.Rollback(); log.Println("❌ Migration failed to save Roles:", err); return
+			tx.Rollback()
+			log.Println("❌ Migration failed to save Roles:", err)
+			return
 		}
 	}
 
 	// ── RolePermissions ──
 	var perms []RolePermission
 	if err := FetchSheetDataToStruct("RolePermissions", &perms); err != nil {
-		tx.Rollback(); log.Println("❌ Migration failed for RolePermissions:", err); return
+		tx.Rollback()
+		log.Println("❌ Migration failed for RolePermissions:", err)
+		return
 	}
 	var validPerms []RolePermission
 	seenPermKeys := make(map[string]bool)
@@ -728,14 +815,18 @@ func PerformDataMigration() {
 	}
 	if len(validPerms) > 0 {
 		if err := tx.CreateInBatches(validPerms, 100).Error; err != nil {
-			tx.Rollback(); log.Printf("❌ Migration failed to save RolePermissions: %v", err); return
+			tx.Rollback()
+			log.Printf("❌ Migration failed to save RolePermissions: %v", err)
+			return
 		}
 	}
 
 	// ── AllOrders ──
 	var orders []Order
 	if err := FetchSheetDataToStruct("AllOrders", &orders); err != nil {
-		tx.Rollback(); log.Println("❌ Migration failed for AllOrders (fetch):", err); return
+		tx.Rollback()
+		log.Println("❌ Migration failed for AllOrders (fetch):", err)
+		return
 	}
 	log.Printf("📊 AllOrders: Fetched %d rows from sheet", len(orders))
 	var validOrders []Order
@@ -748,7 +839,9 @@ func PerformDataMigration() {
 	}
 	if len(validOrders) > 0 {
 		if err := tx.CreateInBatches(validOrders, 100).Error; err != nil {
-			tx.Rollback(); log.Println("❌ Migration failed for AllOrders (save):", err); return
+			tx.Rollback()
+			log.Println("❌ Migration failed for AllOrders (save):", err)
+			return
 		}
 		log.Printf("✅ AllOrders: Saved %d valid rows", len(validOrders))
 	} else {
@@ -758,7 +851,9 @@ func PerformDataMigration() {
 	// ── Movies ──
 	var movies []Movie
 	if err := FetchSheetDataToStruct("Movies", &movies); err != nil {
-		tx.Rollback(); log.Println("❌ Migration failed for Movies:", err); return
+		tx.Rollback()
+		log.Println("❌ Migration failed for Movies:", err)
+		return
 	}
 	var validMovies []Movie
 	seenMovieIDs := make(map[string]bool)
@@ -770,58 +865,80 @@ func PerformDataMigration() {
 	}
 	if len(validMovies) > 0 {
 		if err := tx.CreateInBatches(validMovies, 100).Error; err != nil {
-			tx.Rollback(); log.Println("❌ Migration failed to save Movies:", err); return
+			tx.Rollback()
+			log.Println("❌ Migration failed to save Movies:", err)
+			return
 		}
 	}
 
 	// ── Incentive Sheets ──
 	var incProjects []IncentiveProject
 	if err := FetchSheetDataToStruct("IncentiveProjects", &incProjects); err != nil {
-		tx.Rollback(); log.Println("❌ Migration failed for IncentiveProjects:", err); return
+		tx.Rollback()
+		log.Println("❌ Migration failed for IncentiveProjects:", err)
+		return
 	}
 	if len(incProjects) > 0 {
 		if err := tx.CreateInBatches(incProjects, 100).Error; err != nil {
-			tx.Rollback(); log.Println("❌ Migration failed to save IncentiveProjects:", err); return
+			tx.Rollback()
+			log.Println("❌ Migration failed to save IncentiveProjects:", err)
+			return
 		}
 	}
 
 	var incCalcs []IncentiveCalculator
 	if err := FetchSheetDataToStruct("IncentiveCalculators", &incCalcs); err != nil {
-		tx.Rollback(); log.Println("❌ Migration failed for IncentiveCalculators:", err); return
+		tx.Rollback()
+		log.Println("❌ Migration failed for IncentiveCalculators:", err)
+		return
 	}
 	if len(incCalcs) > 0 {
 		if err := tx.CreateInBatches(incCalcs, 100).Error; err != nil {
-			tx.Rollback(); log.Println("❌ Migration failed to save IncentiveCalculators:", err); return
+			tx.Rollback()
+			log.Println("❌ Migration failed to save IncentiveCalculators:", err)
+			return
 		}
 	}
 
 	var incResults []IncentiveResult
 	if err := FetchSheetDataToStruct("IncentiveResults", &incResults); err != nil {
-		tx.Rollback(); log.Println("❌ Migration failed for IncentiveResults:", err); return
+		tx.Rollback()
+		log.Println("❌ Migration failed for IncentiveResults:", err)
+		return
 	}
 	if len(incResults) > 0 {
 		if err := tx.CreateInBatches(incResults, 100).Error; err != nil {
-			tx.Rollback(); log.Println("❌ Migration failed to save IncentiveResults:", err); return
+			tx.Rollback()
+			log.Println("❌ Migration failed to save IncentiveResults:", err)
+			return
 		}
 	}
 
 	var incManual []IncentiveManualData
 	if err := FetchSheetDataToStruct("IncentiveManualData", &incManual); err != nil {
-		tx.Rollback(); log.Println("❌ Migration failed for IncentiveManualData:", err); return
+		tx.Rollback()
+		log.Println("❌ Migration failed for IncentiveManualData:", err)
+		return
 	}
 	if len(incManual) > 0 {
 		if err := tx.CreateInBatches(incManual, 100).Error; err != nil {
-			tx.Rollback(); log.Println("❌ Migration failed to save IncentiveManualData:", err); return
+			tx.Rollback()
+			log.Println("❌ Migration failed to save IncentiveManualData:", err)
+			return
 		}
 	}
 
 	var incCustom []IncentiveCustomPayout
 	if err := FetchSheetDataToStruct("IncentiveCustomPayouts", &incCustom); err != nil {
-		tx.Rollback(); log.Println("❌ Migration failed for IncentiveCustomPayouts:", err); return
+		tx.Rollback()
+		log.Println("❌ Migration failed for IncentiveCustomPayouts:", err)
+		return
 	}
 	if len(incCustom) > 0 {
 		if err := tx.CreateInBatches(incCustom, 100).Error; err != nil {
-			tx.Rollback(); log.Println("❌ Migration failed to save IncentiveCustomPayouts:", err); return
+			tx.Rollback()
+			log.Println("❌ Migration failed to save IncentiveCustomPayouts:", err)
+			return
 		}
 	}
 
@@ -837,4 +954,78 @@ func PerformDataMigration() {
 func HandleMigrateData(c *gin.Context) {
 	go PerformDataMigration()
 	c.JSON(http.StatusOK, gin.H{"status": "success", "message": "Migration started."})
+}
+
+// HandleMigrateMovies migrates Movie data from Google Sheets to the database (Admin only).
+// After completion (success or failure), broadcasts a "movie_migration_complete" WebSocket
+// event so the frontend can update its UI without relying on a blind timeout.
+func HandleMigrateMovies(c *gin.Context) {
+	go func() {
+		// broadcastResult sends a WebSocket event to all connected clients so the
+		// frontend knows the outcome of the background goroutine.
+		broadcastResult := func(success bool, message string, count int) {
+			if HubGlobal == nil {
+				return
+			}
+			payload, _ := json.Marshal(map[string]interface{}{
+				"type":    "movie_migration_complete",
+				"success": success,
+				"message": message,
+				"count":   count,
+			})
+			HubGlobal.Broadcast <- payload
+		}
+
+		tx := DB.Begin()
+		defer func() {
+			if r := recover(); r != nil {
+				tx.Rollback()
+				broadcastResult(false, fmt.Sprintf("Panic during migration: %v", r), 0)
+			}
+		}()
+
+		log.Println("🗑️ លុបទិន្នន័យ Movie ចាស់ (Resetting Movies table within transaction)...")
+		tx.Session(&gorm.Session{AllowGlobalUpdate: true}).Delete(&Movie{})
+
+		log.Println("🔄 ចាប់ផ្តើមទាញទិន្នន័យ Movie ថ្មីពី Google Sheet...")
+
+		var movies []Movie
+		if err := FetchSheetDataToStruct("Movies", &movies); err != nil {
+			tx.Rollback()
+			log.Println("❌ Movie Migration failed for Movies:", err)
+			broadcastResult(false, "Failed to fetch data from Google Sheet: "+err.Error(), 0)
+			return
+		}
+
+		var validMovies []Movie
+		seenMovieIDs := make(map[string]bool)
+		for _, x := range movies {
+			if x.ID != "" && !seenMovieIDs[x.ID] {
+				seenMovieIDs[x.ID] = true
+				if x.AddedAt == "" {
+					x.AddedAt = time.Now().Format(time.RFC3339)
+				}
+				validMovies = append(validMovies, x)
+			}
+		}
+
+		if len(validMovies) > 0 {
+			if err := tx.CreateInBatches(validMovies, 100).Error; err != nil {
+				tx.Rollback()
+				log.Println("❌ Movie Migration failed to save Movies:", err)
+				broadcastResult(false, "Failed to save movies to database: "+err.Error(), 0)
+				return
+			}
+		}
+
+		if err := tx.Commit().Error; err != nil {
+			log.Println("❌ Movie Migration failed on commit:", err)
+			broadcastResult(false, "Database commit failed: "+err.Error(), 0)
+		} else {
+			log.Printf("🎉 Movie Migration ជោគជ័យ! Saved %d movies.", len(validMovies))
+			broadcastResult(true, fmt.Sprintf("Sync ជោគជ័យ! បានរក្សាទុក %d ភាពយន្ត។", len(validMovies)), len(validMovies))
+		}
+	}()
+
+	c.JSON(200, gin.H{"status": "success", "message": "Movie migration started."})
 }

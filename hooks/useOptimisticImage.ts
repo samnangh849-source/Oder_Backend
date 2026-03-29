@@ -36,9 +36,9 @@ export const useOptimisticImage = (props?: UseOptimisticImageProps) => {
      * Start the actual background upload to the Go Backend (Proxy to Apps Script)
      */
     const startUpload = useCallback(async (
-        id: string, 
-        blob: Blob, 
-        fileName: string, 
+        id: string,
+        blob: Blob,
+        fileName: string,
         metadata: {
             orderId?: string;
             targetColumn?: string;
@@ -46,6 +46,7 @@ export const useOptimisticImage = (props?: UseOptimisticImageProps) => {
             movieId?: string;
             sheetName?: string;
             primaryKey?: any;
+            newData?: Record<string, any>;
         }
     ) => {
         setUploadingIds(prev => new Set(prev).add(id));
@@ -89,16 +90,10 @@ export const useOptimisticImage = (props?: UseOptimisticImageProps) => {
             const result = await response.json();
 
             if (result.status === 'success') {
-                // The backend started a background upload. 
-                // We'll get a temporary URL back, but since we are doing Optimistic UI, 
-                // we'll wait for the real Drive URL if possible, or just consider it "queued".
-                
-                // Note: The real Drive URL comes later via WebSocket or polling, 
-                // because the Go backend returns immediately after starting the background goroutine.
-                
                 if (props?.onUploadSuccess) {
-                    props.onUploadSuccess(id, result.url); // result.url is the tempUrl from Go Backend
+                    props.onUploadSuccess(id, result.url);
                 }
+                return result.url as string;
             } else {
                 throw new Error(result.message || 'Upload failed');
             }

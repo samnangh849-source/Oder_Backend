@@ -14,6 +14,7 @@ import RoleSelectionPage from './pages/RoleSelectionPage';
 import SeriesPlayerPage from './pages/SeriesPlayerPage';
 import LongFilmPlayerPage from './pages/LongFilmPlayerPage';
 import ShortFilmPlayerPage from './pages/ShortFilmPlayerPage';
+import CambodiaMapPage from './pages/CambodiaMapPage';
 import NetflixEntertainment from './components/admin/netflix/NetflixEntertainment';
 import Header from './components/common/Header';
 import Spinner from './components/common/Spinner';
@@ -47,7 +48,7 @@ const AppContent: React.FC = () => {
         orders, appData, isOrdersLoading, isSyncing, refreshTimestamp, fetchData, fetchOrders, refreshData
     } = useOrder();
 
-    const [appState, setAppState] = useUrlState<'login' | 'user_journey' | 'admin_dashboard' | 'create_order' | 'fulfillment' | 'role_selection' | 'confirm_delivery' | 'entertainment' | 'watch' | 'series_player' | 'long_player' | 'short_player'>('view', 'login');
+    const [appState, setAppState] = useUrlState<'login' | 'user_journey' | 'admin_dashboard' | 'create_order' | 'fulfillment' | 'role_selection' | 'confirm_delivery' | 'entertainment' | 'watch' | 'series_player' | 'long_player' | 'short_player' | 'cambodia_map'>('view', 'login');
     const [selectedTeam, setSelectedTeam] = useUrlState<string>('team', '');
     const [selectedMovieId, setSelectedMovieId] = useUrlState<string>('movie', '');
     const [mobilePageTitle, setMobilePageTitle] = useState<string | null>(null);
@@ -97,8 +98,69 @@ const AppContent: React.FC = () => {
         }
     }, [advancedSettings.glassIntensity, advancedSettings.borderRadius, advancedSettings.animationSpeed, advancedSettings.fontStyle, advancedSettings.uiTheme]);
 
+    const [lastMessage, setLastMessage] = useState<any>(null);
+
+    // Global WebSocket connection for system notifications (Sync, etc.)
+    useEffect(() => {
+        if (!currentUser) return;
+        
+        let ws: WebSocket | null = null;
+        let reconnectTimeout: any = null;
+        let isDisposed = false;
+
+        const connect = async () => {
+            if (isDisposed) return;
+            const session = await CacheService.get<{ token: string }>(CACHE_KEYS.SESSION);
+            const token = session?.token || localStorage.getItem('token');
+            if (!token) return;
+
+            const protocol = window.location.protocol === 'https:' ? 'wss' : 'ws';
+            const host = WEB_APP_URL.replace(/^https?:\/\//, '');
+            
+            try {
+                ws = new WebSocket(`${protocol}://${host}/api/chat/ws?token=${encodeURIComponent(token)}`);
+                
+                ws.onmessage = (event) => {
+                    if (isDisposed) return;
+                    try {
+                        const data = JSON.parse(event.data);
+                        setLastMessage(data);
+                    } catch (e) {
+                        setLastMessage(event.data);
+                    }
+                };
+
+                ws.onclose = () => {
+                    if (!isDisposed) {
+                        reconnectTimeout = setTimeout(connect, 3000);
+                    }
+                };
+
+                ws.onerror = () => {
+                    ws?.close();
+                };
+            } catch (e) {
+                if (!isDisposed) {
+                    reconnectTimeout = setTimeout(connect, 3000);
+                }
+            }
+        };
+
+        connect();
+
+        return () => {
+            isDisposed = true;
+            if (ws) {
+                ws.onclose = null;
+                ws.close();
+            }
+            if (reconnectTimeout) clearTimeout(reconnectTimeout);
+        };
+    }, [currentUser]);
+
     const tokenRef = useRef<string | null>(null);
     const isMobile = window.innerWidth < 768;
+    const isAdmin = useMemo(() => currentUser?.IsSystemAdmin || (currentUser?.Role && currentUser.Role.toLowerCase() === 'admin'), [currentUser]);
 
     // --- SYNC SETTINGS ---
     useEffect(() => { localStorage.setItem('language', language); }, [language]);
@@ -124,7 +186,7 @@ const AppContent: React.FC = () => {
 
     // --- PERMISSION REFRESH ---
     useEffect(() => {
-        if (currentUser && appData?.permissions && Array.isArray(appData.permissions)) {
+        if (currentUser && appData?.permissions && Array.isArray(appData.permissions) && appData.permissions.length > 0) {
             // Split user roles (e.g. "Manager, Driver") and normalize to lowercase
             const userRoles = (currentUser.Role || '').split(',').map(r => r.trim().toLowerCase());
             
@@ -149,12 +211,12 @@ const AppContent: React.FC = () => {
                 if (currentPermsStr !== nextPermsStr) {
                     setCurrentUser(prev => prev ? { ...prev, Permissions: rolePerms } : null);
                 }
-            } else if ((currentUser.Permissions || []).length > 0) {
-                // Clear permissions if none match anymore (except for Admin who bypasses in hasPermission)
+            } else if ((currentUser.Permissions || []).length > 0 && !isAdmin) {
+                // Only clear if we actually have data but none match
                 setCurrentUser(prev => prev ? { ...prev, Permissions: [] } : null);
             }
         }
-    }, [currentUser?.Role, appData?.permissions, currentUser?.Permissions, setCurrentUser]);
+    }, [currentUser?.Role, appData?.permissions, currentUser?.Permissions, setCurrentUser, isAdmin]);
 
     useEffect(() => {
         if (currentUser) fetchOrders();
@@ -194,8 +256,11 @@ const AppContent: React.FC = () => {
                         const perms = await fetchPermissions(session.token);
                         userWithPerms.Permissions = perms;
                     }
+                    
+                    // Fetch static data first to ensure permissions can be refreshed correctly
+                    await fetchData(false);
+                    
                     setCurrentUser(userWithPerms);
-                    fetchData(false);
                     
                     const currentView = new URLSearchParams(window.location.search).get('view');
                     if (currentView !== 'series_player' && currentView !== 'watch' && currentView !== 'confirm_delivery' && currentView !== 'entertainment' && currentView !== 'short_player' && currentView !== 'long_player') {
@@ -232,17 +297,17 @@ const AppContent: React.FC = () => {
     }, []);
 
     const shouldShowHeader = useMemo(() => {
-        if (appState === 'login' || appState === 'user_journey' || appState === 'admin_dashboard' || appState === 'confirm_delivery' || appState === 'entertainment' || appState === 'watch' || appState === 'series_player' || appState === 'long_player' || appState === 'short_player') return false;
+        if (appState === 'login' || appState === 'user_journey' || appState === 'admin_dashboard' || appState === 'confirm_delivery' || appState === 'entertainment' || appState === 'watch' || appState === 'series_player' || appState === 'long_player' || appState === 'short_player' || appState === 'cambodia_map') return false;
         return true;
     }, [appState]);
 
     const containerClass = useMemo(() => {
-        if (appState === 'entertainment' || appState === 'watch' || appState === 'series_player' || appState === 'long_player' || appState === 'short_player') return 'w-full';
+        if (appState === 'entertainment' || appState === 'watch' || appState === 'series_player' || appState === 'long_player' || appState === 'short_player' || appState === 'cambodia_map') return 'w-full';
         return (appState === 'admin_dashboard' || appState === 'role_selection' || appState === 'user_journey') ? 'w-full' : 'w-full px-2 sm:px-6';
     }, [appState, selectedTeam]);
 
     const paddingClass = useMemo(() => {
-        if (appState === 'login' || appState === 'confirm_delivery' || appState === 'entertainment' || appState === 'watch' || appState === 'series_player' || appState === 'long_player' || appState === 'short_player') return 'pt-0 pb-0';
+        if (appState === 'login' || appState === 'confirm_delivery' || appState === 'entertainment' || appState === 'watch' || appState === 'series_player' || appState === 'long_player' || appState === 'short_player' || appState === 'cambodia_map') return 'pt-0 pb-0';
         
         // Base header padding
         let topPadding = isMobile ? 'pt-16' : 'pt-20';
@@ -294,7 +359,8 @@ const AppContent: React.FC = () => {
         mobilePageTitle, setMobilePageTitle,
         advancedSettings, setAdvancedSettings,
         selectedTeam, setSelectedTeam,
-        selectedMovieId, setSelectedMovieId
+        selectedMovieId, setSelectedMovieId,
+        lastMessage
     }), [
         currentUser, appData, orders, isOrdersLoading, isSyncing, login, logout, refreshData, refreshTimestamp,
         originalAdminUser, setUnreadCount, unreadCount, appState, setAppState, setOriginalAdminUser,
@@ -302,26 +368,32 @@ const AppContent: React.FC = () => {
         isSidebarCollapsed, setIsSidebarCollapsed, setIsChatOpen, isMobileMenuOpen, 
         setIsMobileMenuOpen, language, setLanguage, showNotification, mobilePageTitle, 
         setMobilePageTitle, advancedSettings, setAdvancedSettings, selectedTeam, setSelectedTeam,
-        selectedMovieId, setSelectedMovieId
+        selectedMovieId, setSelectedMovieId, lastMessage
     ]);
 
-    if (isGlobalLoading) return <div className="flex h-screen items-center justify-center bg-[#020617]"><Spinner size="lg" /></div>;
+    if (isGlobalLoading) return <div className="flex h-screen items-center justify-center bg-dark" style={{ backgroundColor: 'var(--bg-dark)' }}><Spinner size="lg" /></div>;
 
     return (
         <AppContext.Provider value={legacyContextValue as any}>
             <div className={`theme-wrapper h-screen w-full overflow-hidden flex flex-col ${advancedSettings.uiTheme ? `ui-${advancedSettings.uiTheme}` : ''} ${advancedSettings.themeMode ? `theme-${advancedSettings.themeMode}` : 'theme-dark'}`}>
                 {/* GLOBAL PREMIUM BACKGROUND */}
-                <div className="fixed inset-0 w-screen h-[100dvh] overflow-hidden pointer-events-none z-0 bg-[#020617] dark:bg-[#020617] light:bg-slate-100">
-                    <div className="absolute top-[-10%] left-[-10%] w-[100%] sm:w-[70%] h-[60%] sm:h-[70%] bg-blue-600/15 rounded-full blur-[80px] sm:blur-[120px] animate-pulse"></div>
-                    <div className="absolute bottom-[-10%] right-[-10%] w-[100%] sm:w-[60%] h-[60%] bg-indigo-600/15 rounded-full blur-[80px] sm:blur-[120px]" style={{ animationDelay: '3s' }}></div>
-                    <div className="absolute top-[20%] right-[10%] w-[50%] sm:w-[40%] h-[40%] bg-emerald-500/5 rounded-full blur-[60px] sm:blur-[100px]" style={{ animationDelay: '1.5s' }}></div>
+                <div className="fixed inset-0 w-screen h-[100dvh] overflow-hidden pointer-events-none z-0" style={{ backgroundColor: 'var(--bg-dark)' }}>
+                    {advancedSettings.uiTheme !== 'binance' && (
+                        <>
+                            <div className="absolute top-[-10%] left-[-10%] w-[100%] sm:w-[70%] h-[60%] sm:h-[70%] bg-blue-600/15 rounded-full blur-[80px] sm:blur-[120px] animate-pulse"></div>
+                            <div className="absolute bottom-[-10%] right-[-10%] w-[100%] sm:w-[60%] h-[60%] bg-indigo-600/15 rounded-full blur-[80px] sm:blur-[120px]" style={{ animationDelay: '3s' }}></div>
+                            <div className="absolute top-[20%] right-[10%] w-[50%] sm:w-[40%] h-[40%] bg-emerald-500/5 rounded-full blur-[60px] sm:blur-[100px]" style={{ animationDelay: '1.5s' }}></div>
+                        </>
+                    )}
                     <div className="absolute inset-0 bg-[url('https://www.transparenttextures.com/patterns/carbon-fibre.png')] opacity-[0.02] mix-blend-overlay"></div>
                 </div>
 
                 <div className="relative z-10 flex flex-col h-full w-full overflow-hidden">
                     <BackgroundMusic />
                     <Suspense fallback={<div className="flex h-full items-center justify-center bg-transparent"><Spinner size="lg" /></div>}>
-                        {appState === 'confirm_delivery' ? (
+                        {appState === 'cambodia_map' ? (
+                            <CambodiaMapPage />
+                        ) : appState === 'confirm_delivery' ? (
                             <DeliveryAgentView orderIds={confirmIds} returnOrderIds={returnIds} failedOrderIds={failedIdsParam} storeName={confirmStore} />
                         ) : appState === 'watch' ? (
                             <div id="app-main-scroll-container" className="flex-grow overflow-y-auto w-full h-full">

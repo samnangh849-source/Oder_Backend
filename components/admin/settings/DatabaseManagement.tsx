@@ -51,10 +51,15 @@ const DatabaseManagement: React.FC = () => {
                 method: 'POST',
                 headers
             });
-            
+
+            if (!response.ok) {
+                const text = await response.text();
+                throw new Error(`Server Error (${response.status}): ${text}`);
+            }
+
             const result = await response.json();
             
-            if (response.ok && result.status === 'success') {
+            if (result.status === 'success') {
                 setStatus({ type: 'success', message: 'ការ Sync ទិន្នន័យបានចាប់ផ្តើមដោយជោគជ័យ! សូមរង់ចាំមួយស្របក់ដើម្បីឱ្យប្រព័ន្ធបញ្ចប់ការងារក្នុង Background។' });
                 showNotification("Data Migration Started", "success");
                 
@@ -90,9 +95,14 @@ const DatabaseManagement: React.FC = () => {
                 headers
             });
 
+            if (!response.ok) {
+                const text = await response.text();
+                throw new Error(`Server Error (${response.status}): ${text}`);
+            }
+
             const result = await response.json();
 
-            if (!response.ok || result.status !== 'success') {
+            if (result.status !== 'success') {
                 throw new Error(result.message || 'Movie migration request failed');
             }
             // ✅ Server accepted the job — goroutine is running in background.

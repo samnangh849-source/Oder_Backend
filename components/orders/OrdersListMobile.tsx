@@ -4,6 +4,8 @@ import { AppContext } from '../../context/AppContext';
 import Spinner from '../common/Spinner';
 import { MobileGrandTotalCard } from './OrderGrandTotal';
 import { useSoundEffects } from '../../hooks/useSoundEffects';
+import { convertGoogleDriveUrl } from '../../utils/fileUtils';
+import { Edit2, Check, Truck, Warehouse, MapPin, Clock, Globe } from 'lucide-react';
 
 interface OrdersListMobileProps {
     orders: ParsedOrder[];
@@ -29,21 +31,11 @@ const OrdersListMobile: React.FC<OrdersListMobileProps> = ({
     orders, totals, visibleColumns, selectedIds, isSelectionMode, onToggleSelect, onEdit, onView,
     handlePrint, toggleOrderVerified, updatingIds, groupBy = 'none', viewMode = 'card'
 }) => {
-    const { currentUser, hasPermission } = useContext(AppContext);
-    const { playClick, playPop, playSuccess } = useSoundEffects();
+    const { currentUser, hasPermission, advancedSettings, language } = useContext(AppContext);
+    const { playClick, playPop } = useSoundEffects();
     const [displayCount, setDisplayCount] = useState(20);
-    const longPressTimer = useRef<any>(null);
-    
-    const handleStartLongPress = (id: string) => {
-        longPressTimer.current = setTimeout(() => {
-            playPop();
-            onToggleSelect?.(id);
-        }, 600);
-    };
 
-    const handleEndLongPress = () => {
-        if (longPressTimer.current) clearTimeout(longPressTimer.current);
-    };
+    const isBinance = advancedSettings?.uiTheme === 'binance';
     
     const visibleOrders = useMemo(() => orders.slice(0, displayCount), [orders, displayCount]);
     
@@ -88,140 +80,140 @@ const OrdersListMobile: React.FC<OrdersListMobileProps> = ({
     const showVerify = !visibleColumns || visibleColumns.has('isVerified');
 
     return (
-        <div className="flex flex-col space-y-4">
+        <div className="flex flex-col space-y-6">
             <style>{`
-                .order-card-v2 {
-                    background: rgba(30, 41, 59, 0.3);
-                    border: 1px solid rgba(255, 255, 255, 0.04);
-                    backdrop-filter: blur(16px);
-                    transition: all 0.4s cubic-bezier(0.23, 1, 0.32, 1);
+                .premium-card {
+                    background: linear-gradient(145deg, var(--cm-card-bg), #1c2127);
+                    border: 1px solid var(--cm-border);
+                    border-radius: 4px;
+                    box-shadow: 0 4px 20px rgba(0,0,0,0.2);
+                    position: relative;
+                    overflow: hidden;
                 }
-                .order-card-v2:active {
-                    transform: scale(0.98);
-                    background: rgba(30, 41, 59, 0.5);
+                .status-bar {
+                    position: absolute;
+                    left: 0;
+                    top: 0;
+                    bottom: 0;
+                    width: 3px;
                 }
-                .order-row-v2 {
-                    background: rgba(30, 41, 59, 0.2);
-                    border-bottom: 1px solid rgba(255, 255, 255, 0.03);
-                    padding: 12px 16px;
-                    transition: all 0.3s;
-                }
-                .order-row-v2:active {
-                    background: rgba(255, 255, 255, 0.05);
-                }
-                .status-pill-v2 {
-                    padding: 4px 12px;
-                    border-radius: 12px;
+                .status-pill-v4 {
                     font-size: 9px;
                     font-weight: 900;
+                    letter-spacing: 0.05em;
+                    padding: 2px 8px;
+                    border-radius: 2px;
+                    text-transform: uppercase;
+                }
+                .info-label-v4 {
+                    font-size: 8px;
+                    font-weight: 800;
+                    color: var(--cm-text-muted);
                     text-transform: uppercase;
                     letter-spacing: 0.05em;
+                    margin-bottom: 2px;
                 }
-                .product-pill-v2 {
-                    background: rgba(255, 255, 255, 0.03);
-                    border: 1px solid rgba(255, 255, 255, 0.05);
-                    padding: 4px 10px;
-                    border-radius: 10px;
-                    font-size: 10px;
-                    font-weight: 600;
+                .info-value-v4 {
+                    font-size: 11px;
+                    font-weight: 700;
+                    color: var(--cm-text-primary);
                 }
-                .action-btn-v2 {
-                    width: 38px;
-                    height: 38px;
+                .list-row-v4 {
+                    background: var(--cm-card-bg);
+                    border-bottom: 1px solid var(--cm-border);
+                    padding: 12px 16px;
+                    display: flex;
+                    align-items: center;
+                    gap: 12px;
+                }
+                .list-row-v4:active {
+                    background: var(--cm-card-bg2);
+                }
+                .action-icon-btn {
+                    width: 32px;
+                    height: 32px;
                     display: flex;
                     align-items: center;
                     justify-content: center;
-                    border-radius: 12px;
-                    background: rgba(255, 255, 255, 0.03);
-                    border: 1px solid rgba(255, 255, 255, 0.05);
-                    color: rgba(255, 255, 255, 0.4);
-                    transition: all 0.2s;
+                    border-radius: 4px;
+                    background: var(--cm-card-bg2);
+                    border: 1px solid var(--cm-border);
+                    color: var(--cm-text-muted);
                 }
-                .action-btn-v2:active {
-                    transform: scale(0.9);
-                    background: rgba(255, 255, 255, 0.1);
+                .action-icon-btn.active {
+                    color: var(--cm-accent);
+                    border-color: var(--cm-accent);
                 }
             `}</style>
 
             {groupedData.map((group, gIdx) => (
-                <div key={gIdx} className="space-y-3">
+                <div key={gIdx} className="space-y-4">
                     {group.label && (
-                        <div className="flex items-center gap-3 px-3 mb-2">
-                            <span className="text-[9px] font-black text-blue-500/60 uppercase tracking-[0.3em]">{group.label}</span>
-                            <div className="h-px flex-1 bg-gradient-to-r from-blue-500/10 to-transparent"></div>
+                        <div className="flex items-center gap-3 px-4">
+                            <span className="text-[10px] font-black text-[var(--cm-accent)] uppercase tracking-[0.2em]">{group.label}</span>
+                            <div className="h-px flex-1 bg-gradient-to-r from-[var(--cm-border)] to-transparent"></div>
                         </div>
                     )}
                     
-                    <div className={viewMode === 'card' ? "grid grid-cols-1 gap-3 px-2" : "flex flex-col bg-white/[0.02] border border-white/5 rounded-[2rem] overflow-hidden"}>
+                    <div className={viewMode === 'card' ? "grid grid-cols-1 gap-4 px-4" : "flex flex-col border-y border-[var(--cm-border)]"}>
                         {group.orders.map((order, idx) => {
                             const isVerified = order.IsVerified === true || String(order.IsVerified).toUpperCase() === 'TRUE' || order.IsVerified === 'A';
                             const isSelected = selectedIds.has(order['Order ID']);
                             const isPaid = order['Payment Status'] === 'Paid';
                             const orderTotal = Number(order['Grand Total']) || 0;
                             const displayIndex = idx + 1;
-                            
+
+                            // Products logic
+                            const products = Array.isArray(order.Products) ? order.Products : [];
+                            const mainProduct = products[0];
+                            const productCount = products.length;
+
                             if (viewMode === 'list') {
                                 return (
                                     <div 
                                         key={order['Order ID']} 
-                                        onClick={() => {
-                                            if (isSelectionMode || selectedIds.size > 0) {
-                                                playClick();
-                                                onToggleSelect?.(order['Order ID']);
-                                            } else {
-                                                onView?.(order);
-                                            }
-                                        }}
-                                        className={`order-row-v2 flex items-center justify-between gap-3 transition-all ${isSelected ? 'bg-blue-600/20 border-l-4 border-blue-500' : ''}`}
+                                        onClick={() => (isSelectionMode || selectedIds.size > 0) ? onToggleSelect?.(order['Order ID']) : onView?.(order)}
+                                        className={`list-row-v4 ${isSelected ? 'bg-[var(--cm-accent-light)]' : ''}`}
                                     >
-                                        <div className="flex items-center gap-3 flex-1 min-w-0">
-                                            {/* Show checkbox ONLY when Selection Mode is active, otherwise show index */}
+                                        <div className="status-bar" style={{ backgroundColor: isPaid ? 'var(--cm-green)' : 'var(--cm-red)' }}></div>
+                                        
+                                        <div className="w-6 shrink-0 text-center">
                                             {isSelectionMode ? (
-                                                <div 
-                                                    onClick={(e) => { e.stopPropagation(); playPop(); onToggleSelect?.(order['Order ID']); }}
-                                                    className={`w-6 h-6 rounded-md flex items-center justify-center shrink-0 transition-all border-2 ${isSelected ? 'bg-blue-600 border-blue-500 shadow-lg shadow-blue-900/40' : 'bg-white/5 border-blue-500/40'}`}
-                                                >
-                                                    {isSelected && <svg className="w-4 h-4 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={4}><path d="M5 13l4 4L19 7" /></svg>}
+                                                <div className={`w-5 h-5 rounded-sm flex items-center justify-center border ${isSelected ? 'bg-[var(--cm-accent)] border-[var(--cm-accent)]' : 'border-[var(--cm-border)]'}`}>
+                                                    {isSelected && <Check size={12} color="var(--cm-accent-text)" strokeWidth={4} />}
                                                 </div>
                                             ) : (
-                                                <span className="text-[10px] font-black text-blue-500/40 font-mono w-4 shrink-0 text-center">{displayIndex}</span>
+                                                <span className="text-[10px] font-black text-[var(--cm-text-muted)] font-mono opacity-50">{displayIndex}</span>
                                             )}
-                                            
-                                            <div className="flex-1 min-w-0">
-                                                <div className="flex items-center gap-2 mb-0.5">
-                                                    <h3 className="text-sm font-black text-white truncate uppercase tracking-tight">{order['Customer Name']}</h3>
-                                                    <span className={`status-pill-v2 !py-0.5 !px-1.5 !rounded-md !text-[7px] ${isPaid ? 'bg-emerald-500/10 text-emerald-400' : 'bg-orange-500/10 text-orange-400'}`}>
-                                                        {isPaid ? 'PAID' : 'COD'}
-                                                    </span>
-                                                </div>
-                                                <div className="flex items-center gap-2 text-[9px] font-bold text-gray-500">
-                                                    <span className="text-blue-400/80">{order['Customer Phone']}</span>
-                                                    <span>•</span>
-                                                    <span className="truncate max-w-[100px]">{order.Location || 'N/A'}</span>
-                                                </div>
+                                        </div>
+
+                                        <div className="flex-1 min-w-0">
+                                            <div className="flex items-center gap-2 mb-0.5">
+                                                <h3 className="text-[13px] font-black text-[var(--cm-text-primary)] truncate uppercase tracking-tight">{order['Customer Name']}</h3>
+                                                <span className={`text-[8px] font-black px-1.5 py-0.5 rounded-sm ${isPaid ? 'bg-[var(--cm-green)]/10 text-[var(--cm-green)]' : 'bg-[var(--cm-red)]/10 text-[var(--cm-red)]'}`}>
+                                                    {isPaid ? 'PAID' : 'UNPAID'}
+                                                </span>
+                                            </div>
+                                            <div className="flex items-center gap-2 text-[10px] font-bold text-[var(--cm-text-muted)]">
+                                                <span className="text-[var(--cm-accent)]">{order['Customer Phone']}</span>
+                                                <span className="opacity-20">•</span>
+                                                <span className="truncate">{order.Location || 'N/A'}</span>
                                             </div>
                                         </div>
-                                        <div className="text-right shrink-0">
-                                            <div className="text-base font-black text-white italic tracking-tighter leading-none">
-                                                <span className="text-[10px] text-blue-500 mr-0.5">$</span>
-                                                {orderTotal.toLocaleString(undefined, { maximumFractionDigits: 0 })}
+
+                                        <div className="flex items-center gap-3 shrink-0">
+                                            <div className="text-right">
+                                                <div className="text-[14px] font-black text-[var(--cm-text-primary)] italic tabular-nums leading-none">
+                                                    <span className="text-[10px] text-[var(--cm-accent)] mr-0.5 font-sans">$</span>
+                                                    {orderTotal.toLocaleString(undefined, { minimumFractionDigits: 0 })}
+                                                </div>
                                             </div>
-                                            <div className="text-[7px] font-black text-gray-600 uppercase tracking-widest mt-1">{getSafeDateString(order.Timestamp).split(',')[0]}</div>
-                                        </div>
-                                        {/* Hide individual verify button when in selection mode to avoid confusion */}
-                                        {showVerify && !isSelectionMode && (
-                                            <div onClick={(e) => e.stopPropagation()} className="flex items-center ml-1">
-                                                <button 
-                                                    onClick={() => {
-                                                        if (!isVerified) playSuccess();
-                                                        toggleOrderVerified(order['Order ID'], isVerified);
-                                                    }}
-                                                    className={`w-8 h-8 flex items-center justify-center rounded-lg transition-all ${isVerified ? 'text-emerald-500 bg-emerald-500/10 shadow-[0_0_15px_rgba(16,185,129,0.2)]' : 'text-gray-700 active:bg-white/5'}`}
-                                                >
-                                                    {updatingIds.has(order['Order ID']) ? <Spinner size="xs" /> : <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={3}><path d="M5 13l4 4L19 7" /></svg>}
+                                            {canEditOrder(order) && (
+                                                <button onClick={e => { e.stopPropagation(); onEdit?.(order); }} className="action-icon-btn">
+                                                    <Edit2 size={14} />
                                                 </button>
-                                            </div>
-                                        )}
+                                            )}
+                                        </div>
                                     </div>
                                 );
                             }
@@ -229,76 +221,98 @@ const OrdersListMobile: React.FC<OrdersListMobileProps> = ({
                             return (
                                 <div 
                                     key={order['Order ID']} 
-                                    onClick={() => {
-                                        if (selectedIds.size > 0 || isSelectionMode) {
-                                            playClick();
-                                            onToggleSelect?.(order['Order ID']);
-                                        } else {
-                                            onView?.(order);
-                                        }
-                                    }}
-                                    className={`order-card-v2 relative overflow-hidden rounded-[2rem] p-4 transition-all duration-300 ${isSelected ? 'ring-2 ring-blue-500 bg-blue-600/10' : ''}`}
+                                    onClick={() => (selectedIds.size > 0 || isSelectionMode) ? onToggleSelect?.(order['Order ID']) : onView?.(order)}
+                                    className={`premium-card p-4 transition-all ${isSelected ? 'ring-1 ring-[var(--cm-accent)] shadow-[0_0_15px_rgba(240,185,11,0.15)]' : ''}`}
                                 >
-                                    {/* Standard Square Checkbox for Cards - Visible ONLY in Selection Mode */}
-                                    {isSelectionMode && (
-                                        <div 
-                                            onClick={(e) => { e.stopPropagation(); playPop(); onToggleSelect?.(order['Order ID']); }}
-                                            className={`absolute top-4 left-4 z-20 w-6 h-6 rounded-md flex items-center justify-center shadow-lg transition-all border-2 ${isSelected ? 'bg-blue-600 border-blue-500' : 'bg-white/5 border-blue-500/40'}`}
-                                        >
-                                            {isSelected && <svg className="w-4 h-4 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={4}><path d="M5 13l4 4L19 7" /></svg>}
-                                        </div>
-                                    )}
-
-                                    {/* Glass Highlight */}
-                                    <div className="absolute top-0 left-0 w-full h-1/2 bg-gradient-to-b from-white/[0.03] to-transparent pointer-events-none"></div>
-
-                                    {/* Header: Index, ID & Price */}
-                                    <div className="flex justify-between items-start mb-3 relative z-10">
-                                        <div className={`flex items-center gap-2 ${isSelectionMode ? 'pl-8' : ''}`}>
-                                            {!isSelectionMode && <span className="text-[10px] font-black text-blue-500/40 font-mono italic">{displayIndex}</span>}
-                                            <span className="text-[9px] font-black text-gray-600 font-mono tracking-tighter bg-white/5 px-2 py-0.5 rounded-md">#{order['Order ID'].substring(0, 8)}</span>
-                                            <div className={`status-pill-v2 !py-0.5 !px-2 !rounded-lg ${isPaid ? 'bg-emerald-500/10 text-emerald-400' : 'bg-orange-500/10 text-orange-400'}`}>
-                                                {order['Payment Status']}
+                                    <div className="status-bar" style={{ backgroundColor: isPaid ? 'var(--cm-green)' : 'var(--cm-red)' }}></div>
+                                    
+                                    {/* Header Row */}
+                                    <div className="flex justify-between items-start mb-4">
+                                        <div className="flex items-center gap-3">
+                                            {isSelectionMode ? (
+                                                <div className={`w-5 h-5 rounded-sm flex items-center justify-center border ${isSelected ? 'bg-[var(--cm-accent)] border-[var(--cm-accent)]' : 'border-[var(--cm-border)]'}`}>
+                                                    {isSelected && <Check size={12} color="var(--cm-accent-text)" strokeWidth={4} />}
+                                                </div>
+                                            ) : (
+                                                <span className="text-[10px] font-black text-[var(--cm-text-muted)] font-mono opacity-50">{displayIndex}</span>
+                                            )}
+                                            <div className="flex flex-col">
+                                                <span className="text-[10px] font-black text-[var(--cm-text-primary)] tracking-tighter opacity-80">#{order['Order ID'].substring(0, 10)}</span>
+                                                <div className="flex items-center gap-2 mt-1">
+                                                    <span className={`status-pill-v4 ${isPaid ? 'bg-[var(--cm-green)]/10 text-[var(--cm-green)]' : 'bg-[var(--cm-red)]/10 text-[var(--cm-red)]'}`}>
+                                                        {isPaid ? 'PAID' : 'UNPAID'}
+                                                    </span>
+                                                    {isVerified && <div className="flex items-center gap-1 text-[var(--cm-green)] text-[9px] font-black"><Check size={10} strokeWidth={4}/> VERIFIED</div>}
+                                                </div>
                                             </div>
                                         </div>
-                                        <div className="text-lg font-black text-white italic tracking-tighter">
-                                            <span className="text-[10px] text-blue-500 mr-0.5">$</span>
-                                            {orderTotal.toLocaleString(undefined, { minimumFractionDigits: 2 })}
+                                        <div className="text-right">
+                                            <div className="text-[20px] font-black text-[var(--cm-text-primary)] italic tabular-nums leading-none tracking-tighter">
+                                                <span className="text-[12px] text-[var(--cm-accent)] mr-0.5 font-sans">$</span>
+                                                {orderTotal.toLocaleString(undefined, { minimumFractionDigits: 2 })}
+                                            </div>
                                         </div>
                                     </div>
 
-                                    {/* Customer Info */}
-                                    <div className="mb-3">
-                                        <h3 className="text-base font-black text-white truncate tracking-tight mb-0.5 italic uppercase">{order['Customer Name']}</h3>
-                                        <div className="flex items-center gap-2 text-[11px]">
-                                            <span className="font-bold text-blue-400 tracking-tight">{order['Customer Phone']}</span>
-                                            <span className="w-1 h-1 bg-white/10 rounded-full"></span>
-                                            <span className="font-medium text-gray-500 truncate">{order.Location || 'N/A'}</span>
+                                    {/* Content Row */}
+                                    <div className="flex gap-4 mb-5 pb-4 border-b border-[var(--cm-border)]/50">
+                                        <div className="w-16 h-16 rounded bg-[var(--cm-card-bg2)] border border-[var(--cm-border)] shrink-0 relative overflow-hidden">
+                                            {mainProduct?.ProductImage ? (
+                                                <img src={convertGoogleDriveUrl(mainProduct.ProductImage)} className="w-full h-full object-cover" alt="" />
+                                            ) : (
+                                                <div className="w-full h-full flex items-center justify-center text-[8px] text-[var(--cm-text-muted)] font-black">IMAGE</div>
+                                            )}
+                                            {productCount > 1 && (
+                                                <div className="absolute bottom-0 right-0 bg-[var(--cm-accent)] text-[var(--cm-accent-text)] text-[9px] font-black px-1.5 rounded-tl-sm">
+                                                    +{productCount - 1}
+                                                </div>
+                                            )}
+                                        </div>
+                                        <div className="flex-1 min-w-0">
+                                            <h3 className="text-[15px] font-black text-[var(--cm-text-primary)] truncate uppercase tracking-tight mb-1">{order['Customer Name']}</h3>
+                                            <div className="flex items-center gap-2 text-[12px] font-bold text-[var(--cm-accent)] mb-1">
+                                                <span>{order['Customer Phone']}</span>
+                                            </div>
+                                            <div className="flex items-center gap-1.5 text-[10px] text-[var(--cm-text-muted)] font-medium">
+                                                <MapPin size={10} className="text-[var(--cm-red)] opacity-70" />
+                                                <span className="truncate">{order.Location || 'N/A'}</span>
+                                            </div>
                                         </div>
                                     </div>
 
-                                    {/* Compact Footer: Actions */}
-                                    <div className="flex items-center justify-between pt-3 border-t border-white/5">
-                                        <div className="flex flex-col">
-                                            <span className="text-[8px] font-black text-gray-600 uppercase tracking-widest">{getSafeDateString(order.Timestamp)}</span>
-                                            <span className="text-[8px] font-black text-blue-400/50 uppercase truncate max-w-[100px] mt-0.5">{order.Page || 'System'}</span>
+                                    {/* Footer Info & Actions */}
+                                    <div className="flex items-end justify-between">
+                                        <div className="grid grid-cols-2 gap-x-6 gap-y-3 flex-1">
+                                            <div>
+                                                <div className="info-label-v4"><Warehouse size={8} className="inline mr-1" /> Warehouse</div>
+                                                <div className="info-value-v4 truncate max-w-[80px]">{order['Fulfillment Store'] || '---'}</div>
+                                            </div>
+                                            <div>
+                                                <div className="info-label-v4"><Truck size={8} className="inline mr-1" /> Driver</div>
+                                                <div className="info-value-v4 truncate max-w-[80px]">{order['Driver Name'] || '---'}</div>
+                                            </div>
+                                            <div>
+                                                <div className="info-label-v4"><Clock size={8} className="inline mr-1" /> Date</div>
+                                                <div className="info-value-v4">{getSafeDateString(order.Timestamp).split(',')[0]}</div>
+                                            </div>
+                                            <div>
+                                                <div className="info-label-v4"><Globe size={8} className="inline mr-1" /> Source</div>
+                                                <div className="info-value-v4 truncate max-w-[80px] italic">{order.Page || 'System'}</div>
+                                            </div>
                                         </div>
                                         
-                                        <div className="flex items-center gap-2" onClick={(e) => e.stopPropagation()}>
-                                            <button onClick={() => handlePrint(order)} className="action-btn-v2 !w-9 !h-9">
-                                                <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2.5}><path d="M17 17h2a2 2 0 002-2v-4a2 2 0 00-2-2H5a2 2 0 00-2 2v4a2 2 0 002 2h2m2 4h6a2 2 0 002-2v-4a2 2 0 00-2-2H9a2 2 0 00-2 2v4a2 2 0 002 2zm8-12V5a2 2 0 00-2-2H9a2 2 0 00-2 2v4h10z" /></svg>
-                                            </button>
+                                        <div className="flex items-center gap-2 ml-4" onClick={e => e.stopPropagation()}>
                                             {canEditOrder(order) && (
-                                                <button onClick={() => onEdit && onEdit(order)} className="action-btn-v2 !w-9 !h-9">
-                                                    <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2.5}><path d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" /></svg>
+                                                <button onClick={() => onEdit?.(order)} className="action-icon-btn w-10 h-10 active:scale-90 transition-transform">
+                                                    <Edit2 size={16} />
                                                 </button>
                                             )}
                                             {showVerify && !isSelectionMode && (
                                                 <button 
                                                     onClick={() => toggleOrderVerified(order['Order ID'], isVerified)}
-                                                    className={`action-btn-v2 !w-9 !h-9 transition-all ${isVerified ? 'text-emerald-500 bg-emerald-500/10 border-emerald-500/20' : ''}`}
+                                                    className={`action-icon-btn w-10 h-10 ${isVerified ? 'active' : ''} active:scale-90 transition-transform`}
                                                 >
-                                                    {updatingIds.has(order['Order ID']) ? <Spinner size="xs" /> : <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={3}><path d="M5 13l4 4L19 7" /></svg>}
+                                                    {updatingIds.has(order['Order ID']) ? <Spinner size="xs" /> : <Check size={18} strokeWidth={3} />}
                                                 </button>
                                             )}
                                         </div>
@@ -311,15 +325,19 @@ const OrdersListMobile: React.FC<OrdersListMobileProps> = ({
             ))}
             
             {displayCount < orders.length && (
-                <div className="flex justify-center pt-8 pb-12">
+                <div className="flex justify-center pt-4 pb-2 px-4">
                     <button 
                         onClick={handleLoadMore} 
-                        className="px-12 py-4 bg-white/5 text-gray-500 rounded-2xl text-[11px] font-black uppercase tracking-[0.3em] border border-white/10 hover:text-white hover:bg-white/10 transition-all active:scale-95"
+                        className="w-full py-3.5 bg-[#1E2329] text-[var(--cm-text-muted)] rounded-sm text-[11px] font-black uppercase tracking-[0.2em] border border-[var(--cm-border)] active:scale-[0.98] transition-all"
                     >
                         Load More Records
                     </button>
                 </div>
             )}
+            
+            <div className="px-4 pb-12">
+                <MobileGrandTotalCard totals={totals} />
+            </div>
         </div>
     );
 };

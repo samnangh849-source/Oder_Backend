@@ -22,7 +22,7 @@ interface ShippingReportProps {
 }
 
 const ShippingReport: React.FC<ShippingReportProps> = ({ orders, appData, dateFilter: initialDateFilter, startDate: initialStartDate, endDate: initialEndDate, onNavigate, contextFilters, onBack }) => {
-    const { advancedSettings } = useContext(AppContext);
+    const { advancedSettings, language } = useContext(AppContext);
     const uiTheme = advancedSettings?.uiTheme || 'default';
     const isLightMode = advancedSettings?.themeMode === 'light';
 
@@ -410,148 +410,242 @@ const ShippingReport: React.FC<ShippingReportProps> = ({ orders, appData, dateFi
         printWindow.document.close();
     };
 
+    // Cost per order average
+    const avgCostPerOrder = shippingStats.totalOrders > 0 ? shippingStats.totalInternalCost / shippingStats.totalOrders : 0;
+    const avgFeePerOrder = shippingStats.totalOrders > 0 ? shippingStats.totalCustomerFee / shippingStats.totalOrders : 0;
+    const profitMargin = shippingStats.totalInternalCost > 0 ? (shippingStats.netShipping / shippingStats.totalCustomerFee) * 100 : 0;
+
     return (
-        <div className="space-y-8 animate-fade-in pb-12 select-none">
+        <div className="space-y-6 animate-fade-in pb-12 select-none">
             
-            {/* Header Actions */}
-            <div className={`flex flex-col gap-4 ${styles.headerBg} p-5 rounded-md border backdrop-blur-md`}>
-                <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
-                    <div className="flex items-center gap-4">
+            {/* Header Section */}
+            <div className={`${styles.headerBg} border backdrop-blur-md`} style={uiTheme === 'binance' ? { borderRadius: '4px' } : undefined}>
+                {/* Title Row */}
+                <div className="flex justify-between items-center px-5 pt-5 pb-4">
+                    <div className="flex items-center gap-3">
                         {onBack && (
-                            <button onClick={onBack} className={`p-3 rounded-md border ${styles.buttonSecondary} transition-all active:scale-95`}>
-                                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 19l-7-7m0 0l7-7m-7 7h18" /></svg>
+                            <button onClick={onBack} className={`p-2 transition-all active:scale-95 ${styles.buttonSecondary}`} style={uiTheme === 'binance' ? { borderRadius: '4px', border: 'none', background: 'transparent' } : { border: 'none' }}>
+                                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2.5}><path d="M15 19l-7-7 7-7" /></svg>
                             </button>
                         )}
-                        <div>
-                            <h2 className={`text-xl font-black ${styles.primaryText} uppercase tracking-tight`}>របាយការណ៍ដឹកជញ្ជូន</h2>
-                            <p className={`text-[10px] ${styles.secondaryText} font-bold mt-1 uppercase tracking-widest`}>Shipping & Fulfillment Cost Analysis</p>
+                        <div className="flex items-center gap-2">
+                            <div className="w-1 h-5 rounded-full" style={{ backgroundColor: styles.accent }}></div>
+                            <div>
+                                <h2 className={`text-base font-black ${styles.primaryText} uppercase tracking-tight`}>របាយការណ៍ដឹកជញ្ជូន</h2>
+                                <p className={`text-[9px] ${styles.secondaryText} font-bold uppercase tracking-widest`}>Shipping & Fulfillment Cost Analysis</p>
+                            </div>
                         </div>
                     </div>
-                    
-                    <div className="flex flex-wrap items-center gap-2">
+
+                    <div className="flex items-center gap-2">
+                        {/* Store Filter */}
+                        <div className={`flex items-center border ${styles.tableBorder} ${styles.innerBg}`} style={uiTheme === 'binance' ? { borderRadius: '4px' } : undefined}>
+                            <span className={`text-[9px] font-bold ${styles.secondaryText} uppercase px-3 whitespace-nowrap`}>Store</span>
+                            <select 
+                                value={storeFilter} 
+                                onChange={(e) => setStoreFilter(e.target.value)}
+                                className={`bg-transparent border-none text-[10px] font-bold ${styles.primaryText} focus:ring-0 cursor-pointer py-2 pr-6 pl-1 uppercase`}
+                            >
+                                <option value="All" className={styles.innerBg}>All</option>
+                                {appData.stores?.map(s => (
+                                    <option key={s.StoreName} value={s.StoreName} className={styles.innerBg}>{s.StoreName}</option>
+                                ))}
+                            </select>
+                        </div>
+
+                        {/* Export Excel */}
+                        <button 
+                            onClick={handleExportExcel}
+                            className={`flex items-center gap-1.5 px-3 py-2 text-[10px] font-bold uppercase tracking-wider transition-all active:scale-95 ${uiTheme === 'binance' ? 'bg-[#0ECB81] text-[#1E2329] hover:bg-[#0bb371]' : 'bg-emerald-600 text-white hover:bg-emerald-700'}`}
+                            style={uiTheme === 'binance' ? { borderRadius: '4px' } : undefined}
+                        >
+                            <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2.5}><path d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" /></svg>
+                            Excel
+                        </button>
+
+                        {/* Print */}
+                        <button 
+                            onClick={handleOpenPrintView}
+                            className={`flex items-center gap-1.5 px-3 py-2 text-[10px] font-bold uppercase tracking-wider transition-all active:scale-95 ${uiTheme === 'binance' ? 'bg-[#F6465D] text-white hover:bg-[#e03f54]' : 'bg-red-600 text-white hover:bg-red-700'}`}
+                            style={uiTheme === 'binance' ? { borderRadius: '4px' } : undefined}
+                        >
+                            <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2.5}><path d="M7 21h10a2 2 0 002-2V9.414a1 1 0 00-.293-.707l-5.414-5.414A1 1 0 0012.586 3H7a2 2 0 00-2 2v14a2 2 0 002 2z" /></svg>
+                            Print
+                        </button>
+                    </div>
+                </div>
+
+                {/* Date Filter Tabs */}
+                <div className={`flex items-center justify-between px-5 pb-0 border-b ${styles.tableBorder}`}>
+                    <div className="flex items-center">
                         {(['today', 'yesterday', 'this_week', 'this_month', 'last_month', 'all'] as const).map(preset => (
                             <button
                                 key={preset}
                                 onClick={() => setDateFilter(preset)}
-                                className={`px-4 py-2 text-[9px] font-black uppercase rounded-md transition-all ${dateFilter === preset ? styles.buttonAccent + ' shadow-lg' : styles.buttonSecondary}`}
+                                className={`px-4 py-2.5 text-[10px] font-bold uppercase tracking-wider transition-all border-b-2 ${
+                                    dateFilter === preset 
+                                    ? `${styles.primaryText} border-[${styles.accent}]` 
+                                    : `${styles.secondaryText} border-transparent hover:${styles.primaryText}`
+                                }`}
+                                style={dateFilter === preset ? { borderBottomColor: styles.accent } : { borderBottomColor: 'transparent' }}
                             >
                                 {preset.replace('_', ' ')}
                             </button>
                         ))}
                         <button
                             onClick={() => setDateFilter('custom')}
-                            className={`px-4 py-2 text-[9px] font-black uppercase rounded-md transition-all ${dateFilter === 'custom' ? styles.buttonAccent + ' shadow-lg' : styles.buttonSecondary}`}
+                            className={`px-4 py-2.5 text-[10px] font-bold uppercase tracking-wider transition-all border-b-2 ${
+                                dateFilter === 'custom' 
+                                ? `${styles.primaryText} border-[${styles.accent}]` 
+                                : `${styles.secondaryText} border-transparent hover:${styles.primaryText}`
+                            }`}
+                            style={dateFilter === 'custom' ? { borderBottomColor: styles.accent } : { borderBottomColor: 'transparent' }}
                         >
                             Custom
                         </button>
                     </div>
+
+                    {/* Period indicator */}
+                    <div className={`text-[9px] font-bold ${styles.secondaryText} uppercase tracking-wider pb-2`}>
+                        {dateFilter === 'custom' ? `${startDate} → ${endDate}` : dateFilter.replace('_', ' ')}
+                    </div>
                 </div>
 
+                {/* Custom Date Range */}
                 {dateFilter === 'custom' && (
-                    <div className={`flex items-center gap-3 ${styles.innerBg} p-3 rounded-md border ${styles.tableBorder} animate-fade-in-down`}>
+                    <div className={`flex items-center gap-3 mx-5 mt-3 mb-1 ${styles.innerBg} p-3 border ${styles.tableBorder} animate-fade-in-down`} style={uiTheme === 'binance' ? { borderRadius: '4px' } : undefined}>
                         <input 
                             type="date" 
                             value={startDate} 
                             onChange={e => setStartDate(e.target.value)} 
-                            className={`${styles.innerBg} border ${styles.tableBorder} rounded-md px-4 py-2 ${styles.primaryText} text-xs font-bold focus:ring-2 focus:ring-${uiTheme === 'binance' ? '[#FCD535]' : 'blue-500'}`} 
+                            className={`${styles.innerBg} border ${styles.tableBorder} px-3 py-1.5 ${styles.primaryText} text-xs font-bold focus:ring-0 focus:border-[${styles.accent}] outline-none`}
+                            style={uiTheme === 'binance' ? { borderRadius: '4px' } : undefined}
                         />
-                        <span className={`${styles.secondaryText} font-black text-xs uppercase tracking-widest`}>to</span>
+                        <span className={`${styles.secondaryText} font-bold text-xs uppercase`}>to</span>
                         <input 
                             type="date" 
                             value={endDate} 
                             onChange={e => setEndDate(e.target.value)} 
-                            className={`${styles.innerBg} border ${styles.tableBorder} rounded-md px-4 py-2 ${styles.primaryText} text-xs font-bold focus:ring-2 focus:ring-${uiTheme === 'binance' ? '[#FCD535]' : 'blue-500'}`} 
+                            className={`${styles.innerBg} border ${styles.tableBorder} px-3 py-1.5 ${styles.primaryText} text-xs font-bold focus:ring-0 focus:border-[${styles.accent}] outline-none`}
+                            style={uiTheme === 'binance' ? { borderRadius: '4px' } : undefined}
                         />
                     </div>
                 )}
+            </div>
 
-                <div className={`flex flex-col sm:flex-row justify-between items-center gap-4 pt-4 border-t ${styles.tableBorder}`}>
-                    <div className="flex items-center gap-3 w-full sm:w-auto">
-                        <div className={`p-1 rounded-md border ${styles.tableBorder} flex items-center w-full sm:w-auto ${styles.innerBg}`}>
-                            <span className={`text-[9px] font-bold ${styles.secondaryText} uppercase px-3 whitespace-nowrap`}>Store:</span>
-                            <select 
-                                value={storeFilter} 
-                                onChange={(e) => setStoreFilter(e.target.value)}
-                                className={`bg-transparent border-none text-[11px] font-black ${styles.primaryText} focus:ring-0 cursor-pointer py-1.5 pr-8 pl-1 w-full uppercase`}
-                            >
-                                <option value="All" className={styles.innerBg}>All Stores</option>
-                                {appData.stores?.map(s => (
-                                    <option key={s.StoreName} value={s.StoreName} className={styles.innerBg}>{s.StoreName}</option>
-                                ))}
-                            </select>
+            {/* Stats Cards */}
+            <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+                {[
+                    { 
+                        label: language === 'km' ? 'ចំណាយដឹកជញ្ជូន' : 'Shipping Cost', 
+                        sublabel: language === 'km' ? 'សរុបផ្ទៃក្នុង' : 'Internal Total',
+                        value: `$${shippingStats.totalInternalCost.toLocaleString()}`,
+                        subvalue: `$${avgCostPerOrder.toFixed(2)}/order`,
+                        color: uiTheme === 'binance' ? '#F6465D' : '#f97316',
+                        icon: '🚚'
+                    },
+                    { 
+                        label: language === 'km' ? 'ថ្លៃដឹកពីអតិថិជន' : 'Customer Fees', 
+                        sublabel: language === 'km' ? 'ប្រាក់ចំណូល' : 'Revenue',
+                        value: `$${shippingStats.totalCustomerFee.toLocaleString()}`,
+                        subvalue: `$${avgFeePerOrder.toFixed(2)}/order`,
+                        color: uiTheme === 'binance' ? '#FCD535' : '#3b82f6',
+                        icon: '💰'
+                    },
+                    { 
+                        label: language === 'km' ? 'តុល្យភាព' : 'Net Balance', 
+                        sublabel: shippingStats.netShipping >= 0 ? (language === 'km' ? 'ចំណេញ' : 'Profit') : (language === 'km' ? 'ខាត' : 'Loss'),
+                        value: `$${shippingStats.netShipping.toLocaleString()}`,
+                        subvalue: `${profitMargin.toFixed(1)}% margin`,
+                        color: shippingStats.netShipping >= 0 ? (uiTheme === 'binance' ? '#0ECB81' : '#10b981') : (uiTheme === 'binance' ? '#F6465D' : '#ef4444'),
+                        icon: '⚖️'
+                    },
+                    { 
+                        label: language === 'km' ? 'កញ្ចប់សរុប' : 'Total Packages', 
+                        sublabel: language === 'km' ? 'ចំនួន' : 'Count',
+                        value: shippingStats.totalOrders.toLocaleString(),
+                        subvalue: `${shippingStats.methods.length} carriers`,
+                        color: uiTheme === 'binance' ? '#F0B90B' : '#8b5cf6',
+                        icon: '📦'
+                    }
+                ].map((card, i) => (
+                    <div key={i} className={`${styles.cardBg} border p-4`} style={uiTheme === 'binance' ? { borderRadius: '4px' } : undefined}>
+                        <div className="flex items-start justify-between mb-3">
+                            <span className="text-xl">{card.icon}</span>
+                            <div className="w-2 h-2 rounded-full" style={{ backgroundColor: card.color, opacity: 0.6 }}></div>
+                        </div>
+                        <div className={`text-[9px] font-bold ${styles.secondaryText} uppercase tracking-wider mb-1`}>{card.label}</div>
+                        <div className={`text-xl font-black ${styles.primaryText} tabular-nums mb-1`}>{card.value}</div>
+                        <div className="flex items-center justify-between">
+                            <span className={`text-[9px] font-bold ${styles.secondaryText}`}>{card.sublabel}</span>
+                            <span className={`text-[9px] font-bold tabular-nums`} style={{ color: card.color }}>{card.subvalue}</span>
                         </div>
                     </div>
-
-                    <div className="flex gap-2 w-full sm:w-auto">
-                        <button 
-                            onClick={handleExportExcel}
-                            className={`flex-1 sm:flex-none justify-center px-4 py-2.5 rounded-md font-black text-[10px] uppercase tracking-widest transition-all flex items-center gap-2 active:scale-95 ${uiTheme === 'binance' ? 'bg-[#0ECB81] text-[#1E2329] hover:bg-[#0bb371]' : 'bg-emerald-600 text-white hover:bg-emerald-700'}`}
-                        >
-                            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" /></svg>
-                            Excel
-                        </button>
-                        <button 
-                            onClick={handleOpenPrintView}
-                            className={`flex-1 sm:flex-none justify-center px-4 py-2.5 rounded-md font-black text-[10px] uppercase tracking-widest transition-all flex items-center gap-2 active:scale-95 ${uiTheme === 'binance' ? 'bg-[#F6465D] text-white hover:bg-[#e03f54]' : 'bg-red-600 text-white hover:bg-red-700'}`}
-                        >
-                            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 21h10a2 2 0 002-2V9.414a1 1 0 00-.293-.707l-5.414-5.414A1 1 0 0012.586 3H7a2 2 0 00-2 2v14a2 2 0 002 2z" /></svg>
-                            Print
-                        </button>
-                    </div>
-                </div>
+                ))}
             </div>
 
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-                <StatCard label="ចំណាយដឹកជញ្ជូនសរុប" value={`$${shippingStats.totalInternalCost.toLocaleString()}`} icon="🚚" colorClass={uiTheme === 'binance' ? "from-[#F6465D] to-[#e03f54]" : "from-orange-600 to-red-500"} />
-                <StatCard label="ថ្លៃដឹកពីអតិថិជន" value={`$${shippingStats.totalCustomerFee.toLocaleString()}`} icon="💰" colorClass={uiTheme === 'binance' ? "from-[#FCD535] to-[#f0c51d] !text-[#1E2329]" : "from-blue-600 to-indigo-500"} />
-                <StatCard label="តុល្យភាព (Net)" value={`$${shippingStats.netShipping.toLocaleString()}`} icon="⚖️" colorClass={shippingStats.netShipping >= 0 ? (uiTheme === 'binance' ? "from-[#0ECB81] to-[#0bb371]" : "from-emerald-600 to-teal-500") : (uiTheme === 'binance' ? "from-[#F6465D] to-[#e03f54]" : "from-red-600 to-pink-500")} />
-                <StatCard label="ចំនួនកញ្ចប់សរុប" value={shippingStats.totalOrders} icon="📦" colorClass={uiTheme === 'binance' ? "from-[#2B3139] to-[#1E2329]" : "from-purple-600 to-blue-500"} />
-            </div>
-
-            <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
-                <div className="lg:col-span-8 space-y-6">
+            <div className="grid grid-cols-1 lg:grid-cols-12 gap-4">
+                <div className="lg:col-span-8 space-y-4">
                     {/* Table 1: Methods (Shipping Companies) */}
-                    <div className={`page-card !p-6 ${styles.cardBg} rounded-md border`}>
-                        <h3 className={`text-[11px] font-black ${styles.primaryText} uppercase tracking-widest mb-6 flex items-center gap-2`}>
-                            <div className={`w-1 h-4 ${styles.accent === '#FCD535' ? 'bg-[#FCD535]' : 'bg-blue-500'} rounded-full`}></div>
-                            សង្ខេបតាមក្រុមហ៊ុនដឹកជញ្ជូន
+                    <div className={`${styles.cardBg} border p-5`} style={uiTheme === 'binance' ? { borderRadius: '4px' } : undefined}>
+                        <h3 className={`text-[10px] font-black ${styles.primaryText} uppercase tracking-widest mb-4 flex items-center gap-2`}>
+                            <div className="w-1 h-4 rounded-full" style={{ backgroundColor: styles.accent }}></div>
+                            {language === 'km' ? 'សង្ខេបតាមក្រុមហ៊ុនដឹកជញ្ជូន' : 'By Shipping Carrier'}
                         </h3>
                         <div className="overflow-x-auto">
                             <table className="w-full text-sm text-left">
-                                <thead className={`text-[9px] ${styles.secondaryText} font-black uppercase tracking-widest border-b ${styles.tableBorder}`}>
-                                    <tr><th className="px-4 py-3">ក្រុមហ៊ុន</th><th className="px-4 py-3 text-center">ចំនួន Orders</th><th className="px-4 py-3 text-right">ទឹកប្រាក់បង់ ($)</th></tr>
+                                <thead className={`text-[9px] ${styles.secondaryText} font-bold uppercase tracking-wider border-b ${styles.tableBorder}`}>
+                                    <tr>
+                                        <th className="px-3 py-2.5">{language === 'km' ? 'ក្រុមហ៊ុន' : 'Carrier'}</th>
+                                        <th className="px-3 py-2.5 text-center">{language === 'km' ? 'ចំនួន' : 'Orders'}</th>
+                                        <th className="px-3 py-2.5 text-right">{language === 'km' ? 'ទឹកប្រាក់' : 'Cost ($)'}</th>
+                                        <th className="px-3 py-2.5 w-32">{language === 'km' ? 'សមាមាត្រ' : 'Distribution'}</th>
+                                    </tr>
                                 </thead>
                                 <tbody className={`divide-y ${styles.tableBorder}`}>
-                                    {shippingStats.methods.map((m, i) => (
-                                        <tr key={i} className={styles.tableRowHover}>
-                                            <td className={`px-4 py-3 font-bold ${styles.primaryText} flex items-center gap-3`}>
-                                                <img src={convertGoogleDriveUrl(m.logo)} className={`w-8 h-8 rounded-md object-contain ${styles.innerBg} p-1 border ${styles.tableBorder}`} alt="" />
-                                                <span className="text-[11px] uppercase tracking-wider">{m.name}</span>
-                                            </td>
-                                            <td 
-                                                className={`px-4 py-3 text-center font-black ${uiTheme === 'binance' ? 'text-[#FCD535]' : 'text-blue-400'} cursor-pointer hover:underline transition-colors tabular-nums`}
-                                                onClick={() => handleFilterNavigation('shippingFilter', m.name)}
-                                            >
-                                                {m.orders}
-                                            </td>
-                                            <td 
-                                                className={`px-4 py-3 text-right font-black ${styles.primaryText} cursor-pointer hover:underline transition-colors tabular-nums`}
-                                                onClick={() => handleFilterNavigation('shippingFilter', m.name)}
-                                            >
-                                                ${m.cost.toLocaleString(undefined, {minimumFractionDigits: 2})}
-                                            </td>
-                                        </tr>
-                                    ))}
+                                    {shippingStats.methods.map((m, i) => {
+                                        const pct = shippingStats.totalInternalCost > 0 ? (m.cost / shippingStats.totalInternalCost) * 100 : 0;
+                                        return (
+                                            <tr key={i} className={`${styles.tableRowHover} transition-colors`}>
+                                                <td className={`px-3 py-2.5 font-bold ${styles.primaryText} flex items-center gap-2.5`}>
+                                                    <img src={convertGoogleDriveUrl(m.logo)} className={`w-7 h-7 object-contain ${styles.innerBg} p-0.5 border ${styles.tableBorder}`} style={uiTheme === 'binance' ? { borderRadius: '4px' } : undefined} alt="" />
+                                                    <span className="text-[10px] uppercase tracking-wider">{m.name}</span>
+                                                </td>
+                                                <td 
+                                                    className={`px-3 py-2.5 text-center font-black text-[${styles.accent}] cursor-pointer hover:underline transition-colors tabular-nums text-xs`}
+                                                    style={{ color: styles.accent }}
+                                                    onClick={() => handleFilterNavigation('shippingFilter', m.name)}
+                                                >
+                                                    {m.orders}
+                                                </td>
+                                                <td 
+                                                    className={`px-3 py-2.5 text-right font-black ${styles.primaryText} cursor-pointer hover:underline transition-colors tabular-nums text-xs`}
+                                                    onClick={() => handleFilterNavigation('shippingFilter', m.name)}
+                                                >
+                                                    ${m.cost.toLocaleString(undefined, {minimumFractionDigits: 2})}
+                                                </td>
+                                                <td className="px-3 py-2.5">
+                                                    <div className="flex items-center gap-2">
+                                                        <div className="flex-1 h-1.5 ${styles.innerBg}" style={{ backgroundColor: uiTheme === 'binance' ? '#2B3139' : 'rgba(255,255,255,0.05)', borderRadius: '2px' }}>
+                                                            <div className="h-full transition-all" style={{ width: `${pct}%`, backgroundColor: styles.accent, borderRadius: '2px' }}></div>
+                                                        </div>
+                                                        <span className={`text-[9px] font-bold ${styles.secondaryText} tabular-nums w-10 text-right`}>{pct.toFixed(1)}%</span>
+                                                    </div>
+                                                </td>
+                                            </tr>
+                                        );
+                                    })}
                                 </tbody>
-                                <tfoot className={`${styles.innerBg} border-t-2 ${styles.tableBorder}`}>
+                                <tfoot className={`${styles.innerBg} border-t ${styles.tableBorder}`}>
                                     <tr>
-                                        <td className={`px-4 py-3 text-right text-[9px] font-black uppercase ${styles.secondaryText} tracking-widest`}>Aggregate Cost</td>
-                                        <td className={`px-4 py-3 text-center font-black ${uiTheme === 'binance' ? 'text-[#FCD535]' : 'text-blue-300'} text-base tabular-nums`}>
+                                        <td className={`px-3 py-2 text-right text-[9px] font-bold uppercase ${styles.secondaryText} tracking-wider`}>{language === 'km' ? 'សរុប' : 'Total'}</td>
+                                        <td className={`px-3 py-2 text-center font-black text-xs tabular-nums`} style={{ color: styles.accent }}>
                                             {shippingStats.methods.reduce((sum, m) => sum + m.orders, 0)}
                                         </td>
-                                        <td className={`px-4 py-3 text-right font-black ${uiTheme === 'binance' ? 'text-[#0ECB81]' : 'text-emerald-400'} text-base tabular-nums`}>
+                                        <td className={`px-3 py-2 text-right font-black text-sm tabular-nums`} style={{ color: uiTheme === 'binance' ? '#0ECB81' : '#10b981' }}>
                                             ${shippingStats.methods.reduce((sum, m) => sum + m.cost, 0).toLocaleString(undefined, {minimumFractionDigits: 2})}
                                         </td>
+                                        <td></td>
                                     </tr>
                                 </tfoot>
                             </table>
@@ -559,47 +653,66 @@ const ShippingReport: React.FC<ShippingReportProps> = ({ orders, appData, dateFi
                     </div>
 
                     {/* Table 2: Drivers */}
-                    <div className={`page-card !p-6 ${styles.cardBg} rounded-md border`}>
-                        <h3 className={`text-[11px] font-black ${styles.primaryText} uppercase tracking-widest mb-6 flex items-center gap-2`}>
-                            <div className={`w-1 h-4 ${styles.accent === '#FCD535' ? 'bg-[#FCD535]' : 'bg-emerald-500'} rounded-full`}></div>
-                            សង្ខេបតាមអ្នកដឹក (Drivers)
+                    <div className={`${styles.cardBg} border p-5`} style={uiTheme === 'binance' ? { borderRadius: '4px' } : undefined}>
+                        <h3 className={`text-[10px] font-black ${styles.primaryText} uppercase tracking-widest mb-4 flex items-center gap-2`}>
+                            <div className="w-1 h-4 rounded-full" style={{ backgroundColor: uiTheme === 'binance' ? '#0ECB81' : '#10b981' }}></div>
+                            {language === 'km' ? 'សង្ខេបតាមអ្នកដឹក' : 'By Driver'}
                         </h3>
                         <div className="overflow-x-auto">
                             <table className="w-full text-sm text-left">
-                                <thead className={`text-[9px] ${styles.secondaryText} font-black uppercase tracking-widest border-b ${styles.tableBorder}`}>
-                                    <tr><th className="px-4 py-3">អ្នកដឹក</th><th className="px-4 py-3 text-center">ចំនួន Orders</th><th className="px-4 py-3 text-right">ទឹកប្រាក់បង់ ($)</th></tr>
+                                <thead className={`text-[9px] ${styles.secondaryText} font-bold uppercase tracking-wider border-b ${styles.tableBorder}`}>
+                                    <tr>
+                                        <th className="px-3 py-2.5">{language === 'km' ? 'អ្នកដឹក' : 'Driver'}</th>
+                                        <th className="px-3 py-2.5 text-center">{language === 'km' ? 'ចំនួន' : 'Orders'}</th>
+                                        <th className="px-3 py-2.5 text-right">{language === 'km' ? 'ទឹកប្រាក់' : 'Cost ($)'}</th>
+                                        <th className="px-3 py-2.5 w-32">{language === 'km' ? 'សមាមាត្រ' : 'Distribution'}</th>
+                                    </tr>
                                 </thead>
                                 <tbody className={`divide-y ${styles.tableBorder}`}>
-                                    {shippingStats.drivers.map((d, i) => (
-                                        <tr key={i} className={styles.tableRowHover}>
-                                            <td className={`px-4 py-3 font-bold ${styles.primaryText} flex items-center gap-3`}>
-                                                <img src={convertGoogleDriveUrl(d.photo)} className={`w-8 h-8 rounded-full object-cover ${styles.innerBg} border ${styles.tableBorder}`} alt="" />
-                                                <span className="text-[11px] uppercase tracking-wider">{d.name}</span>
-                                            </td>
-                                            <td 
-                                                className={`px-4 py-3 text-center font-black ${uiTheme === 'binance' ? 'text-[#FCD535]' : 'text-blue-400'} cursor-pointer hover:underline transition-colors tabular-nums`}
-                                                onClick={() => handleFilterNavigation('driverFilter', d.name)}
-                                            >
-                                                {d.orders}
-                                            </td>
-                                            <td 
-                                                className={`px-4 py-3 text-right font-black ${styles.primaryText} cursor-pointer hover:underline transition-colors tabular-nums`}
-                                                onClick={() => handleFilterNavigation('driverFilter', d.name)}
-                                            >
-                                                ${d.cost.toLocaleString(undefined, {minimumFractionDigits: 2})}
-                                            </td>
-                                        </tr>
-                                    ))}
+                                    {shippingStats.drivers.map((d, i) => {
+                                        const pct = shippingStats.totalInternalCost > 0 ? (d.cost / shippingStats.totalInternalCost) * 100 : 0;
+                                        const driverColor = uiTheme === 'binance' ? '#0ECB81' : '#10b981';
+                                        return (
+                                            <tr key={i} className={`${styles.tableRowHover} transition-colors`}>
+                                                <td className={`px-3 py-2.5 font-bold ${styles.primaryText} flex items-center gap-2.5`}>
+                                                    <img src={convertGoogleDriveUrl(d.photo)} className={`w-7 h-7 object-cover border ${styles.tableBorder}`} style={uiTheme === 'binance' ? { borderRadius: '4px' } : { borderRadius: '50%' }} alt="" />
+                                                    <span className="text-[10px] uppercase tracking-wider">{d.name}</span>
+                                                </td>
+                                                <td 
+                                                    className={`px-3 py-2.5 text-center font-black cursor-pointer hover:underline transition-colors tabular-nums text-xs`}
+                                                    style={{ color: driverColor }}
+                                                    onClick={() => handleFilterNavigation('driverFilter', d.name)}
+                                                >
+                                                    {d.orders}
+                                                </td>
+                                                <td 
+                                                    className={`px-3 py-2.5 text-right font-black ${styles.primaryText} cursor-pointer hover:underline transition-colors tabular-nums text-xs`}
+                                                    onClick={() => handleFilterNavigation('driverFilter', d.name)}
+                                                >
+                                                    ${d.cost.toLocaleString(undefined, {minimumFractionDigits: 2})}
+                                                </td>
+                                                <td className="px-3 py-2.5">
+                                                    <div className="flex items-center gap-2">
+                                                        <div className="flex-1 h-1.5" style={{ backgroundColor: uiTheme === 'binance' ? '#2B3139' : 'rgba(255,255,255,0.05)', borderRadius: '2px' }}>
+                                                            <div className="h-full transition-all" style={{ width: `${pct}%`, backgroundColor: driverColor, borderRadius: '2px' }}></div>
+                                                        </div>
+                                                        <span className={`text-[9px] font-bold ${styles.secondaryText} tabular-nums w-10 text-right`}>{pct.toFixed(1)}%</span>
+                                                    </div>
+                                                </td>
+                                            </tr>
+                                        );
+                                    })}
                                 </tbody>
-                                <tfoot className={`${styles.innerBg} border-t-2 ${styles.tableBorder}`}>
+                                <tfoot className={`${styles.innerBg} border-t ${styles.tableBorder}`}>
                                     <tr>
-                                        <td className={`px-4 py-3 text-right text-[9px] font-black uppercase ${styles.secondaryText} tracking-widest`}>Aggregate Cost</td>
-                                        <td className={`px-4 py-3 text-center font-black ${uiTheme === 'binance' ? 'text-[#FCD535]' : 'text-blue-300'} text-base tabular-nums`}>
+                                        <td className={`px-3 py-2 text-right text-[9px] font-bold uppercase ${styles.secondaryText} tracking-wider`}>{language === 'km' ? 'សរុប' : 'Total'}</td>
+                                        <td className={`px-3 py-2 text-center font-black text-xs tabular-nums`} style={{ color: uiTheme === 'binance' ? '#0ECB81' : '#10b981' }}>
                                             {shippingStats.drivers.reduce((sum, d) => sum + d.orders, 0)}
                                         </td>
-                                        <td className={`px-4 py-3 text-right font-black ${uiTheme === 'binance' ? 'text-[#0ECB81]' : 'text-emerald-400'} text-base tabular-nums`}>
+                                        <td className={`px-3 py-2 text-right font-black text-sm tabular-nums`} style={{ color: uiTheme === 'binance' ? '#0ECB81' : '#10b981' }}>
                                             ${shippingStats.drivers.reduce((sum, d) => sum + d.cost, 0).toLocaleString(undefined, {minimumFractionDigits: 2})}
                                         </td>
+                                        <td></td>
                                     </tr>
                                 </tfoot>
                             </table>
@@ -607,51 +720,66 @@ const ShippingReport: React.FC<ShippingReportProps> = ({ orders, appData, dateFi
                     </div>
 
                     {/* Table 3: Fulfillment Stores (Stock) */}
-                    <div className={`page-card !p-6 ${styles.cardBg} rounded-md border`}>
-                        <h3 className={`text-[11px] font-black ${styles.primaryText} uppercase tracking-widest mb-6 flex items-center gap-2`}>
-                            <div className={`w-1 h-4 ${styles.accent === '#FCD535' ? 'bg-[#FCD535]' : 'bg-orange-500'} rounded-full`}></div>
-                            សង្ខេបតាម Fulfillment Store (Stock)
+                    <div className={`${styles.cardBg} border p-5`} style={uiTheme === 'binance' ? { borderRadius: '4px' } : undefined}>
+                        <h3 className={`text-[10px] font-black ${styles.primaryText} uppercase tracking-widest mb-4 flex items-center gap-2`}>
+                            <div className="w-1 h-4 rounded-full" style={{ backgroundColor: uiTheme === 'binance' ? '#F0B90B' : '#f97316' }}></div>
+                            {language === 'km' ? 'សង្ខេបតាមឃ្លាំង' : 'By Fulfillment Store'}
                         </h3>
                         <div className="overflow-x-auto">
                             <table className="w-full text-sm text-left">
-                                <thead className={`text-[9px] ${styles.secondaryText} font-black uppercase tracking-widest border-b ${styles.tableBorder}`}>
+                                <thead className={`text-[9px] ${styles.secondaryText} font-bold uppercase tracking-wider border-b ${styles.tableBorder}`}>
                                     <tr>
-                                        <th className="px-4 py-3">ឈ្មោះឃ្លាំង (Store)</th>
-                                        <th className="px-4 py-3 text-center">ចំនួន Orders</th>
-                                        <th className="px-4 py-3 text-right">ទឹកប្រាក់បង់ ($)</th>
+                                        <th className="px-3 py-2.5">{language === 'km' ? 'ឃ្លាំង' : 'Store'}</th>
+                                        <th className="px-3 py-2.5 text-center">{language === 'km' ? 'ចំនួន' : 'Orders'}</th>
+                                        <th className="px-3 py-2.5 text-right">{language === 'km' ? 'ទឹកប្រាក់' : 'Cost ($)'}</th>
+                                        <th className="px-3 py-2.5 w-32">{language === 'km' ? 'សមាមាត្រ' : 'Distribution'}</th>
                                     </tr>
                                 </thead>
                                 <tbody className={`divide-y ${styles.tableBorder}`}>
-                                    {shippingStats.stores.map((s, i) => (
-                                        <tr key={i} className={styles.tableRowHover}>
-                                            <td className={`px-4 py-3 font-bold ${styles.primaryText} flex items-center gap-3`}>
-                                                <span className={`w-8 h-8 rounded-md ${styles.innerBg} ${styles.secondaryText} flex items-center justify-center text-[9px] font-black border ${styles.tableBorder}`}>#{i + 1}</span>
-                                                <span className="text-[11px] uppercase tracking-wider">{s.name}</span>
-                                            </td>
-                                            <td 
-                                                className={`px-4 py-3 text-center font-black ${uiTheme === 'binance' ? 'text-[#FCD535]' : 'text-blue-400'} cursor-pointer hover:underline transition-colors tabular-nums`}
-                                                onClick={() => handleFilterNavigation('fulfillmentStore', s.name)}
-                                            >
-                                                {s.orders}
-                                            </td>
-                                            <td 
-                                                className={`px-4 py-3 text-right font-black ${styles.primaryText} cursor-pointer hover:underline transition-colors tabular-nums`}
-                                                onClick={() => handleFilterNavigation('fulfillmentStore', s.name)}
-                                            >
-                                                ${s.cost.toLocaleString(undefined, {minimumFractionDigits: 2})}
-                                            </td>
-                                        </tr>
-                                    ))}
+                                    {shippingStats.stores.map((s, i) => {
+                                        const pct = shippingStats.totalInternalCost > 0 ? (s.cost / shippingStats.totalInternalCost) * 100 : 0;
+                                        const storeColor = uiTheme === 'binance' ? '#F0B90B' : '#f97316';
+                                        return (
+                                            <tr key={i} className={`${styles.tableRowHover} transition-colors`}>
+                                                <td className={`px-3 py-2.5 font-bold ${styles.primaryText} flex items-center gap-2.5`}>
+                                                    <span className={`w-7 h-7 flex items-center justify-center text-[9px] font-black border ${styles.tableBorder} ${styles.secondaryText}`} style={{ backgroundColor: uiTheme === 'binance' ? '#0B0E11' : 'rgba(255,255,255,0.03)', borderRadius: '4px' }}>#{i + 1}</span>
+                                                    <span className="text-[10px] uppercase tracking-wider">{s.name}</span>
+                                                </td>
+                                                <td 
+                                                    className={`px-3 py-2.5 text-center font-black cursor-pointer hover:underline transition-colors tabular-nums text-xs`}
+                                                    style={{ color: storeColor }}
+                                                    onClick={() => handleFilterNavigation('fulfillmentStore', s.name)}
+                                                >
+                                                    {s.orders}
+                                                </td>
+                                                <td 
+                                                    className={`px-3 py-2.5 text-right font-black ${styles.primaryText} cursor-pointer hover:underline transition-colors tabular-nums text-xs`}
+                                                    onClick={() => handleFilterNavigation('fulfillmentStore', s.name)}
+                                                >
+                                                    ${s.cost.toLocaleString(undefined, {minimumFractionDigits: 2})}
+                                                </td>
+                                                <td className="px-3 py-2.5">
+                                                    <div className="flex items-center gap-2">
+                                                        <div className="flex-1 h-1.5" style={{ backgroundColor: uiTheme === 'binance' ? '#2B3139' : 'rgba(255,255,255,0.05)', borderRadius: '2px' }}>
+                                                            <div className="h-full transition-all" style={{ width: `${pct}%`, backgroundColor: storeColor, borderRadius: '2px' }}></div>
+                                                        </div>
+                                                        <span className={`text-[9px] font-bold ${styles.secondaryText} tabular-nums w-10 text-right`}>{pct.toFixed(1)}%</span>
+                                                    </div>
+                                                </td>
+                                            </tr>
+                                        );
+                                    })}
                                 </tbody>
-                                <tfoot className={`${styles.innerBg} border-t-2 ${styles.tableBorder}`}>
+                                <tfoot className={`${styles.innerBg} border-t ${styles.tableBorder}`}>
                                     <tr>
-                                        <td className={`px-4 py-3 text-right text-[9px] font-black uppercase ${styles.secondaryText} tracking-widest`}>Aggregate Cost</td>
-                                        <td className={`px-4 py-3 text-center font-black ${uiTheme === 'binance' ? 'text-[#FCD535]' : 'text-blue-300'} text-base tabular-nums`}>
+                                        <td className={`px-3 py-2 text-right text-[9px] font-bold uppercase ${styles.secondaryText} tracking-wider`}>{language === 'km' ? 'សរុប' : 'Total'}</td>
+                                        <td className={`px-3 py-2 text-center font-black text-xs tabular-nums`} style={{ color: uiTheme === 'binance' ? '#F0B90B' : '#f97316' }}>
                                             {shippingStats.stores.reduce((sum, s) => sum + s.orders, 0)}
                                         </td>
-                                        <td className={`px-4 py-3 text-right font-black ${uiTheme === 'binance' ? 'text-[#0ECB81]' : 'text-emerald-400'} text-base tabular-nums`}>
+                                        <td className={`px-3 py-2 text-right font-black text-sm tabular-nums`} style={{ color: uiTheme === 'binance' ? '#0ECB81' : '#10b981' }}>
                                             ${shippingStats.stores.reduce((sum, s) => sum + s.cost, 0).toLocaleString(undefined, {minimumFractionDigits: 2})}
                                         </td>
+                                        <td></td>
                                     </tr>
                                 </tfoot>
                             </table>
@@ -659,15 +787,21 @@ const ShippingReport: React.FC<ShippingReportProps> = ({ orders, appData, dateFi
                     </div>
                 </div>
 
+                {/* AI Analysis Sidebar */}
                 <div className="lg:col-span-4">
-                    <div className={`page-card !p-6 ${styles.cardBg} rounded-md border h-full flex flex-col shadow-2xl relative overflow-hidden group`}>
-                        <div className="flex justify-between items-center mb-8 relative z-10">
-                            <div><h3 className={`text-[11px] font-black ${styles.primaryText} uppercase tracking-widest`}>ការវិភាគដោយ AI</h3></div>
+                    <div className={`${styles.cardBg} border p-5 h-full flex flex-col relative overflow-hidden`} style={uiTheme === 'binance' ? { borderRadius: '4px' } : undefined}>
+                        <div className="flex justify-between items-center mb-4 relative z-10">
+                            <h3 className={`text-[10px] font-black ${styles.primaryText} uppercase tracking-widest`}>{language === 'km' ? 'ការវិភាគដោយ AI' : 'AI Analysis'}</h3>
                             <GeminiButton onClick={handleAnalyze} isLoading={loadingAnalysis} variant={uiTheme === 'binance' ? 'primary' : 'default'}>Compute</GeminiButton>
                         </div>
-                        <div className={`flex-grow ${styles.innerBg} rounded-xl p-6 border ${styles.tableBorder} overflow-y-auto custom-scrollbar min-h-[300px] relative z-10 shadow-inner`}>
-                            {analysis ? (<div className={`text-[11px] ${styles.secondaryText} font-bold leading-relaxed uppercase tracking-wide`}>{analysis}</div>) : (
-                                <div className="flex flex-col items-center justify-center h-full opacity-20 text-center"><p className="text-[9px] font-black uppercase tracking-[0.2em]">Idle - Ready for Input</p></div>
+                        <div className={`flex-grow ${styles.innerBg} p-4 border ${styles.tableBorder} overflow-y-auto custom-scrollbar min-h-[300px] relative z-10`} style={uiTheme === 'binance' ? { borderRadius: '4px' } : { borderRadius: '12px' }}>
+                            {analysis ? (
+                                <div className={`text-[10px] ${styles.secondaryText} font-bold leading-relaxed`}>{analysis}</div>
+                            ) : (
+                                <div className="flex flex-col items-center justify-center h-full opacity-30 text-center">
+                                    <div className="text-2xl mb-3">📊</div>
+                                    <p className={`text-[9px] font-bold uppercase tracking-wider ${styles.secondaryText}`}>{language === 'km' ? 'ចុច Compute ដើម្វីវិភាគ' : 'Click Compute to Analyze'}</p>
+                                </div>
                             )}
                         </div>
                     </div>

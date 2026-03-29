@@ -65,6 +65,7 @@ export interface AppContextType {
     setSelectedTeam: (team: string) => void;
     selectedMovieId: string;
     setSelectedMovieId: (id: string) => void;
+    lastMessage: any;
 }
 
 export const AppContext = createContext<AppContextType>({} as AppContextType);

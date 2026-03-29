@@ -58,7 +58,7 @@ type SyncTask struct {
 }
 
 var (
-	SyncQueue = make(chan SyncTask, 1000)
+	SyncQueue = make(chan *SyncTask, 1000)
 
 	// Deduplication map for updateSheet actions
 	// Key: sheetName + primaryKey values
@@ -66,7 +66,7 @@ var (
 	updateMutex    sync.Mutex
 
 	HTTPClient = &http.Client{
-		Timeout: 45 * time.Second,
+		Timeout: 120 * time.Second,
 		Transport: &http.Transport{
 			MaxIdleConns:        100,
 			IdleConnTimeout:     90 * time.Second,
@@ -153,7 +153,7 @@ func EnqueueSync(action string, data map[string]interface{}, sheetName string, p
 		}
 	}
 
-	task := SyncTask{
+	task := &SyncTask{
 		Request:    req,
 		MaxRetries: 5,
 		EnqueuedAt: time.Now(),
@@ -177,7 +177,7 @@ func EnqueueSync(action string, data map[string]interface{}, sheetName string, p
 			// log.Printf("🔄 SyncManager: Merged update for %s", dedupeKey)
 			return
 		}
-		pendingUpdates[dedupeKey] = &task
+		pendingUpdates[dedupeKey] = task
 		updateMutex.Unlock()
 	}
 
@@ -219,7 +219,7 @@ func StartSyncManager(workerCount int) {
 						updateMutex.Unlock()
 					}
 
-					processTask(workerID, task)
+					processTask(workerID, *task)
 				}
 			}
 		}(i)
@@ -261,7 +261,7 @@ func processTask(workerID int, task SyncTask) {
 				select {
 				case <-time.After(d):
 					select {
-					case SyncQueue <- t:
+					case SyncQueue <- &t:
 					case <-stopChan:
 					}
 				case <-stopChan:

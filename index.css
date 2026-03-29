@@ -31,8 +31,7 @@
 :root {
     --primary: #3b82f6;
     --primary-glow: rgba(59, 130, 246, 0.5);
-    --secondary: #06b6d4;
-    --bg-dark: #020617;
+    --bg-dark: #080808;
     --card-bg: rgba(15, 23, 42, 0.6);
     --border-light: rgba(255, 255, 255, 0.08);
     --radius-standard: var(--global-radius, 1rem);
@@ -218,11 +217,11 @@
 .ui-binance {
     --primary: #FCD535;
     --primary-glow: rgba(252, 213, 53, 0.2);
-    --bg-dark: #121619;
-    --bg-black: #0B0E11;
-    --card-bg: #1E2329;
-    --card-bg-hover: #2B3139;
-    --border-light: rgba(71, 77, 87, 0.25);
+    --bg-dark: #080808;
+    --bg-black: #080808;
+    --card-bg: #121212;
+    --card-bg-hover: #1F1F1F;
+    --border-light: rgba(255, 255, 255, 0.08);
     --text-primary: #EAECEF;
     --text-secondary: #848E9C;
     --text-accent: #FCD535;

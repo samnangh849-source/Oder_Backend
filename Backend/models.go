@@ -182,10 +182,12 @@ type Order struct {
 	IsVerified              string  `gorm:"column:is_verified" json:"IsVerified"`
 	FulfillmentStatus       string  `gorm:"column:fulfillment_status" json:"Fulfillment Status"`
 	PackedBy                string  `gorm:"column:packed_by" json:"Packed By"`
+	PackedTime              string  `gorm:"column:packed_time" json:"Packed Time"`
 	PackagePhotoURL         string  `gorm:"column:package_photo_url" json:"Package Photo URL"`
 	DriverName              string  `gorm:"column:driver_name" json:"Driver Name"`
 	TrackingNumber          string  `gorm:"column:tracking_number" json:"Tracking Number"`
 	DispatchedTime          string  `gorm:"column:dispatched_time" json:"Dispatched Time"`
+	DispatchedBy            string  `gorm:"column:dispatched_by" json:"Dispatched By"`
 	DeliveredTime           string  `gorm:"column:delivered_time" json:"Delivered Time"`
 	DeliveryPhotoURL        string  `gorm:"column:delivery_photo_url" json:"Delivery Photo URL"`
 }

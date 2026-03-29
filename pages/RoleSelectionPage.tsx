@@ -7,7 +7,7 @@ import { translations } from '../translations';
 import { useSoundEffects } from '../hooks/useSoundEffects';
 
 interface RoleSelectionPageProps {
-    onSelect: (role: 'admin_dashboard' | 'user_journey' | 'fulfillment') => void;
+    onSelect: (role: 'admin_dashboard' | 'user_journey' | 'fulfillment' | 'cambodia_map' | 'entertainment') => void;
 }
 
 const RoleSelectionPage: React.FC<RoleSelectionPageProps> = ({ onSelect }) => {
@@ -44,7 +44,7 @@ const RoleSelectionPage: React.FC<RoleSelectionPageProps> = ({ onSelect }) => {
     const showSales = hasPermission('access_sales_portal');
     const showEntertainment = isInternalAdmin || hasPermission('view_entertainment');
 
-    const visibleCount = (showAdmin ? 1 : 0) + (showFulfillment ? 1 : 0) + (showSales ? 1 : 0) + (showEntertainment ? 1 : 0);
+    const visibleCount = (showAdmin ? 1 : 0) + (showFulfillment ? 1 : 0) + (showSales ? 1 : 0) + (showEntertainment ? 1 : 0) + 1; // +1 for Cambodia Map (always visible)
 
     const handleUserPortalClick = () => {
         playTransition();
@@ -69,17 +69,17 @@ const RoleSelectionPage: React.FC<RoleSelectionPageProps> = ({ onSelect }) => {
     return (
         <div className="min-h-full w-full flex flex-col items-center justify-center relative font-['Kantumruy_Pro'] py-12">
             <style>{`
-                .selection-btn {
-                    background: rgba(255, 255, 255, 0.03);
-                    border: 1px solid rgba(255, 255, 255, 0.05);
-                    transition: all 0.4s cubic-bezier(0.23, 1, 0.32, 1);
-                }
-                .selection-btn:hover {
-                    background: rgba(255, 255, 255, 0.07);
-                    border-color: rgba(255, 255, 255, 0.15);
-                    transform: translateY(-4px) scale(1.01);
-                    box-shadow: 0 20px 40px rgba(0,0,0,0.3);
-                }
+.selection-btn {
+                     background: rgba(255, 255, 255, 0.08);
+                     border: 1px solid rgba(255, 255, 255, 0.12);
+                     transition: all 0.4s cubic-bezier(0.23, 1, 0.32, 1);
+                 }
+                 .selection-btn:hover {
+                     background: rgba(255, 255, 255, 0.15);
+                     border-color: rgba(255, 255, 255, 0.25);
+                     transform: translateY(-4px) scale(1.02);
+                     box-shadow: 0 25px 50px rgba(0,0,0,0.4);
+                 }
                 .selection-btn:active { transform: scale(0.97); }
                 
                 .shimmer {
@@ -121,7 +121,7 @@ const RoleSelectionPage: React.FC<RoleSelectionPageProps> = ({ onSelect }) => {
                                 />
                             </div>
                         </div>
-                        <div className="absolute bottom-1 right-1 w-4 h-4 sm:w-5 sm:h-5 bg-emerald-500 border-4 border-[#020617] rounded-full shadow-lg z-20 animate-pulse"></div>
+                        <div className="absolute bottom-1 right-1 w-4 h-4 sm:w-5 sm:h-5 bg-emerald-500 border-4 border-[var(--bg-dark)] rounded-full shadow-lg z-20 animate-pulse"></div>
                     </div>
                     <div className="text-center">
                         <h1 className="text-2xl sm:text-3xl font-black text-white tracking-tighter mb-1 uppercase italic">
@@ -151,7 +151,7 @@ const RoleSelectionPage: React.FC<RoleSelectionPageProps> = ({ onSelect }) => {
                             className="selection-btn group p-1 rounded-[2rem] relative overflow-hidden"
                         >
                             <div className="shimmer"></div>
-                            <div className="flex items-center gap-4 p-4 sm:p-5 rounded-[1.9rem] bg-[#020617]/40 backdrop-blur-2xl border border-white/5 relative z-10">
+                            <div className="flex items-center gap-4 p-4 sm:p-5 rounded-[1.9rem] bg-[var(--bg-dark)]/40 backdrop-blur-2xl border border-white/5 relative z-10">
                                 <div className="w-14 h-14 shrink-0 rounded-2xl bg-blue-600/20 flex items-center justify-center border border-white/10 group-hover:bg-blue-600 transition-all duration-500 shadow-2xl">
                                     <svg className="w-7 h-7 text-blue-400 group-hover:text-white transition-colors" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2}><path d="M11 3.055A9.001 9.001 0 1020.945 13H11V3.055z" /><path d="M20.488 9H15V3.512A9.025 9.025 0 0120.488 9z" /></svg>
                                 </div>
@@ -173,7 +173,7 @@ const RoleSelectionPage: React.FC<RoleSelectionPageProps> = ({ onSelect }) => {
                             className="selection-btn group p-1 rounded-[2rem] relative overflow-hidden"
                         >
                             <div className="shimmer"></div>
-                            <div className="flex items-center gap-4 p-4 sm:p-5 rounded-[1.9rem] bg-[#020617]/40 backdrop-blur-2xl border border-white/5 relative z-10">
+                            <div className="flex items-center gap-4 p-4 sm:p-5 rounded-[1.9rem] bg-[var(--bg-dark)]/40 backdrop-blur-2xl border border-white/5 relative z-10">
                                 <div className="w-14 h-14 shrink-0 rounded-2xl bg-amber-600/20 flex items-center justify-center border border-white/10 group-hover:bg-amber-600 transition-all duration-500 shadow-2xl">
                                     <svg className="w-7 h-7 text-amber-400 group-hover:text-white transition-colors" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2}><path d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4" /></svg>
                                 </div>
@@ -195,7 +195,7 @@ const RoleSelectionPage: React.FC<RoleSelectionPageProps> = ({ onSelect }) => {
                             className="selection-btn group p-1 rounded-[2rem] relative overflow-hidden"
                         >
                             <div className="shimmer"></div>
-                            <div className="flex items-center gap-4 p-4 sm:p-5 rounded-[1.9rem] bg-[#020617]/40 backdrop-blur-2xl border border-white/5 relative z-10">
+                            <div className="flex items-center gap-4 p-4 sm:p-5 rounded-[1.9rem] bg-[var(--bg-dark)]/40 backdrop-blur-2xl border border-white/5 relative z-10">
                                 <div className="w-14 h-14 shrink-0 rounded-2xl bg-emerald-600/20 flex items-center justify-center border border-white/10 group-hover:bg-emerald-600 transition-all duration-500 shadow-2xl">
                                     <svg className="w-7 h-7 text-emerald-400 group-hover:text-white transition-colors" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2}><path d="M16 11V7a4 4 0 00-8 0v4M5 9h14l1 12H4L5 9z" /></svg>
                                 </div>
@@ -217,7 +217,7 @@ const RoleSelectionPage: React.FC<RoleSelectionPageProps> = ({ onSelect }) => {
                             className="selection-btn group p-1 rounded-[2rem] relative overflow-hidden"
                         >
                             <div className="shimmer"></div>
-                            <div className="flex items-center gap-4 p-4 sm:p-5 rounded-[1.9rem] bg-[#020617]/40 backdrop-blur-2xl border border-white/5 relative z-10">
+                            <div className="flex items-center gap-4 p-4 sm:p-5 rounded-[1.9rem] bg-[var(--bg-dark)]/40 backdrop-blur-2xl border border-white/5 relative z-10">
                                 <div className="w-14 h-14 shrink-0 rounded-2xl bg-red-600/20 flex items-center justify-center border border-white/10 group-hover:bg-red-600 transition-all duration-500 shadow-2xl">
                                     <svg className="w-7 h-7 text-red-400 group-hover:text-white transition-colors" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2}><path d="M7 4v16M17 4v16M3 8h4m10 0h4M3 12h18M3 16h4m10 0h4M4 20h16a2 2 0 002-2V6a2 2 0 00-2-2H4a2 2 0 00-2 2v12a2 2 0 002 2z" /></svg>
                                 </div>
@@ -231,6 +231,30 @@ const RoleSelectionPage: React.FC<RoleSelectionPageProps> = ({ onSelect }) => {
                             </div>
                         </button>
                     )}
+
+                    <button
+                        onClick={() => { playTransition(); onSelect('cambodia_map'); }}
+                        onMouseEnter={playHover}
+                        className="selection-btn group p-1 rounded-[2rem] relative overflow-hidden"
+                    >
+                        <div className="shimmer"></div>
+                        <div className="flex items-center gap-4 p-4 sm:p-5 rounded-[1.9rem] bg-[var(--bg-dark)]/40 backdrop-blur-2xl border border-white/5 relative z-10">
+                            <div className="w-14 h-14 shrink-0 rounded-2xl bg-yellow-600/20 flex items-center justify-center border border-white/10 group-hover:bg-yellow-500 transition-all duration-500 shadow-2xl">
+                                <svg className="w-7 h-7 text-yellow-400 group-hover:text-white transition-colors" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2}><path d="M9 20l-5.447-2.724A1 1 0 013 16.382V5.618a1 1 0 011.447-.894L9 7m0 13l6-3m-6 3V7m6 10l5.447 2.724A1 1 0 0021 18.382V7.618a1 1 0 00-.553-.894L15 4m0 13V4m0 0L9 7" /></svg>
+                            </div>
+                            <div className="text-left min-w-0 flex-grow">
+                                <h3 className="text-base font-black text-white group-hover:text-yellow-400 transition-colors uppercase italic tracking-tight">
+                                    {language === 'km' ? 'ផែនទីកម្ពុជា' : 'Cambodia Map'}
+                                </h3>
+                                <p className="text-[10px] text-white/30 font-bold uppercase tracking-widest truncate">
+                                    {language === 'km' ? 'ផែនទីខេត្ត/រាជធានី និងទិន្នន័យសេដ្ឋកិច្ច' : 'Provinces & Economic Data'}
+                                </p>
+                            </div>
+                            <div className="w-10 h-10 rounded-xl bg-white/5 flex items-center justify-center group-hover:bg-yellow-500 transition-all">
+                                <svg className="w-4 h-4 text-white/20 group-hover:text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={3}><path d="M9 5l7 7-7 7" /></svg>
+                            </div>
+                        </div>
+                    </button>
                 </div>
 
                 {/* Secure Footer */}

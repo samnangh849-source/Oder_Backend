@@ -35,7 +35,7 @@ export const useMapEngine = (containerRef: MutableRefObject<HTMLDivElement | nul
                         sources: {
                             'osm': {
                                 type: 'raster',
-                                tiles: ['https://a.basemaps.cartocdn.com/dark_nolabels/{z}/{x}/{y}@2x.png'],
+                                tiles: ['https://a.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}@2x.png'],
                                 tileSize: 256,
                                 attribution: '&copy; OpenStreetMap & CartoDB'
                             }
@@ -58,8 +58,13 @@ export const useMapEngine = (containerRef: MutableRefObject<HTMLDivElement | nul
                     zoom: 6.6,
                     pitch: 45, // 3D View Angle
                     bearing: -10, // Slight Rotation
-                    minZoom: 5,
-                    maxZoom: 12
+                    minZoom: 3,
+                    maxZoom: 18,
+                    interactive: true,
+                    scrollZoom: true,
+                    dragPan: true,
+                    dragRotate: true,
+                    touchZoomRotate: true
                 });
 
                 mapInstance.addControl(new maplibregl.NavigationControl({ showCompass: true, visualizePitch: true }), 'top-right');

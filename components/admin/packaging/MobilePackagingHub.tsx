@@ -21,6 +21,7 @@ interface MobilePackagingHubProps {
     onPack: (order: ParsedOrder) => void;
     onShip: (order: ParsedOrder) => void;
     onUndo: (order: ParsedOrder) => void;
+    onUndoShipped: (order: ParsedOrder) => void;
     onView: (order: ParsedOrder) => void;
     onPrintManifest: () => void;
     onSwitchHub: () => void;
@@ -40,7 +41,7 @@ interface MobilePackagingHubProps {
 
 const MobilePackagingHub: React.FC<MobilePackagingHubProps> = ({
     orders, activeTab, setActiveTab, searchTerm, setSearchTerm,
-    onPack, onShip, onUndo, onView, onPrintManifest, onSwitchHub, onExit, selectedStore,
+    onPack, onShip, onUndo, onUndoShipped, onView, onPrintManifest, onSwitchHub, onExit, selectedStore,
     progressStats, setIsFilterModalOpen, loadingActionId, tabCounts,
     selectedOrderIds, toggleOrderSelection, clearSelection, onBulkShip, isBulkProcessing,
     onToggleSelectAll
@@ -220,6 +221,9 @@ const MobilePackagingHub: React.FC<MobilePackagingHubProps> = ({
                                                 <button onClick={(e) => { e.stopPropagation(); onUndo(order); }} className={`w-20 py-1.5 bg-[#F6465D]/10 text-[#F6465D] rounded-sm text-[10px] font-bold uppercase`}>Undo</button>
                                                 <button onClick={(e) => { e.stopPropagation(); onShip(order); }} className={`flex-1 py-1.5 bg-[#0ECB81] text-[#0B0E11] rounded-sm text-xs font-bold uppercase`}>Ship Order</button>
                                             </>
+                                        )}
+                                        {activeTab === 'Shipped' && (
+                                            <button onClick={(e) => { e.stopPropagation(); onUndoShipped(order); }} className={`w-20 py-1.5 bg-[#F6465D]/10 text-[#F6465D] rounded-sm text-[10px] font-bold uppercase`}>Undo</button>
                                         )}
                                     </div>
                                 </div>

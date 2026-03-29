@@ -9,6 +9,7 @@ import Spinner from '../components/common/Spinner';
 import { convertGoogleDriveUrl } from '../utils/fileUtils';
 import SimpleBarChart from '../components/admin/SimpleBarChart';
 import { safeParseDate, getTimestamp } from '../utils/dateUtils';
+import { ChevronLeft, Download, FileText, BarChart3, TrendingUp, Package, Layout, Calendar } from 'lucide-react';
 
 // Import separate view components
 import SalesByPageDesktop from '../components/reports/SalesByPageDesktop';
@@ -43,13 +44,15 @@ const UserSalesPageReport: React.FC<UserSalesPageReportProps> = ({
     initialFilters,
     onFilterChange
 }) => {
-    const { appData, previewImage } = useContext(AppContext);
+    const { appData, previewImage, language, advancedSettings } = useContext(AppContext);
     const [showBorders, setShowBorders] = useState(true);
     const [isFrozen, setIsFrozen] = useState(false);
     const [showFillColor, setShowFillColor] = useState(true);
     const [showAllPages, setShowAllPages] = useState(true); 
     const [isExporting, setIsExporting] = useState(false);
     const [sortConfig, setSortConfig] = useState<{ key: SortKey, direction: 'asc' | 'desc' }>({ key: 'revenue', direction: 'desc' });
+
+    const isBinance = advancedSettings?.uiTheme === 'binance';
 
     const toggleSort = (key: SortKey) => {
         setSortConfig(prev => ({
@@ -86,89 +89,35 @@ const UserSalesPageReport: React.FC<UserSalesPageReportProps> = ({
         if (onNavigate) {
             const now = new Date();
             const currentYear = now.getFullYear();
-            
-            // 1. Determine Target Year
             let targetYear = initialFilters.datePreset === 'last_year' ? currentYear - 1 : currentYear;
-            
-            // Special Case: If custom date is set, check the year from customStart
             if (initialFilters.datePreset === 'custom' && initialFilters.customStart) {
                 const customY = new Date(initialFilters.customStart).getFullYear();
                 if (!isNaN(customY)) targetYear = customY;
             }
-
-            // 2. Define Month Bounds (The full month clicked)
             const monthStart = new Date(targetYear, monthIndex, 1);
             const monthEnd = new Date(targetYear, monthIndex + 1, 0, 23, 59, 59);
-
-            // 3. Define Active Filter Bounds (The currently applied filter)
             let filterStart: Date | null = null;
             let filterEnd: Date | null = null;
-
             switch (initialFilters.datePreset) {
-                case 'today':
-                    filterStart = new Date(now.getFullYear(), now.getMonth(), now.getDate());
-                    filterEnd = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 23, 59, 59);
-                    break;
-                case 'yesterday':
-                    const y = new Date(now); y.setDate(y.getDate() - 1);
-                    filterStart = new Date(y.getFullYear(), y.getMonth(), y.getDate());
-                    filterEnd = new Date(y.getFullYear(), y.getMonth(), y.getDate(), 23, 59, 59);
-                    break;
-                case 'this_week':
-                    const day = now.getDay();
-                    const wStart = new Date(now); wStart.setDate(now.getDate() - (day === 0 ? 6 : day - 1));
-                    const wEnd = new Date(wStart); wEnd.setDate(wStart.getDate() + 6);
-                    filterStart = new Date(wStart.setHours(0,0,0,0));
-                    filterEnd = new Date(wEnd.setHours(23,59,59,999));
-                    break;
-                case 'this_month':
-                    filterStart = new Date(currentYear, now.getMonth(), 1);
-                    filterEnd = new Date(currentYear, now.getMonth() + 1, 0, 23, 59, 59);
-                    break;
-                case 'custom':
-                    if (initialFilters.customStart) filterStart = new Date(initialFilters.customStart + 'T00:00:00');
-                    if (initialFilters.customEnd) filterEnd = new Date(initialFilters.customEnd + 'T23:59:59');
-                    break;
-                default:
-                    filterStart = null;
-                    filterEnd = null;
+                case 'today': filterStart = new Date(now.getFullYear(), now.getMonth(), now.getDate()); filterEnd = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 23, 59, 59); break;
+                case 'yesterday': const y = new Date(now); y.setDate(now.getDate() - 1); filterStart = new Date(y.getFullYear(), y.getMonth(), y.getDate()); filterEnd = new Date(y.getFullYear(), y.getMonth(), y.getDate(), 23, 59, 59); break;
+                case 'this_week': const day = now.getDay(); const wStart = new Date(now); wStart.setDate(now.getDate() - (day === 0 ? 6 : day - 1)); const wEnd = new Date(wStart); wEnd.setDate(wStart.getDate() + 6); filterStart = new Date(wStart.setHours(0,0,0,0)); filterEnd = new Date(wEnd.setHours(23,59,59,999)); break;
+                case 'this_month': filterStart = new Date(currentYear, now.getMonth(), 1); filterEnd = new Date(currentYear, now.getMonth() + 1, 0, 23, 59, 59); break;
+                case 'custom': if (initialFilters.customStart) filterStart = new Date(initialFilters.customStart + 'T00:00:00'); if (initialFilters.customEnd) filterEnd = new Date(initialFilters.customEnd + 'T23:59:59'); break;
+                default: filterStart = null; filterEnd = null;
             }
-
-            // 4. Calculate Intersection (The overlap between Month and Filter)
             let finalStart = monthStart;
             let finalEnd = monthEnd;
-
-            // If Filter Start is LATER than Month Start, use Filter Start
-            if (filterStart && filterStart > monthStart) {
-                finalStart = filterStart;
-            }
-            // If Filter End is EARLIER than Month End, use Filter End
-            if (filterEnd && filterEnd < monthEnd) {
-                finalEnd = filterEnd;
-            }
-
-            // 5. Fallback Logic: If no overlap (e.g., Filter is Feb 1, but user clicked Jan column)
-            // We fallback to showing the full month data (or empty) rather than an invalid date range.
-            if (finalStart > finalEnd) {
-                finalStart = monthStart;
-                finalEnd = monthEnd;
-            }
-            
+            if (filterStart && filterStart > monthStart) finalStart = filterStart;
+            if (filterEnd && filterEnd < monthEnd) finalEnd = filterEnd;
+            if (finalStart > finalEnd) { finalStart = monthStart; finalEnd = monthEnd; }
             const fmt = (d: Date) => {
                 const y = d.getFullYear();
                 const m = String(d.getMonth() + 1).padStart(2, '0');
                 const day = String(d.getDate()).padStart(2, '0');
                 return `${y}-${m}-${day}`;
             };
-
-            onNavigate({
-                team,
-                page: pageName,
-                datePreset: 'custom',
-                customStart: fmt(finalStart),
-                customEnd: fmt(finalEnd),
-                isMonthlyDrilldown: true
-            });
+            onNavigate({ team, page: pageName, datePreset: 'custom', customStart: fmt(finalStart), customEnd: fmt(finalEnd), isMonthlyDrilldown: true });
         }
     };
 
@@ -178,111 +127,49 @@ const UserSalesPageReport: React.FC<UserSalesPageReportProps> = ({
         const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
         let start: Date | null = null;
         let end: Date | null = null; 
-
         switch (initialFilters.datePreset) {
-            case 'today': 
-                start = today; 
-                end = new Date(today);
-                end.setHours(23, 59, 59, 999); 
-                break;
-            case 'yesterday': 
-                start = new Date(today); 
-                start.setDate(today.getDate() - 1); 
-                end = new Date(today); 
-                end.setMilliseconds(-1); 
-                break;
-            case 'this_week': 
-                const day = now.getDay(); 
-                start = new Date(today); 
-                start.setDate(today.getDate() - (day === 0 ? 6 : day - 1));
-                end = new Date(start);
-                end.setDate(start.getDate() + 6);
-                end.setHours(23, 59, 59, 999);
-                break;
-            case 'this_month': 
-                start = new Date(now.getFullYear(), now.getMonth(), 1);
-                end = new Date(now.getFullYear(), now.getMonth() + 1, 0, 23, 59, 59, 999); 
-                break;
-            case 'last_month': 
-                start = new Date(now.getFullYear(), now.getMonth() - 1, 1); 
-                end = new Date(now.getFullYear(), now.getMonth(), 0, 23, 59, 59, 999); 
-                break;
-            case 'this_year':
-                start = new Date(now.getFullYear(), 0, 1);
-                end = new Date(now.getFullYear(), 11, 31, 23, 59, 59, 999);
-                break;
-            case 'last_year':
-                start = new Date(now.getFullYear() - 1, 0, 1);
-                end = new Date(now.getFullYear() - 1, 11, 31, 23, 59, 59, 999);
-                break;
-            case 'all': 
-                start = null; 
-                end = null; 
-                break;
-            case 'custom': 
-                start = safeParseDate(initialFilters.customStart + 'T00:00:00');
-                end = safeParseDate(initialFilters.customEnd + 'T23:59:59');
-                break;
+            case 'today': start = today; end = new Date(today); end.setHours(23, 59, 59, 999); break;
+            case 'yesterday': start = new Date(today); start.setDate(today.getDate() - 1); end = new Date(today); end.setMilliseconds(-1); break;
+            case 'this_week': const day = now.getDay(); start = new Date(today); start.setDate(today.getDate() - (day === 0 ? 6 : day - 1)); end = new Date(start); end.setDate(start.getDate() + 6); end.setHours(23, 59, 59, 999); break;
+            case 'this_month': start = new Date(now.getFullYear(), now.getMonth(), 1); end = new Date(now.getFullYear(), now.getMonth() + 1, 0, 23, 59, 59, 999); break;
+            case 'last_month': start = new Date(now.getFullYear(), now.getMonth() - 1, 1); end = new Date(now.getFullYear(), now.getMonth(), 0, 23, 59, 59, 999); break;
+            case 'this_year': start = new Date(now.getFullYear(), 0, 1); end = new Date(now.getFullYear(), 11, 31, 23, 59, 59, 999); break;
+            case 'last_year': start = new Date(now.getFullYear() - 1, 0, 1); end = new Date(now.getFullYear() - 1, 11, 31, 23, 59, 59, 999); break;
+            case 'all': start = null; end = null; break;
+            case 'custom': start = safeParseDate(initialFilters.customStart + 'T00:00:00'); end = safeParseDate(initialFilters.customEnd + 'T23:59:59'); break;
         }
-
         return sourceOrders.filter(o => {
-            // Strict Team Check (Case Insensitive)
             if ((o.Team || '').trim().toLowerCase() !== team.trim().toLowerCase()) return false;
-
-            // Date Check
-            if (!start) return true; // All time
+            if (!start) return true; 
             const orderDate = safeParseDate(o.Timestamp);
             if (!orderDate) return false;
-            
-            if (end) {
-                return orderDate >= start && orderDate <= end;
-            }
+            if (end) return orderDate >= start && orderDate <= end;
             return orderDate >= start;
         });
     }, [sourceOrders, team, initialFilters]);
 
     const pageStats = useMemo(() => {
         const stats: Record<string, any> = {};
-        
         if (appData.pages) {
             const teamPages = appData.pages.filter(p => (p.Team || '').trim() === team);
             teamPages.forEach(p => {
-                stats[p.PageName] = {
-                    pageName: p.PageName,
-                    teamName: team, 
-                    logoUrl: p.PageLogoURL || '',
-                    revenue: 0,
-                    profit: 0, 
-                    orderCount: 0
-                };
+                stats[p.PageName] = { pageName: p.PageName, teamName: team, logoUrl: p.PageLogoURL || '', revenue: 0, profit: 0, orderCount: 0 };
                 MONTHS.forEach(m => { stats[p.PageName][`rev_${m}`] = 0; stats[p.PageName][`prof_${m}`] = 0; });
             });
         }
-
         filteredOrders.forEach(o => {
             const page = o.Page || 'Unknown';
-            
             if (!stats[page]) {
                 const info = appData.pages?.find(p => p.PageName === page);
-                stats[page] = { 
-                    pageName: page,
-                    teamName: team,
-                    logoUrl: info?.PageLogoURL || '',
-                    revenue: 0, 
-                    profit: 0,
-                    orderCount: 0
-                };
+                stats[page] = { pageName: page, teamName: team, logoUrl: info?.PageLogoURL || '', revenue: 0, profit: 0, orderCount: 0 };
                 MONTHS.forEach(m => { stats[page][`rev_${m}`] = 0; stats[page][`prof_${m}`] = 0; });
             }
-
             const rev = Number(o['Grand Total']) || 0;
             const cost = (Number(o['Total Product Cost ($)']) || 0) + (Number(o['Internal Cost']) || 0);
             const profit = rev - cost;
-            
             stats[page].revenue += rev;
             stats[page].profit += profit;
             stats[page].orderCount += 1;
-
             if (o.Timestamp) {
                 const d = safeParseDate(o.Timestamp);
                 if (d) {
@@ -292,12 +179,8 @@ const UserSalesPageReport: React.FC<UserSalesPageReportProps> = ({
                 }
             }
         });
-
         let result = Object.values(stats);
-        if (!showAllPages) {
-            result = result.filter(item => item.revenue > 0);
-        }
-
+        if (!showAllPages) result = result.filter(item => item.revenue > 0);
         return result.sort((a: any, b: any) => {
             const mult = sortConfig.direction === 'asc' ? 1 : -1;
             const valA = a[sortConfig.key];
@@ -310,15 +193,9 @@ const UserSalesPageReport: React.FC<UserSalesPageReportProps> = ({
     const grandTotals = useMemo(() => {
         const totals: any = { revenue: 0, profit: 0, pagesCount: pageStats.length, orders: 0 };
         MONTHS.forEach(m => { totals[`rev_${m}`] = 0; totals[`prof_${m}`] = 0; });
-
         pageStats.forEach((s: any) => { 
-            totals.revenue += s.revenue; 
-            totals.profit += s.profit;
-            totals.orders += s.orderCount;
-            MONTHS.forEach(m => { 
-                totals[`rev_${m}`] += s[`rev_${m}`]; 
-                totals[`prof_${m}`] += s[`prof_${m}`]; 
-            });
+            totals.revenue += s.revenue; totals.profit += s.profit; totals.orders += s.orderCount;
+            MONTHS.forEach(m => { totals[`rev_${m}`] += s[`rev_${m}`]; totals[`prof_${m}`] += s[`prof_${m}`]; });
         });
         return totals;
     }, [pageStats]);
@@ -333,121 +210,145 @@ const UserSalesPageReport: React.FC<UserSalesPageReportProps> = ({
                 doc.text(`Sales Report - Team: ${team}`, pageWidth / 2, 15, { align: 'center' });
                 doc.setFontSize(12);
                 doc.text(`Period: ${initialFilters.datePreset.toUpperCase()}`, pageWidth / 2, 22, { align: 'center' });
-                
                 doc.autoTable({
-                    startY: 30,
-                    head: [['Metric', 'Value']],
-                    body: [
-                        ['Total Revenue', `$${grandTotals.revenue.toLocaleString()}`],
-                        ['Total Orders', grandTotals.orders],
-                    ],
-                    theme: 'grid',
-                    headStyles: { fillColor: [41, 128, 185] },
+                    startY: 30, head: [['Metric', 'Value']],
+                    body: [['Total Revenue', `$${grandTotals.revenue.toLocaleString()}`], ['Total Orders', grandTotals.orders]],
+                    theme: 'grid', headStyles: { fillColor: [41, 128, 185] },
                 });
-
                 doc.save(`Page_Report_${team}_${Date.now()}.pdf`);
-            } catch (err) {
-                console.error(err);
-                alert("Export failed");
-            } finally {
-                setIsExporting(false);
-            }
+            } catch (err) { console.error(err); alert("Export failed"); } finally { setIsExporting(false); }
         }, 100);
     };
 
     const topPagesChartData = useMemo(() => {
-        return [...pageStats]
-            .sort((a, b) => b.revenue - a.revenue)
-            .slice(0, 5)
-            .map(p => ({ label: p.pageName, value: p.revenue, imageUrl: p.logoUrl }));
+        return [...pageStats].sort((a, b) => b.revenue - a.revenue).slice(0, 5).map(p => ({ label: p.pageName, value: p.revenue, imageUrl: p.logoUrl }));
     }, [pageStats]);
 
     return (
-        <div className="w-full space-y-6">
-            {/* Header & Controls */}
-            <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 mb-2">
-                <div className="flex items-center gap-4">
-                    <button onClick={onBack} className="bg-gray-800 p-3 rounded-2xl border border-gray-700 hover:bg-gray-700 active:scale-95 transition-all">
-                        <svg className="w-5 h-5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 19l-7-7m0 0l7-7m-7 7h18" /></svg>
-                    </button>
-                    <div>
-                        <h1 className="text-xl sm:text-2xl font-black text-white uppercase tracking-tighter italic">Page Report</h1>
-                        <p className="text-[10px] text-gray-500 font-bold uppercase tracking-widest flex items-center gap-1.5"><span className="w-1 h-1 bg-blue-500 rounded-full"></span>TEAM: {team}</p>
+        <div className="w-full space-y-6 select-none animate-fade-in pb-12">
+            <style>{`
+                .setup-pill {
+                    background: #1E2329;
+                    border: 1px solid #2B3139;
+                    border-radius: 2px;
+                    padding: 6px 12px;
+                    font-size: 10px;
+                    font-weight: 800;
+                    text-transform: uppercase;
+                    color: #848E9C;
+                    transition: all 0.15s;
+                }
+                .setup-pill.active {
+                    background: #F0B90B;
+                    color: #181A20;
+                    border-color: #F0B90B;
+                }
+                .finance-header {
+                    background: #1E2329;
+                    border-bottom: 1px solid #2B3139;
+                    padding: 20px;
+                }
+            `}</style>
+
+            {/* Premium Header */}
+            <div className="finance-header flex flex-col gap-6">
+                <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
+                    <div className="flex items-center gap-4">
+                        <button onClick={onBack} className="w-10 h-10 flex items-center justify-center bg-[#2B3139] rounded-sm hover:bg-[#363c45] active:scale-95 transition-all">
+                            <ChevronLeft size={20} color="#EAECEF" />
+                        </button>
+                        <div>
+                            <h1 className="text-xl font-black text-[#EAECEF] uppercase tracking-tighter italic flex items-center gap-2">
+                                <BarChart3 size={20} color="#F0B90B" />
+                                {language === 'km' ? 'របាយការណ៍លក់តាមផេក' : 'Sales Page Report'}
+                            </h1>
+                            <div className="flex items-center gap-2 mt-1">
+                                <div className="w-1 h-3 bg-[#F0B90B] rounded-full"></div>
+                                <p className="text-[10px] text-[#848E9C] font-black uppercase tracking-[0.1em]">TEAM: {team}</p>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div className="flex items-center gap-2">
+                        <button onClick={handleExportPDF} disabled={isExporting} className="flex items-center gap-2 px-4 py-2 bg-[#2B3139] border border-[#474D57] text-[#EAECEF] text-[10px] font-black uppercase tracking-widest rounded-sm hover:bg-[#363c45] active:scale-95 transition-all">
+                            {isExporting ? <Spinner size="xs" /> : <Download size={14} />}
+                            PDF
+                        </button>
                     </div>
                 </div>
 
-                {/* Filters */}
-                <div className="flex overflow-x-auto gap-2 p-1 bg-gray-900/50 rounded-2xl border border-white/5 max-w-full no-scrollbar">
-                    {(['today', 'yesterday', 'this_week', 'this_month', 'last_month', 'this_year', 'last_year', 'all'] as const).map(preset => (
+                {/* Filter Tabs */}
+                <div className="flex flex-wrap gap-2">
+                    {(['today', 'yesterday', 'this_week', 'this_month', 'last_month', 'this_year', 'all'] as const).map(preset => (
                         <button
                             key={preset}
                             onClick={() => handlePresetChange(preset)}
-                            className={`px-4 py-2 text-[10px] font-black uppercase rounded-xl whitespace-nowrap transition-all ${initialFilters.datePreset === preset ? 'bg-blue-600 text-white shadow-lg' : 'text-gray-500 hover:bg-white/5'}`}
+                            className={`setup-pill ${initialFilters.datePreset === preset ? 'active' : ''}`}
                         >
                             {preset.replace('_', ' ')}
                         </button>
                     ))}
                     <button
                         onClick={() => handlePresetChange('custom')}
-                        className={`px-4 py-2 text-[10px] font-black uppercase rounded-xl whitespace-nowrap transition-all ${initialFilters.datePreset === 'custom' ? 'bg-blue-600 text-white shadow-lg' : 'text-gray-500 hover:bg-white/5'}`}
+                        className={`setup-pill ${initialFilters.datePreset === 'custom' ? 'active' : ''}`}
                     >
+                        <Calendar size={12} className="inline mr-1" />
                         Custom
                     </button>
                 </div>
             </div>
 
-            {/* Custom Date Inputs */}
-            {initialFilters.datePreset === 'custom' && (
-                <div className="flex items-center gap-4 bg-gray-800/30 p-4 rounded-2xl border border-white/5 animate-fade-in-down">
-                    <input type="date" value={initialFilters.customStart} onChange={e => handleCustomDateChange('customStart', e.target.value)} className="bg-gray-900 border border-gray-700 rounded-xl px-4 py-2 text-white text-xs font-bold" />
-                    <span className="text-gray-500 font-bold">-</span>
-                    <input type="date" value={initialFilters.customEnd} onChange={e => handleCustomDateChange('customEnd', e.target.value)} className="bg-gray-900 border border-gray-700 rounded-xl px-4 py-2 text-white text-xs font-bold" />
+            <div className="px-4 space-y-6">
+                {/* Custom Date Inputs */}
+                {initialFilters.datePreset === 'custom' && (
+                    <div className="flex items-center gap-4 bg-[#1E2329] p-4 rounded-sm border border-[#2B3139] animate-fade-in-down shadow-xl">
+                        <input type="date" value={initialFilters.customStart} onChange={e => handleCustomDateChange('customStart', e.target.value)} className="bg-[#0B0E11] border border-[#2B3139] rounded-sm px-4 py-2 text-[#EAECEF] text-xs font-bold focus:border-[#F0B90B] outline-none" />
+                        <span className="text-[#848E9C] font-black uppercase text-[10px]">to</span>
+                        <input type="date" value={initialFilters.customEnd} onChange={e => handleCustomDateChange('customEnd', e.target.value)} className="bg-[#0B0E11] border border-[#2B3139] rounded-sm px-4 py-2 text-[#EAECEF] text-xs font-bold focus:border-[#F0B90B] outline-none" />
+                    </div>
+                )}
+
+                {/* Financial KPIs */}
+                <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+                    <StatCard label={language === 'km' ? 'ចំណូលសរុប' : 'Total Revenue'} value={`$${grandTotals.revenue.toLocaleString()}`} icon={<TrendingUp size={18}/>} colorClass="from-[#F0B90B] to-[#FCD535]" variant="minimal" />
+                    <StatCard label={language === 'km' ? 'ប្រាក់ចំណេញ' : 'Net Profit'} value={`$${grandTotals.profit.toLocaleString()}`} icon={<TrendingUp size={18}/>} colorClass="from-[#0ECB81] to-[#0bb371]" variant="minimal" />
+                    <StatCard label={language === 'km' ? 'ការកម្មង់' : 'Total Orders'} value={grandTotals.orders} icon={<Package size={18}/>} colorClass="from-[#3b82f6] to-[#2563eb]" variant="minimal" />
+                    <StatCard label={language === 'km' ? 'ផេកសកម្ម' : 'Active Pages'} value={grandTotals.pagesCount} icon={<Layout size={18}/>} colorClass="from-[#8b5cf6] to-[#7c3aed]" variant="minimal" />
                 </div>
-            )}
 
-            {/* Top Stats Summary */}
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-                <StatCard label="ចំណូលសរុប (Revenue)" value={`$${grandTotals.revenue.toLocaleString()}`} icon="💰" colorClass="from-blue-600 to-indigo-500" />
-                <StatCard label="ប្រាក់ចំណេញ (Profit)" value={`$${grandTotals.profit.toLocaleString()}`} icon="📈" colorClass="from-emerald-600 to-teal-500" />
-                <StatCard label="ការកម្មង់ (Orders)" value={grandTotals.orders} icon="📦" colorClass="from-purple-600 to-pink-500" />
-                <StatCard label="Page សកម្ម" value={grandTotals.pagesCount} icon="📄" colorClass="from-orange-500 to-yellow-500" />
-            </div>
+                {/* Report Content */}
+                <div className="bg-[#1E2329] border border-[#2B3139] rounded-sm overflow-hidden shadow-2xl">
+                    <SalesByPageDesktop data={pageStats} grandTotals={grandTotals} sortConfig={sortConfig} onToggleSort={toggleSort} showAllPages={showAllPages} setShowAllPages={setShowAllPages} onExportPDF={handleExportPDF} isExporting={isExporting} onPreviewImage={previewImage} onNavigate={handleNavigate} onMonthClick={handleMonthClick} />
+                    <SalesByPageTablet data={pageStats} grandTotals={grandTotals} onPreviewImage={previewImage} onNavigate={handleNavigate} onMonthClick={handleMonthClick} />
+                    <SalesByPageMobile data={pageStats} onPreviewImage={previewImage} onNavigate={handleNavigate} onMonthClick={handleMonthClick} />
+                </div>
 
-            {/* 1. Desktop View */}
-            <SalesByPageDesktop 
-                data={pageStats}
-                grandTotals={grandTotals}
-                sortConfig={sortConfig}
-                onToggleSort={toggleSort}
-                showAllPages={showAllPages}
-                setShowAllPages={setShowAllPages}
-                onExportPDF={handleExportPDF}
-                isExporting={isExporting}
-                onPreviewImage={previewImage}
-                onNavigate={handleNavigate}
-                onMonthClick={handleMonthClick}
-            />
-            
-            {/* 2. Tablet View */}
-            <SalesByPageTablet 
-                data={pageStats}
-                grandTotals={grandTotals}
-                onPreviewImage={previewImage}
-                onNavigate={handleNavigate}
-                onMonthClick={handleMonthClick}
-            />
-
-            {/* 3. Mobile View */}
-            <SalesByPageMobile 
-                data={pageStats}
-                onPreviewImage={previewImage}
-                onNavigate={handleNavigate}
-                onMonthClick={handleMonthClick}
-            />
-
-            <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 pb-10">
-                <div className="lg:col-span-8"><div className="page-card !p-4 bg-gray-800/40 border-gray-700/50"><SimpleBarChart data={topPagesChartData} title="Page ដែលមានចំណូលខ្ពស់បំផុត (Top 5 Pages Revenue)" /></div></div>
-                <div className="lg:col-span-4 flex flex-col justify-center page-card !p-5 bg-gray-800/30 border-gray-700/50"><h3 className="text-sm font-black text-gray-400 uppercase tracking-widest flex items-center gap-2 mb-6"><span className="w-1.5 h-4 bg-indigo-500 rounded-full"></span>សង្ខេប</h3><div className="space-y-4"><div className="flex justify-between border-b border-white/5 pb-2"><span className="text-xs text-gray-400">ចំនួន Page សកម្ម:</span><span className="text-white font-black text-sm">{grandTotals.pagesCount}</span></div><div className="flex justify-between"><span className="text-xs text-gray-400">មធ្យមភាគ/Page:</span><span className="text-blue-400 font-black text-sm">${(grandTotals.revenue / (grandTotals.pagesCount || 1)).toLocaleString(undefined, {maximumFractionDigits: 0})}</span></div></div></div>
+                {/* Analytical Charts */}
+                <div className="grid grid-cols-1 lg:grid-cols-12 gap-4">
+                    <div className="lg:col-span-8 bg-[#1E2329] border border-[#2B3139] p-6 rounded-sm shadow-xl">
+                        <div className="flex items-center gap-2 mb-6">
+                            <div className="w-1 h-4 bg-[#F0B90B] rounded-full"></div>
+                            <h3 className="text-xs font-black text-[#EAECEF] uppercase tracking-widest">{language === 'km' ? 'ផេកដែលមានចំណូលខ្ពស់បំផុត' : 'Top 5 Revenue Pages'}</h3>
+                        </div>
+                        <SimpleBarChart data={topPagesChartData} title="" />
+                    </div>
+                    <div className="lg:col-span-4 bg-[#1E2329] border border-[#2B3139] p-6 rounded-sm shadow-xl flex flex-col justify-center">
+                        <div className="flex items-center gap-2 mb-8">
+                            <div className="w-1 h-4 bg-[#0ECB81] rounded-full"></div>
+                            <h3 className="text-xs font-black text-[#EAECEF] uppercase tracking-widest">{language === 'km' ? 'សង្ខេបប្រតិបត្តិការ' : 'Operational Summary'}</h3>
+                        </div>
+                        <div className="space-y-6">
+                            <div className="flex justify-between items-center border-b border-[#2B3139] pb-4">
+                                <span className="text-[10px] font-bold text-[#848E9C] uppercase">{language === 'km' ? 'ចំនួន Page សកម្ម' : 'Active Pages'}</span>
+                                <span className="text-[#EAECEF] font-black text-sm tabular-nums">{grandTotals.pagesCount}</span>
+                            </div>
+                            <div className="flex justify-between items-center">
+                                <span className="text-[10px] font-bold text-[#848E9C] uppercase">{language === 'km' ? 'មធ្យមភាគចំណូល/Page' : 'Avg Revenue/Page'}</span>
+                                <span className="text-[#F0B90B] font-black text-sm tabular-nums">${(grandTotals.revenue / (grandTotals.pagesCount || 1)).toLocaleString(undefined, {maximumFractionDigits: 0})}</span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
             </div>
         </div>
     );

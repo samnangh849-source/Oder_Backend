@@ -158,6 +158,37 @@ func HandleImageUploadProxy(c *gin.Context) {
 	}
 	tempUrl := fmt.Sprintf("%s://%s/api/images/temp/%s", protocol, c.Request.Host, tempID)
 
+	// ── Immediate DB write for non-photo fields ───────────────────────────────
+	// Apply NewData fields (Fulfillment Status, Packed By, Packed Time, etc.) to
+	// the DB and broadcast NOW — before Drive upload starts. This ensures all
+	// other users see the status change immediately rather than waiting 10-60s
+	// for the background Drive upload to complete.
+	if req.OrderID != "" && req.NewData != nil {
+		immediateMap := map[string]interface{}{}
+		immediateBroadcast := map[string]interface{}{}
+		for k, v := range req.NewData {
+			dbCol := UploadMapToDBColumnFunc(k)
+			if UploadIsValidOrderColumnFunc(dbCol) {
+				immediateMap[dbCol] = v
+				immediateBroadcast[k] = v
+			}
+		}
+		if len(immediateMap) > 0 {
+			if res := DB.Model(&Order{}).Where("order_id = ?", req.OrderID).Updates(immediateMap); res.Error != nil {
+				log.Printf("⚠️ [Upload] Immediate DB update failed for order %s: %v", req.OrderID, res.Error)
+			} else {
+				log.Printf("✅ [Upload] Immediate DB update: orderId=%s fields=%v", req.OrderID, immediateBroadcast)
+			}
+			event, _ := json.Marshal(map[string]interface{}{
+				"type":    "update_order",
+				"orderId": req.OrderID,
+				"newData": immediateBroadcast,
+			})
+			HubGlobal.Broadcast <- event
+			EnqueueSync("updateSheet", immediateBroadcast, "AllOrders", map[string]string{"Order ID": req.OrderID})
+		}
+	}
+
 	c.JSON(200, gin.H{
 		"status":  "success",
 		"message": "Processing upload...",
@@ -214,6 +245,8 @@ func HandleImageUploadProxy(c *gin.Context) {
 					"newData": broadcastData,
 				})
 				HubGlobal.Broadcast <- event
+
+				EnqueueSync("updateSheet", broadcastData, "AllOrders", map[string]string{"Order ID": r.OrderID})
 
 				EnqueueSync("updateOrderTelegram", map[string]interface{}{
 					"orderId":       r.OrderID,

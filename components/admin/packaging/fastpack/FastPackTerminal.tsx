@@ -99,16 +99,16 @@ const FastPackTerminal: React.FC<FastPackTerminalProps> = ({ order, onClose, onS
         });
     };
 
-    const executeFinalSubmit = async () => {
+    const executeFinalSubmit = useCallback(async () => {
         try {
             if (!rawFile || !order) return;
             setUploading(true);
-            
+
             const { blob } = await prepareImage(rawFile, 'high-detail');
             const fileName = `Package_${order['Order ID']}_${Date.now()}.jpg`;
 
             // Trigger background upload with metadata for final update
-            await startUpload(
+            const tempUrl = await startUpload(
                 `pack_${order['Order ID']}`,
                 blob,
                 fileName,
@@ -123,17 +123,17 @@ const FastPackTerminal: React.FC<FastPackTerminalProps> = ({ order, onClose, onS
                 }
             );
 
-            onSuccess();
-            
+            onSuccess(tempUrl);
+
             const id = order['Order ID'].substring(0,8);
             const chatMsg = `📦 **[PACKED]** កញ្ចប់ #${id} (${order['Customer Name']}) វេចខ្ចប់រួចរាល់ (កំពុង Upload រូបភាព)`;
-            
+
             const session = await CacheService.get<{ token: string }>(CACHE_KEYS.SESSION);
             const token = session?.token || '';
-            
+
             fetch(`${WEB_APP_URL}/api/chat/send`, {
                 method: 'POST',
-                headers: { 
+                headers: {
                     'Content-Type': 'application/json',
                     'Authorization': `Bearer ${token}`
                 },
@@ -146,7 +146,7 @@ const FastPackTerminal: React.FC<FastPackTerminalProps> = ({ order, onClose, onS
             setUploading(false);
             setUploadProgress(0);
         }
-    };
+    }, [rawFile, order, currentUser, prepareImage, startUpload, onSuccess]);
 
     const capturePhoto = useCallback(() => {
         if (!videoRef.current || !canvasRef.current) return;
@@ -157,6 +157,63 @@ const FastPackTerminal: React.FC<FastPackTerminalProps> = ({ order, onClose, onS
         const ctx = canvas.getContext('2d');
         if (ctx) {
             ctx.drawImage(video, 0, 0);
+
+            // ── Overlay helper ─────────────────────────────────────────────
+            const truncateText = (c: CanvasRenderingContext2D, text: string, maxWidth: number): string => {
+                if (c.measureText(text).width <= maxWidth) return text;
+                let t = text;
+                while (t.length > 0 && c.measureText(t + '...').width > maxWidth) t = t.slice(0, -1);
+                return t + '...';
+            };
+
+            const padding = 20;
+            const maxTextWidth = canvas.width - padding * 2;
+
+            const shortId    = order?.['Order ID']?.substring(0, 15) ?? '';
+            const page       = order?.Page ?? '';
+            const store      = order?.['Fulfillment Store'] ?? '';
+            const location   = order?.Location ?? 'N/A';
+            const custName   = order?.['Customer Name'] ?? 'N/A';
+            const custPhone  = order?.['Customer Phone'] ?? 'N/A';
+            const grandTotal = (Number(order?.['Grand Total']) || 0).toFixed(2);
+            const payment    = order?.['Payment Status'] ?? 'Unpaid';
+            const packedBy   = currentUser?.FullName ?? 'Packer';
+            const logTime    = new Date().toLocaleString('km-KH');
+            const rawProducts = (order?.Products ?? []).map(p => `${p.name} x${p.quantity}`).join(', ');
+
+            // ── TOP BAR — Order ID, Page, Store ──────────────────────────
+            const topBarH = 52;
+            ctx.fillStyle = 'rgba(11, 14, 17, 0.92)';
+            ctx.fillRect(0, 0, canvas.width, topBarH);
+            // yellow accent at bottom of top bar
+            ctx.fillStyle = '#FCD535';
+            ctx.fillRect(0, topBarH - 3, canvas.width, 3);
+            ctx.fillStyle = '#EAECEF';
+            ctx.font = 'bold 20px "Inter", "Helvetica Neue", sans-serif';
+            ctx.fillText(truncateText(ctx, `ORDER: #${shortId}  |  PAGE: ${page}  |  STORE: ${store}`, maxTextWidth), padding, 34);
+
+            // ── BOTTOM BAR — Customer, Products, Meta ────────────────────
+            const botBarH = 115;
+            ctx.fillStyle = 'rgba(11, 14, 17, 0.92)';
+            ctx.fillRect(0, canvas.height - botBarH, canvas.width, botBarH);
+            // yellow accent at top of bottom bar
+            ctx.fillStyle = '#FCD535';
+            ctx.fillRect(0, canvas.height - botBarH, canvas.width, 3);
+
+            // Line 1 — Location, Customer Name, Phone (13px)
+            ctx.fillStyle = '#B7BDC6';
+            ctx.font = '500 13px "Inter", "Helvetica Neue", sans-serif';
+            ctx.fillText(truncateText(ctx, `\u{1F4CD} ${location}  |  \u{1F464} ${custName}  |  \u{1F4F1} ${custPhone}`, maxTextWidth), padding, canvas.height - 80);
+
+            // Line 2 — Products, Grand Total, Payment (13px)
+            const productsForLine = truncateText(ctx, rawProducts, maxTextWidth - 220);
+            ctx.fillText(truncateText(ctx, `\u{1F6CD} ${productsForLine}  |  \u{1F4B0} $${grandTotal}  |  ${payment}`, maxTextWidth), padding, canvas.height - 55);
+
+            // Line 3 — Packed By, Time (11px muted)
+            ctx.fillStyle = '#848E9C';
+            ctx.font = '500 11px "Inter", "Helvetica Neue", sans-serif';
+            ctx.fillText(truncateText(ctx, `PACKED: ${packedBy}  |  TIME: ${logTime}`, maxTextWidth), padding, canvas.height - 30);
+
             const dataUrl = canvas.toDataURL('image/jpeg', 0.8);
             setPreviewImage(dataUrl);
             previewImageRef.current = dataUrl;
@@ -169,7 +226,7 @@ const FastPackTerminal: React.FC<FastPackTerminalProps> = ({ order, onClose, onS
                     setRawFile(file);
                 });
         }
-    }, []);
+    }, [order, currentUser]);
 
     const startCountdown = useCallback((seconds: number = 3) => {
         if (countdownRef.current !== null) return;
@@ -328,6 +385,58 @@ const FastPackTerminal: React.FC<FastPackTerminalProps> = ({ order, onClose, onS
         }
     }, [step]);
 
+    useEffect(() => {
+        if (step === 'VERIFYING' && isOrderVerified) {
+            const timer = setTimeout(() => {
+                setStep('LABELING');
+            }, 600);
+            return () => clearTimeout(timer);
+        }
+    }, [step, isOrderVerified]);
+
+    useEffect(() => {
+        if (step === 'LABELING' && hasGeneratedLabel) {
+            const timer = setTimeout(() => {
+                setStep('CAPTURING');
+            }, 1000);
+            return () => clearTimeout(timer);
+        }
+    }, [step, hasGeneratedLabel]);
+
+    // Broadcast operation steps to All Users
+    useEffect(() => {
+        if (!order) return;
+        
+        const sendStepNotification = async (message: string) => {
+            const session = await CacheService.get<{ token: string }>(CACHE_KEYS.SESSION);
+            const token = session?.token || '';
+            fetch(`${WEB_APP_URL}/api/chat/send`, {
+                method: 'POST',
+                headers: { 
+                    'Content-Type': 'application/json',
+                    'Authorization': `Bearer ${token}`
+                },
+                body: JSON.stringify({ UserName: 'System', MessageType: 'Text', Content: message })
+            }).catch(() => {});
+        };
+
+        const id = order['Order ID'].substring(0, 8);
+        const user = currentUser?.FullName || 'Packer';
+        let msg = '';
+
+        if (step === 'VERIFYING') {
+            msg = `🛂 **[VERIFYING]** ${user} កំពុងផ្ទៀងផ្ទាត់កញ្ចប់ #${id} (${order['Customer Name']})`;
+        } else if (step === 'LABELING') {
+            msg = `🖨️ **[LABELING]** ${user} កំពុងបោះពុម្ពស្លាកបញ្ជូន (Label) សម្រាប់កញ្ចប់ #${id}`;
+        } else if (step === 'CAPTURING') {
+            msg = `📸 **[CAPTURING]** កញ្ចប់ #${id} ត្រៀមថតរូបបញ្ជាក់ការវេចខ្ចប់ដោយ ${user}`;
+        }
+
+        if (msg) {
+            sendStepNotification(msg);
+        }
+    }, [step, order, currentUser]);
+
     useEffect(() => { return () => stopCamera(); }, [stopCamera]);
 
     useEffect(() => {
@@ -341,7 +450,7 @@ const FastPackTerminal: React.FC<FastPackTerminalProps> = ({ order, onClose, onS
             executeFinalSubmit();
         }
         return () => clearInterval(interval);
-    }, [undoTimer, isUndoing]);
+    }, [undoTimer, isUndoing, executeFinalSubmit]);
 
     const fulfillmentStore = appData.stores?.find(s => s.StoreName === order?.['Fulfillment Store']);
     const basePrinterURL = fulfillmentStore?.LabelPrinterURL;

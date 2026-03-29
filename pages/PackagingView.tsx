@@ -273,12 +273,22 @@ const PackagingView: React.FC<{ orders?: ParsedOrder[] }> = ({ orders: propOrder
 
     const handleUndoReadyToShip = async (order: ParsedOrder) => {
         if (!window.confirm("Do you want to move this order back to Pending Pack?")) return;
-        await executeAction(order, 'Pending', { 
-            'Packed By': '', 
-            'Packed Time': '', 
-            'Package Photo URL': '' 
+        await executeAction(order, 'Pending', {
+            'Packed By': '',
+            'Packed Time': '',
+            'Package Photo URL': ''
         }, () => {
             setActiveTab('Pending');
+        });
+    };
+
+    const handleUndoShipped = async (order: ParsedOrder) => {
+        if (!window.confirm("Do you want to move this order back to Ready for Dispatch?")) return;
+        await executeAction(order, 'Ready to Ship', {
+            'Dispatched Time': '',
+            'Dispatched By': ''
+        }, () => {
+            setActiveTab('Ready to Ship');
         });
     };
 
@@ -343,6 +353,7 @@ const PackagingView: React.FC<{ orders?: ParsedOrder[] }> = ({ orders: propOrder
         onPack: (order: ParsedOrder) => setPackingOrder(order),
         onShip: (order: ParsedOrder) => executeAction(order, 'Shipped', { 'Dispatched Time': new Date().toLocaleString('km-KH'), 'Dispatched By': currentUser?.FullName || 'Packer' }),
         onUndo: handleUndoReadyToShip,
+        onUndoShipped: handleUndoShipped,
         onView: (order: ParsedOrder) => setViewingOrder(order),
         onPrintManifest: () => setIsManifestModalOpen(true),
         onSwitchHub: () => setSelectedStore(''),
@@ -381,7 +392,7 @@ const PackagingView: React.FC<{ orders?: ParsedOrder[] }> = ({ orders: propOrder
                         ));
                         setPackingOrder(null); 
                         setActiveTab('Ready to Ship'); 
-                        refreshData(); 
+                        // `refreshData()` removed to prevent race condition since background WS handles the database sync.
                     }} 
                 />
             )}

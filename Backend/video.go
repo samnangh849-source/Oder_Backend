@@ -23,7 +23,6 @@ package backend
 import (
 	"bufio"
 	"bytes"
-	"context"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -36,7 +35,6 @@ import (
 	"time"
 
 	"github.com/gin-gonic/gin"
-	"gorm.io/gorm"
 )
 
 // ── Injectable Dependencies ───────────────────────────────────────────────
@@ -209,87 +207,6 @@ func HandleDeleteMovie(c *gin.Context) {
 	}(id)
 
 	c.JSON(http.StatusOK, gin.H{"status": "success", "message": "បានលុបភាពយន្តដោយជោគជ័យ"})
-}
-
-// HandleMigrateMovies migrates Movie data from Google Sheets to the database (Admin only).
-// Requires VideoFetchSheetFunc to be set.
-// After completion (success or failure), broadcasts a "movie_migration_complete" WebSocket
-// event so the frontend can update its UI without relying on a blind timeout.
-func HandleMigrateMovies(c *gin.Context) {
-	go func() {
-		ctx := context.Background()
-		_ = ctx // kept for future sheetsService init if needed
-
-		// broadcastResult sends a WebSocket event to all connected clients so the
-		// frontend knows the outcome of the background goroutine.
-		broadcastResult := func(success bool, message string, count int) {
-			if HubGlobal == nil {
-				return
-			}
-			payload, _ := json.Marshal(map[string]interface{}{
-				"type":    "movie_migration_complete",
-				"success": success,
-				"message": message,
-				"count":   count,
-			})
-			HubGlobal.Broadcast <- payload
-		}
-
-		if VideoFetchSheetFunc == nil {
-			log.Println("❌ Movie Migration: VideoFetchSheetFunc is not set")
-			broadcastResult(false, "Server configuration error: VideoFetchSheetFunc not set.", 0)
-			return
-		}
-
-		tx := DB.Begin()
-		defer func() {
-			if r := recover(); r != nil {
-				tx.Rollback()
-				broadcastResult(false, fmt.Sprintf("Panic during migration: %v", r), 0)
-			}
-		}()
-
-		log.Println("🗑️ លុបទិន្នន័យ Movie ចាស់ (Resetting Movies table within transaction)...")
-		tx.Session(&gorm.Session{AllowGlobalUpdate: true}).Delete(&Movie{})
-
-		log.Println("🔄 ចាប់ផ្តើមទាញទិន្នន័យ Movie ថ្មីពី Google Sheet...")
-
-		var movies []Movie
-		if err := VideoFetchSheetFunc("Movies", &movies); err != nil {
-			tx.Rollback()
-			log.Println("❌ Movie Migration failed for Movies:", err)
-			broadcastResult(false, "Failed to fetch data from Google Sheet: "+err.Error(), 0)
-			return
-		}
-
-		var validMovies []Movie
-		seenMovieIDs := make(map[string]bool)
-		for _, x := range movies {
-			if x.ID != "" && !seenMovieIDs[x.ID] {
-				seenMovieIDs[x.ID] = true
-				validMovies = append(validMovies, x)
-			}
-		}
-
-		if len(validMovies) > 0 {
-			if err := tx.CreateInBatches(validMovies, 100).Error; err != nil {
-				tx.Rollback()
-				log.Println("❌ Movie Migration failed to save Movies:", err)
-				broadcastResult(false, "Failed to save movies to database: "+err.Error(), 0)
-				return
-			}
-		}
-
-		if err := tx.Commit().Error; err != nil {
-			log.Println("❌ Movie Migration failed on commit:", err)
-			broadcastResult(false, "Database commit failed: "+err.Error(), 0)
-		} else {
-			log.Printf("🎉 Movie Migration ជោគជ័យ! Saved %d movies.", len(validMovies))
-			broadcastResult(true, fmt.Sprintf("Sync ជោគជ័យ! បានរក្សាទុក %d ភាពយន្ត។", len(validMovies)), len(validMovies))
-		}
-	}()
-
-	c.JSON(200, gin.H{"status": "success", "message": "Movie migration started."})
 }
 
 // HandleExtractM3U8 scrapes an M3U8/HLS link from a given webpage URL.

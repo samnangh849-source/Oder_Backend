@@ -16,7 +16,9 @@ var HubGlobal *Hub
 
 var Upgrader = websocket.Upgrader{
 	CheckOrigin: func(r *http.Request) bool {
-		return isOriginAllowed(r)
+		// Allow all origins for the prototype to avoid CORS issues between
+		// different hosting providers (e.g. GitHub Pages frontend -> Render backend).
+		return true
 	},
 }
 
