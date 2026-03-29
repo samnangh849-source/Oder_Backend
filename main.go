@@ -21,7 +21,7 @@ import (
 	"github.com/gin-gonic/gin"
 	"golang.org/x/crypto/bcrypt"
 
-	"github.com/samnangh849-source/Oder_Backend-2-/Backend"
+	backend "github.com/samnangh849-source/Oder_Backend-2-/Backend"
 
 	// Import GORM
 	"gorm.io/gorm"
@@ -2050,6 +2050,10 @@ func main() {
 	backend.UploadMapToDBColumnFunc = mapToDBColumn
 	backend.UploadGetTableNameFunc = getTableName
 	backend.UploadIsValidOrderColumnFunc = isValidOrderColumn
+	
+	// Pre-initialize UploadFolderID from environment for immediate use
+	backend.UploadFolderID = os.Getenv("UPLOAD_FOLDER_ID")
+	
 	jwtSecretEnv := os.Getenv("JWT_SECRET")
 	if jwtSecretEnv == "" {
 		jwtSecretEnv = "change-me-in-production"
