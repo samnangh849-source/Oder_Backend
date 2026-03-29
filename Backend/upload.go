@@ -196,19 +196,20 @@ func HandleImageUploadProxy(c *gin.Context) {
 			}
 		}
 		if len(immediateMap) > 0 {
-			if res := DB.Model(&Order{}).Where("order_id = ?", req.OrderID).Updates(immediateMap); res.Error != nil {
+			// Use UpdateColumns (plural) to skip GORM hooks and update only these columns immediately
+			if res := DB.Model(&Order{}).Where("order_id = ?", req.OrderID).UpdateColumns(immediateMap); res.Error != nil {
 				log.Printf("⚠️ [Upload] Immediate DB update failed for order %s: %v", req.OrderID, res.Error)
 			} else {
-				log.Printf("✅ [Upload] Immediate DB update: orderId=%s fields=%v", req.OrderID, immediateBroadcast)
+				log.Printf("✅ [Upload] Immediate DB update SUCCESS: orderId=%s fields=%v", req.OrderID, immediateBroadcast)
 			}
+			
+			// Broadcast update so all clients see the status change immediately
 			event, _ := json.Marshal(map[string]interface{}{
 				"type":    "update_order",
 				"orderId": req.OrderID,
 				"newData": immediateBroadcast,
 			})
 			HubGlobal.Broadcast <- event
-			// Removed redundant immediate EnqueueSync here.
-			// The final sync will happen in the background goroutine below to save Apps Script quota.
 		}
 	}
 
