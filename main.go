@@ -1274,6 +1274,15 @@ func handleAdminUpdateOrder(c *gin.Context) {
 		}
 	}
 
+	// Auto-set Delivered Time when transitioning to Delivered (if not already provided)
+	if newStatusRaw, ok := r.NewData["Fulfillment Status"]; ok {
+		if strings.TrimSpace(fmt.Sprintf("%v", newStatusRaw)) == "Delivered" {
+			if _, hasTime := r.NewData["Delivered Time"]; !hasTime {
+				r.NewData["Delivered Time"] = time.Now().Format("2006-01-02 15:04:05")
+			}
+		}
+	}
+
 	mappedData := make(map[string]interface{})
 	for k, v := range r.NewData {
 		dbCol := mapToDBColumn(k)
@@ -1310,18 +1319,38 @@ func handleAdminUpdateOrder(c *gin.Context) {
 	hub.Broadcast <- eventBytes
 
 	go func() {
-		// Sync with Google Sheets via managed queue
-		// Note: "AllOrders" is the sheet name for orders.
-		// The primary key for an order in the sheet is "Order ID".
-		enqueueSync("updateSheet", r.NewData, "AllOrders", map[string]string{"Order ID": r.OrderID})
+		// Build comprehensive sheet data: start from r.NewData then fill missing
+		// fulfillment fields from DB (e.g. Driver Name set in a prior step).
+		sheetData := make(map[string]interface{})
+		for k, v := range r.NewData {
+			sheetData[k] = v
+		}
+		var current Order
+		if err := DB.Where("order_id = ?", r.OrderID).First(&current).Error; err == nil {
+			fill := func(key, val string) {
+				if val != "" {
+					if _, exists := sheetData[key]; !exists {
+						sheetData[key] = val
+					}
+				}
+			}
+			fill("Packed By", current.PackedBy)
+			fill("Package Photo URL", current.PackagePhotoURL)
+			fill("Driver Name", current.DriverName)
+			fill("Tracking Number", current.TrackingNumber)
+			fill("Dispatched Time", current.DispatchedTime)
+			fill("Dispatched By", current.DispatchedBy)
+			fill("Delivered Time", current.DeliveredTime)
+			fill("Delivery Photo URL", current.DeliveryPhotoURL)
+		}
 
-		// Also send to Telegram via Apps Script (this is a separate action)
-		// Sync with Telegram via Apps Script (keep separate for now)
+		enqueueSync("updateSheet", sheetData, "AllOrders", map[string]string{"Order ID": r.OrderID})
+
 		enqueueSync("updateOrderTelegram", map[string]interface{}{
 			"orderId":       r.OrderID,
 			"updatedFields": r.NewData,
 			"team":          originalOrder.Team,
-		}, "", nil) // SheetName and PrimaryKey are not directly applicable for Telegram update action
+		}, "", nil)
 	}()
 
 	c.JSON(200, gin.H{"status": "success"})
