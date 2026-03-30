@@ -131,7 +131,7 @@ const MobileUserJourney: React.FC<MobileUserJourneyProps> = ({ onBackToRoleSelec
                         </div>
                     </div>
                     <div className="flex-grow overflow-hidden">
-                        <UserOrdersView onAdd={handleCreateOrder} onStatsUpdate={setTeamStats} />
+                        <UserOrdersView onAdd={handleCreateOrder} onStatsUpdate={setTeamStats} showColumnSelectorToggle={false} />
                     </div>
                 </div>
             ) : (

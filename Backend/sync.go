@@ -29,7 +29,7 @@ type AppsScriptRequest struct {
 	NewName        string                 `json:"newName,omitempty"` // Added for renameFile compatibility
 	MimeType       string                 `json:"mimeType,omitempty"`
 	UserName       string                 `json:"userName,omitempty"`
-	OrderData      interface{}            `json:"orderData,omitempty"`
+	OrderData      interface{}            `json:"orderData"`
 	OrderID        string                 `json:"orderId,omitempty"`
 	MovieID        string                 `json:"movieId,omitempty"`
 	TargetColumn   string                 `json:"targetColumn,omitempty"`

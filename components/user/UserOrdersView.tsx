@@ -24,9 +24,10 @@ interface ReportFilterState {
 interface UserOrdersViewProps {
   onAdd: () => void;
   onStatsUpdate: (stats: { revenue: number; cost: number; paid: number; unpaid: number, count: number }) => void;
+  showColumnSelectorToggle?: boolean;
 }
 
-const UserOrdersView: React.FC<UserOrdersViewProps> = ({ onAdd, onStatsUpdate }) => {
+const UserOrdersView: React.FC<UserOrdersViewProps> = ({ onAdd, onStatsUpdate, showColumnSelectorToggle = true }) => {
     const { currentUser, language, refreshData, appData, orders, isOrdersLoading, hasPermission, selectedTeam: team, setAppState } = useContext(AppContext);
     const { playClick, playPop } = useSoundEffects();
     
@@ -241,31 +242,33 @@ const UserOrdersView: React.FC<UserOrdersViewProps> = ({ onAdd, onStatsUpdate })
                             </>
                         )}
 
-                        <div className="relative">
-                            <button onClick={() => { playClick(); setShowColumnSelector(!showColumnSelector); }} className={`p-2.5 bg-[var(--cm-input-bg)] ${showColumnSelector ? 'text-[var(--cm-accent)] border-[var(--cm-accent)]' : 'text-secondary border-[var(--cm-border)]'} border rounded-md relative active:scale-95 transition-all hover:border-[var(--cm-accent)] hover:text-[var(--cm-accent)]`}>
-                                <Settings size={18} />
-                            </button>
-                            {showColumnSelector && (
-                                <>
-                                    <div className="fixed inset-0 z-[55]" onClick={() => setShowColumnSelector(false)}></div>
-                                    <div className="absolute right-0 mt-2 w-56 bg-[var(--cm-card-bg)] border border-[var(--cm-border)] rounded-lg shadow-2xl z-[60] overflow-hidden animate-fade-in-down">
-                                        <div className="px-4 py-2 bg-[var(--cm-card-bg2)] border-b border-[var(--cm-border)]">
-                                            <span className="text-[10px] font-bold text-secondary uppercase tracking-widest">{language === 'km' ? 'កំណត់កឡោន' : 'Setup Columns'}</span>
+                        {showColumnSelectorToggle && (
+                            <div className="relative">
+                                <button onClick={() => { playClick(); setShowColumnSelector(!showColumnSelector); }} className={`p-2.5 bg-[var(--cm-input-bg)] ${showColumnSelector ? 'text-[var(--cm-accent)] border-[var(--cm-accent)]' : 'text-secondary border-[var(--cm-border)]'} border rounded-md relative active:scale-95 transition-all hover:border-[var(--cm-accent)] hover:text-[var(--cm-accent)]`}>
+                                    <Settings size={18} />
+                                </button>
+                                {showColumnSelector && (
+                                    <>
+                                        <div className="fixed inset-0 z-[55]" onClick={() => setShowColumnSelector(false)}></div>
+                                        <div className="absolute right-0 mt-2 w-56 bg-[var(--cm-card-bg)] border border-[var(--cm-border)] rounded-lg shadow-2xl z-[60] overflow-hidden animate-fade-in-down">
+                                            <div className="px-4 py-2 bg-[var(--cm-card-bg2)] border-b border-[var(--cm-border)]">
+                                                <span className="text-[10px] font-bold text-secondary uppercase tracking-widest">{language === 'km' ? 'កំណត់កឡោន' : 'Setup Columns'}</span>
+                                            </div>
+                                            <div className="max-h-[300px] overflow-y-auto py-1 custom-scrollbar">
+                                                {allColumns.map(col => (
+                                                    <button key={col.key} onClick={() => toggleColumn(col.key)} className="w-full px-4 py-2 flex items-center gap-3 hover:bg-[var(--cm-border)] transition-colors group">
+                                                        <div className={`w-4 h-4 rounded border flex items-center justify-center transition-all ${visibleColumns.has(col.key) ? 'bg-[var(--cm-accent)] border-[var(--cm-accent)]' : 'border-[var(--cm-border)] group-hover:border-[var(--cm-accent)]'}`}>
+                                                            {visibleColumns.has(col.key) && <Check size={12} strokeWidth={4} />}
+                                                        </div>
+                                                        <span className={`text-xs font-medium ${visibleColumns.has(col.key) ? 'text-[var(--cm-text-primary)]' : 'text-secondary'}`}>{col.label}</span>
+                                                    </button>
+                                                ))}
+                                            </div>
                                         </div>
-                                        <div className="max-h-[300px] overflow-y-auto py-1 custom-scrollbar">
-                                            {allColumns.map(col => (
-                                                <button key={col.key} onClick={() => toggleColumn(col.key)} className="w-full px-4 py-2 flex items-center gap-3 hover:bg-[var(--cm-border)] transition-colors group">
-                                                    <div className={`w-4 h-4 rounded border flex items-center justify-center transition-all ${visibleColumns.has(col.key) ? 'bg-[var(--cm-accent)] border-[var(--cm-accent)]' : 'border-[var(--cm-border)] group-hover:border-[var(--cm-accent)]'}`}>
-                                                        {visibleColumns.has(col.key) && <Check size={12} strokeWidth={4} />}
-                                                    </div>
-                                                    <span className={`text-xs font-medium ${visibleColumns.has(col.key) ? 'text-[var(--cm-text-primary)]' : 'text-secondary'}`}>{col.label}</span>
-                                                </button>
-                                            ))}
-                                        </div>
-                                    </div>
-                                </>
-                            )}
-                        </div>
+                                    </>
+                                )}
+                            </div>
+                        )}
                         <button onClick={() => { playClick(); setIsFilterPanelOpen(true); }} className="p-2.5 bg-[var(--cm-input-bg)] text-secondary border border-[var(--cm-border)] rounded-md relative active:scale-95 transition-all hover:border-[var(--cm-accent)] hover:text-[var(--cm-accent)]">
                             <Filter size={18} />
                             {Object.values(advancedFilters).some(v => v && v !== 'all' && v !== 'this_month' && v !== 'All') && <span className="absolute -top-1 -right-1 w-2 h-2 bg-[var(--cm-accent)] rounded-full border border-[var(--cm-bg)]"></span>}
