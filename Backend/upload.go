@@ -281,6 +281,7 @@ func HandleImageUploadProxy(c *gin.Context) {
 				}
 
 				if len(sheetFields) > 0 {
+					log.Printf("📋 [Immediate Sync] orderId=%s updatedFields=%v", oid, sheetFields)
 					EnqueueSync("updateOrderTelegram", map[string]interface{}{
 						"orderId":       oid,
 						"team":          team,
@@ -356,12 +357,41 @@ func HandleImageUploadProxy(c *gin.Context) {
 			})
 			HubGlobal.Broadcast <- event
 
+			// Build comprehensive sheet data: start from broadcastData then fill
+			// missing fulfillment fields from DB (same approach as handleAdminUpdateOrder).
+			// This ensures Google Sheets receives ALL fulfillment columns, not just
+			// the ones in the current request.
+			sheetData := make(map[string]interface{})
+			for k, v := range broadcastData {
+				sheetData[k] = v
+			}
+			if order.OrderID != "" {
+				fill := func(key, val string) {
+					if val != "" {
+						if _, exists := sheetData[key]; !exists {
+							sheetData[key] = val
+						}
+					}
+				}
+				fill("Packed By", order.PackedBy)
+				fill("Packed Time", order.PackedTime)
+				fill("Package Photo URL", order.PackagePhotoURL)
+				fill("Driver Name", order.DriverName)
+				fill("Tracking Number", order.TrackingNumber)
+				fill("Dispatched Time", order.DispatchedTime)
+				fill("Dispatched By", order.DispatchedBy)
+				fill("Delivered Time", order.DeliveredTime)
+				fill("Delivery Photo URL", order.DeliveryPhotoURL)
+			}
+
+			log.Printf("📋 [Background Sync] orderId=%s updatedFields=%v", r.OrderID, sheetData)
+
 			// SINGLE Sync call to Google Sheets and Telegram.
 			// Apps Script's updateOrderTelegram already handles updating all relevant sheets.
 			EnqueueSync("updateOrderTelegram", map[string]interface{}{
 				"orderId":       r.OrderID,
 				"team":          team,
-				"updatedFields": broadcastData,
+				"updatedFields": sheetData,
 			}, "", nil)
 
 			return // Finished order processing
