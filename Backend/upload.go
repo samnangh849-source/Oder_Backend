@@ -340,27 +340,20 @@ func HandleImageUploadProxy(c *gin.Context) {
 				dbUpdateMap[UploadMapToDBColumnFunc(r.TargetColumn)] = driveURL
 			}
 
+			// Update PostgreSQL first
+			if res := DB.Model(&Order{}).Where("order_id = ?", r.OrderID).Updates(dbUpdateMap); res.Error != nil {
+				log.Printf("⚠️ [Background Update] DB update failed for order %s: %v", r.OrderID, res.Error)
+			}
+
+			// Now fetch the latest state to ensure we have everything (including team)
 			var order Order
 			team := ""
 			if res := DB.Where("order_id = ?", r.OrderID).First(&order); res.Error == nil {
 				team = order.Team
-				DB.Model(&order).Updates(dbUpdateMap)
-			} else {
-				DB.Model(&Order{}).Where("order_id = ?", r.OrderID).Updates(dbUpdateMap)
 			}
 
-			// Broadcast final status update
-			event, _ := json.Marshal(map[string]interface{}{
-				"type":    "update_order",
-				"orderId": r.OrderID,
-				"newData": broadcastData,
-			})
-			HubGlobal.Broadcast <- event
-
 			// Build comprehensive sheet data: start from broadcastData then fill
-			// missing fulfillment fields from DB (same approach as handleAdminUpdateOrder).
-			// This ensures Google Sheets receives ALL fulfillment columns, not just
-			// the ones in the current request.
+			// missing fulfillment fields from the freshly updated DB record.
 			sheetData := make(map[string]interface{})
 			for k, v := range broadcastData {
 				sheetData[k] = v
