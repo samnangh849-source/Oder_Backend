@@ -195,6 +195,15 @@ func HandleImageUploadProxy(c *gin.Context) {
 				immediateBroadcast[k] = v
 			}
 		}
+
+		// Also update the photo column with the temp URL immediately in the DB
+		// so it shows up for all users right away.
+		if req.TargetColumn != "" {
+			dbCol := UploadMapToDBColumnFunc(req.TargetColumn)
+			immediateMap[dbCol] = tempUrl
+			immediateBroadcast[req.TargetColumn] = tempUrl
+		}
+
 		if len(immediateMap) > 0 {
 			// Use UpdateColumns (plural) to skip GORM hooks and update only these columns immediately
 			if res := DB.Model(&Order{}).Where("order_id = ?", req.OrderID).UpdateColumns(immediateMap); res.Error != nil {
@@ -210,6 +219,34 @@ func HandleImageUploadProxy(c *gin.Context) {
 				"newData": immediateBroadcast,
 			})
 			HubGlobal.Broadcast <- event
+
+			// Sync with Google Sheets IMMEDIATELY for status and packer info
+			// We exclude the temp URL from the sheet to prevent broken links later,
+			// the background worker will update the permanent Drive URL once ready.
+			go func(oid string, data map[string]interface{}) {
+				var order Order
+				team := ""
+				if res := DB.Where("order_id = ?", oid).Select("team").First(&order); res.Error == nil {
+					team = order.Team
+				}
+
+				sheetFields := make(map[string]interface{})
+				for k, v := range data {
+					// Skip temp URLs for Google Sheets
+					if str, ok := v.(string); ok && strings.Contains(str, "/api/images/temp/") {
+						continue
+					}
+					sheetFields[k] = v
+				}
+
+				if len(sheetFields) > 0 {
+					EnqueueSync("updateOrderTelegram", map[string]interface{}{
+						"orderId":       oid,
+						"team":          team,
+						"updatedFields": sheetFields,
+					}, "", nil)
+				}
+			}(req.OrderID, immediateBroadcast)
 		}
 	}
 
