@@ -1462,6 +1462,16 @@ func handleGetChatMessages(c *gin.Context) {
 	c.JSON(200, gin.H{"status": "success", "data": messages})
 }
 
+func handleGetSingleChatMessage(c *gin.Context) {
+	id := c.Param("id")
+	var msg ChatMessage
+	if err := DB.Where("id = ?", id).First(&msg).Error; err != nil {
+		c.JSON(404, gin.H{"error": "message not found"})
+		return
+	}
+	c.JSON(200, gin.H{"status": "success", "data": msg})
+}
+
 func handleSendChatMessage(c *gin.Context) {
 	var msg ChatMessage
 	if err := c.ShouldBindJSON(&msg); err != nil {
@@ -1823,6 +1833,7 @@ func main() {
 
 		chat := protected.Group("/chat")
 		chat.GET("/messages", handleGetChatMessages)
+		chat.GET("/message/:id", handleGetSingleChatMessage)
 		chat.POST("/send", handleSendChatMessage)
 		chat.POST("/delete", handleDeleteChatMessage)
 
