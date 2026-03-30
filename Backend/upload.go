@@ -186,6 +186,47 @@ func HandleImageUploadProxy(c *gin.Context) {
 	// other users see the status change immediately rather than waiting 10-60s
 	// for the background Drive upload to complete.
 	if req.OrderID != "" && req.NewData != nil {
+		// ✅ Validate state machine transitions (same rules as handleAdminUpdateOrder)
+		if newStatusRaw, hasStatus := req.NewData["Fulfillment Status"]; hasStatus {
+			newStatus := strings.TrimSpace(fmt.Sprintf("%v", newStatusRaw))
+
+			var currentOrder Order
+			if err := DB.Where("order_id = ?", req.OrderID).Select("fulfillment_status").First(&currentOrder).Error; err != nil {
+				log.Printf("⚠️ [Upload] Cannot find order %s for validation: %v", req.OrderID, err)
+				c.JSON(404, gin.H{"status": "error", "message": "រកមិនឃើញការកម្មង់"})
+				return
+			}
+
+			currentStatus := strings.TrimSpace(currentOrder.FulfillmentStatus)
+			if currentStatus == "" {
+				currentStatus = "Pending"
+			}
+
+			validTransitions := map[string][]string{
+				"Pending":       {"Ready to Ship"},
+				"Ready to Ship": {"Shipped", "Pending"},
+				"Shipped":       {"Delivered", "Ready to Ship"},
+				"Delivered":     {},
+				"Cancelled":     {},
+			}
+
+			allowed, ok := validTransitions[currentStatus]
+			if ok {
+				transitionValid := false
+				for _, s := range allowed {
+					if s == newStatus {
+						transitionValid = true
+						break
+					}
+				}
+				if !transitionValid {
+					log.Printf("⛔ [Upload] Invalid transition: %s → %s for order %s", currentStatus, newStatus, req.OrderID)
+					c.JSON(400, gin.H{"status": "error", "message": fmt.Sprintf("មិនអាចផ្លាស់ប្តូរពី '%s' ទៅ '%s' បានទេ", currentStatus, newStatus)})
+					return
+				}
+			}
+		}
+
 		immediateMap := map[string]interface{}{}
 		immediateBroadcast := map[string]interface{}{}
 		for k, v := range req.NewData {
