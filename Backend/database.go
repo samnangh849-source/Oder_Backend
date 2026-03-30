@@ -87,8 +87,18 @@ func InitDB() {
 	maxRetries := GetEnvInt("DB_MAX_RETRIES", 10)
 
 	for i := 0; i < maxRetries; i++ {
+		newLogger := logger.New(
+			log.New(os.Stdout, "\r\n", log.LstdFlags),
+			logger.Config{
+				SlowThreshold:             time.Second,
+				LogLevel:                  logger.Error,
+				IgnoreRecordNotFoundError: true,
+				Colorful:                  true,
+			},
+		)
+
 		db, err = gorm.Open(postgres.Open(dsn), &gorm.Config{
-			Logger: logger.Default.LogMode(logger.Error),
+			Logger: newLogger,
 			// PrepareStmt: true, // Increases performance for repeated queries
 		})
 		if err == nil {
