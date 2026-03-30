@@ -1043,6 +1043,7 @@ func handleAdminUpdateOrder(c *gin.Context) {
 				}
 			}
 			fill("Packed By", current.PackedBy)
+			fill("Packed Time", current.PackedTime)
 			fill("Package Photo URL", current.PackagePhotoURL)
 			fill("Driver Name", current.DriverName)
 			fill("Tracking Number", current.TrackingNumber)
