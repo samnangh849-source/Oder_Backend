@@ -10,6 +10,7 @@ import PdfExportModal from '../components/admin/PdfExportModal';
 import BulkActionManager from '../components/admin/BulkActionManager';
 import MobileFilterEngine from '../components/orders/MobileFilterEngine';
 import { FilterPanel } from '../components/orders/FilterPanel';
+import { ColumnToggler, availableColumns } from '../components/orders/ColumnToggler';
 import OrderDetailModal from '../components/orders/OrderDetailModal';
 import { translations } from '../translations';
 import { useSoundEffects } from '../hooks/useSoundEffects';
@@ -36,6 +37,20 @@ const MobileOrdersDashboard: React.FC<MobileOrdersDashboardProps> = ({ onBack, i
     const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>('desc');
     const [viewMode, setViewMode] = useUrlState<'card' | 'list'>('viewMode', 'card');
     
+    const [visibleColumns, setVisibleColumns] = useState<Set<string>>(() => {
+        const defaults = availableColumns || [];
+        return new Set(
+            defaults.filter(c => 
+                c.key !== 'productInfo' && 
+                c.key !== 'print' && 
+                c.key !== 'check' && 
+                c.key !== 'fulfillment' &&
+                c.key !== 'note' &&
+                c.key !== 'driver'
+            ).map(c => c.key)
+        );
+    });
+
     const [isFilterModalOpen, setIsFilterModalOpen] = useState(false);
     const [isPdfModalOpen, setIsPdfModalOpen] = useState(false);
     const [searchQuery, setSearchQuery] = useState('');
@@ -219,6 +234,14 @@ const MobileOrdersDashboard: React.FC<MobileOrdersDashboardProps> = ({ onBack, i
         });
     }, [enrichedOrders, filters, searchQuery, sortBy, sortOrder]);
 
+    const toggleColumn = (key: string) => {
+        setVisibleColumns(prev => {
+            const next = new Set(prev);
+            if (next.has(key)) { if (next.size > 1) next.delete(key); } else { next.add(key); }
+            return next;
+        });
+    };
+
     if (editingOrderId) {
         const order = enrichedOrders.find(o => o['Order ID'] === editingOrderId);
         return order ? (
@@ -243,6 +266,7 @@ const MobileOrdersDashboard: React.FC<MobileOrdersDashboardProps> = ({ onBack, i
                     </div>
                 </div>
                 <div className="flex items-center gap-2">
+                    <ColumnToggler visibleColumns={visibleColumns} onToggle={toggleColumn} />
                     <button onClick={() => { playClick(); setIsFilterModalOpen(true); }} className="p-2.5 bg-blue-600/10 text-blue-400 border border-blue-500/20 rounded-xl relative">
                         <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path d="M3 4a1 1 0 011-1h16a1 1 0 011 1v2.586a1 1 0 01-.293.707l-6.414 6.414a1 1 0 00-.293.707V17l-4 4v-6.586a1 1 0 00-.293-.707L3.293 7.293A1 1 0 013 6.586V4z" strokeWidth={2}/></svg>
                         {Object.values(filters).some(v => v && v !== 'all' && v !== 'this_month') && <span className="absolute top-1 right-1 w-2 h-2 bg-blue-500 rounded-full border-2 border-[#0f172a]"></span>}
@@ -337,6 +361,7 @@ const MobileOrdersDashboard: React.FC<MobileOrdersDashboardProps> = ({ onBack, i
                         onEdit={o => setEditingOrderId(o['Order ID'])} onView={o => setViewingOrder(o)}
                         showActions={true} selectedIds={selectedIds}
                         isSelectionMode={isSelectionMode}
+                        visibleColumns={visibleColumns}
                         onToggleSelect={id => setSelectedIds(prev => { const next = new Set(prev); if (next.has(id)) next.delete(id); else next.add(id); return next; })}
                     />
                 )}

@@ -77,7 +77,8 @@ const OrdersListMobile: React.FC<OrdersListMobileProps> = ({
         return d.toLocaleDateString('km-KH', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' });
     };
 
-    const showVerify = !visibleColumns || visibleColumns.has('isVerified');
+    const isVisible = (key: string) => !visibleColumns || visibleColumns.has(key);
+    const showVerify = isVisible('check');
 
     return (
         <div className="flex flex-col space-y-6">
@@ -182,33 +183,41 @@ const OrdersListMobile: React.FC<OrdersListMobileProps> = ({
                                                 <div className={`w-5 h-5 rounded-sm flex items-center justify-center border ${isSelected ? 'bg-[var(--cm-accent)] border-[var(--cm-accent)]' : 'border-[var(--cm-border)]'}`}>
                                                     {isSelected && <Check size={12} color="var(--cm-accent-text)" strokeWidth={4} />}
                                                 </div>
-                                            ) : (
+                                            ) : isVisible('index') && (
                                                 <span className="text-[10px] font-black text-[var(--cm-text-muted)] font-mono opacity-50">{displayIndex}</span>
                                             )}
                                         </div>
 
                                         <div className="flex-1 min-w-0">
                                             <div className="flex items-center gap-2 mb-0.5">
-                                                <h3 className="text-[13px] font-black text-[var(--cm-text-primary)] truncate uppercase tracking-tight">{order['Customer Name']}</h3>
-                                                <span className={`text-[8px] font-black px-1.5 py-0.5 rounded-sm ${isPaid ? 'bg-[var(--cm-green)]/10 text-[var(--cm-green)]' : 'bg-[var(--cm-red)]/10 text-[var(--cm-red)]'}`}>
-                                                    {isPaid ? 'PAID' : 'UNPAID'}
-                                                </span>
+                                                {isVisible('customerName') && <h3 className="text-[13px] font-black text-[var(--cm-text-primary)] truncate uppercase tracking-tight">{order['Customer Name']}</h3>}
+                                                {isVisible('status') && (
+                                                    <span className={`text-[8px] font-black px-1.5 py-0.5 rounded-sm ${isPaid ? 'bg-[var(--cm-green)]/10 text-[var(--cm-green)]' : 'bg-[var(--cm-red)]/10 text-[var(--cm-red)]'}`}>
+                                                        {isPaid ? 'PAID' : 'UNPAID'}
+                                                    </span>
+                                                )}
                                             </div>
                                             <div className="flex items-center gap-2 text-[10px] font-bold text-[var(--cm-text-muted)]">
                                                 <span className="text-[var(--cm-accent)]">{order['Customer Phone']}</span>
-                                                <span className="opacity-20">•</span>
-                                                <span className="truncate">{order.Location || 'N/A'}</span>
+                                                {isVisible('location') && (
+                                                    <>
+                                                        <span className="opacity-20">•</span>
+                                                        <span className="truncate">{order.Location || 'N/A'}</span>
+                                                    </>
+                                                )}
                                             </div>
                                         </div>
 
                                         <div className="flex items-center gap-3 shrink-0">
-                                            <div className="text-right">
-                                                <div className="text-[14px] font-black text-[var(--cm-text-primary)] italic tabular-nums leading-none">
-                                                    <span className="text-[10px] text-[var(--cm-accent)] mr-0.5 font-sans">$</span>
-                                                    {orderTotal.toLocaleString(undefined, { minimumFractionDigits: 0 })}
+                                            {isVisible('total') && (
+                                                <div className="text-right">
+                                                    <div className="text-[14px] font-black text-[var(--cm-text-primary)] italic tabular-nums leading-none">
+                                                        <span className="text-[10px] text-[var(--cm-accent)] mr-0.5 font-sans">$</span>
+                                                        {orderTotal.toLocaleString(undefined, { minimumFractionDigits: 0 })}
+                                                    </div>
                                                 </div>
-                                            </div>
-                                            {canEditOrder(order) && (
+                                            )}
+                                            {isVisible('actions') && canEditOrder(order) && (
                                                 <button onClick={e => { e.stopPropagation(); onEdit?.(order); }} className="action-icon-btn">
                                                     <Edit2 size={14} />
                                                 </button>
@@ -233,76 +242,92 @@ const OrdersListMobile: React.FC<OrdersListMobileProps> = ({
                                                 <div className={`w-5 h-5 rounded-sm flex items-center justify-center border ${isSelected ? 'bg-[var(--cm-accent)] border-[var(--cm-accent)]' : 'border-[var(--cm-border)]'}`}>
                                                     {isSelected && <Check size={12} color="var(--cm-accent-text)" strokeWidth={4} />}
                                                 </div>
-                                            ) : (
+                                            ) : isVisible('index') && (
                                                 <span className="text-[10px] font-black text-[var(--cm-text-muted)] font-mono opacity-50">{displayIndex}</span>
                                             )}
                                             <div className="flex flex-col">
-                                                <span className="text-[10px] font-black text-[var(--cm-text-primary)] tracking-tighter opacity-80">#{order['Order ID'].substring(0, 10)}</span>
+                                                {isVisible('orderId') && <span className="text-[10px] font-black text-[var(--cm-text-primary)] tracking-tighter opacity-80">#{order['Order ID'].substring(0, 10)}</span>}
                                                 <div className="flex items-center gap-2 mt-1">
-                                                    <span className={`status-pill-v4 ${isPaid ? 'bg-[var(--cm-green)]/10 text-[var(--cm-green)]' : 'bg-[var(--cm-red)]/10 text-[var(--cm-red)]'}`}>
-                                                        {isPaid ? 'PAID' : 'UNPAID'}
-                                                    </span>
-                                                    {isVerified && <div className="flex items-center gap-1 text-[var(--cm-green)] text-[9px] font-black"><Check size={10} strokeWidth={4}/> VERIFIED</div>}
+                                                    {isVisible('status') && (
+                                                        <span className={`status-pill-v4 ${isPaid ? 'bg-[var(--cm-green)]/10 text-[var(--cm-green)]' : 'bg-[var(--cm-red)]/10 text-[var(--cm-red)]'}`}>
+                                                            {isPaid ? 'PAID' : 'UNPAID'}
+                                                        </span>
+                                                    )}
+                                                    {showVerify && isVerified && <div className="flex items-center gap-1 text-[var(--cm-green)] text-[9px] font-black"><Check size={10} strokeWidth={4}/> VERIFIED</div>}
                                                 </div>
                                             </div>
                                         </div>
-                                        <div className="text-right">
-                                            <div className="text-[20px] font-black text-[var(--cm-text-primary)] italic tabular-nums leading-none tracking-tighter">
-                                                <span className="text-[12px] text-[var(--cm-accent)] mr-0.5 font-sans">$</span>
-                                                {orderTotal.toLocaleString(undefined, { minimumFractionDigits: 2 })}
+                                        {isVisible('total') && (
+                                            <div className="text-right">
+                                                <div className="text-[20px] font-black text-[var(--cm-text-primary)] italic tabular-nums leading-none tracking-tighter">
+                                                    <span className="text-[12px] text-[var(--cm-accent)] mr-0.5 font-sans">$</span>
+                                                    {orderTotal.toLocaleString(undefined, { minimumFractionDigits: 2 })}
+                                                </div>
                                             </div>
-                                        </div>
+                                        )}
                                     </div>
 
                                     {/* Content Row */}
                                     <div className="flex gap-4 mb-5 pb-4 border-b border-[var(--cm-border)]/50">
-                                        <div className="w-16 h-16 rounded bg-[var(--cm-card-bg2)] border border-[var(--cm-border)] shrink-0 relative overflow-hidden">
-                                            {mainProduct?.ProductImage ? (
-                                                <img src={convertGoogleDriveUrl(mainProduct.ProductImage)} className="w-full h-full object-cover" alt="" />
-                                            ) : (
-                                                <div className="w-full h-full flex items-center justify-center text-[8px] text-[var(--cm-text-muted)] font-black">IMAGE</div>
-                                            )}
-                                            {productCount > 1 && (
-                                                <div className="absolute bottom-0 right-0 bg-[var(--cm-accent)] text-[var(--cm-accent-text)] text-[9px] font-black px-1.5 rounded-tl-sm">
-                                                    +{productCount - 1}
-                                                </div>
-                                            )}
-                                        </div>
+                                        {isVisible('productInfo') && (
+                                            <div className="w-16 h-16 rounded bg-[var(--cm-card-bg2)] border border-[var(--cm-border)] shrink-0 relative overflow-hidden">
+                                                {mainProduct?.ProductImage ? (
+                                                    <img src={convertGoogleDriveUrl(mainProduct.ProductImage)} className="w-full h-full object-cover" alt="" />
+                                                ) : (
+                                                    <div className="w-full h-full flex items-center justify-center text-[8px] text-[var(--cm-text-muted)] font-black">IMAGE</div>
+                                                )}
+                                                {productCount > 1 && (
+                                                    <div className="absolute bottom-0 right-0 bg-[var(--cm-accent)] text-[var(--cm-accent-text)] text-[9px] font-black px-1.5 rounded-tl-sm">
+                                                        +{productCount - 1}
+                                                    </div>
+                                                )}
+                                            </div>
+                                        )}
                                         <div className="flex-1 min-w-0">
-                                            <h3 className="text-[15px] font-black text-[var(--cm-text-primary)] truncate uppercase tracking-tight mb-1">{order['Customer Name']}</h3>
+                                            {isVisible('customerName') && <h3 className="text-[15px] font-black text-[var(--cm-text-primary)] truncate uppercase tracking-tight mb-1">{order['Customer Name']}</h3>}
                                             <div className="flex items-center gap-2 text-[12px] font-bold text-[var(--cm-accent)] mb-1">
                                                 <span>{order['Customer Phone']}</span>
                                             </div>
-                                            <div className="flex items-center gap-1.5 text-[10px] text-[var(--cm-text-muted)] font-medium">
-                                                <MapPin size={10} className="text-[var(--cm-red)] opacity-70" />
-                                                <span className="truncate">{order.Location || 'N/A'}</span>
-                                            </div>
+                                            {isVisible('location') && (
+                                                <div className="flex items-center gap-1.5 text-[10px] text-[var(--cm-text-muted)] font-medium">
+                                                    <MapPin size={10} className="text-[var(--cm-red)] opacity-70" />
+                                                    <span className="truncate">{order.Location || 'N/A'}</span>
+                                                </div>
+                                            )}
                                         </div>
                                     </div>
 
                                     {/* Footer Info & Actions */}
                                     <div className="flex items-end justify-between">
                                         <div className="grid grid-cols-2 gap-x-6 gap-y-3 flex-1">
-                                            <div>
-                                                <div className="info-label-v4"><Warehouse size={8} className="inline mr-1" /> Warehouse</div>
-                                                <div className="info-value-v4 truncate max-w-[80px]">{order['Fulfillment Store'] || '---'}</div>
-                                            </div>
-                                            <div>
-                                                <div className="info-label-v4"><Truck size={8} className="inline mr-1" /> Driver</div>
-                                                <div className="info-value-v4 truncate max-w-[80px]">{order['Driver Name'] || '---'}</div>
-                                            </div>
-                                            <div>
-                                                <div className="info-label-v4"><Clock size={8} className="inline mr-1" /> Date</div>
-                                                <div className="info-value-v4">{getSafeDateString(order.Timestamp).split(',')[0]}</div>
-                                            </div>
-                                            <div>
-                                                <div className="info-label-v4"><Globe size={8} className="inline mr-1" /> Source</div>
-                                                <div className="info-value-v4 truncate max-w-[80px] italic">{order.Page || 'System'}</div>
-                                            </div>
+                                            {isVisible('fulfillment') && (
+                                                <div>
+                                                    <div className="info-label-v4"><Warehouse size={8} className="inline mr-1" /> Warehouse</div>
+                                                    <div className="info-value-v4 truncate max-w-[80px]">{order['Fulfillment Store'] || '---'}</div>
+                                                </div>
+                                            )}
+                                            {isVisible('driver') && (
+                                                <div>
+                                                    <div className="info-label-v4"><Truck size={8} className="inline mr-1" /> Driver</div>
+                                                    <div className="info-value-v4 truncate max-w-[80px]">{order['Driver Name'] || '---'}</div>
+                                                </div>
+                                            )}
+                                            {isVisible('date') && (
+                                                <div>
+                                                    <div className="info-label-v4"><Clock size={8} className="inline mr-1" /> Date</div>
+                                                    <div className="info-value-v4">{getSafeDateString(order.Timestamp).split(',')[0]}</div>
+                                                </div>
+                                            )}
+                                            {isVisible('pageInfo') && (
+                                                <div>
+                                                    <div className="info-label-v4"><Globe size={8} className="inline mr-1" /> Source</div>
+                                                    <div className="info-value-v4 truncate max-w-[80px] italic">{order.Page || 'System'}</div>
+                                                </div>
+                                            )}
                                         </div>
                                         
                                         <div className="flex items-center gap-2 ml-4" onClick={e => e.stopPropagation()}>
-                                            {canEditOrder(order) && (
+                                            {isVisible('actions') && canEditOrder(order) && (
                                                 <button onClick={() => onEdit?.(order)} className="action-icon-btn w-10 h-10 active:scale-90 transition-transform">
                                                     <Edit2 size={16} />
                                                 </button>
