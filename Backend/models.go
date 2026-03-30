@@ -84,8 +84,8 @@ type ShippingMethod struct {
 
 type DriverRecommendation struct {
 	ID             uint   `gorm:"primaryKey;autoIncrement;column:id" json:"ID"`
-	DayOfWeek      string `gorm:"column:day_of_week" json:"DayOfWeek"`
-	StoreName      string `gorm:"column:store_name" json:"StoreName"`
+	DayOfWeek      string `gorm:"column:day_of_week;index" json:"DayOfWeek"`
+	StoreName      string `gorm:"column:store_name;index" json:"StoreName"`
 	Province       string `gorm:"column:province" json:"Province"`
 	DriverName     string `gorm:"column:driver_name" json:"DriverName"`
 	ShippingMethod string `gorm:"column:shipping_method" json:"ShippingMethod"`
@@ -119,36 +119,40 @@ type TelegramTemplate struct {
 }
 
 type Inventory struct {
-	ID          uint    `gorm:"primaryKey;autoIncrement"`
-	StoreName   string  `gorm:"index" json:"StoreName"`
-	Barcode     string  `gorm:"index" json:"Barcode"`
-	Quantity    float64 `json:"Quantity"`
-	LastUpdated string  `json:"LastUpdated"`
-	UpdatedBy   string  `json:"UpdatedBy"`
+	ID          uint    `gorm:"primaryKey;autoIncrement" json:"ID"`
+	StoreName   string  `gorm:"column:store_name;uniqueIndex:idx_inventory_store_barcode" json:"StoreName"`
+	Barcode     string  `gorm:"column:barcode;uniqueIndex:idx_inventory_store_barcode" json:"Barcode"`
+	Quantity    float64 `gorm:"column:quantity" json:"Quantity"`
+	LastUpdated string  `gorm:"column:last_updated" json:"LastUpdated"`
+	UpdatedBy   string  `gorm:"column:updated_by" json:"UpdatedBy"`
 }
+
 type StockTransfer struct {
-	TransferID  string  `gorm:"primaryKey" json:"TransferID"`
-	Timestamp   string  `json:"Timestamp"`
-	FromStore   string  `json:"FromStore"`
-	ToStore     string  `json:"ToStore"`
-	Barcode     string  `json:"Barcode"`
-	Quantity    float64 `json:"Quantity"`
-	Status      string  `json:"Status"`
-	RequestedBy string  `json:"RequestedBy"`
-	ApprovedBy  string  `json:"ApprovedBy"`
-	ReceivedBy  string  `json:"ReceivedBy"`
+	TransferID  string  `gorm:"primaryKey;column:transfer_id" json:"TransferID"`
+	Timestamp   string  `gorm:"column:timestamp" json:"Timestamp"`
+	FromStore   string  `gorm:"column:from_store;index" json:"FromStore"`
+	ToStore     string  `gorm:"column:to_store;index" json:"ToStore"`
+	Barcode     string  `gorm:"column:barcode" json:"Barcode"`
+	Quantity    float64 `gorm:"column:quantity" json:"Quantity"`
+	Status      string  `gorm:"column:status;index" json:"Status"`
+	RequestedBy string  `gorm:"column:requested_by" json:"RequestedBy"`
+	ApprovedBy  string  `gorm:"column:approved_by" json:"ApprovedBy"`
+	ReceivedBy  string  `gorm:"column:received_by" json:"ReceivedBy"`
 }
+
 type ReturnItem struct {
-	ReturnID    string  `gorm:"primaryKey" json:"ReturnID"`
-	Timestamp   string  `json:"Timestamp"`
-	OrderID     string  `json:"OrderID"`
-	StoreName   string  `json:"StoreName"`
-	Barcode     string  `json:"Barcode"`
-	Quantity    float64 `json:"Quantity"`
-	Reason      string  `json:"Reason"`
-	IsRestocked bool    `json:"IsRestocked"`
-	HandledBy   string  `json:"HandledBy"`
+	ReturnID    string  `gorm:"primaryKey;column:return_id" json:"ReturnID"`
+	Timestamp   string  `gorm:"column:timestamp" json:"Timestamp"`
+	OrderID     string  `gorm:"column:order_id;index" json:"OrderID"`
+	StoreName   string  `gorm:"column:store_name;index" json:"StoreName"`
+	Barcode     string  `gorm:"column:barcode" json:"Barcode"`
+	Quantity    float64 `gorm:"column:quantity" json:"Quantity"`
+	Reason      string  `gorm:"column:reason" json:"Reason"`
+	IsRestocked bool    `gorm:"column:is_restocked" json:"IsRestocked"`
+	HandledBy   string  `gorm:"column:handled_by" json:"HandledBy"`
 }
+
+func (ReturnItem) TableName() string { return "returns" }
 
 type Order struct {
 	OrderID                 string  `gorm:"primaryKey;column:order_id" json:"Order ID"`
@@ -177,10 +181,10 @@ type Order struct {
 	TelegramMessageID1      string  `gorm:"column:telegram_message_id1" json:"Telegram Message ID 1"`
 	TelegramMessageID2      string  `gorm:"column:telegram_message_id2" json:"Telegram Message ID 2"`
 	ScheduledTime           string  `gorm:"column:scheduled_time" json:"Scheduled Time"`
-	FulfillmentStore        string  `gorm:"column:fulfillment_store" json:"Fulfillment Store"`
-	Team                    string  `gorm:"column:team" json:"Team"`
+	FulfillmentStore        string  `gorm:"column:fulfillment_store;index" json:"Fulfillment Store"`
+	Team                    string  `gorm:"column:team;index" json:"Team"`
 	IsVerified              string  `gorm:"column:is_verified" json:"IsVerified"`
-	FulfillmentStatus       string  `gorm:"column:fulfillment_status" json:"Fulfillment Status"`
+	FulfillmentStatus       string  `gorm:"column:fulfillment_status;index" json:"Fulfillment Status"`
 	PackedBy                string  `gorm:"column:packed_by" json:"Packed By"`
 	PackedTime              string  `gorm:"column:packed_time" json:"Packed Time"`
 	PackagePhotoURL         string  `gorm:"column:package_photo_url" json:"Package Photo URL"`
