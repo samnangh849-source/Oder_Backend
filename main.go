@@ -1819,7 +1819,7 @@ func main() {
 	go func() {
 		initDB()
 		// Start Background Workers ONLY after DB is ready (if they depend on it)
-		startSyncManager(3)
+		startSyncManager(2)
 		go startOrderWorker()
 		startScheduler()
 		backend.CreateGoogleAPIClient(context.Background())
