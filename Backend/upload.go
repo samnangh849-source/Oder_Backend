@@ -268,34 +268,9 @@ func HandleImageUploadProxy(c *gin.Context) {
 			})
 			HubGlobal.Broadcast <- event
 
-			// Sync with Google Sheets IMMEDIATELY for status and packer info
-			// We exclude the temp URL from the sheet to prevent broken links later,
-			// the background worker will update the permanent Drive URL once ready.
-			go func(oid string, data map[string]interface{}) {
-				var order Order
-				team := ""
-				if res := DB.Where("order_id = ?", oid).Select("team").First(&order); res.Error == nil {
-					team = order.Team
-				}
-
-				sheetFields := make(map[string]interface{})
-				for k, v := range data {
-					// Skip temp URLs for Google Sheets
-					if str, ok := v.(string); ok && strings.Contains(str, "/api/images/temp/") {
-						continue
-					}
-					sheetFields[k] = v
-				}
-
-				if len(sheetFields) > 0 {
-					log.Printf("📋 [Immediate Sync] orderId=%s updatedFields=%v", oid, sheetFields)
-					EnqueueSync("updateOrderTelegram", map[string]interface{}{
-						"orderId":       oid,
-						"team":          team,
-						"updatedFields": sheetFields,
-					}, "", nil)
-				}
-			}(req.OrderID, immediateBroadcast)
+	// The photo upload background worker will handle updating Google Sheets and triggering Telegram
+			// once the permanent Drive URL is available. This prevents duplicate Telegram notifications
+			// and reduces Apps Script quota usage.
 		}
 	}
 
