@@ -229,9 +229,12 @@ func HandleImageUploadProxy(c *gin.Context) {
 
 		immediateMap := map[string]interface{}{}
 		immediateBroadcast := map[string]interface{}{}
+		log.Printf("🔍 [Upload Debug] Received NewData: %+v", req.NewData)
 		for k, v := range req.NewData {
 			dbCol := UploadMapToDBColumnFunc(k)
-			if UploadIsValidOrderColumnFunc(dbCol) {
+			isValid := UploadIsValidOrderColumnFunc(dbCol)
+			log.Printf("🔍 [Upload Debug] Mapping field: %q -> %q (Valid: %v)", k, dbCol, isValid)
+			if isValid {
 				immediateMap[dbCol] = v
 				immediateBroadcast[k] = v
 			}
@@ -241,18 +244,20 @@ func HandleImageUploadProxy(c *gin.Context) {
 		// so it shows up for all users right away.
 		if req.TargetColumn != "" {
 			dbCol := UploadMapToDBColumnFunc(req.TargetColumn)
+			log.Printf("🔍 [Upload Debug] Target Column: %q -> %q", req.TargetColumn, dbCol)
 			immediateMap[dbCol] = tempUrl
 			immediateBroadcast[req.TargetColumn] = tempUrl
 		}
 
 		if len(immediateMap) > 0 {
+			log.Printf("🔍 [Upload Debug] Executing DB Update for order %s with: %+v", req.OrderID, immediateMap)
 			// Use UpdateColumns (plural) to skip GORM hooks and update only these columns immediately
 			if res := DB.Model(&Order{}).Where("order_id = ?", req.OrderID).UpdateColumns(immediateMap); res.Error != nil {
 				log.Printf("❌ [Upload] Immediate DB update failed for order %s: %v", req.OrderID, res.Error)
 				c.JSON(500, gin.H{"status": "error", "message": fmt.Sprintf("មិនអាចធ្វើបច្ចុប្បន្នភាពការកម្មង់បានទេ: %v", res.Error)})
 				return
 			} else {
-				log.Printf("✅ [Upload] Immediate DB update SUCCESS: orderId=%s fields=%v", req.OrderID, immediateBroadcast)
+				log.Printf("✅ [Upload] Immediate DB update SUCCESS: orderId=%s rowsAffected=%d fields=%v", req.OrderID, res.RowsAffected, immediateBroadcast)
 			}
 			
 			// Broadcast update so all clients see the status change immediately
