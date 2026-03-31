@@ -253,10 +253,16 @@ func HandleImageUploadProxy(c *gin.Context) {
 		if len(immediateMap) > 0 {
 			log.Printf("🔍 [Upload Debug] Executing DB Update for order %s with: %+v", req.OrderID, immediateMap)
 			// Use UpdateColumns (plural) to skip GORM hooks and update only these columns immediately
-			if res := DB.Model(&Order{}).Where("order_id = ?", req.OrderID).UpdateColumns(immediateMap); res.Error != nil {
+			// Using TRIM and UPPER for robust matching
+			res := DB.Model(&Order{}).Where("UPPER(TRIM(order_id)) = UPPER(TRIM(?))", req.OrderID).UpdateColumns(immediateMap)
+			if res.Error != nil {
 				log.Printf("❌ [Upload] Immediate DB update failed for order %s: %v", req.OrderID, res.Error)
 				c.JSON(500, gin.H{"status": "error", "message": fmt.Sprintf("មិនអាចធ្វើបច្ចុប្បន្នភាពការកម្មង់បានទេ: %v", res.Error)})
 				return
+			}
+			
+			if res.RowsAffected == 0 {
+				log.Printf("⚠️ [Upload] No rows affected for immediate update of Order %s. ID might not exist or is already updated.", req.OrderID)
 			} else {
 				log.Printf("✅ [Upload] Immediate DB update SUCCESS: orderId=%s rowsAffected=%d fields=%v", req.OrderID, res.RowsAffected, immediateBroadcast)
 			}
@@ -265,7 +271,7 @@ func HandleImageUploadProxy(c *gin.Context) {
 			// This prevents the "Pending" status in the sheet from reverting the DB during the photo upload delay.
 			go func(orderId string, newData map[string]interface{}) {
 				var order Order
-				if err := DB.Where("order_id = ?", orderId).First(&order).Error; err == nil {
+				if err := DB.Where("UPPER(TRIM(order_id)) = UPPER(TRIM(?))", orderId).First(&order).Error; err == nil {
 					// Prepare fields for initial sync
 					sheetData := make(map[string]interface{})
 					for k, v := range newData {
@@ -342,15 +348,21 @@ func HandleImageUploadProxy(c *gin.Context) {
 			}
 
 			// Update PostgreSQL first
-			if res := DB.Model(&Order{}).Where("order_id = ?", r.OrderID).Updates(dbUpdateMap); res.Error != nil {
+			res := DB.Model(&Order{}).Where("UPPER(TRIM(order_id)) = UPPER(TRIM(?))", r.OrderID).Updates(dbUpdateMap)
+			if res.Error != nil {
 				log.Printf("⚠️ [Background Update] DB update failed for order %s: %v", r.OrderID, res.Error)
+			}
+			if res.RowsAffected == 0 {
+				log.Printf("⚠️ [Background Update] No rows affected for order %s. ID mismatch?", r.OrderID)
 			}
 
 			// Now fetch the latest state to ensure we have everything (including team)
 			var order Order
 			team := ""
-			if res := DB.Where("order_id = ?", r.OrderID).First(&order); res.Error == nil {
+			if res := DB.Where("UPPER(TRIM(order_id)) = UPPER(TRIM(?))", r.OrderID).First(&order); res.Error == nil {
 				team = order.Team
+			} else {
+				log.Printf("⚠️ [Background Update] Could not fetch order %s after update: %v", r.OrderID, res.Error)
 			}
 
 			// Build comprehensive sheet data: start from broadcastData then fill
