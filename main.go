@@ -1727,9 +1727,13 @@ func handleSheetsWebhook(c *gin.Context) {
 
 				// If we are already at "Ready to Ship" or further, don't let it revert to "Pending"
 				if statusWeight[cur] >= 3 && statusWeight[newStatus] < 3 && newStatus != "Cancelled" {
-					log.Printf("🛡️  SyncManager: Blocked status revert for %v: %s -> %s", pkVal, cur, newStatus)
+					log.Printf("🛡️  [Webhook Protection] BLOCKED REVERT for Order %v: Current='%s' -> Incoming='%s' (preventing stale sheet data overwrite)", pkVal, cur, newStatus)
 					delete(mappedData, "fulfillment_status") // Remove status from update map
+				} else {
+					log.Printf("✅ [Webhook Sync] Allowed status change for Order %v: '%s' -> '%s'", pkVal, cur, newStatus)
 				}
+			} else if err != nil {
+				log.Printf("⚠️  [Webhook Sync] Error checking current status for Order %v: %v", pkVal, err)
 			}
 		}
 	}
