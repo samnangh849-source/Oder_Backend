@@ -261,6 +261,28 @@ func HandleImageUploadProxy(c *gin.Context) {
 				log.Printf("✅ [Upload] Immediate DB update SUCCESS: orderId=%s rowsAffected=%d fields=%v", req.OrderID, res.RowsAffected, immediateBroadcast)
 			}
 			
+			// 🚀 Immediate Sync to Google Sheets and Telegram (Status only)
+			// This prevents the "Pending" status in the sheet from reverting the DB during the photo upload delay.
+			go func(orderId string, newData map[string]interface{}) {
+				var order Order
+				if err := DB.Where("order_id = ?", orderId).First(&order).Error; err == nil {
+					// Prepare fields for initial sync
+					sheetData := make(map[string]interface{})
+					for k, v := range newData {
+						sheetData[k] = v
+					}
+					// Ensure we have current packing info from DB
+					if order.PackedBy != "" { sheetData["Packed By"] = order.PackedBy }
+					if order.PackedTime != "" { sheetData["Packed Time"] = order.PackedTime }
+
+					EnqueueSync("updateOrderTelegram", map[string]interface{}{
+						"orderId":       orderId,
+						"team":          order.Team,
+						"updatedFields": sheetData,
+					}, "", nil)
+				}
+			}(req.OrderID, immediateBroadcast)
+
 			// Broadcast update so all clients see the status change immediately
 			event, _ := json.Marshal(map[string]interface{}{
 				"type":    "update_order",
@@ -268,10 +290,6 @@ func HandleImageUploadProxy(c *gin.Context) {
 				"newData": immediateBroadcast,
 			})
 			HubGlobal.Broadcast <- event
-
-	// The photo upload background worker will handle updating Google Sheets and triggering Telegram
-			// once the permanent Drive URL is available. This prevents duplicate Telegram notifications
-			// and reduces Apps Script quota usage.
 		}
 	}
 
