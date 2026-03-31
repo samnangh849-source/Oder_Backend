@@ -924,11 +924,12 @@ func handleAdminUpdateOrder(c *gin.Context) {
 		}
 
 		validTransitions := map[string][]string{
-			"Pending":       {"Ready to Ship"},
-			"Ready to Ship": {"Shipped", "Pending"},
-			"Shipped":       {"Delivered", "Ready to Ship"},
+			"Pending":       {"Processing", "Ready to Ship", "Cancelled"},
+			"Processing":    {"Ready to Ship", "Pending", "Cancelled"},
+			"Ready to Ship": {"Shipped", "Pending", "Cancelled"},
+			"Shipped":       {"Delivered", "Ready to Ship", "Cancelled"},
 			"Delivered":     {},
-			"Cancelled":     {},
+			"Cancelled":     {"Pending"},
 		}
 
 		allowed, ok := validTransitions[currentStatus]
@@ -966,13 +967,8 @@ func handleAdminUpdateOrder(c *gin.Context) {
 					return
 				}
 			}
-			driverName, _ := r.NewData["Driver Name"]
-			if driverName == nil || strings.TrimSpace(fmt.Sprintf("%v", driverName)) == "" {
-				if strings.TrimSpace(originalOrder.DriverName) == "" {
-					c.JSON(http.StatusBadRequest, gin.H{"status": "error", "message": "ត្រូវការអ្នកដឹកជញ្ជូន (Driver Name)"})
-					return
-				}
-			}
+			// Driver assignment is usually done by logistics/dispatch or during delivery confirmation,
+			// so we should not strictly require it for the 'Shipped' transition to avoid blocking packers.
 		case "Delivered":
 			_, hasDriver := r.NewData["Driver Name"]
 			if !hasDriver && strings.TrimSpace(originalOrder.DriverName) == "" {
@@ -1707,6 +1703,34 @@ func handleSheetsWebhook(c *gin.Context) {
 			}
 		} else {
 			mappedData[dbCol] = fmt.Sprintf("%v", v)
+		}
+	}
+
+	// --- Status Protection (State Machine Safeguard) ---
+	if tableName == "orders" {
+		if newStatusRaw, hasNewStatus := mappedData["fulfillment_status"]; hasNewStatus {
+			newStatus := fmt.Sprintf("%v", newStatusRaw)
+			
+			var currentOrder Order
+			if err := DB.Where(pkCol+" = ?", pkVal).Select("fulfillment_status").First(&currentOrder).Error; err == nil {
+				cur := strings.TrimSpace(currentOrder.FulfillmentStatus)
+				if cur == "" { cur = "Pending" }
+				
+				statusWeight := map[string]int{
+					"Pending":       1,
+					"Processing":    2,
+					"Ready to Ship": 3,
+					"Shipped":       4,
+					"Delivered":     5,
+					"Cancelled":     0,
+				}
+
+				// If we are already at "Ready to Ship" or further, don't let it revert to "Pending"
+				if statusWeight[cur] >= 3 && statusWeight[newStatus] < 3 && newStatus != "Cancelled" {
+					log.Printf("🛡️  SyncManager: Blocked status revert for %v: %s -> %s", pkVal, cur, newStatus)
+					delete(mappedData, "fulfillment_status") // Remove status from update map
+				}
+			}
 		}
 	}
 
