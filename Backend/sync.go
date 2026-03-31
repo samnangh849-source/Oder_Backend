@@ -238,12 +238,14 @@ func processTask(workerID int, task SyncTask) {
 
 	resp, err := CallAppsScriptPOST(task.Request)
 
-	if err != nil || resp.Status == "error" {
+	if err != nil || resp.Status != "success" {
 		errorMessage := "Unknown error"
 		if err != nil {
 			errorMessage = err.Error()
+		} else if resp.Message != "" {
+			errorMessage = fmt.Sprintf("status=%s: %s", resp.Status, resp.Message)
 		} else {
-			errorMessage = resp.Message
+			errorMessage = fmt.Sprintf("unexpected status: %s", resp.Status)
 		}
 
 		log.Printf("❌ SyncManager [Worker %d]: Task %s failed: %v", workerID, task.Request.Action, errorMessage)
