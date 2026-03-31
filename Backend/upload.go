@@ -203,11 +203,12 @@ func HandleImageUploadProxy(c *gin.Context) {
 			}
 
 			validTransitions := map[string][]string{
-				"Pending":       {"Ready to Ship"},
-				"Ready to Ship": {"Shipped", "Pending"},
-				"Shipped":       {"Delivered", "Ready to Ship"},
+				"Pending":       {"Processing", "Ready to Ship", "Cancelled"},
+				"Processing":    {"Ready to Ship", "Pending", "Cancelled"},
+				"Ready to Ship": {"Shipped", "Pending", "Cancelled"},
+				"Shipped":       {"Delivered", "Ready to Ship", "Cancelled"},
 				"Delivered":     {},
-				"Cancelled":     {},
+				"Cancelled":     {"Pending"},
 			}
 
 			allowed, ok := validTransitions[currentStatus]
