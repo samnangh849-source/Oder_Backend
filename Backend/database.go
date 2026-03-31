@@ -114,13 +114,14 @@ func InitDB() {
 
 	sqlDB, err := db.DB()
 	if err == nil {
-		// Configurable pool settings
-		maxIdle := GetEnvInt("DB_MAX_IDLE_CONNS", 10)
-		maxOpen := GetEnvInt("DB_MAX_OPEN_CONNS", 25)
+		// Configurable pool settings - Optimized for Aiven/entry-tier PostgreSQL
+		maxIdle := GetEnvInt("DB_MAX_IDLE_CONNS", 5)
+		maxOpen := GetEnvInt("DB_MAX_OPEN_CONNS", 10)
 		sqlDB.SetMaxIdleConns(maxIdle)
 		sqlDB.SetMaxOpenConns(maxOpen)
 		sqlDB.SetConnMaxLifetime(15 * time.Minute)
-		log.Printf("⚡ Database Pool: MaxOpen=%d, MaxIdle=%d", maxOpen, maxIdle)
+		sqlDB.SetConnMaxIdleTime(5 * time.Minute)
+		log.Printf("⚡ Database Pool: MaxOpen=%d, MaxIdle=%d (Optimized for Workers)", maxOpen, maxIdle)
 	}
 
 	log.Println("✅ Database connection established!")
