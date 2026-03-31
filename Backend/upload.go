@@ -248,7 +248,9 @@ func HandleImageUploadProxy(c *gin.Context) {
 		if len(immediateMap) > 0 {
 			// Use UpdateColumns (plural) to skip GORM hooks and update only these columns immediately
 			if res := DB.Model(&Order{}).Where("order_id = ?", req.OrderID).UpdateColumns(immediateMap); res.Error != nil {
-				log.Printf("⚠️ [Upload] Immediate DB update failed for order %s: %v", req.OrderID, res.Error)
+				log.Printf("❌ [Upload] Immediate DB update failed for order %s: %v", req.OrderID, res.Error)
+				c.JSON(500, gin.H{"status": "error", "message": fmt.Sprintf("មិនអាចធ្វើបច្ចុប្បន្នភាពការកម្មង់បានទេ: %v", res.Error)})
+				return
 			} else {
 				log.Printf("✅ [Upload] Immediate DB update SUCCESS: orderId=%s fields=%v", req.OrderID, immediateBroadcast)
 			}
