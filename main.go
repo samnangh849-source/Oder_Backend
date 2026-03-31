@@ -1712,7 +1712,9 @@ func handleSheetsWebhook(c *gin.Context) {
 			newStatus := fmt.Sprintf("%v", newStatusRaw)
 			
 			var currentOrder Order
-			if err := DB.Where(pkCol+" = ?", pkVal).Select("fulfillment_status").First(&currentOrder).Error; err == nil {
+			// Using TRIM and UPPER for robust matching
+			whereClause := fmt.Sprintf("UPPER(TRIM(%s)) = UPPER(TRIM(?))", pkCol)
+			if err := DB.Where(whereClause, pkVal).Select("fulfillment_status").First(&currentOrder).Error; err == nil {
 				cur := strings.TrimSpace(currentOrder.FulfillmentStatus)
 				if cur == "" { cur = "Pending" }
 				
@@ -1744,10 +1746,12 @@ func handleSheetsWebhook(c *gin.Context) {
 	}
 
 	if req.Action == "delete" {
-		DB.Table(tableName).Where(pkCol+" = ?", pkVal).Delete(nil)
+		whereClause := fmt.Sprintf("UPPER(TRIM(%s)) = UPPER(TRIM(?))", pkCol)
+		DB.Table(tableName).Where(whereClause, pkVal).Delete(nil)
 	} else {
 		// UPSERT logic: Try to update first
-		result := DB.Table(tableName).Where(pkCol+" = ?", pkVal).Updates(mappedData)
+		whereClause := fmt.Sprintf("UPPER(TRIM(%s)) = UPPER(TRIM(?))", pkCol)
+		result := DB.Table(tableName).Where(whereClause, pkVal).Updates(mappedData)
 		if result.Error != nil {
 			c.JSON(500, gin.H{"status": "error", "message": result.Error.Error()})
 			return
