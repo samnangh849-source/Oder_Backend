@@ -11,6 +11,8 @@ import (
 	"strings"
 	"sync"
 	"time"
+
+	"gorm.io/gorm"
 )
 
 var (
@@ -78,6 +80,49 @@ var (
 	workerWG sync.WaitGroup
 	stopChan = make(chan struct{})
 )
+
+// ReconcileMissingPhotoLinks looks for orders that have a photo URL in DB but might be missing in Sheets.
+// This is a self-healing mechanism to ensure data consistency.
+func ReconcileMissingPhotoLinks(db *gorm.DB) {
+	log.Println("🔍 [Self-Healing] Starting photo link reconciliation...")
+
+	var orders []struct {
+		OrderID         string `gorm:"column:order_id"`
+		Team            string `gorm:"column:team"`
+		PackagePhotoURL string `gorm:"column:package_photo_url"`
+	}
+
+	// Look for orders from the last 24 hours that have a permanent Drive link in DB
+	yesterday := time.Now().Add(-24 * time.Hour).Format(time.RFC3339)
+	err := db.Table("orders").
+		Select("order_id, team, package_photo_url").
+		Where("package_photo_url LIKE ? AND timestamp > ?", "%drive.google.com%", yesterday).
+		Find(&orders).Error
+
+	if err != nil {
+		log.Printf("❌ [Self-Healing] Database query failed: %v", err)
+		return
+	}
+
+	if len(orders) == 0 {
+		log.Println("✅ [Self-Healing] No orders need reconciliation.")
+		return
+	}
+
+	log.Printf("📦 [Self-Healing] Found %d orders to verify in Sheets", len(orders))
+
+	for _, o := range orders {
+		// Enqueue a specialized sync task
+		EnqueueSync("updateOrderTelegram", map[string]interface{}{
+			"orderId": o.OrderID,
+			"team":    o.Team,
+			"updatedFields": map[string]interface{}{
+				"Package Photo URL": o.PackagePhotoURL,
+			},
+			"healingMode": true,
+		}, "", nil)
+	}
+}
 
 func CallAppsScriptPOST(requestData AppsScriptRequest) (AppsScriptResponse, error) {
 	requestData.Secret = AppsScriptSecret
