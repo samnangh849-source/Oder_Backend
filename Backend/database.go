@@ -159,7 +159,7 @@ func runMigrations(db *gorm.DB) {
 		&Role{}, &RolePermission{},
 		&IncentiveProject{}, &IncentiveCalculator{}, &IncentiveResult{},
 		&IncentiveManualData{}, &IncentiveCustomPayout{},
-		&TempImage{}, &DriverRecommendation{}, &Movie{},
+		&DriverRecommendation{}, &Movie{},
 	)
 	if err != nil {
 		log.Printf("❌ Migration failed: %v", err)
