@@ -1,9 +1,5 @@
 package backend
 
-import (
-	"time"
-)
-
 // =========================================================================
 // ម៉ូដែលទិន្នន័យ (GORM Models)
 // =========================================================================
@@ -309,10 +305,4 @@ type DeleteOrderRequest struct {
 	TelegramChatId     string `json:"telegramChatId"`
 }
 
-type TempImage struct {
-	ID        string    `gorm:"primaryKey" json:"id"`
-	MimeType  string    `json:"mimeType"`
-	ImageData string    `gorm:"type:text" json:"imageData"`
-	DriveURL  string    `gorm:"column:drive_url" json:"driveUrl"` // Permanent URL resolved later
-	ExpiresAt time.Time `gorm:"index" json:"expiresAt"`
-}
+
