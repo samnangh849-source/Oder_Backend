@@ -135,11 +135,15 @@ func UploadToGoogleDriveDirectly(base64Data string, fileName string, mimeType st
 
 		// For orders, we need the team to update the correct sheet
 		if originalReq.OrderID != "" {
-			var order Order
-			if err := DB.Where("UPPER(TRIM(order_id)) = UPPER(TRIM(?))", originalReq.OrderID).Select("team").First(&order).Error; err == nil {
-				// Inject team into the request for Apps Script
-				req.OrderData = map[string]interface{}{"team": order.Team}
+			teamVal := ""
+			var teamOrder Order
+			if err := DB.Where("UPPER(TRIM(order_id)) = UPPER(TRIM(?))", originalReq.OrderID).Select("team").First(&teamOrder).Error; err == nil {
+				teamVal = teamOrder.Team
+			} else {
+				log.Printf("⚠️ [Drive Upload] Cannot find team for order %s: %v", originalReq.OrderID, err)
 			}
+			// Always set OrderData so Apps Script receives team context (even if empty)
+			req.OrderData = map[string]interface{}{"team": teamVal}
 		}
 	}
 
