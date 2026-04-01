@@ -924,11 +924,12 @@ func handleAdminUpdateOrder(c *gin.Context) {
 		}
 
 		validTransitions := map[string][]string{
-			"Pending":       {"Ready to Ship"},
-			"Ready to Ship": {"Shipped", "Pending"},
-			"Shipped":       {"Delivered", "Ready to Ship"},
+			"Pending":       {"Processing", "Ready to Ship", "Cancelled"},
+			"Processing":    {"Ready to Ship", "Pending", "Cancelled"},
+			"Ready to Ship": {"Shipped", "Pending", "Cancelled"},
+			"Shipped":       {"Delivered", "Ready to Ship", "Cancelled"},
 			"Delivered":     {},
-			"Cancelled":     {},
+			"Cancelled":     {"Pending"},
 		}
 
 		allowed, ok := validTransitions[currentStatus]
@@ -966,13 +967,8 @@ func handleAdminUpdateOrder(c *gin.Context) {
 					return
 				}
 			}
-			driverName, _ := r.NewData["Driver Name"]
-			if driverName == nil || strings.TrimSpace(fmt.Sprintf("%v", driverName)) == "" {
-				if strings.TrimSpace(originalOrder.DriverName) == "" {
-					c.JSON(http.StatusBadRequest, gin.H{"status": "error", "message": "ត្រូវការអ្នកដឹកជញ្ជូន (Driver Name)"})
-					return
-				}
-			}
+			// Driver assignment is usually done by logistics/dispatch or during delivery confirmation,
+			// so we should not strictly require it for the 'Shipped' transition to avoid blocking packers.
 		case "Delivered":
 			_, hasDriver := r.NewData["Driver Name"]
 			if !hasDriver && strings.TrimSpace(originalOrder.DriverName) == "" {
@@ -1043,6 +1039,7 @@ func handleAdminUpdateOrder(c *gin.Context) {
 				}
 			}
 			fill("Packed By", current.PackedBy)
+			fill("Packed Time", current.PackedTime)
 			fill("Package Photo URL", current.PackagePhotoURL)
 			fill("Driver Name", current.DriverName)
 			fill("Tracking Number", current.TrackingNumber)
@@ -1271,93 +1268,6 @@ func handleUpdateFormulaReport(c *gin.Context)    { c.JSON(200, gin.H{"status": 
 func handleClearCache(c *gin.Context)             { c.JSON(200, gin.H{"status": "success"}) }
 func handleAdminUpdateProductTags(c *gin.Context) { c.JSON(200, gin.H{"status": "success"}) }
 
-func handleGetTeamSalesRanking(c *gin.Context) {
-	period := c.DefaultQuery("period", "today")
-
-	type TeamRevenue struct {
-		TeamName     string  `gorm:"column:team_name"`
-		TotalRevenue float64 `gorm:"column:total_revenue"`
-	}
-	var rows []TeamRevenue
-
-	now := time.Now()
-
-	// Query directly from orders table using grand_total (live revenue data)
-	// NOTE: PostgreSQL does NOT support GROUP BY/ORDER BY with SELECT aliases,
-	// so we must repeat the expressions explicitly.
-	db := DB.Table("orders").
-		Select("LOWER(TRIM(team)) as team_name, SUM(COALESCE(grand_total, 0)) as total_revenue").
-		Where("team IS NOT NULL AND team <> '' AND team <> 'Unassigned'").
-		Where("order_id NOT LIKE '%Opening_Balance%' AND order_id NOT LIKE '%Opening Balance%'").
-		Group("LOWER(TRIM(team))").
-		Order("SUM(COALESCE(grand_total, 0)) DESC").
-		Limit(10)
-
-	switch period {
-	case "today":
-		start := time.Date(now.Year(), now.Month(), now.Day(), 0, 0, 0, 0, now.Location())
-		db = db.Where("timestamp >= ?", start.Format("2006-01-02"))
-	case "this_week":
-		offset := int(now.Weekday()) - 1
-		if offset < 0 {
-			offset = 6
-		}
-		start := now.AddDate(0, 0, -offset)
-		db = db.Where("timestamp >= ?", start.Format("2006-01-02"))
-	case "this_month", "month":
-		start := time.Date(now.Year(), now.Month(), 1, 0, 0, 0, 0, now.Location())
-		db = db.Where("timestamp >= ?", start.Format("2006-01-02"))
-	case "year":
-		start := time.Date(now.Year(), 1, 1, 0, 0, 0, 0, now.Location())
-		db = db.Where("timestamp >= ?", start.Format("2006-01-02"))
-		// "all" — no date filter
-	}
-
-	if err := db.Scan(&rows).Error; err != nil {
-		log.Printf("[ERROR] Team Ranking Query Failed: %v", err)
-		c.JSON(500, gin.H{"status": "error", "message": "Query failed"})
-		return
-	}
-
-	// DIAGNOSTIC: Log raw team values from DB to verify data integrity
-	log.Printf("[DIAGNOSTIC] Team Ranking Results (period=%s, count=%d):", period, len(rows))
-	for i, row := range rows {
-		log.Printf("[DIAGNOSTIC]   #%d: team_name=%q revenue=%.2f", i+1, row.TeamName, row.TotalRevenue)
-	}
-	// Also log sample team vs page values to detect data contamination
-	var sampleCheck []struct {
-		Team string `gorm:"column:team"`
-		Page string `gorm:"column:page"`
-	}
-	DB.Table("orders").Select("DISTINCT team, page").Where("team IS NOT NULL AND team <> ''").Limit(10).Scan(&sampleCheck)
-	log.Printf("[DIAGNOSTIC] Sample team vs page values from orders table:")
-	for _, s := range sampleCheck {
-		log.Printf("[DIAGNOSTIC]   team=%q page=%q match=%v", s.Team, s.Page, strings.EqualFold(s.Team, s.Page))
-	}
-
-	// Build response with proper Title Case display names
-	type TeamResult struct {
-		Team    string  `json:"Team"`
-		Revenue float64 `json:"Revenue"`
-	}
-	results := make([]TeamResult, 0, len(rows))
-	for _, row := range rows {
-		displayName := row.TeamName
-		words := strings.Fields(displayName)
-		for i, w := range words {
-			if len(w) > 0 {
-				runes := []rune(w)
-				runes[0] = unicode.ToUpper(runes[0])
-				words[i] = string(runes)
-			}
-		}
-		displayName = strings.Join(words, " ")
-		results = append(results, TeamResult{Team: displayName, Revenue: row.TotalRevenue})
-	}
-
-	c.JSON(http.StatusOK, gin.H{"status": "success", "data": results})
-}
-
 func handleGetGlobalShippingCosts(c *gin.Context) {
 	var results []struct {
 		OrderID        string  `json:"Order ID"`
@@ -1461,6 +1371,16 @@ func handleGetChatMessages(c *gin.Context) {
 	c.JSON(200, gin.H{"status": "success", "data": messages})
 }
 
+func handleGetSingleChatMessage(c *gin.Context) {
+	id := c.Param("id")
+	var msg ChatMessage
+	if err := DB.Where("id = ?", id).First(&msg).Error; err != nil {
+		c.JSON(404, gin.H{"error": "message not found"})
+		return
+	}
+	c.JSON(200, gin.H{"status": "success", "data": msg})
+}
+
 func handleSendChatMessage(c *gin.Context) {
 	var msg ChatMessage
 	if err := c.ShouldBindJSON(&msg); err != nil {
@@ -1519,7 +1439,7 @@ func handleSendChatMessage(c *gin.Context) {
 				}
 			}()
 
-			driveURL, fileId, err := backend.UploadToGoogleDriveDirectly(b64, "chat_file", mt)
+			driveURL, fileId, err := backend.UploadToGoogleDriveDirectly(b64, "chat_file", mt, nil)
 			if err == nil {
 
 				finalContent := originalContent
@@ -1699,16 +1619,52 @@ func handleSheetsWebhook(c *gin.Context) {
 		}
 	}
 
+	// --- Status Protection (State Machine Safeguard) ---
+	if tableName == "orders" {
+		if newStatusRaw, hasNewStatus := mappedData["fulfillment_status"]; hasNewStatus {
+			newStatus := fmt.Sprintf("%v", newStatusRaw)
+			
+			var currentOrder Order
+			// Using TRIM and UPPER for robust matching
+			whereClause := fmt.Sprintf("UPPER(TRIM(%s)) = UPPER(TRIM(?))", pkCol)
+			if err := DB.Where(whereClause, pkVal).Select("fulfillment_status").First(&currentOrder).Error; err == nil {
+				cur := strings.TrimSpace(currentOrder.FulfillmentStatus)
+				if cur == "" { cur = "Pending" }
+				
+				statusWeight := map[string]int{
+					"Pending":       1,
+					"Processing":    2,
+					"Ready to Ship": 3,
+					"Shipped":       4,
+					"Delivered":     5,
+					"Cancelled":     0,
+				}
+
+				// If we are already at "Ready to Ship" or further, don't let it revert to "Pending"
+				if statusWeight[cur] >= 3 && statusWeight[newStatus] < 3 && newStatus != "Cancelled" {
+					log.Printf("🛡️  [Webhook Protection] BLOCKED REVERT for Order %v: Current='%s' -> Incoming='%s' (preventing stale sheet data overwrite)", pkVal, cur, newStatus)
+					delete(mappedData, "fulfillment_status") // Remove status from update map
+				} else {
+					log.Printf("✅ [Webhook Sync] Allowed status change for Order %v: '%s' -> '%s'", pkVal, cur, newStatus)
+				}
+			} else if err != nil {
+				log.Printf("⚠️  [Webhook Sync] Error checking current status for Order %v: %v", pkVal, err)
+			}
+		}
+	}
+
 	if pkCol == "" || pkVal == nil {
 		c.JSON(400, gin.H{"status": "error", "message": "Missing primary key"})
 		return
 	}
 
 	if req.Action == "delete" {
-		DB.Table(tableName).Where(pkCol+" = ?", pkVal).Delete(nil)
+		whereClause := fmt.Sprintf("UPPER(TRIM(%s)) = UPPER(TRIM(?))", pkCol)
+		DB.Table(tableName).Where(whereClause, pkVal).Delete(nil)
 	} else {
 		// UPSERT logic: Try to update first
-		result := DB.Table(tableName).Where(pkCol+" = ?", pkVal).Updates(mappedData)
+		whereClause := fmt.Sprintf("UPPER(TRIM(%s)) = UPPER(TRIM(?))", pkCol)
+		result := DB.Table(tableName).Where(whereClause, pkVal).Updates(mappedData)
 		if result.Error != nil {
 			c.JSON(500, gin.H{"status": "error", "message": result.Error.Error()})
 			return
@@ -1776,7 +1732,7 @@ func main() {
 	go func() {
 		initDB()
 		// Start Background Workers ONLY after DB is ready (if they depend on it)
-		startSyncManager(3)
+		startSyncManager(2)
 		go startOrderWorker()
 		startScheduler()
 		backend.CreateGoogleAPIClient(context.Background())
@@ -1800,7 +1756,6 @@ func main() {
 	api := r.Group("/api", DBMiddleware())
 	api.POST("/login", handleLogin)
 	api.GET("/images/temp/:id", backend.HandleServeTempImage)
-	api.GET("/teams/ranking", handleGetTeamSalesRanking)
 	api.GET("/settings", handleGetSettings)
 	// ── Entertainment / Video Player routes (Backend/video.go) ────────────────────────
 	// All video handler logic lives in Backend/video.go (package backend).
@@ -1822,6 +1777,7 @@ func main() {
 
 		chat := protected.Group("/chat")
 		chat.GET("/messages", handleGetChatMessages)
+		chat.GET("/message/:id", handleGetSingleChatMessage)
 		chat.POST("/send", handleSendChatMessage)
 		chat.POST("/delete", handleDeleteChatMessage)
 

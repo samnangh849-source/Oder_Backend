@@ -69,26 +69,51 @@ const OrderSummaryPanel: React.FC<OrderSummaryPanelProps> = ({
     };
 
     const renderStepIndicator = () => {
-        const steps: { id: PackStep, label: string, icon: string }[] = [
-            { id: 'VERIFYING', label: 'Order Info', icon: '🔍' },
-            { id: 'LABELING', label: 'Label', icon: '🏷️' },
-            { id: 'CAPTURING', label: 'Capture', icon: '📸' }
+        const steps: { id: PackStep, label: string, icon: React.ReactNode }[] = [
+            { id: 'VERIFYING', label: 'Verify', icon: <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2.5}><path strokeLinecap="round" strokeLinejoin="round" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-6 9l2 2 4-4" /></svg> },
+            { id: 'LABELING', label: 'Label', icon: <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2.5}><path strokeLinecap="round" strokeLinejoin="round" d="M7 7h.01M7 3h5c.512 0 1.024.195 1.414.586l7 7a2 2 0 010 2.828l-7 7a2 2 0 01-2.828 0l-7-7A1.994 1.994 0 013 12V7a4 4 0 014-4z" /></svg> },
+            { id: 'CAPTURING', label: 'Capture', icon: <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2.5}><path strokeLinecap="round" strokeLinejoin="round" d="M3 9a2 2 0 012-2h.93a2 2 0 001.664-.89l.812-1.22A2 2 0 0110.07 4h3.86a2 2 0 011.664.89l.812 1.22A2 2 0 0018.07 7H19a2 2 0 012 2v9a2 2 0 01-2 2H5a2 2 0 01-2-2V9z" /><path strokeLinecap="round" strokeLinejoin="round" d="M15 13a3 3 0 11-6 0 3 3 0 016 0z" /></svg> },
         ];
+        const currentIdx = steps.findIndex(st => st.id === step);
 
         return (
-            <div className="flex items-center justify-between mb-8 pb-4 border-b border-[#2B3139]">
-                {steps.map((s, idx) => {
-                    const isActive = step === s.id;
-                    const isPast = steps.findIndex(st => st.id === step) > idx;
-                    return (
-                        <div key={s.id} className="flex flex-col gap-1 w-full text-center relative z-10">
-                            <span className={`text-[10px] font-bold uppercase tracking-widest ${isActive || isPast ? 'text-[#FCD535]' : 'text-gray-600'}`}>
-                                {s.label}
-                            </span>
-                            <div className={`mt-2 h-1 w-full max-w-[80%] mx-auto ${isActive ? 'bg-[#FCD535]' : isPast ? 'bg-[#FCD535]/50' : 'bg-[#2B3139]'} transition-colors`}></div>
-                        </div>
-                    );
-                })}
+            <div className="mb-6">
+                <div className="flex items-center">
+                    {steps.map((s, idx) => {
+                        const isActive = step === s.id;
+                        const isPast = currentIdx > idx;
+                        const isLast = idx === steps.length - 1;
+                        return (
+                            <React.Fragment key={s.id}>
+                                {/* Step Node */}
+                                <div className="flex flex-col items-center gap-1.5 relative z-10">
+                                    <div className={`w-8 h-8 rounded-full flex items-center justify-center border-2 transition-all duration-300 ${
+                                        isPast ? 'bg-[#0ECB81] border-[#0ECB81] text-white'
+                                        : isActive ? 'bg-[#FCD535] border-[#FCD535] text-[#0B0E11] shadow-[0_0_12px_rgba(252,213,53,0.3)]'
+                                        : 'bg-[#1E2329] border-[#2B3139] text-[#474D57]'
+                                    }`}>
+                                        {isPast ? (
+                                            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={3}><path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" /></svg>
+                                        ) : s.icon}
+                                    </div>
+                                    <span className={`text-[9px] font-bold uppercase tracking-widest whitespace-nowrap transition-colors duration-300 ${
+                                        isActive ? 'text-[#FCD535]' : isPast ? 'text-[#0ECB81]' : 'text-[#474D57]'
+                                    }`}>{s.label}</span>
+                                </div>
+                                {/* Connector Line */}
+                                {!isLast && (
+                                    <div className="flex-1 h-[2px] mx-2 mb-5 relative overflow-hidden rounded-full bg-[#2B3139]/50">
+                                        <div className={`absolute inset-y-0 left-0 rounded-full transition-all duration-700 ease-out ${
+                                            isPast ? 'w-full bg-[#0ECB81] shadow-[0_0_8px_rgba(14,203,129,0.8)]'
+                                            : isActive ? 'w-1/2 bg-gradient-to-r from-[#FCD535] to-[#FCD535]/0 shadow-[0_0_8px_rgba(252,213,53,0.5)]'
+                                            : 'w-0'
+                                        }`} />
+                                    </div>
+                                )}
+                            </React.Fragment>
+                        );
+                    })}
+                </div>
             </div>
         );
     };
@@ -110,10 +135,16 @@ const OrderSummaryPanel: React.FC<OrderSummaryPanelProps> = ({
                                     fileInputRef.current?.click();
                                 }}
                             >
-                                <img src={convertGoogleDriveUrl(p.image)} className={`w-16 h-16 rounded-sm object-cover border border-[#2B3139] transition-all ${uploadingImage === p.name ? 'opacity-50 grayscale' : 'group-hover:opacity-70 group-hover:blur-sm'}`} alt={p.name} />
+                                {p.image ? (
+                                    <img src={convertGoogleDriveUrl(p.image)} className={`w-14 h-14 md:w-16 md:h-16 rounded-sm object-cover border border-[#2B3139] transition-all ${uploadingImage === p.name ? 'opacity-50 grayscale' : 'group-hover:opacity-70 group-hover:blur-sm'}`} alt={p.name} />
+                                ) : (
+                                    <div className={`w-14 h-14 md:w-16 md:h-16 rounded-sm bg-[#181A20] flex items-center justify-center border border-[#2B3139] transition-all ${uploadingImage === p.name ? 'opacity-50 grayscale' : 'group-hover:opacity-70 group-hover:blur-sm'}`}>
+                                        <svg className="w-6 h-6 text-gray-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4" /></svg>
+                                    </div>
+                                )}
                                 
                                 {/* Edit Overlay */}
-                                <div className="absolute inset-0 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
+                                <div className="absolute inset-0 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity bg-black/40 rounded-sm">
                                     {uploadingImage === p.name ? (
                                         <Spinner size="sm" />
                                     ) : (
@@ -132,22 +163,22 @@ const OrderSummaryPanel: React.FC<OrderSummaryPanelProps> = ({
                                 {masterP?.Barcode && (
                                     <p className="text-[10px] font-mono text-gray-400 mt-1">SN: {masterP.Barcode}</p>
                                 )}
-                                <div className="flex items-center justify-between mt-3">
+                                <div className="grid grid-cols-4 gap-2 mt-3 bg-[#0B0E11] p-2 rounded-sm border border-[#2B3139]">
                                     <div className="flex flex-col">
-                                        <span className="text-[9px] font-bold text-gray-500 uppercase tracking-widest">Base</span>
-                                        <span className="text-[11px] font-mono text-gray-500 line-through">${(Number(p.cost) || 0).toFixed(2)}</span>
+                                        <span className="text-[8px] font-bold text-gray-500 uppercase tracking-widest">Base Px</span>
+                                        <span className="text-[10px] sm:text-[11px] font-mono text-gray-500 line-through mt-0.5">${(Number(p.cost) || 0).toFixed(2)}</span>
                                     </div>
-                                    <div className="flex flex-col">
-                                        <span className="text-[9px] font-bold text-gray-400 uppercase tracking-widest">Final</span>
-                                        <span className="text-xs font-mono text-white">${(Number(p.finalPrice) || 0).toFixed(2)}</span>
+                                    <div className="flex flex-col border-l border-[#2B3139] pl-2">
+                                        <span className="text-[8px] font-bold text-gray-400 uppercase tracking-widest">Final</span>
+                                        <span className="text-[10px] sm:text-xs font-mono text-white mt-0.5">${(Number(p.finalPrice) || 0).toFixed(2)}</span>
                                     </div>
-                                    <div className="flex flex-col border-l border-[#2B3139] pl-3">
-                                        <span className="text-[9px] font-bold text-[#FCD535] uppercase tracking-widest">Full Px</span>
-                                        <span className="text-sm font-mono text-[#FCD535]">${((Number(p.finalPrice) || 0) * (Number(p.quantity) || 1)).toFixed(2)}</span>
+                                    <div className="flex flex-col border-l border-[#2B3139] pl-2">
+                                        <span className="text-[8px] font-bold text-[#FCD535] uppercase tracking-widest">Full Px</span>
+                                        <span className="text-xs sm:text-sm font-mono text-[#FCD535] mt-0.5">${((Number(p.finalPrice) || 0) * (Number(p.quantity) || 1)).toFixed(2)}</span>
                                     </div>
-                                    <div className="flex flex-col items-end">
-                                        <span className="text-[9px] font-bold text-[#0ECB81] uppercase tracking-widest">Qty</span>
-                                        <p className="text-xl font-mono text-white leading-none mt-0.5">{p.quantity}</p>
+                                    <div className="flex flex-col items-end border-l border-[#2B3139] pl-2">
+                                        <span className="text-[8px] font-bold text-[#0ECB81] uppercase tracking-widest">Qty</span>
+                                        <p className="text-lg sm:text-xl font-mono text-white leading-none mt-1">{p.quantity}</p>
                                     </div>
                                 </div>
                             </div>
@@ -207,8 +238,8 @@ const OrderSummaryPanel: React.FC<OrderSummaryPanelProps> = ({
                                     </div>
                                 )}
                                 <div className="flex justify-between items-center mt-3 pt-3 border-t border-[#2B3139]">
-                                    <span className="text-[10px] uppercase font-bold text-[#FCD535] tracking-widest">Grand Total <span className="text-gray-500 font-normal lowercase tracking-normal ml-1">(Total to Pay)</span></span>
-                                    <span className="text-xl font-mono font-bold text-[#0ECB81]">${grandTotal.toFixed(2)}</span>
+                                    <span className="text-[10px] uppercase font-bold text-[#FCD535] tracking-widest">Grand Total <span className="text-[9px] text-gray-500 font-normal lowercase tracking-normal ml-1">(Total to Pay)</span></span>
+                                    <span className="text-2xl sm:text-3xl font-mono font-black text-[#0ECB81] drop-shadow-[0_0_8px_rgba(14,203,129,0.3)]">${grandTotal.toFixed(2)}</span>
                                 </div>
                             </div>
                         );

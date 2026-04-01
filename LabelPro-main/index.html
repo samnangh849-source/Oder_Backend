@@ -1,0 +1,91 @@
+<!DOCTYPE html>
+<html lang="en" class="dark">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Label Pro Ultra</title>
+    <!-- Fonts -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Rajdhani:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&family=Kantumruy+Pro:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+      tailwind.config = {
+        darkMode: 'class',
+        theme: {
+          extend: {
+            fontFamily: {
+              sans: ['"Inter"', '"Kantumruy Pro"', 'sans-serif'],
+              display: ['"Rajdhani"', '"Kantumruy Pro"', 'sans-serif'],
+              mono: ['"JetBrains Mono"', 'monospace'],
+              khmer: ['"Kantumruy Pro"', 'sans-serif'],
+            },
+            colors: {
+              dark: {
+                950: '#020617',
+                900: '#0f172a',
+                800: '#1e293b',
+              },
+              brand: {
+                cyan: '#06b6d4',
+                purple: '#8b5cf6',
+                pink: '#ec4899'
+              }
+            }
+          }
+        }
+      }
+    </script>
+    <style>
+      body {
+        background-color: #020617;
+        color: #e2e8f0;
+        -webkit-font-smoothing: antialiased;
+        font-family: "Inter", "Kantumruy Pro", sans-serif;
+      }
+      ::-webkit-scrollbar { width: 6px; }
+      ::-webkit-scrollbar-track { background: #0f172a; }
+      ::-webkit-scrollbar-thumb { background: #334155; border-radius: 3px; }
+      ::-webkit-scrollbar-thumb:hover { background: #475569; }
+
+      .glass-panel {
+        background: rgba(15, 23, 42, 0.6);
+        backdrop-filter: blur(12px);
+        -webkit-backdrop-filter: blur(12px);
+        border: 1px solid rgba(255, 255, 255, 0.08);
+      }
+      
+      .khmer-text {
+        line-height: 1.6;
+        font-feature-settings: "kern" on, "liga" on;
+      }
+
+      @media print {
+        body { background: white !important; margin: 0 !important; overflow: hidden !important; }
+        .no-print { display: none !important; }
+        #root { display: block !important; }
+        @page { size: 80mm 60mm; margin: 0; }
+      }
+    </style>
+</head>
+  <body>
+    <div id="root"></div>
+    <script type="module" src="./index.tsx"></script>
+    <script>
+  // រង់ចាំរហូតដល់ទំព័រ Load ពេញលេញ
+  window.addEventListener('load', function() {
+    const urlParams = new URLSearchParams(window.location.search);
+    
+    // បើប្រព័ន្ធមេបញ្ជាឱ្យ Print លឿន (autoPrint=true) វានឹងលោត Print ដោយស្វ័យប្រវត្តិ
+    if (urlParams.get('autoPrint') === 'true') {
+       setTimeout(() => {
+           window.print();
+       }, 500); // រង់ចាំកន្លះវិនាទីដើម្បីឱ្យ Barcode ឬរូបភាព Load បានពេញលេញសិន
+    }
+  });
+</script>
+
+  </body>
+</html>

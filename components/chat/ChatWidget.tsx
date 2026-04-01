@@ -177,6 +177,7 @@ const ChatWidget: React.FC<ChatWidgetProps> = ({ isOpen, onClose }) => {
 
         return {
             id: msg.Timestamp || String(Date.now()),
+            backendId: msg.id,
             user: msg.UserName,
             fullName: user?.FullName || msg.UserName,
             avatar: user?.ProfilePictureURL || '',
@@ -461,6 +462,23 @@ const ChatWidget: React.FC<ChatWidgetProps> = ({ isOpen, onClose }) => {
         finally { setIsUploading(false); }
     };
 
+    const handleImageError = useCallback(async (msg: ChatMessage) => {
+        if (!msg.content?.includes('/images/temp/') || !msg.backendId) return;
+        try {
+            const token = localStorage.getItem('token');
+            const res = await fetch(`${WEB_APP_URL}/api/chat/message/${msg.backendId}`, {
+                headers: { 'Authorization': `Bearer ${token}` }
+            });
+            const result = await res.json();
+            if (result.status === 'success' && result.data) {
+                const updated = transformBackendMessage(result.data);
+                if (updated.content !== msg.content) {
+                    setAndCacheMessages(prev => prev.map(m => m.id === msg.id ? { ...m, content: updated.content, fileID: updated.fileID } : m));
+                }
+            }
+        } catch {}
+    }, [transformBackendMessage, setAndCacheMessages]);
+
     const getDateLabel = (timestamp: string) => {
         const d = new Date(timestamp);
         const today = new Date();
@@ -554,11 +572,12 @@ const ChatWidget: React.FC<ChatWidgetProps> = ({ isOpen, onClose }) => {
                                                     {msg.type === 'text' && <p className="text-sm font-medium leading-relaxed whitespace-pre-wrap">{msg.content}</p>}
                                                     {msg.type === 'image' && (
                                                         <div className="relative group/img overflow-hidden rounded-xl bg-black/20 min-h-[100px] min-w-[150px]">
-                                                            <img 
-                                                                src={convertGoogleDriveUrl(msg.content)} 
-                                                                className="rounded-xl w-full cursor-pointer hover:scale-105 transition-transform duration-500" 
-                                                                onClick={() => previewImage(msg.content)} 
-                                                                alt="Chat" 
+                                                            <img
+                                                                src={convertGoogleDriveUrl(msg.content)}
+                                                                className="rounded-xl w-full cursor-pointer hover:scale-105 transition-transform duration-500"
+                                                                onClick={() => previewImage(msg.content)}
+                                                                onError={() => handleImageError(msg)}
+                                                                alt="Chat"
                                                             />
                                                             {msg.isOptimistic && <div className="absolute inset-0 bg-black/40 flex items-center justify-center"><Spinner size="sm" /></div>}
                                                         </div>

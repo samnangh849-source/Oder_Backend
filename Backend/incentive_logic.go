@@ -283,7 +283,7 @@ func ProcessIncentiveCalculation(db *gorm.DB, projectID uint, month string) ([]I
 
 	// Custom Payouts
 	var customPayouts []IncentiveCustomPayout
-	db.Where("project_id = ? AND month = ?", projectID, month).Find(&manualData)
+	db.Where("project_id = ? AND month = ?", projectID, month).Find(&customPayouts)
 	customPayoutMap := make(map[string]float64)
 	for _, cp := range customPayouts {
 		customPayoutMap[cp.UserName] = cp.Value

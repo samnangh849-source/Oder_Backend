@@ -68,11 +68,13 @@ export interface FullOrder {
     IsVerified: string; // Changed to string to match Go
     FulfillmentStatus: FulfillmentStatus;
     "Packed By": string;
+    "Packed Time": string;
     "Package Photo URL": string;
     "Driver Name": string;
     "Tracking Number": string;
-    "Dispatched Time": string; // Added to match Go
-    "Delivered Time": string; // Added to match Go
+    "Dispatched Time": string;
+    "Dispatched By": string;
+    "Delivered Time": string;
     "Delivery Photo URL": string;
 }
 
@@ -210,6 +212,7 @@ export interface BackendChatMessage {
 
 export interface ChatMessage {
     id: string;
+    backendId?: number;
     user: string;
     fullName: string;
     avatar: string;

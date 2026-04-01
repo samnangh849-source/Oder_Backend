@@ -4,7 +4,7 @@ import { createProject, updateProject, deleteProject } from '../../services/ince
 import { AppContext } from '../../context/AppContext';
 import { translations } from '../../translations';
 import { IncentiveProject } from '../../types';
-import { X, Trash2, Save, Plus } from 'lucide-react';
+import { X, Trash2, Save, Plus, Terminal, Settings, Box, Database, Palette, Activity } from 'lucide-react';
 
 interface CreateProjectModalProps {
     isOpen: boolean;
@@ -18,7 +18,7 @@ const CreateProjectModal: React.FC<CreateProjectModalProps> = ({ isOpen, onClose
     const t = translations[language];
 
     const [projectName, setProjectName] = useState('');
-    const [colorCode, setColorCode] = useState('#FCD535'); // default yellow
+    const [colorCode, setColorCode] = useState('#F0B90B'); // Binance Yellow
     const [requirePeriod, setRequirePeriod] = useState(false);
     const [dataSource, setDataSource] = useState<'system' | 'manual'>('system');
     const [status, setStatus] = useState<string>('Draft');
@@ -29,7 +29,7 @@ const CreateProjectModal: React.FC<CreateProjectModalProps> = ({ isOpen, onClose
     useEffect(() => {
         if (initialData) {
             setProjectName(initialData.projectName || '');
-            setColorCode(initialData.colorCode || '#FCD535');
+            setColorCode(initialData.colorCode || '#F0B90B');
             setRequirePeriod(!!initialData.requirePeriodSelection);
             setDataSource(initialData.dataSource || 'system');
             setStatus(initialData.status || 'Draft');
@@ -38,7 +38,7 @@ const CreateProjectModal: React.FC<CreateProjectModalProps> = ({ isOpen, onClose
             setTargetTeam(initialData.targetTeam || '');
         } else {
             setProjectName('');
-            setColorCode('#FCD535');
+            setColorCode('#F0B90B');
             setRequirePeriod(false);
             setDataSource('system');
             setStatus('Draft');
@@ -100,111 +100,136 @@ const CreateProjectModal: React.FC<CreateProjectModalProps> = ({ isOpen, onClose
     if (!isOpen) return null;
 
     return (
-        <Modal isOpen={isOpen} onClose={onClose} maxWidth="max-w-md">
-            <div className="ui-binance bg-card-bg rounded-md border border-[#2B3139] shadow-2xl overflow-hidden text-[#EAECEF] font-sans">
-                <div className="flex justify-between items-center px-6 py-4 bg-bg-black border-b border-[#2B3139]">
-                    <div>
-                        <h2 className="text-sm font-bold text-[#EAECEF] uppercase tracking-widest">
-                            {initialData ? t.edit : t.create_project}
-                        </h2>
-                        <p className="text-[9px] text-secondary font-bold uppercase tracking-wider mt-0.5">Configure Engine Node</p>
+        <Modal isOpen={isOpen} onClose={onClose} maxWidth="max-w-lg">
+            <div className="bg-[#121212] border border-[#1A1A1A] shadow-2xl overflow-hidden text-[#EAECEF] font-sans rounded">
+                {/* Modal Header */}
+                <div className="flex justify-between items-center px-5 py-4 bg-[#080808] border-b border-[#1A1A1A]">
+                    <div className="flex items-center gap-3">
+                        <div className="w-8 h-8 rounded bg-[#050505] border border-[#1A1A1A] flex items-center justify-center">
+                            <Terminal className="w-4 h-4 text-[#F0B90B]" />
+                        </div>
+                        <div>
+                            <h2 className="text-xs font-black text-[#EAECEF] uppercase tracking-[0.2em]">
+                                {initialData ? "Config_Engine_Node" : "Initialize_New_Node"}
+                            </h2>
+                            <p className="text-[8px] font-mono text-[#707A8A] uppercase tracking-widest mt-0.5">Station Protocol // ACC_v2.5</p>
+                        </div>
                     </div>
-                    <button onClick={onClose} className="p-1.5 bg-bg-black hover:bg-[#474D57] rounded transition-colors text-secondary hover:text-[#EAECEF] border border-[#2B3139]">
+                    <button onClick={onClose} className="p-1.5 hover:bg-[#2B3139] rounded transition-all text-[#707A8A] hover:text-[#EAECEF] border border-transparent hover:border-[#1A1A1A]">
                         <X className="w-4 h-4" />
                     </button>
                 </div>
 
-                <form onSubmit={handleSubmit} className="p-6 space-y-5">
-                    <div>
-                        <label className="block text-[10px] font-bold text-secondary uppercase tracking-widest mb-2">{t.project_name}</label>
+                <form onSubmit={handleSubmit} className="p-5 space-y-6">
+                    {/* Project Name Section */}
+                    <div className="space-y-2">
+                        <div className="flex items-center gap-2">
+                            <Box className="w-3 h-3 text-[#707A8A]" />
+                            <label className="text-[9px] font-black text-[#707A8A] uppercase tracking-[0.2em]">{t.project_name}</label>
+                        </div>
                         <input 
                             type="text" 
                             value={projectName}
                             onChange={e => setProjectName(e.target.value)}
-                            className="w-full bg-bg-black border border-[#2B3139] rounded px-3 py-2.5 text-[11px] font-bold text-[#EAECEF] focus:border-primary outline-none transition-all uppercase"
-                            placeholder="e.g. PERFORMANCE ENGINE Q3"
+                            className="w-full h-10 bg-[#050505] border border-[#1A1A1A] rounded px-4 text-[11px] font-bold text-[#EAECEF] focus:border-[#F0B90B]/50 outline-none transition-all uppercase tracking-widest"
+                            placeholder="STATION_IDENTITY_KEY"
                             required
                         />
                     </div>
 
+                    {/* Tech Config Grid */}
                     <div className="grid grid-cols-2 gap-4">
-                        <div>
-                            <label className="block text-[10px] font-bold text-secondary uppercase tracking-widest mb-2">{t.color_theme}</label>
-                            <div className="flex items-center gap-3 bg-bg-black p-1.5 rounded border border-[#2B3139]">
+                        <div className="space-y-2">
+                            <div className="flex items-center gap-2">
+                                <Palette className="w-3 h-3 text-[#707A8A]" />
+                                <label className="text-[9px] font-black text-[#707A8A] uppercase tracking-[0.2em]">{t.color_theme}</label>
+                            </div>
+                            <div className="flex items-center gap-3 bg-[#050505] p-2 rounded border border-[#1A1A1A]">
                                 <input 
                                     type="color" 
                                     value={colorCode}
                                     onChange={e => setColorCode(e.target.value)}
-                                    className="w-6 h-6 rounded cursor-pointer border-0 bg-transparent p-0"
+                                    className="w-6 h-6 rounded cursor-pointer border-0 bg-transparent p-0 overflow-hidden"
                                 />
-                                <span className="text-[10px] font-mono text-secondary font-bold uppercase">{colorCode}</span>
+                                <span className="text-[10px] font-mono text-[#EAECEF] font-bold uppercase">{colorCode}</span>
                             </div>
                         </div>
-                        <div>
-                            <label className="block text-[10px] font-bold text-secondary uppercase tracking-widest mb-2">{t.status}</label>
+                        <div className="space-y-2">
+                            <div className="flex items-center gap-2">
+                                <Activity className="w-3 h-3 text-[#707A8A]" />
+                                <label className="text-[9px] font-black text-[#707A8A] uppercase tracking-[0.2em]">{t.status}</label>
+                            </div>
                             <select 
                                 value={status}
                                 onChange={e => setStatus(e.target.value as any)}
-                                className="w-full bg-bg-black border border-[#2B3139] rounded px-2 py-1.5 text-[11px] font-bold text-[#EAECEF] focus:border-primary outline-none"
+                                className="w-full h-10 bg-[#050505] border border-[#1A1A1A] rounded px-3 text-[10px] font-bold text-[#EAECEF] focus:border-[#F0B90B]/50 outline-none cursor-pointer"
                             >
-                                <option value="Draft">DRAFT</option>
-                                <option value="Active">ACTIVE</option>
-                                <option value="Disable">DISABLE</option>
+                                <option value="Draft">PROTOCOL_DRAFT</option>
+                                <option value="Active">LIVE_NODE</option>
+                                <option value="Disable">OFFLINE_NODE</option>
                             </select>
                         </div>
                     </div>
 
-                    <div className="bg-bg-black rounded border border-[#2B3139] p-4 space-y-4">
+                    {/* Data Source & Rules */}
+                    <div className="bg-[#080808] rounded border border-[#1A1A1A] p-4 space-y-5">
                         <div className="flex items-center justify-between">
-                            <div>
-                                <label className="text-[11px] font-bold text-[#EAECEF] uppercase tracking-wide block">{t.require_period}</label>
-                                <span className="text-[9px] text-secondary font-bold uppercase tracking-wider block mt-0.5">{t.require_period_desc}</span>
+                            <div className="flex items-center gap-3">
+                                <Settings className="w-4 h-4 text-[#F0B90B]/50" />
+                                <div>
+                                    <label className="text-[10px] font-black text-[#EAECEF] uppercase tracking-widest block">{t.require_period}</label>
+                                    <span className="text-[8px] font-bold text-[#707A8A] uppercase tracking-wider block mt-0.5">Mandatory Interval Control</span>
+                                </div>
                             </div>
                             <label className="relative inline-flex items-center cursor-pointer">
                                 <input type="checkbox" checked={requirePeriod} onChange={e => setRequirePeriod(e.target.checked)} className="sr-only peer" />
-                                <div className="w-9 h-5 bg-[#474D57] peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-primary"></div>
+                                <div className="w-10 h-5 bg-[#1A1A1A] border border-[#2B3139] peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full after:content-[''] after:absolute after:top-[3px] after:left-[3px] after:bg-[#707A8A] after:rounded-full after:h-3.5 after:w-4 after:transition-all peer-checked:bg-[#0ECB81]/20 peer-checked:border-[#0ECB81]/40 peer-checked:after:bg-[#0ECB81]"></div>
                             </label>
                         </div>
 
-                        <div className="pt-3 border-t border-[#2B3139]">
-                            <label className="block text-[10px] font-bold text-secondary uppercase tracking-widest mb-2">{t.data_source}</label>
+                        <div className="pt-4 border-t border-[#1A1A1A]">
+                            <div className="flex items-center gap-2 mb-3">
+                                <Database className="w-3 h-3 text-[#707A8A]" />
+                                <label className="text-[9px] font-black text-[#707A8A] uppercase tracking-[0.2em]">{t.data_source}</label>
+                            </div>
                             <div className="flex gap-2">
                                 <button
                                     type="button"
                                     onClick={() => setDataSource('system')}
-                                    className={`flex-1 py-1.5 rounded text-[10px] font-bold border transition-all ${dataSource === 'system' ? 'bg-primary text-bg-black border-primary' : 'bg-bg-black border-[#2B3139] text-secondary hover:text-[#EAECEF]'}`}
+                                    className={`flex-1 h-9 rounded text-[9px] font-black uppercase tracking-widest border transition-all ${dataSource === 'system' ? 'bg-[#F0B90B] text-black border-[#F0B90B]' : 'bg-[#050505] border-[#1A1A1A] text-[#707A8A] hover:text-[#EAECEF] hover:border-[#2B3139]'}`}
                                 >
-                                    {t.system_data}
+                                    SYSTEM_CORE
                                 </button>
                                 <button
                                     type="button"
                                     onClick={() => setDataSource('manual')}
-                                    className={`flex-1 py-1.5 rounded text-[10px] font-bold border transition-all ${dataSource === 'manual' ? 'bg-primary text-bg-black border-primary' : 'bg-bg-black border-[#2B3139] text-secondary hover:text-[#EAECEF]'}`}
+                                    className={`flex-1 h-9 rounded text-[9px] font-black uppercase tracking-widest border transition-all ${dataSource === 'manual' ? 'bg-[#F0B90B] text-black border-[#F0B90B]' : 'bg-[#050505] border-[#1A1A1A] text-[#707A8A] hover:text-[#EAECEF] hover:border-[#2B3139]'}`}
                                 >
-                                    {t.manual_input}
+                                    MANUAL_OVERRIDE
                                 </button>
                             </div>
                         </div>
                     </div>
 
+                    {/* Form Actions */}
                     <div className="flex flex-col gap-2 pt-2">
                         <button 
                             type="submit"
                             disabled={!projectName.trim()}
-                            className="w-full py-2.5 bg-primary hover:bg-[#f0c51d] disabled:opacity-50 text-bg-black font-bold rounded text-[11px] uppercase tracking-widest transition-all flex items-center justify-center gap-2"
+                            className="w-full h-11 bg-[#F0B90B] hover:bg-[#D4A50A] disabled:opacity-30 disabled:grayscale text-black font-black rounded text-[10px] uppercase tracking-[0.2em] transition-all flex items-center justify-center gap-3 active:scale-[0.98]"
                         >
-                            {initialData ? <Save className="w-4 h-4" /> : <Plus className="w-4 h-4" />}
-                            {initialData ? t.save : t.create_project}
+                            {initialData ? <Save className="w-4 h-4 stroke-[3]" /> : <Plus className="w-4 h-4 stroke-[3]" />}
+                            {initialData ? "VERIFY_&_DEPLOY" : "INITIALIZE_PROTOCOL"}
                         </button>
                         
                         {initialData && (
                             <button 
                                 type="button"
                                 onClick={handleDelete}
-                                className="w-full py-2 text-red-500 hover:bg-red-500/10 border border-transparent rounded text-[10px] font-bold uppercase tracking-widest transition-all flex items-center justify-center gap-2"
+                                className="w-full h-9 text-[#F6465D] hover:bg-[#F6465D]/10 border border-transparent hover:border-[#F6465D]/20 rounded text-[9px] font-black uppercase tracking-widest transition-all flex items-center justify-center gap-2"
                             >
                                 <Trash2 className="w-3.5 h-3.5" />
-                                {t.delete}
+                                TERMINATE_NODE
                             </button>
                         )}
                     </div>

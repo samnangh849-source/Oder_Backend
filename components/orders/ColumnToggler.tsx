@@ -16,6 +16,7 @@ export const availableColumns = [
     { key: 'shippingService', labelKey: 'col_carrier' },
     { key: 'driver', labelKey: 'col_agent' },
     { key: 'shippingCost', labelKey: 'col_cost' },
+    { key: 'fulfillmentStatus', labelKey: 'col_fulfillmentStatus' },
     { key: 'status', labelKey: 'col_status' },
     { key: 'date', labelKey: 'col_date' },
     { key: 'note', labelKey: 'col_note' },

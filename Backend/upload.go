@@ -94,7 +94,7 @@ func ExtractDriveFolderID(idOrURL string) string {
 // ── Core Upload Function ──────────────────────────────────────────────────
 
 // UploadToGoogleDriveDirectly sends base64 data to Google Apps Script which uploads it to Drive.
-func UploadToGoogleDriveDirectly(base64Data string, fileName string, mimeType string) (string, string, error) {
+func UploadToGoogleDriveDirectly(base64Data string, fileName string, mimeType string, originalReq *AppsScriptRequest) (string, string, error) {
 	log.Printf("📤 [Drive Upload via AppsScript] file=%q mime=%q dataLen=%d", fileName, mimeType, len(base64Data))
 
 	if fileName == "" {
@@ -120,6 +120,26 @@ func UploadToGoogleDriveDirectly(base64Data string, fileName string, mimeType st
 		FileName:       fileName,
 		MimeType:       mimeType,
 		UploadFolderID: targetFolder,
+	}
+
+	// ✅ Pass metadata for immediate Google Sheet sync "first of all"
+	if originalReq != nil {
+		req.OrderID = originalReq.OrderID
+		req.SheetName = originalReq.SheetName
+		req.PrimaryKey = originalReq.PrimaryKey
+		req.TargetColumn = originalReq.TargetColumn
+		req.NewData = originalReq.NewData
+		req.UserName = originalReq.UserName
+		req.MovieID = originalReq.MovieID
+		
+		// For orders, we need the team to update the correct sheet
+		if originalReq.OrderID != "" {
+			var order Order
+			if err := DB.Where("UPPER(TRIM(order_id)) = UPPER(TRIM(?))", originalReq.OrderID).Select("team").First(&order).Error; err == nil {
+				// Inject team into the request for Apps Script
+				req.OrderData = map[string]interface{}{"team": order.Team}
+			}
+		}
 	}
 
 	log.Printf("🚀 [Drive Upload] Calling Apps Script uploadImage action...")
@@ -186,23 +206,109 @@ func HandleImageUploadProxy(c *gin.Context) {
 	// other users see the status change immediately rather than waiting 10-60s
 	// for the background Drive upload to complete.
 	if req.OrderID != "" && req.NewData != nil {
+		// ✅ Validate state machine transitions (same rules as handleAdminUpdateOrder)
+		if newStatusRaw, hasStatus := req.NewData["Fulfillment Status"]; hasStatus {
+			newStatus := strings.TrimSpace(fmt.Sprintf("%v", newStatusRaw))
+
+			var currentOrder Order
+			if err := DB.Where("order_id = ?", req.OrderID).Select("fulfillment_status").First(&currentOrder).Error; err != nil {
+				log.Printf("⚠️ [Upload] Cannot find order %s for validation: %v", req.OrderID, err)
+				c.JSON(404, gin.H{"status": "error", "message": "រកមិនឃើញការកម្មង់"})
+				return
+			}
+
+			currentStatus := strings.TrimSpace(currentOrder.FulfillmentStatus)
+			if currentStatus == "" {
+				currentStatus = "Pending"
+			}
+
+			validTransitions := map[string][]string{
+				"Pending":       {"Processing", "Ready to Ship", "Cancelled"},
+				"Processing":    {"Ready to Ship", "Pending", "Cancelled"},
+				"Ready to Ship": {"Shipped", "Pending", "Cancelled"},
+				"Shipped":       {"Delivered", "Ready to Ship", "Cancelled"},
+				"Delivered":     {},
+				"Cancelled":     {"Pending"},
+			}
+
+			allowed, ok := validTransitions[currentStatus]
+			if ok {
+				transitionValid := false
+				for _, s := range allowed {
+					if s == newStatus {
+						transitionValid = true
+						break
+					}
+				}
+				if !transitionValid {
+					log.Printf("⛔ [Upload] Invalid transition: %s → %s for order %s", currentStatus, newStatus, req.OrderID)
+					c.JSON(400, gin.H{"status": "error", "message": fmt.Sprintf("មិនអាចផ្លាស់ប្តូរពី '%s' ទៅ '%s' បានទេ", currentStatus, newStatus)})
+					return
+				}
+			}
+		}
+
 		immediateMap := map[string]interface{}{}
 		immediateBroadcast := map[string]interface{}{}
+		log.Printf("🔍 [Upload Debug] Received NewData: %+v", req.NewData)
 		for k, v := range req.NewData {
 			dbCol := UploadMapToDBColumnFunc(k)
-			if UploadIsValidOrderColumnFunc(dbCol) {
+			isValid := UploadIsValidOrderColumnFunc(dbCol)
+			log.Printf("🔍 [Upload Debug] Mapping field: %q -> %q (Valid: %v)", k, dbCol, isValid)
+			if isValid {
 				immediateMap[dbCol] = v
 				immediateBroadcast[k] = v
 			}
 		}
+
+		// Also update the photo column with the temp URL immediately in the DB
+		// so it shows up for all users right away.
+		if req.TargetColumn != "" {
+			dbCol := UploadMapToDBColumnFunc(req.TargetColumn)
+			log.Printf("🔍 [Upload Debug] Target Column: %q -> %q", req.TargetColumn, dbCol)
+			immediateMap[dbCol] = tempUrl
+			immediateBroadcast[req.TargetColumn] = tempUrl
+		}
+
 		if len(immediateMap) > 0 {
+			log.Printf("🔍 [Upload Debug] Executing DB Update for order %s with: %+v", req.OrderID, immediateMap)
 			// Use UpdateColumns (plural) to skip GORM hooks and update only these columns immediately
-			if res := DB.Model(&Order{}).Where("order_id = ?", req.OrderID).UpdateColumns(immediateMap); res.Error != nil {
-				log.Printf("⚠️ [Upload] Immediate DB update failed for order %s: %v", req.OrderID, res.Error)
-			} else {
-				log.Printf("✅ [Upload] Immediate DB update SUCCESS: orderId=%s fields=%v", req.OrderID, immediateBroadcast)
+			// Using TRIM and UPPER for robust matching
+			res := DB.Model(&Order{}).Where("UPPER(TRIM(order_id)) = UPPER(TRIM(?))", req.OrderID).UpdateColumns(immediateMap)
+			if res.Error != nil {
+				log.Printf("❌ [Upload] Immediate DB update failed for order %s: %v", req.OrderID, res.Error)
+				c.JSON(500, gin.H{"status": "error", "message": fmt.Sprintf("មិនអាចធ្វើបច្ចុប្បន្នភាពការកម្មង់បានទេ: %v", res.Error)})
+				return
 			}
 			
+			if res.RowsAffected == 0 {
+				log.Printf("⚠️ [Upload] No rows affected for immediate update of Order %s. ID might not exist or is already updated.", req.OrderID)
+			} else {
+				log.Printf("✅ [Upload] Immediate DB update SUCCESS: orderId=%s rowsAffected=%d fields=%v", req.OrderID, res.RowsAffected, immediateBroadcast)
+			}
+			
+			// 🚀 Immediate Sync to Google Sheets and Telegram (Status only)
+			// This prevents the "Pending" status in the sheet from reverting the DB during the photo upload delay.
+			go func(orderId string, newData map[string]interface{}) {
+				var order Order
+				if err := DB.Where("UPPER(TRIM(order_id)) = UPPER(TRIM(?))", orderId).First(&order).Error; err == nil {
+					// Prepare fields for initial sync
+					sheetData := make(map[string]interface{})
+					for k, v := range newData {
+						sheetData[k] = v
+					}
+					// Ensure we have current packing info from DB
+					if order.PackedBy != "" { sheetData["Packed By"] = order.PackedBy }
+					if order.PackedTime != "" { sheetData["Packed Time"] = order.PackedTime }
+
+					EnqueueSync("updateOrderTelegram", map[string]interface{}{
+						"orderId":       orderId,
+						"team":          order.Team,
+						"updatedFields": sheetData,
+					}, "", nil)
+				}
+			}(req.OrderID, immediateBroadcast)
+
 			// Broadcast update so all clients see the status change immediately
 			event, _ := json.Marshal(map[string]interface{}{
 				"type":    "update_order",
@@ -228,7 +334,7 @@ func HandleImageUploadProxy(c *gin.Context) {
 		}()
 
 		log.Printf("⏳ [Background Upload] Starting for tempID=%s file=%q mime=%q", tid, r.FileName, r.MimeType)
-		driveURL, fileID, err := UploadToGoogleDriveDirectly(rawData, r.FileName, r.MimeType)
+		driveURL, fileID, err := UploadToGoogleDriveDirectly(rawData, r.FileName, r.MimeType, &r)
 
 		if err != nil {
 			log.Printf("❌ [Background Upload] FAILED for tempID=%s: %v", tid, err)
@@ -261,29 +367,57 @@ func HandleImageUploadProxy(c *gin.Context) {
 				dbUpdateMap[UploadMapToDBColumnFunc(r.TargetColumn)] = driveURL
 			}
 
-			var order Order
-			team := ""
-			if res := DB.Where("order_id = ?", r.OrderID).First(&order); res.Error == nil {
-				team = order.Team
-				DB.Model(&order).Updates(dbUpdateMap)
-			} else {
-				DB.Model(&Order{}).Where("order_id = ?", r.OrderID).Updates(dbUpdateMap)
+			// Update PostgreSQL first
+			res := DB.Model(&Order{}).Where("UPPER(TRIM(order_id)) = UPPER(TRIM(?))", r.OrderID).Updates(dbUpdateMap)
+			if res.Error != nil {
+				log.Printf("⚠️ [Background Update] DB update failed for order %s: %v", r.OrderID, res.Error)
+			}
+			if res.RowsAffected == 0 {
+				log.Printf("⚠️ [Background Update] No rows affected for order %s. ID mismatch?", r.OrderID)
 			}
 
-			// Broadcast final status update
-			event, _ := json.Marshal(map[string]interface{}{
-				"type":    "update_order",
-				"orderId": r.OrderID,
-				"newData": broadcastData,
-			})
-			HubGlobal.Broadcast <- event
+			// Now fetch the latest state to ensure we have everything (including team)
+			var order Order
+			team := ""
+			if res := DB.Where("UPPER(TRIM(order_id)) = UPPER(TRIM(?))", r.OrderID).First(&order); res.Error == nil {
+				team = order.Team
+			} else {
+				log.Printf("⚠️ [Background Update] Could not fetch order %s after update: %v", r.OrderID, res.Error)
+			}
+
+			// Build comprehensive sheet data: start from broadcastData then fill
+			// missing fulfillment fields from the freshly updated DB record.
+			sheetData := make(map[string]interface{})
+			for k, v := range broadcastData {
+				sheetData[k] = v
+			}
+			if order.OrderID != "" {
+				fill := func(key, val string) {
+					if val != "" {
+						if _, exists := sheetData[key]; !exists {
+							sheetData[key] = val
+						}
+					}
+				}
+				fill("Packed By", order.PackedBy)
+				fill("Packed Time", order.PackedTime)
+				fill("Package Photo URL", order.PackagePhotoURL)
+				fill("Driver Name", order.DriverName)
+				fill("Tracking Number", order.TrackingNumber)
+				fill("Dispatched Time", order.DispatchedTime)
+				fill("Dispatched By", order.DispatchedBy)
+				fill("Delivered Time", order.DeliveredTime)
+				fill("Delivery Photo URL", order.DeliveryPhotoURL)
+			}
+
+			log.Printf("📋 [Background Sync] orderId=%s updatedFields=%v", r.OrderID, sheetData)
 
 			// SINGLE Sync call to Google Sheets and Telegram.
 			// Apps Script's updateOrderTelegram already handles updating all relevant sheets.
 			EnqueueSync("updateOrderTelegram", map[string]interface{}{
 				"orderId":       r.OrderID,
 				"team":          team,
-				"updatedFields": broadcastData,
+				"updatedFields": sheetData,
 			}, "", nil)
 
 			return // Finished order processing

@@ -7,6 +7,7 @@ import { useOrderTotals } from './OrderGrandTotal';
 import OrdersListDesktop from './OrdersListDesktop';
 import OrdersListMobile from './OrdersListMobile';
 import OrdersListTablet from './OrdersListTablet'; // Import Tablet Component
+import { printViaIframe } from '../../utils/printUtils';
 
 interface OrdersListProps {
     orders: ParsedOrder[];
@@ -139,7 +140,7 @@ ${dateStr}
     };
 
     const handlePrint = (order: ParsedOrder) => {
-        if (!LABEL_PRINTER_URL_BASE || !order) return;
+        if (!order) return;
         const validatedPhone = formatPhone(order['Customer Phone']);
         const queryParams = new URLSearchParams({
             id: order['Order ID'],
@@ -156,7 +157,8 @@ ${dateStr}
         const note = order.Note || '';
         const mapMatch = note.match(/https?:\/\/(www\.)?(google\.com\/maps|maps\.app\.goo\.gl)\/[^\s]+/);
         if (mapMatch) queryParams.set('map', mapMatch[0]);
-        window.open(`${LABEL_PRINTER_URL_BASE}?${queryParams.toString()}`, '_blank');
+        queryParams.set('view', 'print_label');
+        printViaIframe(`${window.location.origin}${window.location.pathname}?${queryParams.toString()}`);
     };
 
     const [viewType, setViewType] = useState<'mobile' | 'tablet' | 'desktop'>('desktop');

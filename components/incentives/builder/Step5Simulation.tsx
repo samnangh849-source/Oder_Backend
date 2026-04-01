@@ -1,6 +1,6 @@
 import React from 'react';
 import { IncentiveCalculator } from '../../../types';
-import { Info } from 'lucide-react';
+import { Info, Rocket, MousePointer2, GitBranch, Terminal, Activity } from 'lucide-react';
 
 interface Step5SimulationProps {
     calcData: Partial<IncentiveCalculator>;
@@ -27,46 +27,69 @@ const Step5Simulation: React.FC<Step5SimulationProps> = ({ calcData, previewInpu
     }
 
     return (
-        <div className="space-y-6">
-             <h3 className="text-sm font-bold text-[#EAECEF] uppercase tracking-wider border-b border-[#2B3139] pb-3 flex items-center gap-2">
-                <span className="text-primary">05</span> Simulation & Splitting
-            </h3>
+        <div className="space-y-10">
+            <div className="flex items-center gap-4 border-b border-[#1A1A1A] pb-6">
+                <div className="w-10 h-10 rounded bg-[#050505] border border-[#1A1A1A] flex items-center justify-center">
+                    <Rocket className="w-5 h-5 text-[#F0B90B]" />
+                </div>
+                <div>
+                    <h3 className="text-lg font-black text-[#EAECEF] uppercase tracking-[0.2em]">Protocol_Simulation_Lab</h3>
+                    <p className="text-[9px] font-mono text-[#707A8A] uppercase tracking-widest mt-0.5">Validate logic output and define distribution topology</p>
+                </div>
+            </div>
 
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
                 <div className="space-y-4">
-                    <label className="block text-[10px] font-bold text-secondary uppercase tracking-widest">Simulator</label>
-                    <div className="bg-bg-black p-6 rounded-md border border-[#2B3139] text-center">
-                         <div className="text-[10px] font-bold text-secondary uppercase tracking-widest mb-4">Input Metric</div>
-                         <div className="flex items-center justify-center gap-2 mb-6">
-                            <span className="text-xl font-bold text-[#474D57] font-mono">$</span>
-                            <input type="number" value={previewInput} onChange={e => setPreviewInput(Number(e.target.value))} className="bg-transparent border-none text-3xl font-mono font-bold text-[#EAECEF] text-center w-36 focus:ring-0" />
+                    <div className="flex items-center gap-2 mb-1">
+                        <Terminal className="w-3.5 h-3.5 text-[#707A8A]" />
+                        <label className="text-[9px] font-black text-[#707A8A] uppercase tracking-[0.2em]">Input_Stress_Test</label>
+                    </div>
+                    <div className="bg-[#080808] p-8 rounded border border-[#1A1A1A] text-center relative overflow-hidden group">
+                         <div className="absolute top-0 left-0 w-1 h-full bg-[#F0B90B]/20"></div>
+                         <div className="text-[9px] font-black text-[#707A8A] uppercase tracking-[0.2em] mb-6">Simulated_KPI_Metric</div>
+                         <div className="flex items-center justify-center gap-3 mb-8">
+                            <span className="text-xl font-black text-[#1A1A1A] font-mono group-hover:text-[#F0B90B]/20 transition-colors">$</span>
+                            <input type="number" value={previewInput} onChange={e => setPreviewInput(Number(e.target.value))} className="bg-[#050505] border border-[#1A1A1A] rounded h-14 text-3xl font-mono font-black text-[#EAECEF] text-center w-48 focus:border-[#F0B90B]/50 transition-all outline-none shadow-inner" />
                          </div>
-                         <div className="pt-4 border-t border-[#2B3139]">
-                            <div className="text-[10px] font-bold text-primary uppercase tracking-widest mb-1">Reward Preview</div>
-                            <div className="text-4xl font-mono font-bold text-primary tracking-tighter">
-                                <span className="text-lg text-secondary mr-1">$</span>
+                         <div className="pt-6 border-t border-[#1A1A1A]">
+                            <div className="text-[9px] font-black text-[#0ECB81] uppercase tracking-[0.2em] mb-2 flex items-center justify-center gap-2">
+                                <Activity className="w-3 h-3" /> Projected_Yield_Output
+                            </div>
+                            <div className="text-4xl font-mono font-black text-[#0ECB81] tracking-tighter drop-shadow-[0_0_15px_rgba(14,203,129,0.2)]">
+                                <span className="text-lg text-[#707A8A] mr-2 opacity-30">$</span>
                                 {result.toLocaleString(undefined, { minimumFractionDigits: 2 })}
                             </div>
                          </div>
                     </div>
                 </div>
 
-                <div className="space-y-4">
-                    <label className="block text-[10px] font-bold text-secondary uppercase tracking-widest">Splitting Logic</label>
-                    <div className="bg-bg-black p-4 rounded-md border border-[#2B3139] space-y-2">
-                        {['Equal Split', 'Percentage Allocation'].map(m => (
-                            <button key={m} onClick={() => updateField('distributionRule', { ...calcData.distributionRule, method: m as any })} className={`w-full flex items-center justify-between p-3 rounded border transition-all ${calcData.distributionRule?.method === m ? 'bg-primary/5 border-primary text-primary' : 'bg-card-bg border-[#2B3139] text-secondary'}`}>
-                                <span className="text-[10px] font-bold uppercase tracking-wider">{m}</span>
-                                {calcData.distributionRule?.method === m && <div className="w-1.5 h-1.5 rounded-full bg-primary" />}
-                            </button>
-                        ))}
-                    </div>
-                    <div className="bg-bg-black border border-[#2B3139] p-4 rounded-md mb-6">
-                        <div className="flex items-center gap-2 mb-2">
-                            <Info className="w-4 h-4 text-primary" />
-                            <h4 className="text-[11px] font-bold text-primary uppercase tracking-wider">Splitting Rule</h4>
+                <div className="space-y-6">
+                    <div className="space-y-4">
+                        <div className="flex items-center gap-2 mb-1">
+                            <GitBranch className="w-3.5 h-3.5 text-[#707A8A]" />
+                            <label className="text-[9px] font-black text-[#707A8A] uppercase tracking-[0.2em]">Distribution_Protocol</label>
                         </div>
-                        <div className="text-[11px] text-secondary font-medium leading-relaxed">Define how earned rewards are distributed among team members.</div>
+                        <div className="bg-[#050505] p-2 rounded border border-[#1A1A1A] space-y-1">
+                            {['Equal Split', 'Percentage Allocation'].map(m => (
+                                <button key={m} onClick={() => updateField('distributionRule', { ...calcData.distributionRule, method: m as any })} className={`w-full h-11 flex items-center justify-between px-4 rounded transition-all uppercase tracking-widest ${calcData.distributionRule?.method === m ? 'bg-[#2B3139] text-[#F0B90B]' : 'text-[#707A8A] hover:text-[#EAECEF]'}`}>
+                                    <span className="text-[10px] font-black">{m.replace(' ', '_')}</span>
+                                    {calcData.distributionRule?.method === m && <div className="w-1.5 h-1.5 rounded-full bg-[#F0B90B] shadow-[0_0_8px_#F0B90B]" />}
+                                </button>
+                            ))}
+                        </div>
+                    </div>
+
+                    <div className="bg-[#080808] border border-[#1A1A1A] p-5 rounded relative group overflow-hidden">
+                        <div className="flex items-center gap-3 mb-3">
+                            <Info className="w-4 h-4 text-[#F0B90B]" />
+                            <h4 className="text-[10px] font-black text-[#EAECEF] uppercase tracking-[0.2em]">Topo_Guideline</h4>
+                        </div>
+                        <div className="text-[10px] text-[#707A8A] font-bold leading-relaxed uppercase tracking-widest">
+                            Define how earned yield assets are distributed among identified entity nodes in the target group.
+                        </div>
+                        <div className="absolute -bottom-4 -right-4 opacity-[0.03] group-hover:opacity-[0.07] transition-opacity">
+                            <GitBranch className="w-20 h-20 rotate-45" />
+                        </div>
                     </div>
                 </div>
             </div>

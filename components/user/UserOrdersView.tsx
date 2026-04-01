@@ -25,9 +25,10 @@ interface UserOrdersViewProps {
   onAdd: () => void;
   onStatsUpdate: (stats: { revenue: number; cost: number; paid: number; unpaid: number, count: number }) => void;
   showColumnSelectorToggle?: boolean;
+  dateFilter?: DateRangePreset;
 }
 
-const UserOrdersView: React.FC<UserOrdersViewProps> = ({ onAdd, onStatsUpdate, showColumnSelectorToggle = true }) => {
+const UserOrdersView: React.FC<UserOrdersViewProps> = ({ onAdd, onStatsUpdate, showColumnSelectorToggle = true, dateFilter }) => {
     const { currentUser, language, refreshData, appData, orders, isOrdersLoading, hasPermission, selectedTeam: team, setAppState } = useContext(AppContext);
     const { playClick, playPop } = useSoundEffects();
     
@@ -39,7 +40,14 @@ const UserOrdersView: React.FC<UserOrdersViewProps> = ({ onAdd, onStatsUpdate, s
     const [showShippingReport, setShowShippingReport] = useState(false);
     const [processing, setProcessing] = useState(false); 
     const [searchQuery, setSearchQuery] = useState('');
-    const [dateRange, setDateRange] = useState<DateRangePreset>('this_month');
+    const [dateRange, setDateRange] = useState<DateRangePreset>(dateFilter || 'this_month');
+
+    // Sync with dateFilter prop
+    useEffect(() => {
+        if (dateFilter) {
+            setDateRange(dateFilter);
+        }
+    }, [dateFilter]);
     const [showColumnSelector, setShowColumnSelector] = useState(false);
     const [visibleColumns, setVisibleColumns] = useState<Set<string>>(new Set([
         'index', 'customerName', 'productInfo', 'location', 'total', 'status', 'date', 'actions'
@@ -101,6 +109,8 @@ const UserOrdersView: React.FC<UserOrdersViewProps> = ({ onAdd, onStatsUpdate, s
             case 'this_week': const d = now.getDay(); start = new Date(today); start.setDate(today.getDate() - (d === 0 ? 6 : d - 1)); end = new Date(start); end.setDate(start.getDate() + 6); end.setHours(23, 59, 59, 999); break;
             case 'this_month': start = new Date(now.getFullYear(), now.getMonth(), 1); break;
             case 'last_month': start = new Date(now.getFullYear(), now.getMonth() - 1, 1); end = new Date(now.getFullYear(), now.getMonth(), 0, 23, 59, 59, 999); break;
+            case 'this_year': start = new Date(now.getFullYear(), 0, 1); break;
+            case 'last_year': start = new Date(now.getFullYear() - 1, 0, 1); end = new Date(now.getFullYear() - 1, 11, 31, 23, 59, 59, 999); break;
             case 'all': start = null; end = null; break;
             case 'custom': if (cStart) start = getValidDate(cStart + 'T00:00:00'); if (cEnd) end = getValidDate(cEnd + 'T23:59:59'); break;
         }
@@ -131,23 +141,44 @@ const UserOrdersView: React.FC<UserOrdersViewProps> = ({ onAdd, onStatsUpdate, s
 
     const processDataForRange = useCallback((range: DateRangePreset) => {
         setProcessing(true);
-        const { start, end } = getDateBounds(range);
+        const { start, end } = getDateBounds(range, advancedFilters.startDate, advancedFilters.endDate);
+        
+        // Log for debugging (optional: console.log("Filtering range:", range, start, end))
+        
         const filtered = permittedOrders.filter(o => {
             const orderId = (o['Order ID'] || '').toString();
+            // Skip opening balance entries
             if (orderId.includes('Opening_Balance') || orderId.includes('Opening Balance')) return false;
+            
             if (range === 'all') return true;
             if (!o.Timestamp) return false;
+
+            // Robust date parsing
             const orderDate = safeParseDate(o.Timestamp);
-            if (!orderDate) return range === 'all'; 
+            if (!orderDate || isNaN(orderDate.getTime())) return range === 'all'; 
+
+            // Check bounds
             if (start && orderDate < start) return false;
             if (end && orderDate > end) return false;
+            
             return true;
         });
-        setViewOrders(filtered.sort((a, b) => getTimestamp(b.Timestamp) - getTimestamp(a.Timestamp)));
-        setProcessing(false);
-    }, [permittedOrders, getDateBounds]);
 
-    useEffect(() => { processDataForRange(dateRange); }, [dateRange, processDataForRange]);
+        // Sort by timestamp descending
+        const sorted = [...filtered].sort((a, b) => {
+            const timeA = safeParseDate(a.Timestamp)?.getTime() || 0;
+            const timeB = safeParseDate(b.Timestamp)?.getTime() || 0;
+            return timeB - timeA;
+        });
+
+        setViewOrders(sorted);
+        setProcessing(false);
+    }, [permittedOrders, getDateBounds, advancedFilters.startDate, advancedFilters.endDate]);
+
+    // Ensure filtering runs whenever relevant data changes
+    useEffect(() => { 
+        processDataForRange(dateRange); 
+    }, [dateRange, permittedOrders, processDataForRange]);
 
     const filteredOrders = useMemo(() => {
         return viewOrders.filter(o => {
@@ -214,9 +245,9 @@ const UserOrdersView: React.FC<UserOrdersViewProps> = ({ onAdd, onStatsUpdate, s
 
     if (editingOrder) return <div className="animate-reveal"><EditOrderPage order={editingOrder} onSaveSuccess={handleSaveEdit} onCancel={() => setEditingOrder(null)} /></div>;
 
-    if (showReport) return <div className="animate-fade-in min-h-screen bg-[var(--cm-bg)]"><UserSalesPageReport orders={permittedOrders} onBack={() => setShowReport(false)} team={team || ''} initialFilters={reportFilters as any} onFilterChange={setReportFilters as any} /></div>;
+    if (showReport) return <div className="animate-fade-in h-full overflow-auto bg-[var(--cm-bg)]"><UserSalesPageReport orders={permittedOrders} onBack={() => setShowReport(false)} team={team || ''} initialFilters={reportFilters as any} onFilterChange={setReportFilters as any} /></div>;
 
-    if (showShippingReport) return <div className="animate-fade-in min-h-screen bg-[var(--cm-bg)]"><ShippingReport orders={permittedOrders} appData={appData} dateFilter={dateRange} onBack={() => setShowShippingReport(false)} /></div>;
+    if (showShippingReport) return <div className="animate-fade-in h-full overflow-auto bg-[var(--cm-bg)]"><ShippingReport orders={permittedOrders} appData={appData} dateFilter={dateRange} onBack={() => setShowShippingReport(false)} /></div>;
 
     return (
         <div className="flex flex-col h-full">

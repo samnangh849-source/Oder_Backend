@@ -2,7 +2,9 @@ import React, { useContext, useEffect, useState, useMemo } from 'react';
 import { AppContext } from '../context/AppContext';
 import { translations } from '../translations';
 import UserOrdersView from '../components/user/UserOrdersView';
+import TopPerformanceUserJourney from '../components/user/TopPerformanceUserJourney';
 import { useSoundEffects } from '../hooks/useSoundEffects';
+import { useOrder } from '../context/OrderContext';
 import { 
     Activity, Server, LogOut, ChevronLeft, BarChart3, 
     Layers, Search, ChevronRight, Plus, DollarSign, ListChecks, AlertCircle
@@ -21,6 +23,8 @@ const DesktopUserJourney: React.FC<DesktopUserJourneyProps> = ({ onBackToRoleSel
         setSelectedTeam,
         hasPermission,
     } = useContext(AppContext);
+    
+    const { orders } = useOrder();
 
     const [localLanguage, setLocalLanguage] = useState<'km' | 'en'>(language);
     const t = translations[localLanguage];
@@ -28,6 +32,7 @@ const DesktopUserJourney: React.FC<DesktopUserJourneyProps> = ({ onBackToRoleSel
     const [isSidebarOpen, setIsSidebarOpen] = useState(true);
     const [searchQuery, setSearchQuery] = useState('');
     const [teamStats, setTeamStats] = useState({ revenue: 0, cost: 0, paid: 0, unpaid: 0, count: 0 });
+    const [dateFilter, setDateFilter] = useState<'today' | 'month' | 'year' | 'custom'>('today');
 
     useEffect(() => {
         // Reset stats when team is deselected
@@ -72,12 +77,25 @@ const DesktopUserJourney: React.FC<DesktopUserJourneyProps> = ({ onBackToRoleSel
         return userTeams.filter((team: string) => team.toLowerCase().includes(q));
     }, [searchQuery, userTeams]);
 
-    const globalKpiStats = { // Placeholder stats
-        total_orders: 1245,
-        total_revenue: 89050.25,
-        top_team_name: 'Alpha Team',
-        active_teams: userTeams.length,
-    };
+    const globalKpiStats = useMemo(() => {
+        const now = new Date();
+        const filtered = orders.filter(o => {
+            const date = new Date(o.Timestamp);
+            if (dateFilter === 'today') return date.toDateString() === now.toDateString();
+            if (dateFilter === 'month') return date.getMonth() === now.getMonth() && date.getFullYear() === now.getFullYear();
+            if (dateFilter === 'year') return date.getFullYear() === now.getFullYear();
+            return true; // Custom or All for now
+        });
+
+        const revenue = filtered.reduce((sum, o) => sum + (Number(o['Grand Total']) || 0), 0);
+        const uniqueTeams = new Set(filtered.map(o => o.Team).filter(Boolean));
+
+        return {
+            total_orders: filtered.length,
+            total_revenue: revenue,
+            active_teams: uniqueTeams.size,
+        };
+    }, [orders, dateFilter]);
     
     const formatNumber = (n: number) => {
         if (n >= 1e6) return (n / 1e6).toFixed(1) + 'M';
@@ -85,66 +103,83 @@ const DesktopUserJourney: React.FC<DesktopUserJourneyProps> = ({ onBackToRoleSel
         return n.toLocaleString();
     }
     
-    const kpiBar = selectedTeam ? (
+    const kpiBar = (
         <div className="cm-kpi-bar">
-            <div className="cm-kpi-cell">
-                <div className="cm-kpi-icon orders"><Activity size={14}/></div>
-                <div className="cm-kpi-info">
-                    <div className="cm-kpi-label">{language === 'km' ? 'ការបញ្ជាទិញដែលបានចម្រោះ' : 'Filtered Orders'}</div>
-                    <div className="cm-kpi-value">{teamStats.count}</div>
-                </div>
-            </div>
-            <div className="cm-kpi-cell">
-                <div className="cm-kpi-icon revenue"><DollarSign size={14}/></div>
-                <div className="cm-kpi-info">
-                    <div className="cm-kpi-label">{language === 'km' ? 'ចំណូលដែលបានចម្រោះ' : 'Filtered Revenue'}</div>
-                    <div className="cm-kpi-value">${formatNumber(teamStats.revenue)}</div>
-                </div>
-            </div>
-            <div className="cm-kpi-cell">
-                <div className="cm-kpi-icon top"><ListChecks size={14}/></div>
-                <div className="cm-kpi-info">
-                    <div className="cm-kpi-label">{language === 'km' ? 'បានបង់ប្រាក់' : 'Paid'}</div>
-                    <div className="cm-kpi-value text-[var(--cm-green)]">{teamStats.paid}</div>
-                </div>
-            </div>
-            <div className="cm-kpi-cell">
-                <div className="cm-kpi-icon coverage"><AlertCircle size={14}/></div>
-                <div className="cm-kpi-info">
-                    <div className="cm-kpi-label">{language === 'km' ? 'មិនទាន់បង់ប្រាក់' : 'Unpaid'}</div>
-                    <div className="cm-kpi-value text-[var(--cm-red)]">{teamStats.unpaid}</div>
-                </div>
-            </div>
-        </div>
-    ) : (
-        <div className="cm-kpi-bar">
-            <div className="cm-kpi-cell">
-                <div className="cm-kpi-icon orders"><Activity size={14}/></div>
-                <div className="cm-kpi-info">
-                    <div className="cm-kpi-label">{language === 'km' ? 'ការបញ្ជាទិញសរុប' : 'Total Orders'}</div>
-                    <div className="cm-kpi-value">{globalKpiStats.total_orders}</div>
-                </div>
-            </div>
-            <div className="cm-kpi-cell">
-                <div className="cm-kpi-icon revenue"><BarChart3 size={14}/></div>
-                <div className="cm-kpi-info">
-                    <div className="cm-kpi-label">{language === 'km' ? 'ចំណូលសរុប' : 'Total Revenue'}</div>
-                    <div className="cm-kpi-value">${formatNumber(globalKpiStats.total_revenue)}</div>
-                </div>
-            </div>
-            <div className="cm-kpi-cell">
-                <div className="cm-kpi-icon top"><Layers size={14}/></div>
-                <div className="cm-kpi-info">
-                    <div className="cm-kpi-label">{language === 'km' ? 'ក្រុមឆ្នើម' : 'Top Team'}</div>
-                    <div className="cm-kpi-value">{globalKpiStats.top_team_name}</div>
-                </div>
-            </div>
-            <div className="cm-kpi-cell">
-                <div className="cm-kpi-icon coverage"><Server size={14}/></div>
-                <div className="cm-kpi-info">
-                    <div className="cm-kpi-label">{language === 'km' ? 'ក្រុមសកម្ម' : 'Active Teams'}</div>
-                    <div className="cm-kpi-value">{globalKpiStats.active_teams}</div>
-                </div>
+            {selectedTeam ? (
+                <>
+                    <div className="cm-kpi-cell">
+                        <div className="cm-kpi-icon orders"><Activity size={14}/></div>
+                        <div className="cm-kpi-info">
+                            <div className="cm-kpi-label">{language === 'km' ? 'ការបញ្ជាទិញដែលបានចម្រោះ' : 'Filtered Orders'}</div>
+                            <div className="cm-kpi-value">{teamStats.count}</div>
+                        </div>
+                    </div>
+                    <div className="cm-kpi-cell">
+                        <div className="cm-kpi-icon revenue"><DollarSign size={14}/></div>
+                        <div className="cm-kpi-info">
+                            <div className="cm-kpi-label">{language === 'km' ? 'ចំណូលដែលបានចម្រោះ' : 'Filtered Revenue'}</div>
+                            <div className="cm-kpi-value">${formatNumber(teamStats.revenue)}</div>
+                        </div>
+                    </div>
+                    <div className="cm-kpi-cell">
+                        <div className="cm-kpi-icon top"><ListChecks size={14}/></div>
+                        <div className="cm-kpi-info">
+                            <div className="cm-kpi-label">{language === 'km' ? 'បានបង់ប្រាក់' : 'Paid'}</div>
+                            <div className="cm-kpi-value text-[var(--cm-green)]">{teamStats.paid}</div>
+                        </div>
+                    </div>
+                    <div className="cm-kpi-cell">
+                        <div className="cm-kpi-icon coverage"><AlertCircle size={14}/></div>
+                        <div className="cm-kpi-info">
+                            <div className="cm-kpi-label">{language === 'km' ? 'មិនទាន់បង់ប្រាក់' : 'Unpaid'}</div>
+                            <div className="cm-kpi-value text-[var(--cm-red)]">{teamStats.unpaid}</div>
+                        </div>
+                    </div>
+                </>
+            ) : (
+                <>
+                    <div className="cm-kpi-cell">
+                        <div className="cm-kpi-icon orders"><Activity size={14}/></div>
+                        <div className="cm-kpi-info">
+                            <div className="cm-kpi-label">{language === 'km' ? 'ការបញ្ជាទិញសរុប' : 'Total Orders'}</div>
+                            <div className="cm-kpi-value">{globalKpiStats.total_orders}</div>
+                        </div>
+                    </div>
+                    <div className="cm-kpi-cell">
+                        <div className="cm-kpi-icon revenue"><BarChart3 size={14}/></div>
+                        <div className="cm-kpi-info">
+                            <div className="cm-kpi-label">{language === 'km' ? 'ចំណូលសរុប' : 'Total Revenue'}</div>
+                            <div className="cm-kpi-value">${formatNumber(globalKpiStats.total_revenue)}</div>
+                        </div>
+                    </div>
+                    <div className="cm-kpi-cell">
+                        <div className="cm-kpi-icon coverage"><Server size={14}/></div>
+                        <div className="cm-kpi-info">
+                            <div className="cm-kpi-label">{language === 'km' ? 'ក្រុមសកម្ម' : 'Active Teams'}</div>
+                            <div className="cm-kpi-value">{globalKpiStats.active_teams}</div>
+                        </div>
+                    </div>
+                </>
+            )}
+
+            {/* Date Selection Options - Always Visible */}
+            <div className="ml-auto flex items-center px-4 gap-1 border-l border-[var(--cm-border)]">
+                {(['today', 'month', 'year', 'custom'] as const).map((f) => (
+                    <button
+                        key={f}
+                        onClick={() => setDateFilter(f)}
+                        className={`px-3 py-1 text-[10px] font-bold uppercase tracking-wider transition-all rounded ${
+                            dateFilter === f 
+                            ? 'bg-[var(--cm-accent)] text-[var(--cm-accent-text)]' 
+                            : 'text-[var(--cm-text-muted)] hover:text-[var(--cm-text-primary)] hover:bg-[var(--cm-border)]'
+                        }`}
+                    >
+                        {f === 'today' ? (language === 'km' ? 'ថ្ងៃនេះ' : 'Today') : 
+                            f === 'month' ? (language === 'km' ? 'ខែនេះ' : 'Month') : 
+                            f === 'year' ? (language === 'km' ? 'ឆ្នាំនេះ' : 'Year') : 
+                            (language === 'km' ? 'កំណត់' : 'Custom')}
+                    </button>
+                ))}
             </div>
         </div>
     );
@@ -246,11 +281,25 @@ const DesktopUserJourney: React.FC<DesktopUserJourneyProps> = ({ onBackToRoleSel
                 </aside>
                 <main className="cm-map-area">
                     {selectedTeam ? (
-                        <UserOrdersView onAdd={handleCreateOrder} onStatsUpdate={setTeamStats} />
+                        <UserOrdersView 
+                            onAdd={handleCreateOrder} 
+                            onStatsUpdate={setTeamStats} 
+                            dateFilter={dateFilter === 'month' ? 'this_month' : dateFilter === 'year' ? 'this_year' : dateFilter as any}
+                        />
                     ) : (
-                        <div className="welcome-area">
-                            <h2 style={{color: 'var(--cm-text-secondary)', borderBottom: '1px solid var(--cm-border)', paddingBottom: '10px'}}>Welcome to the Operations Dashboard</h2>
-                            <p style={{color: 'var(--cm-text-muted)', marginTop: '10px'}}>Select a team from the sidebar to view active orders and details.</p>
+                        <div className="welcome-area h-full overflow-y-auto custom-scrollbar">
+                            <div className="max-w-5xl mx-auto flex flex-col gap-8 pb-10">
+                                <div>
+                                    <h2 className="text-xl font-bold mb-2 uppercase tracking-tight italic" style={{color: 'var(--cm-text-primary)'}}>
+                                        {language === 'km' ? 'សូមស្វាគមន៍មកកាន់ ផ្ទាំងគ្រប់គ្រងប្រតិបត្តិការ' : 'Welcome to Operations Dashboard'}
+                                    </h2>
+                                    <p style={{color: 'var(--cm-text-muted)', fontSize: '13px'}}>
+                                        {language === 'km' ? 'សូមជ្រើសរើសក្រុមពី Sidebar ដើម្បីមើលការកម្មង់ និងព័ត៌មានលម្អិត។' : 'Select a team from the sidebar to view active orders and details.'}
+                                    </p>
+                                </div>
+
+                                <TopPerformanceUserJourney orders={orders} language={localLanguage} period={dateFilter} />
+                            </div>
                         </div>
                     )}
                 </main>

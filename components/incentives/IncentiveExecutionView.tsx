@@ -5,7 +5,11 @@ import { translations } from '../../translations';
 import UserAvatar from '../common/UserAvatar';
 import { getProjectById, calculateIncentive, getIncentiveManualData, saveIncentiveManualData, getIncentiveCustomPayouts, saveIncentiveCustomPayout, lockIncentivePayout } from '../../services/incentiveService';
 import IncentivePdfExportModal from './IncentivePdfExportModal';
-import { ChevronLeft, FileText, Download, Lock, Unlock, Search, CheckCircle, RefreshCw, AlertCircle, Info } from 'lucide-react';
+import {
+    ChevronLeft, FileText, Lock, Unlock, Search, CheckCircle, RefreshCw,
+    AlertCircle, Activity, Coins, TrendingUp, ShieldCheck, MousePointer2,
+    Trophy, Terminal, Calendar, Target
+} from 'lucide-react';
 
 interface IncentiveExecutionViewProps {
     projectId: string;
@@ -27,26 +31,27 @@ const IncentiveExecutionView: React.FC<IncentiveExecutionViewProps> = ({ project
 
     // State
     const [project, setProject] = useState<IncentiveProject | null>(null);
-    const [selectedMonth, setSelectedMonth] = useState(new Date().toISOString().slice(0, 7)); 
-    const [manualDataMap, setManualDataMap] = useState<Record<string, Record<string, number>>>({}); 
-    const [customPayouts, setCustomPayouts] = useState<Record<string, number>>({}); 
+    const [selectedMonth, setSelectedMonth] = useState(new Date().toISOString().slice(0, 7));
+    const [manualDataMap, setManualDataMap] = useState<Record<string, Record<string, number>>>({});
+    const [customPayouts, setCustomPayouts] = useState<Record<string, number>>({});
     const [calculationResults, setCalculationResults] = useState<IncentiveResult[]>([]);
-    
+
     const [showInputPanel, setShowInputPanel] = useState(false);
     const [entryMode, setEntryMode] = useState<'team' | 'user'>('team');
     const [isAdjustMode, setIsAdjustMode] = useState(false);
     const [activeMetricTab, setActiveMetricTab] = useState<string>('');
     const [isLocked, setIsLocked] = useState(false);
     const [editorSearch, setEditorSearch] = useState('');
-    const [editorPeriodMode, setEditorPeriodMode] = useState<'Monthly' | 'Weekly'>('Monthly');
     const [saveStatus, setSaveStatus] = useState<'idle' | 'saving' | 'saved' | 'error'>('idle');
     const [isPdfModalOpen, setIsPdfModalOpen] = useState(false);
     const [isCalculating, setIsCalculating] = useState(false);
 
-    // Debounce Timer Ref
+    // Separate timers: saveTimer debounces API writes, recalcTimer debounces recalculation
     const debounceTimer = useRef<NodeJS.Timeout | null>(null);
+    const recalcTimer = useRef<NodeJS.Timeout | null>(null);
+    // pendingManual tracks the latest committed value per cell (avoids stale closure reads)
+    const pendingManual = useRef<Record<string, Record<string, number>>>({});
 
-    // Initial Loading
     useEffect(() => {
         const fetchProject = async () => {
             const p = await getProjectById(Number(projectId));
@@ -63,122 +68,118 @@ const IncentiveExecutionView: React.FC<IncentiveExecutionViewProps> = ({ project
         fetchProject();
     }, [projectId]);
 
-    const loadDataAndCalculate = useCallback(async (isSilient = false) => {
+    const loadDataAndCalculate = useCallback(async (isSilent = false) => {
         if (!project?.id) return;
-        if (!isSilient) setIsCalculating(true);
-        
+        if (!isSilent) setIsCalculating(true);
         try {
             const [manualData, customData, results] = await Promise.all([
                 getIncentiveManualData(project.id, selectedMonth),
                 getIncentiveCustomPayouts(project.id, selectedMonth),
                 calculateIncentive(project.id, selectedMonth)
             ]);
-
             const mdMap: Record<string, Record<string, number>> = {};
             manualData.forEach((item: IncentiveManualData) => {
                 if (!mdMap[item.metricType]) mdMap[item.metricType] = {};
                 mdMap[item.metricType][item.dataKey] = item.value;
             });
             setManualDataMap(mdMap);
-
             const cpMap: Record<string, number> = {};
-            customData.forEach((item: any) => {
-                cpMap[item.userName] = item.value;
-            });
+            customData.forEach((item: any) => { cpMap[item.userName] = item.value; });
             setCustomPayouts(cpMap);
-
             setCalculationResults(results);
         } catch (error) {
-            console.error("Error loading incentive data", error);
+            console.error('Error loading incentive data', error);
             setSaveStatus('error');
         } finally {
             setIsCalculating(false);
         }
     }, [project?.id, selectedMonth]);
 
-    useEffect(() => {
-        loadDataAndCalculate();
-    }, [loadDataAndCalculate]);
+    useEffect(() => { loadDataAndCalculate(); }, [loadDataAndCalculate]);
 
     const toggleLock = async () => {
         if (!project?.id) return;
-        if (isLocked) {
-            setIsLocked(false);
-            return;
-        }
-        
-        if (!window.confirm(t.confirm_lock_payout || "តើអ្នកចង់ចាក់សោររបាយការណ៍ខែនេះមែនទេ?")) return;
-        
+        if (isLocked) { setIsLocked(false); return; }
+        if (!window.confirm(t.confirm_lock_payout || 'តើអ្នកចង់ចាក់សោររបាយការណ៍ខែនេះមែនទេ?')) return;
         setSaveStatus('saving');
         const success = await lockIncentivePayout(project.id, selectedMonth, calculationResults);
-        if (success) {
-            setIsLocked(true);
-            setSaveStatus('saved');
-            setTimeout(() => setSaveStatus('idle'), 2000);
-        } else {
-            alert("Failed to lock and save results.");
-            setSaveStatus('idle');
-        }
+        if (success) { setIsLocked(true); setSaveStatus('saved'); setTimeout(() => setSaveStatus('idle'), 2000); }
+        else { alert('Failed to lock and save results.'); setSaveStatus('idle'); }
     };
 
     const handleManualDataChange = (metric: string, tid: string, val: string, pk: string) => {
         if (isLocked || !project?.id) return;
-        
         const valNum = Number(val) || 0;
-        
-        // Optimistic Update
-        setManualDataMap(prev => ({
-            ...prev,
-            [metric]: { ...(prev[metric] || {}), [`${pk}_${tid}`]: valNum }
-        }));
+        const cellKey = `${pk}_${tid}`;
 
+        // 1. Sync pending ref immediately (for rapid increment reads)
+        if (!pendingManual.current[metric]) pendingManual.current[metric] = {};
+        pendingManual.current[metric][cellKey] = valNum;
+
+        // 2. Optimistic UI update
+        setManualDataMap(prev => ({ ...prev, [metric]: { ...(prev[metric] || {}), [cellKey]: valNum } }));
         setSaveStatus('saving');
 
-        // Debounce API Call
+        // 3. Debounce the SAVE (800ms) — saves the latest pending value
         if (debounceTimer.current) clearTimeout(debounceTimer.current);
         debounceTimer.current = setTimeout(async () => {
+            const latestVal = pendingManual.current[metric]?.[cellKey] ?? valNum;
             const success = await saveIncentiveManualData({
                 projectId: project.id,
                 month: selectedMonth,
                 metricType: metric,
-                dataKey: `${pk}_${tid}`,
-                value: valNum
+                dataKey: cellKey,
+                value: latestVal
             });
-            
             if (success) {
                 setSaveStatus('saved');
-                loadDataAndCalculate(true); // Re-calculate silently
-                setTimeout(() => setSaveStatus('idle'), 2000);
+                setTimeout(() => setSaveStatus('idle'), 1500);
+                // 4. Debounce the RECALCULATE separately (3s after last save)
+                //    This prevents UI flicker from rapid +/- clicks
+                if (recalcTimer.current) clearTimeout(recalcTimer.current);
+                recalcTimer.current = setTimeout(() => loadDataAndCalculate(true), 3000);
             } else {
                 setSaveStatus('error');
             }
-        }, 1000);
+        }, 800);
     };
+
+    const handleManualDataIncrement = (metric: string, tid: string, p: string, delta: number) => {
+        if (isLocked || !project?.id) return;
+        // Read from pendingManual ref (always up-to-date even under rapid clicks)
+        const currentVal = pendingManual.current[metric]?.[`${p}_${tid}`]
+            ?? (manualDataMap[metric] || {})[`${p}_${tid}`]
+            ?? 0;
+        handleManualDataChange(metric, tid, String(Math.max(0, currentVal + delta)), p);
+    };
+
+    // Track pending payout per user (same pattern as pendingManual)
+    const pendingPayout = useRef<Record<string, number>>({});
 
     const handleCustomPayoutChange = (un: string, val: string) => {
         if (isLocked || !project?.id) return;
-        
         const valNum = Number(val) || 0;
+        pendingPayout.current[un] = valNum;
         setCustomPayouts(prev => ({ ...prev, [un]: valNum }));
         setSaveStatus('saving');
-
         if (debounceTimer.current) clearTimeout(debounceTimer.current);
         debounceTimer.current = setTimeout(async () => {
+            const latest = pendingPayout.current[un] ?? valNum;
             const success = await saveIncentiveCustomPayout({
                 projectId: project.id,
                 month: selectedMonth,
                 userName: un,
-                value: valNum
+                value: latest
             });
-
             if (success) {
                 setSaveStatus('saved');
-                loadDataAndCalculate(true);
-                setTimeout(() => setSaveStatus('idle'), 2000);
+                setTimeout(() => setSaveStatus('idle'), 1500);
+                if (recalcTimer.current) clearTimeout(recalcTimer.current);
+                recalcTimer.current = setTimeout(() => loadDataAndCalculate(true), 3000);
             } else {
                 setSaveStatus('error');
             }
-        }, 1000);
+        }, 800);
     };
 
     const preparedResults = useMemo(() => {
@@ -186,211 +187,276 @@ const IncentiveExecutionView: React.FC<IncentiveExecutionViewProps> = ({ project
             const u = appData.users?.find(x => x.UserName === cr.userName);
             let breakdown: any[] = [];
             if (cr.breakdownJson) {
-                try {
-                    breakdown = JSON.parse(cr.breakdownJson);
-                } catch (e) {
-                    console.error("Failed to parse breakdownJson", e);
-                }
+                try { breakdown = JSON.parse(cr.breakdownJson); }
+                catch (e) { console.error('Failed to parse breakdownJson', e); }
             }
-            const metricType = breakdown.find((b: any) => b?.metricType)?.metricType || '';
+            const metricType = breakdown[0]?.metricType || (cr.totalRevenue > 0 ? 'Sales Amount' : 'Number of Orders');
             const isAmountMetric = ['sales amount', 'revenue', 'profit'].includes(String(metricType).toLowerCase());
-            
+            const performance = isAmountMetric ? (cr.totalRevenue || 0) : (cr.totalOrders || 0);
             return {
                 username: cr.userName,
                 fullName: u?.FullName || cr.userName,
                 avatar: u?.ProfilePictureURL,
                 role: u?.Role,
                 team: u?.Team,
-                performance: cr.totalRevenue || cr.totalOrders,
-                performanceMetric: metricType || (cr.totalRevenue ? 'Revenue' : 'Orders'),
+                performance,
+                performanceMetric: metricType,
                 isAmountMetric,
                 reward: cr.calculatedValue,
+                baseReward: cr.calculatedValue,
                 isCustom: cr.isCustom || false,
-                breakdown: breakdown
+                breakdown
             };
         }).sort((a, b) => b.reward - a.reward || b.performance - a.performance);
     }, [calculationResults, appData.users]);
 
     const totalPayout = useMemo(() => preparedResults.reduce((sum, u) => sum + u.reward, 0), [preparedResults]);
     const topStaff = preparedResults.length > 0 ? preparedResults[0] : null;
+    const maxPerformance = useMemo(() => Math.max(...preparedResults.map(r => r.performance), 1), [preparedResults]);
 
-    if (!project) return <div className="ui-binance flex items-center justify-center min-h-screen bg-bg-black"><div className="text-secondary font-bold uppercase tracking-[0.2em] animate-pulse">Initializing Protocol...</div></div>;
+    // ---------- Loading State ----------
+    if (!project) return (
+        <div className="min-h-screen bg-[#050505] flex items-center justify-center">
+            <div className="w-8 h-8 border-2 border-[#F0B90B]/20 border-t-[#F0B90B] rounded-full animate-spin" />
+        </div>
+    );
 
+    // ---------- MAIN RENDER (Binance Style) ----------
     return (
-        <div className="ui-binance w-full min-h-screen bg-bg-black text-[#EAECEF] font-sans selection:bg-primary/30">
-            <div className="max-w-7xl mx-auto p-4 sm:p-6 lg:p-8">
-                {/* Global Header */}
-                <div className="flex flex-col gap-6 mb-10">
-                    <div className="flex items-center justify-between">
-                         <div className="flex items-center gap-3 text-secondary text-[10px] font-bold uppercase tracking-widest">
-                            <button onClick={onBack} className="hover:text-primary transition-colors flex items-center gap-1.5 bg-card-bg px-3 py-1.5 rounded-md border border-[#2B3139]">
-                                <ChevronLeft className="w-3.5 h-3.5" /> {t.back}
-                            </button>
-                            <span className="opacity-30">/</span>
-                            <span className="text-secondary">{t.execution_workstation}</span>
-                        </div>
-                        <div className="flex items-center gap-2">
-                             {saveStatus === 'saving' && <span className="text-[10px] font-bold text-amber-500 uppercase animate-pulse flex items-center gap-1.5"><RefreshCw className="w-3 h-3 animate-spin" /> Saving...</span>}
-                             {saveStatus === 'saved' && <span className="text-[10px] font-bold text-primary uppercase flex items-center gap-1.5"><CheckCircle className="w-3 h-3" /> All changes synced</span>}
-                             {saveStatus === 'error' && <span className="text-[10px] font-bold text-red-500 uppercase flex items-center gap-1.5"><AlertCircle className="w-3 h-3" /> Sync failed</span>}
-                        </div>
-                    </div>
+        <div className="w-full h-screen bg-[#050505] text-[#EAECEF] font-sans selection:bg-[#F0B90B]/30 flex flex-col overflow-hidden">
 
-                    <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 bg-card-bg p-6 rounded-md border border-[#2B3139] shadow-xl">
-                        <div className="flex items-center gap-5">
-                            <div className="w-14 h-14 rounded-md flex items-center justify-center text-primary bg-bg-black border border-[#2B3139] shadow-inner">
-                                <FileText className="w-7 h-7" />
-                            </div>
-                            <div>
-                                <h1 className="text-2xl font-bold text-[#EAECEF] tracking-tight uppercase leading-none mb-2">{project.projectName}</h1>
-                                <div className="flex items-center gap-4">
-                                    <div className="flex items-center bg-bg-black px-3 py-1.5 rounded border border-[#2B3139]">
-                                        <input 
-                                            type="month" 
-                                            value={selectedMonth} 
-                                            onChange={e => setSelectedMonth(e.target.value)} 
-                                            className="bg-transparent border-none p-0 text-primary text-[11px] font-bold uppercase focus:ring-0 cursor-pointer" 
-                                        />
-                                    </div>
-                                    <div className="h-4 w-px bg-[#2B3139]"></div>
-                                    <span className="text-[10px] font-bold text-secondary uppercase tracking-widest flex items-center gap-2">
-                                        Total Payout: <span className="text-primary text-sm font-mono">${totalPayout.toLocaleString(undefined, { minimumFractionDigits: 2 })}</span>
-                                    </span>
-                                </div>
-                            </div>
-                        </div>
-
-                        <div className="flex items-center gap-2 w-full md:w-auto mt-4 md:mt-0">
-                            <button onClick={() => setIsPdfModalOpen(true)} className="flex-1 md:flex-none px-4 py-2.5 rounded-md text-[11px] font-bold uppercase tracking-wider bg-bg-black border border-[#2B3139] text-secondary hover:text-[#EAECEF] hover:border-primary flex items-center justify-center gap-2 transition-all">
-                                <FileText className="w-4 h-4" /> PDF Report
-                            </button>
-                            <button onClick={toggleLock} className={`flex-1 md:flex-none px-4 py-2.5 rounded-md text-[11px] font-bold uppercase tracking-wider border flex items-center justify-center gap-2 transition-all ${isLocked ? 'bg-red-500/10 border-red-500/20 text-red-500' : 'bg-bg-black border-[#2B3139] text-secondary hover:text-[#EAECEF] hover:border-amber-500'}`}>
-                                {isLocked ? <><Lock className="w-4 h-4" /> {t.locked}</> : <><Unlock className="w-4 h-4" /> {t.lock_payout}</>}
-                            </button>
-                            {project.dataSource === 'manual' && (
-                                <button onClick={() => setShowInputPanel(!showInputPanel)} className={`flex-1 md:flex-none px-4 py-2.5 rounded-md text-[11px] font-bold uppercase tracking-wider transition-all border ${showInputPanel ? 'bg-primary text-bg-black border-primary shadow-lg shadow-primary/20' : 'bg-primary/5 border-primary/20 text-primary hover:bg-primary hover:text-bg-black'}`}>
-                                    {showInputPanel ? "Hide Editor" : "Open Perf Editor"}
-                                </button>
-                            )}
-                            <button onClick={() => loadDataAndCalculate()} disabled={isCalculating} className={`p-2.5 rounded-md bg-bg-black border border-[#2B3139] text-secondary hover:text-primary transition-all ${isCalculating ? 'animate-spin' : ''}`}>
-                                <RefreshCw className="w-4 h-4" />
-                            </button>
-                        </div>
-                    </div>
-
-                    {/* Stats Overview */}
-                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-                        <div className="bg-card-bg border border-[#2B3139] p-5 rounded-md group hover:border-primary transition-all">
-                            <p className="text-[10px] font-bold text-secondary uppercase tracking-widest mb-1 flex items-center gap-2">Total Pool <Info className="w-3 h-3 opacity-30" /></p>
-                            <div className="flex items-baseline gap-2">
-                                <span className="text-2xl font-bold text-primary font-mono">${totalPayout.toLocaleString(undefined, { minimumFractionDigits: 2 })}</span>
-                                <span className="text-[9px] font-bold text-secondary uppercase">USD</span>
-                            </div>
-                        </div>
-
-                        <div className="bg-card-bg border border-[#2B3139] p-5 rounded-md group hover:border-primary transition-all">
-                            <p className="text-[10px] font-bold text-secondary uppercase tracking-widest mb-2">Alpha Performer</p>
-                            {topStaff ? (
-                                <div className="flex items-center gap-3">
-                                    <UserAvatar avatarUrl={topStaff.avatar} name={topStaff.fullName} size="xs" />
-                                    <div>
-                                        <p className="text-[11px] font-bold text-[#EAECEF] uppercase truncate max-w-[120px]">{topStaff.fullName}</p>
-                                        <p className="text-[10px] font-bold text-primary uppercase font-mono">${topStaff.reward.toFixed(2)}</p>
-                                    </div>
-                                </div>
-                            ) : <div className="h-8 flex items-center text-[10px] text-secondary uppercase italic">Syncing...</div>}
-                        </div>
-
-                        <div className="bg-card-bg border border-[#2B3139] p-5 rounded-md">
-                            <p className="text-[10px] font-bold text-secondary uppercase tracking-widest mb-1">Yield Average</p>
-                            <div className="flex items-baseline gap-2">
-                                <span className="text-2xl font-bold text-[#EAECEF] font-mono">${(totalPayout / (preparedResults.length || 1)).toLocaleString(undefined, { maximumFractionDigits: 0 })}</span>
-                                <span className="text-[9px] font-bold text-secondary uppercase">Avg/Staff</span>
-                            </div>
-                        </div>
-
-                        <div className="bg-card-bg border border-[#2B3139] p-5 rounded-md">
-                            <p className="text-[10px] font-bold text-secondary uppercase tracking-widest mb-1">Qualified Entries</p>
-                            <div className="flex items-baseline gap-2">
-                                <span className="text-2xl font-bold text-[#EAECEF] font-mono">{preparedResults.length}</span>
-                                <span className="text-[9px] font-bold text-secondary uppercase">Units</span>
-                            </div>
-                        </div>
-                    </div>
+            {/* ── Top Header Bar ── */}
+            <header className="h-14 bg-[#121212] border-b border-[#1A1A1A] px-4 flex items-center justify-between shrink-0">
+                <div className="flex items-center gap-3">
+                    <button onClick={onBack} className="p-1.5 hover:bg-[#2B3139] rounded transition-all text-[#B7BDC6] hover:text-[#F0B90B]">
+                        <ChevronLeft className="w-5 h-5" />
+                    </button>
+                    <div className="h-6 w-px bg-[#1A1A1A]" />
+                    <Terminal className="w-4 h-4 text-[#F0B90B]" />
+                    <h1 className="text-sm font-bold tracking-wider uppercase">{project.projectName}</h1>
+                    <span className="px-2 py-0.5 bg-[#1A1A1A] text-[#707A8A] text-[9px] font-mono rounded border border-[#2B3139]">
+                        STN_{String(project.id).padStart(3, '0')}
+                    </span>
+                    {/* Save status */}
+                    {saveStatus === 'saving' && (
+                        <span className="flex items-center gap-1.5 text-[9px] font-bold text-[#F0B90B] uppercase tracking-widest animate-pulse">
+                            <RefreshCw className="w-3 h-3 animate-spin" /> Auto-Saving...
+                        </span>
+                    )}
+                    {saveStatus === 'saved' && (
+                        <span className="flex items-center gap-1.5 text-[9px] font-bold text-[#0ECB81] uppercase tracking-widest">
+                            <CheckCircle className="w-3 h-3" /> Saved · Recalculating in 3s
+                        </span>
+                    )}
+                    {saveStatus === 'error' && (
+                        <span className="flex items-center gap-1.5 text-[9px] font-bold text-[#F6465D] uppercase tracking-widest">
+                            <AlertCircle className="w-3 h-3" /> Save Failed
+                        </span>
+                    )}
                 </div>
 
-                {/* Performance Editor Panel */}
-                {showInputPanel && project.dataSource === 'manual' && (
-                    <div className="mb-10 border border-primary/20 rounded-md bg-card-bg overflow-hidden shadow-2xl animate-in fade-in slide-in-from-top-4 duration-300">
-                        <div className="px-6 py-5 bg-[#1E2329] border-b border-[#2B3139] flex flex-wrap justify-between items-end gap-6">
-                            <div className="flex flex-wrap items-center gap-8">
-                                <div className="space-y-2">
-                                    <label className="block text-[10px] font-bold text-secondary uppercase tracking-widest">Active Calculator</label>
-                                    <div className="flex gap-1 bg-bg-black p-1 rounded border border-[#2B3139]">
-                                        {project.calculators?.filter(c => c.status === 'Active').map(calc => (
-                                            <button key={calc.id} onClick={() => setActiveMetricTab(String(calc.id))} className={`px-4 py-1.5 rounded text-[10px] font-bold uppercase transition-all ${activeMetricTab === String(calc.id) ? 'bg-primary text-bg-black shadow-lg shadow-primary/20' : 'text-secondary hover:text-[#EAECEF]'}`}>{calc.name}</button>
-                                        ))}
-                                    </div>
-                                </div>
+                <div className="flex items-center gap-2">
+                    {/* Month Picker */}
+                    <div className="flex items-center gap-2 h-8 px-3 bg-[#1A1A1A] border border-[#2B3139] rounded text-[#F0B90B]">
+                        <Calendar className="w-3.5 h-3.5" />
+                        <input
+                            type="month"
+                            value={selectedMonth}
+                            onChange={e => setSelectedMonth(e.target.value)}
+                            className="bg-transparent border-none p-0 text-[#F0B90B] text-[10px] font-bold tracking-widest focus:ring-0 cursor-pointer outline-none"
+                        />
+                    </div>
 
-                                <div className="space-y-2">
-                                    <label className="block text-[10px] font-bold text-secondary uppercase tracking-widest">Entry Scope</label>
-                                    <div className="flex gap-1 bg-bg-black p-1 rounded border border-[#2B3139]">
-                                        <button onClick={() => setEntryMode('team')} className={`px-4 py-1.5 rounded text-[10px] font-bold uppercase transition-all ${entryMode === 'team' ? 'bg-[#474D57] text-[#EAECEF]' : 'text-secondary hover:text-[#EAECEF]'}`}>Team Data</button>
-                                        <button onClick={() => setEntryMode('user')} className={`px-4 py-1.5 rounded text-[10px] font-bold uppercase transition-all ${entryMode === 'user' ? 'bg-[#474D57] text-[#EAECEF]' : 'text-secondary hover:text-[#EAECEF]'}`}>User Data</button>
-                                    </div>
+                    <div className="h-6 w-px bg-[#1A1A1A]" />
+
+                    {/* Lock status badge */}
+                    <div className={`px-2 py-1 rounded text-[9px] font-bold uppercase flex items-center gap-1.5 border ${
+                        isLocked ? 'bg-[#F6465D]/10 border-[#F6465D]/20 text-[#F6465D]' : 'bg-[#1A1A1A] border-[#2B3139] text-[#707A8A]'
+                    }`}>
+                        <div className={`w-1.5 h-1.5 rounded-full ${isLocked ? 'bg-[#F6465D] animate-pulse' : 'bg-[#707A8A]'}`} />
+                        {isLocked ? 'Locked' : 'Unlocked'}
+                    </div>
+
+                    {/* PDF */}
+                    <button onClick={() => setIsPdfModalOpen(true)} className="h-8 px-3 bg-[#1A1A1A] hover:bg-[#2B3139] text-[#B7BDC6] hover:text-[#EAECEF] rounded text-[10px] font-bold uppercase tracking-wider transition-all border border-[#2B3139] flex items-center gap-1.5">
+                        <FileText className="w-3.5 h-3.5" /> PDF
+                    </button>
+
+                    {/* Lock/Unlock */}
+                    <button onClick={toggleLock} className={`h-8 px-3 rounded text-[10px] font-bold uppercase tracking-wider transition-all border flex items-center gap-1.5 ${
+                        isLocked ? 'bg-[#F6465D]/10 border-[#F6465D]/30 text-[#F6465D] hover:bg-[#F6465D]/20' : 'bg-[#1A1A1A] hover:bg-[#2B3139] text-[#B7BDC6] border-[#2B3139]'
+                    }`}>
+                        {isLocked ? <><Lock className="w-3.5 h-3.5" />{t.locked}</> : <><Unlock className="w-3.5 h-3.5" />{t.lock_payout}</>}
+                    </button>
+
+                    {/* Performance Input */}
+                    {project.dataSource === 'manual' && (
+                        <button onClick={() => setShowInputPanel(!showInputPanel)} className={`h-8 px-3 rounded text-[10px] font-bold uppercase tracking-wider transition-all border flex items-center gap-1.5 ${
+                            showInputPanel ? 'bg-[#F0B90B] text-black border-[#F0B90B]' : 'bg-[#F0B90B]/10 border-[#F0B90B]/30 text-[#F0B90B] hover:bg-[#F0B90B] hover:text-black'
+                        }`}>
+                            {showInputPanel ? 'CLOSE INPUT' : 'PERFORMANCE_INPUT'}
+                        </button>
+                    )}
+
+                    {/* Refresh */}
+                    <button onClick={() => loadDataAndCalculate()} disabled={isCalculating} className="w-8 h-8 bg-[#1A1A1A] hover:bg-[#2B3139] text-[#707A8A] hover:text-[#F0B90B] rounded border border-[#2B3139] flex items-center justify-center transition-all">
+                        <RefreshCw className={`w-3.5 h-3.5 ${isCalculating ? 'animate-spin' : ''}`} />
+                    </button>
+                </div>
+            </header>
+
+            {/* ── Scrollable Body ── */}
+            <main className="flex-1 overflow-auto">
+
+                {/* ── KPI Stats Bar ── */}
+                <div className="grid grid-cols-2 md:grid-cols-4 gap-0 border-b border-[#1A1A1A]">
+                    {[
+                        { label: 'Total Distribution', value: `$${totalPayout.toLocaleString(undefined, { maximumFractionDigits: 2 })}`, color: '#F0B90B', icon: Coins },
+                        { label: 'Alpha Performer', value: topStaff?.fullName || 'N/A', sub: topStaff ? `$${topStaff.reward.toFixed(2)}` : null, color: '#0ECB81', icon: Trophy },
+                        { label: 'Yield Average', value: `$${(totalPayout / (preparedResults.length || 1)).toLocaleString(undefined, { maximumFractionDigits: 0 })}`, color: '#B7BDC6', icon: TrendingUp },
+                        { label: 'Qualified Entities', value: String(preparedResults.length), color: '#F0B90B', icon: ShieldCheck },
+                    ].map((s, i) => (
+                        <div key={i} className={`p-4 bg-[#121212] flex flex-col gap-1 ${i < 3 ? 'border-r border-[#1A1A1A]' : ''}`}>
+                            <div className="flex items-center gap-2">
+                                <s.icon className="w-3.5 h-3.5" style={{ color: s.color }} />
+                                <span className="text-[10px] font-bold text-[#707A8A] uppercase tracking-widest">{s.label}</span>
+                            </div>
+                            <span className="text-lg font-mono font-bold truncate" style={{ color: s.color }}>{s.value}</span>
+                            {s.sub && <span className="text-[10px] font-mono text-[#707A8A]">{s.sub}</span>}
+                        </div>
+                    ))}
+                </div>
+
+                {/* ── Performance Input Panel ── */}
+                {showInputPanel && project.dataSource === 'manual' && (
+                    <div className="border-b border-[#1A1A1A] bg-[#0A0A0A]">
+                        {/* Panel Header */}
+                        <div className="px-4 py-3 bg-[#121212] border-b border-[#1A1A1A] flex flex-wrap items-center gap-4">
+                            <div className="flex items-center gap-2">
+                                <span className="text-[9px] font-bold text-[#707A8A] uppercase tracking-widest">Calculator:</span>
+                                <div className="flex items-center gap-1 bg-[#050505] p-0.5 rounded border border-[#1A1A1A]">
+                                    {project.calculators?.filter(c => c.status === 'Active').map(calc => (
+                                        <button
+                                            key={calc.id}
+                                            onClick={() => setActiveMetricTab(String(calc.id))}
+                                            className={`px-3 py-1 rounded text-[10px] font-bold uppercase tracking-wide transition-all ${
+                                                activeMetricTab === String(calc.id)
+                                                    ? 'bg-[#F0B90B] text-black'
+                                                    : 'text-[#707A8A] hover:text-[#EAECEF]'
+                                            }`}
+                                        >{calc.name}</button>
+                                    ))}
                                 </div>
                             </div>
 
-                            <div className="flex-grow max-w-sm relative">
-                                <input type="text" placeholder="Search entity..." value={editorSearch} onChange={e => setEditorSearch(e.target.value)} className="w-full bg-bg-black border border-[#2B3139] rounded px-4 py-2.5 pl-10 text-[12px] font-bold text-[#EAECEF] focus:border-primary focus:ring-0 outline-none transition-all" />
-                                <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 h-4 w-4 text-secondary" />
+                            <div className="flex items-center gap-2">
+                                <span className="text-[9px] font-bold text-[#707A8A] uppercase tracking-widest">Scope:</span>
+                                <div className="flex items-center gap-1 bg-[#050505] p-0.5 rounded border border-[#1A1A1A]">
+                                    {(['team', 'user'] as const).map(mode => (
+                                        <button key={mode} onClick={() => setEntryMode(mode)} className={`px-3 py-1 rounded text-[10px] font-bold uppercase tracking-wide transition-all ${entryMode === mode ? 'bg-[#2B3139] text-[#EAECEF]' : 'text-[#707A8A] hover:text-[#EAECEF]'}`}>
+                                            {mode === 'team' ? 'Teams' : 'Staff'}
+                                        </button>
+                                    ))}
+                                </div>
+                            </div>
+
+                            <div className="relative ml-auto w-56 group">
+                                <Search className="pointer-events-none absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-[#707A8A] group-focus-within:text-[#F0B90B] transition-colors" />
+                                <input
+                                    type="text"
+                                    placeholder="Search entity..."
+                                    value={editorSearch}
+                                    onChange={e => setEditorSearch(e.target.value)}
+                                    className="w-full h-8 bg-[#050505] border border-[#1A1A1A] rounded pl-8 pr-8 text-[11px] font-bold text-[#EAECEF] placeholder:text-[#707A8A] focus:border-[#F0B90B]/50 outline-none transition-all"
+                                />
+                                {editorSearch && (
+                                    <button
+                                        onClick={() => setEditorSearch('')}
+                                        className="absolute right-2 top-1/2 -translate-y-1/2 w-4 h-4 flex items-center justify-center text-[#707A8A] hover:text-[#EAECEF] transition-colors text-[10px] font-bold"
+                                    >✕</button>
+                                )}
                             </div>
                         </div>
 
-                        <div className="overflow-x-auto bg-bg-black max-h-[600px] overflow-y-auto custom-scrollbar">
+                        {/* Input Table */}
+                        <div className="overflow-x-auto max-h-[400px] overflow-y-auto">
                             {project.calculators?.filter(c => c.status === 'Active' && String(c.id) === activeMetricTab).map(calc => {
                                 const subPeriods = calc.calculationPeriod === 'Weekly' ? ['W1', 'W2', 'W3', 'W4', 'W5'] : ['month'];
-                                const targets = (entryMode === 'team' ? allTeams : appData.users || []).filter(t => {
+                                const eligibleUsers = entryMode === 'user'
+                                    ? (appData.users || []).filter(u => {
+                                        if (!calc.applyTo || calc.applyTo.length === 0) return true;
+                                        return calc.applyTo.some(rule => {
+                                            if (rule.startsWith('Role:')) return u.Role === rule.replace('Role:', '');
+                                            if (rule.startsWith('Team:')) {
+                                                const tgt = rule.replace('Team:', '').trim().toLowerCase();
+                                                return (u.Team || '').split(',').some(t => t.trim().toLowerCase() === tgt);
+                                            }
+                                            if (rule.startsWith('User:')) return u.UserName === rule.replace('User:', '');
+                                            return false;
+                                        });
+                                    }).sort((a, b) => a.FullName.localeCompare(b.FullName))
+                                    : [];
+                                const targets = (entryMode === 'team' ? allTeams : eligibleUsers).filter(t => {
                                     const label = typeof t === 'string' ? t : t.FullName;
                                     return label.toLowerCase().includes(editorSearch.toLowerCase());
                                 });
-                                
                                 return (
-                                    <table key={calc.id} className="w-full text-left border-collapse min-w-[800px]">
+                                    <table key={calc.id} className="w-full text-left border-collapse min-w-[700px]">
                                         <thead className="sticky top-0 z-10">
-                                            <tr className="bg-[#1E2329] border-b border-[#2B3139] text-[10px] text-secondary font-bold uppercase tracking-widest">
-                                                <th className="px-6 py-4 min-w-[200px] border-r border-[#2B3139]">Target Entity</th>
+                                            <tr className="bg-[#121212] border-b border-[#1A1A1A] text-[9px] text-[#707A8A] font-bold uppercase tracking-widest">
+                                                <th className="px-4 py-3 min-w-[180px] border-r border-[#1A1A1A]">Entity</th>
                                                 {subPeriods.map(p => (
-                                                    <th key={p} className="px-4 py-4 text-center border-r border-[#2B3139]">{p === 'month' ? 'Total Accumulation' : p}</th>
+                                                    <th key={p} className="px-2 py-3 text-center border-r border-[#1A1A1A] min-w-[160px]">
+                                                        {p === 'month' ? 'Accumulated KPI' : p}
+                                                    </th>
                                                 ))}
-                                                <th className="px-6 py-4 text-right text-primary bg-primary/5">Calculated KPI</th>
+                                                <th className="px-4 py-3 text-right text-[#F0B90B] bg-[#F0B90B]/5">Total</th>
                                             </tr>
                                         </thead>
-                                        <tbody className="divide-y divide-[#2B3139]">
+                                        <tbody className="divide-y divide-[#1A1A1A]">
                                             {targets.map(t => {
                                                 const id = typeof t === 'string' ? t : t.UserName;
                                                 const label = typeof t === 'string' ? t : t.FullName;
                                                 const rowData = manualDataMap[calc.metricType || ''] || {};
                                                 const rowTotal = subPeriods.reduce((sum, p) => sum + (rowData[`${p}_${id}`] || 0), 0);
-
                                                 return (
-                                                    <tr key={id} className="hover:bg-card-bg-hover transition-colors group">
-                                                        <td className="px-6 py-3 border-r border-[#2B3139] font-bold text-[#EAECEF] text-[12px] uppercase">{label}</td>
-                                                        {subPeriods.map(p => (
-                                                            <td key={p} className="px-2 py-2 border-r border-[#2B3139]">
-                                                                <input
-                                                                    type="number"
-                                                                    value={rowData[`${p}_${id}`] || ''}
-                                                                    disabled={isLocked}
-                                                                    onChange={e => handleManualDataChange(calc.metricType || '', id, e.target.value, p)}
-                                                                    className="w-full bg-transparent border-none text-center font-mono text-[12px] font-bold text-[#EAECEF] focus:bg-primary/10 focus:text-primary rounded py-2 outline-none transition-all disabled:opacity-50"
-                                                                    placeholder="0"
-                                                                />
-                                                            </td>
-                                                        ))}
-                                                        <td className="px-6 py-3 text-right bg-primary/5">
-                                                            <span className="font-mono text-[12px] text-primary font-bold">{rowTotal.toLocaleString()}</span>
+                                                    <tr key={id} className="hover:bg-[#121212] transition-colors group">
+                                                        <td className="px-4 py-3 border-r border-[#1A1A1A] font-bold text-[#EAECEF] text-[11px] uppercase tracking-wide group-hover:text-[#F0B90B] transition-colors">{label}</td>
+                                                        {subPeriods.map(p => {
+                                                            const cellVal = rowData[`${p}_${id}`] || 0;
+                                                            return (
+                                                                <td key={p} className="px-2 py-2 border-r border-[#1A1A1A]">
+                                                                    <div className="flex items-center gap-1">
+                                                                        <button
+                                                                            type="button"
+                                                                            disabled={isLocked || cellVal <= 0}
+                                                                            onClick={() => handleManualDataIncrement(calc.metricType || '', id, p, -1)}
+                                                                            className="w-7 h-8 flex items-center justify-center rounded bg-[#F6465D]/10 hover:bg-[#F6465D]/20 text-[#F6465D] font-black border border-[#F6465D]/20 transition-all disabled:opacity-25 disabled:cursor-not-allowed active:scale-95 shrink-0 select-none text-sm"
+                                                                            title="បន្ថយ 1"
+                                                                        >−</button>
+                                                                        <input
+                                                                            type="number"
+                                                                            value={cellVal || ''}
+                                                                            disabled={isLocked}
+                                                                            onChange={e => handleManualDataChange(calc.metricType || '', id, e.target.value, p)}
+                                                                            className="flex-1 bg-[#050505] border border-[#1A1A1A] text-center font-mono text-[12px] font-bold text-[#EAECEF] focus:bg-[#F0B90B]/5 focus:text-[#F0B90B] focus:border-[#F0B90B]/40 rounded py-2 outline-none transition-all disabled:opacity-30 min-w-0"
+                                                                            placeholder="0"
+                                                                            min={0}
+                                                                        />
+                                                                        <button
+                                                                            type="button"
+                                                                            disabled={isLocked}
+                                                                            onClick={() => handleManualDataIncrement(calc.metricType || '', id, p, 1)}
+                                                                            className="w-7 h-8 flex items-center justify-center rounded bg-[#0ECB81]/10 hover:bg-[#0ECB81]/20 text-[#0ECB81] font-black border border-[#0ECB81]/20 transition-all disabled:opacity-25 disabled:cursor-not-allowed active:scale-95 shrink-0 select-none text-sm"
+                                                                            title="បន្ថែម 1"
+                                                                        >+</button>
+                                                                    </div>
+                                                                </td>
+                                                            );
+                                                        })}
+                                                        <td className="px-4 py-3 text-right bg-[#F0B90B]/5">
+                                                            <span className="font-mono text-[14px] text-[#F0B90B] font-bold">{rowTotal.toLocaleString()}</span>
+                                                            <div className="text-[8px] text-[#707A8A] font-bold uppercase tracking-widest">{calc.metricType || 'KPI'}</div>
                                                         </td>
                                                     </tr>
                                                 );
@@ -403,77 +469,154 @@ const IncentiveExecutionView: React.FC<IncentiveExecutionViewProps> = ({ project
                     </div>
                 )}
 
-                {/* Results Ledger */}
-                <div className="space-y-6">
-                    <div className="flex justify-between items-end">
-                        <div>
-                            <h2 className="text-[12px] font-bold text-primary uppercase tracking-[0.3em] mb-1">Payout Ledger</h2>
-                            <p className="text-[10px] text-secondary uppercase font-bold tracking-widest">Real-time settlement calculation</p>
+                {/* ── Settlement Ledger ── */}
+                <div className="p-4 space-y-4">
+                    {/* Section Header */}
+                    <div className="flex items-center justify-between">
+                        <div className="flex items-center gap-3">
+                            <div className="w-1 h-5 bg-[#F0B90B] rounded-full" />
+                            <h2 className="text-sm font-bold text-[#EAECEF] uppercase tracking-wider">Settlement Ledger</h2>
+                            <div className="h-4 w-px bg-[#1A1A1A]" />
+                            <span className="text-[10px] font-mono text-[#707A8A] uppercase tracking-widest">Final validation &amp; override protocol</span>
                         </div>
-                        <button onClick={() => setIsAdjustMode(!isAdjustMode)} className={`text-[10px] font-bold uppercase tracking-wider px-4 py-2 rounded border transition-all ${isAdjustMode ? 'bg-amber-500 text-bg-black border-amber-500 shadow-lg shadow-amber-500/20' : 'text-secondary border-[#2B3139] hover:text-[#EAECEF] hover:border-primary'}`}>
-                            {isAdjustMode ? "Save Adjustments" : "Adjust Results"}
+                        <button
+                            onClick={() => setIsAdjustMode(!isAdjustMode)}
+                            className={`h-8 px-4 text-[10px] font-bold uppercase tracking-wider rounded border transition-all flex items-center gap-2 ${
+                                isAdjustMode
+                                    ? 'bg-[#F0B90B] text-black border-[#F0B90B]'
+                                    : 'bg-[#1A1A1A] text-[#707A8A] hover:text-[#EAECEF] border-[#2B3139]'
+                            }`}
+                        >
+                            <MousePointer2 className="w-3.5 h-3.5" />
+                            {isAdjustMode ? 'TERMINATE_ADJUSTMENT' : 'INITIALIZE_OVERRIDE'}
                         </button>
                     </div>
 
-                    <div className="border border-[#2B3139] rounded-md bg-card-bg overflow-hidden shadow-xl">
-                        <table className="w-full text-left border-collapse">
+                    {/* Ledger Table */}
+                    <div className="bg-[#121212] border border-[#1A1A1A] rounded overflow-hidden">
+                        <table className="w-full text-left border-collapse min-w-[900px]">
                             <thead>
-                                <tr className="bg-[#1E2329] border-b border-[#2B3139] text-[10px] text-secondary font-bold uppercase tracking-widest">
-                                    <th className="px-6 py-4 w-12 text-center">Rank</th>
-                                    <th className="px-6 py-4 min-w-[280px]">Entity</th>
-                                    <th className="px-6 py-4">Performance</th>
-                                    <th className="px-6 py-4">Yield Breakdown</th>
-                                    <th className="px-6 py-4 text-right">Settlement (USD)</th>
+                                <tr className="bg-[#0A0A0A] border-b border-[#1A1A1A] text-[9px] text-[#707A8A] font-bold uppercase tracking-widest">
+                                    <th className="px-4 py-3 w-12 text-center border-r border-[#1A1A1A]">Rank</th>
+                                    <th className="px-4 py-3 min-w-[220px] border-r border-[#1A1A1A]">Entity</th>
+                                    <th className="px-4 py-3 border-r border-[#1A1A1A]">Performance KPI</th>
+                                    <th className="px-4 py-3 border-r border-[#1A1A1A]">Yield Components</th>
+                                    <th className="px-4 py-3 text-right">Settlement (USD)</th>
                                 </tr>
                             </thead>
-                            <tbody className="divide-y divide-[#2B3139]">
+                            <tbody className="divide-y divide-[#1A1A1A]">
                                 {preparedResults.map((u, idx) => (
-                                    <tr key={u.username} className={`hover:bg-card-bg-hover transition-all group ${idx === 0 ? 'bg-primary/5' : ''}`}>
-                                        <td className="px-6 py-5 text-secondary text-center font-mono font-bold">{idx + 1}</td>
-                                        <td className="px-6 py-5">
-                                            <div className="flex items-center gap-4">
-                                                <UserAvatar avatarUrl={u.avatar} name={u.fullName} size="sm" />
+                                    <tr key={u.username} className={`hover:bg-[#1A1A1A] transition-all group ${idx === 0 ? 'bg-[#F0B90B]/[0.02]' : ''}`}>
+                                        {/* Rank */}
+                                        <td className="px-4 py-4 text-center border-r border-[#1A1A1A]">
+                                            <span className={`font-mono font-bold text-sm ${idx === 0 ? 'text-[#F0B90B]' : 'text-[#2B3139]'}`}>
+                                                {(idx + 1).toString().padStart(2, '0')}
+                                            </span>
+                                        </td>
+
+                                        {/* Entity */}
+                                        <td className="px-4 py-4 border-r border-[#1A1A1A]">
+                                            <div className="flex items-center gap-3">
+                                                <div className="relative shrink-0">
+                                                    <UserAvatar avatarUrl={u.avatar} name={u.fullName} size="sm" className="border border-[#2B3139] group-hover:border-[#F0B90B]/40 transition-colors" />
+                                                    {idx === 0 && (
+                                                        <div className="absolute -top-1.5 -right-1.5 w-4 h-4 bg-[#F0B90B] rounded-full flex items-center justify-center border border-[#050505]">
+                                                            <Trophy className="w-2.5 h-2.5 text-black" />
+                                                        </div>
+                                                    )}
+                                                </div>
                                                 <div className="min-w-0">
-                                                    <p className="font-bold text-[#EAECEF] uppercase truncate text-[12px]">{u.fullName}</p>
-                                                    <p className="text-[9px] text-secondary font-bold tracking-widest">ID: {u.username} • {u.role || 'N/A'}</p>
+                                                    <p className="font-bold text-[#EAECEF] text-[12px] uppercase truncate group-hover:text-[#F0B90B] transition-colors">{u.fullName}</p>
+                                                    <p className="text-[9px] text-[#707A8A] font-mono truncate">{u.username} · {u.role || 'Staff'}</p>
                                                 </div>
                                             </div>
                                         </td>
-                                        <td className="px-6 py-5">
-                                            <div className="space-y-1">
-                                                <p className="font-mono text-[#EAECEF] font-bold text-[13px]">{u.isAmountMetric ? '$' : ''}{u.performance.toLocaleString()}</p>
-                                                <p className="text-[9px] text-secondary uppercase font-bold tracking-tighter opacity-70">{u.performanceMetric}</p>
-                                            </div>
-                                        </td>
-                                        <td className="px-6 py-5">
-                                            <div className="flex flex-wrap gap-2">
-                                                {u.breakdown?.map((b: any, i: number) => (
-                                                    <div key={i} className="px-2.5 py-1 bg-bg-black border border-[#2B3139] rounded-md text-[9px] flex items-center gap-2 group/tag hover:border-primary transition-colors">
-                                                        <span className="text-secondary font-bold uppercase group-hover/tag:text-primary">{b.name}</span>
-                                                        <div className="h-2 w-px bg-[#2B3139]"></div>
-                                                        <span className="text-[#EAECEF] font-bold font-mono">${b.amount.toFixed(2)}</span>
-                                                    </div>
-                                                ))}
-                                                {u.breakdown.length === 0 && <span className="text-[10px] text-secondary italic opacity-50">No yield components</span>}
-                                            </div>
-                                        </td>
-                                        <td className="px-6 py-5 text-right">
-                                            {isAdjustMode ? (
-                                                <div className="flex items-center justify-end gap-2">
-                                                    <span className="text-secondary font-bold font-mono">$</span>
-                                                    <input 
-                                                        type="number" 
-                                                        value={customPayouts[u.username] !== undefined ? customPayouts[u.username] : u.reward} 
-                                                        onChange={e => handleCustomPayoutChange(u.username, e.target.value)} 
-                                                        className="w-28 bg-bg-black border border-amber-500/50 rounded-md py-1.5 px-3 text-[12px] text-right font-bold text-amber-500 focus:border-amber-500 outline-none shadow-inner" 
+
+                                        {/* Performance KPI */}
+                                        <td className="px-4 py-4 border-r border-[#1A1A1A]">
+                                            <p className="font-mono font-bold text-[#EAECEF] text-[13px]">
+                                                {u.isAmountMetric ? '$' : ''}{u.performance.toLocaleString()}
+                                            </p>
+                                            <div className="flex items-center gap-2 mt-1.5">
+                                                <div className="h-1 w-20 bg-[#1A1A1A] rounded-full overflow-hidden">
+                                                    <div
+                                                        className="h-full bg-[#F0B90B] rounded-full transition-all duration-700"
+                                                        style={{ width: `${Math.min(100, Math.round((u.performance / maxPerformance) * 100))}%` }}
                                                     />
                                                 </div>
+                                                <span className="text-[9px] text-[#707A8A] font-bold uppercase tracking-widest">
+                                                    {Math.round((u.performance / maxPerformance) * 100)}% · {u.performanceMetric}
+                                                </span>
+                                            </div>
+                                        </td>
+
+                                        {/* Yield Components */}
+                                        <td className="px-4 py-4 border-r border-[#1A1A1A]">
+                                            <div className="flex flex-wrap gap-1.5">
+                                                {u.breakdown?.map((b: any, i: number) => (
+                                                    <div key={i} className="px-2 py-1 bg-[#050505] border border-[#1A1A1A] hover:border-[#F0B90B]/30 rounded text-[9px] flex items-center gap-1.5 transition-all">
+                                                        <span className="text-[#707A8A] font-bold uppercase tracking-wide">{b.name || b.calculatorName || 'Bonus'}</span>
+                                                        <div className="w-px h-3 bg-[#1A1A1A]" />
+                                                        <span className="text-[#0ECB81] font-mono font-bold">${(b.amount || 0).toFixed(2)}</span>
+                                                    </div>
+                                                ))}
+                                                {u.breakdown.length === 0 && (
+                                                    <span className="text-[9px] text-[#2B3139] font-bold uppercase tracking-widest italic">—</span>
+                                                )}
+                                            </div>
+                                        </td>
+
+                                        {/* Settlement */}
+                                        <td className="px-4 py-4 text-right">
+                                            {isAdjustMode ? (
+                                                <div className="flex flex-col items-end gap-1.5">
+                                                    <div className="flex items-center gap-1.5">
+                                                        <button
+                                                            type="button"
+                                                            onClick={() => {
+                                                                const cur = customPayouts[u.username] !== undefined ? customPayouts[u.username] : u.reward;
+                                                                handleCustomPayoutChange(u.username, String(Math.max(0, cur - 1)));
+                                                            }}
+                                                            className="w-7 h-8 flex items-center justify-center rounded bg-[#F6465D]/10 hover:bg-[#F6465D]/20 text-[#F6465D] font-black text-sm border border-[#F6465D]/20 transition-all active:scale-95 select-none"
+                                                            title="បន្ថយ $1"
+                                                        >−</button>
+                                                        <div className="flex items-center">
+                                                            <span className="text-[#707A8A] font-mono text-sm mr-1">$</span>
+                                                            <input
+                                                                type="number"
+                                                                value={customPayouts[u.username] !== undefined ? customPayouts[u.username] : u.reward}
+                                                                onChange={e => handleCustomPayoutChange(u.username, e.target.value)}
+                                                                className="w-24 bg-[#050505] border border-[#F0B90B]/30 rounded py-1.5 px-2 text-[13px] text-right font-mono font-bold text-[#F0B90B] focus:border-[#F0B90B] outline-none"
+                                                                min={0}
+                                                            />
+                                                        </div>
+                                                        <button
+                                                            type="button"
+                                                            onClick={() => {
+                                                                const cur = customPayouts[u.username] !== undefined ? customPayouts[u.username] : u.reward;
+                                                                handleCustomPayoutChange(u.username, String(cur + 1));
+                                                            }}
+                                                            className="w-7 h-8 flex items-center justify-center rounded bg-[#0ECB81]/10 hover:bg-[#0ECB81]/20 text-[#0ECB81] font-black text-sm border border-[#0ECB81]/20 transition-all active:scale-95 select-none"
+                                                            title="បន្ថែម $1"
+                                                        >+</button>
+                                                    </div>
+                                                    {customPayouts[u.username] !== undefined && (
+                                                        <button
+                                                            onClick={() => handleCustomPayoutChange(u.username, String(u.baseReward))}
+                                                            className="text-[8px] text-[#707A8A] hover:text-[#F0B90B] font-bold uppercase tracking-widest transition-all"
+                                                        >
+                                                            ↺ Reset ${u.baseReward.toFixed(2)}
+                                                        </button>
+                                                    )}
+                                                </div>
                                             ) : (
-                                                <div className="space-y-1">
-                                                    <span className={`font-bold font-mono text-[15px] tracking-tight ${u.isCustom ? 'text-amber-500' : 'text-primary'}`}>
+                                                <div>
+                                                    <span className={`font-mono font-bold text-[18px] ${u.isCustom ? 'text-[#F0B90B]' : 'text-[#F0B90B]'}`}>
                                                         ${u.reward.toLocaleString(undefined, { minimumFractionDigits: 2 })}
                                                     </span>
-                                                    {u.isCustom && <p className="text-[8px] text-amber-500 font-bold uppercase text-right tracking-widest">Manual Override</p>}
+                                                    {u.isCustom && (
+                                                        <p className="text-[8px] text-[#707A8A] font-bold uppercase tracking-widest mt-0.5">✎ Override</p>
+                                                    )}
                                                 </div>
                                             )}
                                         </td>
@@ -481,16 +624,23 @@ const IncentiveExecutionView: React.FC<IncentiveExecutionViewProps> = ({ project
                                 ))}
                             </tbody>
                         </table>
+
                         {preparedResults.length === 0 && !isCalculating && (
-                            <div className="p-20 text-center">
-                                <Search className="w-12 h-12 text-secondary opacity-20 mx-auto mb-4" />
-                                <p className="text-secondary font-bold uppercase tracking-widest text-[11px]">No settlement data found for this period</p>
+                            <div className="py-20 text-center">
+                                <Search className="w-10 h-10 text-[#1A1A1A] mx-auto mb-4" />
+                                <p className="text-[11px] font-bold text-[#707A8A] uppercase tracking-widest">No settlement records found in this cycle</p>
+                            </div>
+                        )}
+                        {isCalculating && (
+                            <div className="py-10 text-center">
+                                <div className="w-6 h-6 border-2 border-[#F0B90B]/20 border-t-[#F0B90B] rounded-full animate-spin mx-auto" />
                             </div>
                         )}
                     </div>
                 </div>
-            </div>
+            </main>
 
+            {/* PDF Modal */}
             {isPdfModalOpen && project && (
                 <IncentivePdfExportModal
                     isOpen={isPdfModalOpen}

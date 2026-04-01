@@ -5,7 +5,7 @@ import { jsPDF } from 'jspdf';
 import 'jspdf-autotable';
 import Spinner from '../common/Spinner';
 import { translations } from '../../translations';
-import { FileText, X, Download } from 'lucide-react';
+import { FileText, X, Download, Terminal, Info, Activity } from 'lucide-react';
 
 interface IncentiveResult {
     username: string;
@@ -140,36 +140,50 @@ const IncentivePdfExportModal: React.FC<IncentivePdfExportModalProps> = ({
 
     return (
         <Modal isOpen={isOpen} onClose={onClose} maxWidth="max-w-md">
-            <div className="ui-binance bg-card-bg border border-[#2B3139] rounded-md overflow-hidden">
-                <div className="p-6 text-center">
-                    <div className="w-16 h-16 bg-[#2B3139] rounded-md flex items-center justify-center mx-auto mb-6 border border-[#474D57]">
-                        <FileText className="w-8 h-8 text-primary" />
+            <div className="bg-[#121212] border border-[#1A1A1A] shadow-2xl rounded overflow-hidden text-[#EAECEF] font-sans">
+                <div className="p-8 text-center space-y-8">
+                    <div className="relative inline-block">
+                        <div className="w-20 h-20 bg-[#050505] rounded border border-[#1A1A1A] flex items-center justify-center mx-auto shadow-inner">
+                            <Terminal className="w-10 h-10 text-[#F0B90B]" />
+                        </div>
+                        <div className="absolute -bottom-2 -right-2 w-8 h-8 bg-[#0ECB81]/10 rounded-full flex items-center justify-center border border-[#0ECB81]/30">
+                            <Activity className="w-4 h-4 text-[#0ECB81] animate-pulse" />
+                        </div>
                     </div>
                     
-                    <h3 className="text-lg font-bold text-[#EAECEF] uppercase tracking-wider mb-2">{t.export || 'Confirm PDF Export'}</h3>
-                    <div className="bg-bg-black border border-[#2B3139] p-4 rounded-md mb-8">
-                        <p className="text-[11px] text-secondary leading-relaxed uppercase tracking-wider">
-                            Generating report for <span className="text-[#EAECEF] font-bold">{projectName}</span>
-                        </p>
-                        <div className="flex items-center justify-center gap-2 mt-2">
-                            <span className="text-[10px] text-secondary font-bold uppercase tracking-widest">Period:</span>
-                            <span className="text-primary font-mono text-[11px] font-bold uppercase">{selectedMonth}</span>
+                    <div>
+                        <h3 className="text-sm font-black text-[#EAECEF] uppercase tracking-[0.3em] mb-2">{t.export || 'Generate_Protocol_Report'}</h3>
+                        <p className="text-[10px] text-[#707A8A] font-bold uppercase tracking-widest">Finalizing asset distribution records</p>
+                    </div>
+
+                    <div className="bg-[#080808] border border-[#1A1A1A] p-5 rounded space-y-4">
+                        <div className="space-y-1.5">
+                            <p className="text-[9px] text-[#707A8A] font-black uppercase tracking-widest flex items-center justify-center gap-2">
+                                <Info className="w-3 h-3" /> Station_Identity
+                            </p>
+                            <p className="text-xs font-bold text-[#EAECEF] uppercase tracking-[0.1em]">{projectName}</p>
+                        </div>
+                        <div className="h-px bg-[#1A1A1A] w-1/2 mx-auto"></div>
+                        <div className="space-y-1.5">
+                            <p className="text-[9px] text-[#707A8A] font-black uppercase tracking-widest">Temporal_Period</p>
+                            <p className="text-xs font-mono font-black text-[#F0B90B] uppercase">{selectedMonth}</p>
                         </div>
                     </div>
 
-                    <div className="flex flex-col gap-3">
+                    <div className="flex flex-col gap-3 pt-2">
                         <button 
                             onClick={generatePDF}
                             disabled={isGenerating}
-                            className="w-full py-3 bg-primary hover:bg-[#f0c51d] text-bg-black rounded-md font-bold uppercase text-[11px] tracking-widest transition-all flex items-center justify-center gap-2 disabled:opacity-50"
+                            className="w-full h-12 bg-[#F0B90B] hover:bg-[#D4A50A] text-black rounded font-black uppercase text-[10px] tracking-[0.2em] transition-all flex items-center justify-center gap-3 disabled:opacity-30 disabled:grayscale active:scale-[0.98]"
                         >
-                            {isGenerating ? <><Spinner size="sm" /> Processing...</> : <><Download className="w-4 h-4" /> Download PDF Report</>}
+                            {isGenerating ? <Spinner size="sm" /> : <Download className="w-4 h-4 stroke-[3]" />}
+                            {isGenerating ? 'Processing_Data...' : 'Download_PDF_Package'}
                         </button>
                         <button 
                             onClick={onClose}
-                            className="w-full py-3 bg-bg-black text-secondary hover:text-[#EAECEF] rounded-md font-bold uppercase text-[11px] tracking-widest transition-all border border-[#2B3139]"
+                            className="w-full h-10 bg-[#050505] text-[#707A8A] hover:text-[#EAECEF] rounded font-black uppercase text-[9px] tracking-widest transition-all border border-[#1A1A1A] hover:border-[#2B3139]"
                         >
-                            {t.cancel || 'Cancel'}
+                            {t.cancel || 'Abort_Operation'}
                         </button>
                     </div>
                 </div>

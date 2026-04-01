@@ -9,7 +9,8 @@ import {
     ChevronLeft, Settings, Zap, Award, DollarSign, 
     Copy, Edit3, Trash2, Calendar, Database,
     LayoutGrid, Activity, AlertCircle, RefreshCw, TrendingUp,
-    ShieldCheck, Star, Target, Layers, ArrowRight, MousePointer2
+    ShieldCheck, Star, Target, Layers, ArrowRight, MousePointer2,
+    Info, Power, Terminal, Box, ChevronRight
 } from 'lucide-react';
 
 interface IncentiveProjectDetailsProps {
@@ -98,7 +99,7 @@ const IncentiveProjectDetails: React.FC<IncentiveProjectDetailsProps> = ({ proje
     if (isLoading && !project) {
         return (
             <div className="min-h-screen bg-[#050505] flex items-center justify-center">
-                <div className="w-16 h-16 border-4 border-primary/10 border-t-primary rounded-full animate-spin"></div>
+                <div className="w-8 h-8 border-2 border-[#F0B90B]/20 border-t-[#F0B90B] rounded-full animate-spin"></div>
             </div>
         );
     }
@@ -106,12 +107,12 @@ const IncentiveProjectDetails: React.FC<IncentiveProjectDetailsProps> = ({ proje
     if (error || !project) {
         return (
             <div className="min-h-screen bg-[#050505] p-8 flex flex-col items-center justify-center text-center">
-                <AlertCircle className="w-16 h-16 text-red-500/50 mb-6" />
-                <h2 className="text-2xl font-black text-white uppercase mb-2 italic">Sync Failure</h2>
-                <p className="text-white/40 text-xs font-bold uppercase tracking-[0.2em] mb-10 max-w-md">{error || 'Project data corrupted'}</p>
-                <button onClick={loadProject} className="h-12 px-8 bg-white/5 hover:bg-white/10 text-white rounded-xl font-black uppercase tracking-widest transition-all border border-white/10 flex items-center gap-3">
-                    <RefreshCw className="w-4 h-4" />
-                    Retry Load
+                <AlertCircle className="w-12 h-12 text-[#F6465D]/50 mb-4" />
+                <h2 className="text-lg font-bold text-[#EAECEF] uppercase mb-2">Protocol Sync Error</h2>
+                <p className="text-[#707A8A] text-[10px] uppercase tracking-widest mb-8 max-w-xs">{error || 'Data corruption detected'}</p>
+                <button onClick={loadProject} className="h-9 px-6 bg-[#1A1A1A] hover:bg-[#2B3139] text-[#EAECEF] rounded text-[10px] font-bold uppercase tracking-widest transition-all border border-[#2B3139] flex items-center gap-2">
+                    <RefreshCw className="w-3.5 h-3.5" />
+                    Reset Connection
                 </button>
             </div>
         );
@@ -135,276 +136,236 @@ const IncentiveProjectDetails: React.FC<IncentiveProjectDetailsProps> = ({ proje
     }
 
     return (
-        <div className="w-full min-h-screen bg-[#050505] text-[#F5F5F7] font-sans selection:bg-primary/30">
-            {/* Dynamic Hero Section */}
-            <div className="relative overflow-hidden border-b border-white/5 bg-gradient-to-b from-white/[0.02] to-transparent">
-                <div className="max-w-[1600px] mx-auto px-6 py-12 relative z-10">
-                    <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-10">
-                        <div className="flex items-center gap-8">
-                            <button 
-                                onClick={onBack} 
-                                className="w-14 h-14 flex items-center justify-center bg-white/5 hover:bg-white/10 rounded-2xl transition-all border border-white/10 group"
-                            >
-                                <ChevronLeft className="w-6 h-6 group-hover:-translate-x-1 transition-transform" />
-                            </button>
-                            
-                            <div className="flex items-center gap-6">
-                                <div 
-                                    className="w-20 h-20 rounded-3xl flex items-center justify-center border bg-black transition-transform hover:scale-105 shadow-2xl"
-                                    style={{ 
-                                        boxShadow: `0 0 40px ${project.colorCode}20`,
-                                        borderColor: `${project.colorCode}40`
-                                    }}
-                                >
-                                    <Activity className="w-10 h-10" style={{ color: project.colorCode || 'var(--primary)' }} />
-                                </div>
-                                <div>
-                                    <div className="flex items-center gap-4 mb-2">
-                                        <h2 className="text-3xl font-black text-white uppercase italic tracking-tight">{project.projectName}</h2>
-                                        <span className="px-3 py-1 bg-primary/10 text-primary text-[10px] font-black rounded-full uppercase tracking-[0.2em] border border-primary/20">NODE_{String(project.id).padStart(3, '0')}</span>
-                                    </div>
-                                    <div className="flex flex-wrap items-center gap-6">
-                                        <div className="flex items-center gap-2 text-white/40 text-[10px] font-black uppercase tracking-[0.2em]">
-                                            <Database className="w-4 h-4 text-primary/60" />
-                                            {project.dataSource}
-                                        </div>
-                                        <div className="w-1.5 h-1.5 bg-white/10 rounded-full"></div>
-                                        <div className="flex items-center gap-2 text-white/40 text-[10px] font-black uppercase tracking-[0.2em]">
-                                            <Calendar className="w-4 h-4" />
-                                            {new Date(project.createdAt || '').toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' }).toUpperCase()}
-                                        </div>
-                                        <div className="w-1.5 h-1.5 bg-white/10 rounded-full"></div>
-                                        <div className="flex items-center gap-2 text-white/40 text-[10px] font-black uppercase tracking-[0.2em]">
-                                            <Target className="w-4 h-4" />
-                                            {project.targetTeam || 'GLOBAL'}
-                                        </div>
-                                    </div>
-                                </div>
-                            </div>
-                        </div>
-
-                        <div className="flex items-center gap-4">
-                            <button 
-                                onClick={() => setIsSettingsOpen(true)}
-                                className="h-14 px-8 bg-white/5 hover:bg-white/10 text-white rounded-2xl text-[11px] font-black uppercase tracking-[0.2em] transition-all border border-white/10 flex items-center gap-3 shadow-lg group"
-                            >
-                                <Settings className="w-5 h-5 group-hover:rotate-90 transition-transform duration-500" />
-                                {t.settings}
-                            </button>
-                            <div className="relative">
-                                <select 
-                                    value={project.status} 
-                                    onChange={(e) => handleUpdateStatus(e.target.value as any)}
-                                    className={`h-14 px-8 pl-12 rounded-2xl border text-[11px] font-black uppercase tracking-[0.2em] bg-black/40 cursor-pointer focus:ring-0 transition-all appearance-none ${
-                                        project.status === 'Active' ? 'text-emerald-400 border-emerald-500/30 shadow-[0_0_20px_rgba(52,211,153,0.1)]' : 
-                                        project.status === 'Draft' ? 'text-primary border-primary/30 shadow-[0_0_20px_rgba(252,213,53,0.1)]' : 'text-red-400 border-red-500/30'
-                                    }`}
-                                >
-                                    <option value="Draft">DRAFT</option>
-                                    <option value="Active">ACTIVE</option>
-                                    <option value="Disable">DISABLE</option>
-                                </select>
-                                <div className={`absolute left-6 top-1/2 -translate-y-1/2 w-2 h-2 rounded-full ${
-                                    project.status === 'Active' ? 'bg-emerald-400 animate-pulse' : 
-                                    project.status === 'Draft' ? 'bg-primary' : 'bg-red-400'
-                                }`}></div>
-                            </div>
-                        </div>
+        <div className="w-full h-screen bg-[#050505] text-[#EAECEF] font-sans selection:bg-[#F0B90B]/30 flex flex-col overflow-hidden">
+            {/* Top Bar Header */}
+            <header className="h-14 bg-[#121212] border-b border-[#1A1A1A] px-4 flex items-center justify-between shrink-0">
+                <div className="flex items-center gap-4">
+                    <button 
+                        onClick={onBack} 
+                        className="p-1.5 hover:bg-[#2B3139] rounded transition-all text-[#B7BDC6] hover:text-[#F0B90B]"
+                    >
+                        <ChevronLeft className="w-5 h-5" />
+                    </button>
+                    <div className="h-6 w-px bg-[#1A1A1A]"></div>
+                    <div className="flex items-center gap-3">
+                        <Terminal className="w-4 h-4 text-[#F0B90B]" />
+                        <h2 className="text-sm font-bold tracking-wider uppercase">{project.projectName}</h2>
+                        <span className="px-2 py-0.5 bg-[#1A1A1A] text-[#707A8A] text-[9px] font-mono rounded border border-[#2B3139]">STN_{String(project.id).padStart(3, '0')}</span>
                     </div>
                 </div>
-                
-                <div className="absolute top-0 right-0 w-[600px] h-[600px] bg-primary/5 blur-[120px] rounded-full -translate-y-1/2 translate-x-1/2"></div>
-            </div>
 
-            <div className="max-w-[1600px] mx-auto px-6 py-16 pb-32">
-                {/* Engine Configuration Section */}
-                <div className="space-y-12">
-                    <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-8">
-                        <div>
-                            <div className="flex items-center gap-4 mb-3">
-                                <h3 className="text-2xl font-black text-white uppercase italic tracking-wider flex items-center gap-4">
-                                    <span className="w-2 h-8 bg-primary rounded-full shadow-[0_0_15px_rgba(252,213,53,0.5)]"></span>
-                                    {t.calculators}
-                                </h3>
-                                <div className="h-6 w-px bg-white/10"></div>
-                                <span className="text-[10px] font-black text-primary uppercase tracking-[0.3em] px-4 py-1.5 bg-primary/10 border border-primary/20 rounded-full">
-                                    {project.calculators?.length || 0} Core Engines Active
-                                </span>
+                <div className="flex items-center gap-3">
+                    <div className={`px-3 py-1 rounded text-[10px] font-black uppercase flex items-center gap-2 border ${
+                        project.status === 'Active' ? 'bg-[#0ECB81]/10 border-[#0ECB81]/20 text-[#0ECB81]' : 
+                        project.status === 'Draft' ? 'bg-[#F0B90B]/10 border-[#F0B90B]/20 text-[#F0B90B]' : 'bg-[#1A1A1A] border-[#2B3139] text-[#707A8A]'
+                    }`}>
+                        <div className={`w-1.5 h-1.5 rounded-full ${project.status === 'Active' ? 'bg-[#0ECB81] animate-pulse' : 'bg-current'}`}></div>
+                        {project.status}
+                    </div>
+                    <button 
+                        onClick={() => setIsSettingsOpen(true)}
+                        className="h-8 px-4 bg-[#1A1A1A] hover:bg-[#2B3139] text-[#B7BDC6] hover:text-[#EAECEF] rounded text-[10px] font-bold uppercase tracking-wider transition-all border border-[#2B3139] flex items-center gap-2"
+                    >
+                        <Settings className="w-3.5 h-3.5" />
+                        Config
+                    </button>
+                </div>
+            </header>
+
+            <div className="flex-1 flex overflow-hidden">
+                {/* Left Sidebar: Project Intelligence */}
+                <aside className="w-72 bg-[#121212] border-r border-[#1A1A1A] flex flex-col shrink-0">
+                    <div className="p-6 space-y-8">
+                        <div className="space-y-4">
+                            <h3 className="text-[10px] font-black text-[#707A8A] uppercase tracking-[0.2em] flex items-center gap-2">
+                                <Box className="w-3 h-3" />
+                                Project Intel
+                            </h3>
+                            <div className="space-y-3">
+                                <div className="bg-[#050505] p-3 rounded border border-[#1A1A1A]">
+                                    <p className="text-[9px] font-bold text-[#707A8A] uppercase mb-1 flex items-center gap-2">
+                                        <Database className="w-3 h-3" /> Data Source
+                                    </p>
+                                    <p className="text-xs font-mono font-bold text-[#EAECEF]">{project.dataSource?.toUpperCase()}</p>
+                                </div>
+                                <div className="bg-[#050505] p-3 rounded border border-[#1A1A1A]">
+                                    <p className="text-[9px] font-bold text-[#707A8A] uppercase mb-1 flex items-center gap-2">
+                                        <Calendar className="w-3 h-3" /> Initialized
+                                    </p>
+                                    <p className="text-xs font-mono font-bold text-[#EAECEF]">{new Date(project.createdAt || '').toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' }).toUpperCase()}</p>
+                                </div>
+                                <div className="bg-[#050505] p-3 rounded border border-[#1A1A1A]">
+                                    <p className="text-[9px] font-bold text-[#707A8A] uppercase mb-1 flex items-center gap-2">
+                                        <Target className="w-3 h-3" /> Target Group
+                                    </p>
+                                    <p className="text-xs font-mono font-bold text-[#EAECEF]">{project.targetTeam?.toUpperCase() || 'GLOBAL_CORE'}</p>
+                                </div>
                             </div>
-                            <p className="text-white/40 text-xs font-bold uppercase tracking-[0.2em] max-w-2xl">{t.calculators_engine_desc}</p>
                         </div>
-                        
-                        <div className="flex gap-4">
-                            <button 
-                                onClick={() => openBuilderNew('Achievement')}
-                                className="h-14 px-8 bg-primary text-black hover:bg-[#FCD535] rounded-2xl text-[11px] font-black uppercase tracking-[0.2em] transition-all flex items-center gap-3 shadow-[0_8px_30px_rgba(252,213,53,0.2)] active:scale-95 group"
-                            >
-                                <Award className="w-5 h-5 stroke-[3] group-hover:scale-110 transition-transform" />
-                                {t.achievement_bonus}
-                            </button>
-                            <button 
-                                onClick={() => openBuilderNew('Commission')}
-                                className="h-14 px-8 bg-white/5 text-primary border border-primary/30 hover:bg-primary hover:text-black rounded-2xl text-[11px] font-black uppercase tracking-[0.2em] transition-all flex items-center gap-3 active:scale-95 group"
-                            >
-                                <DollarSign className="w-5 h-5 stroke-[3] group-hover:scale-110 transition-transform" />
-                                {t.commission_rate}
-                            </button>
+
+                        <div className="space-y-4">
+                            <h3 className="text-[10px] font-black text-[#707A8A] uppercase tracking-[0.2em] flex items-center gap-2">
+                                <Activity className="w-3 h-3" /> Live Metrics
+                            </h3>
+                            <div className="grid grid-cols-2 gap-2">
+                                <div className="bg-[#050505] p-3 rounded border border-[#1A1A1A]">
+                                    <p className="text-[8px] font-bold text-[#707A8A] uppercase mb-1">Nodes</p>
+                                    <p className="text-lg font-mono font-bold text-[#F0B90B]">{project.calculators?.length || 0}</p>
+                                </div>
+                                <div className="bg-[#050505] p-3 rounded border border-[#1A1A1A]">
+                                    <p className="text-[8px] font-bold text-[#707A8A] uppercase mb-1">Uptime</p>
+                                    <p className="text-lg font-mono font-bold text-[#0ECB81]">100%</p>
+                                </div>
+                            </div>
                         </div>
                     </div>
 
-                    {(!project.calculators || project.calculators.length === 0) ? (
-                        <div className="bg-white/[0.02] border-2 border-dashed border-white/5 rounded-[40px] py-40 text-center flex flex-col items-center justify-center group hover:border-primary/20 transition-all duration-500">
-                            <div className="w-24 h-24 rounded-[32px] bg-black border border-white/10 flex items-center justify-center mb-10 group-hover:scale-110 group-hover:rotate-12 transition-all duration-500 shadow-2xl">
-                                <Layers className="w-12 h-12 text-white/10 group-hover:text-primary/40" />
+                    <div className="mt-auto p-4 border-t border-[#1A1A1A] bg-[#080808]">
+                        <p className="text-[9px] text-[#707A8A] font-bold uppercase leading-relaxed italic opacity-50 text-center">
+                            Encrypted Protocol // v2.5.0-ALPHA
+                        </p>
+                    </div>
+                </aside>
+
+                {/* Main Content Area: Engine Grid */}
+                <main className="flex-1 overflow-auto bg-[#050505] p-6">
+                    <div className="max-w-6xl mx-auto space-y-8">
+                        <div className="flex items-center justify-between border-b border-[#1A1A1A] pb-6">
+                            <div className="flex items-center gap-4">
+                                <div className="w-1.5 h-6 bg-[#F0B90B] rounded-full"></div>
+                                <h3 className="text-lg font-bold text-[#EAECEF] uppercase tracking-wider">{t.calculators}</h3>
+                                <div className="h-4 w-px bg-[#1A1A1A]"></div>
+                                <span className="text-[10px] font-mono text-[#707A8A] uppercase tracking-widest">{project.calculators?.length || 0} Processor Assets Loaded</span>
                             </div>
-                            <p className="text-white/60 font-black uppercase tracking-[0.3em] text-lg mb-4">{t.no_calculators}</p>
-                            <p className="text-white/30 text-xs font-bold uppercase tracking-[0.2em] max-w-md mb-12 italic">{t.add_calculator_desc}</p>
-                            <button onClick={() => openBuilderNew('Achievement')} className="h-14 px-12 bg-white/5 hover:bg-white/10 text-primary font-black uppercase rounded-2xl border border-white/10 transition-all tracking-[0.3em] shadow-xl active:scale-95">Initialize Node Protocol</button>
-                        </div>
-                    ) : (
-                        <div className="grid grid-cols-1 xl:grid-cols-2 gap-8">
-                            {project.calculators.map((calc) => (
-                                <div 
-                                    key={calc.id} 
-                                    className="bg-white/[0.03] border border-white/10 hover:border-primary/30 transition-all duration-500 rounded-[32px] overflow-hidden group hover:shadow-[0_20px_50px_rgba(0,0,0,0.3)] flex flex-col"
+                            
+                            <div className="flex gap-2">
+                                <button 
+                                    onClick={() => openBuilderNew('Achievement')}
+                                    className="h-9 px-4 bg-[#1A1A1A] hover:bg-[#2B3139] text-[#F0B90B] rounded text-[10px] font-bold uppercase tracking-wider border border-[#F0B90B]/30 transition-all flex items-center gap-2 active:scale-95"
                                 >
-                                    <div className="p-8 space-y-8 flex-grow">
-                                        <div className="flex justify-between items-start">
-                                            <div className="flex items-center gap-6">
-                                                <div className={`w-16 h-16 rounded-2xl flex items-center justify-center border transition-all group-hover:scale-110 group-hover:rotate-6 shadow-2xl ${
-                                                    calc.type === 'Achievement' ? 'border-primary/30 bg-black text-primary shadow-primary/10' : 'border-emerald-500/30 bg-black text-emerald-400 shadow-emerald-500/10'
+                                    <Award className="w-3.5 h-3.5" />
+                                    {t.achievement_bonus}
+                                </button>
+                                <button 
+                                    onClick={() => openBuilderNew('Commission')}
+                                    className="h-9 px-4 bg-[#1A1A1A] hover:bg-[#2B3139] text-[#0ECB81] rounded text-[10px] font-bold uppercase tracking-wider border border-[#0ECB81]/30 transition-all flex items-center gap-2 active:scale-95"
+                                >
+                                    <DollarSign className="w-3.5 h-3.5" />
+                                    {t.commission_rate}
+                                </button>
+                            </div>
+                        </div>
+
+                        {(!project.calculators || project.calculators.length === 0) ? (
+                            <div className="h-[400px] bg-[#121212] border border-[#1A1A1A] border-dashed rounded flex flex-col items-center justify-center text-center">
+                                <Layers className="w-12 h-12 text-[#1A1A1A] mb-6" />
+                                <p className="text-[#EAECEF] font-bold uppercase tracking-widest text-[12px] mb-2">{t.no_calculators}</p>
+                                <p className="text-[#707A8A] text-[10px] uppercase tracking-wider max-w-xs mb-8">{t.add_calculator_desc}</p>
+                                <button onClick={() => openBuilderNew('Achievement')} className="h-10 px-8 bg-[#2B3139] hover:bg-[#F0B90B] text-[#EAECEF] hover:text-black rounded text-[10px] font-bold uppercase tracking-widest transition-all">Initialize Core Node</button>
+                            </div>
+                        ) : (
+                            <div className="grid grid-cols-1 gap-4">
+                                {project.calculators.map((calc) => (
+                                    <div 
+                                        key={calc.id} 
+                                        className="bg-[#121212] border border-[#1A1A1A] hover:border-[#2B3139] transition-all rounded overflow-hidden group"
+                                    >
+                                        <div className="p-5 flex flex-col lg:flex-row gap-6 lg:items-center">
+                                            <div className="flex items-center gap-5 lg:w-1/3">
+                                                <div className={`w-12 h-12 rounded bg-[#050505] border flex items-center justify-center shrink-0 ${
+                                                    calc.type === 'Achievement' ? 'border-[#F0B90B]/20 text-[#F0B90B]' : 'border-[#0ECB81]/20 text-[#0ECB81]'
                                                 }`}>
-                                                    {calc.type === 'Achievement' ? <Zap className="w-8 h-8" /> : <TrendingUp className="w-8 h-8" />}
+                                                    {calc.type === 'Achievement' ? <Zap className="w-6 h-6" /> : <TrendingUp className="w-6 h-6" />}
                                                 </div>
-                                                <div>
-                                                    <h4 className="font-black text-xl text-white group-hover:text-primary transition-colors uppercase tracking-tight mb-2">{calc.name}</h4>
-                                                    <div className="flex items-center gap-4">
-                                                        <span className={`text-[9px] font-black uppercase tracking-[0.2em] px-4 py-1.5 rounded-full border ${
-                                                            calc.type === 'Achievement' ? 'border-primary/20 bg-primary/5 text-primary' : 'border-emerald-500/20 bg-emerald-500/5 text-emerald-400'
+                                                <div className="min-w-0">
+                                                    <h4 className="font-bold text-[#EAECEF] uppercase tracking-wide text-sm truncate">{calc.name}</h4>
+                                                    <div className="flex items-center gap-2 mt-1">
+                                                        <span className={`text-[8px] font-bold uppercase tracking-widest px-1.5 py-0.5 rounded border ${
+                                                            calc.type === 'Achievement' ? 'bg-[#F0B90B]/5 border-[#F0B90B]/20 text-[#F0B90B]' : 'bg-[#0ECB81]/5 border-[#0ECB81]/20 text-[#0ECB81]'
                                                         }`}>
-                                                            {calc.type === 'Achievement' ? t.achievement_bonus : t.commission_rate}
+                                                            {calc.type === 'Achievement' ? 'Achievement' : 'Commission'}
                                                         </span>
-                                                        <div className={`flex items-center gap-2 text-[9px] font-black uppercase tracking-[0.2em] ${
-                                                            calc.status === 'Active' ? 'text-emerald-400' : calc.status === 'Draft' ? 'text-primary' : 'text-red-400'
+                                                        <div className={`flex items-center gap-1.5 text-[8px] font-bold uppercase tracking-widest ${
+                                                            calc.status === 'Active' ? 'text-[#0ECB81]' : 'text-[#707A8A]'
                                                         }`}>
-                                                            <div className={`w-1.5 h-1.5 rounded-full ${calc.status === 'Active' ? 'bg-emerald-400 animate-pulse' : calc.status === 'Draft' ? 'bg-primary' : 'bg-red-400'}`}></div>
+                                                            <div className={`w-1 h-1 rounded-full ${calc.status === 'Active' ? 'bg-[#0ECB81]' : 'bg-[#707A8A]'}`}></div>
                                                             {calc.status}
                                                         </div>
                                                     </div>
                                                 </div>
                                             </div>
-                                            
-                                            <div className="flex items-center gap-2">
-                                                <button onClick={() => handleDuplicateCalc(calc.id)} className="w-10 h-10 flex items-center justify-center bg-white/5 hover:bg-white/10 text-white/40 hover:text-white rounded-xl transition-all border border-white/10" title="Duplicate">
-                                                    <Copy className="w-4 h-4" />
-                                                </button>
-                                                <button onClick={() => openBuilderEdit(calc)} className="w-10 h-10 flex items-center justify-center bg-white/5 hover:bg-white/10 text-white/40 hover:text-white rounded-xl transition-all border border-white/10" title="Edit">
-                                                    <Edit3 className="w-4 h-4" />
-                                                </button>
-                                                <button onClick={() => handleDeleteCalc(calc.id)} className="w-10 h-10 flex items-center justify-center bg-white/5 hover:bg-red-500/10 text-white/40 hover:text-red-500 rounded-xl transition-all border border-white/10" title="Delete">
-                                                    <Trash2 className="w-4 h-4" />
-                                                </button>
+
+                                            <div className="flex-1 grid grid-cols-2 sm:grid-cols-4 gap-4 border-l border-[#1A1A1A] lg:pl-6 pl-0 lg:border-l-1 border-l-0">
+                                                <div className="space-y-1">
+                                                    <p className="text-[8px] text-[#707A8A] font-bold uppercase tracking-widest flex items-center gap-1.5">
+                                                        <Target className="w-2.5 h-2.5" /> Metric
+                                                    </p>
+                                                    <p className="text-[11px] font-bold text-[#EAECEF] uppercase truncate">{calc.metricType}</p>
+                                                </div>
+                                                <div className="space-y-1">
+                                                    <p className="text-[8px] text-[#707A8A] font-bold uppercase tracking-widest flex items-center gap-1.5">
+                                                        <Calendar className="w-2.5 h-2.5" /> Cycle
+                                                    </p>
+                                                    <p className="text-[11px] font-bold text-[#EAECEF] uppercase">{calc.calculationPeriod}</p>
+                                                </div>
+                                                <div className="space-y-1">
+                                                    <p className="text-[8px] text-[#707A8A] font-bold uppercase tracking-widest flex items-center gap-1.5">
+                                                        <Terminal className="w-2.5 h-2.5" /> Rule
+                                                    </p>
+                                                    <p className="text-[11px] font-mono font-bold text-[#F0B90B]">
+                                                        {calc.type === 'Achievement' ? `${calc.achievementTiers?.length || 0} Tiers` : calc.commissionType?.split(' ')[0]}
+                                                    </p>
+                                                </div>
+                                                <div className="flex items-center justify-end gap-1.5">
+                                                    <button onClick={() => handleDuplicateCalc(calc.id)} className="w-8 h-8 flex items-center justify-center bg-[#1A1A1A] hover:bg-[#2B3139] text-[#707A8A] hover:text-[#EAECEF] rounded transition-all border border-[#1A1A1A]" title="Duplicate">
+                                                        <Copy className="w-3.5 h-3.5" />
+                                                    </button>
+                                                    <button onClick={() => openBuilderEdit(calc)} className="w-8 h-8 flex items-center justify-center bg-[#1A1A1A] hover:bg-[#2B3139] text-[#707A8A] hover:text-[#EAECEF] rounded transition-all border border-[#1A1A1A]" title="Edit">
+                                                        <Edit3 className="w-3.5 h-3.5" />
+                                                    </button>
+                                                    <button onClick={() => handleDeleteCalc(calc.id)} className="w-8 h-8 flex items-center justify-center bg-[#1A1A1A] hover:bg-[#F6465D]/10 text-[#707A8A] hover:text-[#F6465D] rounded transition-all border border-[#1A1A1A]" title="Delete">
+                                                        <Trash2 className="w-3.5 h-3.5" />
+                                                    </button>
+                                                </div>
                                             </div>
                                         </div>
-
-                                        <div className="grid grid-cols-2 gap-8 bg-black/40 p-8 rounded-3xl border border-white/5 relative overflow-hidden group/inner">
-                                            <div className="space-y-2 relative z-10">
-                                                <p className="text-[10px] text-white/30 font-black uppercase tracking-[0.3em] flex items-center gap-3">
-                                                    <Target className="w-4 h-4 text-primary/50" />
-                                                    {t.metric}
-                                                </p>
-                                                <p className="text-sm font-black text-white uppercase tracking-wider">{calc.metricType}</p>
-                                            </div>
-                                            <div className="space-y-2 text-right relative z-10">
-                                                <p className="text-[10px] text-white/30 font-black uppercase tracking-[0.3em] flex items-center justify-end gap-3">
-                                                    <Calendar className="w-4 h-4" />
-                                                    {t.period}
-                                                </p>
-                                                <p className="text-sm font-black text-white uppercase tracking-wider">{calc.calculationPeriod}</p>
-                                            </div>
-                                            
-                                            {calc.type === 'Achievement' && calc.achievementTiers && (
-                                                <div className="col-span-2 border-t border-white/5 mt-4 pt-8 space-y-6">
-                                                    <div className="flex items-center justify-between">
-                                                        <p className="text-[10px] text-white/30 font-black uppercase tracking-[0.3em] flex items-center gap-3">
-                                                            <ShieldCheck className="w-4 h-4 text-emerald-500/60" />
-                                                            {t.tiers_config}
-                                                        </p>
-                                                        <span className="text-[9px] font-mono text-white/20 uppercase tracking-widest">{calc.achievementTiers.length} Levels Defined</span>
-                                                    </div>
-                                                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                                                        {[...calc.achievementTiers].sort((a,b) => a.target - b.target).map((tier, i) => (
-                                                            <div key={tier.id} className="group/tier flex items-center justify-between bg-white/5 px-5 py-4 rounded-2xl border border-white/5 hover:border-primary/40 hover:bg-white/10 transition-all duration-300">
-                                                                <div className="flex items-center gap-4">
-                                                                    <div className="w-8 h-8 rounded-xl bg-black border border-white/10 text-primary flex items-center justify-center text-[10px] font-black font-mono group-hover/tier:scale-110 transition-transform shadow-lg">{i+1}</div>
-                                                                    <div>
-                                                                        <span className="text-[10px] text-white/30 font-black uppercase tracking-[0.2em] group-hover/tier:text-primary transition-colors block mb-1">{tier.name || `LVL-${i+1}`}</span>
-                                                                        <span className="text-sm font-mono font-black text-white">${tier.target.toLocaleString()}</span>
-                                                                    </div>
-                                                                </div>
-                                                                <div className="text-right">
-                                                                    <span className="text-[10px] text-white/20 font-black uppercase tracking-[0.2em] block mb-1 italic">Reward</span>
-                                                                    <span className="text-lg font-black text-primary font-mono group-hover/tier:scale-110 transition-transform inline-block drop-shadow-[0_0_10px_rgba(252,213,53,0.3)]">
-                                                                        {tier.rewardType === 'Percentage' ? `${tier.rewardAmount}%` : `$${tier.rewardAmount.toLocaleString()}`}
-                                                                    </span>
-                                                                </div>
+                                        
+                                        {/* Tier Preview Row (Only for Achievement) */}
+                                        {calc.type === 'Achievement' && calc.achievementTiers && (
+                                            <div className="bg-[#080808] px-5 py-2 border-t border-[#1A1A1A] flex items-center gap-4 overflow-x-auto no-scrollbar">
+                                                <span className="text-[8px] font-black text-[#707A8A] uppercase tracking-widest shrink-0">Protocol Map:</span>
+                                                <div className="flex items-center gap-2">
+                                                    {[...calc.achievementTiers].sort((a,b) => a.target - b.target).map((tier, i) => (
+                                                        <div key={tier.id} className="flex items-center gap-2 shrink-0">
+                                                            <div className="px-2 py-1 bg-[#121212] border border-[#1A1A1A] rounded flex items-center gap-2">
+                                                                <span className="text-[9px] font-mono text-[#F0B90B] font-bold">${tier.target.toLocaleString()}</span>
+                                                                <ArrowRight className="w-2 h-2 text-[#707A8A]" />
+                                                                <span className="text-[9px] font-mono text-[#0ECB81] font-bold">{tier.rewardType === 'Percentage' ? `${tier.rewardAmount}%` : `$${tier.rewardAmount}`}</span>
                                                             </div>
-                                                        ))}
-                                                    </div>
+                                                            {i < calc.achievementTiers!.length - 1 && <div className="w-2 h-px bg-[#1A1A1A]"></div>}
+                                                        </div>
+                                                    ))}
                                                 </div>
-                                            )}
-                                            
-                                            {calc.type === 'Commission' && calc.commissionType && (
-                                                <div className="col-span-2 border-t border-white/5 mt-4 pt-8">
-                                                    <div className="flex justify-between items-center mb-6">
-                                                        <p className="text-[10px] text-white/30 font-black uppercase tracking-[0.3em] flex items-center gap-3">
-                                                            <Star className="w-4 h-4 text-orange-400/60" />
-                                                            {t.commission_rule}
-                                                        </p>
-                                                        <div className="px-4 py-1.5 bg-emerald-500/10 rounded-full text-emerald-400 text-[9px] font-black uppercase tracking-[0.2em] border border-emerald-500/20 shadow-lg">NODE_OPERATIONAL</div>
-                                                    </div>
-                                                    <div className="bg-white/5 p-6 rounded-2xl border border-white/5 group-hover/inner:border-primary/20 transition-all">
-                                                        <p className="text-sm font-black text-white uppercase tracking-[0.1em] leading-relaxed flex flex-wrap items-center gap-3">
-                                                            <span className="text-primary">{calc.commissionType}</span>
-                                                            <span className="text-white/10">•</span>
-                                                            <span className="text-white/60">{calc.commissionMethod}</span>
-                                                            <span className="text-white/10">•</span>
-                                                            <span className="px-3 py-1 bg-black rounded-lg border border-primary/30 text-primary font-mono text-xs">{calc.commissionCondition}</span>
-                                                        </p>
-                                                    </div>
-                                                </div>
-                                            )}
-                                        </div>
+                                            </div>
+                                        )}
                                     </div>
-                                    
-                                    <div className="h-2 w-full bg-gradient-to-r from-transparent via-primary/20 to-transparent opacity-0 group-hover:opacity-100 transition-opacity"></div>
-                                </div>
-                            ))}
-                        </div>
-                    )}
-                </div>
+                                ))}
+                            </div>
+                        )}
+                    </div>
+                </main>
+            </div>
 
-                {/* Project Settings Modal */}
-                <CreateProjectModal 
-                    isOpen={isSettingsOpen}
-                    onClose={() => setIsSettingsOpen(false)}
-                    onSuccess={() => {
-                        setIsSettingsOpen(false);
-                        loadProject();
-                    }}
-                    initialData={project}
-                />
-            </div>
-            
-            {/* Quick Action FAB */}
-            <div className="fixed bottom-10 right-10 flex flex-col gap-4 z-50">
-                <button 
-                    onClick={() => window.scrollTo({ top: 0, behavior: 'smooth' })}
-                    className="w-14 h-14 bg-white/5 hover:bg-white/10 text-white rounded-2xl border border-white/10 flex items-center justify-center backdrop-blur-xl shadow-2xl transition-all hover:-translate-y-1 active:scale-95 group"
-                >
-                    <ArrowRight className="w-6 h-6 -rotate-90 group-hover:scale-110 transition-transform" />
-                </button>
-            </div>
+            {/* Project Settings Modal */}
+            <CreateProjectModal 
+                isOpen={isSettingsOpen}
+                onClose={() => setIsSettingsOpen(false)}
+                onSuccess={() => {
+                    setIsSettingsOpen(false);
+                    loadProject();
+                }}
+                initialData={project}
+            />
         </div>
     );
 };

@@ -238,13 +238,13 @@ const DesktopPackagingHub: React.FC<DesktopPackagingHubProps> = ({
                         <div 
                             key={order['Order ID']} 
                             className={`${B_BG_PANEL} border ${B_BORDER} hover:border-[#FCD535]/30 group transition-all relative cursor-pointer`}
-                            onClick={() => activeTab === 'Ready to Ship' ? toggleOrderSelection(order['Order ID']) : onView(order)}
+                            onClick={() => onView(order)}
                         >
                             {loadingActionId === order['Order ID'] && (
                                 <div className="absolute inset-0 bg-[#0B0E11]/80 z-50 flex items-center justify-center"><Spinner size="sm" /></div>
                             )}
                             {activeTab === 'Ready to Ship' && (
-                                <div className="absolute top-3 left-3 z-10">
+                                <div className="absolute top-3 left-3 z-10" onClick={(e) => { e.stopPropagation(); toggleOrderSelection(order['Order ID']); }}>
                                     <div className={`w-5 h-5 border-2 rounded-sm transition-colors flex items-center justify-center ${selectedOrderIds.has(order['Order ID']) ? 'bg-[#FCD535] border-[#FCD535]' : 'border-gray-600 bg-black/20'}`}>
                                         {selectedOrderIds.has(order['Order ID']) && (
                                             <svg className="w-3.5 h-3.5 text-black" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={4}><path d="M5 13l4 4L19 7" /></svg>
@@ -287,7 +287,7 @@ const DesktopPackagingHub: React.FC<DesktopPackagingHubProps> = ({
                                                         {activeTab === 'Ready to Ship' && (
                                                             <>
                                                                 <button onClick={(e) => { e.stopPropagation(); onUndo(order); }} className={`w-full py-1.5 bg-[#F6465D]/10 hover:bg-[#F6465D]/20 ${B_RED} text-[10px] font-bold uppercase transition-colors rounded-sm`}>Undo</button>
-                                                                <button onClick={(e) => { e.stopPropagation(); onShip(order); }} className={`w-full py-1.5 bg-amber-500 hover:bg-amber-400 text-black text-[10px] font-bold uppercase transition-colors rounded-sm`}>Ship</button>
+                                                                <button onClick={(e) => { e.stopPropagation(); onShip(order); }} className={`w-full py-1.5 ${B_ACCENT_BG} text-[10px] font-bold uppercase transition-colors rounded-sm`}>Ship</button>
                                                             </>
                                                         )}
                                                         {activeTab === 'Shipped' && (
@@ -300,7 +300,21 @@ const DesktopPackagingHub: React.FC<DesktopPackagingHubProps> = ({
                                                     {loadingActionId === order['Order ID'] && (
                                                         <div className="absolute inset-0 bg-[#0B0E11]/80 z-50 flex items-center justify-center"><Spinner size="sm" /></div>
                                                     )}
-                                                    <div className="col-span-1 text-[10px] font-mono text-[#848E9C] pl-1">{(idx + 1).toString().padStart(2, '0')}</div>
+                                                    <div className="col-span-1 flex flex-col items-start gap-1 pl-1">
+                                                        {activeTab === 'Ready to Ship' && (
+                                                            <div 
+                                                                onClick={(e) => { e.stopPropagation(); toggleOrderSelection(order['Order ID']); }}
+                                                                className={`w-4 h-4 border-2 rounded-sm transition-colors flex items-center justify-center cursor-pointer ${selectedOrderIds.has(order['Order ID']) ? 'bg-[#FCD535] border-[#FCD535]' : 'border-gray-600 bg-black/20'}`}
+                                                            >
+                                                                {selectedOrderIds.has(order['Order ID']) && (
+                                                                    <svg className="w-3 h-3 text-black" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={4}><path d="M5 13l4 4L19 7" /></svg>
+                                                                )}
+                                                            </div>
+                                                        )}
+                                                        {(!selectedOrderIds.has(order['Order ID']) || activeTab !== 'Ready to Ship') && (
+                                                            <div className="text-[10px] font-mono text-[#848E9C]">{(idx + 1).toString().padStart(2, '0')}</div>
+                                                        )}
+                                                    </div>
                                                     <div className="col-span-4 flex items-center gap-3 w-min-0">
                                                         <img src={convertGoogleDriveUrl(order.Products[0]?.image)} className={`w-8 h-8 object-cover ${B_BG_MAIN} border ${B_BORDER} flex-shrink-0 rounded-sm`} alt="" />
                                                         <div className="min-w-0">
@@ -327,7 +341,7 @@ const DesktopPackagingHub: React.FC<DesktopPackagingHubProps> = ({
                                                         {activeTab === 'Ready to Ship' && (
                                                             <>
                                                                 <button onClick={(e) => { e.stopPropagation(); onUndo(order); }} className={`px-3 py-1 bg-[#F6465D]/10 hover:bg-[#F6465D]/20 ${B_RED} text-[10px] font-bold uppercase rounded-sm transition-colors`}>Undo</button>
-                                                                <button onClick={(e) => { e.stopPropagation(); onShip(order); }} className={`px-4 py-1 bg-amber-500 hover:bg-amber-400 text-[#0B0E11] text-[10px] font-bold uppercase rounded-sm`}>Ship</button>
+                                                                <button onClick={(e) => { e.stopPropagation(); onShip(order); }} className={`px-4 py-1 ${B_ACCENT_BG} text-[10px] font-bold uppercase rounded-sm`}>Ship</button>
                                                             </>
                                                         )}
                                                         {activeTab === 'Shipped' && (

@@ -448,7 +448,7 @@ const EditOrderPage: React.FC<EditOrderPageProps> = ({ order, onSaveSuccess, onC
 
     return (
         // Main Container - Fixed Layout
-        <div className="w-full h-full flex flex-col animate-fade-in overflow-y-auto custom-scrollbar pb-20">
+        <div className="w-full h-full flex flex-col animate-fade-in overflow-y-auto custom-scrollbar bg-[#0B0E11] pb-20">
             {/* Scanner Modal */}
             {isScannerVisible && (
                 <BarcodeScannerModal 
@@ -462,45 +462,50 @@ const EditOrderPage: React.FC<EditOrderPageProps> = ({ order, onSaveSuccess, onC
             )}
 
             {/* Top Bar */}
-            <div className="flex-shrink-0 flex flex-col sm:flex-row justify-between items-start sm:items-center mb-4 gap-4 px-1 lg:px-4 pt-2">
-                <div>
-                    <h1 className="text-2xl font-black text-white uppercase tracking-tighter italic flex items-center gap-3">
-                        <span className="w-1.5 h-6 bg-blue-600 rounded-full"></span>
-                        Edit Order
-                    </h1>
-                    <div className="flex flex-wrap items-center gap-2 mt-1">
-                        <span className="text-[10px] font-mono font-bold text-gray-500 bg-gray-900 px-2 py-0.5 rounded border border-gray-800">#{formData['Order ID']}</span>
-                        <span className="text-[10px] text-gray-500 font-bold uppercase">{formData.Team}</span>
-                        {/* Date Picker */}
-                        <div className="flex items-center gap-1 bg-gray-900 px-2 py-0.5 rounded border border-gray-800">
-                            <label htmlFor="order-date" className="text-[10px] font-black text-gray-600 uppercase cursor-pointer">Date</label>
-                            <input 
-                                id="order-date"
-                                type="datetime-local"
-                                value={formatForInput(formData.Timestamp)}
-                                onChange={handleDateChange}
-                                disabled={!currentUser?.IsSystemAdmin}
-                                className={`bg-transparent border-none text-[10px] font-bold text-blue-400 p-0 focus:ring-0 h-4 ${!currentUser?.IsSystemAdmin ? 'opacity-50 cursor-not-allowed' : ''}`}
-                                style={{ colorScheme: 'dark' }}
-                            />
+            <div className="flex-shrink-0 flex flex-col sm:flex-row justify-between items-start sm:items-center mb-4 gap-4 px-4 pt-4">
+                <div className="flex items-center gap-4">
+                    <button onClick={onCancel} className="p-2 hover:bg-[#2B3139] rounded transition-colors text-[#848E9C] hover:text-[#EAECEF]">
+                        <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 19l-7-7m0 0l7-7m-7 7h18" /></svg>
+                    </button>
+                    <div>
+                        <h1 className="text-xl font-bold text-[#EAECEF] flex items-center gap-2">
+                            Edit Order
+                            <span className="text-sm font-medium text-[#848E9C]">#{formData['Order ID'].substring(0, 8)}</span>
+                        </h1>
+                        <div className="flex items-center gap-3 mt-1">
+                            <span className="text-[11px] font-medium text-[#FCD535] bg-[#FCD535]/10 px-1.5 py-0.5 rounded-sm uppercase tracking-tight">{formData.Team}</span>
+                            <div className="flex items-center gap-1.5">
+                                <label htmlFor="order-date" className="text-[11px] font-medium text-[#848E9C] uppercase">Date:</label>
+                                <input 
+                                    id="order-date"
+                                    type="datetime-local"
+                                    value={formatForInput(formData.Timestamp)}
+                                    onChange={handleDateChange}
+                                    disabled={!currentUser?.IsSystemAdmin}
+                                    className={`bg-transparent border-none text-[11px] font-bold text-[#EAECEF] p-0 focus:ring-0 h-4 ${!currentUser?.IsSystemAdmin ? 'opacity-50 cursor-not-allowed' : 'hover:text-[#FCD535] cursor-pointer'}`}
+                                    style={{ colorScheme: 'dark' }}
+                                />
+                            </div>
                         </div>
                     </div>
                 </div>
-                <button onClick={onCancel} className="px-6 py-2.5 bg-gray-800 border border-gray-700 hover:bg-gray-700 text-gray-400 font-black rounded-xl uppercase text-[10px] tracking-widest transition-all">បោះបង់</button>
+                <div className="flex gap-2">
+                    <button onClick={onCancel} className="px-4 py-2 bg-[#2B3139] hover:bg-[#363C44] text-[#EAECEF] text-xs font-medium rounded transition-all">Cancel</button>
+                </div>
             </div>
 
             {error && (
-                <div className="flex-shrink-0 mb-4 mx-4 p-3 bg-red-500/10 border border-red-500/20 rounded-xl text-red-400 flex items-center gap-3 animate-shake">
-                    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" strokeWidth="2"/></svg>
-                    <span className="font-bold text-xs">{error}</span>
+                <div className="flex-shrink-0 mb-4 mx-4 p-3 bg-[#F6465D]/10 border border-[#F6465D]/20 rounded text-[#F6465D] flex items-center gap-3 animate-shake">
+                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" strokeWidth="2"/></svg>
+                    <span className="font-medium text-xs">{error}</span>
                 </div>
             )}
 
             {/* Split Content Area */}
-            <div className="flex-1 flex flex-col lg:flex-row gap-6 overflow-hidden px-1 lg:px-4 pb-4">
+            <div className="flex-1 flex flex-col lg:flex-row gap-4 overflow-hidden px-4 pb-4">
                 
                 {/* Left: Customer & Logistics */}
-                <div className="w-full lg:w-[380px] xl:w-[420px] flex-shrink-0 h-full overflow-hidden">
+                <div className="w-full lg:w-[360px] xl:w-[400px] flex-shrink-0 h-full overflow-hidden">
                     <EditCustomerPanel 
                         formData={formData}
                         appData={appData}

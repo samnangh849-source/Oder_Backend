@@ -2,7 +2,9 @@ import React, { useContext, useEffect, useState, useMemo } from 'react';
 import { AppContext } from '../context/AppContext';
 import { translations } from '../translations';
 import UserOrdersView from '../components/user/UserOrdersView';
+import TopPerformanceUserJourney from '../components/user/TopPerformanceUserJourney';
 import { useSoundEffects } from '../hooks/useSoundEffects';
+import { useOrder } from '../context/OrderContext';
 import { 
     Activity, Server, LogOut, ChevronLeft, BarChart3, 
     Layers, Plus, ChevronRight, DollarSign, ListChecks
@@ -22,10 +24,13 @@ const MobileUserJourney: React.FC<MobileUserJourneyProps> = ({ onBackToRoleSelec
         hasPermission,
     } = useContext(AppContext);
 
+    const { orders } = useOrder();
+
     const [localLanguage, setLocalLanguage] = useState<'km' | 'en'>(language);
     const t = translations[localLanguage];
     const { playClick, playTeamSelect } = useSoundEffects();
     const [teamStats, setTeamStats] = useState({ revenue: 0, cost: 0, paid: 0, unpaid: 0, count: 0 });
+    const [dateFilter, setDateFilter] = useState<'today' | 'month' | 'year' | 'custom'>('today');
 
      useEffect(() => {
         if (!selectedTeam) {
@@ -63,10 +68,25 @@ const MobileUserJourney: React.FC<MobileUserJourneyProps> = ({ onBackToRoleSelec
         setSelectedTeam('');
     };
 
-    const globalKpiStats = { // Placeholder stats
-        total_orders: 1245,
-        total_revenue: 89050.25,
-    };
+    const globalKpiStats = useMemo(() => {
+        const now = new Date();
+        const filtered = orders.filter(o => {
+            const date = new Date(o.Timestamp);
+            if (dateFilter === 'today') return date.toDateString() === now.toDateString();
+            if (dateFilter === 'month') return date.getMonth() === now.getMonth() && date.getFullYear() === now.getFullYear();
+            if (dateFilter === 'year') return date.getFullYear() === now.getFullYear();
+            return true; 
+        });
+
+        const revenue = filtered.reduce((sum, o) => sum + (Number(o['Grand Total']) || 0), 0);
+        const uniqueTeams = new Set(filtered.map(o => o.Team).filter(Boolean));
+
+        return {
+            total_orders: filtered.length,
+            total_revenue: revenue,
+            active_teams: uniqueTeams.size,
+        };
+    }, [orders, dateFilter]);
     const formatNumber = (n: number) => n.toLocaleString();
 
     return (
@@ -87,6 +107,8 @@ const MobileUserJourney: React.FC<MobileUserJourneyProps> = ({ onBackToRoleSelec
                 .cm-list-header { font-size: 12px; font-weight: 700; color: var(--cm-accent); text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 8px; }
                 .cm-team-item-mobile { display: flex; align-items: center; justify-content: space-between; padding: 14px 10px; background: var(--cm-card-bg2); border-radius: 2px; border-left: 3px solid var(--cm-accent); cursor: pointer; }
                 .cm-team-item-name-mobile { font-size: 14px; font-weight: 600; }
+                .no-scrollbar::-webkit-scrollbar { display: none; }
+                .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
             `}</style>
             <header className="cm-header-mobile">
                 <div className="flex items-center gap-1">
@@ -118,6 +140,26 @@ const MobileUserJourney: React.FC<MobileUserJourneyProps> = ({ onBackToRoleSelec
                 </div>
             </header>
 
+            {/* Global Date Filter for Mobile - Always Visible */}
+            <div className="flex overflow-x-auto gap-1 px-4 py-2.5 no-scrollbar border-b border-[var(--cm-border)] bg-[var(--cm-card-bg)] flex-shrink-0">
+                    {(['today', 'month', 'year', 'custom'] as const).map((f) => (
+                    <button
+                        key={f}
+                        onClick={() => setDateFilter(f)}
+                        className={`whitespace-nowrap px-4 py-1.5 text-[10px] font-bold uppercase tracking-wider transition-all rounded-full border ${
+                            dateFilter === f 
+                            ? 'bg-[var(--cm-accent)] text-[var(--cm-accent-text)] border-[var(--cm-accent)] shadow-lg' 
+                            : 'text-[var(--cm-text-muted)] border-[var(--cm-border)]'
+                        }`}
+                    >
+                        {f === 'today' ? (language === 'km' ? 'ថ្ងៃនេះ' : 'Today') : 
+                        f === 'month' ? (language === 'km' ? 'ខែនេះ' : 'Month') : 
+                        f === 'year' ? (language === 'km' ? 'ឆ្នាំនេះ' : 'Year') : 
+                        (language === 'km' ? 'កំណត់' : 'Custom')}
+                    </button>
+                ))}
+            </div>
+
             {selectedTeam ? (
                 <div className="flex-grow flex flex-col overflow-hidden">
                      <div className="cm-kpi-grid-mobile flex-shrink-0 !py-3">
@@ -131,20 +173,41 @@ const MobileUserJourney: React.FC<MobileUserJourneyProps> = ({ onBackToRoleSelec
                         </div>
                     </div>
                     <div className="flex-grow overflow-hidden">
-                        <UserOrdersView onAdd={handleCreateOrder} onStatsUpdate={setTeamStats} showColumnSelectorToggle={false} />
+                        <UserOrdersView 
+                            onAdd={handleCreateOrder} 
+                            onStatsUpdate={setTeamStats} 
+                            showColumnSelectorToggle={false} 
+                            dateFilter={dateFilter === 'month' ? 'this_month' : dateFilter === 'year' ? 'this_year' : dateFilter as any}
+                        />
                     </div>
                 </div>
             ) : (
-                <div className="cm-mobile-content">
-                    <div className="cm-kpi-grid-mobile !pt-4">
-                        <div className="cm-kpi-card-mobile">
-                            <div className="cm-kpi-card-label"><Activity size={12}/><span>{language === 'km' ? 'ការបញ្ជាទិញសរុប' : 'Total Orders'}</span></div>
-                            <div className="cm-kpi-card-value" style={{color: 'var(--cm-accent)'}}>{globalKpiStats.total_orders}</div>
+                <div className="cm-mobile-content pb-10">
+                    <div className="flex flex-col gap-3 px-4 pt-4 border-b border-[var(--cm-border)] pb-4">
+                        <div className="flex overflow-x-auto gap-3 no-scrollbar pb-1">
+                            <div className="min-w-[120px] bg-[var(--cm-card-bg2)] border border-[var(--cm-border)] rounded-lg p-3">
+                                <div className="flex items-center gap-1.5 text-[10px] font-bold text-[var(--cm-text-muted)] uppercase mb-1">
+                                    <Activity size={12}/> {language === 'km' ? 'ការកម្មង់' : 'Orders'}
+                                </div>
+                                <div className="text-lg font-bold text-[var(--cm-accent)]">{globalKpiStats.total_orders}</div>
+                            </div>
+                            <div className="min-w-[140px] bg-[var(--cm-card-bg2)] border border-[var(--cm-border)] rounded-lg p-3">
+                                <div className="flex items-center gap-1.5 text-[10px] font-bold text-[var(--cm-text-muted)] uppercase mb-1">
+                                    <BarChart3 size={12}/> {language === 'km' ? 'ចំណូលសរុប' : 'Total Revenue'}
+                                </div>
+                                <div className="text-lg font-bold text-[var(--cm-green)]">${formatNumber(globalKpiStats.total_revenue)}</div>
+                            </div>
+                            <div className="min-w-[120px] bg-[var(--cm-card-bg2)] border border-[var(--cm-border)] rounded-lg p-3">
+                                <div className="flex items-center gap-1.5 text-[10px] font-bold text-[var(--cm-text-muted)] uppercase mb-1">
+                                    <Server size={12}/> {language === 'km' ? 'ក្រុមសកម្ម' : 'Active Teams'}
+                                </div>
+                                <div className="text-lg font-bold text-[var(--cm-text-primary)]">{globalKpiStats.active_teams}</div>
+                            </div>
                         </div>
-                        <div className="cm-kpi-card-mobile">
-                            <div className="cm-kpi-card-label"><BarChart3 size={12}/><span>{language === 'km' ? 'ចំណូលសរុប' : 'Total Revenue'}</span></div>
-                            <div className="cm-kpi-card-value" style={{color: 'var(--cm-green)'}}>${formatNumber(globalKpiStats.total_revenue)}</div>
-                        </div>
+                    </div>
+
+                    <div className="px-4">
+                        <TopPerformanceUserJourney orders={orders} language={localLanguage} period={dateFilter} />
                     </div>
 
                     <div className="cm-team-list-mobile">

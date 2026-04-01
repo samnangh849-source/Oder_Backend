@@ -44,8 +44,8 @@ const SYSTEM_STRUCTURE = {
     "Products (JSON)", "Internal Shipping Method", "Internal Shipping Details", "Internal Cost", 
     "Payment Status", "Payment Info", "Discount ($)", "Delivery Unpaid", "Delivery Paid", 
     "Total Product Cost ($)", "Telegram Message ID 1", "Telegram Message ID 2", "Scheduled Time", 
-    "Fulfillment Store", "Team", "IsVerified", "Fulfillment Status", "Packed By", 
-    "Package Photo URL", "Driver Name", "Tracking Number", "Dispatched Time", "Delivered Time", "Delivery Photo URL"
+    "Fulfillment Store", "Team", "IsVerified", "Fulfillment Status", "Packed By", "Packed Time", 
+    "Package Photo URL", "Driver Name", "Tracking Number", "Dispatched Time", "Dispatched By", "Delivered Time", "Delivery Photo URL"
   ],
   "RevenueDashboard": ["ID", "Timestamp", "Team", "Page", "Revenue", "FulfillmentStore"],
   

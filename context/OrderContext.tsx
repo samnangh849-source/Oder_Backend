@@ -93,7 +93,12 @@ export const OrderProvider: React.FC<{ children: React.ReactNode }> = ({ childre
                             const rawProducts = o['Products (JSON)'] || o.Products;
                             products = typeof rawProducts === 'string' ? JSON.parse(rawProducts) : (rawProducts || []);
                         } catch (e) { console.warn("Failed to parse products for order", o['Order ID']); }
-                        return { ...o, Products: products };
+                        return {
+                            ...o,
+                            Products: products,
+                            FulfillmentStatus: (o['Fulfillment Status'] || o.FulfillmentStatus || 'Pending'),
+                            IsVerified: String(o.IsVerified).toUpperCase() === 'TRUE' || o.IsVerified === 'A'
+                        };
                     });
                     setOrders(parsedOrders);
                     setRefreshTimestamp(Date.now());

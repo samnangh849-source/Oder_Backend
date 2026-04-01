@@ -102,6 +102,7 @@ export const useOptimisticImage = (props?: UseOptimisticImageProps) => {
             if (props?.onUploadError) {
                 props.onUploadError(id, error);
             }
+            throw error;
         } finally {
             setUploadingIds(prev => {
                 const next = new Set(prev);

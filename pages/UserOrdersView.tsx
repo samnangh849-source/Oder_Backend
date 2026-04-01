@@ -184,9 +184,9 @@ const UserOrdersView: React.FC<{ team: string; onAdd: () => void }> = ({ team, o
         </div>
     );
 
-    if (showReport) return <div className="animate-fade-in"><UserSalesPageReport orders={permittedOrders} onBack={() => setShowReport(false)} team={team} onNavigate={(filters) => setDrilldownFilters(filters)} initialFilters={reportFilters} onFilterChange={setReportFilters} /></div>;
+    if (showReport) return <div className="animate-fade-in h-full overflow-auto"><UserSalesPageReport orders={permittedOrders} onBack={() => setShowReport(false)} team={team} onNavigate={(filters) => setDrilldownFilters(filters)} initialFilters={reportFilters} onFilterChange={setReportFilters} /></div>;
 
-    if (showShippingReport) return <div className="animate-fade-in min-h-screen"><ShippingReport orders={permittedOrders} appData={appData} dateFilter={dateRange} startDate={customStart} endDate={customEnd} onNavigate={(filters) => { setDrilldownFilters(filters); setShowShippingReport(false); }} onBack={() => setShowShippingReport(false)} /></div>;
+    if (showShippingReport) return <div className="animate-fade-in h-full overflow-auto"><ShippingReport orders={permittedOrders} appData={appData} dateFilter={dateRange} startDate={customStart} endDate={customEnd} onNavigate={(filters) => { setDrilldownFilters(filters); setShowShippingReport(false); }} onBack={() => setShowShippingReport(false)} /></div>;
 
     return (
         <div className="flex flex-col space-y-4 pb-32">

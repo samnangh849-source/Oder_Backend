@@ -69,16 +69,19 @@ function doPost(e) {
         return createJsonResponse({ status: 'success' });
 
       case 'submitOrder':
-        const result = processOrder(contents.orderData);
+        const submitData = contents.orderData || contents;
+        const result = processOrder(submitData);
         logUserActivity(user, "បង្កើតការកម្មង់ថ្មី", `លេខសម្គាល់: ${result.orderId}`);
         return createJsonResponse({ status: 'success', orderId: result.orderId });
         
       case 'updateOrderTelegram':
-        const updateRes = updateOrderTelegram(contents.orderData);
+        const updateData = contents.orderData || contents;
+        const updateRes = updateOrderTelegram(updateData);
         return createJsonResponse({ status: 'success', messageIds: updateRes });
         
       case 'deleteOrderTelegram':
-        deleteOrderTelegramMessages(contents.orderData);
+        const deleteData = contents.orderData || contents;
+        deleteOrderTelegramMessages(deleteData);
         return createJsonResponse({ status: 'success' });
         
       case 'addRow': 
@@ -107,6 +110,54 @@ function doPost(e) {
         try {
           const upRes = uploadImageToDrive(contents.fileData, contents.fileName, contents.mimeType, contents.uploadFolderID, contents.userName);
           console.log("📤 [uploadImage] SUCCESS: url=" + upRes.url + " fileID=" + upRes.fileID);
+
+          // ✅ [Requirement] Link must be kept in Google Sheet "first of all"
+          // If this is an Order update, sync it now before returning to backend.
+          if (contents.orderId) {
+             let team = "";
+             // Try to get team from orderData or contents
+             if (contents.orderData && contents.orderData.team) team = contents.orderData.team;
+             else if (contents.team) team = contents.team;
+             
+             const updatedFields = {};
+             if (contents.targetColumn) {
+                updatedFields[contents.targetColumn] = upRes.url;
+             }
+             // Also include any other NewData fields provided (status, packing info, etc.)
+             if (contents.newData) {
+                for (let k in contents.newData) updatedFields[k] = contents.newData[k];
+             }
+             
+             updateOrderInSheets(contents.orderId, team, updatedFields);
+             console.log("✅ [uploadImage] Order Sheet updated for ID: " + contents.orderId);
+          } else if (contents.sheetName && contents.primaryKey && contents.targetColumn) {
+             // Handle generic table updates
+             const newData = {};
+             newData[contents.targetColumn] = upRes.url;
+             handleUpdateSheet({
+               sheetName: contents.sheetName,
+               primaryKey: contents.primaryKey,
+               newData: newData
+             });
+             console.log("✅ [uploadImage] Generic Sheet updated: " + contents.sheetName);
+          } else if (contents.userName && contents.fileName === 'profile_picture') {
+             // Handle user profile picture
+             handleUpdateSheet({
+               sheetName: CONFIG.USERS_SHEET,
+               primaryKey: { "UserName": contents.userName },
+               newData: { "ProfilePictureURL": upRes.url }
+             });
+             console.log("✅ [uploadImage] User profile updated for: " + contents.userName);
+          } else if (contents.movieId && contents.targetColumn) {
+             // Handle movies
+             handleUpdateSheet({
+               sheetName: CONFIG.MOVIES_SHEET,
+               primaryKey: { "ID": contents.movieId },
+               newData: { [contents.targetColumn]: upRes.url }
+             });
+             console.log("✅ [uploadImage] Movie updated for ID: " + contents.movieId);
+          }
+
           return createJsonResponse({ status: 'success', url: upRes.url, fileID: upRes.fileID, message: 'Upload completed successfully' });
         } catch (e) {
           console.error("📤 [uploadImage] FAILED: " + e.message);
@@ -244,23 +295,30 @@ function handleUpdateSheet(data) {
     console.log("📑 [UpdateSheet] Headers: " + normalizedHeaders.join(", "));
     
     let rowIndex = -1;
+    const targetPkVals = {};
+    for (const [k, v] of Object.entries(data.primaryKey)) {
+      targetPkVals[normalizeKey(k)] = String(v).trim();
+    }
+
     for (let i = 1; i < values.length; i++) {
       let match = true;
-      for (const [pkKey, pkVal] of Object.entries(data.primaryKey)) {
-        const colIdx = normalizedHeaders.indexOf(normalizeKey(pkKey));
-        if (colIdx === -1 || String(values[i][colIdx]) !== String(pkVal)) {
+      for (const pkKey in targetPkVals) {
+        const colIdx = normalizedHeaders.indexOf(pkKey);
+        if (colIdx === -1 || String(values[i][colIdx]).trim() !== targetPkVals[pkKey]) {
           match = false; break;
         }
       }
       if (match) { 
         rowIndex = i + 1; 
-        console.log("✅ [UpdateSheet] Row found: " + rowIndex + " data=" + JSON.stringify(values[i]));
+        console.log("✅ [UpdateSheet] Row found: " + rowIndex);
         break; 
       }
     }
 
     if (rowIndex !== -1) {
       let updatedCount = 0;
+      const rowData = values[rowIndex - 1]; // Get the existing row data (0-indexed locally)
+
       for (const [key, val] of Object.entries(data.newData)) {
         const colIdx = normalizedHeaders.indexOf(normalizeKey(key));
         if (colIdx !== -1) {
@@ -269,14 +327,19 @@ function handleUpdateSheet(data) {
             if (v.toLowerCase() === 'true') v = true;
             else if (v.toLowerCase() === 'false') v = false;
           }
-          sheet.getRange(rowIndex, colIdx + 1).setValue(v);
+          rowData[colIdx] = v; // Update the local row array
           updatedCount++;
-          console.log("📝 [UpdateSheet] Updated col " + (colIdx+1) + " (" + key + ") = " + v);
+          console.log("📝 [Batch Update] Changed col " + (colIdx+1) + " (" + key + ") = " + v);
         } else {
-          console.warn("⚠️ [UpdateSheet] Column not found in headers: " + key);
+          console.warn("⚠️ [Batch Update] Column not found in headers: " + key);
         }
       }
-      console.log("✅ [UpdateSheet] SUCCESS: Updated " + updatedCount + " columns in row " + rowIndex);
+
+      if (updatedCount > 0) {
+        // Write the ENTIRE row back in ONE atomic operation
+        sheet.getRange(rowIndex, 1, 1, headers.length).setValues([rowData]);
+        console.log("✅ [Batch Update] SUCCESS: Atomically updated row " + rowIndex);
+      }
       return createJsonResponse({ status: "success", updated: updatedCount });
     }
     console.error("❌ [UpdateSheet] Row not found with PK: " + JSON.stringify(data.primaryKey));
@@ -451,8 +514,18 @@ function deleteOrderTelegramMessages(orderData) {
 // --- ជំនួយការធ្វើសមកាលកម្មទិន្នន័យ (Sync Helpers) ---
 
 function updateOrderInSheets(orderId, team, updatedFields) {
+  console.log("🔄 [updateOrderInSheets] Attempting update for ID: " + orderId + " Team: " + team);
+  if (!updatedFields || typeof updatedFields !== 'object') {
+    console.error("❌ [updateOrderInSheets] Invalid updatedFields provided");
+    return;
+  }
+
   const ss = SpreadsheetApp.getActiveSpreadsheet();
-  const sheetsToUpdate = [ss.getSheetByName(CONFIG.ALL_ORDERS_SHEET), ss.getSheetByName(CONFIG.ORDER_SHEET_PREFIX + team)];
+  const sheetsToUpdate = [ss.getSheetByName(CONFIG.ALL_ORDERS_SHEET)];
+  if (team) {
+    const teamSheet = ss.getSheetByName(CONFIG.ORDER_SHEET_PREFIX + team);
+    if (teamSheet) sheetsToUpdate.push(teamSheet);
+  }
   
   sheetsToUpdate.forEach(sheet => {
     if (!sheet) return;
@@ -460,22 +533,48 @@ function updateOrderInSheets(orderId, team, updatedFields) {
     const headers = data[0];
     const normalizedHeaders = headers.map(h => normalizeKey(h));
     const orderIdCol = normalizedHeaders.indexOf(normalizeKey("Order ID"));
-    if (orderIdCol === -1) return;
+    if (orderIdCol === -1) {
+      console.error("❌ [updateOrderInSheets] 'Order ID' column not found in sheet: " + sheet.getName());
+      return;
+    }
+
+    let found = false;
+    const targetId = String(orderId).trim();
 
     for (let i = 1; i < data.length; i++) {
-      if (String(data[i][orderIdCol]) === String(orderId)) {
+      const sheetId = String(data[i][orderIdCol]).trim();
+      if (sheetId === targetId) {
+        found = true;
+        const rowValues = data[i];
+        let updatedCount = 0;
+
         for (const [fieldName, newValue] of Object.entries(updatedFields)) {
-          const colIndex = normalizedHeaders.indexOf(normalizeKey(fieldName));
+          const colKey = normalizeKey(fieldName);
+          const colIndex = normalizedHeaders.indexOf(colKey);
           if (colIndex !== -1) {
-            sheet.getRange(i + 1, colIndex + 1).setValue(newValue);
+            let val = newValue;
+            // Prefix phone numbers to preserve leading zeros
+            if (colKey.includes("phone")) {
+              val = "'" + String(val || "").replace(/[^0-9+]/g, "");
+            }
+            rowValues[colIndex] = val;
+            updatedCount++;
           }
+        }
+        
+        if (updatedCount > 0) {
+          sheet.getRange(i + 1, 1, 1, headers.length).setValues([rowValues]);
+          console.log("✅ [updateOrderInSheets] Updated " + updatedCount + " fields for ID " + orderId + " in " + sheet.getName());
         }
         break; 
       }
     }
+    if (!found) {
+      console.warn("⚠️ [updateOrderInSheets] Order ID " + orderId + " not found in sheet: " + sheet.getName());
+    }
   });
   
-  SpreadsheetApp.flush(); // បង្ខំអោយទិន្នន័យរក្សាទុកភ្លាមៗ
+  SpreadsheetApp.flush();
 }
 
 function deleteOrderFromSheets(orderId, team) {
@@ -763,12 +862,18 @@ function updateMessageIdInSheet(sheetName, orderId, ids) {
   const sheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName(sheetName);
   if (!sheet) return;
   const data = sheet.getDataRange().getValues();
-  const headers = data[0];
-  const idCol = headers.indexOf("Order ID"), m1 = headers.indexOf("Telegram Message ID 1"), m2 = headers.indexOf("Telegram Message ID 2");
+  const headers = data[0].map(h => normalizeKey(h));
+  const idCol = headers.indexOf(normalizeKey("Order ID"));
+  const m1 = headers.indexOf(normalizeKey("Telegram Message ID 1"));
+  const m2 = headers.indexOf(normalizeKey("Telegram Message ID 2"));
+  
+  if (idCol === -1) return;
+  
+  const targetId = String(orderId).trim();
   for (let i = 1; i < data.length; i++) {
-    if (data[i][idCol] == orderId) {
-      if (ids.id1) sheet.getRange(i+1, m1+1).setValue(ids.id1);
-      if (ids.id2) sheet.getRange(i+1, m2+1).setValue(ids.id2);
+    if (String(data[i][idCol]).trim() === targetId) {
+      if (ids.id1 && m1 !== -1) sheet.getRange(i+1, m1+1).setValue(String(ids.id1));
+      if (ids.id2 && m2 !== -1) sheet.getRange(i+1, m2+1).setValue(String(ids.id2));
       break;
     }
   }
@@ -787,10 +892,18 @@ function getMessageIdsFromSheet(orderId) {
 
 function getStoreFromOrderSheet(orderId) {
     const sheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName(CONFIG.ALL_ORDERS_SHEET);
+    if (!sheet) return "Unknown";
     const data = sheet.getDataRange().getValues();
-    const headers = data[0];
-    const idCol = headers.indexOf("Order ID"), storeCol = headers.indexOf("Fulfillment Store");
-    for (let i = 1; i < data.length; i++) if (String(data[i][idCol]) === String(orderId)) return data[i][storeCol];
+    const headers = data[0].map(h => normalizeKey(h));
+    const idCol = headers.indexOf(normalizeKey("Order ID"));
+    const storeCol = headers.indexOf(normalizeKey("Fulfillment Store"));
+    
+    if (idCol === -1 || storeCol === -1) return "Unknown";
+    
+    const targetId = String(orderId).trim();
+    for (let i = 1; i < data.length; i++) {
+      if (String(data[i][idCol]).trim() === targetId) return data[i][storeCol];
+    }
     return "Unknown";
 }
 

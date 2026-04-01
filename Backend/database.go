@@ -87,8 +87,18 @@ func InitDB() {
 	maxRetries := GetEnvInt("DB_MAX_RETRIES", 10)
 
 	for i := 0; i < maxRetries; i++ {
+		newLogger := logger.New(
+			log.New(os.Stdout, "\r\n", log.LstdFlags),
+			logger.Config{
+				SlowThreshold:             time.Second,
+				LogLevel:                  logger.Error,
+				IgnoreRecordNotFoundError: true,
+				Colorful:                  true,
+			},
+		)
+
 		db, err = gorm.Open(postgres.Open(dsn), &gorm.Config{
-			Logger: logger.Default.LogMode(logger.Error),
+			Logger: newLogger,
 			// PrepareStmt: true, // Increases performance for repeated queries
 		})
 		if err == nil {
@@ -104,13 +114,14 @@ func InitDB() {
 
 	sqlDB, err := db.DB()
 	if err == nil {
-		// Configurable pool settings
-		maxIdle := GetEnvInt("DB_MAX_IDLE_CONNS", 10)
-		maxOpen := GetEnvInt("DB_MAX_OPEN_CONNS", 25)
+		// Configurable pool settings - Optimized for Aiven/entry-tier PostgreSQL
+		maxIdle := GetEnvInt("DB_MAX_IDLE_CONNS", 5)
+		maxOpen := GetEnvInt("DB_MAX_OPEN_CONNS", 10)
 		sqlDB.SetMaxIdleConns(maxIdle)
 		sqlDB.SetMaxOpenConns(maxOpen)
 		sqlDB.SetConnMaxLifetime(15 * time.Minute)
-		log.Printf("⚡ Database Pool: MaxOpen=%d, MaxIdle=%d", maxOpen, maxIdle)
+		sqlDB.SetConnMaxIdleTime(5 * time.Minute)
+		log.Printf("⚡ Database Pool: MaxOpen=%d, MaxIdle=%d (Optimized for Workers)", maxOpen, maxIdle)
 	}
 
 	log.Println("✅ Database connection established!")

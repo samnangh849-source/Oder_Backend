@@ -37,7 +37,20 @@ const OrderDetailModal: React.FC<OrderDetailModalProps> = ({ order, onClose }) =
                                 <div className="w-1 h-4 bg-[#FCD535]"></div>
                                 <h2 className="text-lg font-black uppercase tracking-widest italic leading-none">Order Analysis</h2>
                             </div>
-                            <p className="text-[10px] font-mono text-[#848E9C] font-bold mt-1 uppercase tracking-[0.2em]">NODE ID: {order['Order ID']}</p>
+                            <div className="flex items-center gap-2 mt-1">
+                                <p className="text-[10px] font-mono text-[#848E9C] font-bold uppercase tracking-[0.2em]">NODE ID: {order['Order ID']}</p>
+                                {(() => {
+                                    const fs = (order as any).FulfillmentStatus || (order as any)['Fulfillment Status'] || 'Pending';
+                                    const fsColors: Record<string, string> = {
+                                        'Pending': 'bg-yellow-500/20 text-yellow-400 border-yellow-500/30',
+                                        'Ready to Ship': 'bg-blue-500/20 text-blue-400 border-blue-500/30',
+                                        'Shipped': 'bg-purple-500/20 text-purple-400 border-purple-500/30',
+                                        'Delivered': 'bg-[#0ECB81]/20 text-[#0ECB81] border-[#0ECB81]/30',
+                                        'Cancelled': 'bg-[#F6465D]/20 text-[#F6465D] border-[#F6465D]/30',
+                                    };
+                                    return <span className={`px-2 py-0.5 text-[9px] font-black uppercase tracking-widest border ${fsColors[fs] || 'bg-[#2B3139] text-[#848E9C] border-[#2B3139]'}`}>{fs}</span>;
+                                })()}
+                            </div>
                         </div>
                     </div>
                     <button onClick={onClose} className="w-10 h-10 bg-[#2B3139] hover:bg-[#F6465D]/10 text-[#848E9C] hover:text-[#F6465D] rounded-sm flex items-center justify-center transition-all active:scale-90 border border-[#2B3139] group">
@@ -165,26 +178,61 @@ const OrderDetailModal: React.FC<OrderDetailModalProps> = ({ order, onClose }) =
                                 </div>
                                 <div className="space-y-5 relative z-10">
                                     <div className="space-y-1.5">
-                                        <label className="text-[8px] font-black text-[#848E9C] uppercase tracking-[0.25em] ml-0.5">Execution Agent</label>
+                                        <label className="text-[8px] font-black text-[#848E9C] uppercase tracking-[0.25em] ml-0.5">Packed By</label>
                                         <div className="bg-[#0B0E11] border border-[#2B3139] p-3">
                                             <p className="text-[11px] font-black text-[#EAECEF] uppercase tracking-wider">{order['Packed By'] || 'AWAITING DISPATCH'}</p>
                                         </div>
                                     </div>
                                     <div className="space-y-1.5">
-                                        <label className="text-[8px] font-black text-[#848E9C] uppercase tracking-[0.25em] ml-0.5">Time Log</label>
+                                        <label className="text-[8px] font-black text-[#848E9C] uppercase tracking-[0.25em] ml-0.5">Packed Time</label>
                                         <div className="bg-[#0B0E11] border border-[#2B3139] p-3">
                                             <p className="text-[11px] font-mono font-black text-[#848E9C] tracking-[0.1em] uppercase">{order['Packed Time'] || 'UNRECORDED'}</p>
                                         </div>
                                     </div>
+                                    {order['Driver Name'] && (
+                                        <div className="space-y-1.5">
+                                            <label className="text-[8px] font-black text-[#848E9C] uppercase tracking-[0.25em] ml-0.5">Driver</label>
+                                            <div className="bg-[#0B0E11] border border-[#2B3139] p-3 flex items-center gap-2">
+                                                <svg className="w-3.5 h-3.5 text-[#F28C28] flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16V6a1 1 0 00-1-1H4a1 1 0 00-1 1v10a1 1 0 001 1h1m8-1a1 1 0 01-1 1H9m4-1V8a1 1 0 011-1h2.586a1 1 0 01.707.293l3.414 3.414a1 1 0 01.293.707V16a1 1 0 01-1 1h-1m-6-1a1 1 0 001 1h1M5 17a2 2 0 104 0m-4 0a2 2 0 114 0m6 0a2 2 0 104 0m-4 0a2 2 0 114 0" /></svg>
+                                                <p className="text-[11px] font-black text-[#F28C28] uppercase tracking-wider">{order['Driver Name']}</p>
+                                            </div>
+                                        </div>
+                                    )}
+                                    {order['Tracking Number'] && (
+                                        <div className="space-y-1.5">
+                                            <label className="text-[8px] font-black text-[#848E9C] uppercase tracking-[0.25em] ml-0.5">Tracking Number</label>
+                                            <div className="bg-[#0B0E11] border border-[#2B3139] p-3">
+                                                <p className="text-[11px] font-mono font-black text-[#0ECB81] tracking-wider">{order['Tracking Number']}</p>
+                                            </div>
+                                        </div>
+                                    )}
+                                    {order['Dispatched By'] && (
+                                        <div className="space-y-1.5">
+                                            <label className="text-[8px] font-black text-[#848E9C] uppercase tracking-[0.25em] ml-0.5">Dispatched By</label>
+                                            <div className="bg-[#0B0E11] border border-[#2B3139] p-3 flex justify-between items-center">
+                                                <p className="text-[11px] font-black text-[#EAECEF] uppercase tracking-wider">{order['Dispatched By']}</p>
+                                                <p className="text-[9px] font-mono text-[#848E9C]">{order['Dispatched Time'] || ''}</p>
+                                            </div>
+                                        </div>
+                                    )}
+                                    {order['Delivered Time'] && (
+                                        <div className="space-y-1.5">
+                                            <label className="text-[8px] font-black text-[#848E9C] uppercase tracking-[0.25em] ml-0.5">Delivered</label>
+                                            <div className="bg-[#0B0E11] border border-[#0ECB81]/30 p-3 flex items-center gap-2">
+                                                <svg className="w-3.5 h-3.5 text-[#0ECB81] flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
+                                                <p className="text-[11px] font-mono font-black text-[#0ECB81] tracking-[0.1em]">{order['Delivered Time']}</p>
+                                            </div>
+                                        </div>
+                                    )}
                                 </div>
                                 <div className="absolute bottom-0 right-0 w-12 h-12 bg-gradient-to-tl from-[#FCD535]/10 to-transparent pointer-events-none"></div>
                             </div>
 
-                            {/* Digital Proof: Scanning Frame Look */}
+                            {/* Digital Proof: Package Photo */}
                             <div className="space-y-3">
                                 <div className="flex items-center gap-3 ml-1">
                                     <div className="w-1 h-3 bg-[#848E9C]"></div>
-                                    <h3 className="text-[10px] font-black uppercase tracking-[0.25em] text-[#848E9C]">Digital Proof</h3>
+                                    <h3 className="text-[10px] font-black uppercase tracking-[0.25em] text-[#848E9C]">Package Photo</h3>
                                 </div>
                                 {order['Package Photo URL'] ? (
                                     <div className="relative group aspect-square border-2 border-[#2B3139] bg-[#0B0E11] cursor-pointer overflow-hidden" onClick={() => previewImage(order['Package Photo URL']!)}>
@@ -194,7 +242,6 @@ const OrderDetailModal: React.FC<OrderDetailModalProps> = ({ order, onClose }) =
                                                 <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0zM10 7v3m0 0v3m0-3h3m-3 0H7" strokeWidth={2.5} /></svg>
                                             </div>
                                         </div>
-                                        {/* Scanning Line Animation */}
                                         <div className="absolute inset-x-0 h-[1px] bg-[#FCD535]/50 shadow-[0_0_10px_#FCD535] top-0 animate-[scan_3s_linear_infinite]"></div>
                                     </div>
                                 ) : (
@@ -202,10 +249,29 @@ const OrderDetailModal: React.FC<OrderDetailModalProps> = ({ order, onClose }) =
                                         <div className="w-12 h-12 border border-[#2B3139] rounded-sm flex items-center justify-center grayscale group-hover:grayscale-0 transition-all opacity-40">
                                             <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" strokeWidth={1.5} /></svg>
                                         </div>
-                                        <p className="text-[9px] font-black uppercase tracking-[0.4em] opacity-40">Visual Signal Lost</p>
+                                        <p className="text-[9px] font-black uppercase tracking-[0.4em] opacity-40">No Package Photo</p>
                                     </div>
                                 )}
                             </div>
+
+                            {/* Digital Proof: Delivery Photo */}
+                            {order['Delivery Photo URL'] && (
+                                <div className="space-y-3">
+                                    <div className="flex items-center gap-3 ml-1">
+                                        <div className="w-1 h-3 bg-[#0ECB81]"></div>
+                                        <h3 className="text-[10px] font-black uppercase tracking-[0.25em] text-[#0ECB81]">Delivery Photo</h3>
+                                    </div>
+                                    <div className="relative group aspect-square border-2 border-[#0ECB81]/30 bg-[#0B0E11] cursor-pointer overflow-hidden" onClick={() => previewImage(order['Delivery Photo URL']!)}>
+                                        <img src={convertGoogleDriveUrl(order['Delivery Photo URL']!)} className="w-full h-full object-cover transition-all duration-700 grayscale group-hover:grayscale-0 group-hover:scale-110" alt="Delivery Proof" />
+                                        <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
+                                            <div className="w-12 h-12 border border-[#0ECB81] bg-[#0B0E11]/80 flex items-center justify-center text-[#0ECB81] shadow-2xl scale-75 group-hover:scale-100 transition-transform duration-500">
+                                                <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0zM10 7v3m0 0v3m0-3h3m-3 0H7" strokeWidth={2.5} /></svg>
+                                            </div>
+                                        </div>
+                                        <div className="absolute inset-x-0 h-[1px] bg-[#0ECB81]/50 shadow-[0_0_10px_#0ECB81] top-0 animate-[scan_3s_linear_infinite]"></div>
+                                    </div>
+                                </div>
+                            )}
 
                             {/* Settlement Summary: High-Impact Card */}
                             <div className="bg-[#1E2329] border border-[#2B3139] p-6 shadow-2xl relative overflow-hidden group">

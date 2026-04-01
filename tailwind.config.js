@@ -1,5 +1,6 @@
 /** @type {import('tailwindcss').Config} */
 export default {
+  darkMode: 'class',
   content: [
     "./index.html",
     "./index.tsx",
@@ -10,8 +11,25 @@ export default {
   ],
   theme: {
     extend: {
+      fontFamily: {
+        sans: ['"Inter"', '"Kantumruy Pro"', 'sans-serif'],
+        display: ['"Rajdhani"', '"Kantumruy Pro"', 'sans-serif'],
+        mono: ['"JetBrains Mono"', 'monospace'],
+        khmer: ['"Kantumruy Pro"', 'sans-serif'],
+        binance: ['Inter', 'sans-serif'],
+      },
       colors: {
         primary: "var(--primary, #3b82f6)",
+        dark: {
+          950: '#020617',
+          900: '#0f172a',
+          800: '#1e293b',
+        },
+        brand: {
+          cyan: '#06b6d4',
+          purple: '#8b5cf6',
+          pink: '#ec4899'
+        },
         binance: {
           yellow: '#FCD535',
           black: '#0B0E11',
@@ -26,9 +44,6 @@ export default {
           highlight: '#474D57',
         },
       },
-      fontFamily: {
-        binance: ['Inter', 'sans-serif'],
-      }
     },
   },
   plugins: [],

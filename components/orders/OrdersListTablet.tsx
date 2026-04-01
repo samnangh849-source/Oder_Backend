@@ -42,7 +42,8 @@ const OrdersListTablet: React.FC<OrdersListTabletProps> = ({
     groupBy = 'none',
     viewMode = 'card'
 }) => {
-    const { appData, previewImage, currentUser } = useContext(AppContext);
+    const { appData, previewImage, currentUser, advancedSettings } = useContext(AppContext);
+    const isBinance = advancedSettings?.uiTheme === 'binance';
 
     // Helper for robust date parsing
     const getSafeDateObj = (dateStr: string) => {
@@ -125,9 +126,19 @@ const OrdersListTablet: React.FC<OrdersListTabletProps> = ({
                 <div key={gIdx} className="space-y-5">
                     {group.label && (
                         <div className="flex items-center gap-3 px-2 py-1">
-                            <div className="w-1.5 h-5 bg-purple-500 rounded-full"></div>
-                            <span className="text-xs font-black text-gray-400 uppercase tracking-[0.2em] italic">{groupBy}: <span className="text-white">{group.label}</span></span>
-                            <span className="text-xs text-gray-600 font-bold ml-auto">{group.orders.length} items</span>
+                            {isBinance ? (
+                                <>
+                                    <div className="w-1 h-5 bg-[#FCD535] rounded-sm"></div>
+                                    <span className="text-xs font-bold text-[#848E9C] uppercase tracking-tight">{groupBy}: <span className="text-[#EAECEF]">{group.label}</span></span>
+                                    <div className="h-[1px] flex-1 bg-[#2B3139]"></div>
+                                </>
+                            ) : (
+                                <>
+                                    <div className="w-1.5 h-5 bg-purple-500 rounded-full"></div>
+                                    <span className="text-xs font-black text-gray-400 uppercase tracking-[0.2em] italic">{groupBy}: <span className="text-white">{group.label}</span></span>
+                                    <span className="text-xs text-gray-600 font-bold ml-auto">{group.orders.length} items</span>
+                                </>
+                            )}
                         </div>
                     )}
                     

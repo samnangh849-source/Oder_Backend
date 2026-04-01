@@ -79,6 +79,7 @@ export const translations = {
     col_carrier: "សេវាដឹក",
     col_agent: "អ្នកដឹក",
     col_cost: "ថ្លៃដឹក",
+    col_fulfillmentStatus: "ស្ថានភាពដឹកជញ្ជូន",
     col_status: "ស្ថានភាព",
     col_date: "កាលបរិច្ឆេទ",
     col_note: "ចំណាំ",
@@ -102,7 +103,7 @@ export const translations = {
     role_subtext: "សូមជ្រើសរើសប្រភេទគណនីដែលអ្នកចង់ចូលប្រើប្រាស់",
     enter_admin: "ចូលផ្ទាំង Admin",
     admin_desc: "គ្រប់គ្រងប្រព័ន្ធទាំងមូល មើលរបាយការណ៍ និងការកំណត់ផ្សេងៗ។",
-    enter_user: "ចូលជា User",
+    enter_user: "(បង្កើតការកម្មង់)",
     user_desc: "បង្កើតការកម្មង់ថ្មី ពិនិត្យមើលប្រវត្តិការលក់ និងការងារប្រចាំថ្ងៃ។",
 
     // Admin Dashboard
@@ -538,7 +539,7 @@ export const translations = {
     role_subtext: "Please select the account type to continue",
     enter_admin: "Admin Dashboard",
     admin_desc: "Full system management, reports, and configurations.",
-    enter_user: "User Portal",
+    enter_user: "(Create Order)",
     user_desc: "Create new orders, check sales history, and daily tasks.",
 
     // Admin Dashboard

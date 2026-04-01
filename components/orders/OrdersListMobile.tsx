@@ -151,8 +151,18 @@ const OrdersListMobile: React.FC<OrdersListMobileProps> = ({
                 <div key={gIdx} className="space-y-4">
                     {group.label && (
                         <div className="flex items-center gap-3 px-4">
-                            <span className="text-[10px] font-black text-[var(--cm-accent)] uppercase tracking-[0.2em]">{group.label}</span>
-                            <div className="h-px flex-1 bg-gradient-to-r from-[var(--cm-border)] to-transparent"></div>
+                            {isBinance ? (
+                                <>
+                                    <div className="w-1 h-4 bg-[#FCD535] rounded-sm"></div>
+                                    <span className="text-[10px] font-bold text-[#848E9C] uppercase tracking-tight">{group.label}</span>
+                                    <div className="h-[1px] flex-1 bg-[#2B3139]"></div>
+                                </>
+                            ) : (
+                                <>
+                                    <span className="text-[10px] font-black text-[var(--cm-accent)] uppercase tracking-[0.2em]">{group.label}</span>
+                                    <div className="h-px flex-1 bg-gradient-to-r from-[var(--cm-border)] to-transparent"></div>
+                                </>
+                            )}
                         </div>
                     )}
                     
@@ -253,6 +263,11 @@ const OrdersListMobile: React.FC<OrdersListMobileProps> = ({
                                                             {isPaid ? 'PAID' : 'UNPAID'}
                                                         </span>
                                                     )}
+                                                    {isVisible('fulfillmentStatus') && (() => {
+                                                        const fs = (order as any).FulfillmentStatus || (order as any)['Fulfillment Status'] || 'Pending';
+                                                        const fsC: Record<string, string> = { 'Pending': 'bg-yellow-500/10 text-yellow-400', 'Ready to Ship': 'bg-blue-500/10 text-blue-400', 'Shipped': 'bg-purple-500/10 text-purple-400', 'Delivered': 'bg-[var(--cm-green)]/10 text-[var(--cm-green)]', 'Cancelled': 'bg-[var(--cm-red)]/10 text-[var(--cm-red)]' };
+                                                        return <span className={`status-pill-v4 ${fsC[fs] || 'bg-[var(--cm-border)] text-[var(--cm-text-muted)]'}`}>{fs}</span>;
+                                                    })()}
                                                     {showVerify && isVerified && <div className="flex items-center gap-1 text-[var(--cm-green)] text-[9px] font-black"><Check size={10} strokeWidth={4}/> VERIFIED</div>}
                                                 </div>
                                             </div>

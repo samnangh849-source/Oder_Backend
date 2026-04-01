@@ -209,6 +209,23 @@ const OrderRow = (props: any) => {
                                 return <div className="px-4 py-2 w-full font-bold text-[#848E9C] text-[11px] uppercase truncate tracking-tight flex items-center">{order['Driver Name'] || order['Internal Shipping Details'] || 'Unassigned'}</div>;
                             case 'shippingCost':
                                 return <div className="px-4 py-2 w-full font-bold text-[#848E9C] text-[12px] flex items-center">${(Number(order['Internal Cost']) || 0).toFixed(2)}</div>;
+                            case 'fulfillmentStatus': {
+                                const fs = (order as any).FulfillmentStatus || (order as any)['Fulfillment Status'] || 'Pending';
+                                const fsColors: Record<string, string> = {
+                                    'Pending': 'bg-yellow-500/10 text-yellow-400',
+                                    'Ready to Ship': 'bg-blue-500/10 text-blue-400',
+                                    'Shipped': 'bg-purple-500/10 text-purple-400',
+                                    'Delivered': 'bg-[#0ECB81]/10 text-[#0ECB81]',
+                                    'Cancelled': 'bg-[#F6465D]/10 text-[#F6465D]',
+                                };
+                                return (
+                                    <div className="px-4 py-2 w-full flex items-center justify-center">
+                                        <span className={`px-2.5 py-1 rounded text-[9px] font-bold uppercase tracking-wider ${fsColors[fs] || 'bg-[#2B3139] text-[#848E9C]'}`}>
+                                            {fs}
+                                        </span>
+                                    </div>
+                                );
+                            }
                             case 'status':
                                 return (
                                     <div className="px-4 py-2 w-full flex items-center justify-center">
@@ -296,6 +313,7 @@ const OrdersListDesktop: React.FC<OrdersListDesktopProps> = ({
             shippingService: 150,
             driver: 140,
             shippingCost: 90,
+            fulfillmentStatus: 120,
             status: 105,
             date: 105,
             note: isUltraWide ? 280 : (isCompact ? 180 : 220),
@@ -308,8 +326,8 @@ const OrdersListDesktop: React.FC<OrdersListDesktopProps> = ({
 
     const columnKeys = useMemo(() => [
         'index', 'actions', 'customerName', 'productInfo', 'location', 
-        'pageInfo', 'brandSales', 'fulfillment', 'total', 'shippingService', 
-        'driver', 'shippingCost', 'status', 'date', 'note', 'print', 'check', 'orderId'
+        'pageInfo', 'brandSales', 'fulfillment', 'total', 'shippingService',
+        'driver', 'shippingCost', 'fulfillmentStatus', 'status', 'date', 'note', 'print', 'check', 'orderId'
     ], []);
 
     const visibleCols = useMemo(() => columnKeys.filter(checkColumnVisible), [columnKeys, checkColumnVisible]);
@@ -433,15 +451,15 @@ const OrdersListDesktop: React.FC<OrdersListDesktopProps> = ({
             <div className="flex-grow overflow-auto custom-scrollbar overscroll-contain">
                 <div style={{ minWidth: `${totalTableWidth}px`, height: '100%', display: 'flex', flexDirection: 'column' }}>
                     {/* Sticky Table Header & Total Row */}
-                    <div className={`sticky top-0 z-40 ${isBinance ? '' : 'shadow-[0_15px_30px_rgba(0,0,0,0.5)]'} flex-shrink-0`}>
+                    <div className={`sticky top-0 z-40 ${isBinance ? 'shadow-lg shadow-black/20' : 'shadow-[0_15px_30px_rgba(0,0,0,0.5)]'} flex-shrink-0`}>
                         {/* Table Column Headers */}
                         <div className={`${isBinance ? 'bg-[#1E2329] border-b border-[#2B3139]' : 'bg-[#0f172a]/95 backdrop-blur-3xl border-b border-white/10'}`}>
                             <div className="flex w-full">
                                 {onToggleSelectAll && (
-                                    <div className="flex-shrink-0 flex items-center justify-center py-5" style={{ width: '40px' }}>
+                                    <div className="flex-shrink-0 flex items-center justify-center py-4" style={{ width: '40px' }}>
                                         <input 
                                             type="checkbox" 
-                                            className="h-5 w-5 rounded-md border-white/10 bg-black/40 text-blue-500 cursor-pointer" 
+                                            className={`h-4 w-4 rounded border-[#474D57] bg-transparent text-[#FCD535] cursor-pointer focus:ring-0 focus:ring-offset-0 ${isBinance ? 'border-[#474D57]' : 'border-white/10 bg-black/40 text-blue-500'}`} 
                                             checked={isAllSelected} 
                                             onChange={() => onToggleSelectAll(orders.map(o => o['Order ID']))} 
                                         />
@@ -451,7 +469,7 @@ const OrdersListDesktop: React.FC<OrdersListDesktopProps> = ({
                                     <div 
                                         key={k} 
                                         style={{ width: `${getColWidth(k)}px` }} 
-                                        className={`px-4 ${isBinance ? 'py-3' : 'py-5'} ${isBinance ? 'font-semibold tracking-wider text-[#848E9C]' : 'font-black tracking-widest text-gray-500'} uppercase text-[11px] flex items-center ${k === 'index' || k === 'actions' || k === 'status' || k === 'print' || k === 'check' || k === 'orderId' ? 'justify-center text-center' : 'justify-start text-left'}`}
+                                        className={`px-4 py-3 ${isBinance ? 'font-medium tracking-normal text-[#848E9C]' : 'font-black tracking-widest text-gray-500'} uppercase text-[11px] flex items-center ${k === 'index' || k === 'actions' || k === 'status' || k === 'fulfillmentStatus' || k === 'print' || k === 'check' || k === 'orderId' ? 'justify-center text-center' : 'justify-start text-left'}`}
                                     >
                                         {(t as any)[`col_${k}`] || (t as any)[k] || k}
                                     </div>
@@ -460,7 +478,7 @@ const OrdersListDesktop: React.FC<OrdersListDesktopProps> = ({
                         </div>
 
                         {/* Grand Total Row */}
-                        <div className={`${isBinance ? 'bg-[#1E2329] border-b-2 border-[#FCD535]/30' : 'bg-[#0f172a]/80 backdrop-blur-2xl border-b border-blue-500/20'}`}>
+                        <div className={`${isBinance ? 'bg-[#1E2329] border-b border-[#2B3139]' : 'bg-[#0f172a]/80 backdrop-blur-2xl border-b border-blue-500/20'}`}>
                             <table className="w-full border-collapse" style={{ tableLayout: 'fixed' }}>
                                 <colgroup>
                                     {onToggleSelectAll && <col style={{ width: '40px' }} />}

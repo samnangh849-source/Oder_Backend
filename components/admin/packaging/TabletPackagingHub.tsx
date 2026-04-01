@@ -180,10 +180,10 @@ const TabletPackagingHub: React.FC<TabletPackagingHubProps> = ({
                                         <div 
                             key={order['Order ID']} 
                             className={`${B_BG_PANEL} border ${B_BORDER} flex flex-col relative group cursor-pointer ${selectedOrderIds.has(order['Order ID']) ? 'ring-1 ring-[#FCD535]/50' : ''}`}
-                            onClick={() => activeTab === 'Ready to Ship' ? toggleOrderSelection(order['Order ID']) : onView(order)}
+                            onClick={() => onView(order)}
                         >
                             {activeTab === 'Ready to Ship' && (
-                                <div className="absolute top-4 left-4 z-10">
+                                <div className="absolute top-4 left-4 z-10" onClick={(e) => { e.stopPropagation(); toggleOrderSelection(order['Order ID']); }}>
                                     <div className={`w-5 h-5 border-2 rounded-sm transition-colors flex items-center justify-center ${selectedOrderIds.has(order['Order ID']) ? 'bg-[#FCD535] border-[#FCD535]' : 'border-gray-600 bg-black/20'}`}>
                                         {selectedOrderIds.has(order['Order ID']) && (
                                             <svg className="w-3.5 h-3.5 text-black" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={4}><path d="M5 13l4 4L19 7" /></svg>

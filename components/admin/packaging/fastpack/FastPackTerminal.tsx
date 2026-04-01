@@ -10,10 +10,12 @@ import { packageDetector, DetectionResult } from '@/utils/visionAlgorithm';
 import { CacheService, CACHE_KEYS } from '@/services/cacheService';
 import OrderGracePeriod from '@/components/orders/OrderGracePeriod';
 import { compressImage } from '@/utils/imageCompressor';
+import { printViaIframe } from '@/utils/printUtils';
 
 import OrderSummaryPanel from './OrderSummaryPanel';
 import CameraViewport from './CameraViewport';
 import ActionControls from './ActionControls';
+import PrintLabelPage from '@/pages/PrintLabelPage';
 
 type PackStep = 'VERIFYING' | 'LABELING' | 'CAPTURING';
 
@@ -29,7 +31,7 @@ const FastPackTerminal: React.FC<FastPackTerminalProps> = ({ order, onClose, onS
     // Workflow State
     const [step, setStep] = useState<PackStep>('VERIFYING');
     const [verifiedItems, setVerifiedItems] = useState<Record<string, number>>({}); 
-    const hasAutoAdvanced = useRef(false);
+    const hasAutoAdvanced = useRef({ verify: false, label: false });
 
     // Optimistic Image Hook
     const { prepareImage, startUpload } = useOptimisticImage({
@@ -76,12 +78,16 @@ const FastPackTerminal: React.FC<FastPackTerminalProps> = ({ order, onClose, onS
     const [isCameraActive, setIsCameraActive] = useState(false);
     const [rawFile, setRawFile] = useState<File | null>(null);
     const [hasGeneratedLabel, setHasGeneratedLabel] = useState(false);
+    const [showLabelEditor, setShowLabelEditor] = useState(false);
     const [copiedField, setCopiedField] = useState<string | null>(null);
+    const [isAdvancingLabel, setIsAdvancingLabel] = useState(false);
+    const [advancementProgress, setAdvancementProgress] = useState(0);
     
     // Grace Period / Undo State
+    const { advancedSettings } = useContext(AppContext);
     const [undoTimer, setUndoTimer] = useState<number | null>(null);
     const [isUndoing, setIsUndoing] = useState(false);
-    const maxUndoTimer = 5;
+    const maxUndoTimer = advancedSettings.packagingGracePeriod || 5;
 
     useEffect(() => { isAiEnabledRef.current = isAiEnabled; }, [isAiEnabled]);
     useEffect(() => { uploadingRef.current = uploading; }, [uploading]);
@@ -122,6 +128,11 @@ const FastPackTerminal: React.FC<FastPackTerminalProps> = ({ order, onClose, onS
                     }
                 }
             );
+
+            if (!tempUrl) {
+                alert("❌ ការបញ្ជូនបរាជ័យ: មិនទទួលបាន URL ពី Server");
+                return;
+            }
 
             onSuccess(tempUrl);
 
@@ -386,7 +397,8 @@ const FastPackTerminal: React.FC<FastPackTerminalProps> = ({ order, onClose, onS
     }, [step]);
 
     useEffect(() => {
-        if (step === 'VERIFYING' && isOrderVerified) {
+        if (step === 'VERIFYING' && isOrderVerified && !hasAutoAdvanced.current.verify) {
+            hasAutoAdvanced.current.verify = true;
             const timer = setTimeout(() => {
                 setStep('LABELING');
             }, 600);
@@ -395,13 +407,36 @@ const FastPackTerminal: React.FC<FastPackTerminalProps> = ({ order, onClose, onS
     }, [step, isOrderVerified]);
 
     useEffect(() => {
-        if (step === 'LABELING' && hasGeneratedLabel) {
+        if (step === 'LABELING' && hasGeneratedLabel && !hasAutoAdvanced.current.label) {
+            hasAutoAdvanced.current.label = true;
+            setIsAdvancingLabel(true);
             const timer = setTimeout(() => {
                 setStep('CAPTURING');
-            }, 1000);
-            return () => clearTimeout(timer);
+                setIsAdvancingLabel(false);
+            }, 5000); // Wait 5 seconds to give user time to physically pack/label
+            return () => { clearTimeout(timer); setIsAdvancingLabel(false); };
         }
     }, [step, hasGeneratedLabel]);
+
+    useEffect(() => {
+        if (isAdvancingLabel) {
+            setAdvancementProgress(0);
+            const start = Date.now();
+            const duration = 5000;
+            const interval = setInterval(() => {
+                const elapsed = Date.now() - start;
+                if (elapsed >= duration) {
+                    setAdvancementProgress(100);
+                    clearInterval(interval);
+                } else {
+                    setAdvancementProgress((elapsed / duration) * 100);
+                }
+            }, 50);
+            return () => clearInterval(interval);
+        } else {
+            setAdvancementProgress(0);
+        }
+    }, [isAdvancingLabel]);
 
     // Broadcast operation steps to All Users
     useEffect(() => {
@@ -453,11 +488,11 @@ const FastPackTerminal: React.FC<FastPackTerminalProps> = ({ order, onClose, onS
     }, [undoTimer, isUndoing, executeFinalSubmit]);
 
     const fulfillmentStore = appData.stores?.find(s => s.StoreName === order?.['Fulfillment Store']);
-    const basePrinterURL = fulfillmentStore?.LabelPrinterURL;
 
     const getFullPrinterURL = () => {
-        if (!basePrinterURL || !order) return '';
+        if (!order) return '';
         const params = new URLSearchParams({
+            view: 'print_label',
             id: order['Order ID'],
             name: order['Customer Name'],
             phone: order['Customer Phone'],
@@ -471,7 +506,7 @@ const FastPackTerminal: React.FC<FastPackTerminalProps> = ({ order, onClose, onS
             store: order['Fulfillment Store'],
             note: order.Note || ''
         });
-        return `${basePrinterURL}?${params.toString()}`;
+        return `${window.location.origin}${window.location.pathname}?${params.toString()}`;
     };
 
     const fullPrinterURL = getFullPrinterURL();
@@ -532,6 +567,30 @@ const FastPackTerminal: React.FC<FastPackTerminalProps> = ({ order, onClose, onS
 
     return (
         <div className="fixed inset-0 z-[200] bg-[#0B0E11] flex flex-col animate-fade-in font-sans text-gray-300">
+            {/* LABEL EDITOR MODAL */}
+            {showLabelEditor && (
+                <div className="fixed inset-0 z-[300] bg-[#0B0E11] overflow-hidden">
+                    <PrintLabelPage 
+                        standalone={false}
+                        onClose={() => setShowLabelEditor(false)}
+                        initialData={{
+                            id: order['Order ID'],
+                            name: order['Customer Name'],
+                            phone: order['Customer Phone'],
+                            location: order.Location,
+                            address: order['Address Details'] || '',
+                            total: String(order['Grand Total']),
+                            payment: order['Payment Status'] || '',
+                            shipping: order['Internal Shipping Method'] || '',
+                            user: order.User,
+                            page: order.Page,
+                            store: order['Fulfillment Store'],
+                            note: order.Note || ''
+                        }}
+                    />
+                </div>
+            )}
+
             {/* Header */}
             <header className="relative z-30 px-6 py-4 bg-[#181A20] border-b border-[#2B3139] flex justify-between items-center flex-shrink-0">
                 <div className="flex items-center gap-4">
@@ -547,12 +606,12 @@ const FastPackTerminal: React.FC<FastPackTerminalProps> = ({ order, onClose, onS
                     </button>
                     <div>
                         <div className="flex items-center gap-3">
-                            <h1 className="text-xl font-bold text-white uppercase tracking-widest">Fast Pack Terminal</h1>
-                            <span className="px-1.5 py-0.5 bg-[#2B3139] text-gray-400 text-[9px] font-bold rounded-sm uppercase tracking-widest border border-gray-700">v4.3</span>
+                            <h1 className="text-xl sm:text-2xl font-black text-transparent bg-clip-text bg-gradient-to-r from-white to-gray-400 uppercase tracking-widest leading-none">Fast Pack Terminal</h1>
+                            <span className="px-1.5 py-0.5 bg-[#FCD535]/10 text-[#FCD535] text-[9px] font-black rounded-sm uppercase tracking-widest border border-[#FCD535]/30">v4.3</span>
                         </div>
-                        <div className="flex items-center gap-3 mt-1">
-                            <span className="text-[#FCD535] font-mono text-xs tracking-widest">#{order['Order ID'].substring(0, 15)}</span>
-                            <span className="text-[9px] font-bold text-gray-500 uppercase tracking-widest">| {order.Page} | {order.Team}</span>
+                        <div className="flex items-center gap-3 mt-1.5">
+                            <span className="text-[#0ECB81] font-mono text-xs sm:text-sm font-bold tracking-widest drop-shadow-[0_0_8px_rgba(14,203,129,0.3)]">#{order['Order ID'].substring(0, 15)}</span>
+                            <span className="text-[9px] font-bold text-gray-500 uppercase tracking-widest border-l border-[#2B3139] pl-3">PG: {order.Page} <span className="mx-1">•</span> TM: <span className={order.Team === 'A' ? 'text-blue-400' : 'text-purple-400'}>{order.Team}</span></span>
                         </div>
                     </div>
                 </div>
@@ -751,10 +810,47 @@ const FastPackTerminal: React.FC<FastPackTerminalProps> = ({ order, onClose, onS
                                         <p className="text-gray-500 text-[10px] font-bold uppercase tracking-widest">Attach label before taking photo</p>
                                     </div>
                                     {fullPrinterURL && (
-                                        <button onClick={() => { window.open(fullPrinterURL, '_blank'); setHasGeneratedLabel(true); }} className="px-10 py-4 bg-[#FCD535] hover:bg-[#FCD535]/90 text-black rounded-sm font-bold uppercase text-xs tracking-widest flex items-center gap-3 transition-colors">
-                                            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M17 17h2a2 2 0 002-2v-4a2 2 0 00-2-2H5a2 2 0 00-2-2v4a2 2 0 002 2h2m2 4h6a2 2 0 002-2v-4a2 2 0 00-2-2H9a2 2 0 00-2 2v4a2 2 0 002 2zm8-12V5a2 2 0 00-2-2H9a2 2 0 00-2 2v4h10z"/></svg>
-                                            Generate Label
-                                        </button>
+                                        <div className="flex items-center gap-4">
+                                            <button 
+                                                onClick={() => { printViaIframe(fullPrinterURL); setHasGeneratedLabel(true); }} 
+                                                disabled={isAdvancingLabel}
+                                                className={`relative overflow-hidden px-10 py-4 rounded-sm font-bold uppercase text-xs tracking-widest flex items-center justify-center gap-3 transition-colors min-w-[240px] ${
+                                                    isAdvancingLabel ? 'bg-[#2B3139] text-[#FCD535] cursor-default' : 
+                                                    hasGeneratedLabel ? 'bg-[#0ECB81]/10 text-[#0ECB81] border border-[#0ECB81]/30 hover:bg-[#0ECB81]/20' : 
+                                                    'bg-[#FCD535] hover:bg-[#FCD535]/90 text-black'
+                                                }`}
+                                            >
+                                                {isAdvancingLabel && (
+                                                    <div 
+                                                        className="absolute inset-y-0 left-0 bg-[#FCD535]/15" 
+                                                        style={{ width: `${advancementProgress}%` }}
+                                                    ></div>
+                                                )}
+                                                
+                                                <span className="relative z-10 flex items-center gap-2">
+                                                    {isAdvancingLabel ? (
+                                                        <>
+                                                            <Spinner size="sm" />
+                                                            Auto Advancing...
+                                                        </>
+                                                    ) : hasGeneratedLabel ? (
+                                                        <>
+                                                            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" /></svg>
+                                                            Label Generated
+                                                        </>
+                                                    ) : (
+                                                        <>
+                                                            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M17 17h2a2 2 0 002-2v-4a2 2 0 00-2-2H5a2 2 0 00-2-2v4a2 2 0 002 2h2m2 4h6a2 2 0 002-2v-4a2 2 0 00-2-2H9a2 2 0 00-2 2v4a2 2 0 002 2zm8-12V5a2 2 0 00-2-2H9a2 2 0 00-2 2v4h10z"/></svg>
+                                                            Generate Label
+                                                        </>
+                                                    )}
+                                                </span>
+                                            </button>
+                                            <button onClick={() => setShowLabelEditor(true)} className="px-10 py-4 bg-[#2B3139] hover:bg-[#2B3139]/80 text-[#EAECEF] rounded-sm font-bold uppercase text-xs tracking-widest flex items-center gap-3 transition-colors">
+                                                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" /></svg>
+                                                Edit Label
+                                            </button>
+                                        </div>
                                     )}
                                 </div>
                             )}
