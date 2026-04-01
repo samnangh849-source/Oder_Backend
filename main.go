@@ -1268,93 +1268,6 @@ func handleUpdateFormulaReport(c *gin.Context)    { c.JSON(200, gin.H{"status": 
 func handleClearCache(c *gin.Context)             { c.JSON(200, gin.H{"status": "success"}) }
 func handleAdminUpdateProductTags(c *gin.Context) { c.JSON(200, gin.H{"status": "success"}) }
 
-func handleGetTeamSalesRanking(c *gin.Context) {
-	period := c.DefaultQuery("period", "today")
-
-	type TeamRevenue struct {
-		TeamName     string  `gorm:"column:team_name"`
-		TotalRevenue float64 `gorm:"column:total_revenue"`
-	}
-	var rows []TeamRevenue
-
-	now := time.Now()
-
-	// Query directly from orders table using grand_total (live revenue data)
-	// NOTE: PostgreSQL does NOT support GROUP BY/ORDER BY with SELECT aliases,
-	// so we must repeat the expressions explicitly.
-	db := DB.Table("orders").
-		Select("LOWER(TRIM(team)) as team_name, SUM(COALESCE(grand_total, 0)) as total_revenue").
-		Where("team IS NOT NULL AND team <> '' AND team <> 'Unassigned'").
-		Where("order_id NOT LIKE '%Opening_Balance%' AND order_id NOT LIKE '%Opening Balance%'").
-		Group("LOWER(TRIM(team))").
-		Order("SUM(COALESCE(grand_total, 0)) DESC").
-		Limit(10)
-
-	switch period {
-	case "today":
-		start := time.Date(now.Year(), now.Month(), now.Day(), 0, 0, 0, 0, now.Location())
-		db = db.Where("timestamp >= ?", start.Format("2006-01-02"))
-	case "this_week":
-		offset := int(now.Weekday()) - 1
-		if offset < 0 {
-			offset = 6
-		}
-		start := now.AddDate(0, 0, -offset)
-		db = db.Where("timestamp >= ?", start.Format("2006-01-02"))
-	case "this_month", "month":
-		start := time.Date(now.Year(), now.Month(), 1, 0, 0, 0, 0, now.Location())
-		db = db.Where("timestamp >= ?", start.Format("2006-01-02"))
-	case "year":
-		start := time.Date(now.Year(), 1, 1, 0, 0, 0, 0, now.Location())
-		db = db.Where("timestamp >= ?", start.Format("2006-01-02"))
-		// "all" — no date filter
-	}
-
-	if err := db.Scan(&rows).Error; err != nil {
-		log.Printf("[ERROR] Team Ranking Query Failed: %v", err)
-		c.JSON(500, gin.H{"status": "error", "message": "Query failed"})
-		return
-	}
-
-	// DIAGNOSTIC: Log raw team values from DB to verify data integrity
-	log.Printf("[DIAGNOSTIC] Team Ranking Results (period=%s, count=%d):", period, len(rows))
-	for i, row := range rows {
-		log.Printf("[DIAGNOSTIC]   #%d: team_name=%q revenue=%.2f", i+1, row.TeamName, row.TotalRevenue)
-	}
-	// Also log sample team vs page values to detect data contamination
-	var sampleCheck []struct {
-		Team string `gorm:"column:team"`
-		Page string `gorm:"column:page"`
-	}
-	DB.Table("orders").Select("DISTINCT team, page").Where("team IS NOT NULL AND team <> ''").Limit(10).Scan(&sampleCheck)
-	log.Printf("[DIAGNOSTIC] Sample team vs page values from orders table:")
-	for _, s := range sampleCheck {
-		log.Printf("[DIAGNOSTIC]   team=%q page=%q match=%v", s.Team, s.Page, strings.EqualFold(s.Team, s.Page))
-	}
-
-	// Build response with proper Title Case display names
-	type TeamResult struct {
-		Team    string  `json:"Team"`
-		Revenue float64 `json:"Revenue"`
-	}
-	results := make([]TeamResult, 0, len(rows))
-	for _, row := range rows {
-		displayName := row.TeamName
-		words := strings.Fields(displayName)
-		for i, w := range words {
-			if len(w) > 0 {
-				runes := []rune(w)
-				runes[0] = unicode.ToUpper(runes[0])
-				words[i] = string(runes)
-			}
-		}
-		displayName = strings.Join(words, " ")
-		results = append(results, TeamResult{Team: displayName, Revenue: row.TotalRevenue})
-	}
-
-	c.JSON(http.StatusOK, gin.H{"status": "success", "data": results})
-}
-
 func handleGetGlobalShippingCosts(c *gin.Context) {
 	var results []struct {
 		OrderID        string  `json:"Order ID"`
@@ -1526,7 +1439,7 @@ func handleSendChatMessage(c *gin.Context) {
 				}
 			}()
 
-			driveURL, fileId, err := backend.UploadToGoogleDriveDirectly(b64, "chat_file", mt)
+			driveURL, fileId, err := backend.UploadToGoogleDriveDirectly(b64, "chat_file", mt, nil)
 			if err == nil {
 
 				finalContent := originalContent
@@ -1843,7 +1756,6 @@ func main() {
 	api := r.Group("/api", DBMiddleware())
 	api.POST("/login", handleLogin)
 	api.GET("/images/temp/:id", backend.HandleServeTempImage)
-	api.GET("/teams/ranking", handleGetTeamSalesRanking)
 	api.GET("/settings", handleGetSettings)
 	// ── Entertainment / Video Player routes (Backend/video.go) ────────────────────────
 	// All video handler logic lives in Backend/video.go (package backend).
