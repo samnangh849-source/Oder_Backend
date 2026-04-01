@@ -94,7 +94,7 @@ func ExtractDriveFolderID(idOrURL string) string {
 // ── Core Upload Function ──────────────────────────────────────────────────
 
 // UploadToGoogleDriveDirectly sends base64 data to Google Apps Script which uploads it to Drive.
-func UploadToGoogleDriveDirectly(base64Data string, fileName string, mimeType string) (string, string, error) {
+func UploadToGoogleDriveDirectly(base64Data string, fileName string, mimeType string, originalReq *AppsScriptRequest) (string, string, error) {
 	log.Printf("📤 [Drive Upload via AppsScript] file=%q mime=%q dataLen=%d", fileName, mimeType, len(base64Data))
 
 	if fileName == "" {
@@ -120,6 +120,26 @@ func UploadToGoogleDriveDirectly(base64Data string, fileName string, mimeType st
 		FileName:       fileName,
 		MimeType:       mimeType,
 		UploadFolderID: targetFolder,
+	}
+
+	// ✅ Pass metadata for immediate Google Sheet sync "first of all"
+	if originalReq != nil {
+		req.OrderID = originalReq.OrderID
+		req.SheetName = originalReq.SheetName
+		req.PrimaryKey = originalReq.PrimaryKey
+		req.TargetColumn = originalReq.TargetColumn
+		req.NewData = originalReq.NewData
+		req.UserName = originalReq.UserName
+		req.MovieID = originalReq.MovieID
+		
+		// For orders, we need the team to update the correct sheet
+		if originalReq.OrderID != "" {
+			var order Order
+			if err := DB.Where("UPPER(TRIM(order_id)) = UPPER(TRIM(?))", originalReq.OrderID).Select("team").First(&order).Error; err == nil {
+				// Inject team into the request for Apps Script
+				req.OrderData = map[string]interface{}{"team": order.Team}
+			}
+		}
 	}
 
 	log.Printf("🚀 [Drive Upload] Calling Apps Script uploadImage action...")
@@ -314,7 +334,7 @@ func HandleImageUploadProxy(c *gin.Context) {
 		}()
 
 		log.Printf("⏳ [Background Upload] Starting for tempID=%s file=%q mime=%q", tid, r.FileName, r.MimeType)
-		driveURL, fileID, err := UploadToGoogleDriveDirectly(rawData, r.FileName, r.MimeType)
+		driveURL, fileID, err := UploadToGoogleDriveDirectly(rawData, r.FileName, r.MimeType, &r)
 
 		if err != nil {
 			log.Printf("❌ [Background Upload] FAILED for tempID=%s: %v", tid, err)
