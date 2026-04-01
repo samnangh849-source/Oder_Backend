@@ -5,6 +5,7 @@ package backend
 // =========================================================================
 // ឯកសារនេះរួមបញ្ចូល logic ដែលពាក់ព័ន្ធនឹងការ Upload រូបភាព និងសម្លេង
 // ដោយប្រើប្រាស់ Google Apps Script ជាអ្នក Upload ទៅកាន់ Google Drive ដោយផ្ទាល់។
+// Upload ដោយ synchronous — រង់ចាំ Drive URL រួចទើប save DB និង return។
 // =========================================================================
 
 import (
@@ -122,7 +123,7 @@ func UploadToGoogleDriveDirectly(base64Data string, fileName string, mimeType st
 		UploadFolderID: targetFolder,
 	}
 
-	// ✅ Pass metadata for immediate Google Sheet sync "first of all"
+	// ✅ Pass metadata for immediate Google Sheet sync
 	if originalReq != nil {
 		req.OrderID = originalReq.OrderID
 		req.SheetName = originalReq.SheetName
@@ -131,7 +132,7 @@ func UploadToGoogleDriveDirectly(base64Data string, fileName string, mimeType st
 		req.NewData = originalReq.NewData
 		req.UserName = originalReq.UserName
 		req.MovieID = originalReq.MovieID
-		
+
 		// For orders, we need the team to update the correct sheet
 		if originalReq.OrderID != "" {
 			var order Order
@@ -159,17 +160,6 @@ func UploadToGoogleDriveDirectly(base64Data string, fileName string, mimeType st
 
 // ── Request Handlers ──────────────────────────────────────────────────────
 
-func HandleServeTempImage(c *gin.Context) {
-	id := c.Param("id")
-	var temp TempImage
-	if err := DB.Where("id = ?", id).First(&temp).Error; err != nil {
-		c.JSON(404, gin.H{"error": "រកមិនឃើញរូបភាព ឬផុតកំណត់"})
-		return
-	}
-	decodedBytes, _ := ParseBase64(temp.ImageData)
-	c.Data(200, temp.MimeType, decodedBytes)
-}
-
 func HandleImageUploadProxy(c *gin.Context) {
 	var req AppsScriptRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
@@ -186,27 +176,8 @@ func HandleImageUploadProxy(c *gin.Context) {
 		return
 	}
 
-	tempID := UploadGenerateIDFunc() + UploadGenerateIDFunc()
-	DB.Create(&TempImage{
-		ID:        tempID,
-		MimeType:  req.MimeType,
-		ImageData: data,
-		ExpiresAt: time.Now().Add(15 * time.Minute),
-	})
-
-	protocol := "http"
-	if c.Request.TLS != nil || c.Request.Header.Get("X-Forwarded-Proto") == "https" {
-		protocol = "https"
-	}
-	tempUrl := fmt.Sprintf("%s://%s/api/images/temp/%s", protocol, c.Request.Host, tempID)
-
-	// ── Immediate DB write for non-photo fields ───────────────────────────────
-	// Apply NewData fields (Fulfillment Status, Packed By, Packed Time, etc.) to
-	// the DB and broadcast NOW — before Drive upload starts. This ensures all
-	// other users see the status change immediately rather than waiting 10-60s
-	// for the background Drive upload to complete.
+	// ── Validate state machine transitions for orders ─────────────────────
 	if req.OrderID != "" && req.NewData != nil {
-		// ✅ Validate state machine transitions (same rules as handleAdminUpdateOrder)
 		if newStatusRaw, hasStatus := req.NewData["Fulfillment Status"]; hasStatus {
 			newStatus := strings.TrimSpace(fmt.Sprintf("%v", newStatusRaw))
 
@@ -247,230 +218,144 @@ func HandleImageUploadProxy(c *gin.Context) {
 				}
 			}
 		}
+	}
 
-		immediateMap := map[string]interface{}{}
-		immediateBroadcast := map[string]interface{}{}
-		log.Printf("🔍 [Upload Debug] Received NewData: %+v", req.NewData)
-		for k, v := range req.NewData {
-			dbCol := UploadMapToDBColumnFunc(k)
-			isValid := UploadIsValidOrderColumnFunc(dbCol)
-			log.Printf("🔍 [Upload Debug] Mapping field: %q -> %q (Valid: %v)", k, dbCol, isValid)
-			if isValid {
-				immediateMap[dbCol] = v
-				immediateBroadcast[k] = v
+	// ── Upload to Google Drive synchronously ──────────────────────────────
+	log.Printf("📤 [Upload] Uploading to Drive synchronously for file=%q", req.FileName)
+	driveURL, fileID, err := UploadToGoogleDriveDirectly(data, req.FileName, req.MimeType, &req)
+	if err != nil {
+		log.Printf("❌ [Upload] Drive upload failed: %v", err)
+		c.JSON(500, gin.H{"status": "error", "message": fmt.Sprintf("បរាជ័យក្នុងការ Upload: %v", err)})
+		return
+	}
+
+	// ── 1. Order Update ──────────────────────────────────────────────────
+	if req.OrderID != "" {
+		dbUpdateMap := map[string]interface{}{}
+		broadcastMap := map[string]interface{}{}
+
+		if req.NewData != nil {
+			for k, v := range req.NewData {
+				dbCol := UploadMapToDBColumnFunc(k)
+				if UploadIsValidOrderColumnFunc(dbCol) {
+					dbUpdateMap[dbCol] = v
+					broadcastMap[k] = v
+				}
 			}
 		}
 
-		// Also update the photo column with the temp URL immediately in the DB
-		// so it shows up for all users right away.
 		if req.TargetColumn != "" {
 			dbCol := UploadMapToDBColumnFunc(req.TargetColumn)
-			log.Printf("🔍 [Upload Debug] Target Column: %q -> %q", req.TargetColumn, dbCol)
-			immediateMap[dbCol] = tempUrl
-			immediateBroadcast[req.TargetColumn] = tempUrl
+			dbUpdateMap[dbCol] = driveURL
+			broadcastMap[req.TargetColumn] = driveURL
 		}
 
-		if len(immediateMap) > 0 {
-			log.Printf("🔍 [Upload Debug] Executing DB Update for order %s with: %+v", req.OrderID, immediateMap)
-			// Use UpdateColumns (plural) to skip GORM hooks and update only these columns immediately
-			// Using TRIM and UPPER for robust matching
-			res := DB.Model(&Order{}).Where("UPPER(TRIM(order_id)) = UPPER(TRIM(?))", req.OrderID).UpdateColumns(immediateMap)
+		if len(dbUpdateMap) > 0 {
+			res := DB.Model(&Order{}).Where("UPPER(TRIM(order_id)) = UPPER(TRIM(?))", req.OrderID).UpdateColumns(dbUpdateMap)
 			if res.Error != nil {
-				log.Printf("❌ [Upload] Immediate DB update failed for order %s: %v", req.OrderID, res.Error)
-				c.JSON(500, gin.H{"status": "error", "message": fmt.Sprintf("មិនអាចធ្វើបច្ចុប្បន្នភាពការកម្មង់បានទេ: %v", res.Error)})
-				return
-			}
-			
-			if res.RowsAffected == 0 {
-				log.Printf("⚠️ [Upload] No rows affected for immediate update of Order %s. ID might not exist or is already updated.", req.OrderID)
+				log.Printf("❌ [Upload] DB update failed for order %s: %v", req.OrderID, res.Error)
 			} else {
-				log.Printf("✅ [Upload] Immediate DB update SUCCESS: orderId=%s rowsAffected=%d fields=%v", req.OrderID, res.RowsAffected, immediateBroadcast)
+				log.Printf("✅ [Upload] DB update SUCCESS: orderId=%s rowsAffected=%d fields=%v", req.OrderID, res.RowsAffected, broadcastMap)
 			}
-			
-			// 🚀 Immediate Sync to Google Sheets and Telegram (Status only)
-			// This prevents the "Pending" status in the sheet from reverting the DB during the photo upload delay.
-			go func(orderId string, newData map[string]interface{}, tCol string, tUrl string) {
+
+			// Sync to Google Sheets + Telegram
+			go func(orderId string, bMap map[string]interface{}) {
 				var order Order
 				if err := DB.Where("UPPER(TRIM(order_id)) = UPPER(TRIM(?))", orderId).First(&order).Error; err == nil {
-					// Prepare fields for initial sync
 					sheetData := make(map[string]interface{})
-					for k, v := range newData {
+					for k, v := range bMap {
 						sheetData[k] = v
 					}
-					// Ensure we include the temporary photo URL so the column is not empty in Sheets
-					if tCol != "" && tUrl != "" {
-						sheetData[tCol] = tUrl
+					if order.PackedBy != "" {
+						sheetData["Packed By"] = order.PackedBy
 					}
-					// Ensure we have current packing info from DB
-					if order.PackedBy != "" { sheetData["Packed By"] = order.PackedBy }
-					if order.PackedTime != "" { sheetData["Packed Time"] = order.PackedTime }
-
+					if order.PackedTime != "" {
+						sheetData["Packed Time"] = order.PackedTime
+					}
 					EnqueueSync("updateOrderTelegram", map[string]interface{}{
 						"orderId":       orderId,
 						"team":          order.Team,
 						"updatedFields": sheetData,
 					}, "", nil)
 				}
-			}(req.OrderID, immediateBroadcast, req.TargetColumn, tempUrl)
+			}(req.OrderID, broadcastMap)
 
-			// Broadcast update so all clients see the status change immediately
+			// Broadcast to all connected clients
 			event, _ := json.Marshal(map[string]interface{}{
 				"type":    "update_order",
 				"orderId": req.OrderID,
-				"newData": immediateBroadcast,
+				"newData": broadcastMap,
 			})
 			HubGlobal.Broadcast <- event
 		}
 	}
 
-	c.JSON(200, gin.H{
-		"status":  "success",
-		"message": "Processing upload...",
-		"tempUrl": tempUrl,
-		"url":     tempUrl,
-	})
+	// ── 2. User Profile Update ───────────────────────────────────────────
+	if req.UserName != "" {
+		DB.Model(&User{}).Where("user_name = ?", req.UserName).UpdateColumn("profile_picture_url", driveURL)
 
-	go func(r AppsScriptRequest, rawData string, tid string) {
-		defer func() {
-			if rec := recover(); rec != nil {
-				log.Printf("🔥 PANIC in background upload: %v", rec)
+		notify, _ := json.Marshal(map[string]interface{}{
+			"type":     "profile_image_ready",
+			"userName": req.UserName,
+			"url":      driveURL,
+		})
+		HubGlobal.Broadcast <- notify
+
+		EnqueueSync("updateSheet", map[string]interface{}{"ProfilePictureURL": driveURL}, "Users", map[string]string{"UserName": req.UserName})
+	}
+
+	// ── 3. Movie Update ──────────────────────────────────────────────────
+	if req.MovieID != "" && req.TargetColumn != "" {
+		dbCol := UploadMapToDBColumnFunc(req.TargetColumn)
+		DB.Model(&Movie{}).Where("id = ?", req.MovieID).UpdateColumn(dbCol, driveURL)
+
+		EnqueueSync("updateSheet", map[string]interface{}{req.TargetColumn: driveURL}, "Movies", map[string]string{"ID": req.MovieID})
+
+		// Rename file in Drive to match movie title
+		fID := ExtractFileIDFromURL(driveURL)
+		if fID != "" {
+			var mv Movie
+			if err := DB.Where("id = ?", req.MovieID).First(&mv).Error; err == nil && mv.Title != "" {
+				log.Printf("📂 [Upload] Renaming Drive file %s to %q", fID, mv.Title)
+				EnqueueSync("renameFile", map[string]interface{}{
+					"fileID":  fID,
+					"newName": mv.Title,
+				}, "", nil)
 			}
-		}()
-
-		log.Printf("⏳ [Background Upload] Starting for tempID=%s file=%q mime=%q", tid, r.FileName, r.MimeType)
-		driveURL, fileID, err := UploadToGoogleDriveDirectly(rawData, r.FileName, r.MimeType, &r)
-
-		if err != nil {
-			log.Printf("❌ [Background Upload] FAILED for tempID=%s: %v", tid, err)
-			// Do not return yet if it's an Order update; we still need to sync the status (NewData).
-		} else {
-			log.Printf("✅ [Background Upload] SUCCESS tempID=%s fileID=%s driveURL=%s", tid, fileID, driveURL)
-			// Save the resolved DriveURL in TempImage for later retrieval (if needed by CreateMovie)
-			DB.Model(&TempImage{}).Where("id = ?", tid).UpdateColumn("drive_url", driveURL)
 		}
 
-		// 1. Specialized Order Update (Needs Team for Telegram)
-		if r.OrderID != "" {
-			log.Printf("📦 [Background Update] Specialized Order update: orderId=%s", r.OrderID)
+		notify, _ := json.Marshal(map[string]interface{}{
+			"type":    "movie_thumbnail_ready",
+			"movieId": req.MovieID,
+			"url":     driveURL,
+		})
+		HubGlobal.Broadcast <- notify
+	}
 
-			// Prepare combined update data for final DB sync
-			dbUpdateMap := map[string]interface{}{}
+	// ── 4. Generic Table/Sheet Update ────────────────────────────────────
+	if req.SheetName != "" && req.PrimaryKey != nil && req.TargetColumn != "" && req.SheetName != "Movies" {
+		EnqueueSync("updateSheet", map[string]interface{}{req.TargetColumn: driveURL}, req.SheetName, req.PrimaryKey)
 
-			// Include NewData if provided
-			if r.NewData != nil {
-				for k, v := range r.NewData {
-					dbUpdateMap[UploadMapToDBColumnFunc(k)] = v
-				}
+		tableName := UploadGetTableNameFunc(req.SheetName)
+		if tableName != "" {
+			dbCol := UploadMapToDBColumnFunc(req.TargetColumn)
+			query := DB.Table(tableName)
+			for k, v := range req.PrimaryKey {
+				query = query.Where(UploadMapToDBColumnFunc(k)+" = ?", v)
 			}
-
-			// Include Drive URL if upload succeeded
-			if err == nil && r.TargetColumn != "" {
-				dbUpdateMap[UploadMapToDBColumnFunc(r.TargetColumn)] = driveURL
-			}
-
-			// Update PostgreSQL (Local Source of Truth)
-			res := DB.Model(&Order{}).Where("UPPER(TRIM(order_id)) = UPPER(TRIM(?))", r.OrderID).Updates(dbUpdateMap)
+			res := query.UpdateColumn(dbCol, driveURL)
 			if res.Error != nil {
-				log.Printf("⚠️ [Background Update] DB update failed for order %s: %v", r.OrderID, res.Error)
-			}
-
-			// 🚀 Note: We DO NOT call EnqueueSync("updateOrderTelegram") here anymore.
-			// The function 'UploadToGoogleDriveDirectly' already called 'uploadImage' 
-			// which internally updated the Google Sheets row immediately.
-			
-			return // Finished order processing
-		}
-
-		// For other types, stop if upload failed
-		if err != nil {
-			return
-		}
-
-		// 2. Specialized User Profile Update
-		if r.UserName != "" {
-			log.Printf("👤 [Background Update] Specialized User update: userName=%s", r.UserName)
-			DB.Model(&User{}).Where("user_name = ?", r.UserName).UpdateColumn("profile_picture_url", driveURL)
-
-			notify, _ := json.Marshal(map[string]interface{}{
-				"type":     "profile_image_ready",
-				"userName": r.UserName,
-				"url":      driveURL,
-			})
-			HubGlobal.Broadcast <- notify
-
-			// Also sync with Google Sheets
-			EnqueueSync("updateSheet", map[string]interface{}{"ProfilePictureURL": driveURL}, "Users", map[string]string{"UserName": r.UserName})
-		}
-
-		// 3. Specialized Movie Update
-		if r.MovieID != "" && r.TargetColumn != "" {
-			log.Printf("🎬 [Background Update] Specialized Movie update: movieId=%s col=%s", r.MovieID, r.TargetColumn)
-			dbCol := UploadMapToDBColumnFunc(r.TargetColumn)
-
-			// Retry updating the database for up to 1 minute (for new records being created)
-			for i := 0; i < 12; i++ {
-				res := DB.Model(&Movie{}).Where("id = ?", r.MovieID).UpdateColumn(dbCol, driveURL)
-				if res.Error == nil && res.RowsAffected > 0 {
-					log.Printf("✅ [Background Update] SUCCESS: Updated movie %s column %s", r.MovieID, dbCol)
-					break
-				}
-				log.Printf("⏳ [Background Update] Waiting for movie record %s... (attempt %d)", r.MovieID, i+1)
-				time.Sleep(5 * time.Second)
-			}
-
-			// Also sync with Google Sheets if updated or if it's a known record
-			EnqueueSync("updateSheet", map[string]interface{}{r.TargetColumn: driveURL}, "Movies", map[string]string{"ID": r.MovieID})
-
-			// If we have a movie title, rename the file in Drive to match
-			fID := ExtractFileIDFromURL(driveURL)
-			if fID != "" {
-				var mv Movie
-				if err := DB.Where("id = ?", r.MovieID).First(&mv).Error; err == nil && mv.Title != "" {
-					log.Printf("📂 [Background Update] Renaming Drive file %s to %q", fID, mv.Title)
-					EnqueueSync("renameFile", map[string]interface{}{
-						"fileID":  fID,
-						"newName": mv.Title,
-					}, "", nil)
-				}
-			}
-
-			// Broadcast update
-			notify, _ := json.Marshal(map[string]interface{}{
-				"type":    "movie_thumbnail_ready",
-				"movieId": r.MovieID,
-				"url":     driveURL,
-			})
-			HubGlobal.Broadcast <- notify
-		}
-
-		// 4. Generic Table/Sheet Update (Handles other tables)
-		if r.SheetName != "" && r.PrimaryKey != nil && r.TargetColumn != "" && r.SheetName != "Movies" {
-			log.Printf("📝 [Background Update] Generic update for sheet=%s PK=%v col=%s", r.SheetName, r.PrimaryKey, r.TargetColumn)
-
-			// Sync with Google Sheets via managed queue
-			EnqueueSync("updateSheet", map[string]interface{}{r.TargetColumn: driveURL}, r.SheetName, r.PrimaryKey)
-
-			// Update PostgreSQL
-			tableName := UploadGetTableNameFunc(r.SheetName)
-			if tableName != "" {
-				dbCol := UploadMapToDBColumnFunc(r.TargetColumn)
-				query := DB.Table(tableName)
-				for k, v := range r.PrimaryKey {
-					query = query.Where(UploadMapToDBColumnFunc(k)+" = ?", v)
-				}
-				res := query.UpdateColumn(dbCol, driveURL)
-				if res.Error != nil {
-					log.Printf("❌ [Background Update] DB update failed for %s: %v", tableName, res.Error)
-				} else if res.RowsAffected == 0 {
-					log.Printf("⚠️ [Background Update] No rows affected for %s (PK: %v)", tableName, r.PrimaryKey)
-				} else {
-					log.Printf("✅ [Background Update] DB updated for %s (%s)", tableName, r.TargetColumn)
-				}
+				log.Printf("❌ [Upload] DB update failed for %s: %v", tableName, res.Error)
 			}
 		}
+	}
 
-		log.Printf("✅ Background upload complete: %s", driveURL)
-	}(req, data, tempID)
+	log.Printf("✅ [Upload] Complete: driveURL=%s fileID=%s", driveURL, fileID)
+	c.JSON(200, gin.H{
+		"status": "success",
+		"url":    driveURL,
+		"fileID": fileID,
+	})
 }
 
 func HandleGetAudioProxy(c *gin.Context) {
