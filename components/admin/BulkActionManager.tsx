@@ -513,7 +513,7 @@ const BulkActionManager: React.FC<BulkActionManagerProps> = ({ orders, selectedI
                             onClick={() => {
                                 const payload: any = { 'Internal Shipping Method': shippingMethod };
                                 if (requiresDriver) payload['Internal Shipping Details'] = shippingDriver;
-                                else payload['Internal Shipping Details'] = shippingMethod; // Default detail to method name if no driver
+                                else payload['Internal Shipping Details'] = ''; // Set empty if no driver selection required
                                 
                                 if (shippingCost) payload['Internal Cost'] = Number(shippingCost);
                                 

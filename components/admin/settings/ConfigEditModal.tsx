@@ -104,7 +104,7 @@ const ConfigEditModal: React.FC<ConfigEditModalProps> = ({ section, item, onClos
             const result = await response.json();
             if (!response.ok || result.status !== 'success') throw new Error(result.message || 'Upload failed');
             
-            const finalUrl = result.url || result.tempUrl;
+            const finalUrl = result.url;
             setFormData((prev: any) => ({ ...prev, [fieldName]: finalUrl }));
         } catch (err: any) { setError(err.message); } finally { setUploadingFields(prev => ({ ...prev, [fieldName]: false })); }
     };

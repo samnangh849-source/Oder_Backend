@@ -3,94 +3,62 @@ import { AppContext } from '@/context/AppContext';
 import { WEB_APP_URL } from '@/constants';
 import Spinner from '@/components/common/Spinner';
 import { ParsedOrder } from '@/types';
-import { useOptimisticImage } from '@/hooks/useOptimisticImage';
-import { convertGoogleDriveUrl } from '@/utils/fileUtils';
-import { useSmartZoom } from '@/hooks/useSmartZoom';
-import { packageDetector, DetectionResult } from '@/utils/visionAlgorithm';
+import { convertGoogleDriveUrl, fileToBase64, fileToDataUrl, getOptimisticPackagePhoto } from '@/utils/fileUtils';
+import { compressImage } from '@/utils/imageCompressor';
 import { CacheService, CACHE_KEYS } from '@/services/cacheService';
 import OrderGracePeriod from '@/components/orders/OrderGracePeriod';
-import { compressImage } from '@/utils/imageCompressor';
 import { printViaIframe } from '@/utils/printUtils';
+import { useBarcodeScanner } from '@/hooks/useBarcodeScanner';
+import { useOrder } from '@/context/OrderContext';
 
 import OrderSummaryPanel from './OrderSummaryPanel';
-import CameraViewport from './CameraViewport';
 import ActionControls from './ActionControls';
 import PrintLabelPage from '@/pages/PrintLabelPage';
 
-type PackStep = 'VERIFYING' | 'LABELING' | 'CAPTURING';
+type PackStep = 'VERIFYING' | 'LABELING' | 'PHOTO';
 
 interface FastPackTerminalProps {
     order: ParsedOrder | null;
     onClose: () => void;
-    onSuccess: (tempUrl?: string) => void;
+    onSuccess: (photoUrl?: string) => void;
 }
 
 const FastPackTerminal: React.FC<FastPackTerminalProps> = ({ order, onClose, onSuccess }) => {
     const { currentUser, appData, previewImage: showFullImage, refreshData } = useContext(AppContext);
+    const { setOrders } = useOrder();
     
     // Workflow State
     const [step, setStep] = useState<PackStep>('VERIFYING');
     const [verifiedItems, setVerifiedItems] = useState<Record<string, number>>({}); 
-    const hasAutoAdvanced = useRef({ verify: false, label: false });
-
-    // Optimistic Image Hook
-    const { prepareImage, startUpload } = useOptimisticImage({
-        onUploadSuccess: (id, tempUrl) => {
-            console.log("Packaging photo upload started:", id, tempUrl);
-        },
-        onUploadError: (id, err) => {
-            alert("រូបភាពកញ្ចប់បញ្ជូនមិនបានជោគជ័យ: " + (err.message || err));
-        }
-    });
+    const hasAutoAdvanced = useRef({ verify: false, label: false, photo: false });
+    const fileInputRef = useRef<HTMLInputElement>(null);
 
     const isOrderVerified = useMemo(() => {
         if (!order) return false;
         return order.Products.every(p => (verifiedItems[p.name] || 0) >= p.quantity);
     }, [order, verifiedItems]);
     
-    // Refs
-    const videoRef = useRef<HTMLVideoElement>(null);
-    const canvasRef = useRef<HTMLCanvasElement>(null);
-    const fileInputRef = useRef<HTMLInputElement>(null);
-    const countdownRef = useRef<number | null>(null);
-    const countdownIntervalRef = useRef<any>(null);
-    const aiLoopRef = useRef<number | null>(null);
-    const isAiEnabledRef = useRef(true);
-    const qrStabilityRef = useRef(0);
-    const lastActionTime = useRef(0);
-    const previewImageRef = useRef<string | null>(null);
-    const uploadingRef = useRef(false);
-
-    // AI & Camera State
-    const [isAiEnabled, setIsAiEnabled] = useState(true);
-    const [isAiLoading, setIsAiLoading] = useState(false);
-    const [detection, setDetection] = useState<DetectionResult | null>(null);
-    const [autoCaptureProgress, setAutoCaptureProgress] = useState(0);
-    const [countdown, setCountdown] = useState<number | null>(null);
-    const [facingMode, setFacingMode] = useState<'environment' | 'user'>('environment');
-    const [zoom, setZoom] = useState(1.0);
-    const [aiFrameCount, setAiFrameCount] = useState(0);
-
     // UI State
     const [uploading, setUploading] = useState(false);
     const [uploadProgress, setUploadProgress] = useState(0);
-    const [previewImage, setPreviewImage] = useState<string | null>(null);
-    const [isCameraActive, setIsCameraActive] = useState(false);
-    const [rawFile, setRawFile] = useState<File | null>(null);
     const [hasGeneratedLabel, setHasGeneratedLabel] = useState(false);
+    const [packagePhoto, setPackagePhoto] = useState<string | null>(null);
     const [showLabelEditor, setShowLabelEditor] = useState(false);
     const [copiedField, setCopiedField] = useState<string | null>(null);
     const [isAdvancingLabel, setIsAdvancingLabel] = useState(false);
     const [advancementProgress, setAdvancementProgress] = useState(0);
+
+    // Auto Capture State
+    const [autoCaptureCountdown, setAutoCaptureCountdown] = useState<number | null>(null);
+    const [isCapturing, setIsCapturing] = useState(false);
+    const lastDetectedQR = useRef<string | null>(null);
+    const countdownTimerRef = useRef<any>(null);
     
     // Grace Period / Undo State
     const { advancedSettings } = useContext(AppContext);
     const [undoTimer, setUndoTimer] = useState<number | null>(null);
     const [isUndoing, setIsUndoing] = useState(false);
     const maxUndoTimer = advancedSettings.packagingGracePeriod || 5;
-
-    useEffect(() => { isAiEnabledRef.current = isAiEnabled; }, [isAiEnabled]);
-    useEffect(() => { uploadingRef.current = uploading; }, [uploading]);
 
     const verifyItem = (name: string) => {
         setVerifiedItems(prev => {
@@ -105,42 +73,265 @@ const FastPackTerminal: React.FC<FastPackTerminalProps> = ({ order, onClose, onS
         });
     };
 
-    const executeFinalSubmit = useCallback(async () => {
+    const handlePhotoCapture = async (e: React.ChangeEvent<HTMLInputElement>) => {
+        const file = e.target.files?.[0];
+        if (!file) return;
+
         try {
-            if (!rawFile || !order) return;
-            setUploading(true);
+            const compressed = await compressImage(file, 'balanced');
+            const dataUrl = await fileToDataUrl(compressed);
+            setPackagePhoto(dataUrl);
+            if (order?.['Order ID']) {
+                localStorage.setItem(`package_photo_${order['Order ID']}`, dataUrl);
+            }
+            
+            // Auto advance after photo if it's the first time
+            if (!hasAutoAdvanced.current.photo) {
+                hasAutoAdvanced.current.photo = true;
+                setTimeout(() => {
+                    handleSubmit();
+                }, 1000);
+            }
+        } catch (err) {
+            console.error("Photo processing failed:", err);
+            alert("Failed to process photo");
+        }
+    };
 
-            const { blob } = await prepareImage(rawFile, 'high-detail');
-            const fileName = `Package_${order['Order ID']}_${Date.now()}.jpg`;
+    const capturePhotoFromStream = useCallback(async () => {
+        const video = document.querySelector('#fastpack-scanner-container video') as HTMLVideoElement;
+        if (!video || isCapturing) return;
 
-            // Trigger background upload with metadata for final update
-            const tempUrl = await startUpload(
-                `pack_${order['Order ID']}`,
-                blob,
-                fileName,
-                {
-                    orderId: order['Order ID'],
-                    targetColumn: 'Package Photo URL',
-                    newData: {
-                        'Fulfillment Status': 'Ready to Ship',
-                        'Packed By': currentUser?.FullName || 'Packer',
-                        'Packed Time': new Date().toLocaleString('km-KH')
-                    }
-                }
-            );
+        setIsCapturing(true);
+        try {
+            const canvas = document.createElement('canvas');
+            // Set canvas to a standard high-quality size for the final record
+            canvas.width = 1280;
+            canvas.height = 960; 
+            const ctx = canvas.getContext('2d');
+            if (!ctx) throw new Error("Could not get canvas context");
 
-            if (!tempUrl) {
-                alert("❌ ការបញ្ជូនបរាជ័យ: មិនទទួលបាន URL ពី Server");
-                return;
+            // 1. Draw the Video Frame (Centered & Cropped to fit)
+            const videoAspect = video.videoWidth / video.videoHeight;
+            const canvasAspect = canvas.width / canvas.height;
+            let drawWidth, drawHeight, offsetX, offsetY;
+
+            if (videoAspect > canvasAspect) {
+                drawHeight = canvas.height;
+                drawWidth = canvas.height * videoAspect;
+                offsetX = -(drawWidth - canvas.width) / 2;
+                offsetY = 0;
+            } else {
+                drawWidth = canvas.width;
+                drawHeight = canvas.width / videoAspect;
+                offsetX = 0;
+                offsetY = -(drawHeight - canvas.height) / 2;
             }
 
-            onSuccess(tempUrl);
+            ctx.drawImage(video, offsetX, offsetY, drawWidth, drawHeight);
 
-            const id = order['Order ID'].substring(0,8);
-            const chatMsg = `📦 **[PACKED]** កញ្ចប់ #${id} (${order['Customer Name']}) វេចខ្ចប់រួចរាល់ (កំពុង Upload រូបភាព)`;
+            // 2. Add Semi-transparent Overlays for Text Readability
+            ctx.fillStyle = 'rgba(0, 0, 0, 0.5)';
+            // Left Overlay
+            ctx.fillRect(0, 0, 350, canvas.height);
+            // Right Overlay
+            ctx.fillRect(canvas.width - 350, 0, 350, canvas.height);
+
+            // 3. Draw Order Information
+            ctx.fillStyle = '#FFFFFF';
+            ctx.textBaseline = 'top';
+            
+            // Left Side Info
+            ctx.font = 'bold 32px Kantumruy Pro, sans-serif';
+            ctx.fillText('ORDER DETAILS', 30, 40);
+            
+            ctx.font = 'bold 48px monospace';
+            ctx.fillStyle = '#FCD535';
+            ctx.fillText(`#${order?.['Order ID'].substring(0, 12)}`, 30, 90);
+            
+            ctx.fillStyle = '#FFFFFF';
+            ctx.font = 'bold 36px Kantumruy Pro, sans-serif';
+            ctx.fillText(order?.['Customer Name'] || 'N/A', 30, 160);
+            
+            ctx.font = '32px monospace';
+            ctx.fillText(order?.['Customer Phone'] || 'N/A', 30, 210);
+
+            // Right Side Info
+            ctx.textAlign = 'right';
+            ctx.font = 'bold 32px Kantumruy Pro, sans-serif';
+            ctx.fillText('PAYMENT & LOGS', canvas.width - 30, 40);
+            
+            ctx.font = 'bold 60px monospace';
+            ctx.fillStyle = '#0ECB81';
+            ctx.fillText(`$${(Number(order?.['Grand Total']) || 0).toFixed(2)}`, canvas.width - 30, 90);
+            
+            ctx.fillStyle = '#FFFFFF';
+            ctx.font = '28px Kantumruy Pro, sans-serif';
+            ctx.fillText(`Packer: ${currentUser?.FullName || 'N/A'}`, canvas.width - 30, 170);
+            
+            const now = new Date();
+            ctx.font = '24px monospace';
+            ctx.fillText(now.toLocaleDateString('km-KH'), canvas.width - 30, 220);
+            ctx.fillText(now.toLocaleTimeString('km-KH'), canvas.width - 30, 255);
+
+            // 4. Add Bottom Watermark
+            ctx.textAlign = 'center';
+            ctx.font = 'bold 20px sans-serif';
+            ctx.fillStyle = 'rgba(255, 255, 255, 0.3)';
+            ctx.fillText('GENERATED BY FAST PACK TERMINAL v4.3', canvas.width / 2, canvas.height - 30);
+
+            const blob = await new Promise<Blob | null>(res => canvas.toBlob(res, 'image/jpeg', 0.85));
+            if (!blob) throw new Error("Could not create blob from canvas");
+
+            const file = new File([blob], `Package_${order?.['Order ID'].substring(0,8)}.jpg`, { type: 'image/jpeg' });
+            const compressed = await compressImage(file, 'balanced');
+            const dataUrl = await fileToDataUrl(compressed);
+            
+            setPackagePhoto(dataUrl);
+            if (order?.['Order ID']) {
+                localStorage.setItem(`package_photo_${order['Order ID']}`, dataUrl);
+            }
+            setAutoCaptureCountdown(null);
+
+            if (!hasAutoAdvanced.current.photo) {
+                hasAutoAdvanced.current.photo = true;
+                setTimeout(() => {
+                    handleSubmit();
+                }, 1500); // Slightly longer delay to show the framed photo
+            }
+        } catch (err) {
+            console.error("Capture failed:", err);
+        } finally {
+            setIsCapturing(false);
+        }
+    }, [order, isCapturing, setPackagePhoto, currentUser]);
+
+    const onScan = useCallback((decodedText: string) => {
+        if (step !== 'PHOTO' || packagePhoto || autoCaptureCountdown !== null || isCapturing) return;
+        
+        // Prevent multiple triggers for same QR in short time
+        if (lastDetectedQR.current === decodedText) return;
+        lastDetectedQR.current = decodedText;
+        setTimeout(() => { lastDetectedQR.current = null; }, 5000);
+
+        // Start countdown
+        setAutoCaptureCountdown(3);
+    }, [step, packagePhoto, autoCaptureCountdown, isCapturing]);
+
+    const { 
+        isInitializing: isScannerLoading, 
+        error: scannerError,
+        switchCamera,
+        isTorchOn,
+        isTorchSupported,
+        toggleTorch
+    } = useBarcodeScanner("fastpack-scanner-container", onScan, 'single', { 
+        fps: 10,
+        // ✅ Fix 2: Only start camera when in PHOTO step to save battery/reduce heat
+        disableScanner: step !== 'PHOTO' || !!packagePhoto 
+    });
+
+    useEffect(() => {
+        if (autoCaptureCountdown !== null && autoCaptureCountdown > 0) {
+            countdownTimerRef.current = setTimeout(() => {
+                setAutoCaptureCountdown(prev => (prev !== null ? prev - 1 : null));
+            }, 1000);
+        } else if (autoCaptureCountdown === 0) {
+            capturePhotoFromStream();
+        }
+        return () => {
+            if (countdownTimerRef.current) clearTimeout(countdownTimerRef.current);
+        };
+    }, [autoCaptureCountdown, capturePhotoFromStream]);
+
+    // ✅ Fix 4: Reliable Background Upload with Retry Mechanism
+    const uploadPhotoWithRetry = useCallback(async (data: any, token: string, attempt = 1) => {
+        const MAX_ATTEMPTS = 3;
+        try {
+            const response = await fetch(`${WEB_APP_URL}/api/upload-image`, {
+                method: 'POST',
+                keepalive: true,
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Authorization': `Bearer ${token}`
+                },
+                body: JSON.stringify(data)
+            });
+            if (!response.ok) throw new Error(`Server responded with ${response.status}`);
+            console.log(`✅ Photo upload successful on attempt ${attempt}`);
+        } catch (err) {
+            console.error(`❌ Photo upload failed (Attempt ${attempt}/${MAX_ATTEMPTS}):`, err);
+            if (attempt < MAX_ATTEMPTS) {
+                const delay = attempt * 2000; // Exponential backoff: 2s, 4s...
+                setTimeout(() => uploadPhotoWithRetry(data, token, attempt + 1), delay);
+            }
+        }
+    }, []);
+
+    const executeFinalSubmit = useCallback(async () => {
+        try {
+            if (!order) return;
+            setUploading(true);
 
             const session = await CacheService.get<{ token: string }>(CACHE_KEYS.SESSION);
             const token = session?.token || '';
+            
+            const newData = {
+                'Fulfillment Status': 'Ready to Ship',
+                'Packed By': currentUser?.FullName || 'Packer',
+                'Packed Time': new Date().toLocaleString('km-KH')
+            };
+
+            // 1. 🚀 STEP 1: Update Status (JSON) - Await this for reliability
+            const statusResponse = await fetch(`${WEB_APP_URL}/api/admin/update-order`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Authorization': `Bearer ${token}`
+                },
+                body: JSON.stringify({
+                    orderId: order['Order ID'],
+                    team: order.Team,
+                    userName: currentUser?.FullName || 'System',
+                    newData: newData
+                })
+            });
+
+            if (!statusResponse.ok) throw new Error("Status update failed");
+
+            // 2. ✅ STEP 2: Close Terminal & Move UI immediately
+            onSuccess(packagePhoto || 'manual_sync_ok');
+            setOrders(prev => prev.map(o => 
+                o['Order ID'] === order['Order ID'] 
+                    ? { 
+                        ...o, 
+                        'Fulfillment Status': 'Ready to Ship',
+                        FulfillmentStatus: 'Ready to Ship',
+                        'Packed By': currentUser?.FullName || 'Packer',
+                        'Packed Time': new Date().toLocaleString('km-KH'),
+                        'Package Photo URL': packagePhoto || o['Package Photo URL']
+                      } 
+                    : o
+            ));
+
+            // 3. 📸 STEP 3: Background Photo Upload with Retry
+            if (packagePhoto) {
+                const base64Data = packagePhoto.includes(',') ? packagePhoto.split(',')[1] : packagePhoto;
+                const uploadData = {
+                    fileData: base64Data,
+                    fileName: `Package_${order['Order ID'].substring(0,8)}_${Date.now()}.jpg`,
+                    mimeType: 'image/jpeg',
+                    orderId: order['Order ID'],
+                    targetColumn: 'Package Photo URL',
+                    newData: newData // ✅ Critical: Re-included for Apps Script context
+                };
+                
+                // Trigger retry-enabled upload in background
+                uploadPhotoWithRetry(uploadData, token);
+            }
+
+            const id = order['Order ID'].substring(0,8);
+            const chatMsg = `📦 **[PACKED]** កញ្ចប់ #${id} (${order['Customer Name']}) វេចខ្ចប់រួចរាល់`;
 
             fetch(`${WEB_APP_URL}/api/chat/send`, {
                 method: 'POST',
@@ -152,129 +343,17 @@ const FastPackTerminal: React.FC<FastPackTerminalProps> = ({ order, onClose, onS
             }).catch(() => {});
 
         } catch (err: any) {
+            console.error("Critical submission error:", err);
             alert("❌ ការបញ្ជូនបរាជ័យ: " + err.message);
         } finally {
             setUploading(false);
             setUploadProgress(0);
         }
-    }, [rawFile, order, currentUser, prepareImage, startUpload, onSuccess]);
-
-    const capturePhoto = useCallback(() => {
-        if (!videoRef.current || !canvasRef.current) return;
-        const video = videoRef.current;
-        const canvas = canvasRef.current;
-        canvas.width = video.videoWidth;
-        canvas.height = video.videoHeight;
-        const ctx = canvas.getContext('2d');
-        if (ctx) {
-            ctx.drawImage(video, 0, 0);
-
-            // ── Overlay helper ─────────────────────────────────────────────
-            const truncateText = (c: CanvasRenderingContext2D, text: string, maxWidth: number): string => {
-                if (c.measureText(text).width <= maxWidth) return text;
-                let t = text;
-                while (t.length > 0 && c.measureText(t + '...').width > maxWidth) t = t.slice(0, -1);
-                return t + '...';
-            };
-
-            const padding = 20;
-            const maxTextWidth = canvas.width - padding * 2;
-
-            const shortId    = order?.['Order ID']?.substring(0, 15) ?? '';
-            const page       = order?.Page ?? '';
-            const store      = order?.['Fulfillment Store'] ?? '';
-            const location   = order?.Location ?? 'N/A';
-            const custName   = order?.['Customer Name'] ?? 'N/A';
-            const custPhone  = order?.['Customer Phone'] ?? 'N/A';
-            const grandTotal = (Number(order?.['Grand Total']) || 0).toFixed(2);
-            const payment    = order?.['Payment Status'] ?? 'Unpaid';
-            const packedBy   = currentUser?.FullName ?? 'Packer';
-            const logTime    = new Date().toLocaleString('km-KH');
-            const rawProducts = (order?.Products ?? []).map(p => `${p.name} x${p.quantity}`).join(', ');
-
-            // ── TOP BAR — Order ID, Page, Store ──────────────────────────
-            const topBarH = 52;
-            ctx.fillStyle = 'rgba(11, 14, 17, 0.92)';
-            ctx.fillRect(0, 0, canvas.width, topBarH);
-            // yellow accent at bottom of top bar
-            ctx.fillStyle = '#FCD535';
-            ctx.fillRect(0, topBarH - 3, canvas.width, 3);
-            ctx.fillStyle = '#EAECEF';
-            ctx.font = 'bold 20px "Inter", "Helvetica Neue", sans-serif';
-            ctx.fillText(truncateText(ctx, `ORDER: #${shortId}  |  PAGE: ${page}  |  STORE: ${store}`, maxTextWidth), padding, 34);
-
-            // ── BOTTOM BAR — Customer, Products, Meta ────────────────────
-            const botBarH = 115;
-            ctx.fillStyle = 'rgba(11, 14, 17, 0.92)';
-            ctx.fillRect(0, canvas.height - botBarH, canvas.width, botBarH);
-            // yellow accent at top of bottom bar
-            ctx.fillStyle = '#FCD535';
-            ctx.fillRect(0, canvas.height - botBarH, canvas.width, 3);
-
-            // Line 1 — Location, Customer Name, Phone (13px)
-            ctx.fillStyle = '#B7BDC6';
-            ctx.font = '500 13px "Inter", "Helvetica Neue", sans-serif';
-            ctx.fillText(truncateText(ctx, `\u{1F4CD} ${location}  |  \u{1F464} ${custName}  |  \u{1F4F1} ${custPhone}`, maxTextWidth), padding, canvas.height - 80);
-
-            // Line 2 — Products, Grand Total, Payment (13px)
-            const productsForLine = truncateText(ctx, rawProducts, maxTextWidth - 220);
-            ctx.fillText(truncateText(ctx, `\u{1F6CD} ${productsForLine}  |  \u{1F4B0} $${grandTotal}  |  ${payment}`, maxTextWidth), padding, canvas.height - 55);
-
-            // Line 3 — Packed By, Time (11px muted)
-            ctx.fillStyle = '#848E9C';
-            ctx.font = '500 11px "Inter", "Helvetica Neue", sans-serif';
-            ctx.fillText(truncateText(ctx, `PACKED: ${packedBy}  |  TIME: ${logTime}`, maxTextWidth), padding, canvas.height - 30);
-
-            const dataUrl = canvas.toDataURL('image/jpeg', 0.8);
-            setPreviewImage(dataUrl);
-            previewImageRef.current = dataUrl;
-            
-            // Convert dataUrl to File for submission
-            fetch(dataUrl)
-                .then(res => res.blob())
-                .then(blob => {
-                    const file = new File([blob], "capture.jpg", { type: "image/jpeg" });
-                    setRawFile(file);
-                });
-        }
-    }, [order, currentUser]);
-
-    const startCountdown = useCallback((seconds: number = 3) => {
-        if (countdownRef.current !== null) return;
-        countdownRef.current = seconds;
-        setCountdown(seconds);
-        if (countdownIntervalRef.current) clearInterval(countdownIntervalRef.current);
-        let count = seconds;
-        countdownIntervalRef.current = setInterval(() => {
-            count -= 1;
-            setCountdown(count);
-            if (count <= 0) {
-                if (countdownIntervalRef.current) clearInterval(countdownIntervalRef.current);
-                setCountdown(null);
-                countdownRef.current = null;
-                capturePhoto();
-            }
-        }, 1000);
-    }, [capturePhoto]);
-
-    const applyZoom = useCallback(async (track: MediaStreamTrack, value: number) => {
-        const capabilities = track.getCapabilities() as any;
-        if (!capabilities.zoom) return;
-        const min = capabilities.zoom.min || 1;
-        const max = capabilities.zoom.max || 3;
-        const clamped = Math.max(min, Math.min(max, value));
-        try {
-            await track.applyConstraints({ advanced: [{ zoom: clamped }] } as any);
-            setZoom(clamped);
-        } catch (e) {
-            console.warn("Zoom not supported on this device/browser");
-        }
-    }, []);
+    }, [order, currentUser, onSuccess, packagePhoto, setOrders, uploadPhotoWithRetry]);
 
     const handleSubmit = useCallback(() => {
-        if (!previewImage) return;
         setUndoTimer(maxUndoTimer);
-    }, [previewImage]);
+    }, [maxUndoTimer]);
 
     const handleUndo = () => {
         setIsUndoing(true);
@@ -284,116 +363,8 @@ const FastPackTerminal: React.FC<FastPackTerminalProps> = ({ order, onClose, onS
         }, 500);
     };
 
-    const stopCamera = useCallback(() => {
-        setIsCameraActive(false);
-        if (aiLoopRef.current) cancelAnimationFrame(aiLoopRef.current);
-        if (videoRef.current && videoRef.current.srcObject) {
-            const stream = videoRef.current.srcObject as MediaStream;
-            stream.getTracks().forEach(track => track.stop());
-            videoRef.current.srcObject = null;
-        }
-    }, []);
-
-    const runAiLoop = useCallback(async () => {
-        if (!videoRef.current || !isCameraActive || previewImageRef.current) return;
-        
-        const result = await packageDetector.detect(videoRef.current);
-        setDetection(result);
-        setAiFrameCount(prev => (prev + 1) % 100);
-
-        if (isAiEnabledRef.current) {
-            const isQRCode = result.barcodeFormat === 'qr_code' || result.barcodeFormat === 'qr' || result.barcodeFormat?.toLowerCase().includes('qr');
-            
-            if (result.barcodeBox && isQRCode) {
-                qrStabilityRef.current += 1;
-            } else {
-                qrStabilityRef.current = 0;
-            }
-
-            if (qrStabilityRef.current >= 2 && countdownRef.current === null && !previewImageRef.current) {
-                const track = (videoRef.current.srcObject as MediaStream)?.getVideoTracks()[0];
-                if (track && Date.now() - lastActionTime.current > 1500) {
-                    const videoArea = videoRef.current.videoWidth * videoRef.current.videoHeight;
-                    const objectArea = result.barcodeBox!.w * result.barcodeBox!.h;
-                    const areaRatio = objectArea / videoArea;
-                    const minThreshold = 0.05;
-                    const maxThreshold = 0.25;
-                    if (areaRatio < minThreshold) applyZoom(track, zoom + 0.5);
-                    else if (areaRatio > maxThreshold) applyZoom(track, zoom - 0.5);
-                    lastActionTime.current = Date.now();
-                }
-                startCountdown(2);
-            } else if (result.gesture === 'five_fingers' && countdownRef.current === null) {
-                startCountdown(3);
-            }
-
-            if (result.gesture === 'thumbs_up' && previewImageRef.current && !uploadingRef.current) handleSubmit();
-
-            if (result.found && result.box && !result.barcodeBox) {
-                const track = (videoRef.current.srcObject as MediaStream)?.getVideoTracks()[0];
-                if (track && Date.now() - lastActionTime.current > 1200) {
-                    const videoArea = videoRef.current.videoWidth * videoRef.current.videoHeight;
-                    const objectArea = result.box.w * result.box.h;
-                    const areaRatio = objectArea / videoArea;
-                    const minThreshold = result.isHand ? 0.35 : 0.25;
-                    const maxThreshold = result.isHand ? 0.80 : 0.70;
-                    if (areaRatio < minThreshold) applyZoom(track, zoom + 0.5);
-                    else if (areaRatio > maxThreshold) applyZoom(track, zoom - 0.5);
-                    lastActionTime.current = Date.now();
-                }
-                
-                if (countdownRef.current === null && result.stability > 0.95 && !previewImageRef.current && !result.isHand) {
-                    setAutoCaptureProgress(prev => {
-                        const next = prev + 3;
-                        if (next >= 100) { capturePhoto(); return 0; }
-                        return next;
-                    });
-                } else setAutoCaptureProgress(0);
-            }
-        }
-        aiLoopRef.current = requestAnimationFrame(runAiLoop);
-    }, [isCameraActive, zoom, applyZoom, capturePhoto, startCountdown, handleSubmit]);
-
-    const startCamera = async (overrideFacingMode?: 'environment' | 'user') => {
-        const modeToUse = overrideFacingMode || facingMode;
-        if (overrideFacingMode) setFacingMode(overrideFacingMode);
-
-        if (videoRef.current && videoRef.current.srcObject) {
-            const stream = videoRef.current.srcObject as MediaStream;
-            stream.getTracks().forEach(track => track.stop());
-            videoRef.current.srcObject = null;
-        }
-
-        setIsCameraActive(true);
-        setPreviewImage(null);
-        previewImageRef.current = null;
-        if (!packageDetector.isReady()) {
-            setIsAiLoading(true);
-            await packageDetector.init();
-            setIsAiLoading(false);
-        }
-        try {
-            const stream = await navigator.mediaDevices.getUserMedia({ 
-                video: { facingMode: modeToUse, width: { ideal: 1280 }, height: { ideal: 720 } }, 
-                audio: false 
-            });
-            if (videoRef.current) {
-                videoRef.current.srcObject = stream;
-                videoRef.current.onloadedmetadata = () => { runAiLoop(); };
-            }
-        } catch (err) {
-            alert("Unable to open camera.");
-            setIsCameraActive(false);
-            setIsAiLoading(false);
-        }
-    };
-
     useEffect(() => {
-        if (step === 'CAPTURING') {
-            startCamera();
-        } else {
-            stopCamera();
-        }
+        // No operation needed for step changes
     }, [step]);
 
     useEffect(() => {
@@ -411,9 +382,9 @@ const FastPackTerminal: React.FC<FastPackTerminalProps> = ({ order, onClose, onS
             hasAutoAdvanced.current.label = true;
             setIsAdvancingLabel(true);
             const timer = setTimeout(() => {
-                setStep('CAPTURING');
+                setStep('PHOTO');
                 setIsAdvancingLabel(false);
-            }, 5000); // Wait 5 seconds to give user time to physically pack/label
+            }, 5000); // 5s wait before auto-advancing
             return () => { clearTimeout(timer); setIsAdvancingLabel(false); };
         }
     }, [step, hasGeneratedLabel]);
@@ -463,8 +434,8 @@ const FastPackTerminal: React.FC<FastPackTerminalProps> = ({ order, onClose, onS
             msg = `🛂 **[VERIFYING]** ${user} កំពុងផ្ទៀងផ្ទាត់កញ្ចប់ #${id} (${order['Customer Name']})`;
         } else if (step === 'LABELING') {
             msg = `🖨️ **[LABELING]** ${user} កំពុងបោះពុម្ពស្លាកបញ្ជូន (Label) សម្រាប់កញ្ចប់ #${id}`;
-        } else if (step === 'CAPTURING') {
-            msg = `📸 **[CAPTURING]** កញ្ចប់ #${id} ត្រៀមថតរូបបញ្ជាក់ការវេចខ្ចប់ដោយ ${user}`;
+        } else if (step === 'PHOTO') {
+            msg = `📸 **[PHOTO]** ${user} កំពុងថតរូបកញ្ចប់ #${id}`;
         }
 
         if (msg) {
@@ -472,7 +443,7 @@ const FastPackTerminal: React.FC<FastPackTerminalProps> = ({ order, onClose, onS
         }
     }, [step, order, currentUser]);
 
-    useEffect(() => { return () => stopCamera(); }, [stopCamera]);
+    // Auto-clean removed tracks if any
 
     useEffect(() => {
         let interval: any;
@@ -514,29 +485,6 @@ const FastPackTerminal: React.FC<FastPackTerminalProps> = ({ order, onClose, onS
     const shippingMethod = appData.shippingMethods?.find(m => m.MethodName === order?.['Internal Shipping Method']);
     const driver = appData.drivers?.find(d => d.DriverName === (order?.['Driver Name'] || order?.['Internal Shipping Details']));
     const bank = appData.bankAccounts?.find(b => b.BankName === order?.['Payment Info']);
-
-    const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
-        const file = e.target.files?.[0];
-        if (file) {
-            setRawFile(file);
-            try {
-                const compressedBlob = await compressImage(file, 'balanced');
-                const reader = new FileReader();
-                reader.onloadend = () => {
-                    setPreviewImage(reader.result as string);
-                    previewImageRef.current = reader.result as string;
-                };
-                reader.readAsDataURL(compressedBlob);
-            } catch (error) {
-                const reader = new FileReader();
-                reader.onloadend = () => {
-                    setPreviewImage(reader.result as string);
-                    previewImageRef.current = reader.result as string;
-                };
-                reader.readAsDataURL(file);
-            }
-        }
-    };
 
     const handleCopy = (text: string, label: string) => {
         if (!text) return;
@@ -595,8 +543,8 @@ const FastPackTerminal: React.FC<FastPackTerminalProps> = ({ order, onClose, onS
             <header className="relative z-30 px-6 py-4 bg-[#181A20] border-b border-[#2B3139] flex justify-between items-center flex-shrink-0">
                 <div className="flex items-center gap-4">
                     <button onClick={() => {
-                        if (step === 'CAPTURING') setStep('LABELING');
-                        else if (step === 'LABELING') setStep('VERIFYING');
+                        if (step === 'LABELING') setStep('VERIFYING');
+                        else if (step === 'PHOTO') setStep('LABELING');
                         else onClose();
                     }} className="px-4 py-2 bg-[#0B0E11] hover:bg-gray-800 text-gray-400 hover:text-white rounded-sm flex items-center gap-2 transition-colors border border-[#2B3139]">
                         <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" /></svg>
@@ -661,14 +609,14 @@ const FastPackTerminal: React.FC<FastPackTerminalProps> = ({ order, onClose, onS
                 />
 
                 {/* RIGHT: Dynamic Execution Stage */}
-                <div className="flex-grow flex flex-col bg-[#0B0E11] p-6 overflow-y-auto">
+                <div className="flex-grow flex flex-col bg-[#0B0E11] p-6 overflow-y-auto relative">
                     <div className="w-full h-full flex flex-col max-w-4xl mx-auto">
                         {uploading && undoTimer === null && (
                             <div className="bg-[#181A20] border border-[#2B3139] rounded-sm p-6 mb-6">
                                 <div className="flex justify-between items-center mb-4">
                                     <div className="flex items-center gap-3">
                                         <Spinner size="sm" />
-                                        <span className="text-[10px] font-bold text-white uppercase tracking-widest">Uploading Photo...</span>
+                                        <span className="text-[10px] font-bold text-white uppercase tracking-widest">Processing Final Update...</span>
                                     </div>
                                     <span className="text-sm font-mono text-[#FCD535]">{uploadProgress}%</span>
                                 </div>
@@ -807,7 +755,7 @@ const FastPackTerminal: React.FC<FastPackTerminalProps> = ({ order, onClose, onS
                                     </div>
                                     <div className="text-center space-y-4">
                                         <h3 className="text-2xl font-bold text-white uppercase tracking-widest">Print Label</h3>
-                                        <p className="text-gray-500 text-[10px] font-bold uppercase tracking-widest">Attach label before taking photo</p>
+                                        <p className="text-gray-500 text-[10px] font-bold uppercase tracking-widest">Attach label and finalize packing</p>
                                     </div>
                                     {fullPrinterURL && (
                                         <div className="flex items-center gap-4">
@@ -855,29 +803,135 @@ const FastPackTerminal: React.FC<FastPackTerminalProps> = ({ order, onClose, onS
                                 </div>
                             )}
 
-                            {step === 'CAPTURING' && (
-                                <CameraViewport 
-                                    videoRef={videoRef}
-                                    canvasRef={canvasRef}
-                                    fileInputRef={fileInputRef}
-                                    isCameraActive={isCameraActive}
-                                    isAiEnabled={isAiEnabled}
-                                    setIsAiEnabled={setIsAiEnabled}
-                                    isAiLoading={isAiLoading}
-                                    detection={detection}
-                                    autoCaptureProgress={autoCaptureProgress}
-                                    countdown={countdown}
-                                    previewImage={previewImage}
-                                    setPreviewImage={setPreviewImage}
-                                    showFullImage={showFullImage}
-                                    stopCamera={stopCamera}
-                                    capturePhoto={capturePhoto}
-                                    startCamera={startCamera}
-                                    zoom={zoom}
-                                    handleFileChange={handleFileChange}
-                                    toggleCamera={() => startCamera(facingMode === 'environment' ? 'user' : 'environment')}
-                                />
-                            )}
+                            <div className={`bg-[#181A20] rounded-sm p-6 sm:p-12 border border-[#2B3139] flex-grow flex-col items-center justify-center gap-6 sm:gap-8 animate-fade-in relative overflow-hidden ${step === 'PHOTO' ? 'flex' : 'hidden'}`}>
+                                {/* Camera Section */}
+                                <div className="relative group w-full max-w-md aspect-square sm:w-[400px] sm:h-[400px]">
+                                    <div className={`w-full h-full bg-[#0B0E11] rounded-sm flex items-center justify-center border-2 transition-all duration-300 overflow-hidden relative ${packagePhoto ? 'border-[#0ECB81]' : autoCaptureCountdown !== null ? 'border-[#FCD535] shadow-[0_0_20px_rgba(252,213,53,0.3)]' : 'border-[#2B3139]'}`}>
+                                        {/* Live Scanner Container */}
+                                        <div 
+                                            id="fastpack-scanner-container" 
+                                            className={`absolute inset-0 z-0 ${packagePhoto ? 'opacity-0' : 'opacity-100'}`}
+                                        ></div>
+
+                                            {/* Photo Preview Overlay */}
+                                            {packagePhoto && (
+                                                <img src={packagePhoto} className="absolute inset-0 w-full h-full object-cover z-10" alt="Package" />
+                                            )}
+
+                                            {/* Countdown Overlay */}
+                                            {autoCaptureCountdown !== null && !packagePhoto && (
+                                                <div className="absolute inset-0 z-20 flex flex-col items-center justify-center bg-black/40 backdrop-blur-sm animate-fade-in">
+                                                    <div className="text-8xl font-black text-[#FCD535] animate-bounce drop-shadow-[0_0_15px_rgba(252,213,53,0.5)]">
+                                                        {autoCaptureCountdown}
+                                                    </div>
+                                                    <p className="text-[10px] font-black text-[#FCD535] uppercase tracking-[0.3em] mt-4">Capturing...</p>
+                                                </div>
+                                            )}
+
+                                            {/* Initializing/Error Overlays */}
+                                            {!packagePhoto && autoCaptureCountdown === null && (
+                                                <>
+                                                    {isScannerLoading && (
+                                                        <div className="absolute inset-0 z-10 flex flex-col items-center justify-center bg-[#0B0E11]">
+                                                            <Spinner size="lg" />
+                                                            <p className="text-[10px] font-bold text-gray-500 uppercase tracking-widest mt-4">Waking Camera...</p>
+                                                        </div>
+                                                    )}
+                                                    {scannerError && (
+                                                        <div className="absolute inset-0 z-10 flex flex-col items-center justify-center bg-[#0B0E11] p-6 text-center">
+                                                            <svg className="w-12 h-12 text-[#F6465D] mb-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" /></svg>
+                                                            <p className="text-xs font-bold text-gray-300 uppercase tracking-widest">{scannerError}</p>
+                                                        </div>
+                                                    )}
+                                                </>
+                                            )}
+
+                                            {/* Scanning Reticle */}
+                                            {!packagePhoto && !isScannerLoading && autoCaptureCountdown === null && (
+                                                <div className="absolute inset-0 z-10 pointer-events-none flex items-center justify-center">
+                                                    <div className="w-48 h-48 border border-white/20 rounded-2xl relative">
+                                                        <div className="absolute -top-1 -left-1 w-6 h-6 border-t-4 border-l-4 border-[#FCD535] rounded-tl-lg"></div>
+                                                        <div className="absolute -top-1 -right-1 w-6 h-6 border-t-4 border-r-4 border-[#FCD535] rounded-tr-lg"></div>
+                                                        <div className="absolute -bottom-1 -left-1 w-6 h-6 border-b-4 border-l-4 border-[#FCD535] rounded-bl-lg"></div>
+                                                        <div className="absolute -bottom-1 -right-1 w-6 h-6 border-b-4 border-r-4 border-[#FCD535] rounded-br-lg"></div>
+                                                        <div className="absolute inset-0 bg-[#FCD535]/5 animate-pulse"></div>
+                                                    </div>
+                                                </div>
+                                            )}
+                                        </div>
+
+                                        {/* Quick Controls */}
+                                        {!packagePhoto && !isScannerLoading && (
+                                            <div className="absolute bottom-4 left-1/2 -translate-x-1/2 z-30 flex items-center gap-3">
+                                                <button 
+                                                    onClick={switchCamera}
+                                                    className="p-3 bg-black/60 backdrop-blur-md border border-white/10 rounded-full text-white hover:bg-[#FCD535] hover:text-black transition-all"
+                                                >
+                                                    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" /></svg>
+                                                </button>
+                                                {isTorchSupported && (
+                                                    <button 
+                                                        onClick={toggleTorch}
+                                                        className={`p-3 backdrop-blur-md border border-white/10 rounded-full transition-all ${isTorchOn ? 'bg-[#FCD535] text-black' : 'bg-black/60 text-white'}`}
+                                                    >
+                                                        <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z" /></svg>
+                                                    </button>
+                                                )}
+                                            </div>
+                                        )}
+
+                                        {packagePhoto && (
+                                            <button 
+                                                onClick={() => setPackagePhoto(null)} 
+                                                className="absolute -top-3 -right-3 z-30 bg-[#F6465D] text-white p-2 rounded-full shadow-lg hover:scale-110 transition-transform border-2 border-[#181A20]"
+                                            >
+                                                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2.5}><path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" /></svg>
+                                            </button>
+                                        )}
+                                    </div>
+
+                                    <div className="text-center space-y-2">
+                                        <h3 className="text-xl font-bold text-white uppercase tracking-widest">
+                                            {packagePhoto ? 'Photo Ready' : autoCaptureCountdown !== null ? 'Keep Steady' : 'Fast Capture'}
+                                        </h3>
+                                        <p className="text-gray-500 text-[10px] font-bold uppercase tracking-[0.2em]">
+                                            {packagePhoto ? 'Review and proceed below' : 'Scan any QR Code for 3s Auto-Capture'}
+                                        </p>
+                                    </div>
+
+                                    <div className="flex flex-col items-center gap-4 w-full">
+                                        <button 
+                                            onClick={capturePhotoFromStream}
+                                            disabled={isCapturing || !!packagePhoto || isScannerLoading}
+                                            className="w-full max-w-xs py-4 bg-[#FCD535] hover:bg-[#FCD535]/90 disabled:bg-[#2B3139] disabled:text-gray-600 text-black rounded-sm font-black uppercase text-xs tracking-[0.2em] flex items-center justify-center gap-3 transition-all shadow-[0_8px_25px_rgba(252,213,53,0.2)] active:scale-95"
+                                        >
+                                            {isCapturing ? (
+                                                <Spinner size="sm" />
+                                            ) : (
+                                                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2.5}><path strokeLinecap="round" strokeLinejoin="round" d="M3 9a2 2 0 012-2h.93a2 2 0 001.664-.89l.812-1.22A2 2 0 0110.07 4h3.86a2 2 0 011.664.89l.812 1.22A2 2 0 0018.07 7H19a2 2 0 012 2v9a2 2 0 01-2 2H5a2 2 0 01-2-2V9z" /><path strokeLinecap="round" strokeLinejoin="round" d="M15 13a3 3 0 11-6 0 3 3 0 016 0z" /></svg>
+                                            )}
+                                            {packagePhoto ? 'Captured' : 'Manual Capture'}
+                                        </button>
+                                        
+                                        {!packagePhoto && (
+                                            <p className="text-[9px] font-bold text-gray-600 uppercase tracking-widest flex items-center gap-2">
+                                                <span className="w-1.5 h-1.5 rounded-full bg-[#0ECB81] animate-pulse"></span>
+                                                AI Vision Enabled
+                                            </p>
+                                        )}
+                                        {packagePhoto && (
+                                            <p className="text-[9px] font-bold text-[#0ECB81] uppercase tracking-[0.2em] animate-pulse">Success ✓ Auto-advancing...</p>
+                                        )}
+                                    </div>
+
+                                    <style>{`
+                                        #fastpack-scanner-container video { 
+                                            object-fit: cover !important; 
+                                            width: 100% !important; 
+                                            height: 100% !important; 
+                                        }
+                                    `}</style>
+                                </div>
                         </div>
                     </div>
                 </div>
@@ -888,8 +942,8 @@ const FastPackTerminal: React.FC<FastPackTerminalProps> = ({ order, onClose, onS
                 step={step}
                 isOrderVerified={isOrderVerified}
                 hasGeneratedLabel={hasGeneratedLabel}
+                packagePhoto={packagePhoto}
                 uploading={uploading}
-                previewImage={previewImage}
                 undoTimer={undoTimer}
                 onClose={onClose}
                 setStep={setStep}
@@ -903,8 +957,8 @@ const FastPackTerminal: React.FC<FastPackTerminalProps> = ({ order, onClose, onS
                     onUndo={handleUndo}
                     isUndoing={isUndoing}
                     accentColor="yellow"
-                    title="UPLOADING PHOTO..."
-                    subtitle="System is uploading the photo and finishing the task. Cancel to halt."
+                    title="FINISHING PACKING..."
+                    subtitle="System is updating order status. Cancel to halt."
                 />
             )}
         </div>

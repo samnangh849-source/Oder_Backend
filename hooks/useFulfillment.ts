@@ -21,7 +21,7 @@ export const useFulfillment = (allOrders: ParsedOrder[], onUpdate?: () => void) 
 
         allOrders.forEach(order => {
             const status = (order.FulfillmentStatus || 'Pending') as FulfillmentStatus;
-            if (status === ('Cancelled' as any)) return;
+            if (status === ('Cancelled' as any) || status === 'Scheduled') return;
             if (groups[status as keyof typeof groups]) {
                 groups[status as keyof typeof groups].push(order);
             } else if (status !== ('Cancelled' as any)) {

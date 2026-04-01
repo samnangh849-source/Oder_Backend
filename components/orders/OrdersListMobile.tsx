@@ -265,7 +265,14 @@ const OrdersListMobile: React.FC<OrdersListMobileProps> = ({
                                                     )}
                                                     {isVisible('fulfillmentStatus') && (() => {
                                                         const fs = (order as any).FulfillmentStatus || (order as any)['Fulfillment Status'] || 'Pending';
-                                                        const fsC: Record<string, string> = { 'Pending': 'bg-yellow-500/10 text-yellow-400', 'Ready to Ship': 'bg-blue-500/10 text-blue-400', 'Shipped': 'bg-purple-500/10 text-purple-400', 'Delivered': 'bg-[var(--cm-green)]/10 text-[var(--cm-green)]', 'Cancelled': 'bg-[var(--cm-red)]/10 text-[var(--cm-red)]' };
+                                                        const fsC: Record<string, string> = { 
+                                                            'Pending': 'bg-yellow-500/10 text-yellow-400', 
+                                                            'Scheduled': 'bg-cyan-500/10 text-cyan-400',
+                                                            'Ready to Ship': 'bg-blue-500/10 text-blue-400', 
+                                                            'Shipped': 'bg-purple-500/10 text-purple-400', 
+                                                            'Delivered': 'bg-[var(--cm-green)]/10 text-[var(--cm-green)]', 
+                                                            'Cancelled': 'bg-[var(--cm-red)]/10 text-[var(--cm-red)]' 
+                                                        };
                                                         return <span className={`status-pill-v4 ${fsC[fs] || 'bg-[var(--cm-border)] text-[var(--cm-text-muted)]'}`}>{fs}</span>;
                                                     })()}
                                                     {showVerify && isVerified && <div className="flex items-center gap-1 text-[var(--cm-green)] text-[9px] font-black"><Check size={10} strokeWidth={4}/> VERIFIED</div>}

@@ -68,7 +68,6 @@ type IncentiveResult = backend.IncentiveResult
 type IncentiveManualData = backend.IncentiveManualData
 type IncentiveCustomPayout = backend.IncentiveCustomPayout
 type DeleteOrderRequest = backend.DeleteOrderRequest
-type TempImage = backend.TempImage
 
 type IncentiveRules = backend.IncentiveRules
 type IncentiveTier = backend.IncentiveTier
@@ -623,7 +622,7 @@ func startOrderWorker() {
 
 func startScheduler() {
 	ticker := time.NewTicker(2 * time.Minute)
-	cleanupTicker := time.NewTicker(5 * time.Minute)
+	reconcileTicker := time.NewTicker(15 * time.Minute)
 
 	go func() {
 		for {
@@ -631,11 +630,9 @@ func startScheduler() {
 			case <-ticker.C:
 				// Sync with Google Sheets via managed queue
 				enqueueSync("checkScheduledOrders", nil, "", nil)
-			case <-cleanupTicker.C:
-				result := DB.Where("expires_at < ?", time.Now()).Delete(&TempImage{})
-				if result.RowsAffected > 0 {
-					log.Printf("🧹 Cleanup: លុបរូបភាពបណ្ដោះអាសន្នចំនួន %d ឯកសារដែលហួសពេលចេញពី Database", result.RowsAffected)
-				}
+			case <-reconcileTicker.C:
+				// 🛡️ Self-Healing: Check for missing photo links in Sheets
+				backend.ReconcileMissingPhotoLinks(DB)
 			}
 		}
 	}()
@@ -877,11 +874,21 @@ func handleSubmitOrder(c *gin.Context) {
 	internalShipMethod, _ := orderRequest.Shipping["method"].(string)
 	internalShipDetails, _ := orderRequest.Shipping["details"].(string)
 
+	// Determine initial status based on scheduling
+	fulfillmentStatus := "Pending"
+	if orderRequest.ScheduledTime != "" {
+		if st, err := time.Parse(time.RFC3339, orderRequest.ScheduledTime); err == nil {
+			if st.After(time.Now().Add(1 * time.Minute)) {
+				fulfillmentStatus = "Scheduled"
+			}
+		}
+	}
+
 	newOrder := Order{
 		OrderID: orderID, Timestamp: timestamp, User: orderRequest.CurrentUser.UserName, Team: orderRequest.SelectedTeam,
 		Page: orderRequest.Page, CustomerName: custName, CustomerPhone: custPhone, Subtotal: orderRequest.Subtotal,
 		GrandTotal: orderRequest.GrandTotal, ProductsJSON: string(productsJSON), Note: orderRequest.Note,
-		FulfillmentStore: orderRequest.FulfillmentStore, ScheduledTime: orderRequest.ScheduledTime, FulfillmentStatus: "Pending",
+		FulfillmentStore: orderRequest.FulfillmentStore, ScheduledTime: orderRequest.ScheduledTime, FulfillmentStatus: fulfillmentStatus,
 		PaymentStatus: paymentStatus, PaymentInfo: paymentInfo, InternalCost: shippingCost, DiscountUSD: totalDiscount,
 		TotalProductCost: totalProductCost, Location: strings.Join(locationParts, ", "), AddressDetails: addLocation,
 		ShippingFeeCustomer: shipFeeCustomer, InternalShippingMethod: internalShipMethod, InternalShippingDetails: internalShipDetails,
@@ -909,9 +916,15 @@ func handleAdminUpdateOrder(c *gin.Context) {
 		return
 	}
 
+	if r.NewData == nil {
+		c.JSON(http.StatusBadRequest, gin.H{"status": "error", "message": "ត្រូវការទិន្នន័យថ្មី (NewData is required)"})
+		return
+	}
+
 	var originalOrder Order
-	if err := DB.Where("order_id = ?", r.OrderID).First(&originalOrder).Error; err != nil {
-		c.JSON(http.StatusNotFound, gin.H{"status": "error", "message": "រកមិនឃើញការកម្មង់"})
+	// Use case-insensitive and robust trimming for matching Order IDs
+	if err := DB.Where("UPPER(TRIM(order_id)) = UPPER(TRIM(?))", r.OrderID).First(&originalOrder).Error; err != nil {
+		c.JSON(http.StatusNotFound, gin.H{"status": "error", "message": "រកមិនឃើញការកម្មង់ " + r.OrderID})
 		return
 	}
 
@@ -924,12 +937,13 @@ func handleAdminUpdateOrder(c *gin.Context) {
 		}
 
 		validTransitions := map[string][]string{
+			"Scheduled":     {"Pending", "Cancelled"},
 			"Pending":       {"Processing", "Ready to Ship", "Cancelled"},
 			"Processing":    {"Ready to Ship", "Pending", "Cancelled"},
 			"Ready to Ship": {"Shipped", "Pending", "Cancelled"},
 			"Shipped":       {"Delivered", "Ready to Ship", "Cancelled"},
 			"Delivered":     {},
-			"Cancelled":     {"Pending"},
+			"Cancelled":     {"Pending", "Scheduled"},
 		}
 
 		allowed, ok := validTransitions[currentStatus]
@@ -937,13 +951,18 @@ func handleAdminUpdateOrder(c *gin.Context) {
 			c.JSON(http.StatusBadRequest, gin.H{"status": "error", "message": "ស្ថានភាពបច្ចុប្បន្នមិនត្រឹមត្រូវ"})
 			return
 		}
-		transitionValid := false
-		for _, s := range allowed {
-			if s == newStatus {
-				transitionValid = true
-				break
+		
+		// ✅ Support re-packing / self-updates (allow same status transition)
+		transitionValid := (newStatus == currentStatus) 
+		if !transitionValid {
+			for _, s := range allowed {
+				if s == newStatus {
+					transitionValid = true
+					break
+				}
 			}
 		}
+
 		if !transitionValid {
 			c.JSON(http.StatusBadRequest, gin.H{"status": "error", "message": fmt.Sprintf("មិនអាចផ្លាស់ប្តូរពី '%s' ទៅ '%s' បានទេ", currentStatus, newStatus)})
 			return
@@ -991,15 +1010,6 @@ func handleAdminUpdateOrder(c *gin.Context) {
 	for k, v := range r.NewData {
 		dbCol := mapToDBColumn(k)
 		if isValidOrderColumn(dbCol) && v != nil {
-			// ✅ Prevent overwriting a permanent Google Drive URL with a temporary URL
-			if strVal, ok := v.(string); ok && strings.Contains(strVal, "/api/images/temp/") {
-				var currentVal string
-				DB.Model(&Order{}).Where("order_id = ?", r.OrderID).Select(dbCol).Scan(&currentVal)
-				if strings.Contains(currentVal, "drive.google.com") {
-					continue // Skip updating this column as we already have the permanent Drive URL
-				}
-			}
-
 			if dbCol == "discount_usd" || dbCol == "grand_total" || dbCol == "subtotal" || dbCol == "shipping_fee_customer" || dbCol == "internal_cost" || dbCol == "delivery_unpaid" || dbCol == "delivery_paid" || dbCol == "total_product_cost" {
 				if f, ok := v.(float64); ok {
 					mappedData[dbCol] = f
@@ -1014,7 +1024,7 @@ func handleAdminUpdateOrder(c *gin.Context) {
 		}
 	}
 
-	if err := DB.Model(&Order{}).Where("order_id = ?", r.OrderID).Updates(mappedData).Error; err != nil {
+	if err := DB.Model(&Order{}).Where("UPPER(TRIM(order_id)) = UPPER(TRIM(?))", r.OrderID).Updates(mappedData).Error; err != nil {
 		c.Error(err)
 		return
 	}
@@ -1030,7 +1040,7 @@ func handleAdminUpdateOrder(c *gin.Context) {
 			sheetData[k] = v
 		}
 		var current Order
-		if err := DB.Where("order_id = ?", r.OrderID).First(&current).Error; err == nil {
+		if err := DB.Where("UPPER(TRIM(order_id)) = UPPER(TRIM(?))", r.OrderID).First(&current).Error; err == nil {
 			fill := func(key, val string) {
 				if val != "" {
 					if _, exists := sheetData[key]; !exists {
@@ -1133,17 +1143,6 @@ func handleAdminUpdateSheet(c *gin.Context) {
 		dbCol := mapToDBColumn(k)
 		if v == nil {
 			continue
-		}
-
-		// ✅ Prevent overwriting a permanent Google Drive URL with a temporary URL
-		if strVal, ok := v.(string); ok && strings.Contains(strVal, "/api/images/temp/") {
-			var currentVal string
-			if pkVal != nil {
-				DB.Table(tableName).Where(pkCol+" = ?", pkVal).Select(dbCol).Scan(&currentVal)
-				if strings.Contains(currentVal, "drive.google.com") {
-					continue // Skip updating this column as we already have the permanent Drive URL
-				}
-			}
 		}
 
 		mappedData[dbCol] = v
@@ -1409,65 +1408,24 @@ func handleSendChatMessage(c *gin.Context) {
 			base64Data = parts[1]
 		}
 
-		tempID := "chat_temp_" + generateShortID() + generateShortID()
-		DB.Create(&TempImage{
-			ID:        tempID,
-			MimeType:  mimeType,
-			ImageData: base64Data,
-			ExpiresAt: time.Now().Add(30 * time.Minute),
-		})
-
-		protocol := "http"
-		if c.Request.TLS != nil || c.Request.Header.Get("X-Forwarded-Proto") == "https" {
-			protocol = "https"
+		// Upload to Drive synchronously
+		driveURL, fileId, err := backend.UploadToGoogleDriveDirectly(base64Data, "chat_file", mimeType, nil)
+		if err != nil {
+			log.Printf("❌ Chat media upload failed: %v", err)
+			c.JSON(500, gin.H{"status": "error", "message": "បរាជ័យក្នុងការ Upload មេឌៀ"})
+			return
 		}
-		tempUrl := fmt.Sprintf("%s://%s/api/images/temp/%s", protocol, c.Request.Host, tempID)
 
-		originalContent := msg.Content
-		msg.Content = tempUrl
+		msg.FileID = fileId
+		if strings.ToLower(msg.MessageType) == "image" {
+			msg.Content = driveURL
+		}
 
 		DB.Create(&msg)
 		msgBytes, _ := json.Marshal(map[string]interface{}{"type": "new_message", "data": msg})
 		hub.Broadcast <- msgBytes
 
 		c.JSON(200, gin.H{"status": "success", "data": msg})
-
-		go func(m ChatMessage, b64 string, mt string, tid string, originalContent string) {
-			defer func() {
-				if rec := recover(); rec != nil {
-					log.Printf("🔥 PANIC in chat upload: %v", rec)
-				}
-			}()
-
-			driveURL, fileId, err := backend.UploadToGoogleDriveDirectly(b64, "chat_file", mt, nil)
-			if err == nil {
-
-				finalContent := originalContent
-				if strings.ToLower(m.MessageType) == "image" {
-					finalContent = driveURL
-				}
-
-				DB.Model(&ChatMessage{}).Where("id = ?", m.ID).Updates(map[string]interface{}{
-					"file_id": fileId,
-					"content": finalContent,
-				})
-
-				updateMsg, _ := json.Marshal(map[string]interface{}{
-					"type":       "upload_complete",
-					"message_id": m.ID,
-					"file_id":    fileId,
-					"url":        driveURL,
-					"receiver":   m.Receiver,
-				})
-				hub.Broadcast <- updateMsg
-				log.Printf("📢 Broadcasted upload_complete for Message ID: %d", m.ID)
-
-				// Removed immediate TempImage deletion to allow client time to load
-			} else {
-				log.Printf("❌ Chat media upload failed: %v", err)
-			}
-		}(msg, base64Data, mimeType, tempID, originalContent)
-
 		return
 	}
 
@@ -1690,6 +1648,45 @@ func handleSheetsWebhook(c *gin.Context) {
 	})
 	hub.Broadcast <- event
 
+	// --- NEW: Trigger Telegram Update (if Sheet Edit for an Order) ---
+	if tableName == "orders" && req.Action == "update" && pkVal != nil {
+		go func(orderId interface{}, sheetName string, rowData map[string]interface{}) {
+			// Apps Script re-fetches from the sheet, so we just need Order ID and Team.
+			// 1. Try to get team from rowData
+			team := ""
+			if t, exists := rowData["Team"]; exists {
+				team = fmt.Sprintf("%v", t)
+			} else if strings.HasPrefix(sheetName, "Orders_") {
+				team = strings.TrimPrefix(sheetName, "Orders_")
+			}
+
+			// 2. If team is still empty, fetch from DB
+			if team == "" {
+				var order Order
+				whereClause := fmt.Sprintf("UPPER(TRIM(%s)) = UPPER(TRIM(?))", pkCol)
+				if err := DB.Where(whereClause, orderId).Select("team").First(&order).Error; err == nil {
+					team = order.Team
+				}
+			}
+
+			if team != "" {
+				log.Printf("📢 [Webhook Sync] Triggering Telegram Edit for Order %v (Team: %s)", orderId, team)
+				
+				// Prepare updatedFields from rowData to pass along (Apps Script uses this to UpdateSheets first)
+				updatedFields := make(map[string]interface{})
+				for k, v := range rowData {
+					updatedFields[k] = v
+				}
+
+				enqueueSync("updateOrderTelegram", map[string]interface{}{
+					"orderId":       fmt.Sprintf("%v", orderId),
+					"team":          team,
+					"updatedFields": updatedFields,
+				}, "", nil)
+			}
+		}(pkVal, req.SheetName, req.RowData)
+	}
+
 	c.JSON(200, gin.H{"status": "success"})
 }
 
@@ -1755,7 +1752,6 @@ func main() {
 	// Apply DBMiddleware to all /api routes except root health checks
 	api := r.Group("/api", DBMiddleware())
 	api.POST("/login", handleLogin)
-	api.GET("/images/temp/:id", backend.HandleServeTempImage)
 	api.GET("/settings", handleGetSettings)
 	// ── Entertainment / Video Player routes (Backend/video.go) ────────────────────────
 	// All video handler logic lives in Backend/video.go (package backend).
@@ -1772,7 +1768,12 @@ func main() {
 		protected.POST("/upload-image", backend.HandleImageUploadProxy)
 		protected.GET("/permissions", handleGetUserPermissions)
 		protected.GET("/roles", handleGetRoles)
-		protected.GET("/orders", RequirePermission("view_order_list"), handleGetAllOrders)
+		
+		// Order Management (Accessible by anyone with permission, e.g. Packers/Admins)
+		protected.GET("/admin/orders", RequirePermission("view_order_list"), handleGetAllOrders)
+		protected.GET("/admin/all-orders", RequirePermission("view_order_list"), handleGetAllOrders)
+		protected.POST("/admin/update-order", RequirePermission("edit_order"), handleAdminUpdateOrder)
+		
 		protected.GET("/teams/shipping-costs", RequirePermission("view_revenue"), handleGetGlobalShippingCosts)
 
 		chat := protected.Group("/chat")
@@ -1788,8 +1789,6 @@ func main() {
 			// This registers both public (/api) and admin (/api/admin) movie routes
 			backend.RegisterVideoRoutes(api, admin)
 
-			admin.GET("/orders", RequirePermission("view_order_list"), handleGetAllOrders)
-			admin.POST("/update-order", RequirePermission("edit_order"), handleAdminUpdateOrder)
 			admin.POST("/migrate-data", backend.HandleMigrateData)
 			admin.GET("/revenue-summary", handleGetRevenueSummary)
 			admin.POST("/update-sheet", handleAdminUpdateSheet)
@@ -1819,3 +1818,4 @@ func main() {
 	api.GET("/chat/audio/:fileID", backend.HandleGetAudioProxy)
 	r.Run("0.0.0.0:" + port)
 }
+

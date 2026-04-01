@@ -114,6 +114,7 @@ function initializeSystem() {
 
   // កំណត់ទិន្នន័យចាំបាច់បឋម (Default Settings)
   setupDefaultSettings(ss);
+  setupDefaultTelegramTemplates(ss);
 
   const ui = SpreadsheetApp.getUi();
   ui.alert('✅ ជោគជ័យ!', `បានបង្កើត Sheet ថ្មីចំនួន: ${createdCount}\nបានធ្វើបច្ចុប្បន្នភាព Sheet ចាស់ចំនួន: ${updatedCount}\n\nរចនាសម្ព័ន្ធទិន្នន័យរបស់អ្នកឥឡូវនេះស៊ីគ្នា ១០០% ជាមួយ Backend ហើយ។`, ui.ButtonSet.OK);
@@ -168,6 +169,31 @@ function setupDefaultSettings(ss) {
   defaultSettings.forEach(setting => {
     if (!existingKeys.includes(setting[0])) {
       settingsSheet.appendRow(setting);
+    }
+  });
+}
+
+function setupDefaultTelegramTemplates(ss) {
+  const templateSheet = ss.getSheetByName("TelegramTemplates");
+  if (!templateSheet) return;
+
+  const defaultTemplates = [
+    ["TPL001", "Global", "Header", "🛒 <b>ការកម្មង់ថ្មី (New Order)</b>\n🆔 <b>{Order ID}</b>\n------------------------"],
+    ["TPL002", "Global", "CustomerInfo", "👤 <b>អតិថិជន:</b> {Customer Name}\n☎️ <b>លេខទូរស័ព្ទ:</b> {Customer Phone}\n📍 <b>ទីតាំង:</b> {Location}\n🏠 <b>អាសយដ្ឋាន:</b> {Address Details}\n📝 <b>ចំណាំ:</b> {Note}"],
+    ["TPL003", "Global", "Products", "📦 <b>ទំនិញ:</b>\n{ProductsList}"],
+    ["TPL004", "Global", "Financials", "------------------------\n💰 <b>សរុប (Grand Total):</b> ${Grand Total}\n🚚 <b>សេវាដឹក:</b> {Shipping Fee (Customer)}\n💵 <b>ស្ថានភាព:</b> {Payment Status}"]
+  ];
+
+  const lastRow = templateSheet.getLastRow();
+  let existingIDs = [];
+  if (lastRow > 0) {
+    const data = templateSheet.getRange(1, 1, lastRow, 1).getValues();
+    existingIDs = data.map(row => String(row[0]));
+  }
+
+  defaultTemplates.forEach(template => {
+    if (!existingIDs.includes(String(template[0]))) {
+      templateSheet.appendRow(template);
     }
   });
 }

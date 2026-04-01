@@ -280,7 +280,7 @@ const MobileCreateOrderPage: React.FC<MobileCreateOrderPageProps> = ({ team, onS
                                             ...prev.shipping,
                                             method: method.MethodName,
                                             cost: method.InternalCost || prev.shipping.cost,
-                                            service: recommendedDriver || (method.RequireDriverSelection ? '' : method.MethodName)
+                                            service: method.RequireDriverSelection ? (recommendedDriver || '') : ''
                                         }
                                     }));
                                 }}

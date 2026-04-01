@@ -203,8 +203,7 @@ const DesktopNetflixEntertainment: React.FC<DesktopNetflixEntertainmentProps> = 
       const result = await response.json();
       if (!response.ok || result.status !== 'success') throw new Error(result.message || 'Upload failed');
       
-      // Local update for immediate UI feedback (use temp URL if provided)
-      const finalUrl = result.url || result.tempUrl;
+      const finalUrl = result.url;
       if (finalUrl) {
           setLocalMovies(prev => prev.map(m => m.ID === movieId ? { ...m, Thumbnail: finalUrl } : m));
           // Also update appData if possible (though it's better to wait for refreshData)
@@ -253,7 +252,7 @@ const DesktopNetflixEntertainment: React.FC<DesktopNetflixEntertainmentProps> = 
       const result = await response.json();
       if (!response.ok || result.status !== 'success') throw new Error(result.message || 'Upload failed');
       
-      const finalUrl = result.url || result.tempUrl;
+      const finalUrl = result.url;
       setNewMovie(prev => ({ ...prev, Thumbnail: finalUrl }));
       showNotification("Image uploaded successfully!", "success");
     } catch (err: any) { 

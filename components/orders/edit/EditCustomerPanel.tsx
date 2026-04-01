@@ -62,7 +62,7 @@ const EditCustomerPanel: React.FC<EditCustomerPanelProps> = ({
     }, [formData['Customer Phone'], appData.phoneCarriers]);
 
     return (
-        <div className="flex flex-col gap-3 h-full overflow-y-auto custom-scrollbar pr-1 pb-20 lg:pb-2">
+        <div className="flex flex-col gap-3 lg:h-full lg:overflow-y-auto custom-scrollbar pr-1 pb-4 lg:pb-2">
             {/* Customer Info Card */}
             <div className="bg-[#1E2329] border border-[#2B3139] rounded-sm p-4 flex-shrink-0">
                 <h3 className="text-[11px] font-medium text-[#848E9C] uppercase tracking-wider mb-4 flex items-center gap-2">

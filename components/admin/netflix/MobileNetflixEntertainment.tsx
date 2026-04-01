@@ -147,7 +147,7 @@ const MobileNetflixEntertainment: React.FC<MobileNetflixEntertainmentProps> = ({
       const result = await response.json();
       if (!response.ok || result.status !== 'success') throw new Error(result.message || 'Upload failed');
       
-      const finalUrl = result.url || result.tempUrl;
+      const finalUrl = result.url;
       if (finalUrl) {
           setLocalMovies(prev => prev.map(m => m.ID === movieId ? { ...m, Thumbnail: finalUrl } : m));
       }
@@ -193,7 +193,7 @@ const MobileNetflixEntertainment: React.FC<MobileNetflixEntertainmentProps> = ({
       const result = await response.json();
       if (!response.ok || result.status !== 'success') throw new Error(result.message || 'Upload failed');
       
-      const finalUrl = result.url || result.tempUrl;
+      const finalUrl = result.url;
       setNewMovie(prev => ({ ...prev, Thumbnail: finalUrl }));
       showNotification("Image uploaded successfully!", "success");
     } catch (err: any) { 

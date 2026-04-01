@@ -2,7 +2,7 @@ import React, { useContext, useMemo } from 'react';
 import { AppContext } from '@/context/AppContext';
 import { ParsedOrder } from '@/types';
 import Spinner from '@/components/common/Spinner';
-import { convertGoogleDriveUrl } from '@/utils/fileUtils';
+import { convertGoogleDriveUrl, getOptimisticPackagePhoto } from '@/utils/fileUtils';
 
 const B_BG_MAIN = 'bg-[#0B0E11]';
 const B_BG_PANEL = 'bg-[#181A20]';
@@ -207,7 +207,7 @@ const TabletPackagingHub: React.FC<TabletPackagingHubProps> = ({
                                             <div className="px-2 pb-2">
                                                 <h4 className={`text-xs font-bold ${B_TEXT_PRIMARY} truncate uppercase flex items-center gap-2`}>
                                                     {order['Customer Name']}
-                                                    {order['Package Photo URL'] && <span title="Photo Verified">📸</span>}
+                                                    {getOptimisticPackagePhoto(order['Order ID'], order['Package Photo URL']) && <span title="Photo Verified">📸</span>}
                                                 </h4>
                                                 <div className="flex justify-between items-center mt-0.5">
                                                     <p className={`text-[10px] ${B_TEXT_SECONDARY} font-mono`}>{order['Customer Phone']}</p>

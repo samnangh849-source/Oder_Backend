@@ -76,9 +76,7 @@ export const OrderProvider: React.FC<{ children: React.ReactNode }> = ({ childre
             if (!token) return;
             const headers: HeadersInit = { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` };
 
-            // Determine endpoint based on role to avoid unnecessary 403s
-            const isAdmin = currentUser?.IsSystemAdmin || (currentUser?.Role && currentUser.Role.toLowerCase() === 'admin');
-            const endpoint = isAdmin ? `${WEB_APP_URL}/api/admin/orders` : `${WEB_APP_URL}/api/orders`;
+            const endpoint = `${WEB_APP_URL}/api/admin/orders`;
 
             const response = await fetch(endpoint, { headers });
             

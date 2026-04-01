@@ -374,7 +374,7 @@ const CreateOrderPage: React.FC<CreateOrderPageProps> = ({ team, onSaveSuccess, 
             shipping: {
                 ...prev.shipping,
                 method: method.MethodName,
-                details: recommendedDriver || (method.RequireDriverSelection ? '' : method.MethodName),
+                details: method.RequireDriverSelection ? (recommendedDriver || '') : '',
                 cost: method.InternalCost ? String(method.InternalCost) : prev.shipping.cost
             }
         }));

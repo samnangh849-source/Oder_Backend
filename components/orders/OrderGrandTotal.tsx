@@ -22,10 +22,10 @@ interface DesktopGrandTotalRowProps {
     totals: { grandTotal: number; internalCost: number; count: number; paidCount: number; unpaidCount: number };
     isVisible: (key: string) => boolean;
     showSelection: boolean;
-    showBorders?: boolean;
+    getColWidth: (key: string) => number;
 }
 
-export const DesktopGrandTotalRow: React.FC<DesktopGrandTotalRowProps> = ({ totals, isVisible, showSelection, showBorders = false }) => {
+export const DesktopGrandTotalRow: React.FC<DesktopGrandTotalRowProps> = ({ totals, isVisible, showSelection, getColWidth }) => {
     const { language, advancedSettings } = useContext(AppContext);
     const t = translations[language];
     const isBinance = advancedSettings?.uiTheme === 'binance';
@@ -34,127 +34,136 @@ export const DesktopGrandTotalRow: React.FC<DesktopGrandTotalRowProps> = ({ tota
 
     const check = isVisible;
 
-    // Theme Variables
-    const rowBg = isBinance ? 'bg-[#1E2329]' : 'bg-[#0f172a]/95 backdrop-blur-3xl';
-    const rowBorder = isBinance ? 'border-b border-[#2B3139]' : 'border-y border-blue-500/20';
-    const accentColor = isBinance ? 'text-[#FCD535]' : 'text-blue-400';
-    const accentBg = isBinance ? 'bg-[#2B3139] border-[#474D57]' : 'bg-blue-500/10 border-blue-500/20';
+    // Theme Variables - Enhanced for a borderless layout
+    const rowBg = isBinance 
+        ? 'bg-[#1E2329]' 
+        : 'bg-[#0f172a]/90 backdrop-blur-3xl';
+    
     const greenText = isBinance ? 'text-[#0ECB81]' : 'text-emerald-400';
     const redText = isBinance ? 'text-[#F6465D]' : 'text-red-400';
 
+    const renderCell = (key: string, content: React.ReactNode, extraClasses = "") => {
+        if (!check(key)) return null;
+        return (
+            <div 
+                style={{ width: `${getColWidth(key)}px` }} 
+                className={`flex-shrink-0 flex items-center px-4 py-3 ${extraClasses}`}
+            >
+                {content}
+            </div>
+        );
+    };
+
     return (
-        <tr className={`${rowBg} ${rowBorder} ${isBinance ? '' : 'shadow-[0_15px_40px_rgba(0,0,0,0.4)]'} transition-all duration-300 ${showBorders ? 'divide-x divide-[#2B3139]' : ''} group`}>
-            {showSelection && <td className="px-1 py-2 w-8"></td>}
-            
-            {check('index') && (
-                <td className="px-1 py-2 text-center">
-                    <div className="flex flex-col items-center justify-center h-full">
-                        <span className={`text-[9px] font-medium uppercase mb-0.5 ${isBinance ? 'text-[#848E9C]' : 'text-blue-500/50'}`}>
-                            {language === 'km' ? 'សរុប' : 'Total'}
-                        </span>
-                        <div className={`${isBinance ? 'bg-[#2B3139] px-2 py-0.5 rounded' : accentBg + ' px-3 py-1 rounded-xl border-2 shadow-[0_0_15px_rgba(59,130,246,0.1)]'}`}>
-                            <span className={`font-bold ${isBinance ? 'text-[12px]' : 'text-[13px]'} tabular-nums ${isBinance ? 'text-[#EAECEF]' : accentColor}`}>
-                                {totals.count}
-                            </span>
-                        </div>
-                    </div>
-                </td>
-            )}
-            
-            {check('actions') && <td className="px-4 py-2 text-center">
-                <div className="flex flex-col">
-                   <span className={`text-[9px] font-medium uppercase tracking-tight ${isBinance ? 'text-[#848E9C]' : 'text-gray-500 italic'}`}>
-                        {language === 'km' ? 'សង្ខេប' : 'Summary'}
-                    </span>
-                    {isBinance && <span className="text-[8px] font-medium text-[#0ECB81] mt-0.5">LIVE</span>}
+        <div className={`flex w-full ${rowBg} transition-all duration-300 group z-10 relative overflow-hidden`}>
+            {/* Animated Ambient Light (Default Theme Only) */}
+            {!isBinance && (
+                <div className="absolute inset-0 pointer-events-none overflow-hidden opacity-20">
+                    <div className="absolute top-[-50%] left-[-10%] w-[40%] h-[200%] bg-blue-600/10 blur-[100px] rotate-45 animate-pulse"></div>
+                    <div className="absolute bottom-[-50%] right-[-10%] w-[40%] h-[200%] bg-emerald-500/5 blur-[100px] rotate-45 animate-pulse" style={{ animationDelay: '1s' }}></div>
                 </div>
-            </td>}
-            
-            {check('customerName') && (
-                <td className="px-6 py-2">
-                    <div className="flex items-center gap-3">
-                        {isBinance ? (
-                            <div className="w-1 h-6 bg-[#FCD535] rounded-sm"></div>
-                        ) : (
-                            <div className="w-1.5 h-10 rounded-full shadow-[0_0_15px_rgba(59,130,246,0.3)] bg-gradient-to-b from-blue-600 via-indigo-500 to-transparent"></div>
-                        )}
-                        <div className="flex flex-col">
-                            <h4 className={`font-bold uppercase tracking-tight ${isBinance ? 'text-[13px] text-[#EAECEF]' : 'text-[16px] italic text-white'}`}>
-                                {t.grand_total}
-                            </h4>
-                            {!isBinance && (
-                                <div className="flex items-center gap-2 mt-2">
-                                    <span className="flex w-1.5 h-1.5 rounded-full animate-pulse bg-emerald-500 shadow-[0_0_10px_#10b981]"></span>
-                                    <span className="font-bold text-[9px] uppercase tracking-widest text-gray-500">Processing Stats</span>
-                                </div>
-                            )}
-                        </div>
-                    </div>
-                </td>
-            )}
-            
-            {check('productInfo') && <td className="px-6 py-2"></td>}
-            {check('location') && <td className="px-6 py-2"></td>}
-            {check('pageInfo') && <td className="px-6 py-2"></td>}
-            {check('brandSales') && <td className="px-6 py-2"></td>}
-            {check('fulfillment') && <td className="px-6 py-2"></td>}
-            
-            {check('total') && (
-                <td className="px-6 py-2">
-                    <div className="flex flex-col items-start">
-                        <span className={`text-[10px] font-medium uppercase mb-0.5 ${isBinance ? 'text-[#848E9C]' : 'text-emerald-500 font-black'}`}>
-                            {t.total_revenue}
-                        </span>
-                        <div className={`flex items-baseline gap-1 ${isBinance ? '' : 'bg-white/[0.02] px-3 py-1.5 rounded-2xl border border-white/5 shadow-inner'}`}>
-                            <span className={`font-bold ${isBinance ? 'text-[14px] text-[#0ECB81]' : 'text-[12px] italic text-emerald-500'}`}>$</span>
-                            <span className={`font-bold tabular-nums ${isBinance ? 'text-[20px] text-[#EAECEF]' : 'text-[28px] italic text-white'}`}>
-                                {totals.grandTotal.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-                            </span>
-                        </div>
-                    </div>
-                </td>
-            )}
-            
-            {check('shippingService') && <td className="px-6 py-2"></td>}
-            {check('driver') && <td className="px-6 py-2"></td>}
-            
-            {check('shippingCost') && (
-                <td className="px-6 py-2">
-                    <div className="flex flex-col items-start">
-                        <span className={`text-[10px] font-medium uppercase mb-0.5 ${isBinance ? 'text-[#848E9C]' : 'text-orange-500 font-black'}`}>
-                            {t.total_cost}
-                        </span>
-                        <div className="flex items-baseline gap-1">
-                            <span className={`font-bold ${isBinance ? 'text-[12px] text-[#848E9C]' : 'text-[12px] italic text-orange-500'}`}>$</span>
-                            <span className={`font-bold tabular-nums ${isBinance ? 'text-[16px] text-[#EAECEF]' : 'text-[20px] italic text-white/90'}`}>
-                                {totals.internalCost.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-                            </span>
-                        </div>
-                    </div>
-                </td>
-            )}
-            
-            {check('status') && (
-                <td className="px-6 py-2">
-                    <div className="flex items-center gap-4 justify-center">
-                        <div className={`flex flex-col items-center ${isBinance ? 'px-3 py-1 bg-[#2B3139] rounded' : 'px-4 py-2 rounded-2xl border-2 bg-white/[0.03] border-white/5'}`}>
-                            <span className={`font-bold tabular-nums leading-none ${isBinance ? 'text-[14px]' : 'text-[15px]'} ${greenText}`}>{totals.paidCount}</span>
-                            <span className={`font-medium uppercase mt-1 tracking-tight ${isBinance ? 'text-[8px] text-[#848E9C]' : 'text-[7px] text-gray-500 font-black'}`}>{t.paid}</span>
-                        </div>
-                        <div className={`flex flex-col items-center ${isBinance ? 'px-3 py-1 bg-[#2B3139] rounded' : 'px-4 py-2 rounded-2xl border-2 bg-white/[0.03] border-white/5'}`}>
-                            <span className={`font-bold tabular-nums leading-none ${isBinance ? 'text-[14px]' : 'text-[15px]'} ${redText}`}>{totals.unpaidCount}</span>
-                            <span className={`font-medium uppercase mt-1 tracking-tight ${isBinance ? 'text-[8px] text-[#848E9C]' : 'text-[7px] text-gray-500 font-black'}`}>{t.unpaid}</span>
-                        </div>
-                    </div>
-                </td>
             )}
 
-            {check('date') && <td className="px-4 py-4"></td>}
-            {check('note') && <td className="px-6 py-4"></td>}
-            {check('print') && <td className="px-4 py-4"></td>}
-            {check('check') && <td className="px-2 py-4"></td>}
-            {check('orderId') && <td className="px-2 py-4"></td>}
-        </tr>
+            {showSelection && <div className="flex-shrink-0 flex items-center justify-center px-0.5" style={{ width: '40px' }}></div>}
+            
+            {renderCell('index', (
+                <div className="flex flex-col items-center justify-center w-full transition-transform group-hover:scale-105">
+                    <span className={`text-[7px] font-black uppercase tracking-[0.2em] mb-0.5 ${isBinance ? 'text-[#848E9C]' : 'text-blue-500/50'}`}>
+                        {language === 'km' ? 'ចំនួន' : 'COUNT'}
+                    </span>
+                    <div className={`px-2 py-0.5 rounded-sm ${isBinance ? 'bg-[#2B3139] text-[#EAECEF]' : 'bg-blue-500/10 text-white'} font-black text-[11px] tabular-nums border border-transparent`}>
+                        {totals.count}
+                    </div>
+                </div>
+            ), "justify-center")}
+            
+            {renderCell('actions', (
+                <div className="flex flex-col items-center justify-center w-full opacity-60">
+                   <span className={`text-[7px] font-black uppercase tracking-[0.2em] ${isBinance ? 'text-[#848E9C]' : 'text-gray-500 italic'}`}>
+                        {language === 'km' ? 'សរុប' : 'SUMMARY'}
+                    </span>
+                    {isBinance && <div className="flex items-center gap-1 mt-0.5">
+                        <span className="w-1 h-1 bg-[#0ECB81] rounded-full animate-pulse"></span>
+                        <span className="text-[6px] font-bold text-[#0ECB81]">LIVE</span>
+                    </div>}
+                </div>
+            ), "justify-center")}
+            
+            {renderCell('customerName', (
+                <div className="flex items-center gap-3">
+                    <div className="relative flex items-center justify-center">
+                        <div className={`w-1 h-8 rounded-full relative z-10 ${isBinance ? 'bg-[#FCD535]' : 'bg-gradient-to-b from-blue-400 to-indigo-600 shadow-[0_0_10px_rgba(59,130,246,0.3)]'}`}></div>
+                    </div>
+                    <div className="flex flex-col">
+                        <span className={`text-[8px] font-black uppercase tracking-[0.2em] mb-0.5 ${isBinance ? 'text-[#848E9C]' : 'text-blue-500/60'}`}>SYSTEM TOTALS</span>
+                        <h4 className={`font-black uppercase tracking-tight leading-none ${isBinance ? 'text-[14px] text-[#EAECEF]' : 'text-[16px] text-white italic'}`}>
+                            {t.grand_total}
+                        </h4>
+                    </div>
+                </div>
+            ))}
+            
+            {renderCell('productInfo', null)}
+            {renderCell('location', null)}
+            {renderCell('pageInfo', null)}
+            {renderCell('brandSales', null)}
+            {renderCell('fulfillment', null)}
+            
+            {renderCell('total', (
+                <div className="flex flex-col items-start w-full relative">
+                    <span className={`text-[8px] font-black uppercase mb-0.5 tracking-wider ${isBinance ? 'text-[#848E9C]' : 'text-emerald-500/70'}`}>
+                        {t.total_revenue}
+                    </span>
+                    <div className="flex items-baseline gap-0.5">
+                        <span className={`font-black ${isBinance ? 'text-[12px] text-[#0ECB81]' : 'text-[12px] text-emerald-500'}`}>$</span>
+                        <span className={`font-black tabular-nums tracking-tighter ${isBinance ? 'text-[20px] text-[#EAECEF]' : 'text-[22px] text-white shadow-emerald-500/20'}`}>
+                            {totals.grandTotal.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                        </span>
+                    </div>
+                </div>
+            ))}
+            
+            {renderCell('shippingService', null)}
+            {renderCell('driver', null)}
+            
+            {renderCell('shippingCost', (
+                <div className="flex flex-col items-start w-full opacity-90">
+                    <span className={`text-[8px] font-black uppercase mb-0.5 tracking-wider ${isBinance ? 'text-[#848E9C]' : 'text-orange-500/70'}`}>
+                        {t.total_cost}
+                    </span>
+                    <div className="flex items-baseline gap-0.5">
+                        <span className={`font-black ${isBinance ? 'text-[11px] text-[#848E9C]' : 'text-[11px] text-orange-500'}`}>$</span>
+                        <span className={`font-black tabular-nums tracking-tight ${isBinance ? 'text-[15px] text-[#EAECEF]' : 'text-[17px] text-white/90'}`}>
+                            {totals.internalCost.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                        </span>
+                    </div>
+                </div>
+            ))}
+            
+            {renderCell('status', (
+                <div className="flex items-center gap-3 justify-center w-full">
+                    <div className="flex flex-col items-center group/stat">
+                        <div className={`font-black tabular-nums leading-none ${isBinance ? 'text-[13px]' : 'text-[15px]'} ${greenText} group-hover/stat:scale-110 transition-transform`}>
+                            {totals.paidCount}
+                        </div>
+                        <span className={`font-black uppercase mt-0.5 tracking-widest ${isBinance ? 'text-[6px] text-[#848E9C]' : 'text-[6px] text-gray-500'}`}>{t.paid}</span>
+                    </div>
+                    <div className={`w-px h-5 ${isBinance ? 'bg-[#2B3139]' : 'bg-white/10'}`}></div>
+                    <div className="flex flex-col items-center group/stat">
+                        <div className={`font-black tabular-nums leading-none ${isBinance ? 'text-[13px]' : 'text-[15px]'} ${redText} group-hover/stat:scale-110 transition-transform`}>
+                            {totals.unpaidCount}
+                        </div>
+                        <span className={`font-black uppercase mt-0.5 tracking-widest ${isBinance ? 'text-[6px] text-[#848E9C]' : 'text-[6px] text-gray-500'}`}>{t.unpaid}</span>
+                    </div>
+                </div>
+            ), "justify-center")}
+
+            {renderCell('date', null)}
+            {renderCell('note', null)}
+            {renderCell('print', null)}
+            {renderCell('check', null)}
+            {renderCell('orderId', null)}
+        </div>
     );
 };
 
@@ -229,69 +238,65 @@ export const MobileGrandTotalCard: React.FC<MobileGrandTotalCardProps> = ({ tota
     }
 
     return (
-        <div className={`${cardBg} border-2 ${cardBorder} rounded-[2.5rem] p-7 shadow-[0_35px_60px_-15px_rgba(0,0,0,0.6)] relative overflow-hidden animate-fade-in-up mt-6 mx-1`}>
+        <div className={`${cardBg} border border-white/10 rounded-3xl p-6 shadow-2xl relative overflow-hidden animate-fade-in-up mt-6 mx-1`}>
             {/* Ambient Background Accents */}
-            {!isBinance && (
-                <>
-                    <div className="absolute top-0 right-0 w-72 h-72 bg-blue-600/15 rounded-full blur-[110px] -translate-y-1/2 translate-x-1/2 pointer-events-none"></div>
-                    <div className="absolute bottom-0 left-0 w-64 h-64 bg-emerald-500/10 rounded-full blur-[90px] translate-y-1/2 -translate-x-1/2 pointer-events-none"></div>
-                </>
-            )}
+            <div className="absolute top-0 right-0 w-48 h-48 bg-blue-600/10 rounded-full blur-[80px] -translate-y-1/2 translate-x-1/2 pointer-events-none"></div>
+            <div className="absolute bottom-0 left-0 w-40 h-40 bg-emerald-500/5 rounded-full blur-[60px] translate-y-1/2 -translate-x-1/2 pointer-events-none"></div>
             
-            <div className="flex justify-between items-center mb-8">
-                <div className="flex items-center gap-4">
-                    <div className={`w-2.5 h-12 rounded-full shadow-[0_0_25px_rgba(37,99,235,0.3)] ${isBinance ? 'bg-[#FCD535]' : 'bg-gradient-to-b from-blue-600 to-indigo-600'}`}></div>
+            <div className="flex justify-between items-center mb-6">
+                <div className="flex items-center gap-3">
+                    <div className="w-1 h-8 rounded-full bg-gradient-to-b from-blue-600 to-indigo-600"></div>
                     <div className="flex flex-col">
-                        <span className={`text-[10px] font-black uppercase tracking-[0.25em] ${isBinance ? 'text-[#848E9C]' : 'text-blue-400/70'}`}>
-                            {language === 'km' ? 'ស្ថិតិសរុប' : 'Summary Statistics'}
+                        <span className="text-[9px] font-black uppercase tracking-[0.2em] text-blue-400/70">
+                            {language === 'km' ? 'ស្ថិតិសរុប' : 'SUMMARY STATISTICS'}
                         </span>
-                        <h3 className="text-xl font-black text-white uppercase tracking-wider mt-1">
-                            {totals.count} <span className={`${isBinance ? 'text-[#848E9C]' : 'text-gray-500'} font-bold text-sm`}>{language === 'km' ? 'ការកម្មង់' : 'Orders'}</span>
+                        <h3 className="text-lg font-black text-white uppercase tracking-wider">
+                            {totals.count} <span className="text-gray-500 font-bold text-xs">{language === 'km' ? 'ការកម្មង់' : 'Orders'}</span>
                         </h3>
                     </div>
                 </div>
-                <div className={`${isBinance ? 'bg-[#2B3139]' : 'bg-white/5'} px-4 py-2 rounded-2xl border ${cardBorder} backdrop-blur-xl shadow-lg`}>
-                   <div className="flex items-center gap-2">
-                        <span className="w-1.5 h-1.5 bg-emerald-500 rounded-full animate-pulse"></span>
-                        <span className={`text-[10px] font-black uppercase tracking-widest ${isBinance ? 'text-[#FCD535]' : 'text-gray-300'}`}>Live</span>
+                <div className="bg-white/5 px-3 py-1.5 rounded-xl border border-white/10 backdrop-blur-xl">
+                   <div className="flex items-center gap-1.5">
+                        <span className="w-1 h-1 bg-emerald-500 rounded-full animate-pulse"></span>
+                        <span className="text-[8px] font-black uppercase tracking-widest text-gray-300">Live</span>
                    </div>
                 </div>
             </div>
             
-            <div className="space-y-6 mb-8">
-                <div className="flex flex-col bg-white/[0.02] p-5 rounded-3xl border border-white/5 shadow-inner">
-                    <p className={`text-[10px] font-black uppercase mb-2 tracking-[0.2em] ${isBinance ? 'text-[#848E9C]' : 'text-gray-400'}`}>
+            <div className="space-y-4 mb-6">
+                <div className="flex flex-col bg-white/[0.02] p-4 rounded-2xl border border-white/5 shadow-inner">
+                    <p className="text-[8px] font-black uppercase mb-1.5 tracking-[0.2em] text-gray-400">
                         {language === 'km' ? 'ចំណូលសរុប (REVENUE)' : t.total_revenue}
                     </p>
-                    <div className="flex items-baseline gap-1.5">
-                        <span className={`${greenText} font-black text-lg italic`}>$</span>
-                        <p className={`text-4xl font-black tracking-tighter drop-shadow-[0_0_20px_rgba(16,185,129,0.4)] ${isBinance ? 'text-[#EAECEF]' : 'text-white font-mono'}`}>
+                    <div className="flex items-baseline gap-1">
+                        <span className="text-emerald-500 font-black text-sm italic">$</span>
+                        <p className="text-3xl font-black tracking-tighter text-white">
                             {totals.grandTotal.toLocaleString(undefined, { minimumFractionDigits: 1, maximumFractionDigits: 2 })}
                         </p>
                     </div>
                 </div>
 
-                <div className="grid grid-cols-1 gap-4">
-                    <div className="flex items-center justify-between bg-white/[0.01] px-5 py-4 rounded-2xl border border-white/5">
+                <div className="grid grid-cols-1 gap-3">
+                    <div className="flex items-center justify-between bg-white/[0.01] px-4 py-3 rounded-xl border border-white/5">
                         <div className="flex flex-col">
-                            <p className={`text-[9px] font-black uppercase tracking-widest ${isBinance ? 'text-[#848E9C]' : 'text-gray-500'}`}>
-                                {language === 'km' ? 'សេវាដឹកជញ្ជូន' : 'Total Logistics'}
+                            <p className="text-[8px] font-black uppercase tracking-widest text-gray-500">
+                                {language === 'km' ? 'សេវាដឹកជញ្ជូន' : 'LOGISTICS'}
                             </p>
                             <div className="flex items-baseline gap-1 mt-0.5">
-                                <span className={`${isBinance ? 'text-[#FCD535]' : 'text-orange-400'} font-black text-xs italic`}>$</span>
-                                <p className={`text-lg font-black tracking-tighter ${isBinance ? 'text-[#EAECEF]' : 'text-white/80'}`}>
+                                <span className="text-orange-400 font-black text-[10px] italic">$</span>
+                                <p className="text-base font-black tracking-tighter text-white/80">
                                     {totals.internalCost.toLocaleString(undefined, { minimumFractionDigits: 1, maximumFractionDigits: 2 })}
                                 </p>
                             </div>
                         </div>
                         
-                        <div className="flex gap-4">
-                            <div className="flex flex-col items-center px-3 py-1.5 rounded-xl border border-white/5 bg-white/5">
-                                <span className={`text-[12px] font-black ${greenText}`}>{totals.paidCount}</span>
+                        <div className="flex gap-2">
+                            <div className="flex flex-col items-center px-2 py-1 rounded-lg border border-white/5 bg-white/5 min-w-[40px]">
+                                <span className={`text-[11px] font-black ${greenText}`}>{totals.paidCount}</span>
                                 <span className="text-[6px] font-black uppercase text-gray-500">Paid</span>
                             </div>
-                            <div className="flex flex-col items-center px-3 py-1.5 rounded-xl border border-white/5 bg-white/5">
-                                <span className={`text-[12px] font-black ${redText}`}>{totals.unpaidCount}</span>
+                            <div className="flex flex-col items-center px-2 py-1 rounded-lg border border-white/5 bg-white/5 min-w-[40px]">
+                                <span className={`text-[11px] font-black ${redText}`}>{totals.unpaidCount}</span>
                                 <span className="text-[6px] font-black uppercase text-gray-500">COD</span>
                             </div>
                         </div>
@@ -299,21 +304,18 @@ export const MobileGrandTotalCard: React.FC<MobileGrandTotalCardProps> = ({ tota
                 </div>
             </div>
 
-            <div className={`flex items-center justify-between border-t pt-6 ${cardBorder}`}>
-                <div className="flex flex-col gap-1">
-                    <span className={`text-[8px] font-black uppercase tracking-widest ${isBinance ? 'text-[#848E9C]' : 'text-gray-600'}`}>Account Status</span>
-                    <div className="flex items-center gap-2">
-                        <span className={`px-2 py-0.5 rounded text-[8px] font-black bg-blue-500/10 ${accentColor}`}>VERIFIED</span>
+            <div className="flex items-center justify-between border-t border-white/5 pt-4">
+                <div className="flex flex-col gap-0.5">
+                    <span className="text-[7px] font-black uppercase tracking-widest text-gray-600">Sync Status</span>
+                    <div className="flex items-center gap-1.5">
+                        <span className="px-1.5 py-0.5 rounded text-[7px] font-black bg-emerald-500/10 text-emerald-500 uppercase">Synced</span>
                     </div>
                 </div>
-                <div className="flex -space-x-2">
-                    {[1,2,3].map(i => (
-                        <div key={i} className={`w-8 h-8 rounded-full border-2 ${cardBorder} ${cardBg} flex items-center justify-center`}>
-                            <span className="text-[10px] text-gray-500">👤</span>
-                        </div>
-                    ))}
+                <div className="text-[8px] font-bold text-gray-500 uppercase tracking-widest italic">
+                    ACC MANAGEMENT SYSTEM v2.0
                 </div>
             </div>
         </div>
     );
 };
+

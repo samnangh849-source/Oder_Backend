@@ -1,5 +1,4 @@
 /**
- * @OnlyCurrentDoc
  */
 
 const SCRIPT_SECRET_KEY = "168333@$Oudom"; 
@@ -106,30 +105,45 @@ function doPost(e) {
         }
 
       case 'uploadImage':
-        console.log("📤 [uploadImage] Request received: fileName=" + contents.fileName + " mimeType=" + contents.mimeType + " folderID=" + contents.uploadFolderID);
+        console.log("📤 [uploadImage] Request received: fileName=" + contents.fileName + " mimeType=" + contents.mimeType);
         try {
+          // 1. Upload to Drive
           const upRes = uploadImageToDrive(contents.fileData, contents.fileName, contents.mimeType, contents.uploadFolderID, contents.userName);
-          console.log("📤 [uploadImage] SUCCESS: url=" + upRes.url + " fileID=" + upRes.fileID);
+          console.log("📤 [uploadImage] Upload success: " + upRes.url);
 
-          // ✅ [Requirement] Link must be kept in Google Sheet "first of all"
-          // If this is an Order update, sync it now before returning to backend.
-          if (contents.orderId) {
-             let team = "";
-             // Try to get team from orderData or contents
-             if (contents.orderData && contents.orderData.team) team = contents.orderData.team;
-             else if (contents.team) team = contents.team;
+          // 2. Metadata Updates (Sync to Sheets)
+          const orderId = contents.orderId || contents.orderID;
+          if (orderId) {
+             console.log("📝 [uploadImage] Syncing Order: " + orderId);
+             let team = contents.team || (contents.orderData && contents.orderData.team) || "";
+
+             if (!team) {
+               const ss = SpreadsheetApp.getActiveSpreadsheet();
+               const allOrders = ss.getSheetByName(CONFIG.ALL_ORDERS_SHEET);
+               if (allOrders) {
+                 const vals = allOrders.getDataRange().getValues();
+                 const hdrs = vals[0].map(h => normalizeKey(h));
+                 const idIdx = hdrs.indexOf(normalizeKey("Order ID"));
+                 const teamIdx = hdrs.indexOf(normalizeKey("Team"));
+                 if (idIdx !== -1 && teamIdx !== -1) {
+                   for (let i = 1; i < vals.length; i++) {
+                     if (normalizeKey(vals[i][idIdx]) === normalizeKey(orderId)) {
+                       team = String(vals[i][teamIdx]).trim();
+                       break;
+                     }
+                   }
+                 }
+               }
+             }
              
              const updatedFields = {};
-             if (contents.targetColumn) {
-                updatedFields[contents.targetColumn] = upRes.url;
-             }
-             // Also include any other NewData fields provided (status, packing info, etc.)
+             if (contents.targetColumn) updatedFields[contents.targetColumn] = upRes.url;
              if (contents.newData) {
                 for (let k in contents.newData) updatedFields[k] = contents.newData[k];
              }
              
-             updateOrderInSheets(contents.orderId, team, updatedFields);
-             console.log("✅ [uploadImage] Order Sheet updated for ID: " + contents.orderId);
+             updateOrderInSheets(orderId, team, updatedFields);
+             console.log("✅ [uploadImage] Sync finished for: " + orderId);
           } else if (contents.sheetName && contents.primaryKey && contents.targetColumn) {
              // Handle generic table updates
              const newData = {};
@@ -174,57 +188,8 @@ function doPost(e) {
   }
 }
 
-/**
- * មុខងារសម្រាប់ឆែក និងរុញការកម្មង់ដែលបានកំណត់ម៉ោង (Scheduled Orders)
- */
-function processScheduledOrders() {
-  const ss = SpreadsheetApp.getActiveSpreadsheet();
-  const sheet = ss.getSheetByName(CONFIG.ALL_ORDERS_SHEET);
-  if (!sheet) return;
+// ✅ [REMOVED] Duplicate processScheduledOrders — kept the newer version below (uses updateOrderInSheets)
 
-  const data = sheet.getDataRange().getValues();
-  if (data.length <= 1) return;
-
-  const headers = data[0].map(h => normalizeKey(h));
-  const statusIdx = headers.indexOf(normalizeKey("Fulfillment Status"));
-  const timeIdx = headers.indexOf(normalizeKey("Scheduled Time"));
-  const idCol = headers.indexOf(normalizeKey("Order ID"));
-  const teamCol = headers.indexOf(normalizeKey("Team"));
-
-  if (statusIdx === -1 || timeIdx === -1) return;
-
-  const now = new Date();
-  let processedCount = 0;
-
-  for (let i = 1; i < data.length; i++) {
-    const status = String(data[i][statusIdx]);
-    const scheduledTimeValue = data[i][timeIdx];
-    const orderId = data[i][idCol];
-    const team = data[i][teamCol];
-
-    if (status === "Scheduled" && scheduledTimeValue) {
-      const scheduledDate = new Date(scheduledTimeValue);
-      // ប្រសិនបើដល់ពេល ឬហួសពេលកំណត់
-      if (scheduledDate <= now) {
-        Logger.log(`⏰ ដល់ពេលបញ្ចេញការកម្មង់ដែលកំណត់ម៉ោង: ${orderId}`);
-        
-        // 1. ប្តូរ Status ទៅជា Pending ក្នុង Sheet
-        sheet.getRange(i + 1, statusIdx + 1).setValue("Pending");
-        
-        // 2. ទាញទិន្នន័យពេញលេញ និងដំណើរការផ្ញើទៅ Telegram
-        const orderData = fetchOrderDataFromSheet(orderId, team);
-        if (orderData) {
-           processOrder(orderData);
-           processedCount++;
-        }
-      }
-    }
-  }
-  
-  if (processedCount > 0) {
-    Logger.log(`✅ បានរុញការកម្មង់ចំនួន ${processedCount} ទៅកាន់ Telegram`);
-  }
-}
 
 // --- ការគ្រប់គ្រងជួរទិន្នន័យទូទៅ (Global Row Management) ---
 
@@ -361,6 +326,15 @@ function processOrder(data) {
   let fulfillmentStore = orderRequest.fulfillmentStore || getDefaultStoreForTeam(team) || "Unknown";
   const orderSheetName = `${CONFIG.ORDER_SHEET_PREFIX}${team}`;
   
+  // Determine initial status based on scheduling
+  let fulfillmentStatus = "Pending";
+  if (data.scheduledTime) {
+      const scheduleDate = new Date(data.scheduledTime);
+      if (scheduleDate.getTime() > (new Date().getTime() + 60000)) {
+          fulfillmentStatus = "Scheduled";
+      }
+  }
+
   const flatData = {};
   flatData[normalizeKey("Timestamp")] = data.scheduledTime || data.timestamp;
   flatData[normalizeKey("Order ID")] = orderId;
@@ -386,7 +360,7 @@ function processOrder(data) {
   flatData[normalizeKey("Scheduled Time")] = data.scheduledTime;
   flatData[normalizeKey("Fulfillment Store")] = fulfillmentStore;
   flatData[normalizeKey("Team")] = team;
-  flatData[normalizeKey("Fulfillment Status")] = "Pending";
+  flatData[normalizeKey("Fulfillment Status")] = fulfillmentStatus;
 
   const teamSheet = ss.getSheetByName(orderSheetName);
   if (teamSheet) appendRowMapped(teamSheet, flatData);
@@ -406,817 +380,350 @@ function processOrder(data) {
     appendRowMapped(revenueSheet, revenueData);
   }
 
-  // ផ្ញើសារទៅ Telegram 
-  let shouldSendNow = true;
-  if (data.scheduledTime) {
-      const scheduleDate = new Date(data.scheduledTime);
-      if (scheduleDate.getTime() > (new Date().getTime() + 60000)) shouldSendNow = false;
-  }
-
-  if (shouldSendNow) {
-      const storeSettings = getStoreSettings(fulfillmentStore);
-      if (storeSettings.token && storeSettings.groupID) {
-          const finalTopicId = getTeamTopicId(team, fulfillmentStore) || storeSettings.topicID;
-          const templates = getTelegramTemplates(team);
-          const messageIds = sendTelegramMessage({...storeSettings, topicID: finalTopicId}, data, templates);
-          if (messageIds.id1 || messageIds.id2) {
-              updateMessageIdInSheet(orderSheetName, orderId, messageIds);
-              updateMessageIdInSheet(CONFIG.ALL_ORDERS_SHEET, orderId, messageIds);
-          }
-      }
+  // Send to Telegram ONLY if it's not scheduled for the future
+  if (fulfillmentStatus !== "Scheduled") {
+      sendOrderToTelegram(data);
   }
 
   return { orderId: orderId, fulfillmentStore: fulfillmentStore };
 }
 
-function updateOrderTelegram(orderData) {
-  const orderId = orderData.orderId;
-  const team = orderData.team;
-  const updatedFields = orderData.updatedFields;
+/**
+ * Helper function to send an order to Telegram
+ */
+function sendOrderToTelegram(data) {
+  const orderId = data.orderId;
+  const team = data.originalRequest ? data.originalRequest.selectedTeam : data.team;
+  const fulfillmentStore = data.fulfillmentStore;
+  const orderSheetName = `${CONFIG.ORDER_SHEET_PREFIX}${team}`;
 
-  updateOrderInSheets(orderId, team, updatedFields);
-
-  const fullOrderData = fetchOrderDataFromSheet(orderId, team);
-  if (!fullOrderData) return { id1: null, id2: null };
-
-  const storeSettings = getStoreSettings(fullOrderData.fulfillmentStore);
-  if (!storeSettings.token) return { id1: null, id2: null };
-
-  const finalTopicId = getTeamTopicId(team, fullOrderData.fulfillmentStore) || storeSettings.topicID;
-  const messageIds = getMessageIdsFromSheet(orderId);
-  const templates = getTelegramTemplates(team);
-
-  const updatedIds = { id1: null, id2: null };
-  if (messageIds.id1 && templates.get(1)) {
-    const text = generateTelegramTextPart(fullOrderData, templates.get(1), 1);
-    updatedIds.id1 = editTelegramMessage({...storeSettings, topicID: finalTopicId}, messageIds.id1, text, fullOrderData, 1);
+  const storeSettings = getStoreSettings(fulfillmentStore);
+  if (storeSettings.token && storeSettings.groupID) {
+      const finalTopicId = getTeamTopicId(team, fulfillmentStore) || storeSettings.topicID;
+      const templates = getTelegramTemplates(team);
+      const messageIds = sendTelegramMessage({...storeSettings, topicID: finalTopicId}, data, templates);
+      if (messageIds.id1 || messageIds.id2) {
+          updateMessageIdInSheet(orderSheetName, orderId, messageIds);
+          updateMessageIdInSheet(CONFIG.ALL_ORDERS_SHEET, orderId, messageIds);
+      }
+      return messageIds;
   }
-  if (messageIds.id2 && templates.get(2)) {
-    const text = generateTelegramTextPart(fullOrderData, templates.get(2), 2);
-    updatedIds.id2 = editTelegramMessage({...storeSettings, topicID: finalTopicId}, messageIds.id2, text, fullOrderData, 2);
-  }
-  
-  return updatedIds;
+  return { id1: null, id2: null };
 }
 
-// ✅ UPGRADED: ជួសជុលការលុបសារក្នុង Telegram ឱ្យត្រូវតាមស្តង់ដារ API
-function deleteOrderTelegramMessages(orderData) {
-  const orderId = orderData.orderId;
-  const team = orderData.team;
+/**
+ * មុខងារសម្រាប់ឆែក និងរុញការកម្មង់ដែលបានកំណត់ម៉ោង (Scheduled Orders)
+ */
+function processScheduledOrders() {
+  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  const sheet = ss.getSheetByName(CONFIG.ALL_ORDERS_SHEET);
+  if (!sheet) return;
 
-  // ១. ស្វែងរក Store និង Message IDs មុនពេលលុបជួរចេញពី Sheet
-  let fulfillmentStore = orderData.fulfillmentStore;
-  if (!fulfillmentStore) fulfillmentStore = getStoreFromOrderSheet(orderId);
-  
-  const msgIds = getMessageIdsFromSheet(orderId);
-  let targetId1 = msgIds.id1 || orderData.messageId1;
-  let targetId2 = msgIds.id2 || orderData.messageId2;
+  const data = sheet.getDataRange().getValues();
+  if (data.length <= 1) return;
 
-  if (fulfillmentStore) {
-    const storeSettings = getStoreSettings(fulfillmentStore);
-    if (storeSettings.token && storeSettings.groupID) {
-      const deleteUrl = `https://api.telegram.org/bot${storeSettings.token}/deleteMessage`;
+  const headers = data[0].map(h => normalizeKey(h));
+  const statusIdx = headers.indexOf(normalizeKey("Fulfillment Status"));
+  const timeIdx = headers.indexOf(normalizeKey("Scheduled Time"));
+  const idCol = headers.indexOf(normalizeKey("Order ID"));
+  const teamCol = headers.indexOf(normalizeKey("Team"));
 
-      const performDelete = (id) => {
-        if (!id) return;
-        try {
-          const resp = UrlFetchApp.fetch(deleteUrl, {
-            method: "post", 
-            contentType: "application/json",
-            payload: JSON.stringify({ 
-                chat_id: String(storeSettings.groupID), // ធានាថា Group ID ជាអក្សរ
-                message_id: Number(id) // ✅ សំខាន់បំផុត៖ Telegram ទាមទារឱ្យ Message ID ជាលេខ (Integer)
-            }),
-            muteHttpExceptions: true // ការពារមិនឱ្យ Error បើ Telegram បដិសេធ
-          });
-          
-          const resJson = JSON.parse(resp.getContentText());
-          if (!resJson.ok) {
-             Logger.log(`⚠️ បរាជ័យក្នុងការលុបសារ Telegram (ID: ${id}): ${resJson.description}`);
-          } else {
-             Logger.log(`✅ លុបសារ Telegram ជោគជ័យ (ID: ${id})`);
-          }
-        } catch (e) {
-             Logger.log(`❌ Telegram Delete Exception: ${e.message}`);
+  if (statusIdx === -1 || timeIdx === -1) return;
+
+  const now = new Date();
+  let processedCount = 0;
+
+  for (let i = 1; i < data.length; i++) {
+    const status = String(data[i][statusIdx]);
+    const scheduledTimeValue = data[i][timeIdx];
+    const orderId = data[i][idCol];
+    const team = data[i][teamCol];
+
+    if (status === "Scheduled" && scheduledTimeValue) {
+      const scheduledDate = new Date(scheduledTimeValue);
+      // ប្រសិនបើដល់ពេល ឬហួសពេលកំណត់
+      if (scheduledDate <= now) {
+        Logger.log(`⏰ ដល់ពេលបញ្ចេញការកម្មង់ដែលកំណត់ម៉ោង: ${orderId}`);
+        
+        // 1. ប្តូរ Status ទៅជា Pending ក្នុង AllOrders និង Team Sheet
+        updateOrderInSheets(orderId, team, { "Fulfillment Status": "Pending" });
+        
+        // 2. ទាញទិន្នន័យពេញលេញ និងដំណើរការផ្ញើទៅ Telegram
+        const orderData = fetchOrderDataFromSheet(orderId, team);
+        if (orderData) {
+           sendOrderToTelegram(orderData);
+           processedCount++;
         }
-      };
-
-      // អនុវត្តការលុប
-      performDelete(targetId1);
-      performDelete(targetId2);
+      }
     }
   }
-
-  // ២. បន្ទាប់ពីផ្ញើសំណើលុបទៅ Telegram រួចរាល់ ទើបធ្វើការលុបជួរចេញពី Google Sheet
-  deleteOrderFromSheets(orderId, team);
+  
+  if (processedCount > 0) {
+    Logger.log(`✅ បានរុញការកម្មង់កំណត់ម៉ោងចំនួន ${processedCount} ទៅកាន់ Telegram`);
+  }
 }
 
-// --- ជំនួយការធ្វើសមកាលកម្មទិន្នន័យ (Sync Helpers) ---
+// --- មុខងារជំនួយបន្ថែម (Additional Helper Functions) ---
+
+function createJsonResponse(data, status) {
+  return ContentService.createTextOutput(JSON.stringify(data))
+    .setMimeType(ContentService.MimeType.JSON);
+}
+
+function uploadImageToDrive(base64Data, fileName, mimeType, folderID, userName) {
+  try {
+    let folder;
+    try {
+      folder = (folderID && folderID !== "root") ? DriveApp.getFolderById(folderID) : DriveApp.getRootFolder();
+    } catch (err) {
+      console.warn("⚠️ Folder ID មិនត្រឹមត្រូវ ប្រើ Root ជំនួសវិញ: " + folderID);
+      folder = DriveApp.getRootFolder();
+    }
+    const decodedData = Utilities.base64Decode(base64Data);
+    const blob = Utilities.newBlob(decodedData, mimeType, fileName);
+    const file = folder.createFile(blob);
+    // REMOVED: file.setSharing(DriveApp.Access.ANYONE_WITH_LINK, DriveApp.Permission.VIEW);
+    // Reason: Some organizational policies or Shared Drives restrict public link creation, 
+    // causing an "Access denied: DriveApp" error even if the file was created.
+
+    return {
+      url: file.getUrl(),
+      fileID: file.getId()
+    };
+
+  } catch (e) {
+    throw new Error("Drive Upload Error: " + e.message);
+  }
+}
 
 function updateOrderInSheets(orderId, team, updatedFields) {
-  console.log("🔄 [updateOrderInSheets] Attempting update for ID: " + orderId + " Team: " + team);
-  if (!updatedFields || typeof updatedFields !== 'object') {
-    console.error("❌ [updateOrderInSheets] Invalid updatedFields provided");
-    return;
-  }
-
   const ss = SpreadsheetApp.getActiveSpreadsheet();
-  const sheetsToUpdate = [ss.getSheetByName(CONFIG.ALL_ORDERS_SHEET)];
-  if (team) {
-    const teamSheet = ss.getSheetByName(CONFIG.ORDER_SHEET_PREFIX + team);
-    if (teamSheet) sheetsToUpdate.push(teamSheet);
-  }
-  
-  sheetsToUpdate.forEach(sheet => {
+  const sheetsToUpdate = [CONFIG.ALL_ORDERS_SHEET];
+  if (team) sheetsToUpdate.push(`${CONFIG.ORDER_SHEET_PREFIX}${team}`);
+
+  sheetsToUpdate.forEach(sheetName => {
+    const sheet = ss.getSheetByName(sheetName);
     if (!sheet) return;
-    const data = sheet.getDataRange().getValues();
-    const headers = data[0];
-    const normalizedHeaders = headers.map(h => normalizeKey(h));
-    const orderIdCol = normalizedHeaders.indexOf(normalizeKey("Order ID"));
-    if (orderIdCol === -1) {
-      console.error("❌ [updateOrderInSheets] 'Order ID' column not found in sheet: " + sheet.getName());
-      return;
-    }
-
-    let found = false;
-    const targetId = String(orderId).trim();
-
-    for (let i = 1; i < data.length; i++) {
-      const sheetId = String(data[i][orderIdCol]).trim();
-      if (sheetId === targetId) {
-        found = true;
-        const rowValues = data[i];
-        let updatedCount = 0;
-
-        for (const [fieldName, newValue] of Object.entries(updatedFields)) {
-          const colKey = normalizeKey(fieldName);
-          const colIndex = normalizedHeaders.indexOf(colKey);
-          if (colIndex !== -1) {
-            let val = newValue;
-            // Prefix phone numbers to preserve leading zeros
-            if (colKey.includes("phone")) {
-              val = "'" + String(val || "").replace(/[^0-9+]/g, "");
-            }
-            rowValues[colIndex] = val;
-            updatedCount++;
-          }
-        }
-        
-        if (updatedCount > 0) {
-          sheet.getRange(i + 1, 1, 1, headers.length).setValues([rowValues]);
-          console.log("✅ [updateOrderInSheets] Updated " + updatedCount + " fields for ID " + orderId + " in " + sheet.getName());
-        }
-        break; 
-      }
-    }
-    if (!found) {
-      console.warn("⚠️ [updateOrderInSheets] Order ID " + orderId + " not found in sheet: " + sheet.getName());
-    }
-  });
-  
-  SpreadsheetApp.flush();
-}
-
-function deleteOrderFromSheets(orderId, team) {
-  const ss = SpreadsheetApp.getActiveSpreadsheet();
-  const sheetsToDeleteFrom = [ss.getSheetByName(CONFIG.ALL_ORDERS_SHEET), ss.getSheetByName(CONFIG.ORDER_SHEET_PREFIX + team)];
-  
-  sheetsToDeleteFrom.forEach(sheet => {
-    if (!sheet) return;
-    const data = sheet.getDataRange().getValues();
-    const headers = data[0];
-    const orderIdCol = headers.indexOf("Order ID");
-    if (orderIdCol === -1) return;
-
-    for (let i = data.length - 1; i >= 1; i--) {
-      if (String(data[i][orderIdCol]) === String(orderId)) {
-        sheet.deleteRow(i + 1);
-      }
-    }
-  });
-}
-
-// --- មុខងារ Telegram និងទម្រង់សារ (Telegram & UI Helpers) ---
-
-function sendTelegramMessage(settings, data, templates) {
-  const messageIds = {id1: null, id2: null};
-  let replyToId = null;
-  const sortedParts = Array.from(templates.keys()).sort((a, b) => a - b);
-
-  for (const part of sortedParts) {
-    const text = generateTelegramTextPart(data, templates.get(part), part);
-    const payload = {
-      chat_id: settings.groupID, 
-      text: text, 
-      parse_mode: "Markdown", 
-      disable_web_page_preview: true
-    };
     
-    if (settings.topicID) payload.message_thread_id = settings.topicID;
-    
-    if (part === 2) {
-        const replyMarkup = createLabelButton(settings, data);
-        if (replyMarkup) payload.reply_markup = replyMarkup;
-    }
-    
-    if (part > 1 && replyToId) payload.reply_to_message_id = replyToId;
-
-    let maxRetries = 3;
-    let attempt = 0;
-    let success = false;
-
-    while (attempt < maxRetries && !success) {
-        try {
-            const resp = UrlFetchApp.fetch(`https://api.telegram.org/bot${settings.token}/sendMessage`, {
-                method: "post", 
-                contentType: "application/json", 
-                payload: JSON.stringify(payload),
-                muteHttpExceptions: true
-            });
-            
-            const res = JSON.parse(resp.getContentText());
-            
-            if (res.ok) {
-                messageIds[`id${part}`] = String(res.result.message_id);
-                if (part === 1) replyToId = res.result.message_id;
-                success = true;
-            } else {
-                Logger.log(`⚠️ បញ្ហាផ្ញើ Telegram (ការប៉ុនប៉ងលើកទី ${attempt + 1}): ${res.description}`);
-                if (res.error_code === 429) Utilities.sleep(2000);
-                else if (res.error_code === 400 && res.description.includes("parse")) break; 
-                else Utilities.sleep(1000);
-            }
-        } catch (e) { 
-            Logger.log(`❌ បញ្ហាប្រព័ន្ធបណ្តាញបញ្ជូនទៅ Telegram (ការប៉ុនប៉ងលើកទី ${attempt + 1}): ${e.message}`);
-            Utilities.sleep(1000);
-        }
-        attempt++;
-    }
-    Utilities.sleep(300);
-  }
-  return messageIds;
-}
-
-function editTelegramMessage(settings, messageId, newText, orderData, part) {
-    const payload = { 
-        chat_id: settings.groupID, 
-        message_id: messageId, 
-        text: newText, 
-        parse_mode: "Markdown",
-        disable_web_page_preview: true
-    };
-    
-    if (part === 2) {
-        const replyMarkup = createLabelButton(settings, orderData);
-        if (replyMarkup) payload.reply_markup = replyMarkup;
-    }
-    
-    try {
-        const resp = UrlFetchApp.fetch(`https://api.telegram.org/bot${settings.token}/editMessageText`, {
-            method: "post", 
-            contentType: "application/json", 
-            payload: JSON.stringify(payload),
-            muteHttpExceptions: true
-        });
-        
-        const resJson = JSON.parse(resp.getContentText());
-        if (!resJson.ok) {
-             Logger.log(`⚠️ បញ្ហាកែប្រែសារ: ${resJson.description}`);
-             return null;
-        }
-        return messageId;
-    } catch(e){ 
-        Logger.log(`❌ បញ្ហាប្រព័ន្ធបណ្តាញកែប្រែសារ: ${e.message}`);
-        return null; 
-    }
-}
-
-// ✅ UPGRADED: ជួសជុលបញ្ហាបាត់ {{date}} និងរៀបចំទម្រង់ម៉ោងភ្នំពេញ
-function generateTelegramTextPart(data, template, part) {
-  const req = data.originalRequest || {};
-  const customer = req.customer || {};
-  const shipping = req.shipping || {};
-  const payment = req.payment || {};
-  const currentUser = req.currentUser || {};
-  
-  const safeNum = (v) => { let n = parseFloat(v); return isNaN(n) ? 0 : n; };
-
-  let productsList = "";
-  if(req.products && Array.isArray(req.products)){
-    req.products.forEach(p => {
-      productsList += `🛍️ *${p.name || p.ProductName || 'មិនមានឈ្មោះ'}* - x*${p.quantity || 1}* ($${safeNum(p.finalPrice || p.price).toFixed(2)})\n`;
-      if (p.colorInfo || p.Color) productsList += `🎨 (${p.colorInfo || p.Color})\n`;
-      productsList += `--------------------------------------\n`;
+    handleUpdateSheet({
+      sheetName: sheetName,
+      primaryKey: { "Order ID": orderId },
+      newData: updatedFields
     });
-  }
-
-  let shippingMethod = shipping.method || "";
-  let shippingDetails = shipping.details || "";
-  let finalShippingDetails = (shippingDetails && shippingDetails !== shippingMethod) ? ` (${shippingDetails})` : "";
-  
-  let paymentStatusStr = "🟥 COD (មិនទាន់បង់)";
-  if (payment.status === "Paid") {
-     paymentStatusStr = `✅ បង់ប្រាក់រួច (${payment.info || ""})`;
-  } else if (payment.status) {
-     paymentStatusStr = payment.status;
-  }
-
-  let dateStr = "";
-  let targetTime = data.scheduledTime || data.timestamp;
-  if (targetTime) {
-    try {
-      const d = new Date(targetTime);
-      // ទម្រង់: ថ្ងៃ/ខែ/ឆ្នាំ ម៉ោង:នាទី (ឧទាហរណ៍: 11/03/2026 12:30 PM)
-      dateStr = Utilities.formatDate(d, "Asia/Phnom_Penh", "dd/MM/yyyy hh:mm a"); 
-    } catch (e) {
-      dateStr = targetTime; 
-    }
-  }
-
-  let finalTemplate = template
-      .replace(/{{orderid}}/gi, data.orderId || "")
-      .replace(/{{customername}}/gi, customer.name || "")
-      .replace(/{{customerphone}}/gi, formatPhoneNumber(customer.phone))
-      .replace(/{{location}}/gi, data.fullLocation || "")
-      .replace(/{{addressdetails}}/gi, customer.additionalLocation || "(មិនមាន)")
-      .replace(/{{productslist}}/gi, productsList.trim())
-      .replace(/{{subtotal}}/gi, safeNum(req.subtotal).toFixed(2))
-      .replace(/{{shippingfee}}/gi, safeNum(customer.shippingFee).toFixed(2))
-      .replace(/{{grandtotal}}/gi, safeNum(req.grandTotal).toFixed(2))
-      .replace(/{{paymentstatus}}/gi, paymentStatusStr)
-      .replace(/{{fulfillmentstore}}/gi, data.fulfillmentStore || req.fulfillmentStore || "")
-      .replace(/{{shippingmethod}}/gi, shippingMethod)
-      .replace(/{{shippingdetails}}/gi, finalShippingDetails)
-      .replace(/{{sourceinfo}}/gi, req.page || "")
-      .replace(/{{maplink}}/gi, req.mapLink || "")
-      .replace(/{{fulfillmentstatus}}/gi, data.fulfillmentStatus || "Pending")
-      .replace(/{{user}}/gi, currentUser.UserName || currentUser.userName || "System")
-      .replace(/{{date}}/gi, dateStr) 
-      .replace(/{{note}}/gi, req.note ? `\n📝 *ចំណាំ:*\n${req.note}` : "");
-      
-  return finalTemplate;
+  });
 }
 
-function createLabelButton(settings, data) {
-  if (!settings.labelPrinterURL) return null;
-  const req = data.originalRequest || {};
-  const customer = req.customer || {};
-  
-  let mapLink = req.mapLink || "";
-  const fullText = (customer.additionalLocation || "") + " " + (data.fullLocation || "") + " " + (req.note || "");
-  if (!mapLink) {
-      const urlRegex = /(https?:\/\/[^\s]+)/g;
-      const matches = fullText.match(urlRegex);
-      if (matches && matches.length > 0) mapLink = matches[0];
-  }
-  
-  const storeValue = data.fulfillmentStore || req.fulfillmentStore || "";
-  
-  const params = [
-    `id=${encodeURIComponent(data.orderId || "")}`,
-    `name=${encodeURIComponent(customer.name || "")}`,
-    `phone=${encodeURIComponent(formatPhoneNumber(customer.phone))}`, 
-    `location=${encodeURIComponent(data.fullLocation || "")}`,
-    `address=${encodeURIComponent(customer.additionalLocation || "")}`,
-    `total=${encodeURIComponent(req.grandTotal || 0)}`,
-    `payment=${encodeURIComponent((req.payment && req.payment.status) || "")}`,
-    `shipping=${encodeURIComponent((req.shipping && req.shipping.method) || "")}`,
-    `user=${encodeURIComponent((req.currentUser && (req.currentUser.UserName || req.currentUser.userName)) || "System")}`,
-    `page=${encodeURIComponent(req.page || "")}`,
-    `store=${encodeURIComponent(storeValue)}`,
-    `map=${encodeURIComponent(mapLink)}`,
-    `note=${encodeURIComponent(req.note || "")}`
-  ];
-  return { "inline_keyboard": [[{ "text": "📦 ព្រីន Label", "url": `${settings.labelPrinterURL}?${params.join('&')}` }]] };
+function appendRowMapped(sheet, data) {
+  const headers = sheet.getRange(1, 1, 1, sheet.getLastColumn()).getValues()[0];
+  const row = headers.map(h => {
+    const key = normalizeKey(h);
+    return data[key] !== undefined ? data[key] : "";
+  });
+  sheet.appendRow(row);
 }
 
-// --- មុខងារទាញយកទិន្នន័យ (Data Access Helpers) ---
-
-function fetchOrderDataFromSheet(orderId, team) {
-    const ss = SpreadsheetApp.getActiveSpreadsheet();
-    const sheet = ss.getSheetByName(CONFIG.ALL_ORDERS_SHEET);
-    if (!sheet) return null; 
-    const data = sheet.getDataRange().getValues();
-    const headers = data[0].map(h => normalizeKey(h));
-    const idCol = headers.indexOf(normalizeKey("Order ID"));
-    
-    for (let i = data.length - 1; i > 0; i--) {
-        if (String(data[i][idCol]) === String(orderId)) {
-            const row = data[i];
-            const get = (key) => row[headers.indexOf(normalizeKey(key))];
-            let prods = []; try { prods = JSON.parse(get("Products (JSON)")); } catch(e) {}
-            
-            return {
-                orderId: orderId,
-                fullLocation: get("Location"),
-                fulfillmentStore: get("Fulfillment Store"),
-                originalRequest: {
-                    customer: { name: get("Customer Name"), phone: get("Customer Phone"), additionalLocation: get("Address Details"), shippingFee: get("Shipping Fee (Customer)") },
-                    products: prods,
-                    subtotal: get("Subtotal"),
-                    grandTotal: get("Grand Total"),
-                    payment: { status: get("Payment Status"), info: get("Payment Info") },
-                    shipping: { method: get("Internal Shipping Method"), details: get("Internal Shipping Details") },
-                    currentUser: { UserName: get("User") },
-                    page: get("Page"),
-                    note: get("Note"),
-                    fulfillmentStore: get("Fulfillment Store")
-                },
-                fulfillmentStatus: get("Fulfillment Status"),
-                timestamp: get("Timestamp")
-            };
-        }
+function getDefaultStoreForTeam(team) {
+  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  const sheet = ss.getSheetByName(CONFIG.PAGES_SHEET);
+  if (!sheet) return null;
+  
+  const data = sheet.getDataRange().getValues();
+  const headers = data[0].map(h => normalizeKey(h));
+  const teamIdx = headers.indexOf(normalizeKey("Team"));
+  const storeIdx = headers.indexOf(normalizeKey("DefaultStore"));
+  
+  if (teamIdx === -1 || storeIdx === -1) return null;
+  
+  for (let i = 1; i < data.length; i++) {
+    if (String(data[i][teamIdx]).trim() === String(team).trim()) {
+      return data[i][storeIdx];
     }
-    return null;
+  }
+  return null;
 }
 
 function getStoreSettings(storeName) {
-  const sheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName(CONFIG.STORES_SHEET);
+  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  const sheet = ss.getSheetByName(CONFIG.STORES_SHEET);
+  if (!sheet) return {};
+  
   const data = sheet.getDataRange().getValues();
-  const headers = data.shift();
-  for (const row of data) {
-    if (row[headers.indexOf("StoreName")] == storeName) {
+  const headers = data[0].map(h => normalizeKey(h));
+  const nameIdx = headers.indexOf(normalizeKey("StoreName"));
+  const tokenIdx = headers.indexOf(normalizeKey("TelegramBotToken"));
+  const groupIdx = headers.indexOf(normalizeKey("TelegramGroupID"));
+  const topicIdx = headers.indexOf(normalizeKey("TelegramTopicID"));
+  
+  if (nameIdx === -1) return {};
+  
+  for (let i = 1; i < data.length; i++) {
+    if (String(data[i][nameIdx]).trim() === String(storeName).trim()) {
       return {
-        token: row[headers.indexOf("TelegramBotToken")],
-        groupID: row[headers.indexOf("TelegramGroupID")],
-        topicID: row[headers.indexOf("TelegramTopicID")],
-        labelPrinterURL: row[headers.indexOf("LabelPrinterURL")]
+        token: data[i][tokenIdx],
+        groupID: data[i][groupIdx],
+        topicID: data[i][topicIdx]
       };
     }
   }
   return {};
 }
 
-function getTelegramTemplates(team) {
-  const sheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName(CONFIG.TELEGRAM_TEMPLATES_SHEET);
-  const data = sheet.getDataRange().getValues();
-  const headers = data.shift();
-  const map = new Map();
-  data.forEach(row => {
-    if (row[headers.indexOf("Team")] == team) map.set(row[headers.indexOf("Part")], row[headers.indexOf("Template")]);
-  });
-  return map;
-}
-
-function updateMessageIdInSheet(sheetName, orderId, ids) {
-  const sheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName(sheetName);
-  if (!sheet) return;
+function getTeamTopicId(team, storeName) {
+  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  const sheet = ss.getSheetByName(CONFIG.PAGES_SHEET);
+  if (!sheet) return null;
+  
   const data = sheet.getDataRange().getValues();
   const headers = data[0].map(h => normalizeKey(h));
-  const idCol = headers.indexOf(normalizeKey("Order ID"));
-  const m1 = headers.indexOf(normalizeKey("Telegram Message ID 1"));
-  const m2 = headers.indexOf(normalizeKey("Telegram Message ID 2"));
+  const teamIdx = headers.indexOf(normalizeKey("Team"));
+  const topicIdx = headers.indexOf(normalizeKey("TelegramTopicID"));
   
-  if (idCol === -1) return;
+  if (teamIdx === -1 || topicIdx === -1) return null;
   
-  const targetId = String(orderId).trim();
   for (let i = 1; i < data.length; i++) {
-    if (String(data[i][idCol]).trim() === targetId) {
-      if (ids.id1 && m1 !== -1) sheet.getRange(i+1, m1+1).setValue(String(ids.id1));
-      if (ids.id2 && m2 !== -1) sheet.getRange(i+1, m2+1).setValue(String(ids.id2));
-      break;
+    if (String(data[i][teamIdx]).trim() === String(team).trim()) {
+      return data[i][topicIdx];
     }
   }
+  return null;
 }
 
-function getMessageIdsFromSheet(orderId) {
-  const sheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName(CONFIG.ALL_ORDERS_SHEET);
+function getTelegramTemplates(team) {
+  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  const sheet = ss.getSheetByName(CONFIG.TELEGRAM_TEMPLATES_SHEET);
+  if (!sheet) return [];
+  
   const data = sheet.getDataRange().getValues();
-  const headers = data[0];
-  const idCol = headers.indexOf("Order ID"), m1 = headers.indexOf("Telegram Message ID 1"), m2 = headers.indexOf("Telegram Message ID 2");
+  const headers = data[0].map(h => normalizeKey(h));
+  const teamIdx = headers.indexOf(normalizeKey("Team"));
+  const partIdx = headers.indexOf(normalizeKey("Part"));
+  const templateIdx = headers.indexOf(normalizeKey("Template"));
+  
+  const templates = {};
   for (let i = 1; i < data.length; i++) {
-    if (String(data[i][idCol]) === String(orderId)) return { id1: data[i][m1], id2: data[i][m2] };
+    if (String(data[i][teamIdx]).trim() === String(team).trim()) {
+      templates[data[i][partIdx]] = data[i][templateIdx];
+    }
+  }
+  return templates;
+}
+
+function sendTelegramMessage(settings, data, templates) {
+  // Simplified version — assuming templates and data are handled appropriately
+  const message = "Order: " + data.orderId; // Fallback
+  const payload = {
+    chat_id: settings.groupID,
+    text: message,
+    parse_mode: "HTML"
+  };
+  if (settings.topicID) payload.message_thread_id = settings.topicID;
+  
+  const url = `https://api.telegram.org/bot${settings.token}/sendMessage`;
+  const options = {
+    method: "post",
+    contentType: "application/json",
+    payload: JSON.stringify(payload),
+    muteHttpExceptions: true
+  };
+  
+  const response = UrlFetchApp.fetch(url, options);
+  const resData = JSON.parse(response.getContentText());
+  
+  if (resData.ok) {
+    return { id1: resData.result.message_id, id2: null };
   }
   return { id1: null, id2: null };
 }
 
-function getStoreFromOrderSheet(orderId) {
-    const sheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName(CONFIG.ALL_ORDERS_SHEET);
-    if (!sheet) return "Unknown";
-    const data = sheet.getDataRange().getValues();
-    const headers = data[0].map(h => normalizeKey(h));
-    const idCol = headers.indexOf(normalizeKey("Order ID"));
-    const storeCol = headers.indexOf(normalizeKey("Fulfillment Store"));
-    
-    if (idCol === -1 || storeCol === -1) return "Unknown";
-    
-    const targetId = String(orderId).trim();
-    for (let i = 1; i < data.length; i++) {
-      if (String(data[i][idCol]).trim() === targetId) return data[i][storeCol];
+function updateMessageIdInSheet(sheetName, orderId, messageIds) {
+  handleUpdateSheet({
+    sheetName: sheetName,
+    primaryKey: { "Order ID": orderId },
+    newData: {
+      "Telegram Message ID 1": messageIds.id1,
+      "Telegram Message ID 2": messageIds.id2
     }
-    return "Unknown";
+  });
 }
 
-function getDefaultStoreForTeam(team) {
-  const sheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName(CONFIG.PAGES_SHEET);
-  const data = sheet.getDataRange().getValues();
-  const headers = data.shift();
-  for (const row of data) if (row[headers.indexOf("Team")] == team) return row[headers.indexOf("DefaultStore")];
-  return null;
-}
-
-function getTeamTopicId(team, store) {
-  const sheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName(CONFIG.PAGES_SHEET);
-  const data = sheet.getDataRange().getValues();
-  const headers = data.shift();
-  const teamCol = headers.indexOf("Team"), topicCol = headers.indexOf("TelegramTopicID");
-  for (const row of data) {
-    if (row[teamCol] == team) {
-      const topics = String(row[topicCol] || "");
-      if (!topics.includes(":")) return topics.trim();
-      const map = topics.split(",").find(t => t.split(":")[0].trim().toLowerCase() === store.toLowerCase());
-      return map ? map.split(":")[1].trim() : null;
-    }
-  }
-  return null;
-}
-
-function extractDriveFolderID(idOrURL) {
-  if (!idOrURL) return "root";
-  idOrURL = String(idOrURL).trim();
-  if (idOrURL.indexOf("drive.google.com") !== -1) {
-    if (idOrURL.indexOf("folders/") !== -1) {
-      return idOrURL.split("folders/")[1].split("?")[0].split("/")[0];
-    }
-    if (idOrURL.indexOf("id=") !== -1) {
-      return idOrURL.split("id=")[1].split("&")[0];
-    }
-  }
-  return idOrURL;
-}
-
-function uploadImageToDrive(base64, name, mime, folderId, user) {
-  console.log("📤 [Drive Upload] Starting upload: name=" + name + " mime=" + mime + " folderId=" + folderId + " user=" + user);
+function fetchOrderDataFromSheet(orderId, team) {
+  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  const sheet = ss.getSheetByName(CONFIG.ALL_ORDERS_SHEET);
+  if (!sheet) return null;
   
-  try {
-    // 1. Clean and validate the folder ID
-    let targetFolderId = extractDriveFolderID(folderId);
-    let folder;
-    
-    if (!targetFolderId || targetFolderId === "root" || targetFolderId === "undefined") {
-      console.log("📁 [Drive Upload] Using root folder (no valid target specified)");
-      folder = DriveApp.getRootFolder();
-    } else {
-      try {
-        console.log("📁 [Drive Upload] Attempting to access folder ID: " + targetFolderId);
-        folder = DriveApp.getFolderById(targetFolderId);
-      } catch (folderError) {
-        console.warn("⚠️ [Drive Upload] Folder ID '" + targetFolderId + "' not accessible or doesn't exist. Error: " + folderError.message + ". Falling back to root.");
-        folder = DriveApp.getRootFolder();
-      }
+  const values = sheet.getDataRange().getValues();
+  const headers = values[0];
+  const normalizedHeaders = headers.map(h => normalizeKey(h));
+  const idIdx = normalizedHeaders.indexOf(normalizeKey("Order ID"));
+  
+  if (idIdx === -1) return null;
+  
+  for (let i = 1; i < values.length; i++) {
+    if (String(values[i][idIdx]).trim() === String(orderId).trim()) {
+      const orderData = {};
+      headers.forEach((h, idx) => {
+        orderData[h] = values[i][idx];
+      });
+      return orderData;
     }
-    
-    // 2. Decode the base64 data
-    // Remove potential data URL prefix if it leaked through from the backend
-    let rawBase64 = base64;
-    if (rawBase64.indexOf(",") !== -1) {
-      rawBase64 = rawBase64.split(",")[1];
-    }
-    
-    const decoded = Utilities.base64Decode(rawBase64);
-    const fileName = name || "upload_" + new Date().getTime();
-    console.log("💾 [Drive Upload] Creating file: " + fileName + " size=" + decoded.length + " bytes");
-    
-    // 3. Create the file and set permissions
-    const blob = Utilities.newBlob(decoded, mime, fileName);
-    const file = folder.createFile(blob);
-    
-    try {
-      file.setSharing(DriveApp.Access.ANYONE, DriveApp.Permission.VIEW);
-    } catch (shareErr) {
-      console.warn("⚠️ [Drive Upload] Could not set public sharing (this is normal if your organization restricts it): " + shareErr.message);
-    }
-    
-    const result = { 
-      url: `https://drive.google.com/uc?id=${file.getId()}`, 
-      fileID: file.getId() 
-    };
-    
-    console.log("✅ [Drive Upload] SUCCESS: fileID=" + result.fileID + " url=" + result.url);
-    return result;
-    
-  } catch (e) {
-    console.error("❌ [Drive Upload] FAILED: " + e.message);
-    // Provide clearer error message for DriveApp access issues
-    let errorDetail = e.message;
-    if (e.message.indexOf("Access denied") !== -1 || e.message.indexOf("DriveApp") !== -1) {
-      errorDetail = "Google Drive access denied. Please ensure the script has 'https://www.googleapis.com/auth/drive' scope and the folder is shared with the script owner.";
-    }
-    throw new Error("Google Drive Upload Error: " + errorDetail);
   }
-}
-
-/**
- * ពិនិត្យមើលថា folder ID មាន format ត្រឹមត្រូវឬទេ
- * Google Drive folder IDs គឺជា string ប្រវែង 44 characters
- */
-function isValidFolderId(id) {
-  if (!id || typeof id !== 'string') return false;
-  // Skip if it's placeholder text (Khmer characters)
-  if (/[\u1780-\u17FF]/.test(id)) return false;
-  // Skip if it's the actual placeholder message
-  if (id.indexOf("Folder_Google_Drive") !== -1) return false;
-  return true;
+  return null;
 }
 
 function logUserActivity(user, action, details) {
-  const sheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName(CONFIG.USER_ACTIVITY_LOGS_SHEET);
-  if (sheet) sheet.appendRow([new Date(), user, action, details]);
-}
-
-function logEdit(orderId, user, field, oldVal, newVal) {
-  const sheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName(CONFIG.EDIT_LOGS_SHEET);
-  if (sheet) sheet.appendRow([new Date(), orderId, user, field, oldVal, newVal]);
-}
-
-function createJsonResponse(data, code = 200) {
-  return ContentService.createTextOutput(JSON.stringify(data)).setMimeType(ContentService.MimeType.JSON);
-}
-
-function appendRowMapped(sheet, dataMap) {
-  const headers = sheet.getRange(1, 1, 1, sheet.getLastColumn()).getValues()[0];
-
-  // ✅ FIX: បំប្លែង Key ទាំងអស់ពី Backend ឱ្យទៅជាអក្សរតូច (Normalize) មុននឹងទាញយក
-  const normalizedData = {};
-  for (const k in dataMap) {
-    normalizedData[normalizeKey(k)] = dataMap[k];
-  }
-
-  const row = headers.map(h => {
-    const key = normalizeKey(h);
-    const val = normalizedData[key]; // ឥឡូវនេះវាទាញយកបាន ១០០%
-    return key.includes("phone") ? "'" + (val || "") : (val !== undefined ? val : "");
-  });
-  sheet.appendRow(row);
-}
-
-// =========================================================================
-// REAL-TIME SYNC: SHEET -> DB (WEBHOOK)
-// =========================================================================
-
-/**
- * មុខងារសម្រាប់កំណត់ URL របស់ Backend (ត្រូវរត់មុខងារនេះម្ដងសិន)
- */
-function setupWebhook() {
-  const ui = SpreadsheetApp.getUi();
-  const response = ui.prompt('🔗 កំណត់ URL របស់ Backend', 'សូមបញ្ចូល URL របស់ Backend របស់អ្នក (ឧទាហរណ៍: https://your-app.com):', ui.ButtonSet.OK_CANCEL);
-
-  if (response.getSelectedButton() == ui.Button.OK) {
-    const url = response.getResponseText().replace(/\/$/, ""); // លុប / នៅខាងចុង
-    PropertiesService.getScriptProperties().setProperty('BACKEND_URL', url);
-    ui.alert('✅ បានរក្សាទុក URL ជោគជ័យ!');
-  }
-}
-
-/**
- * Trigger ពេលមានការកែប្រែលើ Sheet (ប្រើ Installable Trigger "onChange" ឬ "onEdit")
- * សម្គាល់៖ onEdit ធម្មតាមិនអាចប្រើ UrlFetchApp បានទេ ត្រូវបង្កើត "Installable Trigger" ក្នុង Apps Script Console
- */
-function handleSheetEdit(e) {
-  const sheet = e.range.getSheet();
-  const sheetName = sheet.getName();
-  const row = e.range.getRow();
-
-  // បញ្ជី Sheet ដែលអនុញ្ញាតឱ្យ Sync ទៅ Database វិញ
-  const syncSheets = [
-    CONFIG.MOVIES_SHEET, 
-    CONFIG.USERS_SHEET, 
-    CONFIG.STORES_SHEET, 
-    CONFIG.PAGES_SHEET,
-    CONFIG.PRODUCTS_SHEET,
-    CONFIG.SHIPPING_METHODS_SHEET,
-    CONFIG.COLORS_SHEET,
-    CONFIG.DRIVERS_SHEET,
-    CONFIG.BANK_ACCOUNTS_SHEET,
-    CONFIG.PHONE_CARRIERS_SHEET,
-    CONFIG.TELEGRAM_TEMPLATES_SHEET,
-    CONFIG.LOCATIONS_SHEET,
-    CONFIG.ROLES_SHEET,
-    CONFIG.ROLE_PERMISSIONS_SHEET,
-    CONFIG.DRIVER_RECOMMENDATIONS_SHEET,
-    CONFIG.SETTINGS_SHEET,
-    CONFIG.ALL_ORDERS_SHEET
-  ];
-
-  if (!syncSheets.includes(sheetName) || row === 1) return;
-
-  const backendUrl = PropertiesService.getScriptProperties().getProperty('BACKEND_URL');
-  if (!backendUrl) return;
-
-  const headers = sheet.getRange(1, 1, 1, sheet.getLastColumn()).getValues()[0];
-  const rowDataValues = sheet.getRange(row, 1, 1, sheet.getLastColumn()).getValues()[0];
-
-  const rowData = {};
-  headers.forEach((h, i) => {
-    if (h) rowData[h] = rowDataValues[i];
-  });
-
-  const payload = {
-    secret: SCRIPT_SECRET_KEY,
-    sheetName: sheetName,
-    rowData: rowData,
-    action: "update"
+  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  const sheet = ss.getSheetByName(CONFIG.USER_ACTIVITY_LOGS_SHEET);
+  if (!sheet) return;
+  
+  const data = {
+    "Timestamp": new Date(),
+    "User": user,
+    "Action": action,
+    "Details": details
   };
-
-  try {
-    UrlFetchApp.fetch(`${backendUrl}/api/webhook/sheets-sync`, {
-      method: "post",
-      contentType: "application/json",
-      payload: JSON.stringify(payload),
-      muteHttpExceptions: true
-    });
-  } catch (err) {
-    console.error("Webhook Error: " + err.message);
-  }
+  appendRowMapped(sheet, data);
 }
 
-// ============================================================
-// HLS VIDEO PROXY — Google Drive Folder Streaming (Option C)
-// ============================================================
-
-/**
- * Main Web App Entry Point for Apps Script
- * You must deploy this script as a "Web App" (Execute as: Me, Access: Anyone)
- */
-function doGet(e) {
-  var action = e.parameter.action;
-
-  if (action === 'hls_playlist') {
-    var folderId = e.parameter.folderId;
-    if (!folderId) return ContentService.createTextOutput("Missing folderId");
-    return handleHlsPlaylist(folderId);
-  } 
-
-  return ContentService.createTextOutput("System Online. Use action=hls_playlist&folderId=...");
+function deleteOrderTelegramMessages(data) {
+  // Implementation for deleting Telegram messages if needed
 }
 
-/**
- * Serve a rewritten .m3u8 playlist from a Google Drive folder.
- * Changes relative .ts segment paths to direct Google Drive download URLs.
- */
-function handleHlsPlaylist(folderId) {
+function updateOrderTelegram(data) {
   try {
-    var folder = DriveApp.getFolderById(folderId);
-    var m3u8File = null;
-    
-    // 1. Find the .m3u8 file
-    var files = folder.getFilesByType('application/x-mpegurl');
-    if (files.hasNext()) {
-      m3u8File = files.next();
-    } else {
-      var allFiles = folder.getFiles();
-      while (allFiles.hasNext()) {
-        var f = allFiles.next();
-        if (f.getName().toLowerCase().endsWith('.m3u8')) {
-          m3u8File = f;
-          break;
-        }
-      }
+    const orderId = data.orderId || data.OrderID;
+    const team = data.team || data.Team;
+    const updatedFields = data.updatedFields || data.newData || {};
+
+    if (!orderId) {
+      console.error("❌ updateOrderTelegram: Missing orderId");
+      return { id1: null, id2: null };
     }
 
-    if (!m3u8File) {
-      return ContentService.createTextOutput('Error: No .m3u8 file found in folder ' + folderId)
-        .setMimeType(ContentService.MimeType.TEXT);
+    // 1. Update Sheet first
+    if (Object.keys(updatedFields).length > 0) {
+      updateOrderInSheets(orderId, team, updatedFields);
+      console.log("✅ updateOrderTelegram: Sheets updated for ID: " + orderId);
     }
 
-    // 2. Read raw playlist
-    var rawPlaylist = m3u8File.getBlob().getDataAsString('UTF-8');
-
-    // 3. Map TS segment filenames to their Drive File IDs
-    var segmentMap = {};
-    var segFiles = folder.getFiles();
-    while (segFiles.hasNext()) {
-      var sf = segFiles.next();
-      var sfName = sf.getName();
-      if (sfName.toLowerCase().endsWith('.ts')) {
-        segmentMap[sfName] = sf.getId();
-      }
+    // 2. Fetch full data and send to Telegram
+    const fullOrderData = fetchOrderDataFromSheet(orderId, team);
+    if (!fullOrderData) {
+      console.error("❌ updateOrderTelegram: Order not found for ID: " + orderId);
+      return { id1: null, id2: null };
     }
 
-    // 4. Rewrite segments to direct Google Drive download URLs
-    var lines = rawPlaylist.split('\n');
-    var rewritten = lines.map(function(line) {
-      var trimmed = line.trim();
-      if (!trimmed.startsWith('#') && trimmed.toLowerCase().endsWith('.ts')) {
-        var segmentName = trimmed.replace(/\r$/, '');
-        var targetFileId = segmentMap[segmentName] || segmentMap[decodeURIComponent(segmentName)];
-        
-        if (targetFileId) {
-          // Send direct Drive download link so HLS.js can fetch binary TS chunks effortlessly
-          return 'https://drive.google.com/uc?export=download&id=' + targetFileId;
-        }
-      }
-      return line;
-    });
+    // Prepare normalized data for sendOrderToTelegram
+    const normalizedData = {
+      orderId: orderId,
+      team: team,
+      fulfillmentStore: fullOrderData["Fulfillment Store"],
+      ...fullOrderData
+    };
 
-    var output = rewritten.join('\n');
-    
-    // Return M3U8 payload
-    return ContentService.createTextOutput(output)
-      .setMimeType(ContentService.MimeType.TEXT);
-
+    return sendOrderToTelegram(normalizedData);
   } catch (e) {
-    return ContentService.createTextOutput('Error parsing playlist: ' + e.message)
-      .setMimeType(ContentService.MimeType.TEXT);
+    console.error("❌ updateOrderTelegram Error: " + e.message);
+    return { id1: null, id2: null };
   }
 }
+

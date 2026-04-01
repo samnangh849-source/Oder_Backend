@@ -25,11 +25,11 @@ interface UserOrdersViewProps {
   onAdd: () => void;
   onStatsUpdate: (stats: { revenue: number; cost: number; paid: number; unpaid: number, count: number }) => void;
   showColumnSelectorToggle?: boolean;
-  dateFilter?: DateRangePreset;
+  dateFilter?: any; 
 }
 
-const UserOrdersView: React.FC<UserOrdersViewProps> = ({ onAdd, onStatsUpdate, showColumnSelectorToggle = true, dateFilter }) => {
-    const { currentUser, language, refreshData, appData, orders, isOrdersLoading, hasPermission, selectedTeam: team, setAppState } = useContext(AppContext);
+const UserOrdersView: React.FC<UserOrdersViewProps> = ({ onAdd, onStatsUpdate, showColumnSelectorToggle = true, dateFilter: propDateFilter }) => {
+    const { currentUser, language, refreshData, appData, orders, isOrdersLoading, hasPermission, selectedTeam, setAppState } = useContext(AppContext);
     const { playClick, playPop } = useSoundEffects();
     
     // State declarations
@@ -40,14 +40,25 @@ const UserOrdersView: React.FC<UserOrdersViewProps> = ({ onAdd, onStatsUpdate, s
     const [showShippingReport, setShowShippingReport] = useState(false);
     const [processing, setProcessing] = useState(false); 
     const [searchQuery, setSearchQuery] = useState('');
-    const [dateRange, setDateRange] = useState<DateRangePreset>(dateFilter || 'this_month');
+    const [dateRange, setDateRange] = useState<DateRangePreset>('this_month');
 
-    // Sync with dateFilter prop
+    // Sync with external dateFilter prop (from Dashboard)
     useEffect(() => {
-        if (dateFilter) {
-            setDateRange(dateFilter);
+        if (propDateFilter) {
+            let mappedFilter = propDateFilter;
+            if (propDateFilter === 'month') mappedFilter = 'this_month';
+            if (propDateFilter === 'year') mappedFilter = 'this_year';
+            
+            const finalRange = mappedFilter as DateRangePreset;
+            setDateRange(finalRange);
+            
+            // CRITICAL FIX: Also sync the advanced filters state
+            setAdvancedFilters(prev => ({
+                ...prev,
+                datePreset: finalRange
+            }));
         }
-    }, [dateFilter]);
+    }, [propDateFilter]);
     const [showColumnSelector, setShowColumnSelector] = useState(false);
     const [visibleColumns, setVisibleColumns] = useState<Set<string>>(new Set([
         'index', 'customerName', 'productInfo', 'location', 'total', 'status', 'date', 'actions'
@@ -101,18 +112,52 @@ const UserOrdersView: React.FC<UserOrdersViewProps> = ({ onAdd, onStatsUpdate, s
     const getDateBounds = useCallback((preset: DateRangePreset, cStart?: string, cEnd?: string) => {
         const now = new Date();
         const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+        const endOfToday = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 23, 59, 59, 999);
+        
         let start: Date | null = null;
-        let end: Date | null = new Date();
+        let end: Date | null = endOfToday; // Default to end of today instead of 'now'
+
         switch (preset) {
-            case 'today': start = today; end = new Date(today); end.setHours(23, 59, 59, 999); break;
-            case 'yesterday': start = new Date(today); start.setDate(today.getDate() - 1); end = new Date(today); end.setMilliseconds(-1); break;
-            case 'this_week': const d = now.getDay(); start = new Date(today); start.setDate(today.getDate() - (d === 0 ? 6 : d - 1)); end = new Date(start); end.setDate(start.getDate() + 6); end.setHours(23, 59, 59, 999); break;
-            case 'this_month': start = new Date(now.getFullYear(), now.getMonth(), 1); break;
-            case 'last_month': start = new Date(now.getFullYear(), now.getMonth() - 1, 1); end = new Date(now.getFullYear(), now.getMonth(), 0, 23, 59, 59, 999); break;
-            case 'this_year': start = new Date(now.getFullYear(), 0, 1); break;
-            case 'last_year': start = new Date(now.getFullYear() - 1, 0, 1); end = new Date(now.getFullYear() - 1, 11, 31, 23, 59, 59, 999); break;
-            case 'all': start = null; end = null; break;
-            case 'custom': if (cStart) start = getValidDate(cStart + 'T00:00:00'); if (cEnd) end = getValidDate(cEnd + 'T23:59:59'); break;
+            case 'today': 
+                start = today; 
+                end = endOfToday; 
+                break;
+            case 'yesterday': 
+                start = new Date(today); 
+                start.setDate(today.getDate() - 1); 
+                end = new Date(today); 
+                end.setMilliseconds(-1); 
+                break;
+            case 'this_week': 
+                const d = now.getDay(); 
+                start = new Date(today); 
+                start.setDate(today.getDate() - (d === 0 ? 6 : d - 1)); 
+                end = endOfToday; 
+                break;
+            case 'this_month': 
+                start = new Date(now.getFullYear(), now.getMonth(), 1); 
+                end = endOfToday; 
+                break;
+            case 'last_month': 
+                start = new Date(now.getFullYear(), now.getMonth() - 1, 1); 
+                end = new Date(now.getFullYear(), now.getMonth(), 0, 23, 59, 59, 999); 
+                break;
+            case 'this_year': 
+                start = new Date(now.getFullYear(), 0, 1); 
+                end = endOfToday; 
+                break;
+            case 'last_year': 
+                start = new Date(now.getFullYear() - 1, 0, 1); 
+                end = new Date(now.getFullYear() - 1, 11, 31, 23, 59, 59, 999); 
+                break;
+            case 'all': 
+                start = null; 
+                end = null; 
+                break;
+            case 'custom': 
+                if (cStart) start = getValidDate(cStart + 'T00:00:00'); 
+                if (cEnd) end = getValidDate(cEnd + 'T23:59:59'); 
+                break;
         }
         return { start, end };
     }, []);
@@ -134,10 +179,10 @@ const UserOrdersView: React.FC<UserOrdersViewProps> = ({ onAdd, onStatsUpdate, s
     }, [orders, appData.users, appData.pages, currentUser]);
 
     const permittedOrders = useMemo(() => {
-        const requestedTeam = (team || '').trim().toLowerCase();
+        const requestedTeam = (selectedTeam || '').trim().toLowerCase();
         if (!requestedTeam) return [];
         return enrichedOrders.filter(o => (o.Team || '').toLowerCase() === requestedTeam);
-    }, [enrichedOrders, team]);
+    }, [enrichedOrders, selectedTeam]);
 
     const processDataForRange = useCallback((range: DateRangePreset) => {
         setProcessing(true);
@@ -243,7 +288,7 @@ const UserOrdersView: React.FC<UserOrdersViewProps> = ({ onAdd, onStatsUpdate, s
         <div className="flex flex-col justify-center items-center h-[60vh] gap-6"><Spinner size="lg" /></div>
     );
 
-    if (editingOrder) return <div className="animate-reveal"><EditOrderPage order={editingOrder} onSaveSuccess={handleSaveEdit} onCancel={() => setEditingOrder(null)} /></div>;
+    if (editingOrder) return <div className="fixed inset-0 z-[100] bg-[#0B0E11] animate-reveal overflow-y-auto"><EditOrderPage order={editingOrder} onSaveSuccess={handleSaveEdit} onCancel={() => setEditingOrder(null)} /></div>;
 
     if (showReport) return <div className="animate-fade-in h-full overflow-auto bg-[var(--cm-bg)]"><UserSalesPageReport orders={permittedOrders} onBack={() => setShowReport(false)} team={team || ''} initialFilters={reportFilters as any} onFilterChange={setReportFilters as any} /></div>;
 

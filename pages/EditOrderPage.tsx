@@ -448,7 +448,7 @@ const EditOrderPage: React.FC<EditOrderPageProps> = ({ order, onSaveSuccess, onC
 
     return (
         // Main Container - Fixed Layout
-        <div className="w-full h-full flex flex-col animate-fade-in overflow-y-auto custom-scrollbar bg-[#0B0E11] pb-20">
+        <div className="w-full h-full flex flex-col animate-fade-in bg-[#0B0E11] overflow-hidden">
             {/* Scanner Modal */}
             {isScannerVisible && (
                 <BarcodeScannerModal 
@@ -462,7 +462,7 @@ const EditOrderPage: React.FC<EditOrderPageProps> = ({ order, onSaveSuccess, onC
             )}
 
             {/* Top Bar */}
-            <div className="flex-shrink-0 flex flex-col sm:flex-row justify-between items-start sm:items-center mb-4 gap-4 px-4 pt-4">
+            <div className="flex-shrink-0 flex flex-col sm:flex-row justify-between items-start sm:items-center mb-4 gap-4 px-4 pt-4 border-b border-[#2B3139] pb-4 bg-[#0B0E11] z-30">
                 <div className="flex items-center gap-4">
                     <button onClick={onCancel} className="p-2 hover:bg-[#2B3139] rounded transition-colors text-[#848E9C] hover:text-[#EAECEF]">
                         <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 19l-7-7m0 0l7-7m-7 7h18" /></svg>
@@ -491,6 +491,9 @@ const EditOrderPage: React.FC<EditOrderPageProps> = ({ order, onSaveSuccess, onC
                 </div>
                 <div className="flex gap-2">
                     <button onClick={onCancel} className="px-4 py-2 bg-[#2B3139] hover:bg-[#363C44] text-[#EAECEF] text-xs font-medium rounded transition-all">Cancel</button>
+                    <button onClick={handleSubmit} disabled={loading} className="px-6 py-2 bg-[#FCD535] hover:bg-[#F0B90B] text-[#181A20] text-xs font-bold rounded shadow-lg shadow-[#FCD535]/10 active:scale-95 transition-all flex items-center gap-2">
+                        {loading ? 'Saving...' : 'Save Changes'}
+                    </button>
                 </div>
             </div>
 
@@ -501,69 +504,71 @@ const EditOrderPage: React.FC<EditOrderPageProps> = ({ order, onSaveSuccess, onC
                 </div>
             )}
 
-            {/* Split Content Area */}
-            <div className="flex-1 flex flex-col lg:flex-row gap-4 overflow-hidden px-4 pb-4">
-                
-                {/* Left: Customer & Logistics */}
-                <div className="w-full lg:w-[360px] xl:w-[400px] flex-shrink-0 h-full overflow-hidden">
-                    <EditCustomerPanel 
-                        formData={formData}
-                        appData={appData}
-                        onChange={handleInputChange}
-                        onPageSelect={(val) => {
-                            const selectedPage = appData.pages?.find(p => p.PageName === val);
-                            setFormData(prev => ({ 
-                                ...prev, 
-                                Page: val, 
-                                TelegramValue: selectedPage?.TelegramValue || prev.TelegramValue,
-                                'Fulfillment Store': selectedPage?.DefaultStore || prev['Fulfillment Store']
-                            }));
-                        }}
-                        onProvinceSelect={(val) => {
-                            setFormData(prev => ({ ...prev, Location: val }));
-                            setSelectedDistrict(''); setSelectedSangkat('');
-                        }}
-                        onDistrictChange={(val) => { setSelectedDistrict(val); setSelectedSangkat(''); }}
-                        onSangkatChange={setSelectedSangkat}
-                        onShippingMethodSelect={(method: ShippingMethod) => setFormData(prev => ({ 
-                            ...prev, 
-                            'Internal Shipping Method': method.MethodName,
-                            'Internal Shipping Details': method.RequireDriverSelection ? '' : method.MethodName
-                        }))}
-                        onDriverSelect={(val) => setFormData(prev => ({ ...prev, 'Internal Shipping Details': val }))}
-                        onBankChange={(e) => {
-                            const val = e.target.value;
-                            setFormData(prev => ({ ...prev, 'Payment Info': val }));
-                            const b = appData.bankAccounts?.find((bank: any) => bank.BankName === val);
-                            setBankLogo(b ? convertGoogleDriveUrl(b.LogoURL) : '');
-                        }}
-                        selectedDistrict={selectedDistrict}
-                        selectedSangkat={selectedSangkat}
-                        bankLogo={bankLogo}
-                    />
-                </div>
-
-                {/* Right: Products & Summary */}
-                <div className="flex-1 flex flex-col gap-4 overflow-hidden h-full">
-                    <EditProductPanel 
-                        products={formData.Products}
-                        masterProducts={appData.products}
-                        onProductChange={handleProductChange}
-                        onAddProduct={handleAddProduct}
-                        onRemoveProduct={handleRemoveProduct}
-                        onPreviewImage={previewImage}
-                        onScanBarcode={() => setIsScannerVisible(true)}
-                    />
+            {/* Split Content Area - Scrollable container */}
+            <div className="flex-1 overflow-y-auto custom-scrollbar">
+                <div className="flex flex-col lg:flex-row gap-4 p-4 min-h-full">
                     
-                    <EditOrderSummary 
-                        subtotal={Number(formData.Subtotal) || 0}
-                        grandTotal={Number(formData['Grand Total']) || 0}
-                        shippingFee={formData['Shipping Fee (Customer)']}
-                        onShippingFeeChange={handleInputChange}
-                        onSave={handleSubmit}
-                        onDelete={handleDelete}
-                        loading={loading}
-                    />
+                    {/* Left: Customer & Logistics */}
+                    <div className="w-full lg:w-[360px] xl:w-[400px] flex-shrink-0">
+                        <EditCustomerPanel 
+                            formData={formData}
+                            appData={appData}
+                            onChange={handleInputChange}
+                            onPageSelect={(val) => {
+                                const selectedPage = appData.pages?.find(p => p.PageName === val);
+                                setFormData(prev => ({ 
+                                    ...prev, 
+                                    Page: val, 
+                                    TelegramValue: selectedPage?.TelegramValue || prev.TelegramValue,
+                                    'Fulfillment Store': selectedPage?.DefaultStore || prev['Fulfillment Store']
+                                }));
+                            }}
+                            onProvinceSelect={(val) => {
+                                setFormData(prev => ({ ...prev, Location: val }));
+                                setSelectedDistrict(''); setSelectedSangkat('');
+                            }}
+                            onDistrictChange={(val) => { setSelectedDistrict(val); setSelectedSangkat(''); }}
+                            onSangkatChange={setSelectedSangkat}
+                            onShippingMethodSelect={(method: ShippingMethod) => setFormData(prev => ({ 
+                                ...prev, 
+                                'Internal Shipping Method': method.MethodName,
+                                'Internal Shipping Details': method.RequireDriverSelection ? '' : ''
+                            }))}
+                            onDriverSelect={(val) => setFormData(prev => ({ ...prev, 'Internal Shipping Details': val }))}
+                            onBankChange={(e) => {
+                                const val = e.target.value;
+                                setFormData(prev => ({ ...prev, 'Payment Info': val }));
+                                const b = appData.bankAccounts?.find((bank: any) => bank.BankName === val);
+                                setBankLogo(b ? convertGoogleDriveUrl(b.LogoURL) : '');
+                            }}
+                            selectedDistrict={selectedDistrict}
+                            selectedSangkat={selectedSangkat}
+                            bankLogo={bankLogo}
+                        />
+                    </div>
+
+                    {/* Right: Products & Summary */}
+                    <div className="flex-1 flex flex-col gap-4">
+                        <EditProductPanel 
+                            products={formData.Products}
+                            masterProducts={appData.products}
+                            onProductChange={handleProductChange}
+                            onAddProduct={handleAddProduct}
+                            onRemoveProduct={handleRemoveProduct}
+                            onPreviewImage={previewImage}
+                            onScanBarcode={() => setIsScannerVisible(true)}
+                        />
+                        
+                        <EditOrderSummary 
+                            subtotal={Number(formData.Subtotal) || 0}
+                            grandTotal={Number(formData['Grand Total']) || 0}
+                            shippingFee={formData['Shipping Fee (Customer)']}
+                            onShippingFeeChange={handleInputChange}
+                            onSave={handleSubmit}
+                            onDelete={handleDelete}
+                            loading={loading}
+                        />
+                    </div>
                 </div>
             </div>
         </div>

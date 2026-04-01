@@ -206,10 +206,6 @@ const MobileUserJourney: React.FC<MobileUserJourneyProps> = ({ onBackToRoleSelec
                         </div>
                     </div>
 
-                    <div className="px-4">
-                        <TopPerformanceUserJourney orders={orders} language={localLanguage} period={dateFilter} />
-                    </div>
-
                     <div className="cm-team-list-mobile">
                         <div className="cm-list-header">{language === 'km' ? 'ជ្រើសរើសក្រុម' : 'Select a Team'}</div>
                         {userTeams.map((team: string) => (
@@ -218,6 +214,10 @@ const MobileUserJourney: React.FC<MobileUserJourneyProps> = ({ onBackToRoleSelec
                                 <ChevronRight size={18} style={{color: 'var(--cm-text-muted)'}} />
                             </div>
                         ))}
+                    </div>
+
+                    <div className="px-4">
+                        <TopPerformanceUserJourney orders={orders} language={localLanguage} period={dateFilter} />
                     </div>
                 </div>
             )}

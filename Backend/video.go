@@ -119,33 +119,6 @@ func HandleCreateMovie(c *gin.Context) {
 		return
 	}
 
-	// Smart Image Resolution: If Thumbnail is a temp URL, wait for permanent DriveURL
-	if strings.Contains(movie.Thumbnail, "/api/images/temp/") {
-		parts := strings.Split(movie.Thumbnail, "/api/images/temp/")
-		if len(parts) > 1 {
-			tempID := parts[1]
-			if idx := strings.IndexAny(tempID, "?/"); idx != -1 {
-				tempID = tempID[:idx]
-			}
-			tempID = strings.TrimSpace(tempID)
-
-			var tempImg TempImage
-			resolved := false
-			for i := 0; i < 30; i++ {
-				if err := DB.Where("id = ?", tempID).First(&tempImg).Error; err == nil && tempImg.DriveURL != "" {
-					movie.Thumbnail = tempImg.DriveURL
-					log.Printf("✨ Resolved temp image %s to permanent URL: %s", tempID, movie.Thumbnail)
-					resolved = true
-					break
-				}
-				time.Sleep(1 * time.Second)
-			}
-			if !resolved {
-				log.Printf("⚠️ Warning: Could not resolve permanent Drive URL for temp image %s within timeout.", tempID)
-			}
-		}
-	}
-
 	if movie.ID == "" && VideoGenerateIDFunc != nil {
 		movie.ID = VideoGenerateIDFunc()
 	}

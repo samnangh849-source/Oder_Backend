@@ -129,7 +129,7 @@ const ProductSelectionConfirm: React.FC<ProductSelectionConfirmProps> = ({
             });
             const result = await uploadRes.json();
             if (result.status === 'success') {
-                const newImg = result.url || result.tempUrl;
+                const newImg = result.url;
                 await fetch(`${WEB_APP_URL}/api/admin/update-sheet`, {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },

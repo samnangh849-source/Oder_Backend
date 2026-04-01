@@ -83,6 +83,32 @@ export const convertGoogleDriveUrl = (url?: string, type: 'image' | 'audio' | 'p
 };
 
 /**
+ * Gets the best available URL for a package photo, prioritizing the server-provided Drive URL,
+ * but falling back to a locally cached version (from localStorage) if the server URL is missing.
+ * This ensures "Immediate Preview" as requested.
+ * @param orderId The ID of the order.
+ * @param serverUrl The URL provided by the server.
+ * @returns The best available image URL or null if none found.
+ */
+export const getOptimisticPackagePhoto = (orderId: string, serverUrl?: string): string | null => {
+    // If we have a real Google Drive URL or a direct link, use it.
+    if (serverUrl && (serverUrl.startsWith('https://drive.google.com') || serverUrl.startsWith('https://lh3.googleusercontent.com'))) {
+        // Once we have a server URL, we can clear the local cache for this order
+        localStorage.removeItem(`package_photo_${orderId}`);
+        return convertGoogleDriveUrl(serverUrl);
+    }
+
+    // Otherwise, check for a locally cached image (optimistic update)
+    const localPhoto = localStorage.getItem(`package_photo_${orderId}`);
+    if (localPhoto && localPhoto.startsWith('data:image')) {
+        return localPhoto;
+    }
+
+    // No photo found
+    return null;
+};
+
+/**
  * Fetches an image from a URL and converts it to a Base64 string.
  * Useful for embedding images in PDFs.
  * @param url The URL of the image.

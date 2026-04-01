@@ -59,6 +59,7 @@ const SearchableProductDropdown: React.FC<SearchableProductDropdownProps> = ({
     const [previewProduct, setPreviewProduct] = useState<MasterProduct | null>(null);
     const [holdItem, setHoldItem] = useState<MasterProduct | null>(null);
     const holdTimerRef = useRef<any>(null);
+    const isLongPress = useRef(false);
     
     const dropdownRef = useRef<HTMLDivElement>(null);
     const inputRef = useRef<HTMLInputElement>(null);
@@ -72,15 +73,26 @@ const SearchableProductDropdown: React.FC<SearchableProductDropdownProps> = ({
     }, [selectedProductName]);
 
     const handleHoldStart = (product: MasterProduct, delay = 500) => {
+        isLongPress.current = false;
         if (holdTimerRef.current) clearTimeout(holdTimerRef.current);
         holdTimerRef.current = setTimeout(() => {
             setHoldItem(product);
+            isLongPress.current = true;
         }, delay);
     };
 
     const handleHoldEnd = () => {
         if (holdTimerRef.current) clearTimeout(holdTimerRef.current);
         setHoldItem(null);
+        isLongPress.current = false;
+    };
+
+    const handleItemClickFromHandler = (product: MasterProduct) => {
+        const wasHold = isLongPress.current;
+        handleHoldEnd();
+        if (!wasHold) {
+            handleItemClick(product);
+        }
     };
 
     useEffect(() => {
@@ -233,15 +245,9 @@ const SearchableProductDropdown: React.FC<SearchableProductDropdownProps> = ({
                                             handleHoldStart(product, 400);
                                         }
                                     }}
-                                    onMouseUp={() => {
-                                        handleHoldEnd();
-                                        handleItemClick(product);
-                                    }}
+                                    onMouseUp={() => handleItemClickFromHandler(product)}
                                     onTouchStart={() => handleHoldStart(product, 400)}
-                                    onTouchEnd={() => {
-                                        handleHoldEnd();
-                                        handleItemClick(product);
-                                    }}
+                                    onTouchEnd={() => handleItemClickFromHandler(product)}
                                 >
                                     <div className="relative">
                                         <img src={convertGoogleDriveUrl(product.ImageURL)} className={`w-12 h-12 rounded-xl object-cover border border-white/10 ${hasNoImage ? 'opacity-30 grayscale' : ''}`} alt="" />

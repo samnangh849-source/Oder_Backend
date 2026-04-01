@@ -19,7 +19,7 @@ const EditProductPanel: React.FC<EditProductPanelProps> = ({
     products, masterProducts, onProductChange, onAddProduct, onRemoveProduct, onPreviewImage, onScanBarcode
 }) => {
     return (
-        <div className="flex-1 bg-[#1E2329] border border-[#2B3139] rounded-sm p-4 overflow-y-auto custom-scrollbar flex flex-col relative">
+        <div className="flex-initial lg:flex-1 bg-[#1E2329] border border-[#2B3139] rounded-sm p-4 lg:overflow-y-auto custom-scrollbar flex flex-col relative min-h-[300px]">
             <div className="flex justify-between items-center mb-4 sticky top-0 z-20 bg-[#1E2329] pb-3 border-b border-[#2B3139]">
                 <h3 className="text-[11px] font-medium text-[#848E9C] uppercase tracking-wider flex items-center gap-2">
                     <div className="w-1 h-3 bg-[#FCD535] rounded-sm"></div>

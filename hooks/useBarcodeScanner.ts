@@ -15,9 +15,12 @@ interface ScannerConfig {
 export const useBarcodeScanner = (
     elementId: string, 
     onScan: (decodedText: string) => void,
-    scanMode: 'single' | 'increment'
+    scanMode: 'single' | 'increment',
+    options: { fps?: number, disableScanner?: boolean } = {}
 ) => {
+    const { fps = 30, disableScanner = false } = options;
     const scannerRef = useRef<any>(null);
+    const isTransitioning = useRef(false);
     const [isInitializing, setIsInitializing] = useState(true);
     const [error, setError] = useState<string | null>(null);
     
@@ -143,58 +146,85 @@ export const useBarcodeScanner = (
         }
 
         const initScanner = async () => {
+            if (isTransitioning.current) return;
+
+            if (disableScanner) {
+                setIsInitializing(false);
+                if (scannerRef.current && scannerRef.current.isScanning) {
+                    isTransitioning.current = true;
+                    try {
+                        await scannerRef.current.stop();
+                        await scannerRef.current.clear();
+                    } catch (e) {
+                        console.warn("Cleanup during disable failed:", e);
+                    } finally {
+                        isTransitioning.current = false;
+                    }
+                }
+                return;
+            }
+
+            isTransitioning.current = true;
             setIsInitializing(true);
             setIsTorchOn(false);
             setZoom(1);
             
-            // @ts-ignore
-            const html5QrCode = new window.Html5Qrcode(elementId);
-            scannerRef.current = html5QrCode;
-
-            const isIosDevice = isIOS();
-
-            // *** CRITICAL IOS CONFIGURATION ***
-            const videoConstraints = isIosDevice 
-                ? {
-                    facingMode: "environment",
-                    width: { min: 1280, ideal: 1920 }, 
-                    height: { min: 720, ideal: 1080 },
-                  }
-                : {
-                    facingMode: facingMode,
-                    width: { min: 640, ideal: 1280, max: 1920 },
-                    height: { min: 480, ideal: 720, max: 1080 },
-                    frameRate: { ideal: 60, min: 30 }, // High FPS for Android
-                    aspectRatio: 1.777777778, // 16:9 for Android
-                    focusMode: "continuous"
-                  };
-
-            const config: ScannerConfig = { 
-                fps: 30,
-                qrbox: { width: 280, height: 280 },
-                ...(isIosDevice ? {} : { aspectRatio: 1.777777778 }),
-                disableFlip: false,
-                experimentalFeatures: {
-                    // Force Native BarcodeDetector on non-iOS
-                    useBarCodeDetectorIfSupported: !isIosDevice 
-                },
-                videoConstraints: videoConstraints
-            };
-
-            let lastScanTime = 0;
-            const onScanSuccess = (decodedText: string) => {
-                const now = Date.now();
-                if (now - lastScanTime < 1500) return;
-                lastScanTime = now;
-                
-                beepSound.current.currentTime = 0;
-                beepSound.current.play().catch(() => {});
-                if (navigator.vibrate) navigator.vibrate(50);
-                
-                onScan(decodedText);
-            };
-
             try {
+                // Pre-cleanup
+                if (scannerRef.current) {
+                    if (scannerRef.current.isScanning) {
+                        await scannerRef.current.stop();
+                    }
+                    await scannerRef.current.clear();
+                }
+
+                // @ts-ignore
+                const html5QrCode = new window.Html5Qrcode(elementId);
+                scannerRef.current = html5QrCode;
+
+                const isIosDevice = isIOS();
+
+                // *** CRITICAL IOS CONFIGURATION ***
+                const videoConstraints = isIosDevice 
+                    ? {
+                        facingMode: "environment",
+                        width: { min: 1280, ideal: 1920 }, 
+                        height: { min: 720, ideal: 1080 },
+                      }
+                    : {
+                        facingMode: facingMode,
+                        width: { min: 640, ideal: 1280, max: 1920 },
+                        height: { min: 480, ideal: 720, max: 1080 },
+                        frameRate: { ideal: 60, min: 30 }, // High FPS for Android
+                        aspectRatio: 1.777777778, // 16:9 for Android
+                        focusMode: "continuous"
+                      };
+
+                const config: ScannerConfig = { 
+                    fps: fps,
+                    qrbox: { width: 280, height: 280 },
+                    ...(isIosDevice ? {} : { aspectRatio: 1.777777778 }),
+                    disableFlip: false,
+                    experimentalFeatures: {
+                        // Force Native BarcodeDetector on non-iOS
+                        useBarCodeDetectorIfSupported: !isIosDevice 
+                    },
+                    videoConstraints: videoConstraints
+                };
+
+                let lastScanTime = 0;
+                const onScanSuccess = (decodedText: string) => {
+                    const now = Date.now();
+                    if (now - lastScanTime < 1500) return;
+                    lastScanTime = now;
+                    
+                    beepSound.current.currentTime = 0;
+                    beepSound.current.play().catch(() => {});
+                    if (navigator.vibrate) navigator.vibrate(50);
+                    
+                    onScan(decodedText);
+                };
+
                 await html5QrCode.start({ facingMode: facingMode }, config, onScanSuccess, undefined);
                 
                 const videoEl = document.querySelector(`#${elementId} video`) as HTMLVideoElement;
@@ -245,19 +275,24 @@ export const useBarcodeScanner = (
 
             } catch (err: any) {
                 console.error("Camera Start Error:", err);
-                setError(err.name === 'NotAllowedError' ? "Camera permission denied." : "Camera error.");
+                const errMsg = String(err);
+                if (!errMsg.includes("already under transition")) {
+                    setError(err.name === 'NotAllowedError' ? "Camera permission denied." : "Camera error.");
+                }
                 setIsInitializing(false);
+            } finally {
+                isTransitioning.current = false;
             }
         };
 
         initScanner();
 
         return () => {
-            if (scannerRef.current && scannerRef.current.isScanning) {
-                scannerRef.current.stop().then(() => scannerRef.current.clear()).catch(console.error);
+            if (scannerRef.current && scannerRef.current.isScanning && !isTransitioning.current) {
+                scannerRef.current.stop().then(() => scannerRef.current.clear()).catch(() => {});
             }
         };
-    }, [facingMode]);
+    }, [facingMode, disableScanner]);
 
     return {
         isInitializing,

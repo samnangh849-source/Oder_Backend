@@ -11,6 +11,8 @@ import (
 	"strings"
 	"sync"
 	"time"
+
+	"gorm.io/gorm"
 )
 
 var (
@@ -79,6 +81,49 @@ var (
 	stopChan = make(chan struct{})
 )
 
+// ReconcileMissingPhotoLinks looks for orders that have a photo URL in DB but might be missing in Sheets.
+// This is a self-healing mechanism to ensure data consistency.
+func ReconcileMissingPhotoLinks(db *gorm.DB) {
+	log.Println("🔍 [Self-Healing] Starting photo link reconciliation...")
+
+	var orders []struct {
+		OrderID         string `gorm:"column:order_id"`
+		Team            string `gorm:"column:team"`
+		PackagePhotoURL string `gorm:"column:package_photo_url"`
+	}
+
+	// Look for orders from the last 24 hours that have a permanent Drive link in DB
+	yesterday := time.Now().Add(-24 * time.Hour).Format(time.RFC3339)
+	err := db.Table("orders").
+		Select("order_id, team, package_photo_url").
+		Where("package_photo_url LIKE ? AND timestamp > ?", "%drive.google.com%", yesterday).
+		Find(&orders).Error
+
+	if err != nil {
+		log.Printf("❌ [Self-Healing] Database query failed: %v", err)
+		return
+	}
+
+	if len(orders) == 0 {
+		log.Println("✅ [Self-Healing] No orders need reconciliation.")
+		return
+	}
+
+	log.Printf("📦 [Self-Healing] Found %d orders to verify in Sheets", len(orders))
+
+	for _, o := range orders {
+		// Enqueue a specialized sync task
+		EnqueueSync("updateOrderTelegram", map[string]interface{}{
+			"orderId": o.OrderID,
+			"team":    o.Team,
+			"updatedFields": map[string]interface{}{
+				"Package Photo URL": o.PackagePhotoURL,
+			},
+			"healingMode": true,
+		}, "", nil)
+	}
+}
+
 func CallAppsScriptPOST(requestData AppsScriptRequest) (AppsScriptResponse, error) {
 	requestData.Secret = AppsScriptSecret
 	if strings.TrimSpace(AppsScriptURL) == "" {
@@ -102,7 +147,21 @@ func CallAppsScriptPOST(requestData AppsScriptRequest) (AppsScriptResponse, erro
 	}
 
 	bodyStr := string(body)
-	log.Printf("📥 [AppsScript] Raw response (len=%d): %.500s", len(bodyStr), bodyStr)
+	log.Printf("📥 [AppsScript] Raw response (HTTP %d, len=%d): %.800s", resp.StatusCode, len(bodyStr), bodyStr)
+
+	// Detect HTML response (common when Apps Script needs reauthorization or deployment is broken)
+	trimmed := strings.TrimSpace(bodyStr)
+	if strings.HasPrefix(trimmed, "<!") || strings.HasPrefix(trimmed, "<HTML") || strings.HasPrefix(trimmed, "<html") {
+		log.Printf("🚨 [AppsScript] Response is HTML, not JSON! This usually means:")
+		log.Printf("   1. Apps Script needs REAUTHORIZATION — open the script editor and run doPost manually")
+		log.Printf("   2. Deployment URL is wrong or expired — create a new deployment")
+		log.Printf("   3. Apps Script has a runtime error — check Executions log in script editor")
+		preview := trimmed
+		if len(preview) > 1000 {
+			preview = preview[:1000]
+		}
+		return AppsScriptResponse{}, fmt.Errorf("apps script returned HTML instead of JSON (HTTP %d). Check deployment. Body: %.300s", resp.StatusCode, preview)
+	}
 
 	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
 		bodyPreview := bodyStr
@@ -113,8 +172,8 @@ func CallAppsScriptPOST(requestData AppsScriptRequest) (AppsScriptResponse, erro
 	}
 	var scriptResponse AppsScriptResponse
 	if err := json.Unmarshal(body, &scriptResponse); err != nil {
-		log.Printf("❌ [AppsScript] JSON parse error: %v, body: %.200s", err, bodyStr)
-		return AppsScriptResponse{}, fmt.Errorf("invalid response from apps script: %v", err)
+		log.Printf("❌ [AppsScript] JSON parse error: %v, body: %.500s", err, bodyStr)
+		return AppsScriptResponse{}, fmt.Errorf("invalid response from apps script (not valid JSON): %v", err)
 	}
 	log.Printf("✅ [AppsScript] Parsed: status=%s url=%s fileID=%s", scriptResponse.Status, scriptResponse.URL, scriptResponse.FileID)
 	return scriptResponse, nil
@@ -148,9 +207,17 @@ func EnqueueSync(action string, data map[string]interface{}, sheetName string, p
 		if val, ok := data["newName"].(string); ok {
 			req.NewName = val
 		}
+		// Correctly extract orderId from data map
 		if val, ok := data["orderId"].(string); ok {
 			req.OrderID = val
+		} else if val, ok := data["OrderID"].(string); ok {
+			req.OrderID = val
 		}
+	}
+
+	// If OrderID is set but OrderData is not, ensure backend has context
+	if req.OrderID != "" && (req.OrderData == nil || len(req.OrderData.(map[string]interface{})) == 0) {
+		req.OrderData = data
 	}
 
 	task := &SyncTask{

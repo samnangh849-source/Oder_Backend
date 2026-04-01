@@ -1,8 +1,9 @@
 
-import React, { useMemo, useState } from 'react';
+import React, { useMemo } from 'react';
 import { ParsedOrder } from '../../types';
 import { translations } from '../../translations';
 import { Trophy, Truck, Users, Calendar } from 'lucide-react';
+import { safeParseDate } from '../../utils/dateUtils';
 
 interface TopPerformanceUserJourneyProps {
     orders: ParsedOrder[];
@@ -16,7 +17,7 @@ const TopPerformanceUserJourney: React.FC<TopPerformanceUserJourneyProps> = ({ o
     const t = translations[language];
 
     const periodLabel = useMemo(() => {
-        if (period === 'daily') return language === 'km' ? 'ប្រចាំថ្ងៃ' : 'Daily';
+        if (period === 'today' || period === 'daily') return language === 'km' ? 'ប្រចាំថ្ងៃ' : 'Daily';
         if (period === 'month') return language === 'km' ? 'ប្រចាំខែ' : 'Monthly';
         if (period === 'year') return language === 'km' ? 'ប្រចាំឆ្នាំ' : 'Yearly';
         return language === 'km' ? 'កំណត់' : 'Custom';
@@ -24,14 +25,22 @@ const TopPerformanceUserJourney: React.FC<TopPerformanceUserJourneyProps> = ({ o
 
     const filteredOrders = useMemo(() => {
         const now = new Date();
+        const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+        const endOfToday = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 23, 59, 59, 999);
+
         return orders.filter(o => {
-            const orderDate = new Date(o.Timestamp);
-            if (period === 'daily') {
-                return orderDate.toDateString() === now.toDateString();
+            const orderDate = safeParseDate(o.Timestamp);
+            if (!orderDate) return false;
+
+            if (period === 'today' || period === 'daily') {
+                return orderDate >= today && orderDate <= endOfToday;
             } else if (period === 'month') {
-                return orderDate.getMonth() === now.getMonth() && orderDate.getFullYear() === now.getFullYear();
+                return orderDate.getMonth() === now.getMonth() && 
+                       orderDate.getFullYear() === now.getFullYear() &&
+                       orderDate <= endOfToday;
             } else if (period === 'year') {
-                return orderDate.getFullYear() === now.getFullYear();
+                return orderDate.getFullYear() === now.getFullYear() &&
+                       orderDate <= endOfToday;
             }
             return true;
         });
@@ -53,9 +62,21 @@ const TopPerformanceUserJourney: React.FC<TopPerformanceUserJourneyProps> = ({ o
     const topDrivers = useMemo(() => {
         const driverStats: Record<string, number> = {};
         filteredOrders.forEach(o => {
-            const dName = o['Driver Name'] || o.InternalShippingDetails || 'No Driver';
-            if (dName === 'No Driver' || !dName) return;
-            driverStats[dName] = (driverStats[dName] || 0) + (Number(o['Internal Cost']) || 0);
+            // Priority: 'Driver Name' > 'Internal Shipping Details'
+            const dName = o['Driver Name'] || o['Internal Shipping Details'] || o.InternalShippingDetails || o['Internal Shipping Method'] || '';
+            
+            const cleanName = (dName || '').toString().split(' (')[0].trim();
+            
+            if (!cleanName || 
+                cleanName.toLowerCase() === 'no driver' || 
+                cleanName.toLowerCase() === 'none' || 
+                cleanName.toLowerCase() === 'unassigned') return;
+            
+            // Try both 'Internal Cost' and 'InternalCost'
+            const cost = Number(o['Internal Cost']) || Number((o as any).InternalCost) || 0;
+            if (cost <= 0) return; 
+
+            driverStats[cleanName] = (driverStats[cleanName] || 0) + cost;
         });
 
         return Object.entries(driverStats)

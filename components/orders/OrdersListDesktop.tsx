@@ -34,7 +34,7 @@ const OrderRow = (props: any) => {
         items, visibleCols, getColWidth, onToggleSelect, selectedIds, 
         onView, onEdit, handleCopyTemplate, handlePrint, handleCopy,
         toggleOrderVerified, updatingIds, canVerifyOrder, canEditOrder,
-        showBorders, copiedTemplateId, appData, t, groupByLabel
+        showBorders, copiedTemplateId, appData, t, groupByLabel, isBinance
     } = data;
     
     const item = items[index];
@@ -42,11 +42,11 @@ const OrderRow = (props: any) => {
 
     if (item.type === 'header') {
         return (
-            <div style={style} className={`${data.isBinance ? 'bg-[#1E2329] border-y border-[#2B3139]' : 'bg-white/[0.03] backdrop-blur-md border-y border-white/5'} flex items-center px-6 z-10`}>
+            <div style={style} className={`${isBinance ? 'bg-[#1E2329] border-y border-[#2B3139]' : 'bg-white/[0.03] backdrop-blur-md border-y border-white/5'} flex items-center px-6 z-10`}>
                 <div className="flex items-center gap-3">
-                    <div className={`w-1.5 h-5 ${data.isBinance ? 'bg-[#FCD535]' : 'bg-blue-500 rounded-full'}`} style={data.isBinance ? { borderRadius: '1px' } : undefined}></div>
-                    <span className={`text-xs font-bold ${data.isBinance ? 'text-[#EAECEF]' : 'text-white italic'} uppercase tracking-wider`}>
-                        {groupByLabel}: <span className={`${data.isBinance ? 'text-[#FCD535]' : 'text-blue-400'} ml-1`}>{item.label}</span>
+                    <div className={`w-1.5 h-5 ${isBinance ? 'bg-[#FCD535]' : 'bg-blue-500 rounded-full'}`} style={isBinance ? { borderRadius: '1px' } : undefined}></div>
+                    <span className={`text-xs font-bold ${isBinance ? 'text-[#EAECEF]' : 'text-white italic'} uppercase tracking-wider`}>
+                        {groupByLabel}: <span className={`${isBinance ? 'text-[#FCD535]' : 'text-blue-400'} ml-1`}>{item.label}</span>
                     </span>
                 </div>
             </div>
@@ -64,7 +64,7 @@ const OrderRow = (props: any) => {
     } = item.enriched;
 
     return (
-        <div style={style} className="group">
+        <div style={style} className="group box-border">
             <style>{`
                 .os-tooltip-trigger { position: relative; }
                 .os-tooltip {
@@ -95,12 +95,12 @@ const OrderRow = (props: any) => {
                     transform: translateY(0);
                 }
             `}</style>
-            <div className={`flex h-full transition-all border-b border-[#2B3139] ${isVerified ? 'bg-[#0ECB81]/[0.02]' : isSelected ? 'bg-[#FCD535]/[0.05]' : 'hover:bg-[#2B3139]'} ${showBorders ? 'border-x border-[#2B3139]' : ''}`}>
+            <div className={`flex h-full transition-all box-border ${isBinance ? 'border-b border-[#2B3139]' : 'border-b border-white/10'} ${isVerified ? 'bg-[#0ECB81]/[0.02]' : isSelected ? 'bg-[#FCD535]/[0.05]' : 'hover:bg-[#2B3139]/30'}`}>
                 {onToggleSelect && (
-                    <div className="flex-shrink-0 flex items-center justify-center px-0.5" style={{ width: '40px' }}>
+                    <div className={`flex-shrink-0 flex items-center justify-center px-0.5 box-border ${showBorders ? (isBinance ? 'border-r border-[#2B3139]' : 'border-r border-white/10') : ''}`} style={{ width: '40px' }}>
                         <input 
                             type="checkbox" 
-                            className="h-4 w-4 rounded border-[#474D57] bg-transparent text-[#FCD535] cursor-pointer focus:ring-0 focus:ring-offset-0" 
+                            className={`h-4 w-4 rounded border-[#474D57] bg-transparent text-[#FCD535] cursor-pointer focus:ring-0 focus:ring-offset-0 ${isBinance ? 'border-[#474D57]' : 'border-white/20 bg-black/40 text-blue-500'}`} 
                             checked={isSelected} 
                             onChange={() => onToggleSelect(order['Order ID'])} 
                         />
@@ -125,7 +125,7 @@ const OrderRow = (props: any) => {
                                 );
                             case 'customerName':
                                 return (
-                                    <div className="px-4 py-2 w-full overflow-hidden">
+                                    <div className="w-full overflow-hidden">
                                         <div className="font-bold text-[#EAECEF] truncate mb-0.5 text-[14px]">{order['Customer Name']}</div>
                                         <div className="flex items-center gap-2">
                                             {carrierLogo && <img src={convertGoogleDriveUrl(carrierLogo)} className="w-3.5 h-3.5 object-contain" alt="" />}
@@ -135,7 +135,7 @@ const OrderRow = (props: any) => {
                                 );
                             case 'productInfo':
                                 return (
-                                    <div className="px-4 py-2 w-full overflow-hidden flex items-center">
+                                    <div className="w-full overflow-hidden flex items-center">
                                         <div className="flex items-center gap-3 w-full">
                                             <div className="flex -space-x-2 items-center shrink-0">
                                                 {productThumbnails.slice(0, 3).map((p: any, i: number) => (
@@ -162,14 +162,14 @@ const OrderRow = (props: any) => {
                                 );
                             case 'location':
                                 return (
-                                    <div className="px-4 py-2 w-full overflow-hidden">
+                                    <div className="w-full overflow-hidden">
                                         <div className="font-bold text-[#EAECEF] text-[12px] truncate leading-tight uppercase tracking-tight">{order.Location}</div>
                                         <div className="text-[10px] text-[#848E9C] font-medium truncate mt-0.5">{order['Address Details']}</div>
                                     </div>
                                 );
                             case 'pageInfo':
                                 return (
-                                    <div className={`px-4 py-2 w-full flex items-center gap-2.5 ${tooltipTriggerClass}`}>
+                                    <div className={`w-full flex items-center gap-2.5 ${tooltipTriggerClass}`}>
                                         <div className="os-tooltip">{order.Page}</div>
                                         {pageLogoUrl && <img src={pageLogoUrl} className="w-8 h-8 rounded border border-[#2B3139] object-cover" alt="" />}
                                         <span className="font-bold text-[#848E9C] text-[11px] uppercase truncate tracking-tight">{order.Page}</span>
@@ -178,7 +178,7 @@ const OrderRow = (props: any) => {
                             case 'brandSales':
                             case 'fulfillment':
                                 return (
-                                    <div className="px-4 py-2 w-full flex items-center overflow-hidden">
+                                    <div className="w-full flex items-center overflow-hidden">
                                         <span className="px-2 py-1 rounded bg-[#2B3139] text-[#EAECEF] font-bold text-[10px] uppercase tracking-tight truncate block text-center w-full">
                                             {order['Fulfillment Store']}
                                         </span>
@@ -186,7 +186,7 @@ const OrderRow = (props: any) => {
                                 );
                             case 'total':
                                 return (
-                                    <div className="px-4 py-2 w-full flex items-center">
+                                    <div className="w-full flex items-center">
                                         <div className="font-bold text-[#EAECEF] text-[16px] tracking-tight">
                                             <span className="text-[11px] mr-0.5">$</span>
                                             {(Number(order['Grand Total']) || 0).toFixed(2)}
@@ -195,7 +195,7 @@ const OrderRow = (props: any) => {
                                 );
                             case 'shippingService':
                                 return (
-                                    <div className={`px-4 py-2 w-full flex items-center ${tooltipTriggerClass}`}>
+                                    <div className={`w-full flex items-center ${tooltipTriggerClass}`}>
                                         <div className="os-tooltip">{order['Internal Shipping Method']}</div>
                                         <div className="flex items-center gap-2 bg-[#2B3139]/50 p-1.5 rounded border border-[#2B3139] overflow-hidden w-full">
                                             <div className="w-6 h-6 bg-[#2B3139] rounded flex items-center justify-center flex-shrink-0">
@@ -206,20 +206,21 @@ const OrderRow = (props: any) => {
                                     </div>
                                 );
                             case 'driver':
-                                return <div className="px-4 py-2 w-full font-bold text-[#848E9C] text-[11px] uppercase truncate tracking-tight flex items-center">{order['Driver Name'] || order['Internal Shipping Details'] || 'Unassigned'}</div>;
+                                return <div className="w-full font-bold text-[#848E9C] text-[11px] uppercase truncate tracking-tight flex items-center">{order['Driver Name'] || order['Internal Shipping Details'] || 'Unassigned'}</div>;
                             case 'shippingCost':
-                                return <div className="px-4 py-2 w-full font-bold text-[#848E9C] text-[12px] flex items-center">${(Number(order['Internal Cost']) || 0).toFixed(2)}</div>;
+                                return <div className="w-full font-bold text-[#848E9C] text-[12px] flex items-center">${(Number(order['Internal Cost']) || 0).toFixed(2)}</div>;
                             case 'fulfillmentStatus': {
                                 const fs = (order as any).FulfillmentStatus || (order as any)['Fulfillment Status'] || 'Pending';
                                 const fsColors: Record<string, string> = {
                                     'Pending': 'bg-yellow-500/10 text-yellow-400',
+                                    'Scheduled': 'bg-cyan-500/10 text-cyan-400',
                                     'Ready to Ship': 'bg-blue-500/10 text-blue-400',
                                     'Shipped': 'bg-purple-500/10 text-purple-400',
                                     'Delivered': 'bg-[#0ECB81]/10 text-[#0ECB81]',
                                     'Cancelled': 'bg-[#F6465D]/10 text-[#F6465D]',
                                 };
                                 return (
-                                    <div className="px-4 py-2 w-full flex items-center justify-center">
+                                    <div className="w-full flex items-center justify-center">
                                         <span className={`px-2.5 py-1 rounded text-[9px] font-bold uppercase tracking-wider ${fsColors[fs] || 'bg-[#2B3139] text-[#848E9C]'}`}>
                                             {fs}
                                         </span>
@@ -228,7 +229,7 @@ const OrderRow = (props: any) => {
                             }
                             case 'status':
                                 return (
-                                    <div className="px-4 py-2 w-full flex items-center justify-center">
+                                    <div className="w-full flex items-center justify-center">
                                         <span className={`px-3 py-1 rounded text-[10px] font-bold uppercase tracking-wider ${order['Payment Status'] === 'Paid' ? 'bg-[#0ECB81]/10 text-[#0ECB81]' : 'bg-[#F6465D]/10 text-[#F6465D]'}`}>
                                             {order['Payment Status']}
                                         </span>
@@ -236,41 +237,41 @@ const OrderRow = (props: any) => {
                                 );
                             case 'date':
                                 return (
-                                    <div className="px-2 py-2 w-full flex flex-col justify-center leading-tight">
+                                    <div className="w-full flex flex-col justify-center leading-tight">
                                         <span className="font-bold text-[#EAECEF] text-[11px] tracking-tight">{orderDate.toLocaleDateString('km-KH')}</span>
                                         <span className="text-[#848E9C] font-medium text-[10px] uppercase tracking-wider">{orderDate.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' })}</span>
                                     </div>
                                 );
                             case 'note':
                                 return (
-                                    <div className="px-4 py-2 w-full text-[11px] text-[#848E9C] font-medium truncate flex items-center italic">
+                                    <div className="w-full text-[11px] text-[#848E9C] font-medium truncate flex items-center italic">
                                         {order.Note || '---'}
                                     </div>
                                 );
                             case 'print':
                                 return (
-                                    <div className="px-4 py-2 w-full flex items-center justify-center gap-2">
+                                    <div className="w-full flex items-center justify-center gap-2">
                                         <button onClick={() => handleCopyTemplate(order)} className={`w-8 h-8 flex items-center justify-center rounded transition-all border ${copiedTemplateId === order['Order ID'] ? 'bg-[#FCD535] border-[#FCD535] text-[#181A20]' : 'bg-[#2B3139] text-[#848E9C] hover:text-white border-[#363C44]'}`} title="Copy Template"><svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path d="M8 5H6a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2v-1M8 5a2 2 0 002 2h2a2 2 0 002-2M8 5a2 2 0 012-2h2a2 2 0 012 2m0 0h2a2 2 0 012 2v3m2 4H10m0 0l3-3m-3 3l3 3" /></svg></button>
                                         <button onClick={() => handlePrint(order)} className="w-8 h-8 flex items-center justify-center bg-[#2B3139] hover:bg-[#0ECB81] text-[#848E9C] hover:text-white rounded transition-all border border-[#363C44]" title="Print Label"><svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path d="M6 9V2h12v7M6 18H4a2 2 0 01-2-2v-5a2 2 0 012-2h16a2 2 0 012 2v5a2 2 0 01-2 2h-2m-2 4H8v-4h8v4z" /></svg></button>
                                     </div>
                                 );
                             case 'check':
                                 return (
-                                    <div className="px-2 py-2 w-full flex items-center justify-center">
+                                    <div className="w-full flex items-center justify-center">
                                         <div className={`h-6 w-6 rounded border flex items-center justify-center transition-all ${isVerified ? 'bg-[#0ECB81] border-[#0ECB81]' : 'border-[#474D57] hover:border-[#FCD535]'} ${canVerifyOrder() ? 'cursor-pointer' : 'cursor-not-allowed'}`} onClick={() => canVerifyOrder() && !updatingIds.has(order['Order ID']) && toggleOrderVerified(order['Order ID'], order.IsVerified)}>
                                             {updatingIds.has(order['Order ID']) ? <Spinner size="xs" /> : isVerified && <svg className="w-3.5 h-3.5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={4}><path d="M5 13l4 4L19 7" /></svg>}
                                         </div>
                                     </div>
                                 );
                             case 'orderId':
-                                return <div className="px-2 py-2 w-full text-center flex items-center justify-center"><button onClick={() => handleCopy(order['Order ID'])} className="text-[10px] font-bold font-mono text-[#848E9C] hover:text-[#FCD535] transition-colors uppercase tracking-tight">{order['Order ID'].substring(0, 6)}</button></div>;
+                                return <div className="text-center flex items-center justify-center w-full"><button onClick={() => handleCopy(order['Order ID'])} className="text-[10px] font-bold font-mono text-[#848E9C] hover:text-[#FCD535] transition-colors uppercase tracking-tight">{order['Order ID'].substring(0, 6)}</button></div>;
                             default:
                                 return null;
                         }
                     })();
 
                     return (
-                        <div key={k} style={{ width: `${width}px` }} className={`flex-shrink-0 flex items-center ${showBorders ? 'border-r border-[#2B3139]' : ''}`}>
+                        <div key={k} style={{ width: `${width}px` }} className={`flex-shrink-0 flex items-center px-4 box-border ${showBorders ? (isBinance ? 'border-r border-[#2B3139]' : 'border-r border-white/10') : ''}`}>
                             {content}
                         </div>
                     );
@@ -451,15 +452,25 @@ const OrdersListDesktop: React.FC<OrdersListDesktopProps> = ({
             <div className="flex-grow overflow-auto custom-scrollbar overscroll-contain">
                 <div style={{ minWidth: `${totalTableWidth}px`, height: '100%', display: 'flex', flexDirection: 'column' }}>
                     {/* Sticky Table Header & Total Row */}
-                    <div className={`sticky top-0 z-40 ${isBinance ? 'shadow-lg shadow-black/20' : 'shadow-[0_15px_30px_rgba(0,0,0,0.5)]'} flex-shrink-0`}>
-                        {/* Table Column Headers */}
-                        <div className={`${isBinance ? 'bg-[#1E2329] border-b border-[#2B3139]' : 'bg-[#0f172a]/95 backdrop-blur-3xl border-b border-white/10'}`}>
-                            <div className="flex w-full">
+                    <div className={`sticky top-0 z-40 ${isBinance ? 'shadow-[0_4px_12px_rgba(0,0,0,0.5)]' : 'shadow-[0_15px_30px_rgba(0,0,0,0.6)]'} flex-shrink-0`}>
+                        {/* Grand Total Row (Now on top) */}
+                        <div className="w-full">
+                            <DesktopGrandTotalRow 
+                                totals={totals} 
+                                isVisible={checkColumnVisible} 
+                                showSelection={!!onToggleSelectAll} 
+                                getColWidth={getColWidth}
+                            />
+                        </div>
+
+                        {/* Table Column Headers (Now below Grand Total) */}
+                        <div className={`${isBinance ? 'bg-[#1E2329] border-b border-[#2B3139]' : 'bg-[#0f172a]/98 backdrop-blur-3xl border-b border-white/10'}`}>
+                            <div className="flex w-full box-border">
                                 {onToggleSelectAll && (
-                                    <div className="flex-shrink-0 flex items-center justify-center py-4" style={{ width: '40px' }}>
+                                    <div className={`flex-shrink-0 flex items-center justify-center py-4 px-0.5 box-border ${showBorders ? (isBinance ? 'border-r border-[#2B3139]' : 'border-r border-white/10') : ''}`} style={{ width: '40px' }}>
                                         <input 
                                             type="checkbox" 
-                                            className={`h-4 w-4 rounded border-[#474D57] bg-transparent text-[#FCD535] cursor-pointer focus:ring-0 focus:ring-offset-0 ${isBinance ? 'border-[#474D57]' : 'border-white/10 bg-black/40 text-blue-500'}`} 
+                                            className={`h-4 w-4 rounded border-[#474D57] bg-transparent text-[#FCD535] cursor-pointer focus:ring-0 focus:ring-offset-0 ${isBinance ? 'border-[#474D57]' : 'border-white/20 bg-black/40 text-blue-500'}`} 
                                             checked={isAllSelected} 
                                             onChange={() => onToggleSelectAll(orders.map(o => o['Order ID']))} 
                                         />
@@ -469,30 +480,12 @@ const OrdersListDesktop: React.FC<OrdersListDesktopProps> = ({
                                     <div 
                                         key={k} 
                                         style={{ width: `${getColWidth(k)}px` }} 
-                                        className={`px-4 py-3 ${isBinance ? 'font-medium tracking-normal text-[#848E9C]' : 'font-black tracking-widest text-gray-500'} uppercase text-[11px] flex items-center ${k === 'index' || k === 'actions' || k === 'status' || k === 'fulfillmentStatus' || k === 'print' || k === 'check' || k === 'orderId' ? 'justify-center text-center' : 'justify-start text-left'}`}
+                                        className={`px-4 py-4 box-border ${isBinance ? 'font-black tracking-normal text-[#848E9C]' : 'font-black tracking-[0.1em] text-gray-400'} uppercase text-[10px] flex items-center ${k === 'index' || k === 'actions' || k === 'status' || k === 'fulfillmentStatus' || k === 'print' || k === 'check' || k === 'orderId' ? 'justify-center text-center' : 'justify-start text-left'} ${showBorders ? (isBinance ? 'border-r border-[#2B3139]' : 'border-r border-white/10') : ''}`}
                                     >
                                         {(t as any)[`col_${k}`] || (t as any)[k] || k}
                                     </div>
                                 ))}
                             </div>
-                        </div>
-
-                        {/* Grand Total Row */}
-                        <div className={`${isBinance ? 'bg-[#1E2329] border-b border-[#2B3139]' : 'bg-[#0f172a]/80 backdrop-blur-2xl border-b border-blue-500/20'}`}>
-                            <table className="w-full border-collapse" style={{ tableLayout: 'fixed' }}>
-                                <colgroup>
-                                    {onToggleSelectAll && <col style={{ width: '40px' }} />}
-                                    {visibleCols.map(k => <col key={k} style={{ width: `${getColWidth(k)}px` }} />)}
-                                </colgroup>
-                                <tbody>
-                                    <DesktopGrandTotalRow 
-                                        totals={totals} 
-                                        isVisible={checkColumnVisible} 
-                                        showSelection={!!onToggleSelectAll} 
-                                        showBorders={showBorders} 
-                                    />
-                                </tbody>
-                            </table>
                         </div>
                     </div>
 
