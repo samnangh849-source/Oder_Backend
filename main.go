@@ -624,6 +624,7 @@ func startOrderWorker() {
 func startScheduler() {
 	ticker := time.NewTicker(2 * time.Minute)
 	cleanupTicker := time.NewTicker(5 * time.Minute)
+	reconcileTicker := time.NewTicker(15 * time.Minute)
 
 	go func() {
 		for {
@@ -636,6 +637,9 @@ func startScheduler() {
 				if result.RowsAffected > 0 {
 					log.Printf("🧹 Cleanup: លុបរូបភាពបណ្ដោះអាសន្នចំនួន %d ឯកសារដែលហួសពេលចេញពី Database", result.RowsAffected)
 				}
+			case <-reconcileTicker.C:
+				// 🛡️ Self-Healing: Check for missing photo links in Sheets
+				backend.ReconcileMissingPhotoLinks(DB)
 			}
 		}
 	}()
@@ -1822,8 +1826,12 @@ func main() {
 		protected.POST("/upload-image", backend.HandleImageUploadProxy)
 		protected.GET("/permissions", handleGetUserPermissions)
 		protected.GET("/roles", handleGetRoles)
-		protected.GET("/orders", RequirePermission("view_order_list"), handleGetAllOrders)
-		protected.POST("/orders/update", RequirePermission("edit_order"), handleAdminUpdateOrder)
+		
+		// Order Management (Accessible by anyone with permission, e.g. Packers/Admins)
+		protected.GET("/admin/orders", RequirePermission("view_order_list"), handleGetAllOrders)
+		protected.GET("/admin/all-orders", RequirePermission("view_order_list"), handleGetAllOrders)
+		protected.POST("/admin/update-order", RequirePermission("edit_order"), handleAdminUpdateOrder)
+		
 		protected.GET("/teams/shipping-costs", RequirePermission("view_revenue"), handleGetGlobalShippingCosts)
 
 		chat := protected.Group("/chat")
@@ -1839,8 +1847,6 @@ func main() {
 			// This registers both public (/api) and admin (/api/admin) movie routes
 			backend.RegisterVideoRoutes(api, admin)
 
-			admin.GET("/orders", RequirePermission("view_order_list"), handleGetAllOrders)
-			admin.POST("/update-order", RequirePermission("edit_order"), handleAdminUpdateOrder)
 			admin.POST("/migrate-data", backend.HandleMigrateData)
 			admin.GET("/revenue-summary", handleGetRevenueSummary)
 			admin.POST("/update-sheet", handleAdminUpdateSheet)
@@ -1870,3 +1876,4 @@ func main() {
 	api.GET("/chat/audio/:fileID", backend.HandleGetAudioProxy)
 	r.Run("0.0.0.0:" + port)
 }
+
