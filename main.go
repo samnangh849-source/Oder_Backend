@@ -910,8 +910,9 @@ func handleAdminUpdateOrder(c *gin.Context) {
 	}
 
 	var originalOrder Order
-	if err := DB.Where("order_id = ?", r.OrderID).First(&originalOrder).Error; err != nil {
-		c.JSON(http.StatusNotFound, gin.H{"status": "error", "message": "រកមិនឃើញការកម្មង់"})
+	// Use case-insensitive and robust trimming for matching Order IDs
+	if err := DB.Where("UPPER(TRIM(order_id)) = UPPER(TRIM(?))", r.OrderID).First(&originalOrder).Error; err != nil {
+		c.JSON(http.StatusNotFound, gin.H{"status": "error", "message": "រកមិនឃើញការកម្មង់ " + r.OrderID})
 		return
 	}
 
@@ -937,13 +938,18 @@ func handleAdminUpdateOrder(c *gin.Context) {
 			c.JSON(http.StatusBadRequest, gin.H{"status": "error", "message": "ស្ថានភាពបច្ចុប្បន្នមិនត្រឹមត្រូវ"})
 			return
 		}
-		transitionValid := false
-		for _, s := range allowed {
-			if s == newStatus {
-				transitionValid = true
-				break
+		
+		// ✅ Support re-packing / self-updates (allow same status transition)
+		transitionValid := (newStatus == currentStatus) 
+		if !transitionValid {
+			for _, s := range allowed {
+				if s == newStatus {
+					transitionValid = true
+					break
+				}
 			}
 		}
+
 		if !transitionValid {
 			c.JSON(http.StatusBadRequest, gin.H{"status": "error", "message": fmt.Sprintf("មិនអាចផ្លាស់ប្តូរពី '%s' ទៅ '%s' បានទេ", currentStatus, newStatus)})
 			return
@@ -1014,7 +1020,7 @@ func handleAdminUpdateOrder(c *gin.Context) {
 		}
 	}
 
-	if err := DB.Model(&Order{}).Where("order_id = ?", r.OrderID).Updates(mappedData).Error; err != nil {
+	if err := DB.Model(&Order{}).Where("UPPER(TRIM(order_id)) = UPPER(TRIM(?))", r.OrderID).Updates(mappedData).Error; err != nil {
 		c.Error(err)
 		return
 	}
@@ -1030,7 +1036,7 @@ func handleAdminUpdateOrder(c *gin.Context) {
 			sheetData[k] = v
 		}
 		var current Order
-		if err := DB.Where("order_id = ?", r.OrderID).First(&current).Error; err == nil {
+		if err := DB.Where("UPPER(TRIM(order_id)) = UPPER(TRIM(?))", r.OrderID).First(&current).Error; err == nil {
 			fill := func(key, val string) {
 				if val != "" {
 					if _, exists := sheetData[key]; !exists {
