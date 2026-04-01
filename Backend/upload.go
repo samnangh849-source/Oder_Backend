@@ -289,13 +289,17 @@ func HandleImageUploadProxy(c *gin.Context) {
 			
 			// 🚀 Immediate Sync to Google Sheets and Telegram (Status only)
 			// This prevents the "Pending" status in the sheet from reverting the DB during the photo upload delay.
-			go func(orderId string, newData map[string]interface{}) {
+			go func(orderId string, newData map[string]interface{}, tCol string, tUrl string) {
 				var order Order
 				if err := DB.Where("UPPER(TRIM(order_id)) = UPPER(TRIM(?))", orderId).First(&order).Error; err == nil {
 					// Prepare fields for initial sync
 					sheetData := make(map[string]interface{})
 					for k, v := range newData {
 						sheetData[k] = v
+					}
+					// Ensure we include the temporary photo URL so the column is not empty in Sheets
+					if tCol != "" && tUrl != "" {
+						sheetData[tCol] = tUrl
 					}
 					// Ensure we have current packing info from DB
 					if order.PackedBy != "" { sheetData["Packed By"] = order.PackedBy }
@@ -307,7 +311,7 @@ func HandleImageUploadProxy(c *gin.Context) {
 						"updatedFields": sheetData,
 					}, "", nil)
 				}
-			}(req.OrderID, immediateBroadcast)
+			}(req.OrderID, immediateBroadcast, req.TargetColumn, tempUrl)
 
 			// Broadcast update so all clients see the status change immediately
 			event, _ := json.Marshal(map[string]interface{}{
