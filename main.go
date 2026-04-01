@@ -1812,6 +1812,7 @@ func main() {
 		protected.GET("/permissions", handleGetUserPermissions)
 		protected.GET("/roles", handleGetRoles)
 		protected.GET("/orders", RequirePermission("view_order_list"), handleGetAllOrders)
+		protected.POST("/orders/update", RequirePermission("edit_order"), handleAdminUpdateOrder)
 		protected.GET("/teams/shipping-costs", RequirePermission("view_revenue"), handleGetGlobalShippingCosts)
 
 		chat := protected.Group("/chat")
