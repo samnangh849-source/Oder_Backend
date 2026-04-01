@@ -909,6 +909,11 @@ func handleAdminUpdateOrder(c *gin.Context) {
 		return
 	}
 
+	if r.NewData == nil {
+		c.JSON(http.StatusBadRequest, gin.H{"status": "error", "message": "ត្រូវការទិន្នន័យថ្មី (NewData is required)"})
+		return
+	}
+
 	var originalOrder Order
 	// Use case-insensitive and robust trimming for matching Order IDs
 	if err := DB.Where("UPPER(TRIM(order_id)) = UPPER(TRIM(?))", r.OrderID).First(&originalOrder).Error; err != nil {
