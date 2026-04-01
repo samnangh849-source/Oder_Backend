@@ -1690,6 +1690,45 @@ func handleSheetsWebhook(c *gin.Context) {
 	})
 	hub.Broadcast <- event
 
+	// --- NEW: Trigger Telegram Update (if Sheet Edit for an Order) ---
+	if tableName == "orders" && req.Action == "update" && pkVal != nil {
+		go func(orderId interface{}, sheetName string, rowData map[string]interface{}) {
+			// Apps Script re-fetches from the sheet, so we just need Order ID and Team.
+			// 1. Try to get team from rowData
+			team := ""
+			if t, exists := rowData["Team"]; exists {
+				team = fmt.Sprintf("%v", t)
+			} else if strings.HasPrefix(sheetName, "Orders_") {
+				team = strings.TrimPrefix(sheetName, "Orders_")
+			}
+
+			// 2. If team is still empty, fetch from DB
+			if team == "" {
+				var order Order
+				whereClause := fmt.Sprintf("UPPER(TRIM(%s)) = UPPER(TRIM(?))", pkCol)
+				if err := DB.Where(whereClause, orderId).Select("team").First(&order).Error; err == nil {
+					team = order.Team
+				}
+			}
+
+			if team != "" {
+				log.Printf("📢 [Webhook Sync] Triggering Telegram Edit for Order %v (Team: %s)", orderId, team)
+				
+				// Prepare updatedFields from rowData to pass along (Apps Script uses this to UpdateSheets first)
+				updatedFields := make(map[string]interface{})
+				for k, v := range rowData {
+					updatedFields[k] = v
+				}
+
+				enqueueSync("updateOrderTelegram", map[string]interface{}{
+					"orderId":       fmt.Sprintf("%v", orderId),
+					"team":          team,
+					"updatedFields": updatedFields,
+				}, "", nil)
+			}
+		}(pkVal, req.SheetName, req.RowData)
+	}
+
 	c.JSON(200, gin.H{"status": "success"})
 }
 
