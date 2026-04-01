@@ -353,77 +353,31 @@ func HandleImageUploadProxy(c *gin.Context) {
 		if r.OrderID != "" {
 			log.Printf("📦 [Background Update] Specialized Order update: orderId=%s", r.OrderID)
 
-			// Prepare combined update data for final sync
-			broadcastData := map[string]interface{}{}
+			// Prepare combined update data for final DB sync
 			dbUpdateMap := map[string]interface{}{}
 
-			// 1a. Include NewData if provided (e.g. Fulfillment Status, Packed By)
+			// Include NewData if provided
 			if r.NewData != nil {
 				for k, v := range r.NewData {
-					broadcastData[k] = v
 					dbUpdateMap[UploadMapToDBColumnFunc(k)] = v
 				}
 			}
 
-			// 1b. Include Drive URL if upload succeeded
+			// Include Drive URL if upload succeeded
 			if err == nil && r.TargetColumn != "" {
-				broadcastData[r.TargetColumn] = driveURL
 				dbUpdateMap[UploadMapToDBColumnFunc(r.TargetColumn)] = driveURL
 			}
 
-			// Update PostgreSQL first
+			// Update PostgreSQL (Local Source of Truth)
 			res := DB.Model(&Order{}).Where("UPPER(TRIM(order_id)) = UPPER(TRIM(?))", r.OrderID).Updates(dbUpdateMap)
 			if res.Error != nil {
 				log.Printf("⚠️ [Background Update] DB update failed for order %s: %v", r.OrderID, res.Error)
 			}
-			if res.RowsAffected == 0 {
-				log.Printf("⚠️ [Background Update] No rows affected for order %s. ID mismatch?", r.OrderID)
-			}
 
-			// Now fetch the latest state to ensure we have everything (including team)
-			var order Order
-			team := ""
-			if res := DB.Where("UPPER(TRIM(order_id)) = UPPER(TRIM(?))", r.OrderID).First(&order); res.Error == nil {
-				team = order.Team
-			} else {
-				log.Printf("⚠️ [Background Update] Could not fetch order %s after update: %v", r.OrderID, res.Error)
-			}
-
-			// Build comprehensive sheet data: start from broadcastData then fill
-			// missing fulfillment fields from the freshly updated DB record.
-			sheetData := make(map[string]interface{})
-			for k, v := range broadcastData {
-				sheetData[k] = v
-			}
-			if order.OrderID != "" {
-				fill := func(key, val string) {
-					if val != "" {
-						if _, exists := sheetData[key]; !exists {
-							sheetData[key] = val
-						}
-					}
-				}
-				fill("Packed By", order.PackedBy)
-				fill("Packed Time", order.PackedTime)
-				fill("Package Photo URL", order.PackagePhotoURL)
-				fill("Driver Name", order.DriverName)
-				fill("Tracking Number", order.TrackingNumber)
-				fill("Dispatched Time", order.DispatchedTime)
-				fill("Dispatched By", order.DispatchedBy)
-				fill("Delivered Time", order.DeliveredTime)
-				fill("Delivery Photo URL", order.DeliveryPhotoURL)
-			}
-
-			log.Printf("📋 [Background Sync] orderId=%s updatedFields=%v", r.OrderID, sheetData)
-
-			// SINGLE Sync call to Google Sheets and Telegram.
-			// Apps Script's updateOrderTelegram already handles updating all relevant sheets.
-			EnqueueSync("updateOrderTelegram", map[string]interface{}{
-				"orderId":       r.OrderID,
-				"team":          team,
-				"updatedFields": sheetData,
-			}, "", nil)
-
+			// 🚀 Note: We DO NOT call EnqueueSync("updateOrderTelegram") here anymore.
+			// The function 'UploadToGoogleDriveDirectly' already called 'uploadImage' 
+			// which internally updated the Google Sheets row immediately.
+			
 			return // Finished order processing
 		}
 
