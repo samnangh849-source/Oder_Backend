@@ -147,7 +147,21 @@ func CallAppsScriptPOST(requestData AppsScriptRequest) (AppsScriptResponse, erro
 	}
 
 	bodyStr := string(body)
-	log.Printf("📥 [AppsScript] Raw response (len=%d): %.500s", len(bodyStr), bodyStr)
+	log.Printf("📥 [AppsScript] Raw response (HTTP %d, len=%d): %.800s", resp.StatusCode, len(bodyStr), bodyStr)
+
+	// Detect HTML response (common when Apps Script needs reauthorization or deployment is broken)
+	trimmed := strings.TrimSpace(bodyStr)
+	if strings.HasPrefix(trimmed, "<!") || strings.HasPrefix(trimmed, "<HTML") || strings.HasPrefix(trimmed, "<html") {
+		log.Printf("🚨 [AppsScript] Response is HTML, not JSON! This usually means:")
+		log.Printf("   1. Apps Script needs REAUTHORIZATION — open the script editor and run doPost manually")
+		log.Printf("   2. Deployment URL is wrong or expired — create a new deployment")
+		log.Printf("   3. Apps Script has a runtime error — check Executions log in script editor")
+		preview := trimmed
+		if len(preview) > 1000 {
+			preview = preview[:1000]
+		}
+		return AppsScriptResponse{}, fmt.Errorf("apps script returned HTML instead of JSON (HTTP %d). Check deployment. Body: %.300s", resp.StatusCode, preview)
+	}
 
 	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
 		bodyPreview := bodyStr
@@ -158,8 +172,8 @@ func CallAppsScriptPOST(requestData AppsScriptRequest) (AppsScriptResponse, erro
 	}
 	var scriptResponse AppsScriptResponse
 	if err := json.Unmarshal(body, &scriptResponse); err != nil {
-		log.Printf("❌ [AppsScript] JSON parse error: %v, body: %.200s", err, bodyStr)
-		return AppsScriptResponse{}, fmt.Errorf("invalid response from apps script: %v", err)
+		log.Printf("❌ [AppsScript] JSON parse error: %v, body: %.500s", err, bodyStr)
+		return AppsScriptResponse{}, fmt.Errorf("invalid response from apps script (not valid JSON): %v", err)
 	}
 	log.Printf("✅ [AppsScript] Parsed: status=%s url=%s fileID=%s", scriptResponse.Status, scriptResponse.URL, scriptResponse.FileID)
 	return scriptResponse, nil
