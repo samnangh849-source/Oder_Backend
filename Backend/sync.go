@@ -148,9 +148,17 @@ func EnqueueSync(action string, data map[string]interface{}, sheetName string, p
 		if val, ok := data["newName"].(string); ok {
 			req.NewName = val
 		}
+		// Correctly extract orderId from data map
 		if val, ok := data["orderId"].(string); ok {
 			req.OrderID = val
+		} else if val, ok := data["OrderID"].(string); ok {
+			req.OrderID = val
 		}
+	}
+
+	// If OrderID is set but OrderData is not, ensure backend has context
+	if req.OrderID != "" && (req.OrderData == nil || len(req.OrderData.(map[string]interface{})) == 0) {
+		req.OrderData = data
 	}
 
 	task := &SyncTask{
