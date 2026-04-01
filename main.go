@@ -68,7 +68,6 @@ type IncentiveResult = backend.IncentiveResult
 type IncentiveManualData = backend.IncentiveManualData
 type IncentiveCustomPayout = backend.IncentiveCustomPayout
 type DeleteOrderRequest = backend.DeleteOrderRequest
-type TempImage = backend.TempImage
 
 type IncentiveRules = backend.IncentiveRules
 type IncentiveTier = backend.IncentiveTier
@@ -623,7 +622,6 @@ func startOrderWorker() {
 
 func startScheduler() {
 	ticker := time.NewTicker(2 * time.Minute)
-	cleanupTicker := time.NewTicker(5 * time.Minute)
 	reconcileTicker := time.NewTicker(15 * time.Minute)
 
 	go func() {
@@ -632,11 +630,6 @@ func startScheduler() {
 			case <-ticker.C:
 				// Sync with Google Sheets via managed queue
 				enqueueSync("checkScheduledOrders", nil, "", nil)
-			case <-cleanupTicker.C:
-				result := DB.Where("expires_at < ?", time.Now()).Delete(&TempImage{})
-				if result.RowsAffected > 0 {
-					log.Printf("🧹 Cleanup: លុបរូបភាពបណ្ដោះអាសន្នចំនួន %d ឯកសារដែលហួសពេលចេញពី Database", result.RowsAffected)
-				}
 			case <-reconcileTicker.C:
 				// 🛡️ Self-Healing: Check for missing photo links in Sheets
 				backend.ReconcileMissingPhotoLinks(DB)
@@ -881,11 +874,21 @@ func handleSubmitOrder(c *gin.Context) {
 	internalShipMethod, _ := orderRequest.Shipping["method"].(string)
 	internalShipDetails, _ := orderRequest.Shipping["details"].(string)
 
+	// Determine initial status based on scheduling
+	fulfillmentStatus := "Pending"
+	if orderRequest.ScheduledTime != "" {
+		if st, err := time.Parse(time.RFC3339, orderRequest.ScheduledTime); err == nil {
+			if st.After(time.Now().Add(1 * time.Minute)) {
+				fulfillmentStatus = "Scheduled"
+			}
+		}
+	}
+
 	newOrder := Order{
 		OrderID: orderID, Timestamp: timestamp, User: orderRequest.CurrentUser.UserName, Team: orderRequest.SelectedTeam,
 		Page: orderRequest.Page, CustomerName: custName, CustomerPhone: custPhone, Subtotal: orderRequest.Subtotal,
 		GrandTotal: orderRequest.GrandTotal, ProductsJSON: string(productsJSON), Note: orderRequest.Note,
-		FulfillmentStore: orderRequest.FulfillmentStore, ScheduledTime: orderRequest.ScheduledTime, FulfillmentStatus: "Pending",
+		FulfillmentStore: orderRequest.FulfillmentStore, ScheduledTime: orderRequest.ScheduledTime, FulfillmentStatus: fulfillmentStatus,
 		PaymentStatus: paymentStatus, PaymentInfo: paymentInfo, InternalCost: shippingCost, DiscountUSD: totalDiscount,
 		TotalProductCost: totalProductCost, Location: strings.Join(locationParts, ", "), AddressDetails: addLocation,
 		ShippingFeeCustomer: shipFeeCustomer, InternalShippingMethod: internalShipMethod, InternalShippingDetails: internalShipDetails,
@@ -934,12 +937,13 @@ func handleAdminUpdateOrder(c *gin.Context) {
 		}
 
 		validTransitions := map[string][]string{
+			"Scheduled":     {"Pending", "Cancelled"},
 			"Pending":       {"Processing", "Ready to Ship", "Cancelled"},
 			"Processing":    {"Ready to Ship", "Pending", "Cancelled"},
 			"Ready to Ship": {"Shipped", "Pending", "Cancelled"},
 			"Shipped":       {"Delivered", "Ready to Ship", "Cancelled"},
 			"Delivered":     {},
-			"Cancelled":     {"Pending"},
+			"Cancelled":     {"Pending", "Scheduled"},
 		}
 
 		allowed, ok := validTransitions[currentStatus]
@@ -1006,15 +1010,6 @@ func handleAdminUpdateOrder(c *gin.Context) {
 	for k, v := range r.NewData {
 		dbCol := mapToDBColumn(k)
 		if isValidOrderColumn(dbCol) && v != nil {
-			// ✅ Prevent overwriting a permanent Google Drive URL with a temporary URL
-			if strVal, ok := v.(string); ok && strings.Contains(strVal, "/api/images/temp/") {
-				var currentVal string
-				DB.Model(&Order{}).Where("order_id = ?", r.OrderID).Select(dbCol).Scan(&currentVal)
-				if strings.Contains(currentVal, "drive.google.com") {
-					continue // Skip updating this column as we already have the permanent Drive URL
-				}
-			}
-
 			if dbCol == "discount_usd" || dbCol == "grand_total" || dbCol == "subtotal" || dbCol == "shipping_fee_customer" || dbCol == "internal_cost" || dbCol == "delivery_unpaid" || dbCol == "delivery_paid" || dbCol == "total_product_cost" {
 				if f, ok := v.(float64); ok {
 					mappedData[dbCol] = f
@@ -1148,17 +1143,6 @@ func handleAdminUpdateSheet(c *gin.Context) {
 		dbCol := mapToDBColumn(k)
 		if v == nil {
 			continue
-		}
-
-		// ✅ Prevent overwriting a permanent Google Drive URL with a temporary URL
-		if strVal, ok := v.(string); ok && strings.Contains(strVal, "/api/images/temp/") {
-			var currentVal string
-			if pkVal != nil {
-				DB.Table(tableName).Where(pkCol+" = ?", pkVal).Select(dbCol).Scan(&currentVal)
-				if strings.Contains(currentVal, "drive.google.com") {
-					continue // Skip updating this column as we already have the permanent Drive URL
-				}
-			}
 		}
 
 		mappedData[dbCol] = v
@@ -1424,65 +1408,24 @@ func handleSendChatMessage(c *gin.Context) {
 			base64Data = parts[1]
 		}
 
-		tempID := "chat_temp_" + generateShortID() + generateShortID()
-		DB.Create(&TempImage{
-			ID:        tempID,
-			MimeType:  mimeType,
-			ImageData: base64Data,
-			ExpiresAt: time.Now().Add(30 * time.Minute),
-		})
-
-		protocol := "http"
-		if c.Request.TLS != nil || c.Request.Header.Get("X-Forwarded-Proto") == "https" {
-			protocol = "https"
+		// Upload to Drive synchronously
+		driveURL, fileId, err := backend.UploadToGoogleDriveDirectly(base64Data, "chat_file", mimeType, nil)
+		if err != nil {
+			log.Printf("❌ Chat media upload failed: %v", err)
+			c.JSON(500, gin.H{"status": "error", "message": "បរាជ័យក្នុងការ Upload មេឌៀ"})
+			return
 		}
-		tempUrl := fmt.Sprintf("%s://%s/api/images/temp/%s", protocol, c.Request.Host, tempID)
 
-		originalContent := msg.Content
-		msg.Content = tempUrl
+		msg.FileID = fileId
+		if strings.ToLower(msg.MessageType) == "image" {
+			msg.Content = driveURL
+		}
 
 		DB.Create(&msg)
 		msgBytes, _ := json.Marshal(map[string]interface{}{"type": "new_message", "data": msg})
 		hub.Broadcast <- msgBytes
 
 		c.JSON(200, gin.H{"status": "success", "data": msg})
-
-		go func(m ChatMessage, b64 string, mt string, tid string, originalContent string) {
-			defer func() {
-				if rec := recover(); rec != nil {
-					log.Printf("🔥 PANIC in chat upload: %v", rec)
-				}
-			}()
-
-			driveURL, fileId, err := backend.UploadToGoogleDriveDirectly(b64, "chat_file", mt, nil)
-			if err == nil {
-
-				finalContent := originalContent
-				if strings.ToLower(m.MessageType) == "image" {
-					finalContent = driveURL
-				}
-
-				DB.Model(&ChatMessage{}).Where("id = ?", m.ID).Updates(map[string]interface{}{
-					"file_id": fileId,
-					"content": finalContent,
-				})
-
-				updateMsg, _ := json.Marshal(map[string]interface{}{
-					"type":       "upload_complete",
-					"message_id": m.ID,
-					"file_id":    fileId,
-					"url":        driveURL,
-					"receiver":   m.Receiver,
-				})
-				hub.Broadcast <- updateMsg
-				log.Printf("📢 Broadcasted upload_complete for Message ID: %d", m.ID)
-
-				// Removed immediate TempImage deletion to allow client time to load
-			} else {
-				log.Printf("❌ Chat media upload failed: %v", err)
-			}
-		}(msg, base64Data, mimeType, tempID, originalContent)
-
 		return
 	}
 
@@ -1809,7 +1752,6 @@ func main() {
 	// Apply DBMiddleware to all /api routes except root health checks
 	api := r.Group("/api", DBMiddleware())
 	api.POST("/login", handleLogin)
-	api.GET("/images/temp/:id", backend.HandleServeTempImage)
 	api.GET("/settings", handleGetSettings)
 	// ── Entertainment / Video Player routes (Backend/video.go) ────────────────────────
 	// All video handler logic lives in Backend/video.go (package backend).
