@@ -1041,20 +1041,37 @@ func handleAdminUpdateOrder(c *gin.Context) {
 		}
 	}
 
-	if err := DB.Model(&Order{}).Where("UPPER(TRIM(order_id)) = UPPER(TRIM(?))", r.OrderID).Updates(mappedData).Error; err != nil {
-		c.Error(err)
+	// Handle 'Force Sync' to trigger Telegram/Google Sheets re-sync
+	forceSync := false
+	if fs, ok := r.NewData["Force Sync"]; ok {
+		if b, ok := fs.(bool); ok && b {
+			forceSync = true
+		}
+	}
+
+	if ObjectSize(mappedData) == 0 && !forceSync {
+		c.JSON(200, gin.H{"status": "success", "message": "No changes to update"})
 		return
 	}
 
-	eventBytes, _ := json.Marshal(map[string]interface{}{"type": "update_order", "orderId": r.OrderID, "newData": r.NewData})
-	hub.Broadcast <- eventBytes
+	if ObjectSize(mappedData) > 0 {
+		if err := DB.Model(&Order{}).Where("UPPER(TRIM(order_id)) = UPPER(TRIM(?))", r.OrderID).Updates(mappedData).Error; err != nil {
+			c.Error(err)
+			return
+		}
+
+		eventBytes, _ := json.Marshal(map[string]interface{}{"type": "update_order", "orderId": r.OrderID, "newData": r.NewData})
+		hub.Broadcast <- eventBytes
+	}
 
 	go func() {
 		// Build comprehensive sheet data: start from r.NewData then fill missing
 		// fulfillment fields from DB (e.g. Driver Name set in a prior step).
 		sheetData := make(map[string]interface{})
 		for k, v := range r.NewData {
-			sheetData[k] = v
+			if k != "Force Sync" {
+				sheetData[k] = v
+			}
 		}
 		var current Order
 		if err := DB.Where("UPPER(TRIM(order_id)) = UPPER(TRIM(?))", r.OrderID).First(&current).Error; err == nil {
@@ -1081,10 +1098,16 @@ func handleAdminUpdateOrder(c *gin.Context) {
 				team = t
 			}
 
+			// If Force Sync is requested, use 'sendOrderTelegram' action to ensure it sends even if IDs exist
+			action := "updateOrderTelegram"
+			if forceSync {
+				action = "sendOrderTelegram"
+			}
+
 			// SINGLE Sync call to Google Sheets and Telegram.
 			// Apps Script's updateOrderTelegram already handles updating AllOrders and the team's specific sheet.
 			// This saves Apps Script execution time and quota.
-			enqueueSync("updateOrderTelegram", map[string]interface{}{
+			enqueueSync(action, map[string]interface{}{
 				"orderId":       r.OrderID,
 				"updatedFields": sheetData,
 				"team":          team,
@@ -1850,4 +1873,6 @@ func main() {
 	api.GET("/chat/audio/:fileID", backend.HandleGetAudioProxy)
 	r.Run("0.0.0.0:" + port)
 }
+
+
 
