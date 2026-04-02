@@ -111,6 +111,7 @@ func mapToDBColumn(key string) string {
 		"Products (JSON)":           "products_json",
 		"Telegram Message ID 1":     "telegram_message_id1",
 		"Telegram Message ID 2":     "telegram_message_id2",
+		"Telegram Message ID 3":     "telegram_message_id3",
 		"Customer Name":             "customer_name",
 		"Customer Phone":            "customer_phone",
 		"Location":                  "location",
@@ -267,7 +268,7 @@ func isValidOrderColumn(col string) bool {
 		"products_json": true, "internal_shipping_method": true, "internal_shipping_details": true,
 		"internal_cost": true, "payment_status": true, "payment_info": true, "discount_usd": true,
 		"delivery_unpaid": true, "delivery_paid": true, "total_product_cost": true,
-		"telegram_message_id1": true, "telegram_message_id2": true, "scheduled_time": true,
+		"telegram_message_id1": true, "telegram_message_id2": true, "telegram_message_id3": true, "scheduled_time": true,
 		"fulfillment_store": true, "team": true, "is_verified": true, "fulfillment_status": true,
 		"packed_by": true, "packed_time": true, "package_photo_url": true, "driver_name": true, "tracking_number": true,
 		"dispatched_time": true, "dispatched_by": true, "delivered_time": true, "delivery_photo_url": true,
@@ -611,10 +612,11 @@ func startOrderWorker() {
 				var scriptResp AppsScriptResponse
 				telegramSent := false
 				if err := json.NewDecoder(resp.Body).Decode(&scriptResp); err == nil {
-					if (scriptResp.MessageIds.ID1 != "" || scriptResp.MessageIds.ID2 != "") && DB != nil {
+					if (scriptResp.MessageIds.ID1 != "" || scriptResp.MessageIds.ID2 != "" || scriptResp.MessageIds.ID3 != "") && DB != nil {
 						DB.Model(&Order{}).Where("order_id = ?", job.OrderID).Updates(map[string]interface{}{
 							"telegram_message_id1": scriptResp.MessageIds.ID1,
 							"telegram_message_id2": scriptResp.MessageIds.ID2,
+							"telegram_message_id3": scriptResp.MessageIds.ID3,
 						})
 						telegramSent = true
 					}
@@ -1111,6 +1113,10 @@ func handleAdminDeleteOrder(c *gin.Context) {
 		if m2 == "" {
 			m2 = r.TelegramMessageID2
 		}
+		m3 := order.TelegramMessageID3
+		if m3 == "" {
+			m3 = r.TelegramMessageID3
+		}
 
 		go func() {
 			// ✅ Sync with Google Sheets & Telegram via managed queue.
@@ -1121,6 +1127,7 @@ func handleAdminDeleteOrder(c *gin.Context) {
 				"team":             order.Team,
 				"messageId1":       m1,
 				"messageId2":       m2,
+				"messageId3":       m3,
 				"fulfillmentStore": order.FulfillmentStore,
 			}, "", nil)
 		}()
