@@ -1070,16 +1070,22 @@ func handleAdminUpdateOrder(c *gin.Context) {
 			fill("Dispatched By", current.DispatchedBy)
 			fill("Delivered Time", current.DeliveredTime)
 			fill("Delivery Photo URL", current.DeliveryPhotoURL)
-		}
+			
+			// Crucial: Use team from DB if not in NewData
+			team := current.Team
+			if t, ok := r.NewData["Team"].(string); ok && t != "" {
+				team = t
+			}
 
-		// SINGLE Sync call to Google Sheets and Telegram.
-		// Apps Script's updateOrderTelegram already handles updating AllOrders and the team's specific sheet.
-		// This saves Apps Script execution time and quota.
-		enqueueSync("updateOrderTelegram", map[string]interface{}{
-			"orderId":       r.OrderID,
-			"updatedFields": sheetData,
-			"team":          originalOrder.Team,
-		}, "", nil)
+			// SINGLE Sync call to Google Sheets and Telegram.
+			// Apps Script's updateOrderTelegram already handles updating AllOrders and the team's specific sheet.
+			// This saves Apps Script execution time and quota.
+			enqueueSync("updateOrderTelegram", map[string]interface{}{
+				"orderId":       r.OrderID,
+				"updatedFields": sheetData,
+				"team":          team,
+			}, "", nil)
+		}
 	}()
 
 	c.JSON(200, gin.H{"status": "success"})
