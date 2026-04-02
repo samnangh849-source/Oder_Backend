@@ -176,6 +176,7 @@ type Order struct {
 	TotalProductCost        float64 `gorm:"column:total_product_cost" json:"Total Product Cost ($)"`
 	TelegramMessageID1      string  `gorm:"column:telegram_message_id1" json:"Telegram Message ID 1"`
 	TelegramMessageID2      string  `gorm:"column:telegram_message_id2" json:"Telegram Message ID 2"`
+	TelegramMessageID3      string  `gorm:"column:telegram_message_id3" json:"Telegram Message ID 3"`
 	ScheduledTime           string  `gorm:"column:scheduled_time" json:"Scheduled Time"`
 	FulfillmentStore        string  `gorm:"column:fulfillment_store;index" json:"Fulfillment Store"`
 	Team                    string  `gorm:"column:team;index" json:"Team"`
@@ -302,6 +303,7 @@ type DeleteOrderRequest struct {
 	UserName           string `json:"userName"`
 	TelegramMessageID1 string `json:"telegramMessageId1"`
 	TelegramMessageID2 string `json:"telegramMessageId2"`
+	TelegramMessageID3 string `json:"telegramMessageId3"`
 	TelegramChatId     string `json:"telegramChatId"`
 }
 
