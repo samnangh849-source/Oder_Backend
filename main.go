@@ -84,6 +84,8 @@ var calculatePayout = backend.CalculatePayout
 func initDB() {
 	backend.InitDB()
 	DB = backend.DB
+	// Explicitly assign to sync.go's package variable
+	backend.DB = backend.DB 
 }
 
 // =========================================================================
