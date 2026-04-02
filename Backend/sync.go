@@ -1,310 +1,368 @@
 package backend
 
-// =========================================================================
-// ម៉ូដែលទិន្នន័យ (GORM Models)
-// =========================================================================
+import (
+	"bytes"
+	"encoding/json"
+	"fmt"
+	"io"
+	"log"
+	"math/rand"
+	"net/http"
+	"strings"
+	"sync"
+	"time"
 
-type User struct {
-	UserName          string `gorm:"primaryKey;column:user_name" json:"UserName"`
-	Password          string `gorm:"column:password" json:"Password"`
-	Team              string `gorm:"column:team" json:"Team"`
-	FullName          string `gorm:"column:full_name" json:"FullName"`
-	ProfilePictureURL string `gorm:"column:profile_picture_url" json:"ProfilePictureURL"`
-	Role              string `gorm:"column:role" json:"Role"`
-	IsSystemAdmin     bool   `gorm:"column:is_system_admin" json:"IsSystemAdmin"`
-	TelegramUsername  string `gorm:"column:telegram_username" json:"TelegramUsername"`
-}
+	"gorm.io/gorm"
+)
 
-type Movie struct {
-	ID          string `gorm:"primaryKey;column:id" json:"ID"`
-	Title       string `gorm:"column:title" json:"Title"`
-	Description string `gorm:"column:description" json:"Description"`
-	Thumbnail   string `gorm:"column:thumbnail" json:"Thumbnail"`
-	VideoURL    string `gorm:"column:video_url" json:"VideoURL"`
-	Type        string `gorm:"column:type" json:"Type"`
-	Language    string `gorm:"column:language" json:"Language"`
-	Country     string `gorm:"column:country" json:"Country"`
-	Category    string `gorm:"column:category" json:"Category"`
-	SeriesKey   string `gorm:"column:series_key" json:"SeriesKey"`
-	AddedAt     string `gorm:"column:added_at" json:"AddedAt"`
-}
-type Store struct {
-	StoreName        string `gorm:"primaryKey;column:store_name" json:"StoreName"`
-	StoreType        string `gorm:"column:store_type" json:"StoreType"`
-	Address          string `gorm:"column:address" json:"Address"`
-	TelegramBotToken string `gorm:"column:telegram_bot_token" json:"TelegramBotToken"`
-	TelegramGroupID  string `gorm:"column:telegram_group_id" json:"TelegramGroupID"`
-	TelegramTopicID  string `gorm:"column:telegram_topic_id" json:"TelegramTopicID"`
-	LabelPrinterURL  string `gorm:"column:label_printer_url" json:"LabelPrinterURL"`
-	CODAlertGroupID  string `gorm:"column:cod_alert_group_id" json:"CODAlertGroupID"`
-}
-type Setting struct {
-	ConfigKey   string `gorm:"primaryKey;column:config_key" json:"Key"`
-	ConfigValue string `gorm:"column:config_value" json:"Value"`
-	Description string `gorm:"column:description" json:"Description"`
+var (
+	AppsScriptURL    string
+	AppsScriptSecret string
+)
+
+type AppsScriptRequest struct {
+	Action         string                 `json:"action"`
+	Secret         string                 `json:"secret"`
+	UploadFolderID string                 `json:"uploadFolderID,omitempty"`
+	FileData       string                 `json:"fileData,omitempty"`
+	Image          string                 `json:"image,omitempty"` // Alias for fileData
+	FileName       string                 `json:"fileName,omitempty"`
+	FileID         string                 `json:"fileID,omitempty"`  // Added for renameFile compatibility
+	NewName        string                 `json:"newName,omitempty"` // Added for renameFile compatibility
+	MimeType       string                 `json:"mimeType,omitempty"`
+	UserName       string                 `json:"userName,omitempty"`
+	OrderData      interface{}            `json:"orderData"`
+	OrderID        string                 `json:"orderId,omitempty"`
+	MovieID        string                 `json:"movieId,omitempty"`
+	TargetColumn   string                 `json:"targetColumn,omitempty"`
+	SheetName      string                 `json:"sheetName,omitempty"`
+	PrimaryKey     map[string]string      `json:"primaryKey,omitempty"`
+	NewData        map[string]interface{} `json:"newData,omitempty"`
 }
 
-type TeamPage struct {
-	ID              uint   `gorm:"primaryKey;autoIncrement;column:id" json:"ID"`
-	Team            string `gorm:"column:team" json:"Team"`
-	PageName        string `gorm:"column:page_name" json:"PageName"`
-	TelegramValue   string `gorm:"column:telegram_value" json:"TelegramValue"`
-	PageLogoURL     string `gorm:"column:page_logo_url" json:"PageLogoURL"`
-	DefaultStore    string `gorm:"column:default_store" json:"DefaultStore"`
-	TelegramTopicID string `gorm:"column:telegram_topic_id" json:"TelegramTopicID"`
+type AppsScriptResponse struct {
+	Status     string `json:"status"`
+	URL        string `json:"url,omitempty"`
+	FileID     string `json:"fileID,omitempty"`
+	Message    string `json:"message,omitempty"`
+	MessageIds struct {
+		ID1 string `json:"id1"`
+		ID2 string `json:"id2"`
+		ID3 string `json:"id3"`
+	} `json:"messageIds,omitempty"`
 }
 
-type Product struct {
-	Barcode     string  `gorm:"primaryKey;column:barcode" json:"Barcode"`
-	ProductName string  `gorm:"column:product_name" json:"ProductName"`
-	Price       float64 `gorm:"column:price" json:"Price"`
-	Cost        float64 `gorm:"column:cost" json:"Cost"`
-	ImageURL    string  `gorm:"column:image_url" json:"ImageURL"`
-	Tags        string  `gorm:"column:tags" json:"Tags"`
-}
-type Location struct {
-	ID       uint   `gorm:"primaryKey;autoIncrement;column:id"`
-	Province string `gorm:"column:province" json:"Province"`
-	District string `gorm:"column:district" json:"District"`
-	Sangkat  string `gorm:"column:sangkat" json:"Sangkat"`
-}
-type ShippingMethod struct {
-	MethodName                 string  `gorm:"primaryKey;column:method_name" json:"MethodName"`
-	LogoURL                    string  `gorm:"column:logo_url" json:"LogoURL"`
-	AllowManualDriver          bool    `gorm:"column:allow_manual_driver" json:"AllowManualDriver"`
-	RequireDriverSelection     bool    `gorm:"column:require_driver_selection" json:"RequireDriverSelection"`
-	InternalCost               float64 `gorm:"column:internal_cost" json:"InternalCost"`
-	CostShortcuts              string  `gorm:"column:cost_shortcuts" json:"CostShortcuts"`
-	EnableDriverRecommendation bool    `gorm:"column:enable_driver_recommendation" json:"EnableDriverRecommendation"`
+// SyncTask represents a synchronization task for the background worker
+type SyncTask struct {
+	Request    AppsScriptRequest
+	RetryCount int
+	MaxRetries int
+	EnqueuedAt time.Time
 }
 
-type DriverRecommendation struct {
-	ID             uint   `gorm:"primaryKey;autoIncrement;column:id" json:"ID"`
-	DayOfWeek      string `gorm:"column:day_of_week;index" json:"DayOfWeek"`
-	StoreName      string `gorm:"column:store_name;index" json:"StoreName"`
-	Province       string `gorm:"column:province" json:"Province"`
-	DriverName     string `gorm:"column:driver_name" json:"DriverName"`
-	ShippingMethod string `gorm:"column:shipping_method" json:"ShippingMethod"`
+var (
+	SyncQueue = make(chan *SyncTask, 1000)
+	DB        *gorm.DB
+
+	// Deduplication map for updateSheet actions
+	// Key: sheetName + primaryKey values
+	pendingUpdates = make(map[string]*SyncTask)
+	updateMutex    sync.Mutex
+
+	HTTPClient = &http.Client{
+		Timeout: 120 * time.Second,
+		Transport: &http.Transport{
+			MaxIdleConns:        100,
+			IdleConnTimeout:     90 * time.Second,
+			MaxIdleConnsPerHost: 20,
+		},
+	}
+
+	// For graceful shutdown
+	workerWG sync.WaitGroup
+	stopChan = make(chan struct{})
+)
+
+// ReconcileMissingPhotoLinks looks for orders that have a photo URL in DB but might be missing in Sheets.
+// This is a self-healing mechanism to ensure data consistency.
+func ReconcileMissingPhotoLinks(db *gorm.DB) {
+	log.Println("🔍 [Self-Healing] Starting photo link reconciliation...")
+
+	var orders []struct {
+		OrderID         string `gorm:"column:order_id"`
+		Team            string `gorm:"column:team"`
+		PackagePhotoURL string `gorm:"column:package_photo_url"`
+	}
+
+	// Look for orders from the last 24 hours that have a permanent Drive link in DB
+	yesterday := time.Now().Add(-24 * time.Hour).Format(time.RFC3339)
+	err := db.Table("orders").
+		Select("order_id, team, package_photo_url").
+		Where("package_photo_url LIKE ? AND timestamp > ?", "%drive.google.com%", yesterday).
+		Find(&orders).Error
+
+	if err != nil {
+		log.Printf("❌ [Self-Healing] Database query failed: %v", err)
+		return
+	}
+
+	if len(orders) == 0 {
+		log.Println("✅ [Self-Healing] No orders need reconciliation.")
+		return
+	}
+
+	log.Printf("📦 [Self-Healing] Found %d orders to verify in Sheets", len(orders))
+
+	for _, o := range orders {
+		// Enqueue a specialized sync task
+		EnqueueSync("updateOrderTelegram", map[string]interface{}{
+			"orderId": o.OrderID,
+			"team":    o.Team,
+			"updatedFields": map[string]interface{}{
+				"Package Photo URL": o.PackagePhotoURL,
+			},
+			"healingMode": true,
+		}, "", nil)
+	}
 }
 
-type Color struct {
-	ColorName string `gorm:"primaryKey;column:color_name" json:"ColorName"`
-}
-type Driver struct {
-	DriverName     string `gorm:"primaryKey;column:driver_name" json:"DriverName"`
-	ImageURL       string `gorm:"column:image_url" json:"ImageURL"`
-	Phone          string `gorm:"column:phone" json:"Phone"`
-	InternalCost   string `gorm:"column:internal_cost" json:"InternalCost"`
-	AssignedStores string `gorm:"column:assigned_stores" json:"AssignedStores"`
-}
-type BankAccount struct {
-	BankName       string `gorm:"primaryKey;column:bank_name" json:"BankName"`
-	LogoURL        string `gorm:"column:logo_url" json:"LogoURL"`
-	AssignedStores string `gorm:"column:assigned_stores" json:"AssignedStores"`
-}
-type PhoneCarrier struct {
-	CarrierName    string `gorm:"primaryKey;column:carrier_name" json:"CarrierName"`
-	Prefixes       string `gorm:"column:prefixes" json:"Prefixes"`
-	CarrierLogoURL string `gorm:"column:carrier_logo_url" json:"CarrierLogoURL"`
-}
-type TelegramTemplate struct {
-	ID       uint    `gorm:"primaryKey;autoIncrement"`
-	Team     string  `json:"Team"`
-	Part     float64 `json:"Part"`
-	Template string  `json:"Template"`
+func CallAppsScriptPOST(requestData AppsScriptRequest) (AppsScriptResponse, error) {
+	requestData.Secret = AppsScriptSecret
+	if strings.TrimSpace(AppsScriptURL) == "" {
+		return AppsScriptResponse{}, fmt.Errorf("apps script URL is not configured")
+	}
+	jsonData, err := json.Marshal(requestData)
+	if err != nil {
+		return AppsScriptResponse{}, fmt.Errorf("failed to marshal request: %w", err)
+	}
+	log.Printf("📡 [AppsScript] POST to %s action=%s", AppsScriptURL, requestData.Action)
+	resp, err := HTTPClient.Post(AppsScriptURL, "application/json", bytes.NewBuffer(jsonData))
+	if err != nil {
+		log.Printf("❌ [AppsScript] HTTP error: %v", err)
+		return AppsScriptResponse{}, err
+	}
+	defer resp.Body.Close()
+
+	body, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return AppsScriptResponse{}, fmt.Errorf("failed to read response: %w", err)
+	}
+
+	bodyStr := string(body)
+	log.Printf("📥 [AppsScript] Raw response (HTTP %d, len=%d): %.800s", resp.StatusCode, len(bodyStr), bodyStr)
+
+	// Detect HTML response (common when Apps Script needs reauthorization or deployment is broken)
+	trimmed := strings.TrimSpace(bodyStr)
+	if strings.HasPrefix(trimmed, "<!") || strings.HasPrefix(trimmed, "<HTML") || strings.HasPrefix(trimmed, "<html") {
+		log.Printf("🚨 [AppsScript] Response is HTML, not JSON! This usually means:")
+		log.Printf("   1. Apps Script needs REAUTHORIZATION — open the script editor and run doPost manually")
+		log.Printf("   2. Deployment URL is wrong or expired — create a new deployment")
+		log.Printf("   3. Apps Script has a runtime error — check Executions log in script editor")
+		preview := trimmed
+		if len(preview) > 1000 {
+			preview = preview[:1000]
+		}
+		return AppsScriptResponse{}, fmt.Errorf("apps script returned HTML instead of JSON (HTTP %d). Check deployment. Body: %.300s", resp.StatusCode, preview)
+	}
+
+	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
+		bodyPreview := bodyStr
+		if len(bodyPreview) > 500 {
+			bodyPreview = bodyPreview[:500]
+		}
+		return AppsScriptResponse{}, fmt.Errorf("apps script returned HTTP %d: %s", resp.StatusCode, bodyPreview)
+	}
+	var scriptResponse AppsScriptResponse
+	if err := json.Unmarshal(body, &scriptResponse); err != nil {
+		log.Printf("❌ [AppsScript] JSON parse error: %v, body: %.500s", err, bodyStr)
+		return AppsScriptResponse{}, fmt.Errorf("invalid response from apps script (not valid JSON): %v", err)
+	}
+	log.Printf("✅ [AppsScript] Parsed: status=%s url=%s fileID=%s", scriptResponse.Status, scriptResponse.URL, scriptResponse.FileID)
+	return scriptResponse, nil
 }
 
-type Inventory struct {
-	ID          uint    `gorm:"primaryKey;autoIncrement" json:"ID"`
-	StoreName   string  `gorm:"column:store_name;uniqueIndex:idx_inventory_store_barcode" json:"StoreName"`
-	Barcode     string  `gorm:"column:barcode;uniqueIndex:idx_inventory_store_barcode" json:"Barcode"`
-	Quantity    float64 `gorm:"column:quantity" json:"Quantity"`
-	LastUpdated string  `gorm:"column:last_updated" json:"LastUpdated"`
-	UpdatedBy   string  `gorm:"column:updated_by" json:"UpdatedBy"`
+// getDedupeKey generates a unique key for a task to see if it can be merged
+func getDedupeKey(action, sheetName string, pk map[string]string) string {
+	if action != "updateSheet" || sheetName == "" || len(pk) == 0 {
+		return ""
+	}
+	// Sort or just concatenate for consistency
+	// Since PK is usually just one field like {"Order ID": "123"}
+	return fmt.Sprintf("%s:%s:%v", action, sheetName, pk)
 }
 
-type StockTransfer struct {
-	TransferID  string  `gorm:"primaryKey;column:transfer_id" json:"TransferID"`
-	Timestamp   string  `gorm:"column:timestamp" json:"Timestamp"`
-	FromStore   string  `gorm:"column:from_store;index" json:"FromStore"`
-	ToStore     string  `gorm:"column:to_store;index" json:"ToStore"`
-	Barcode     string  `gorm:"column:barcode" json:"Barcode"`
-	Quantity    float64 `gorm:"column:quantity" json:"Quantity"`
-	Status      string  `gorm:"column:status;index" json:"Status"`
-	RequestedBy string  `gorm:"column:requested_by" json:"RequestedBy"`
-	ApprovedBy  string  `gorm:"column:approved_by" json:"ApprovedBy"`
-	ReceivedBy  string  `gorm:"column:received_by" json:"ReceivedBy"`
+// EnqueueSync adds a task to the background synchronization queue
+func EnqueueSync(action string, data map[string]interface{}, sheetName string, pk map[string]string) {
+	req := AppsScriptRequest{
+		Action:     action,
+		SheetName:  sheetName,
+		PrimaryKey: pk,
+		NewData:    data,
+		OrderData:  data, // Set OrderData for compatibility
+	}
+
+	// Handle special fields if present in data
+	if data != nil {
+		if val, ok := data["fileID"].(string); ok {
+			req.FileID = val
+		}
+		if val, ok := data["newName"].(string); ok {
+			req.NewName = val
+		}
+		// Correctly extract orderId from data map
+		if val, ok := data["orderId"].(string); ok {
+			req.OrderID = val
+		} else if val, ok := data["OrderID"].(string); ok {
+			req.OrderID = val
+		}
+	}
+
+	// If OrderID is set but OrderData is not, ensure backend has context
+	if req.OrderID != "" && (req.OrderData == nil || len(req.OrderData.(map[string]interface{})) == 0) {
+		req.OrderData = data
+	}
+
+	task := &SyncTask{
+		Request:    req,
+		MaxRetries: 5,
+		EnqueuedAt: time.Now(),
+	}
+
+	// Deduplication Logic
+	dedupeKey := getDedupeKey(action, sheetName, pk)
+	if dedupeKey != "" {
+		updateMutex.Lock()
+		if existing, exists := pendingUpdates[dedupeKey]; exists {
+			// Merge NewData: newer fields overwrite older ones
+			if existing.Request.NewData == nil {
+				existing.Request.NewData = make(map[string]interface{})
+			}
+			for k, v := range data {
+				existing.Request.NewData[k] = v
+			}
+			// Update OrderData as well for compatibility
+			existing.Request.OrderData = existing.Request.NewData
+			updateMutex.Unlock()
+			// log.Printf("🔄 SyncManager: Merged update for %s", dedupeKey)
+			return
+		}
+		pendingUpdates[dedupeKey] = task
+		updateMutex.Unlock()
+	}
+
+	select {
+	case SyncQueue <- task:
+	case <-time.After(2 * time.Second):
+		log.Printf("⚠️ SyncQueue is full. Dropping task action=%s sheet=%s after timeout", action, sheetName)
+		if dedupeKey != "" {
+			updateMutex.Lock()
+			delete(pendingUpdates, dedupeKey)
+			updateMutex.Unlock()
+		}
+	}
 }
 
-type ReturnItem struct {
-	ReturnID    string  `gorm:"primaryKey;column:return_id" json:"ReturnID"`
-	Timestamp   string  `gorm:"column:timestamp" json:"Timestamp"`
-	OrderID     string  `gorm:"column:order_id;index" json:"OrderID"`
-	StoreName   string  `gorm:"column:store_name;index" json:"StoreName"`
-	Barcode     string  `gorm:"column:barcode" json:"Barcode"`
-	Quantity    float64 `gorm:"column:quantity" json:"Quantity"`
-	Reason      string  `gorm:"column:reason" json:"Reason"`
-	IsRestocked bool    `gorm:"column:is_restocked" json:"IsRestocked"`
-	HandledBy   string  `gorm:"column:handled_by" json:"HandledBy"`
+// StartSyncManager runs background workers for Google Sheets synchronization
+func StartSyncManager(workerCount int) {
+	for i := 0; i < workerCount; i++ {
+		workerWG.Add(1)
+		go func(workerID int) {
+			defer workerWG.Done()
+			log.Printf("🔄 SyncManager: Worker %d started", workerID)
+
+			for {
+				select {
+				case <-stopChan:
+					log.Printf("🛑 SyncManager [Worker %d]: Stopping...", workerID)
+					return
+				case task, ok := <-SyncQueue:
+					if !ok {
+						return
+					}
+
+					// Remove from dedupe map if it was there
+					dedupeKey := getDedupeKey(task.Request.Action, task.Request.SheetName, task.Request.PrimaryKey)
+					if dedupeKey != "" {
+						updateMutex.Lock()
+						delete(pendingUpdates, dedupeKey)
+						updateMutex.Unlock()
+					}
+
+					processTask(workerID, *task)
+				}
+			}
+		}(i)
+	}
 }
 
-func (ReturnItem) TableName() string { return "returns" }
-
-type Order struct {
-	OrderID                 string  `gorm:"primaryKey;column:order_id" json:"Order ID"`
-	Timestamp               string  `gorm:"index;column:timestamp" json:"Timestamp"`
-	User                    string  `gorm:"column:user" json:"User"`
-	Page                    string  `gorm:"column:page" json:"Page"`
-	TelegramValue           string  `gorm:"column:telegram_value" json:"TelegramValue"`
-	CustomerName            string  `gorm:"column:customer_name" json:"Customer Name"`
-	CustomerPhone           string  `gorm:"column:customer_phone" json:"Customer Phone"`
-	Location                string  `gorm:"column:location" json:"Location"`
-	AddressDetails          string  `gorm:"column:address_details" json:"Address Details"`
-	Note                    string  `gorm:"column:note" json:"Note"`
-	ShippingFeeCustomer     float64 `gorm:"column:shipping_fee_customer" json:"Shipping Fee (Customer)"`
-	Subtotal                float64 `gorm:"column:subtotal" json:"Subtotal"`
-	GrandTotal              float64 `gorm:"column:grand_total" json:"Grand Total"`
-	ProductsJSON            string  `gorm:"type:text;column:products_json" json:"Products (JSON)"`
-	InternalShippingMethod  string  `gorm:"column:internal_shipping_method" json:"Internal Shipping Method"`
-	InternalShippingDetails string  `gorm:"column:internal_shipping_details" json:"Internal Shipping Details"`
-	InternalCost            float64 `gorm:"column:internal_cost" json:"Internal Cost"`
-	PaymentStatus           string  `gorm:"column:payment_status" json:"Payment Status"`
-	PaymentInfo             string  `gorm:"column:payment_info" json:"Payment Info"`
-	DiscountUSD             float64 `gorm:"column:discount_usd" json:"Discount ($)"`
-	DeliveryUnpaid          float64 `gorm:"column:delivery_unpaid" json:"Delivery Unpaid"`
-	DeliveryPaid            float64 `gorm:"column:delivery_paid" json:"Delivery Paid"`
-	TotalProductCost        float64 `gorm:"column:total_product_cost" json:"Total Product Cost ($)"`
-	TelegramMessageID1      string  `gorm:"column:telegram_message_id1" json:"Telegram Message ID 1"`
-	TelegramMessageID2      string  `gorm:"column:telegram_message_id2" json:"Telegram Message ID 2"`
-	TelegramMessageID3      string  `gorm:"column:telegram_message_id3" json:"Telegram Message ID 3"`
-	ScheduledTime           string  `gorm:"column:scheduled_time" json:"Scheduled Time"`
-	FulfillmentStore        string  `gorm:"column:fulfillment_store;index" json:"Fulfillment Store"`
-	Team                    string  `gorm:"column:team;index" json:"Team"`
-	IsVerified              string  `gorm:"column:is_verified" json:"IsVerified"`
-	FulfillmentStatus       string  `gorm:"column:fulfillment_status;index" json:"Fulfillment Status"`
-	PackedBy                string  `gorm:"column:packed_by" json:"Packed By"`
-	PackedTime              string  `gorm:"column:packed_time" json:"Packed Time"`
-	PackagePhotoURL         string  `gorm:"column:package_photo_url" json:"Package Photo URL"`
-	DriverName              string  `gorm:"column:driver_name" json:"Driver Name"`
-	TrackingNumber          string  `gorm:"column:tracking_number" json:"Tracking Number"`
-	DispatchedTime          string  `gorm:"column:dispatched_time" json:"Dispatched Time"`
-	DispatchedBy            string  `gorm:"column:dispatched_by" json:"Dispatched By"`
-	DeliveredTime           string  `gorm:"column:delivered_time" json:"Delivered Time"`
-	DeliveryPhotoURL        string  `gorm:"column:delivery_photo_url" json:"Delivery Photo URL"`
+// StopSyncManager gracefully stops all workers
+func StopSyncManager() {
+	close(stopChan)
+	workerWG.Wait()
+	log.Println("✅ SyncManager: All workers stopped gracefully")
 }
 
-type RevenueEntry struct {
-	ID               uint    `gorm:"primaryKey;autoIncrement;column:id" json:"ID"`
-	Timestamp        string  `gorm:"column:timestamp" json:"Timestamp"`
-	Team             string  `gorm:"column:team" json:"Team"`
-	Page             string  `gorm:"column:page" json:"Page"`
-	Revenue          float64 `gorm:"column:revenue" json:"Revenue"`
-	FulfillmentStore string  `gorm:"column:fulfillment_store" json:"FulfillmentStore"`
-}
+func processTask(workerID int, task SyncTask) {
+	log.Printf("🔄 SyncManager [Worker %d]: Processing task action=%s sheet=%s pk=%v", workerID, task.Request.Action, task.Request.SheetName, task.Request.PrimaryKey)
 
-type ChatMessage struct {
-	ID          uint   `gorm:"primaryKey;autoIncrement" json:"ID"`
-	Timestamp   string `gorm:"index" json:"Timestamp"`
-	UserName    string `json:"UserName"`
-	Receiver    string `json:"Receiver"`
-	MessageType string `json:"MessageType"`
-	Content     string `gorm:"type:text" json:"Content"`
-	FileID      string `json:"FileID,omitempty"`
-	AudioData   string `gorm:"-" json:"AudioData,omitempty"`
-}
+	resp, err := CallAppsScriptPOST(task.Request)
 
-type EditLog struct {
-	ID           uint   `gorm:"primaryKey;autoIncrement" json:"id"`
-	Timestamp    string `json:"Timestamp"`
-	OrderID      string `json:"OrderID"`
-	Requester    string `json:"Requester"`
-	FieldChanged string `json:"Field Changed"`
-	OldValue     string `json:"Old Value"`
-	NewValue     string `json:"New Value"`
-}
-type UserActivityLog struct {
-	ID        uint   `gorm:"primaryKey;autoIncrement" json:"ID"`
-	Timestamp string `json:"Timestamp"`
-	User      string `json:"User"`
-	Action    string `json:"Action"`
-	Details   string `json:"Details"`
-}
+	if err != nil || resp.Status != "success" {
+		errorMessage := "Unknown error"
+		if err != nil {
+			errorMessage = err.Error()
+		} else if resp.Message != "" {
+			errorMessage = fmt.Sprintf("status=%s: %s", resp.Status, resp.Message)
+		} else {
+			errorMessage = fmt.Sprintf("unexpected status: %s", resp.Status)
+		}
 
-type Role struct {
-	ID          uint   `gorm:"primaryKey;autoIncrement" json:"ID"`
-	RoleName    string `gorm:"uniqueIndex" json:"RoleName"`
-	Description string `json:"Description"`
+		log.Printf("❌ SyncManager [Worker %d]: Task %s failed: %v", workerID, task.Request.Action, errorMessage)
+
+		if task.RetryCount < task.MaxRetries {
+			task.RetryCount++
+			// Exponential backoff with jitter: 2^retry + 0-1000ms jitter
+			delay := time.Duration(1<<uint(task.RetryCount)) * time.Second
+			jitter := time.Duration(rand.Intn(1000)) * time.Millisecond
+			backoff := delay + jitter
+
+			log.Printf("⏳ SyncManager: Retrying task %s in %v (Attempt %d/%d)", task.Request.Action, backoff, task.RetryCount, task.MaxRetries)
+
+			go func(t SyncTask, d time.Duration) {
+				select {
+				case <-time.After(d):
+					select {
+					case SyncQueue <- &t:
+					case <-stopChan:
+					}
+				case <-stopChan:
+				}
+			}(task, backoff)
+		} else {
+			log.Printf("🔥 SyncManager: Task %s reached max retries. Dropping. Sheet=%s PK=%v",
+				task.Request.Action, task.Request.SheetName, task.Request.PrimaryKey)
+		}
+	} else {
+		log.Printf("✅ SyncManager [Worker %d]: Task %s SUCCESS on sheet=%s pk=%v", workerID, task.Request.Action, task.Request.SheetName, task.Request.PrimaryKey)
+
+		// ✅ Update local DB with Telegram Message IDs if returned
+		if (resp.MessageIds.ID1 != "" || resp.MessageIds.ID2 != "" || resp.MessageIds.ID3 != "") && task.Request.OrderID != "" && DB != nil {
+			updates := make(map[string]interface{})
+			if resp.MessageIds.ID1 != "" {
+				updates["telegram_message_id1"] = resp.MessageIds.ID1
+			}
+			if resp.MessageIds.ID2 != "" {
+				updates["telegram_message_id2"] = resp.MessageIds.ID2
+			}
+			if resp.MessageIds.ID3 != "" {
+				updates["telegram_message_id3"] = resp.MessageIds.ID3
+			}
+
+			if err := DB.Table("orders").Where("order_id = ?", task.Request.OrderID).Updates(updates).Error; err != nil {
+				log.Printf("❌ [SyncManager] Failed to update local DB with Message IDs for Order %s: %v", task.Request.OrderID, err)
+			} else {
+				log.Printf("📝 [SyncManager] Updated local DB with Message IDs for Order %s: ID1=%s, ID2=%s, ID3=%s", task.Request.OrderID, resp.MessageIds.ID1, resp.MessageIds.ID2, resp.MessageIds.ID3)
+			}
+		}
+	}
 }
-
-type RolePermission struct {
-	ID        uint   `gorm:"primaryKey;autoIncrement" json:"ID"`
-	Role      string `gorm:"index" json:"Role"`
-	Feature   string `gorm:"index" json:"Feature"`
-	IsEnabled bool   `json:"IsEnabled"`
-}
-
-type IncentiveCalculator struct {
-	ID        uint    `gorm:"primaryKey" json:"id"`
-	ProjectID uint    `gorm:"index" json:"projectId"`
-	Name      string  `json:"name"`
-	Type      string  `json:"type"`
-	Value     float64 `json:"value"`
-	Status    string  `json:"status"`
-	RulesJSON string  `gorm:"type:text" json:"rulesJson"`
-}
-
-type IncentiveProject struct {
-	ID                     uint                  `gorm:"primaryKey" json:"id"`
-	ProjectName            string                `json:"projectName"`
-	CalculatorID           uint                  `json:"calculatorId"`
-	StartDate              string                `json:"startDate"`
-	EndDate                string                `json:"endDate"`
-	TargetTeam             string                `json:"targetTeam"`
-	Status                 string                `json:"status"`
-	ColorCode              string                `json:"colorCode"`
-	RequirePeriodSelection bool                  `json:"requirePeriodSelection"`
-	DataSource             string                `json:"dataSource"`
-	CreatedAt              string                `json:"createdAt"`
-	Calculators            []IncentiveCalculator `gorm:"foreignKey:ProjectID" json:"calculators"`
-}
-
-type IncentiveResult struct {
-	ID              uint    `gorm:"primaryKey" json:"id"`
-	ProjectID       uint    `gorm:"index" json:"projectId"`
-	UserName        string  `json:"userName"`
-	TotalOrders     int     `json:"totalOrders"`
-	TotalRevenue    float64 `json:"totalRevenue"`
-	TotalProfit     float64 `json:"totalProfit"`
-	CalculatedValue float64 `json:"calculatedValue"`
-	IsCustom        bool    `json:"isCustom"`
-	BreakdownJSON   string  `gorm:"type:text" json:"breakdownJson"`
-}
-
-type IncentiveManualData struct {
-	ID         uint    `gorm:"primaryKey" json:"id"`
-	ProjectID  uint    `gorm:"index" json:"projectId"`
-	Month      string  `gorm:"index" json:"month"` // Format: YYYY-MM
-	MetricType string  `json:"metricType"`
-	DataKey    string  `json:"dataKey"` // Format: {period}_{targetId} e.g. "month_TeamA", "W1_user1"
-	Value      float64 `json:"value"`
-}
-
-type IncentiveCustomPayout struct {
-	ID        uint    `gorm:"primaryKey" json:"id"`
-	ProjectID uint    `gorm:"index" json:"projectId"`
-	Month     string  `gorm:"index" json:"month"` // Format: YYYY-MM
-	UserName  string  `json:"userName"`
-	Value     float64 `json:"value"`
-}
-
-type DeleteOrderRequest struct {
-	OrderID            string `json:"orderId"`
-	Team               string `json:"team"`
-	UserName           string `json:"userName"`
-	TelegramMessageID1 string `json:"telegramMessageId1"`
-	TelegramMessageID2 string `json:"telegramMessageId2"`
-	TelegramMessageID3 string `json:"telegramMessageId3"`
-	TelegramChatId     string `json:"telegramChatId"`
-}
-
-
