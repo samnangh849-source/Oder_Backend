@@ -19,6 +19,7 @@ interface OrdersListTabletProps {
     copiedId: string | null;
     copiedTemplateId: string | null;
     toggleOrderVerified: (id: string, currentStatus: boolean) => void;
+    handleSendTelegram: (id: string) => void;
     updatingIds: Set<string>;
     groupBy?: string;
     viewMode?: 'card' | 'list';
@@ -38,11 +39,13 @@ const OrdersListTablet: React.FC<OrdersListTabletProps> = ({
     copiedId,
     copiedTemplateId,
     toggleOrderVerified,
+    handleSendTelegram,
     updatingIds,
     groupBy = 'none',
     viewMode = 'card'
 }) => {
-    const { appData, previewImage, currentUser, advancedSettings } = useContext(AppContext);
+    const { appData, previewImage, currentUser, advancedSettings, language } = useContext(AppContext);
+    const t = translations[language];
     const isBinance = advancedSettings?.uiTheme === 'binance';
 
     // Helper for robust date parsing

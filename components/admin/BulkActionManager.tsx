@@ -16,9 +16,10 @@ interface BulkActionManagerProps {
     selectedIds: Set<string>;
     onComplete: () => void;
     onClearSelection: () => void;
+    onOptimisticUpdate?: (ids: string[], status: string) => void;
 }
 
-const BulkActionManager: React.FC<BulkActionManagerProps> = ({ orders, selectedIds, onComplete, onClearSelection }) => {
+const BulkActionManager: React.FC<BulkActionManagerProps> = ({ orders, selectedIds, onComplete, onClearSelection, onOptimisticUpdate }) => {
     const { appData, currentUser, refreshData, isSidebarCollapsed } = useContext(AppContext);
     const [isProcessing, setIsProcessing] = useState(false);
     
@@ -39,6 +40,51 @@ const BulkActionManager: React.FC<BulkActionManagerProps> = ({ orders, selectedI
     const [shippingCost, setShippingCost] = useState('');
     
     const [deletePassword, setDeletePassword] = useState('');
+
+    const handleBulkSendTelegram = async () => {
+        if (selectedIds.size === 0) return;
+        if (!window.confirm(`តើអ្នកចង់ផ្ញើការកម្មង់ទាំង ${selectedIds.size} នេះទៅ Telegram មែនទេ?`)) return;
+
+        setIsProcessing(true);
+        try {
+            const idArray = Array.from(selectedIds);
+            
+            // Optimistic update
+            if (onOptimisticUpdate) {
+                onOptimisticUpdate(idArray, 'CHECKING');
+            }
+            
+            const sendPromises = idArray.map(async (id) => {
+                return fetch(`${WEB_APP_URL}/api/admin/update-order`, {
+                    method: 'POST',
+                    headers: { 
+                        'Content-Type': 'application/json',
+                        'Authorization': `Bearer ${localStorage.getItem('token')}`
+                    },
+                    body: JSON.stringify({ 
+                        orderId: id, 
+                        newData: { "Force Sync": true }
+                    })
+                });
+            });
+
+            await Promise.all(sendPromises);
+            
+            // Wait longer for background workers to finish their Apps Script calls
+            // Apps Script can take 3-5 seconds per call, and they run in parallel but 
+            // the background worker might be processing the queue.
+            setTimeout(() => {
+                refreshData();
+                onComplete();
+            }, 3000);
+            
+        } catch (e) {
+            console.error("Bulk Telegram send failed:", e);
+            alert("ការផ្ញើទៅ Telegram បរាជ័យ!");
+        } finally {
+            setIsProcessing(false);
+        }
+    };
 
     const filteredBanks = React.useMemo(() => {
         if (!appData.bankAccounts) return [];
@@ -298,6 +344,7 @@ const BulkActionManager: React.FC<BulkActionManagerProps> = ({ orders, selectedI
                         isProcessing={isProcessing}
                         onVerify={() => handleBulkUpdate({ 'IsVerified': true }, `បញ្ជាក់លើការកម្មង់ទាំង ${selectedIds.size} នេះ?`)}
                         onUnverify={() => handleBulkUpdate({ 'IsVerified': false })}
+                        onSendTelegram={handleBulkSendTelegram}
                         onOpenModal={setActiveModal}
                         onClearSelection={onClearSelection}
                     />
@@ -308,6 +355,7 @@ const BulkActionManager: React.FC<BulkActionManagerProps> = ({ orders, selectedI
                         isProcessing={isProcessing}
                         onVerify={() => handleBulkUpdate({ 'IsVerified': true }, `បញ្ជាក់លើការកម្មង់ទាំង ${selectedIds.size} នេះ?`)}
                         onUnverify={() => handleBulkUpdate({ 'IsVerified': false })}
+                        onSendTelegram={handleBulkSendTelegram}
                         onOpenModal={setActiveModal}
                         onClearSelection={onClearSelection}
                     />

@@ -25,7 +25,7 @@ export const useBarcodeScanner = (
     const [error, setError] = useState<string | null>(null);
     
     // Zoom & Camera Controls
-    const [zoom, setZoom] = useState(1);
+    const [zoom, setZoom] = useState(2); // 🚀 Default to 2x for easier alignment
     const [zoomCapabilities, setZoomCapabilities] = useState<{ min: number; max: number; step: number } | null>(null);
     const [isTorchOn, setIsTorchOn] = useState(false);
     const [isTorchSupported, setIsTorchSupported] = useState(false);
@@ -33,7 +33,7 @@ export const useBarcodeScanner = (
     
     const videoRef = useRef<HTMLVideoElement | null>(null);
     const trackRef = useRef<MediaStreamTrack | null>(null);
-    const beepSound = useRef(new Audio('https://assets.mixkit.co/active_storage/sfx/2568/2568-preview.mp3')); // Modern Soft Tap for scanner beep
+    const beepSound = useRef(new Audio('https://assets.mixkit.co/active_storage/sfx/2568/2568-preview.mp3'));
 
     // --- Core Camera Functions ---
 
@@ -63,30 +63,38 @@ export const useBarcodeScanner = (
         try {
             await track.applyConstraints(constraints);
         } catch (e) {
-            // iOS Zoom Fix
             if (constraints.zoom && isIosDevice) {
                 try {
                     await track.applyConstraints({ advanced: [{ zoom: constraints.zoom }] } as any);
                 } catch (e2) {}
             }
         }
-    }, []);
+    }, [elementId]);
 
     // --- Smooth Zoom Logic ---
     const setSmoothZoom = useCallback(async (targetZoom: number) => {
         const track = getActiveTrack();
-        if (!track) return;
         
         let z = targetZoom;
         if (zoomCapabilities) {
             z = Math.max(zoomCapabilities.min, Math.min(targetZoom, zoomCapabilities.max));
+            setZoom(z);
+            await applyConstraints({ zoom: z });
+        } else {
+            // Virtual Zoom Fallback for Desktop
+            const vZoom = Math.max(1, Math.min(4, targetZoom));
+            setZoom(vZoom);
+            
+            const videoEl = document.querySelector(`#${elementId} video`) as HTMLVideoElement;
+            if (videoEl) {
+                videoEl.style.transform = `scale(${vZoom})`;
+                videoEl.style.transformOrigin = 'center center';
+                videoEl.style.transition = 'transform 0.2s ease-out';
+            }
         }
-        setZoom(z);
-        await applyConstraints({ zoom: z });
-    }, [zoomCapabilities, applyConstraints]);
+    }, [zoomCapabilities, applyConstraints, elementId]);
 
-    // --- Custom Smart Zoom Hook (Will auto-disable on iOS internally) ---
-    const { trackingBox, isAutoZooming, notifyManualZoom } = useSmartZoom(
+    const { isAutoZooming, notifyManualZoom } = useSmartZoom(
         videoRef.current,
         trackRef.current,
         zoom,
@@ -102,32 +110,23 @@ export const useBarcodeScanner = (
     // --- Torch Logic ---
     const toggleTorch = useCallback(async () => {
         const track = getActiveTrack();
-        if (!track) return;
-        if (isIOS()) return; 
-
+        if (!track || isIOS()) return;
         const newStatus = !isTorchOn;
         try {
             await track.applyConstraints({ advanced: [{ torch: newStatus } as any] });
             setIsTorchOn(newStatus);
-        } catch (err) {
-            try {
-                await track.applyConstraints({ torch: newStatus } as any);
-                setIsTorchOn(newStatus);
-            } catch(e2) { }
-        }
+        } catch (err) {}
     }, [isTorchOn]);
 
     // --- Focus Logic ---
     const triggerFocus = useCallback(async () => {
         const track = getActiveTrack();
         if (!track) return;
-        try { await applyConstraints({ focusMode: 'continuous' }); } catch (e) {}
         try {
             // @ts-ignore
             const capabilities = track.getCapabilities ? track.getCapabilities() : {};
-            // @ts-ignore
-            if (capabilities.focusMode && capabilities.focusMode.includes('single-shot')) {
-                await applyConstraints({ focusMode: 'single-shot' });
+            if (capabilities.focusMode && capabilities.focusMode.includes('continuous')) {
+                await applyConstraints({ focusMode: 'continuous' });
             }
         } catch (err) { }
     }, [applyConstraints]);
@@ -156,7 +155,6 @@ export const useBarcodeScanner = (
                         await scannerRef.current.stop();
                         await scannerRef.current.clear();
                     } catch (e) {
-                        console.warn("Cleanup during disable failed:", e);
                     } finally {
                         isTransitioning.current = false;
                     }
@@ -167,10 +165,8 @@ export const useBarcodeScanner = (
             isTransitioning.current = true;
             setIsInitializing(true);
             setIsTorchOn(false);
-            setZoom(1);
             
             try {
-                // Pre-cleanup
                 if (scannerRef.current) {
                     if (scannerRef.current.isScanning) {
                         await scannerRef.current.stop();
@@ -184,7 +180,7 @@ export const useBarcodeScanner = (
 
                 const isIosDevice = isIOS();
 
-                // *** CRITICAL IOS CONFIGURATION ***
+                // *** HIGH-PERFORMANCE DESKTOP OPTIMIZATION ***
                 const videoConstraints = isIosDevice 
                     ? {
                         facingMode: "environment",
@@ -193,29 +189,35 @@ export const useBarcodeScanner = (
                       }
                     : {
                         facingMode: facingMode,
-                        width: { min: 640, ideal: 1280, max: 1920 },
-                        height: { min: 480, ideal: 720, max: 1080 },
-                        frameRate: { ideal: 60, min: 30 }, // High FPS for Android
-                        aspectRatio: 1.777777778, // 16:9 for Android
+                        // Request 1080p for superior clarity on dense QR codes
+                        width: { min: 1280, ideal: 1920 },
+                        height: { min: 720, ideal: 1080 },
+                        frameRate: { ideal: 30 },
                         focusMode: "continuous"
                       };
 
-                const config: ScannerConfig = { 
-                    fps: fps,
-                    qrbox: { width: 280, height: 280 },
-                    ...(isIosDevice ? {} : { aspectRatio: 1.777777778 }),
+                const config: any = { 
+                    fps: 30, // Standard smooth FPS
+                    qrbox: (viewfinderWidth: number, viewfinderHeight: number) => {
+                        const minEdge = Math.min(viewfinderWidth, viewfinderHeight);
+                        // Larger box for high-res scanning
+                        const size = Math.floor(minEdge * 0.8); 
+                        return { width: size, height: size };
+                    },
                     disableFlip: false,
                     experimentalFeatures: {
-                        // Force Native BarcodeDetector on non-iOS
-                        useBarCodeDetectorIfSupported: !isIosDevice 
+                        useBarCodeDetectorIfSupported: true // Native Chrome Acceleration
                     },
+                    // Focus purely on QR codes to save CPU cycles
+                    formatsToSupport: [ 0 ], // 0 = Html5QrcodeSupportedFormats.QR_CODE
                     videoConstraints: videoConstraints
                 };
 
                 let lastScanTime = 0;
                 const onScanSuccess = (decodedText: string) => {
                     const now = Date.now();
-                    if (now - lastScanTime < 1500) return;
+                    // Instant response for first scan
+                    if (now - lastScanTime < 500) return; 
                     lastScanTime = now;
                     
                     beepSound.current.currentTime = 0;
@@ -232,6 +234,13 @@ export const useBarcodeScanner = (
                     videoRef.current = videoEl;
                     videoEl.setAttribute('playsinline', 'true'); 
                     videoEl.style.objectFit = 'cover'; 
+                    
+                    // 🚀 Aggressive focus trigger every 2s during scan
+                    const focusInterval = setInterval(() => {
+                        if (scannerRef.current?.isScanning) triggerFocus();
+                    }, 2000);
+                    // @ts-ignore
+                    scannerRef.current._focusInterval = focusInterval;
                 }
 
                 const track = getActiveTrack();
@@ -241,18 +250,12 @@ export const useBarcodeScanner = (
                     const capabilities = track.getCapabilities ? track.getCapabilities() : {};
                     const settings = track.getSettings();
 
-                    if (!isIosDevice && 'torch' in capabilities) {
-                        setIsTorchSupported(true);
-                    } else {
-                        setIsTorchSupported(false);
-                    }
+                    setIsTorchSupported(!isIosDevice && 'torch' in capabilities);
 
                     if (isIosDevice) {
                         // @ts-ignore
                         const minZ = settings.zoom ? Math.min(settings.zoom, 1) : 1; 
                         setZoomCapabilities({ min: minZ >= 1 ? 1 : 0.5, max: 5, step: 0.1 });
-                        // @ts-ignore
-                        setZoom(settings.zoom || 1);
                     } 
                     // @ts-ignore
                     else if (capabilities.zoom) {
@@ -264,11 +267,12 @@ export const useBarcodeScanner = (
                             // @ts-ignore
                             step: capabilities.zoom.step
                         });
-                        // @ts-ignore
-                        setZoom(settings.zoom || capabilities.zoom.min);
                     } else {
                         setZoomCapabilities(null);
                     }
+                    
+                    // 🚀 Apply initial 2x zoom
+                    setSmoothZoom(2);
                 }
 
                 setIsInitializing(false);
@@ -289,10 +293,12 @@ export const useBarcodeScanner = (
 
         return () => {
             if (scannerRef.current && scannerRef.current.isScanning && !isTransitioning.current) {
+                // @ts-ignore
+                if (scannerRef.current._focusInterval) clearInterval(scannerRef.current._focusInterval);
                 scannerRef.current.stop().then(() => scannerRef.current.clear()).catch(() => {});
             }
         };
-    }, [facingMode, disableScanner]);
+    }, [facingMode, disableScanner, elementId, fps]);
 
     return {
         isInitializing,
@@ -303,11 +309,11 @@ export const useBarcodeScanner = (
         isTorchOn,
         isTorchSupported,
         toggleTorch,
-        trackingBox, 
         isAutoZooming, 
         triggerFocus,
         switchCamera,
         facingMode,
-        scanFromImage
+        scanFromImage,
+        trackingBox: null
     };
 };

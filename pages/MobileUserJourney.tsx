@@ -132,11 +132,6 @@ const MobileUserJourney: React.FC<MobileUserJourneyProps> = ({ onBackToRoleSelec
                     <button className="cm-icon-btn-mobile font-bold text-[11px]" onClick={() => setLocalLanguage(language === 'km' ? 'en' : 'km')}>
                         {language === 'km' ? 'EN' : 'ខ្មែរ'}
                     </button>
-                    {selectedTeam && hasPermission('create_order') && (
-                         <button className="p-2 flex items-center justify-center bg-[var(--cm-accent)] rounded-md active:scale-90 transition-transform" onClick={handleCreateOrder}>
-                            <Plus size={18} color="var(--cm-accent-text)"/>
-                        </button>
-                    )}
                 </div>
             </header>
 

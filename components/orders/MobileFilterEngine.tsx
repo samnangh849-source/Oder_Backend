@@ -83,6 +83,7 @@ const MobileFilterEngine: React.FC<MobileFilterEngineProps> = ({
             title: language === 'km' ? 'ប្រតិបត្តិការ និងក្រុម' : 'Operations & Teams',
             items: [
                 { id: 'team', label: language === 'km' ? 'ក្រុម និងអ្នកប្រើប្រាស់' : 'Team & User', icon: <Users size={18} />, value: filters.team || filters.user ? 'Configured' : '' },
+                { id: 'telegram', label: language === 'km' ? 'ស្ថានភាព Telegram' : 'Telegram Status', icon: <Package size={18} />, value: filters.telegramStatus },
                 { id: 'payment', label: language === 'km' ? 'ស្ថានភាពបង់ប្រាក់' : 'Payment Status', icon: <CreditCard size={18} />, value: filters.paymentStatus }
             ]
         },
@@ -107,6 +108,7 @@ const MobileFilterEngine: React.FC<MobileFilterEngineProps> = ({
             case 'date': return filters.datePreset !== 'all' && filters.datePreset !== 'this_month' ? 1 : 0;
             case 'customer': return filters.customerName ? filters.customerName.split(',').length : 0;
             case 'payment': return filters.paymentStatus ? filters.paymentStatus.split(',').length : 0;
+            case 'telegram': return filters.telegramStatus ? filters.telegramStatus.split(',').length : 0;
             case 'team': return (filters.team ? filters.team.split(',').length : 0) + (filters.user ? filters.user.split(',').length : 0);
             case 'inventory': return filters.fulfillmentStore ? filters.fulfillmentStore.split(',').length : 0;
             case 'location': return filters.location ? filters.location.split(',').length : 0;
@@ -215,6 +217,19 @@ const MobileFilterEngine: React.FC<MobileFilterEngineProps> = ({
                                                 )}
                                                 {cat.id === 'customer' && (
                                                     <SelectFilter label={language === 'km' ? 'ស្វែងរកអតិថិជន' : 'Customer Search'} value={filters.customerName} onChange={v => updateFilter('customerName', v)} options={uniqueValues.customerOptions} multiple={true} isInline={true} />
+                                                )}
+                                                {cat.id === 'telegram' && (
+                                                    <SelectFilter 
+                                                        label={language === 'km' ? 'ស្ថានភាព Telegram' : 'Telegram Status'} 
+                                                        value={filters.telegramStatus} 
+                                                        onChange={v => updateFilter('telegramStatus', v)} 
+                                                        options={[
+                                                            { label: 'Sent (បានផ្ញើរ)', value: 'Sent' }, 
+                                                            { label: 'Not Sent (មិនទាន់ផ្ញើរ)', value: 'Not Sent' }
+                                                        ]} 
+                                                        multiple={true} 
+                                                        isInline={true} 
+                                                    />
                                                 )}
                                                 {cat.id === 'payment' && (
                                                     <SelectFilter label={language === 'km' ? 'ស្ថានភាពបង់ប្រាក់' : 'Payment Status'} value={filters.paymentStatus} onChange={v => updateFilter('paymentStatus', v)} options={[{label:language === 'km' ? 'បានបង់' : 'Paid', value:'Paid'}, {label:language === 'km' ? 'មិនទាន់បង់' : 'Unpaid', value:'Unpaid'}]} multiple={true} variant="payment" isInline={true} />

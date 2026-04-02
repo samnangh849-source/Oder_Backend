@@ -24,6 +24,7 @@ export interface FilterState {
     location: string;
     internalCost: string;
     customerName: string; // New Field
+    telegramStatus: string; // Added field
 }
 
 interface OrderFiltersProps {
@@ -100,7 +101,7 @@ const OrderFilters: React.FC<OrderFiltersProps> = ({
             datePreset: 'this_month', startDate: '', endDate: '', team: '', user: '',
             paymentStatus: '', shippingService: '', driver: '', product: '', bank: '',
             fulfillmentStore: '', store: '', page: '', location: '', internalCost: '',
-            customerName: ''
+            customerName: '', telegramStatus: ''
         });
     };
 
@@ -131,6 +132,18 @@ const OrderFilters: React.FC<OrderFiltersProps> = ({
                     placeholder="Search by Name or Phone..."
                     multiple={true}
                     searchable={true}
+                />
+
+                <SelectFilter 
+                    label="Telegram Status" 
+                    value={filters.telegramStatus} 
+                    onChange={(v) => updateFilter('telegramStatus', v)}
+                    options={[
+                        { label: 'Sent (បានផ្ញើរ)', value: 'Sent' }, 
+                        { label: 'Not Sent (មិនទាន់ផ្ញើរ)', value: 'Not Sent' }
+                    ]}
+                    placeholder="All Telegram Status"
+                    multiple={true}
                 />
 
                 <SelectFilter 

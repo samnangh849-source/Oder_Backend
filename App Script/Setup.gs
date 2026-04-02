@@ -43,7 +43,7 @@ const SYSTEM_STRUCTURE = {
     "Location", "Address Details", "Note", "Shipping Fee (Customer)", "Subtotal", "Grand Total", 
     "Products (JSON)", "Internal Shipping Method", "Internal Shipping Details", "Internal Cost", 
     "Payment Status", "Payment Info", "Discount ($)", "Delivery Unpaid", "Delivery Paid", 
-    "Total Product Cost ($)", "Telegram Message ID 1", "Telegram Message ID 2", "Scheduled Time", 
+    "Total Product Cost ($)", "Telegram Message ID 1", "Telegram Message ID 2", "Telegram Message ID 3", "Scheduled Time", 
     "Fulfillment Store", "Team", "IsVerified", "Fulfillment Status", "Packed By", "Packed Time", 
     "Package Photo URL", "Driver Name", "Tracking Number", "Dispatched Time", "Dispatched By", "Delivered Time", "Delivery Photo URL"
   ],
@@ -112,12 +112,24 @@ function initializeSystem() {
     }
   }
 
-  // កំណត់ទិន្នន័យចាំបាច់បឋម (Default Settings)
+  // កំណត់ទិន្នន័យគំរូបឋម (Sample Data)
   setupDefaultSettings(ss);
   setupDefaultTelegramTemplates(ss);
+  setupSampleUsers(ss);
+  setupSampleStores(ss);
+  setupSampleTeamsPages(ss);
+  setupSampleProducts(ss);
+  setupSampleLocations(ss);
+  setupSampleShippingMethods(ss);
+  setupSampleColors(ss);
+  setupSampleDrivers(ss);
+  setupSampleBankAccounts(ss);
+  setupSamplePhoneCarriers(ss);
+  setupSampleRoles(ss);
+  setupSampleRolePermissions(ss);
 
   const ui = SpreadsheetApp.getUi();
-  ui.alert('✅ ជោគជ័យ!', `បានបង្កើត Sheet ថ្មីចំនួន: ${createdCount}\nបានធ្វើបច្ចុប្បន្នភាព Sheet ចាស់ចំនួន: ${updatedCount}\n\nរចនាសម្ព័ន្ធទិន្នន័យរបស់អ្នកឥឡូវនេះស៊ីគ្នា ១០០% ជាមួយ Backend ហើយ។`, ui.ButtonSet.OK);
+  ui.alert('✅ ជោគជ័យ!', `បានបង្កើត Sheet ថ្មីចំនួន: ${createdCount}\nបានធ្វើបច្ចុប្បន្នភាព Sheet ចាស់ចំនួន: ${updatedCount}\n\nរចនាសម្ព័ន្ធទិន្នន័យរបស់អ្នកឥឡូវនេះស៊ីគ្នា ១០០% ជាមួយ Backend ហើយ។\n\n📝 សូមកែប្រែទិន្នន័យគំរូឱ្យត្រឹមត្រូវតាមអាជីវកម្មរបស់អ្នក។`, ui.ButtonSet.OK);
 }
 
 function validateSheetStructure() {
@@ -178,10 +190,9 @@ function setupDefaultTelegramTemplates(ss) {
   if (!templateSheet) return;
 
   const defaultTemplates = [
-    ["TPL001", "Global", "Header", "🛒 <b>ការកម្មង់ថ្មី (New Order)</b>\n🆔 <b>{Order ID}</b>\n------------------------"],
-    ["TPL002", "Global", "CustomerInfo", "👤 <b>អតិថិជន:</b> {Customer Name}\n☎️ <b>លេខទូរស័ព្ទ:</b> {Customer Phone}\n📍 <b>ទីតាំង:</b> {Location}\n🏠 <b>អាសយដ្ឋាន:</b> {Address Details}\n📝 <b>ចំណាំ:</b> {Note}"],
-    ["TPL003", "Global", "Products", "📦 <b>ទំនិញ:</b>\n{ProductsList}"],
-    ["TPL004", "Global", "Financials", "------------------------\n💰 <b>សរុប (Grand Total):</b> ${Grand Total}\n🚚 <b>សេវាដឹក:</b> {Shipping Fee (Customer)}\n💵 <b>ស្ថានភាព:</b> {Payment Status}"]
+    ["TPL001", "Global", "Part1", "📃 *Page:* {{sourceInfo}}\n👨‍💻 *អ្នកលក់:* {{user}}\n🏪 *ដឹកចេញពី:* {{fulfillmentStore}}\n🚚 *ដឹកដោយ:* {{shippingMethod}}{{shippingDetails}}\n{{note}}\n\n🔔 *ការកម្ម៉ង់ថ្មី* | ID: `{{orderId}}`\n--------------------------------------"],
+    ["TPL002", "Global", "Part2", "✅សូមបងពិនិត្យលេខទូរស័ព្ទ និងទីតាំងម្ដងទៀតបង 🙏\n📃 *Page:* {{sourceInfo}}\n👤 *អតិថិជន:* {{customerName}}\n📞 *លេខទូរស័ព្ទ:* {{customerPhone}}\n📍 *ទីតាំង:* {{location}}\n🏠 *អាសយដ្ឋាន:* {{addressDetails}}\n\n *----------- ផលិតផល -----------*\n{{productsList}}\n\n💰 *សរុប:*\n  - តម្លៃទំនិញ: ${{subtotal}}\n  - សេវាដឹក: ${{shippingFee}}\n  - *សរុបចុងក្រោយ: ${{grandTotal}}*\n {{paymentStatus}}\n\n🚚 *វិធីសាស្រ្តដឹកជញ្ជូន:* {{shippingMethod}}\n{{date}}\n--------------------------------------\nអរគុណបង🙏🥰 | ID: `{{orderId}}`"],
+    ["TPL003", "Global", "Part3", "📦 *ព័ត៌មានការវេចខ្ចប់*\n🧑‍🔧 *អ្នកវេចខ្ចប់:* {{packedBy}}\n⏰ *ពេលវេលា:* {{packedTime}}\n🚚 *អ្នកដឹក:* {{driverName}}\n🏷️ *លេខកូដដឹកជញ្ជូន:* `{{trackingNumber}}`\n[📷 រូបភាពវេចខ្ចប់]({{packagePhotoUrl}})"]
   ];
 
   const lastRow = templateSheet.getLastRow();
@@ -196,4 +207,120 @@ function setupDefaultTelegramTemplates(ss) {
       templateSheet.appendRow(template);
     }
   });
+}
+
+// --- Helper: បញ្ចូលទិន្នន័យគំរូប្រសិនបើ Sheet ទទេ ---
+function insertSampleIfEmpty(ss, sheetName, rows) {
+  const sheet = ss.getSheetByName(sheetName);
+  if (!sheet || sheet.getLastRow() > 1) return; // រំលងប្រសិនបើមានទិន្នន័យរួចហើយ
+  rows.forEach(row => sheet.appendRow(row));
+}
+
+// --- ទិន្នន័យគំរូសម្រាប់គ្រប់ Sheet ---
+
+function setupSampleUsers(ss) {
+  insertSampleIfEmpty(ss, "Users", [
+    ["admin", "admin123", "TeamA", "Admin User", "", "Admin", true, ""],
+    ["seller1", "seller123", "TeamA", "អ្នកលក់ ១", "", "Seller", false, ""],
+    ["packer1", "packer123", "TeamA", "អ្នកវេចខ្ចប់ ១", "", "Packer", false, ""]
+  ]);
+}
+
+function setupSampleStores(ss) {
+  // Stores.TelegramTopicID = Topic ID default របស់ Store (fallback ប្រសិនបើ Page មិនមាន TopicID)
+  insertSampleIfEmpty(ss, "Stores", [
+    ["MainStore", "Warehouse", "ភ្នំពេញ", "ដាក់_BOT_TOKEN_នៅទីនេះ", "ដាក់_GROUP_ID_នៅទីនេះ", "ដាក់_TOPIC_ID_នៅទីនេះ", "", ""],
+    ["BranchStore", "Branch", "សៀមរាប", "", "", "", "", ""]
+  ]);
+}
+
+function setupSampleTeamsPages(ss) {
+  // TeamsPages.TelegramTopicID = Topic ID ជាក់លាក់សម្រាប់ Page នីមួយៗ
+  // ទម្រង់: "StoreName:TopicID, StoreName:TopicID" (ច្រើនឃ្លាំង) ឬ "12345" (មួយឃ្លាំង)
+  insertSampleIfEmpty(ss, "TeamsPages", [
+    [1, "TeamA", "Page A", "@page_a_telegram", "", "MainStore", "MainStore:10617, BranchStore:20834"],
+    [2, "TeamA", "Page B", "@page_b_telegram", "", "MainStore", "MainStore:10618, BranchStore:20835"],
+    [3, "TeamB", "Page C", "@page_c_telegram", "", "BranchStore", "30901"]
+  ]);
+}
+
+function setupSampleProducts(ss) {
+  insertSampleIfEmpty(ss, "Products", [
+    ["PRD001", "ផលិតផល A", 10.00, 5.00, "", "popular"],
+    ["PRD002", "ផលិតផល B", 25.50, 12.00, "", "new"],
+    ["PRD003", "ផលិតផល C", 8.00, 3.50, "", ""]
+  ]);
+}
+
+function setupSampleLocations(ss) {
+  insertSampleIfEmpty(ss, "Locations", [
+    [1, "ភ្នំពេញ", "ចំការមន", "ទន្លេបាសាក់"],
+    [2, "ភ្នំពេញ", "ដូនពេញ", "វត្តភ្នំ"],
+    [3, "សៀមរាប", "សៀមរាប", "សាលាកំរើក"]
+  ]);
+}
+
+function setupSampleShippingMethods(ss) {
+  insertSampleIfEmpty(ss, "ShippingMethods", [
+    ["Express", "", true, false, 2.00, "1.5,2,2.5,3", false],
+    ["Standard", "", false, false, 1.50, "1,1.5,2", false],
+    ["Driver", "", true, true, 0, "", true]
+  ]);
+}
+
+function setupSampleColors(ss) {
+  insertSampleIfEmpty(ss, "Colors", [
+    ["ក្រហម"], ["ខៀវ"], ["បៃតង"], ["ខ្មៅ"], ["ស"], ["លឿង"]
+  ]);
+}
+
+function setupSampleDrivers(ss) {
+  insertSampleIfEmpty(ss, "Drivers", [
+    ["បងឆាយ", "", "012345678", 2.00, "MainStore"],
+    ["បងដារា", "", "098765432", 2.50, "MainStore,BranchStore"]
+  ]);
+}
+
+function setupSampleBankAccounts(ss) {
+  insertSampleIfEmpty(ss, "BankAccounts", [
+    ["ABA", "", "MainStore"],
+    ["ACLEDA", "", "MainStore,BranchStore"],
+    ["Wing", "", "MainStore"]
+  ]);
+}
+
+function setupSamplePhoneCarriers(ss) {
+  insertSampleIfEmpty(ss, "PhoneCarriers", [
+    ["Smart", "010,015,016,069,070,093,098", ""],
+    ["Cellcard", "011,012,014,017,061,076,077,078,079,085,089,092,095,099", ""],
+    ["Metfone", "031,060,066,067,068,071,088,090,097", ""]
+  ]);
+}
+
+function setupSampleRoles(ss) {
+  insertSampleIfEmpty(ss, "Roles", [
+    [1, "Admin", "គ្រប់គ្រងប្រព័ន្ធទាំងមូល"],
+    [2, "Seller", "បង្កើតការកម្មង់ និងគ្រប់គ្រងអតិថិជន"],
+    [3, "Packer", "វេចខ្ចប់ និងរៀបចំការកម្មង់"],
+    [4, "Dispatcher", "ផ្ញើការកម្មង់ទៅអ្នកដឹក"],
+    [5, "Viewer", "មើលទិន្នន័យប៉ុណ្ណោះ"]
+  ]);
+}
+
+function setupSampleRolePermissions(ss) {
+  insertSampleIfEmpty(ss, "RolePermissions", [
+    [1, "Admin", "orders", true],
+    [2, "Admin", "products", true],
+    [3, "Admin", "settings", true],
+    [4, "Admin", "users", true],
+    [5, "Admin", "reports", true],
+    [6, "Seller", "orders", true],
+    [7, "Seller", "products", true],
+    [8, "Seller", "settings", false],
+    [9, "Packer", "orders", true],
+    [10, "Packer", "products", false],
+    [11, "Dispatcher", "orders", true],
+    [12, "Viewer", "orders", true],
+    [13, "Viewer", "reports", true]
+  ]);
 }

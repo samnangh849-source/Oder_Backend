@@ -22,7 +22,8 @@ export const availableColumns = [
     { key: 'note', labelKey: 'col_note' },
     { key: 'print', labelKey: 'col_output' },
     { key: 'check', labelKey: 'col_verify' },
-    { key: 'orderId', labelKey: 'col_id' }
+    { key: 'orderId', labelKey: 'col_id' },
+    { key: 'telegramStatus', labelKey: 'col_telegram' }
 ];
 
 interface ColumnTogglerProps {

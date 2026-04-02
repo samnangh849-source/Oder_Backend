@@ -349,6 +349,12 @@ const UserOrdersView: React.FC<UserOrdersViewProps> = ({ onAdd, onStatsUpdate, s
                             <Filter size={18} />
                             {Object.values(advancedFilters).some(v => v && v !== 'all' && v !== 'this_month' && v !== 'All') && <span className="absolute -top-1 -right-1 w-2 h-2 bg-[var(--cm-accent)] rounded-full border border-[var(--cm-bg)]"></span>}
                         </button>
+                        
+                        {hasPermission('create_order') && (
+                            <button onClick={onAdd} className="px-4 py-2.5 bg-[var(--cm-accent)] text-[var(--cm-accent-text)] rounded-md active:scale-95 transition-all flex items-center gap-2 font-bold text-xs shadow-lg shadow-[var(--cm-accent)]/10">
+                                <Plus size={16} /> {language === 'km' ? 'បង្កើតការកម្មង់' : 'Create Order'}
+                            </button>
+                        )}
                     </div>
                 </div>
             </div>

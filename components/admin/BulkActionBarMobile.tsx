@@ -4,15 +4,16 @@ import { useSoundEffects } from '../../hooks/useSoundEffects';
 
 interface BulkActionBarMobileProps {
     selectedCount: number;
-    onClear: () => void;
+    onClearSelection: () => void;
     onVerify: () => void;
     onUnverify: () => void;
+    onSendTelegram?: () => void;
     onOpenModal: (type: 'cost' | 'payment' | 'shipping' | 'delete' | 'date') => void;
     isProcessing?: boolean;
 }
 
 const BulkActionBarMobile: React.FC<BulkActionBarMobileProps> = ({ 
-    selectedCount, onClear, onVerify, onUnverify, onOpenModal, isProcessing 
+    selectedCount, onClearSelection, onVerify, onUnverify, onSendTelegram, onOpenModal, isProcessing 
 }) => {
     const { playClick, playPop } = useSoundEffects();
 
@@ -29,7 +30,7 @@ const BulkActionBarMobile: React.FC<BulkActionBarMobileProps> = ({
                         </div>
                         <span className="text-[10px] font-black text-white uppercase tracking-widest">Selected</span>
                     </div>
-                    <button onClick={() => { playPop(); onClear(); }} className="text-[10px] font-black text-gray-500 uppercase tracking-widest px-2">Clear</button>
+                    <button onClick={() => { playPop(); onClearSelection(); }} className="text-[10px] font-black text-gray-500 uppercase tracking-widest px-2">Clear</button>
                 </div>
 
                 {/* Actions Toolbar - Scrollable */}
@@ -47,6 +48,14 @@ const BulkActionBarMobile: React.FC<BulkActionBarMobileProps> = ({
                         disabled={isProcessing}
                     >
                         Unverify
+                    </button>
+
+                    <button 
+                        onClick={() => { playClick(); onSendTelegram?.(); }}
+                        className="flex-shrink-0 flex items-center gap-1.5 px-4 py-2.5 bg-blue-600 text-white rounded-xl text-[9px] font-black uppercase tracking-widest shadow-lg shadow-blue-900/40 active:scale-95 transition-all"
+                        disabled={isProcessing}
+                    >
+                        Telegram
                     </button>
                     
                     <div className="w-px h-6 bg-white/10 shrink-0"></div>

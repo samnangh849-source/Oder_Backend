@@ -105,17 +105,19 @@ const FastPackTerminal: React.FC<FastPackTerminalProps> = ({ order, onClose, onS
         setIsCapturing(true);
         try {
             const canvas = document.createElement('canvas');
-            // Set canvas to a standard high-quality size for the final record
-            canvas.width = 1280;
-            canvas.height = 960; 
-            const ctx = canvas.getContext('2d');
-            if (!ctx) throw new Error("Could not get canvas context");
-
-            // 1. Draw the Video Frame (Centered & Cropped to fit)
-            const videoAspect = video.videoWidth / video.videoHeight;
+            
+            // 🚀 FIXED HIGH RESOLUTION (5MP 4:3)
+            canvas.width = 2560;
+            canvas.height = 1920; 
+            
+            const videoWidth = video.videoWidth;
+            const videoHeight = video.videoHeight;
+            const videoAspect = videoWidth / videoHeight;
             const canvasAspect = canvas.width / canvas.height;
+
             let drawWidth, drawHeight, offsetX, offsetY;
 
+            // Centered Cropping Logic to fit 4:3 Frame
             if (videoAspect > canvasAspect) {
                 drawHeight = canvas.height;
                 drawWidth = canvas.height * videoAspect;
@@ -128,59 +130,106 @@ const FastPackTerminal: React.FC<FastPackTerminalProps> = ({ order, onClose, onS
                 offsetY = -(drawHeight - canvas.height) / 2;
             }
 
+            const ctx = canvas.getContext('2d');
+            if (!ctx) throw new Error("Could not get canvas context");
+
+            // Draw with Centered Crop
             ctx.drawImage(video, offsetX, offsetY, drawWidth, drawHeight);
 
-            // 2. Add Semi-transparent Overlays for Text Readability
-            ctx.fillStyle = 'rgba(0, 0, 0, 0.5)';
-            // Left Overlay
-            ctx.fillRect(0, 0, 350, canvas.height);
-            // Right Overlay
-            ctx.fillRect(canvas.width - 350, 0, 350, canvas.height);
+            // 2. Adaptive Glassmorphism Overlays (Scaled for 2560x1920 Resolution)
+            const topBarHeight = canvas.height * 0.18; // 18% of height
+            const bottomBarHeight = canvas.height * 0.2; // 20% of height
 
-            // 3. Draw Order Information
-            ctx.fillStyle = '#FFFFFF';
+            // Top Bar Gradient
+            const topGradient = ctx.createLinearGradient(0, 0, 0, topBarHeight);
+            topGradient.addColorStop(0, 'rgba(0, 0, 0, 0.88)');
+            topGradient.addColorStop(1, 'rgba(0, 0, 0, 0)');
+            ctx.fillStyle = topGradient;
+            ctx.fillRect(0, 0, canvas.width, topBarHeight);
+
+            // Bottom Bar Gradient
+            const bottomGradient = ctx.createLinearGradient(0, canvas.height - bottomBarHeight, 0, canvas.height);
+            bottomGradient.addColorStop(0, 'rgba(0, 0, 0, 0)');
+            bottomGradient.addColorStop(1, 'rgba(0, 0, 0, 0.88)');
+            ctx.fillStyle = bottomGradient;
+            ctx.fillRect(0, canvas.height - bottomBarHeight, canvas.width, bottomBarHeight);
+
+            // 3. Scaled Information Layout
             ctx.textBaseline = 'top';
+            const margin = canvas.width * 0.035; // 3.5% padding
             
-            // Left Side Info
-            ctx.font = 'bold 32px Kantumruy Pro, sans-serif';
-            ctx.fillText('ORDER DETAILS', 30, 40);
+            // --- TOP LEFT: Order Info ---
+            ctx.textAlign = 'left';
+            ctx.font = `bold ${Math.round(canvas.width * 0.018)}px Kantumruy Pro, sans-serif`;
+            ctx.fillStyle = 'rgba(255, 255, 255, 0.75)';
+            ctx.fillText('ORDER VERIFICATION PROOF', margin, margin);
             
-            ctx.font = 'bold 48px monospace';
+            ctx.font = `bold ${Math.round(canvas.width * 0.038)}px monospace`;
             ctx.fillStyle = '#FCD535';
-            ctx.fillText(`#${order?.['Order ID'].substring(0, 12)}`, 30, 90);
+            ctx.fillText(`#${order?.['Order ID'].substring(0, 15)}`, margin, margin + (canvas.height * 0.035));
             
             ctx.fillStyle = '#FFFFFF';
-            ctx.font = 'bold 36px Kantumruy Pro, sans-serif';
-            ctx.fillText(order?.['Customer Name'] || 'N/A', 30, 160);
-            
-            ctx.font = '32px monospace';
-            ctx.fillText(order?.['Customer Phone'] || 'N/A', 30, 210);
+            ctx.font = `bold ${Math.round(canvas.width * 0.028)}px Kantumruy Pro, sans-serif`;
+            ctx.fillText(`${order?.['Customer Name'] || 'N/A'} • ${order?.['Customer Phone'] || 'N/A'}`, margin, margin + (canvas.height * 0.1));
 
-            // Right Side Info
+            // --- TOP RIGHT: Status Badge ---
             ctx.textAlign = 'right';
-            ctx.font = 'bold 32px Kantumruy Pro, sans-serif';
-            ctx.fillText('PAYMENT & LOGS', canvas.width - 30, 40);
+            const statusText = 'PACKED & VERIFIED';
+            ctx.font = `bold ${Math.round(canvas.width * 0.016)}px Kantumruy Pro, sans-serif`;
+            const statusWidth = ctx.measureText(statusText).width + (canvas.width * 0.03);
             
-            ctx.font = 'bold 60px monospace';
+            ctx.fillStyle = 'rgba(14, 203, 129, 0.25)';
+            ctx.strokeStyle = '#0ECB81';
+            ctx.lineWidth = Math.round(canvas.width * 0.0025);
+            const rx = canvas.width - statusWidth - margin;
+            const ry = margin;
+            const rw = statusWidth;
+            const rh = canvas.height * 0.05;
+            const radius = canvas.width * 0.006;
+            ctx.beginPath();
+            ctx.moveTo(rx + radius, ry);
+            ctx.lineTo(rx + rw - radius, ry);
+            ctx.quadraticCurveTo(rx + rw, ry, rx + rw, ry + radius);
+            ctx.lineTo(rx + rw, ry + rh - radius);
+            ctx.quadraticCurveTo(rx + rw, ry + rh, rx + rw - radius, ry + rh);
+            ctx.lineTo(rx + radius, ry + rh);
+            ctx.quadraticCurveTo(rx, ry + rh, rx, ry + rh - radius);
+            ctx.lineTo(rx, ry + radius);
+            ctx.quadraticCurveTo(rx, ry, rx + radius, ry);
+            ctx.closePath();
+            ctx.fill();
+            ctx.stroke();
+            
             ctx.fillStyle = '#0ECB81';
-            ctx.fillText(`$${(Number(order?.['Grand Total']) || 0).toFixed(2)}`, canvas.width - 30, 90);
-            
+            ctx.fillText(statusText, canvas.width - margin - (canvas.width * 0.015), margin + (canvas.height * 0.012));
+
+            // --- BOTTOM LEFT: Logistics & Packer ---
+            ctx.textAlign = 'left';
+            ctx.textBaseline = 'bottom';
             ctx.fillStyle = '#FFFFFF';
-            ctx.font = '28px Kantumruy Pro, sans-serif';
-            ctx.fillText(`Packer: ${currentUser?.FullName || 'N/A'}`, canvas.width - 30, 170);
-            
+            ctx.font = `${Math.round(canvas.width * 0.022)}px Kantumruy Pro, sans-serif`;
+            ctx.fillText(`Logistic: ${order?.['Internal Shipping Method'] || 'N/A'}`, margin, canvas.height - margin - (canvas.height * 0.045));
+            ctx.font = `${Math.round(canvas.width * 0.018)}px Kantumruy Pro, sans-serif`;
+            ctx.fillStyle = 'rgba(255, 255, 255, 0.65)';
+            ctx.fillText(`Packer: ${currentUser?.FullName || 'N/A'}`, margin, canvas.height - margin);
+
+            // --- BOTTOM RIGHT: Timestamp ---
+            ctx.textAlign = 'right';
             const now = new Date();
-            ctx.font = '24px monospace';
-            ctx.fillText(now.toLocaleDateString('km-KH'), canvas.width - 30, 220);
-            ctx.fillText(now.toLocaleTimeString('km-KH'), canvas.width - 30, 255);
+            ctx.fillStyle = '#FCD535';
+            ctx.font = `bold ${Math.round(canvas.width * 0.028)}px monospace`;
+            ctx.fillText(now.toLocaleTimeString('km-KH'), canvas.width - margin, canvas.height - margin - (canvas.height * 0.045));
+            ctx.fillStyle = '#FFFFFF';
+            ctx.font = `${Math.round(canvas.width * 0.018)}px monospace`;
+            ctx.fillText(now.toLocaleDateString('km-KH'), canvas.width - margin, canvas.height - margin);
 
-            // 4. Add Bottom Watermark
+            // 4. Subtle Watermark
             ctx.textAlign = 'center';
-            ctx.font = 'bold 20px sans-serif';
-            ctx.fillStyle = 'rgba(255, 255, 255, 0.3)';
-            ctx.fillText('GENERATED BY FAST PACK TERMINAL v4.3', canvas.width / 2, canvas.height - 30);
+            ctx.font = `bold ${Math.round(canvas.width * 0.012)}px sans-serif`;
+            ctx.fillStyle = 'rgba(255, 255, 255, 0.25)';
+            ctx.fillText('ACC ORDER MANAGEMENT SYSTEM • FAST PACK TERMINAL v4.3', canvas.width / 2, canvas.height - (canvas.height * 0.025));
 
-            const blob = await new Promise<Blob | null>(res => canvas.toBlob(res, 'image/jpeg', 0.85));
+            const blob = await new Promise<Blob | null>(res => canvas.toBlob(res, 'image/jpeg', 0.92));
             if (!blob) throw new Error("Could not create blob from canvas");
 
             const file = new File([blob], `Package_${order?.['Order ID'].substring(0,8)}.jpg`, { type: 'image/jpeg' });
@@ -206,6 +255,8 @@ const FastPackTerminal: React.FC<FastPackTerminalProps> = ({ order, onClose, onS
         }
     }, [order, isCapturing, setPackagePhoto, currentUser]);
 
+    const handleZoomRef = useRef<((z: number) => void) | null>(null);
+
     const onScan = useCallback((decodedText: string) => {
         if (step !== 'PHOTO' || packagePhoto || autoCaptureCountdown !== null || isCapturing) return;
         
@@ -213,6 +264,11 @@ const FastPackTerminal: React.FC<FastPackTerminalProps> = ({ order, onClose, onS
         if (lastDetectedQR.current === decodedText) return;
         lastDetectedQR.current = decodedText;
         setTimeout(() => { lastDetectedQR.current = null; }, 5000);
+
+        // 🚀 Reset zoom to 1x on successful scan
+        if (handleZoomRef.current) {
+            handleZoomRef.current(1);
+        }
 
         // Start countdown
         setAutoCaptureCountdown(3);
@@ -224,12 +280,20 @@ const FastPackTerminal: React.FC<FastPackTerminalProps> = ({ order, onClose, onS
         switchCamera,
         isTorchOn,
         isTorchSupported,
-        toggleTorch
+        toggleTorch,
+        zoom,
+        zoomCapabilities,
+        handleZoomChange,
+        trackingBox
     } = useBarcodeScanner("fastpack-scanner-container", onScan, 'single', { 
         fps: 10,
         // ✅ Fix 2: Only start camera when in PHOTO step to save battery/reduce heat
         disableScanner: step !== 'PHOTO' || !!packagePhoto 
     });
+
+    useEffect(() => {
+        handleZoomRef.current = handleZoomChange;
+    }, [handleZoomChange]);
 
     useEffect(() => {
         if (autoCaptureCountdown !== null && autoCaptureCountdown > 0) {
@@ -408,6 +472,12 @@ const FastPackTerminal: React.FC<FastPackTerminalProps> = ({ order, onClose, onS
             setAdvancementProgress(0);
         }
     }, [isAdvancingLabel]);
+
+    useEffect(() => {
+        if (step === 'PHOTO') {
+            handleZoomChange(1);
+        }
+    }, [step, handleZoomChange]);
 
     // Broadcast operation steps to All Users
     useEffect(() => {
@@ -805,7 +875,7 @@ const FastPackTerminal: React.FC<FastPackTerminalProps> = ({ order, onClose, onS
 
                             <div className={`bg-[#181A20] rounded-sm p-6 sm:p-12 border border-[#2B3139] flex-grow flex-col items-center justify-center gap-6 sm:gap-8 animate-fade-in relative overflow-hidden ${step === 'PHOTO' ? 'flex' : 'hidden'}`}>
                                 {/* Camera Section */}
-                                <div className="relative group w-full max-w-md aspect-square sm:w-[400px] sm:h-[400px]">
+                                <div className="relative group w-full max-w-3xl aspect-[4/3]">
                                     <div className={`w-full h-full bg-[#0B0E11] rounded-sm flex items-center justify-center border-2 transition-all duration-300 overflow-hidden relative ${packagePhoto ? 'border-[#0ECB81]' : autoCaptureCountdown !== null ? 'border-[#FCD535] shadow-[0_0_20px_rgba(252,213,53,0.3)]' : 'border-[#2B3139]'}`}>
                                         {/* Live Scanner Container */}
                                         <div 
@@ -848,31 +918,73 @@ const FastPackTerminal: React.FC<FastPackTerminalProps> = ({ order, onClose, onS
 
                                             {/* Scanning Reticle */}
                                             {!packagePhoto && !isScannerLoading && autoCaptureCountdown === null && (
-                                                <div className="absolute inset-0 z-10 pointer-events-none flex items-center justify-center">
-                                                    <div className="w-48 h-48 border border-white/20 rounded-2xl relative">
-                                                        <div className="absolute -top-1 -left-1 w-6 h-6 border-t-4 border-l-4 border-[#FCD535] rounded-tl-lg"></div>
-                                                        <div className="absolute -top-1 -right-1 w-6 h-6 border-t-4 border-r-4 border-[#FCD535] rounded-tr-lg"></div>
-                                                        <div className="absolute -bottom-1 -left-1 w-6 h-6 border-b-4 border-l-4 border-[#FCD535] rounded-bl-lg"></div>
-                                                        <div className="absolute -bottom-1 -right-1 w-6 h-6 border-b-4 border-r-4 border-[#FCD535] rounded-br-lg"></div>
-                                                        <div className="absolute inset-0 bg-[#FCD535]/5 animate-pulse"></div>
+                                                <div className="absolute inset-0 z-10 pointer-events-none flex items-center justify-center p-8">
+                                                    <div className="w-full h-full max-w-[280px] max-h-[280px] border border-white/10 rounded-3xl relative">
+                                                        {/* High-tech Corners */}
+                                                        <div className="absolute -top-2 -left-2 w-10 h-10 border-t-[3px] border-l-[3px] border-[#FCD535] rounded-tl-xl shadow-[0_0_15px_rgba(252,213,53,0.4)]"></div>
+                                                        <div className="absolute -top-2 -right-2 w-10 h-10 border-t-[3px] border-r-[3px] border-[#FCD535] rounded-tr-xl shadow-[0_0_15px_rgba(252,213,53,0.4)]"></div>
+                                                        <div className="absolute -bottom-2 -left-2 w-10 h-10 border-b-[3px] border-l-[3px] border-[#FCD535] rounded-bl-xl shadow-[0_0_15px_rgba(252,213,53,0.4)]"></div>
+                                                        <div className="absolute -bottom-2 -right-2 w-10 h-10 border-b-[3px] border-r-[3px] border-[#FCD535] rounded-br-xl shadow-[0_0_15px_rgba(252,213,53,0.4)]"></div>
+                                                        
+                                                        {/* Center Crosshair */}
+                                                        <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-8 h-8 opacity-40">
+                                                            <div className="absolute top-1/2 left-0 w-full h-[1px] bg-white"></div>
+                                                            <div className="absolute top-0 left-1/2 w-[1px] h-full bg-white"></div>
+                                                        </div>
+
+                                                        {/* Scanning Line Animation */}
+                                                        <div className="absolute inset-x-4 h-[2px] bg-gradient-to-r from-transparent via-[#FCD535]/50 to-transparent shadow-[0_0_10px_rgba(252,213,53,0.5)] animate-scan-line"></div>
+                                                        
+                                                        <div className="absolute inset-0 bg-[#FCD535]/5 rounded-3xl animate-pulse"></div>
                                                     </div>
+                                                </div>
+                                            )}
+
+                                            {/* Zoom Controls Overlay */}
+                                            {!packagePhoto && !isScannerLoading && zoomCapabilities && (
+                                                <div className="absolute right-6 top-1/2 -translate-y-1/2 z-30 flex flex-col items-center gap-4 py-6 px-3 bg-black/40 backdrop-blur-xl border border-white/10 rounded-full group/zoom">
+                                                    <span className="text-[10px] font-black text-[#FCD535] drop-shadow-sm select-none">
+                                                        {zoom.toFixed(1)}x
+                                                    </span>
+                                                    <div className="relative h-40 w-1 flex items-center justify-center">
+                                                        <input 
+                                                            type="range"
+                                                            min={zoomCapabilities.min}
+                                                            max={zoomCapabilities.max}
+                                                            step={zoomCapabilities.step}
+                                                            value={zoom}
+                                                            onChange={(e) => handleZoomChange(parseFloat(e.target.value))}
+                                                            className="absolute w-40 h-1 appearance-none bg-white/20 rounded-full cursor-pointer -rotate-90 origin-center accent-[#FCD535]"
+                                                            style={{ 
+                                                                WebkitAppearance: 'none',
+                                                            }}
+                                                        />
+                                                    </div>
+                                                    <button 
+                                                        onClick={() => handleZoomChange(1)}
+                                                        className="text-[9px] font-black text-white/40 hover:text-white uppercase tracking-tighter transition-colors"
+                                                    >
+                                                        Reset
+                                                    </button>
                                                 </div>
                                             )}
                                         </div>
 
                                         {/* Quick Controls */}
                                         {!packagePhoto && !isScannerLoading && (
-                                            <div className="absolute bottom-4 left-1/2 -translate-x-1/2 z-30 flex items-center gap-3">
+                                            <div className="absolute bottom-6 left-1/2 -translate-x-1/2 z-30 flex items-center gap-4">
                                                 <button 
                                                     onClick={switchCamera}
-                                                    className="p-3 bg-black/60 backdrop-blur-md border border-white/10 rounded-full text-white hover:bg-[#FCD535] hover:text-black transition-all"
+                                                    className="p-3.5 bg-black/60 backdrop-blur-xl border border-white/10 rounded-full text-white hover:bg-[#FCD535] hover:text-black transition-all shadow-lg active:scale-90"
+                                                    title="Switch Camera"
                                                 >
                                                     <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" /></svg>
                                                 </button>
                                                 {isTorchSupported && (
                                                     <button 
                                                         onClick={toggleTorch}
-                                                        className={`p-3 backdrop-blur-md border border-white/10 rounded-full transition-all ${isTorchOn ? 'bg-[#FCD535] text-black' : 'bg-black/60 text-white'}`}
+                                                        className={`p-3.5 backdrop-blur-xl border border-white/10 rounded-full transition-all shadow-lg active:scale-90 ${isTorchOn ? 'bg-[#FCD535] text-black shadow-[0_0_15px_rgba(252,213,53,0.4)]' : 'bg-black/60 text-white'}`}
+                                                        title="Toggle Torch"
                                                     >
                                                         <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z" /></svg>
                                                     </button>
@@ -883,7 +995,7 @@ const FastPackTerminal: React.FC<FastPackTerminalProps> = ({ order, onClose, onS
                                         {packagePhoto && (
                                             <button 
                                                 onClick={() => setPackagePhoto(null)} 
-                                                className="absolute -top-3 -right-3 z-30 bg-[#F6465D] text-white p-2 rounded-full shadow-lg hover:scale-110 transition-transform border-2 border-[#181A20]"
+                                                className="absolute -top-3 -right-3 z-30 bg-[#F6465D] text-white p-2.5 rounded-full shadow-2xl hover:scale-110 active:scale-90 transition-all border-2 border-[#181A20]"
                                             >
                                                 <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2.5}><path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" /></svg>
                                             </button>
@@ -891,11 +1003,11 @@ const FastPackTerminal: React.FC<FastPackTerminalProps> = ({ order, onClose, onS
                                     </div>
 
                                     <div className="text-center space-y-2">
-                                        <h3 className="text-xl font-bold text-white uppercase tracking-widest">
-                                            {packagePhoto ? 'Photo Ready' : autoCaptureCountdown !== null ? 'Keep Steady' : 'Fast Capture'}
+                                        <h3 className="text-xl font-bold text-white uppercase tracking-[0.2em]">
+                                            {packagePhoto ? 'PHOTO READY' : autoCaptureCountdown !== null ? 'KEEP STEADY' : 'FAST CAPTURE'}
                                         </h3>
-                                        <p className="text-gray-500 text-[10px] font-bold uppercase tracking-[0.2em]">
-                                            {packagePhoto ? 'Review and proceed below' : 'Scan any QR Code for 3s Auto-Capture'}
+                                        <p className="text-gray-500 text-[10px] font-black uppercase tracking-[0.3em]">
+                                            {packagePhoto ? 'Review and proceed below' : 'Scan QR for 3s Auto-Capture'}
                                         </p>
                                     </div>
 
@@ -903,24 +1015,36 @@ const FastPackTerminal: React.FC<FastPackTerminalProps> = ({ order, onClose, onS
                                         <button 
                                             onClick={capturePhotoFromStream}
                                             disabled={isCapturing || !!packagePhoto || isScannerLoading}
-                                            className="w-full max-w-xs py-4 bg-[#FCD535] hover:bg-[#FCD535]/90 disabled:bg-[#2B3139] disabled:text-gray-600 text-black rounded-sm font-black uppercase text-xs tracking-[0.2em] flex items-center justify-center gap-3 transition-all shadow-[0_8px_25px_rgba(252,213,53,0.2)] active:scale-95"
+                                            className={`w-full max-w-xs py-4.5 rounded-sm font-black uppercase text-xs tracking-[0.3em] flex items-center justify-center gap-3 transition-all active:scale-95 shadow-xl ${
+                                                packagePhoto ? 'bg-[#0ECB81]/10 text-[#0ECB81] border border-[#0ECB81]/30 cursor-default' : 
+                                                'bg-[#FCD535] hover:bg-[#FCD535]/90 disabled:bg-[#2B3139] disabled:text-gray-600 text-black shadow-[0_8px_30px_rgba(252,213,53,0.2)]'
+                                            }`}
                                         >
                                             {isCapturing ? (
                                                 <Spinner size="sm" />
+                                            ) : packagePhoto ? (
+                                                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={3}><path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" /></svg>
                                             ) : (
                                                 <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2.5}><path strokeLinecap="round" strokeLinejoin="round" d="M3 9a2 2 0 012-2h.93a2 2 0 001.664-.89l.812-1.22A2 2 0 0110.07 4h3.86a2 2 0 011.664.89l.812 1.22A2 2 0 0018.07 7H19a2 2 0 012 2v9a2 2 0 01-2 2H5a2 2 0 01-2-2V9z" /><path strokeLinecap="round" strokeLinejoin="round" d="M15 13a3 3 0 11-6 0 3 3 0 016 0z" /></svg>
                                             )}
-                                            {packagePhoto ? 'Captured' : 'Manual Capture'}
+                                            {packagePhoto ? 'CAPTURED ✓' : 'MANUAL CAPTURE'}
                                         </button>
                                         
                                         {!packagePhoto && (
-                                            <p className="text-[9px] font-bold text-gray-600 uppercase tracking-widest flex items-center gap-2">
-                                                <span className="w-1.5 h-1.5 rounded-full bg-[#0ECB81] animate-pulse"></span>
-                                                AI Vision Enabled
-                                            </p>
+                                            <div className="flex items-center gap-4">
+                                                <p className="text-[9px] font-black text-gray-500 uppercase tracking-widest flex items-center gap-2">
+                                                    <span className="w-1.5 h-1.5 rounded-full bg-[#0ECB81] animate-pulse"></span>
+                                                    VISION ACTIVE
+                                                </p>
+                                                <div className="w-[1px] h-3 bg-gray-800"></div>
+                                                <p className="text-[9px] font-black text-gray-500 uppercase tracking-widest flex items-center gap-2">
+                                                    <span className="w-1.5 h-1.5 rounded-full bg-[#FCD535] animate-pulse"></span>
+                                                    AUTO-TRIGGER ON
+                                                </p>
+                                            </div>
                                         )}
                                         {packagePhoto && (
-                                            <p className="text-[9px] font-bold text-[#0ECB81] uppercase tracking-[0.2em] animate-pulse">Success ✓ Auto-advancing...</p>
+                                            <p className="text-[9px] font-black text-[#0ECB81] uppercase tracking-[0.3em] animate-pulse">READY FOR SUBMISSION</p>
                                         )}
                                     </div>
 
@@ -929,6 +1053,15 @@ const FastPackTerminal: React.FC<FastPackTerminalProps> = ({ order, onClose, onS
                                             object-fit: cover !important; 
                                             width: 100% !important; 
                                             height: 100% !important; 
+                                        }
+                                        @keyframes scan-line {
+                                            0% { top: 10%; opacity: 0; }
+                                            50% { opacity: 1; }
+                                            100% { top: 90%; opacity: 0; }
+                                        }
+                                        .animate-scan-line {
+                                            position: absolute;
+                                            animation: scan-line 3s linear infinite;
                                         }
                                     `}</style>
                                 </div>

@@ -22,6 +22,7 @@ interface OrdersListMobileProps {
     copiedId: string | null;
     copiedTemplateId: string | null;
     toggleOrderVerified: (id: string, currentStatus: boolean) => void;
+    handleSendTelegram: (id: string) => void;
     updatingIds: Set<string>;
     groupBy?: string;
     viewMode?: 'card' | 'list';
@@ -29,9 +30,10 @@ interface OrdersListMobileProps {
 
 const OrdersListMobile: React.FC<OrdersListMobileProps> = ({
     orders, totals, visibleColumns, selectedIds, isSelectionMode, onToggleSelect, onEdit, onView,
-    handlePrint, toggleOrderVerified, updatingIds, groupBy = 'none', viewMode = 'card'
+    handlePrint, toggleOrderVerified, handleSendTelegram, updatingIds, groupBy = 'none', viewMode = 'card'
 }) => {
     const { currentUser, hasPermission, advancedSettings, language } = useContext(AppContext);
+    const t = translations[language];
     const { playClick, playPop } = useSoundEffects();
     const [displayCount, setDisplayCount] = useState(20);
 
@@ -232,6 +234,41 @@ const OrdersListMobile: React.FC<OrdersListMobileProps> = ({
                                                     <Edit2 size={14} />
                                                 </button>
                                             )}
+                                            {isVisible('telegramStatus') && (
+                                                <div onClick={e => e.stopPropagation()} className="flex items-center">
+                                                    {(() => {
+                                                        const id1 = order['Telegram Message ID 1'];
+                                                        const id2 = order['Telegram Message ID 2'];
+                                                        const isChecking = id1 === 'CHECKING';
+                                                        const isSent = (id1 && id2) && !isChecking;
+
+                                                        if (isSent) {
+                                                            return (
+                                                                <div className="w-8 h-8 flex items-center justify-center bg-emerald-500/10 text-emerald-500 rounded border border-emerald-500/20 shadow-sm" title={t.msg_sent}>
+                                                                    <Check size={14} strokeWidth={4} />
+                                                                </div>
+                                                            );
+                                                        } else if (isChecking) {
+                                                            return (
+                                                                <div className="flex flex-col items-center gap-0.5 animate-pulse">
+                                                                    <Spinner size="xs" />
+                                                                    <span className="text-[7px] font-black text-blue-400 uppercase">Checking</span>
+                                                                </div>
+                                                            );
+                                                        } else {
+                                                            return (
+                                                                <button 
+                                                                    onClick={() => handleSendTelegram(order['Order ID'])} 
+                                                                    className={`w-10 h-10 flex items-center justify-center rounded border transition-all active:scale-90 ${isBinance ? 'bg-[#FCD535] border-[#FCD535] text-[#181A20]' : 'bg-blue-600 border-blue-500 text-white shadow-lg shadow-blue-900/20'}`}
+                                                                    title={t.btn_send_telegram}
+                                                                >
+                                                                    {updatingIds.has(order['Order ID']) ? <Spinner size="xs" /> : <Globe size={16} />}
+                                                                </button>
+                                                            );
+                                                        }
+                                                    })()}
+                                                </div>
+                                            )}
                                         </div>
                                     </div>
                                 );
@@ -276,6 +313,20 @@ const OrdersListMobile: React.FC<OrdersListMobileProps> = ({
                                                         return <span className={`status-pill-v4 ${fsC[fs] || 'bg-[var(--cm-border)] text-[var(--cm-text-muted)]'}`}>{fs}</span>;
                                                     })()}
                                                     {showVerify && isVerified && <div className="flex items-center gap-1 text-[var(--cm-green)] text-[9px] font-black"><Check size={10} strokeWidth={4}/> VERIFIED</div>}
+                                                    {isVisible('telegramStatus') && (() => {
+                                                        const id1 = order['Telegram Message ID 1'];
+                                                        const id2 = order['Telegram Message ID 2'];
+                                                        const isChecking = id1 === 'CHECKING';
+                                                        const isSent = (id1 && id2) && !isChecking;
+
+                                                        if (isSent) {
+                                                            return <div className="flex items-center gap-1 text-[var(--cm-green)] text-[9px] font-black uppercase tracking-tighter"><Check size={10} strokeWidth={4}/> {t.msg_sent}</div>;
+                                                        } else if (isChecking) {
+                                                            return <div className="flex items-center gap-1 text-blue-400 text-[9px] font-black uppercase tracking-tighter animate-pulse"><Spinner size="xs" className="scale-75" /> Checking...</div>;
+                                                        } else {
+                                                            return <div className="flex items-center gap-1 text-[var(--cm-red)] text-[9px] font-black uppercase tracking-tighter italic">{t.msg_not_sent}</div>;
+                                                        }
+                                                    })()}
                                                 </div>
                                             </div>
                                         </div>
@@ -354,6 +405,22 @@ const OrdersListMobile: React.FC<OrdersListMobileProps> = ({
                                                     <Edit2 size={16} />
                                                 </button>
                                             )}
+                                            {isVisible('telegramStatus') && (() => {
+                                                const id1 = order['Telegram Message ID 1'];
+                                                const id2 = order['Telegram Message ID 2'];
+                                                const isChecking = id1 === 'CHECKING';
+                                                const isSent = (id1 && id2) && !isChecking;
+
+                                                if (!isSent && !isChecking) {                                                    return (
+                                                        <button onClick={() => handleSendTelegram(order['Order ID'])} className="action-icon-btn w-10 h-10 active:scale-90 transition-transform bg-blue-600/10 text-blue-500 border-blue-500/20">
+                                                            {updatingIds.has(order['Order ID']) ? <Spinner size="xs" /> : <Globe size={18} strokeWidth={3} />}
+                                                        </button>
+                                                    );
+                                                } else if (isChecking) {
+                                                    return <div className="w-10 h-10 flex items-center justify-center bg-blue-600/10 rounded-xl animate-pulse"><Spinner size="xs" /></div>;
+                                                }
+                                                return null;
+                                            })()}
                                             {showVerify && !isSelectionMode && (
                                                 <button 
                                                     onClick={() => toggleOrderVerified(order['Order ID'], isVerified)}

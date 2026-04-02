@@ -48,6 +48,7 @@ type AppsScriptResponse struct {
 	MessageIds struct {
 		ID1 string `json:"id1"`
 		ID2 string `json:"id2"`
+		ID3 string `json:"id3"`
 	} `json:"messageIds,omitempty"`
 }
 
@@ -61,6 +62,7 @@ type SyncTask struct {
 
 var (
 	SyncQueue = make(chan *SyncTask, 1000)
+	DB        *gorm.DB
 
 	// Deduplication map for updateSheet actions
 	// Key: sheetName + primaryKey values
@@ -342,5 +344,25 @@ func processTask(workerID int, task SyncTask) {
 		}
 	} else {
 		log.Printf("✅ SyncManager [Worker %d]: Task %s SUCCESS on sheet=%s pk=%v", workerID, task.Request.Action, task.Request.SheetName, task.Request.PrimaryKey)
+
+		// ✅ Update local DB with Telegram Message IDs if returned
+		if (resp.MessageIds.ID1 != "" || resp.MessageIds.ID2 != "" || resp.MessageIds.ID3 != "") && task.Request.OrderID != "" && DB != nil {
+			updates := make(map[string]interface{})
+			if resp.MessageIds.ID1 != "" {
+				updates["telegram_message_id1"] = resp.MessageIds.ID1
+			}
+			if resp.MessageIds.ID2 != "" {
+				updates["telegram_message_id2"] = resp.MessageIds.ID2
+			}
+			if resp.MessageIds.ID3 != "" {
+				updates["telegram_message_id3"] = resp.MessageIds.ID3
+			}
+
+			if err := DB.Table("orders").Where("order_id = ?", task.Request.OrderID).Updates(updates).Error; err != nil {
+				log.Printf("❌ [SyncManager] Failed to update local DB with Message IDs for Order %s: %v", task.Request.OrderID, err)
+			} else {
+				log.Printf("📝 [SyncManager] Updated local DB with Message IDs for Order %s: ID1=%s, ID2=%s, ID3=%s", task.Request.OrderID, resp.MessageIds.ID1, resp.MessageIds.ID2, resp.MessageIds.ID3)
+			}
+		}
 	}
 }

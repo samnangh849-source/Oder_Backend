@@ -62,6 +62,7 @@ export interface FullOrder {
     "Total Product Cost ($)": number;
     "Telegram Message ID 1": string;
     "Telegram Message ID 2": string;
+    "Telegram Message ID 3": string;
     "Scheduled Time": string;
     "Fulfillment Store": string;
     Team: string;

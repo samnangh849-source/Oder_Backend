@@ -84,6 +84,8 @@ var calculatePayout = backend.CalculatePayout
 func initDB() {
 	backend.InitDB()
 	DB = backend.DB
+	// Explicitly assign to sync.go's package variable
+	backend.DB = backend.DB 
 }
 
 // =========================================================================
@@ -109,6 +111,7 @@ func mapToDBColumn(key string) string {
 		"Products (JSON)":           "products_json",
 		"Telegram Message ID 1":     "telegram_message_id1",
 		"Telegram Message ID 2":     "telegram_message_id2",
+		"Telegram Message ID 3":     "telegram_message_id3",
 		"Customer Name":             "customer_name",
 		"Customer Phone":            "customer_phone",
 		"Location":                  "location",
@@ -265,7 +268,7 @@ func isValidOrderColumn(col string) bool {
 		"products_json": true, "internal_shipping_method": true, "internal_shipping_details": true,
 		"internal_cost": true, "payment_status": true, "payment_info": true, "discount_usd": true,
 		"delivery_unpaid": true, "delivery_paid": true, "total_product_cost": true,
-		"telegram_message_id1": true, "telegram_message_id2": true, "scheduled_time": true,
+		"telegram_message_id1": true, "telegram_message_id2": true, "telegram_message_id3": true, "scheduled_time": true,
 		"fulfillment_store": true, "team": true, "is_verified": true, "fulfillment_status": true,
 		"packed_by": true, "packed_time": true, "package_photo_url": true, "driver_name": true, "tracking_number": true,
 		"dispatched_time": true, "dispatched_by": true, "delivered_time": true, "delivery_photo_url": true,
@@ -600,19 +603,33 @@ func startOrderWorker() {
 
 			if err != nil {
 				log.Printf("❌ Worker error for %s: %v", job.OrderID, err)
+				if backend.HubGlobal != nil {
+					msgBytes, _ := json.Marshal(map[string]interface{}{"type": "system_notification", "status": "error", "targetUser": job.UserName, "message": "បញ្ជូនទៅ Telegram បរាជ័យ: " + err.Error(), "jobId": job.JobID})
+					backend.HubGlobal.Broadcast <- msgBytes
+				}
 			} else {
 				defer resp.Body.Close()
 				var scriptResp AppsScriptResponse
+				telegramSent := false
 				if err := json.NewDecoder(resp.Body).Decode(&scriptResp); err == nil {
-					if (scriptResp.MessageIds.ID1 != "" || scriptResp.MessageIds.ID2 != "") && DB != nil {
+					if (scriptResp.MessageIds.ID1 != "" || scriptResp.MessageIds.ID2 != "" || scriptResp.MessageIds.ID3 != "") && DB != nil {
 						DB.Model(&Order{}).Where("order_id = ?", job.OrderID).Updates(map[string]interface{}{
 							"telegram_message_id1": scriptResp.MessageIds.ID1,
 							"telegram_message_id2": scriptResp.MessageIds.ID2,
+							"telegram_message_id3": scriptResp.MessageIds.ID3,
 						})
+						telegramSent = true
 					}
 				}
-				msgBytes, _ := json.Marshal(map[string]interface{}{"type": "system_notification", "status": "success", "targetUser": job.UserName, "message": "បាញ់ទៅ Telegram ជោគជ័យ!", "jobId": job.JobID})
 				if backend.HubGlobal != nil {
+					notifStatus := "success"
+					notifMsg := "បាញ់ទៅ Telegram ជោគជ័យ!"
+					if !telegramSent {
+						notifStatus = "warning"
+						notifMsg = "កម្មង់បានរក្សាទុក ប៉ុន្តែ Telegram មិនបានផ្ញើ (ពិនិត្យ Stores sheet)"
+						log.Printf("⚠️ Worker: Order %s saved but Telegram message was not sent (messageIds empty)", job.OrderID)
+					}
+					msgBytes, _ := json.Marshal(map[string]interface{}{"type": "system_notification", "status": notifStatus, "targetUser": job.UserName, "message": notifMsg, "jobId": job.JobID})
 					backend.HubGlobal.Broadcast <- msgBytes
 				}
 			}
@@ -1024,20 +1041,37 @@ func handleAdminUpdateOrder(c *gin.Context) {
 		}
 	}
 
-	if err := DB.Model(&Order{}).Where("UPPER(TRIM(order_id)) = UPPER(TRIM(?))", r.OrderID).Updates(mappedData).Error; err != nil {
-		c.Error(err)
+	// Handle 'Force Sync' to trigger Telegram/Google Sheets re-sync
+	forceSync := false
+	if fs, ok := r.NewData["Force Sync"]; ok {
+		if b, ok := fs.(bool); ok && b {
+			forceSync = true
+		}
+	}
+
+	if ObjectSize(mappedData) == 0 && !forceSync {
+		c.JSON(200, gin.H{"status": "success", "message": "No changes to update"})
 		return
 	}
 
-	eventBytes, _ := json.Marshal(map[string]interface{}{"type": "update_order", "orderId": r.OrderID, "newData": r.NewData})
-	hub.Broadcast <- eventBytes
+	if ObjectSize(mappedData) > 0 {
+		if err := DB.Model(&Order{}).Where("UPPER(TRIM(order_id)) = UPPER(TRIM(?))", r.OrderID).Updates(mappedData).Error; err != nil {
+			c.Error(err)
+			return
+		}
+
+		eventBytes, _ := json.Marshal(map[string]interface{}{"type": "update_order", "orderId": r.OrderID, "newData": r.NewData})
+		hub.Broadcast <- eventBytes
+	}
 
 	go func() {
 		// Build comprehensive sheet data: start from r.NewData then fill missing
 		// fulfillment fields from DB (e.g. Driver Name set in a prior step).
 		sheetData := make(map[string]interface{})
 		for k, v := range r.NewData {
-			sheetData[k] = v
+			if k != "Force Sync" {
+				sheetData[k] = v
+			}
 		}
 		var current Order
 		if err := DB.Where("UPPER(TRIM(order_id)) = UPPER(TRIM(?))", r.OrderID).First(&current).Error; err == nil {
@@ -1057,16 +1091,22 @@ func handleAdminUpdateOrder(c *gin.Context) {
 			fill("Dispatched By", current.DispatchedBy)
 			fill("Delivered Time", current.DeliveredTime)
 			fill("Delivery Photo URL", current.DeliveryPhotoURL)
-		}
+			
+			// Crucial: Use team from DB if not in NewData
+			team := current.Team
+			if t, ok := r.NewData["Team"].(string); ok && t != "" {
+				team = t
+			}
 
-		// SINGLE Sync call to Google Sheets and Telegram.
-		// Apps Script's updateOrderTelegram already handles updating AllOrders and the team's specific sheet.
-		// This saves Apps Script execution time and quota.
-		enqueueSync("updateOrderTelegram", map[string]interface{}{
-			"orderId":       r.OrderID,
-			"updatedFields": sheetData,
-			"team":          originalOrder.Team,
-		}, "", nil)
+			// Use 'updateOrderTelegram' action. If Force Sync is true, the Apps Script
+			// will trigger sendOrderToTelegram regardless of existing IDs.
+			enqueueSync("updateOrderTelegram", map[string]interface{}{
+				"orderId":       r.OrderID,
+				"updatedFields": sheetData,
+				"team":          team,
+				"Force Sync":    forceSync,
+			}, "", nil)
+		}
 	}()
 
 	c.JSON(200, gin.H{"status": "success"})
@@ -1090,6 +1130,10 @@ func handleAdminDeleteOrder(c *gin.Context) {
 		if m2 == "" {
 			m2 = r.TelegramMessageID2
 		}
+		m3 := order.TelegramMessageID3
+		if m3 == "" {
+			m3 = r.TelegramMessageID3
+		}
 
 		go func() {
 			// ✅ Sync with Google Sheets & Telegram via managed queue.
@@ -1100,6 +1144,7 @@ func handleAdminDeleteOrder(c *gin.Context) {
 				"team":             order.Team,
 				"messageId1":       m1,
 				"messageId2":       m2,
+				"messageId3":       m3,
 				"fulfillmentStore": order.FulfillmentStore,
 			}, "", nil)
 		}()
@@ -1769,11 +1814,6 @@ func main() {
 		protected.GET("/permissions", handleGetUserPermissions)
 		protected.GET("/roles", handleGetRoles)
 		
-		// Order Management (Accessible by anyone with permission, e.g. Packers/Admins)
-		protected.GET("/admin/orders", RequirePermission("view_order_list"), handleGetAllOrders)
-		protected.GET("/admin/all-orders", RequirePermission("view_order_list"), handleGetAllOrders)
-		protected.POST("/admin/update-order", RequirePermission("edit_order"), handleAdminUpdateOrder)
-		
 		protected.GET("/teams/shipping-costs", RequirePermission("view_revenue"), handleGetGlobalShippingCosts)
 
 		chat := protected.Group("/chat")
@@ -1782,33 +1822,42 @@ func main() {
 		chat.POST("/send", handleSendChatMessage)
 		chat.POST("/delete", handleDeleteChatMessage)
 
-		admin := protected.Group("/admin")
-		admin.Use(AdminOnlyMiddleware())
+		// ── Admin Group ──
+		adminGroup := protected.Group("/admin")
 		{
-			// Video/Movie admin routes from backend package
-			// This registers both public (/api) and admin (/api/admin) movie routes
-			backend.RegisterVideoRoutes(api, admin)
+			// Order Management (Accessible by anyone with permission, e.g. Packers/Admins)
+			adminGroup.GET("/orders", RequirePermission("view_order_list"), handleGetAllOrders)
+			adminGroup.GET("/all-orders", RequirePermission("view_order_list"), handleGetAllOrders)
+			adminGroup.POST("/update-order", RequirePermission("edit_order"), handleAdminUpdateOrder)
 
-			admin.POST("/migrate-data", backend.HandleMigrateData)
-			admin.GET("/revenue-summary", handleGetRevenueSummary)
-			admin.POST("/update-sheet", handleAdminUpdateSheet)
-			admin.POST("/add-row", handleAdminAddRow)
-			admin.POST("/delete-row", handleAdminDeleteRow)
-			admin.POST("/delete-order", RequirePermission("delete_order"), handleAdminDeleteOrder)
-			admin.GET("/permissions", handleGetAllPermissions)
-			admin.POST("/permissions", handleUpdatePermission)
-			admin.POST("/roles", handleCreateRole)
-			admin.GET("/incentive/calculators", handleGetIncentiveCalculators)
-			admin.POST("/incentive/calculators", handleCreateIncentiveCalculator)
-			admin.GET("/incentive/projects", handleGetIncentiveProjects)
-			admin.POST("/incentive/projects", handleCreateIncentiveProject)
-			admin.GET("/incentive/results", handleGetIncentiveResults)
-			admin.POST("/incentive/calculate", handleCalculateIncentive)
-			admin.GET("/incentive/manual-data", handleGetIncentiveManualData)
-			admin.POST("/incentive/manual-data", handleSaveIncentiveManualData)
-			admin.GET("/incentive/custom-payout", handleGetIncentiveCustomPayouts)
-			admin.POST("/incentive/custom-payout", handleSaveIncentiveCustomPayout)
-			admin.POST("/incentive/lock", handleLockIncentivePayout)
+			// Restricted Admin Actions (Require Admin role)
+			restricted := adminGroup.Group("/")
+			restricted.Use(AdminOnlyMiddleware())
+			{
+				// Video/Movie admin routes from backend package
+				backend.RegisterVideoRoutes(api, restricted)
+
+				restricted.POST("/migrate-data", backend.HandleMigrateData)
+				restricted.GET("/revenue-summary", handleGetRevenueSummary)
+				restricted.POST("/update-sheet", handleAdminUpdateSheet)
+				restricted.POST("/add-row", handleAdminAddRow)
+				restricted.POST("/delete-row", handleAdminDeleteRow)
+				restricted.POST("/delete-order", RequirePermission("delete_order"), handleAdminDeleteOrder)
+				restricted.GET("/permissions", handleGetAllPermissions)
+				restricted.POST("/permissions", handleUpdatePermission)
+				restricted.POST("/roles", handleCreateRole)
+				restricted.GET("/incentive/calculators", handleGetIncentiveCalculators)
+				restricted.POST("/incentive/calculators", handleCreateIncentiveCalculator)
+				restricted.GET("/incentive/projects", handleGetIncentiveProjects)
+				restricted.POST("/incentive/projects", handleCreateIncentiveProject)
+				restricted.GET("/incentive/results", handleGetIncentiveResults)
+				restricted.POST("/incentive/calculate", handleCalculateIncentive)
+				restricted.GET("/incentive/manual-data", handleGetIncentiveManualData)
+				restricted.POST("/incentive/manual-data", handleSaveIncentiveManualData)
+				restricted.GET("/incentive/custom-payout", handleGetIncentiveCustomPayouts)
+				restricted.POST("/incentive/custom-payout", handleSaveIncentiveCustomPayout)
+				restricted.POST("/incentive/lock", handleLockIncentivePayout)
+			}
 		}
 		profile := protected.Group("/profile")
 		profile.POST("/update", handleUpdateProfile)
@@ -1818,4 +1867,7 @@ func main() {
 	api.GET("/chat/audio/:fileID", backend.HandleGetAudioProxy)
 	r.Run("0.0.0.0:" + port)
 }
+
+
+// នៅពេលមិនទាន់ capture រូបភាព(AIM and Focus)គឺពេលដែលកំពុងScan រក QR Code គឺប្រព័ន្ធត្រូវ zoom និង tracking គ្រប់កន្លែងដើម្បីស្វែង QR Code ដើម្បីល្បឿនចាប់យក QR Code​លឿនខ្លាំង ទោះបីដាក់នៅឆ្ងាយក៏ប្រព័ន្ធចាប់បាន
 

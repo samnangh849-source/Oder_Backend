@@ -8,6 +8,7 @@ interface BulkActionBarDesktopProps {
     isProcessing: boolean;
     onVerify: () => void;
     onUnverify: () => void;
+    onSendTelegram?: () => void;
     onOpenModal: (type: 'cost' | 'payment' | 'shipping' | 'delete' | 'date') => void;
     onClearSelection: () => void;
 }
@@ -18,6 +19,7 @@ const BulkActionBarDesktop: React.FC<BulkActionBarDesktopProps> = ({
     isProcessing,
     onVerify,
     onUnverify,
+    onSendTelegram,
     onOpenModal,
     onClearSelection
 }) => {
@@ -61,6 +63,18 @@ const BulkActionBarDesktop: React.FC<BulkActionBarDesktopProps> = ({
                         disabled={isProcessing}
                     >
                         UNVERIFY
+                    </button>
+                </div>
+
+                <div className={`flex items-center ${isBinance ? 'bg-[#0B0E11] border-[#2B3139]' : 'bg-blue-600/10 border-blue-500/20 rounded-[1.8rem]'} p-1.5 border relative z-10`} style={isBinance ? { borderRadius: '2px' } : undefined}>
+                    <button
+                        onClick={onSendTelegram}
+                        className={`px-5 py-2 ${isBinance ? 'bg-blue-600 hover:bg-blue-500' : 'bg-blue-600 hover:bg-blue-500 rounded-[1.4rem] shadow-lg shadow-blue-900/40'} text-white text-[11px] font-bold uppercase tracking-widest transition-all flex items-center gap-2 active:scale-95 disabled:opacity-50`}
+                        style={isBinance ? { borderRadius: '2px' } : undefined}
+                        disabled={isProcessing}
+                    >
+                        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2.5}><path d="M22 2L11 13M22 2l-7 20-4-9-9-4 20-7z" /></svg>
+                        SEND TELEGRAM
                     </button>
                 </div>
 

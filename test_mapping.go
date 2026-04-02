@@ -16,6 +16,7 @@ func mapToDBColumn(key string) string {
 		"Products (JSON)":           "products_json",
 		"Telegram Message ID 1":     "telegram_message_id1",
 		"Telegram Message ID 2":     "telegram_message_id2",
+		"Telegram Message ID 3":     "telegram_message_id3",
 		"Customer Name":             "customer_name",
 		"Customer Phone":            "customer_phone",
 		"Location":                  "location",

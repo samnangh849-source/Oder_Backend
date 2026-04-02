@@ -85,7 +85,11 @@ export const translations = {
     col_note: "ចំណាំ",
     col_output: "ចេញទិន្នន័យ",
     col_verify: "ផ្ទៀងផ្ទាត់",
+    col_telegram: "ស្ថានភាព Telegram",
     col_id: "ID",
+    msg_not_sent: "សារមិនទាន់បានផ្ញើរ",
+    msg_sent: "បានផ្ញើររួចហើយ",
+    btn_send_telegram: "ផ្ញើរទៅ Telegram",
 
     // Sorting & Grouping
     sort_date: "កាលបរិច្ឆេទ",
@@ -903,6 +907,10 @@ export const translations = {
     search_placeholder_editor: "Search name or identity...",
     confirm_lock_payout: "Are you sure you want to lock this month's report? Once locked, you cannot modify data.",
     confirm_clear_column: "Are you sure you want to clear all data in this column?",
-    confirm_clear_row: "Are you sure you want to clear all data in this row?"
+    confirm_clear_row: "Are you sure you want to clear all data in this row?",
+    col_telegram: "Telegram Status",
+    msg_not_sent: "Not sent yet",
+    msg_sent: "Sent",
+    btn_send_telegram: "Send to Telegram"
   }
 };

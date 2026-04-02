@@ -1,5 +1,5 @@
 
-import React, { useState, useContext, useEffect, useMemo } from 'react';
+import React, { useState, useContext, useEffect, useMemo, useRef } from 'react';
 import { AppContext } from '../context/AppContext';
 import { ParsedOrder } from '../types';
 import EditOrderPage from './EditOrderPage';
@@ -32,6 +32,7 @@ const MobileOrdersDashboard: React.FC<MobileOrdersDashboardProps> = ({ onBack, i
 
     const [editingOrderId, setEditingOrderId] = useUrlState<string>('editOrder', '');
     const [viewingOrder, setViewingOrder] = useState<ParsedOrder | null>(null);
+    const optimisticUpdateRef = useRef<((ids: string[], status: string) => void) | null>(null);
     const [sortBy, setSortBy] = useState<string>('date');
     const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>('desc');
     const [viewMode, setViewMode] = useUrlState<'card' | 'list'>('viewMode', 'card');
@@ -86,7 +87,8 @@ const MobileOrdersDashboard: React.FC<MobileOrdersDashboardProps> = ({ onBack, i
             bank: initialFilters?.bank || searchParams.get('bankFilter') || '',
             product: initialFilters?.product || searchParams.get('productFilter') || '',
             customerSearch: initialFilters?.customerSearch || searchParams.get('customerFilter') || '',
-            isVerified: 'All'
+            isVerified: 'All',
+            telegramStatus: ''
         };
     });
 
@@ -187,6 +189,15 @@ const MobileOrdersDashboard: React.FC<MobileOrdersDashboardProps> = ({ onBack, i
             if (!isMatch(filters.shippingService, order['Internal Shipping Method'])) return false;
             if (!isMatch(filters.driver, order['Internal Shipping Details'])) return false;
             if (!isMatch(filters.bank, order['Payment Info'])) return false;
+
+            if (filters.telegramStatus) {
+                const id1 = order['Telegram Message ID 1'];
+                const id2 = order['Telegram Message ID 2'];
+                const isSent = (id1 && id2) && id1 !== 'CHECKING';
+                const s = filters.telegramStatus.split(',').map(v => v.trim());
+                if (s.includes('Sent') && !isSent) return false;
+                if (s.includes('Not Sent') && isSent) return false;
+            }
 
             if (filters.isVerified !== 'All') {
                 const isV = order.IsVerified === true || String(order.IsVerified).toUpperCase() === 'TRUE' || order.IsVerified === 'A';
@@ -333,11 +344,18 @@ const MobileOrdersDashboard: React.FC<MobileOrdersDashboardProps> = ({ onBack, i
                     </div>
                 ) : (
                     <OrdersList 
-                        orders={filteredOrders} viewMode={viewMode}
-                        onEdit={o => setEditingOrderId(o['Order ID'])} onView={o => setViewingOrder(o)}
-                        showActions={true} selectedIds={selectedIds}
-                        isSelectionMode={isSelectionMode}
-                        onToggleSelect={id => setSelectedIds(prev => { const next = new Set(prev); if (next.has(id)) next.delete(id); else next.add(id); return next; })}
+                        orders={filteredOrders} 
+                        onEdit={o => setEditingOrderId(o['Order ID'])} 
+                        onView={o => setViewingOrder(o)} 
+                        showActions={true} 
+                        selectedIds={selectedIds} 
+                        onToggleSelect={id => setSelectedIds(prev => {
+                            const next = new Set(prev);
+                            if (next.has(id)) next.delete(id);
+                            else next.add(id);
+                            return next;
+                        })}
+                        onOptimisticUpdate={cb => optimisticUpdateRef.current = cb}
                     />
                 )}
             </div>
@@ -347,6 +365,7 @@ const MobileOrdersDashboard: React.FC<MobileOrdersDashboardProps> = ({ onBack, i
                 selectedIds={selectedIds} 
                 onComplete={() => { setSelectedIds(new Set()); refreshData(); }} 
                 onClearSelection={() => setSelectedIds(new Set())} 
+                onOptimisticUpdate={(ids, status) => optimisticUpdateRef.current?.(ids, status)}
             />
 
             {isFilterModalOpen && (

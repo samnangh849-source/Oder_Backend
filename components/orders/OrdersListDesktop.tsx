@@ -6,6 +6,7 @@ import { convertGoogleDriveUrl } from '../../utils/fileUtils';
 import Spinner from '../common/Spinner';
 import { DesktopGrandTotalRow } from './OrderGrandTotal';
 import { translations } from '../../translations';
+import { Check } from 'lucide-react';
 
 interface OrdersListDesktopProps {
     orders: ParsedOrder[];
@@ -22,6 +23,7 @@ interface OrdersListDesktopProps {
     copiedId: string | null;
     copiedTemplateId: string | null;
     toggleOrderVerified: (id: string, currentStatus: any) => void;
+    handleSendTelegram: (id: string) => void;
     updatingIds: Set<string>;
     showBorders?: boolean;
     groupBy?: string;
@@ -33,7 +35,7 @@ const OrderRow = (props: any) => {
     const { 
         items, visibleCols, getColWidth, onToggleSelect, selectedIds, 
         onView, onEdit, handleCopyTemplate, handlePrint, handleCopy,
-        toggleOrderVerified, updatingIds, canVerifyOrder, canEditOrder,
+        toggleOrderVerified, handleSendTelegram, updatingIds, canVerifyOrder, canEditOrder,
         showBorders, copiedTemplateId, appData, t, groupByLabel, isBinance
     } = data;
     
@@ -265,6 +267,39 @@ const OrderRow = (props: any) => {
                                 );
                             case 'orderId':
                                 return <div className="text-center flex items-center justify-center w-full"><button onClick={() => handleCopy(order['Order ID'])} className="text-[10px] font-bold font-mono text-[#848E9C] hover:text-[#FCD535] transition-colors uppercase tracking-tight">{order['Order ID'].substring(0, 6)}</button></div>;
+                            case 'telegramStatus': {
+                                const id1 = order['Telegram Message ID 1'];
+                                const id2 = order['Telegram Message ID 2'];
+                                const isChecking = id1 === 'CHECKING';
+                                const isSent = (id1 && id2) && !isChecking;
+                                return (
+                                    <div className="w-full flex flex-col items-center justify-center gap-1">
+                                        {isSent ? (
+                                            <span className="text-[10px] font-bold text-[#0ECB81] uppercase tracking-tight flex items-center gap-1">
+                                                <Check className="w-3 h-3" /> {t.msg_sent}
+                                            </span>
+                                        ) : isChecking ? (
+                                            <div className="flex flex-col items-center gap-1">
+                                                <Spinner size="xs" />
+                                                <span className="text-[9px] font-bold text-blue-400 animate-pulse uppercase">កំពុងឆែក...</span>
+                                            </div>
+                                        ) : (
+                                            <>
+                                                <span className="text-[9px] font-bold text-[#F6465D] uppercase tracking-tighter text-center leading-tight">
+                                                    {t.msg_not_sent}
+                                                </span>
+                                                <button 
+                                                    onClick={(e) => { e.stopPropagation(); handleSendTelegram(order['Order ID']); }} 
+                                                    className={`mt-1 px-2 py-1 text-[9px] font-black uppercase tracking-widest rounded-sm transition-all flex items-center gap-1 ${isBinance ? 'bg-[#FCD535] text-[#181A20] hover:bg-[#f0c51d]' : 'bg-blue-600 text-white hover:bg-blue-500 shadow-lg shadow-blue-900/20'}`}
+                                                    disabled={updatingIds.has(order['Order ID'])}
+                                                >
+                                                    {updatingIds.has(order['Order ID']) ? <Spinner size="xs" /> : t.btn_send_telegram}
+                                                </button>
+                                            </>
+                                        )}
+                                    </div>
+                                );
+                            }
                             default:
                                 return null;
                         }
@@ -284,7 +319,7 @@ const OrderRow = (props: any) => {
 const OrdersListDesktop: React.FC<OrdersListDesktopProps> = ({
     orders, totals, visibleColumns, selectedIds, onToggleSelect, onToggleSelectAll,
     onEdit, onView, handlePrint, handleCopy, handleCopyTemplate, copiedId, copiedTemplateId,
-    toggleOrderVerified, updatingIds, showBorders = false, groupBy = 'none'
+    toggleOrderVerified, handleSendTelegram, updatingIds, showBorders = false, groupBy = 'none'
 }) => {
     const { appData, currentUser, hasPermission, language, advancedSettings } = useContext(AppContext);
     const t = translations[language];
@@ -320,7 +355,8 @@ const OrdersListDesktop: React.FC<OrdersListDesktopProps> = ({
             note: isUltraWide ? 280 : (isCompact ? 180 : 220),
             print: 125,
             check: 65,
-            orderId: 85
+            orderId: 85,
+            telegramStatus: 140
         };
         return baseWidths[key] || 150;
     }, []);
@@ -328,7 +364,7 @@ const OrdersListDesktop: React.FC<OrdersListDesktopProps> = ({
     const columnKeys = useMemo(() => [
         'index', 'actions', 'customerName', 'productInfo', 'location', 
         'pageInfo', 'brandSales', 'fulfillment', 'total', 'shippingService',
-        'driver', 'shippingCost', 'fulfillmentStatus', 'status', 'date', 'note', 'print', 'check', 'orderId'
+        'driver', 'shippingCost', 'fulfillmentStatus', 'status', 'date', 'note', 'print', 'check', 'orderId', 'telegramStatus'
     ], []);
 
     const visibleCols = useMemo(() => columnKeys.filter(checkColumnVisible), [columnKeys, checkColumnVisible]);
@@ -431,6 +467,7 @@ const OrdersListDesktop: React.FC<OrdersListDesktopProps> = ({
         handlePrint,
         handleCopy,
         toggleOrderVerified,
+        handleSendTelegram,
         updatingIds,
         canVerifyOrder,
         canEditOrder,
@@ -443,7 +480,7 @@ const OrdersListDesktop: React.FC<OrdersListDesktopProps> = ({
     }), [
         enrichedItems, visibleCols, getColWidth, onToggleSelect, selectedIds,
         onView, onEdit, handleCopyTemplate, handlePrint, handleCopy,
-        toggleOrderVerified, updatingIds, canVerifyOrder, canEditOrder,
+        toggleOrderVerified, handleSendTelegram, updatingIds, canVerifyOrder, canEditOrder,
         showBorders, copiedTemplateId, appData, t, groupBy, isBinance
     ]);
 
@@ -480,7 +517,7 @@ const OrdersListDesktop: React.FC<OrdersListDesktopProps> = ({
                                     <div 
                                         key={k} 
                                         style={{ width: `${getColWidth(k)}px` }} 
-                                        className={`px-4 py-4 box-border ${isBinance ? 'font-black tracking-normal text-[#848E9C]' : 'font-black tracking-[0.1em] text-gray-400'} uppercase text-[10px] flex items-center ${k === 'index' || k === 'actions' || k === 'status' || k === 'fulfillmentStatus' || k === 'print' || k === 'check' || k === 'orderId' ? 'justify-center text-center' : 'justify-start text-left'} ${showBorders ? (isBinance ? 'border-r border-[#2B3139]' : 'border-r border-white/10') : ''}`}
+                                        className={`px-4 py-4 box-border ${isBinance ? 'font-black tracking-normal text-[#848E9C]' : 'font-black tracking-[0.1em] text-gray-400'} uppercase text-[10px] flex items-center ${k === 'index' || k === 'actions' || k === 'status' || k === 'fulfillmentStatus' || k === 'print' || k === 'check' || k === 'orderId' || k === 'telegramStatus' ? 'justify-center text-center' : 'justify-start text-left'} ${showBorders ? (isBinance ? 'border-r border-[#2B3139]' : 'border-r border-white/10') : ''}`}
                                     >
                                         {(t as any)[`col_${k}`] || (t as any)[k] || k}
                                     </div>

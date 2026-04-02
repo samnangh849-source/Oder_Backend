@@ -1,5 +1,5 @@
 
-import React, { useState, useContext, useEffect, useMemo } from 'react';
+import React, { useState, useContext, useEffect, useMemo, useRef } from 'react';
 import { AppContext } from '../context/AppContext';
 import Spinner from '../components/common/Spinner';
 import { ParsedOrder, User } from '../types';
@@ -38,6 +38,7 @@ const DesktopOrdersDashboard: React.FC<DesktopOrdersDashboardProps> = ({ onBack,
     const [sortBy, setSortBy] = useState<string>('date');
     const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>('desc');
     const [groupBy, setGroupBy] = useState<string>('none');
+    const optimisticUpdateRef = useRef<((ids: string[], status: string) => void) | null>(null);
     const [viewMode, setViewMode] = useUrlState<'card' | 'list'>('viewMode', 'list');
     
     const [visibleColumns, setVisibleColumns] = useState<Set<string>>(() => {
@@ -49,7 +50,8 @@ const DesktopOrdersDashboard: React.FC<DesktopOrdersDashboardProps> = ({ onBack,
                 c.key !== 'check' && 
                 c.key !== 'fulfillment' &&
                 c.key !== 'note' &&
-                c.key !== 'driver'
+                c.key !== 'driver' &&
+                c.key !== 'telegramStatus'
             ).map(c => c.key)
         );
     });
@@ -80,7 +82,8 @@ const DesktopOrdersDashboard: React.FC<DesktopOrdersDashboardProps> = ({ onBack,
             bank: initialFilters?.bank || searchParams.get('bankFilter') || '',
             product: initialFilters?.product || searchParams.get('productFilter') || '',
             customerSearch: initialFilters?.customerSearch || searchParams.get('customerFilter') || '',
-            isVerified: 'All'
+            isVerified: 'All',
+            telegramStatus: ''
         };
     });
 
@@ -162,6 +165,14 @@ const DesktopOrdersDashboard: React.FC<DesktopOrdersDashboardProps> = ({ onBack,
                 const sP = filters.product.split(',').map(v => v.trim().toLowerCase());
                 if (!order.Products.some(p => sP.includes((p.name || p.ProductName || '').toLowerCase()))) return false;
             }
+            if (filters.telegramStatus) {
+                const id1 = order['Telegram Message ID 1'];
+                const id2 = order['Telegram Message ID 2'];
+                const isSent = (id1 && id2) && id1 !== 'CHECKING';
+                const s = filters.telegramStatus.split(',').map(v => v.trim());
+                if (s.includes('Sent') && !isSent) return false;
+                if (s.includes('Not Sent') && isSent) return false;
+            }
             if (searchQuery.trim()) {
                 const q = searchQuery.toLowerCase();
                 return order['Order ID'].toLowerCase().includes(q) || (order['Customer Name'] || '').toLowerCase().includes(q) || (order['Customer Phone'] || '').includes(q);
@@ -198,6 +209,24 @@ const DesktopOrdersDashboard: React.FC<DesktopOrdersDashboardProps> = ({ onBack,
         ) : null;
     }
 
+    const calculatedRange = useMemo(() => {
+        const now = new Date();
+        const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+        let start: Date | null = null;
+        let end: Date | null = new Date();
+        switch (filters.datePreset) {
+            case 'today': start = today; break;
+            case 'yesterday': start = new Date(today); start.setDate(today.getDate() - 1); end = new Date(today); end.setMilliseconds(-1); break;
+            case 'this_week': const day = now.getDay(); start = new Date(today); start.setDate(today.getDate() - (day === 0 ? 6 : day - 1)); break;
+            case 'this_month': start = new Date(now.getFullYear(), now.getMonth(), 1); break;
+            case 'all': return 'All time data';
+            case 'custom': return `${filters.startDate || '...'} to ${filters.endDate || '...'}`;
+            default: start = today;
+        }
+        const formatDate = (d: Date) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+        return start ? `${formatDate(start)} to ${formatDate(end)}` : 'All time data';
+    }, [filters.datePreset, filters.startDate, filters.endDate]);
+
     return (
         <div className={`w-full h-full flex flex-col animate-reveal relative ${isBinance ? 'bg-[#0B0E11]' : 'bg-[#020617]'} overflow-hidden`}>
             <Modal isOpen={isFilterModalOpen} onClose={() => setIsFilterModalOpen(false)} maxWidth="max-w-5xl">
@@ -210,7 +239,7 @@ const DesktopOrdersDashboard: React.FC<DesktopOrdersDashboardProps> = ({ onBack,
                         <button onClick={() => setIsFilterModalOpen(false)} className={`w-12 h-12 ${isBinance ? 'bg-[#2B3139] border-[#474D57] text-[#848E9C] hover:text-[#EAECEF]' : 'bg-white/5 border-white/5 text-gray-500 hover:text-white'} flex items-center justify-center border shadow-xl`} style={isBinance ? { borderRadius: '2px' } : undefined}>&times;</button>
                     </div>
                     <div className="flex-grow overflow-y-auto pr-4 custom-scrollbar">
-                        <OrderFilters filters={filters} setFilters={setFilters} orders={enrichedOrders} usersList={appData.users || []} appData={appData} />
+                        <OrderFilters filters={filters} setFilters={setFilters} orders={enrichedOrders} usersList={appData.users || []} appData={appData} calculatedRange={calculatedRange} />
                     </div>
                     <div className={`mt-6 border-t ${isBinance ? 'border-[#2B3139]' : 'border-white/5'} pt-6`}>
                         <button onClick={() => { playPop(); setIsFilterModalOpen(false); }} className={`w-full py-4 ${isBinance ? 'bg-[#FCD535] hover:bg-[#f0c51d] text-[#181A20]' : 'bg-blue-600 hover:bg-blue-500 text-white shadow-[0_20px_50px_rgba(37,99,235,0.3)] rounded-2xl'} text-[13px] font-black uppercase tracking-[0.25em]`} style={isBinance ? { borderRadius: '2px' } : undefined}>{t.apply_config}</button>
@@ -360,10 +389,33 @@ const DesktopOrdersDashboard: React.FC<DesktopOrdersDashboardProps> = ({ onBack,
             </div>
 
             <div className={`flex-1 overflow-hidden ${isBinance ? 'px-3 pb-3' : 'px-6 pb-6'}`}>
-                <OrdersList orders={filteredOrders} onEdit={o => setEditingOrderId(o['Order ID'])} onView={o => setViewingOrder(o)} showActions={true} visibleColumns={visibleColumns} selectedIds={selectedIds} onToggleSelect={id => setSelectedIds(prev => { const next = new Set(prev); if (next.has(id)) next.delete(id); else next.add(id); return next; })} showBorders={showBorders} groupBy={groupBy} viewMode="list" />
+                <OrdersList 
+                    orders={filteredOrders} 
+                    onEdit={o => setEditingOrderId(o['Order ID'])} 
+                    onView={o => setViewingOrder(o)} 
+                    showActions={true} 
+                    visibleColumns={visibleColumns} 
+                    selectedIds={selectedIds} 
+                    onToggleSelect={id => setSelectedIds(prev => { 
+                        const next = new Set(prev); 
+                        if (next.has(id)) next.delete(id); 
+                        else next.add(id); 
+                        return next; 
+                    })} 
+                    showBorders={showBorders} 
+                    groupBy={groupBy} 
+                    viewMode="list" 
+                    onOptimisticUpdate={cb => optimisticUpdateRef.current = cb}
+                />
             </div>
 
-            <BulkActionManager orders={enrichedOrders} selectedIds={selectedIds} onComplete={() => { setSelectedIds(new Set()); refreshData(); }} onClearSelection={() => setSelectedIds(new Set())} />
+            <BulkActionManager 
+                orders={enrichedOrders} 
+                selectedIds={selectedIds} 
+                onComplete={() => { setSelectedIds(new Set()); refreshData(); }} 
+                onClearSelection={() => setSelectedIds(new Set())} 
+                onOptimisticUpdate={(ids, status) => optimisticUpdateRef.current?.(ids, status)}
+            />
             {isPdfModalOpen && <PdfExportModal isOpen={true} onClose={() => setIsPdfModalOpen(false)} orders={filteredOrders} />}
             {viewingOrder && <OrderDetailModal order={viewingOrder} onClose={() => setViewingOrder(null)} />}
         </div>

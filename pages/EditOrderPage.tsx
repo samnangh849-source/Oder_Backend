@@ -292,6 +292,7 @@ const EditOrderPage: React.FC<EditOrderPageProps> = ({ order, onSaveSuccess, onC
                     userName: loggingUser,
                     telegramMessageId1: formData['Telegram Message ID 1'],
                     telegramMessageId2: formData['Telegram Message ID 2'],
+                    telegramMessageId3: formData['Telegram Message ID 3'],
                     telegramChatId: formData.TelegramValue
                 })
             });
