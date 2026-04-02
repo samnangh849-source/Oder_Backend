@@ -215,7 +215,7 @@ func convertSheetValuesToMaps(sheetName string, values *sheets.ValueRange) ([]ma
 					}
 					// Ensure critical IDs are always strings (avoid scientific notation)
 					lowHeader := strings.ToLower(strings.TrimSpace(header))
-					if lowHeader == "telegram message id 1" || lowHeader == "telegram message id 2" ||
+					if lowHeader == "telegram message id 1" || lowHeader == "telegram message id 2" || lowHeader == "telegram message id 3" ||
 						lowHeader == "order id" || lowHeader == "customer phone" ||
 						lowHeader == "barcode" || (sheetName == "Movies" && lowHeader == "id") {
 						rowData[targetHeader] = fmt.Sprintf("%v", cell)
