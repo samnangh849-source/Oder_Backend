@@ -600,19 +600,32 @@ func startOrderWorker() {
 
 			if err != nil {
 				log.Printf("❌ Worker error for %s: %v", job.OrderID, err)
+				if backend.HubGlobal != nil {
+					msgBytes, _ := json.Marshal(map[string]interface{}{"type": "system_notification", "status": "error", "targetUser": job.UserName, "message": "បញ្ជូនទៅ Telegram បរាជ័យ: " + err.Error(), "jobId": job.JobID})
+					backend.HubGlobal.Broadcast <- msgBytes
+				}
 			} else {
 				defer resp.Body.Close()
 				var scriptResp AppsScriptResponse
+				telegramSent := false
 				if err := json.NewDecoder(resp.Body).Decode(&scriptResp); err == nil {
 					if (scriptResp.MessageIds.ID1 != "" || scriptResp.MessageIds.ID2 != "") && DB != nil {
 						DB.Model(&Order{}).Where("order_id = ?", job.OrderID).Updates(map[string]interface{}{
 							"telegram_message_id1": scriptResp.MessageIds.ID1,
 							"telegram_message_id2": scriptResp.MessageIds.ID2,
 						})
+						telegramSent = true
 					}
 				}
-				msgBytes, _ := json.Marshal(map[string]interface{}{"type": "system_notification", "status": "success", "targetUser": job.UserName, "message": "បាញ់ទៅ Telegram ជោគជ័យ!", "jobId": job.JobID})
 				if backend.HubGlobal != nil {
+					notifStatus := "success"
+					notifMsg := "បាញ់ទៅ Telegram ជោគជ័យ!"
+					if !telegramSent {
+						notifStatus = "warning"
+						notifMsg = "កម្មង់បានរក្សាទុក ប៉ុន្តែ Telegram មិនបានផ្ញើ (ពិនិត្យ Stores sheet)"
+						log.Printf("⚠️ Worker: Order %s saved but Telegram message was not sent (messageIds empty)", job.OrderID)
+					}
+					msgBytes, _ := json.Marshal(map[string]interface{}{"type": "system_notification", "status": notifStatus, "targetUser": job.UserName, "message": notifMsg, "jobId": job.JobID})
 					backend.HubGlobal.Broadcast <- msgBytes
 				}
 			}
@@ -1769,11 +1782,6 @@ func main() {
 		protected.GET("/permissions", handleGetUserPermissions)
 		protected.GET("/roles", handleGetRoles)
 		
-		// Order Management (Accessible by anyone with permission, e.g. Packers/Admins)
-		protected.GET("/admin/orders", RequirePermission("view_order_list"), handleGetAllOrders)
-		protected.GET("/admin/all-orders", RequirePermission("view_order_list"), handleGetAllOrders)
-		protected.POST("/admin/update-order", RequirePermission("edit_order"), handleAdminUpdateOrder)
-		
 		protected.GET("/teams/shipping-costs", RequirePermission("view_revenue"), handleGetGlobalShippingCosts)
 
 		chat := protected.Group("/chat")
@@ -1782,33 +1790,42 @@ func main() {
 		chat.POST("/send", handleSendChatMessage)
 		chat.POST("/delete", handleDeleteChatMessage)
 
-		admin := protected.Group("/admin")
-		admin.Use(AdminOnlyMiddleware())
+		// ── Admin Group ──
+		adminGroup := protected.Group("/admin")
 		{
-			// Video/Movie admin routes from backend package
-			// This registers both public (/api) and admin (/api/admin) movie routes
-			backend.RegisterVideoRoutes(api, admin)
+			// Order Management (Accessible by anyone with permission, e.g. Packers/Admins)
+			adminGroup.GET("/orders", RequirePermission("view_order_list"), handleGetAllOrders)
+			adminGroup.GET("/all-orders", RequirePermission("view_order_list"), handleGetAllOrders)
+			adminGroup.POST("/update-order", RequirePermission("edit_order"), handleAdminUpdateOrder)
 
-			admin.POST("/migrate-data", backend.HandleMigrateData)
-			admin.GET("/revenue-summary", handleGetRevenueSummary)
-			admin.POST("/update-sheet", handleAdminUpdateSheet)
-			admin.POST("/add-row", handleAdminAddRow)
-			admin.POST("/delete-row", handleAdminDeleteRow)
-			admin.POST("/delete-order", RequirePermission("delete_order"), handleAdminDeleteOrder)
-			admin.GET("/permissions", handleGetAllPermissions)
-			admin.POST("/permissions", handleUpdatePermission)
-			admin.POST("/roles", handleCreateRole)
-			admin.GET("/incentive/calculators", handleGetIncentiveCalculators)
-			admin.POST("/incentive/calculators", handleCreateIncentiveCalculator)
-			admin.GET("/incentive/projects", handleGetIncentiveProjects)
-			admin.POST("/incentive/projects", handleCreateIncentiveProject)
-			admin.GET("/incentive/results", handleGetIncentiveResults)
-			admin.POST("/incentive/calculate", handleCalculateIncentive)
-			admin.GET("/incentive/manual-data", handleGetIncentiveManualData)
-			admin.POST("/incentive/manual-data", handleSaveIncentiveManualData)
-			admin.GET("/incentive/custom-payout", handleGetIncentiveCustomPayouts)
-			admin.POST("/incentive/custom-payout", handleSaveIncentiveCustomPayout)
-			admin.POST("/incentive/lock", handleLockIncentivePayout)
+			// Restricted Admin Actions (Require Admin role)
+			restricted := adminGroup.Group("/")
+			restricted.Use(AdminOnlyMiddleware())
+			{
+				// Video/Movie admin routes from backend package
+				backend.RegisterVideoRoutes(api, restricted)
+
+				restricted.POST("/migrate-data", backend.HandleMigrateData)
+				restricted.GET("/revenue-summary", handleGetRevenueSummary)
+				restricted.POST("/update-sheet", handleAdminUpdateSheet)
+				restricted.POST("/add-row", handleAdminAddRow)
+				restricted.POST("/delete-row", handleAdminDeleteRow)
+				restricted.POST("/delete-order", RequirePermission("delete_order"), handleAdminDeleteOrder)
+				restricted.GET("/permissions", handleGetAllPermissions)
+				restricted.POST("/permissions", handleUpdatePermission)
+				restricted.POST("/roles", handleCreateRole)
+				restricted.GET("/incentive/calculators", handleGetIncentiveCalculators)
+				restricted.POST("/incentive/calculators", handleCreateIncentiveCalculator)
+				restricted.GET("/incentive/projects", handleGetIncentiveProjects)
+				restricted.POST("/incentive/projects", handleCreateIncentiveProject)
+				restricted.GET("/incentive/results", handleGetIncentiveResults)
+				restricted.POST("/incentive/calculate", handleCalculateIncentive)
+				restricted.GET("/incentive/manual-data", handleGetIncentiveManualData)
+				restricted.POST("/incentive/manual-data", handleSaveIncentiveManualData)
+				restricted.GET("/incentive/custom-payout", handleGetIncentiveCustomPayouts)
+				restricted.POST("/incentive/custom-payout", handleSaveIncentiveCustomPayout)
+				restricted.POST("/incentive/lock", handleLockIncentivePayout)
+			}
 		}
 		profile := protected.Group("/profile")
 		profile.POST("/update", handleUpdateProfile)
