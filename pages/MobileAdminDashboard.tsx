@@ -20,7 +20,6 @@ import IncentiveExecutionView from '../components/incentives/IncentiveExecutionV
 import { getIncentiveProjects } from '../services/incentiveService';
 import { useUrlState } from '../hooks/useUrlState';
 import { ParsedOrder } from '../types';
-import { useSoundEffects } from '../hooks/useSoundEffects';
 
 type ActiveDashboard = 'admin' | 'orders' | 'reports' | 'settings' | 'fulfillment' | 'packaging' | 'delivery' | 'inventory' | 'incentives';
 type AdminView = 'dashboard' | 'performance';
@@ -30,8 +29,6 @@ const MobileAdminDashboard: React.FC = () => {
     const { 
         appData, currentUser, refreshTimestamp, orders, hasPermission, isOrdersLoading, isSyncing
     } = useContext(AppContext);
-    
-    const { playTransition } = useSoundEffects();
     
     // --- Navigation State ---
     const [activeDashboard, setActiveDashboard] = useUrlState<ActiveDashboard>('tab', 'admin');
@@ -156,7 +153,6 @@ const MobileAdminDashboard: React.FC = () => {
 
     // --- Navigation Handlers ---
     const handleNavChange = (id: string) => {
-        playTransition();
         if (id === 'reports') setIsReportSubMenuOpen(!isReportSubMenuOpen);
         else {
             if (['dashboard', 'performance'].includes(id)) {
@@ -168,7 +164,6 @@ const MobileAdminDashboard: React.FC = () => {
     };
 
     const handleReportSubNav = (reportId: ReportType) => {
-        playTransition();
         setActiveDashboard('reports');
         setActiveReport(reportId);
     };

@@ -5,7 +5,6 @@ import { ParsedOrder, User, AppData } from '../../types';
 import SelectFilter from './filters/SelectFilter';
 import DateWindowFilter from './filters/DateWindowFilter';
 import SearchableProductDropdown from '../common/SearchableProductDropdown';
-import { useSoundEffects } from '../../hooks/useSoundEffects';
 import { AppContext } from '../../context/AppContext';
 import { Calendar, User as UserIcon, Users, CreditCard, Truck, Warehouse, MapPin, Package, RotateCcw, Check } from 'lucide-react';
 
@@ -23,7 +22,6 @@ const MobileFilterEngine: React.FC<MobileFilterEngineProps> = ({
     filters, setFilters, orders, usersList, appData, calculatedRange, onApply
 }) => {
     const { language } = useContext(AppContext);
-    const { playClick, playPop } = useSoundEffects();
     const [activeCategory, setActiveCategory] = useState<string | null>('date');
 
     const uniqueValues = useMemo(() => {
@@ -61,7 +59,6 @@ const MobileFilterEngine: React.FC<MobileFilterEngineProps> = ({
     };
 
     const handleReset = () => {
-        playPop();
         setFilters({
             datePreset: 'this_month', startDate: '', endDate: '', team: '', user: '',
             paymentStatus: '', shippingService: '', driver: '', product: '', bank: '',
@@ -184,7 +181,7 @@ const MobileFilterEngine: React.FC<MobileFilterEngineProps> = ({
                                 return (
                                     <div key={cat.id} className="flex flex-col">
                                         <button 
-                                            onClick={() => { playClick(); setActiveCategory(isActive ? null : cat.id); }}
+                                            onClick={() => setActiveCategory(isActive ? null : cat.id)}
                                             className={`filter-category-card flex items-center justify-between p-4 ${isActive ? 'active' : ''}`}
                                         >
                                             <div className="flex items-center gap-4">
@@ -271,7 +268,7 @@ const MobileFilterEngine: React.FC<MobileFilterEngineProps> = ({
             {/* Premium Floating Apply Button */}
             <div className="absolute bottom-0 left-0 right-0 px-6 py-6 bg-gradient-to-t from-[#0B0E11] via-[#0B0E11]/90 to-transparent z-30">
                 <button 
-                    onClick={() => { playPop(); onApply(); }}
+                    onClick={() => onApply()}
                     className="w-full py-4 bg-[var(--cm-accent)] text-[#181A20] font-black uppercase text-[13px] tracking-[0.15em] rounded-sm shadow-xl active:scale-[0.98] transition-all flex items-center justify-center gap-3 border border-transparent"
                 >
                     <Check size={18} strokeWidth={3} />

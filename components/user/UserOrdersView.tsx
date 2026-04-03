@@ -8,7 +8,6 @@ import OrderDetailModal from '../orders/OrderDetailModal';
 import UserSalesPageReport from '../../pages/UserSalesPageReport';
 import ShippingReport from '../reports/ShippingReport';
 import { safeParseDate, getValidDate, getTimestamp } from '../../utils/dateUtils';
-import { useSoundEffects } from '../../hooks/useSoundEffects';
 import { FilterPanel } from '../orders/FilterPanel';
 import { FilterState } from '../orders/OrderFilters';
 import { BarChart3, Truck, Filter, Settings, Search, Plus, X, Check } from 'lucide-react';
@@ -30,8 +29,6 @@ interface UserOrdersViewProps {
 
 const UserOrdersView: React.FC<UserOrdersViewProps> = ({ onAdd, onStatsUpdate, showColumnSelectorToggle = true, dateFilter: propDateFilter }) => {
     const { currentUser, language, refreshData, appData, orders, isOrdersLoading, hasPermission, selectedTeam, setAppState } = useContext(AppContext);
-    const { playClick, playPop } = useSoundEffects();
-    
     // State declarations
     const [viewOrders, setViewOrders] = useState<ParsedOrder[]>([]);
     const [editingOrder, setEditingOrder] = useState<ParsedOrder | null>(null);
@@ -309,10 +306,10 @@ const UserOrdersView: React.FC<UserOrdersViewProps> = ({ onAdd, onStatsUpdate, s
                         {/* Report Buttons */}
                         {hasPermission('view_revenue') && (
                             <>
-                                <button onClick={() => { playClick(); setShowReport(true); }} className="p-2.5 bg-[var(--cm-input-bg)] text-secondary border border-[var(--cm-border)] rounded-md active:scale-95 transition-all hover:border-[var(--cm-accent)] hover:text-[var(--cm-accent)]" title="Page Report">
+                                <button onClick={() => setShowReport(true)} className="p-2.5 bg-[var(--cm-input-bg)] text-secondary border border-[var(--cm-border)] rounded-md active:scale-95 transition-all hover:border-[var(--cm-accent)] hover:text-[var(--cm-accent)]" title="Page Report">
                                     <BarChart3 size={18} />
                                 </button>
-                                <button onClick={() => { playClick(); setShowShippingReport(true); }} className="p-2.5 bg-[var(--cm-input-bg)] text-secondary border border-[var(--cm-border)] rounded-md active:scale-95 transition-all hover:border-[var(--cm-accent)] hover:text-[var(--cm-accent)]" title="Shipping Cost">
+                                <button onClick={() => setShowShippingReport(true)} className="p-2.5 bg-[var(--cm-input-bg)] text-secondary border border-[var(--cm-border)] rounded-md active:scale-95 transition-all hover:border-[var(--cm-accent)] hover:text-[var(--cm-accent)]" title="Shipping Cost">
                                     <Truck size={18} />
                                 </button>
                             </>
@@ -320,7 +317,7 @@ const UserOrdersView: React.FC<UserOrdersViewProps> = ({ onAdd, onStatsUpdate, s
 
                         {showColumnSelectorToggle && (
                             <div className="relative">
-                                <button onClick={() => { playClick(); setShowColumnSelector(!showColumnSelector); }} className={`p-2.5 bg-[var(--cm-input-bg)] ${showColumnSelector ? 'text-[var(--cm-accent)] border-[var(--cm-accent)]' : 'text-secondary border-[var(--cm-border)]'} border rounded-md relative active:scale-95 transition-all hover:border-[var(--cm-accent)] hover:text-[var(--cm-accent)]`}>
+                                <button onClick={() => setShowColumnSelector(!showColumnSelector)} className={`p-2.5 bg-[var(--cm-input-bg)] ${showColumnSelector ? 'text-[var(--cm-accent)] border-[var(--cm-accent)]' : 'text-secondary border-[var(--cm-border)]'} border rounded-md relative active:scale-95 transition-all hover:border-[var(--cm-accent)] hover:text-[var(--cm-accent)]`}>
                                     <Settings size={18} />
                                 </button>
                                 {showColumnSelector && (
@@ -345,7 +342,7 @@ const UserOrdersView: React.FC<UserOrdersViewProps> = ({ onAdd, onStatsUpdate, s
                                 )}
                             </div>
                         )}
-                        <button onClick={() => { playClick(); setIsFilterPanelOpen(true); }} className="p-2.5 bg-[var(--cm-input-bg)] text-secondary border border-[var(--cm-border)] rounded-md relative active:scale-95 transition-all hover:border-[var(--cm-accent)] hover:text-[var(--cm-accent)]">
+                        <button onClick={() => setIsFilterPanelOpen(true)} className="p-2.5 bg-[var(--cm-input-bg)] text-secondary border border-[var(--cm-border)] rounded-md relative active:scale-95 transition-all hover:border-[var(--cm-accent)] hover:text-[var(--cm-accent)]">
                             <Filter size={18} />
                             {Object.values(advancedFilters).some(v => v && v !== 'all' && v !== 'this_month' && v !== 'All') && <span className="absolute -top-1 -right-1 w-2 h-2 bg-[var(--cm-accent)] rounded-full border border-[var(--cm-bg)]"></span>}
                         </button>

@@ -27,7 +27,7 @@ const MobileOrdersDashboard: React.FC<MobileOrdersDashboardProps> = ({ onBack, i
     } = useContext(AppContext);
     const { setIsBottomNavHidden } = useUI();
     
-    const { playClick, playTransition, playPop, playSuccess } = useSoundEffects();
+    const { playSuccess } = useSoundEffects();
     const t = useMemo(() => translations[language || 'km'] || translations['km'], [language]);
 
     const [editingOrderId, setEditingOrderId] = useUrlState<string>('editOrder', '');
@@ -51,7 +51,6 @@ const MobileOrdersDashboard: React.FC<MobileOrdersDashboardProps> = ({ onBack, i
     }, [selectedIds.size, setIsBottomNavHidden]);
 
     const toggleSelectionMode = () => {
-        playPop();
         if (isSelectionMode) {
             setSelectedIds(new Set());
         }
@@ -59,7 +58,6 @@ const MobileOrdersDashboard: React.FC<MobileOrdersDashboardProps> = ({ onBack, i
     };
 
     const handleSelectAll = () => {
-        playClick();
         if (selectedIds.size === filteredOrders.length) {
             setSelectedIds(new Set());
         } else {
@@ -242,7 +240,7 @@ const MobileOrdersDashboard: React.FC<MobileOrdersDashboardProps> = ({ onBack, i
             {/* Mobile Header */}
             <div className="flex-shrink-0 px-4 py-4 flex items-center justify-between bg-[#0f172a]/60 backdrop-blur-2xl border-b border-white/5 sticky top-0 z-30">
                 <div className="flex items-center gap-3">
-                    <button onClick={() => { playTransition(); onBack(); }} className="p-2 bg-white/5 rounded-xl border border-white/5 active:scale-90">
+                    <button onClick={() => onBack()} className="p-2 bg-white/5 rounded-xl border border-white/5 active:scale-90">
                         <svg className="w-5 h-5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path d="M15 19l-7-7 7-7" strokeWidth={3}/></svg>
                     </button>
                     <div>
@@ -254,7 +252,7 @@ const MobileOrdersDashboard: React.FC<MobileOrdersDashboardProps> = ({ onBack, i
                     </div>
                 </div>
                 <div className="flex items-center gap-2">
-                    <button onClick={() => { playClick(); setIsFilterModalOpen(true); }} className="p-2.5 bg-blue-600/10 text-blue-400 border border-blue-500/20 rounded-xl relative">
+                    <button onClick={() => setIsFilterModalOpen(true)} className="p-2.5 bg-blue-600/10 text-blue-400 border border-blue-500/20 rounded-xl relative">
                         <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path d="M3 4a1 1 0 011-1h16a1 1 0 011 1v2.586a1 1 0 01-.293.707l-6.414 6.414a1 1 0 00-.293.707V17l-4 4v-6.586a1 1 0 00-.293-.707L3.293 7.293A1 1 0 013 6.586V4z" strokeWidth={2}/></svg>
                         {Object.values(filters).some(v => v && v !== 'all' && v !== 'this_month') && <span className="absolute top-1 right-1 w-2 h-2 bg-blue-500 rounded-full border-2 border-[#0f172a]"></span>}
                     </button>
@@ -279,13 +277,13 @@ const MobileOrdersDashboard: React.FC<MobileOrdersDashboardProps> = ({ onBack, i
                 <div className="flex items-center justify-between gap-3">
                     <div className="flex bg-white/5 p-1 rounded-xl border border-white/5 flex-1">
                         <button 
-                            onClick={() => { playPop(); setViewMode('card'); }}
+                            onClick={() => setViewMode('card')}
                             className={`flex-1 flex items-center justify-center gap-2 py-2 rounded-lg text-[10px] font-black uppercase transition-all ${viewMode === 'card' ? 'bg-blue-600 text-white shadow-lg' : 'text-gray-500 hover:text-gray-400'}`}
                         >
                             <span>🗂️</span> {t.view_card}
                         </button>
                         <button 
-                            onClick={() => { playPop(); setViewMode('list'); }}
+                            onClick={() => setViewMode('list')}
                             className={`flex-1 flex items-center justify-center gap-2 py-2 rounded-lg text-[10px] font-black uppercase transition-all ${viewMode === 'list' ? 'bg-blue-600 text-white shadow-lg' : 'text-gray-500 hover:text-gray-400'}`}
                         >
                             <span>📝</span> {t.view_list}
@@ -302,7 +300,7 @@ const MobileOrdersDashboard: React.FC<MobileOrdersDashboardProps> = ({ onBack, i
                         </button>
 
                         <button 
-                            onClick={() => { playClick(); setIsPdfModalOpen(true); }}
+                            onClick={() => setIsPdfModalOpen(true)}
                             className="flex items-center justify-center w-10 h-10 bg-red-600/10 text-red-400 border border-red-500/20 rounded-xl active:scale-95 transition-all"
                         >
                             <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path d="M7 21h10a2 2 0 002-2V9.414a1 1 0 00-.293-.707l-5.414-5.414A1 1 0 0012.586 3H7a2 2 0 00-2 2v14a2 2 0 002 2z" strokeWidth={2.5}/></svg>
@@ -328,7 +326,7 @@ const MobileOrdersDashboard: React.FC<MobileOrdersDashboardProps> = ({ onBack, i
                         { id: 'this_week', icon: '📅', label: 'Week' },
                         { id: 'this_month', icon: '🗓️', label: 'Month' }
                     ].map(p => (
-                        <button key={p.id} onClick={() => { playPop(); setFilters(prev => ({ ...prev, datePreset: p.id as any })); }} className={`flex-shrink-0 flex items-center gap-2 px-4 py-2 rounded-2xl text-[10px] font-black uppercase tracking-widest border transition-all ${filters.datePreset === p.id ? 'bg-blue-600/10 border-blue-500/30 text-blue-400' : 'bg-white/5 border-white/5 text-gray-500'}`}>
+                        <button key={p.id} onClick={() => setFilters(prev => ({ ...prev, datePreset: p.id as any }))} className={`flex-shrink-0 flex items-center gap-2 px-4 py-2 rounded-2xl text-[10px] font-black uppercase tracking-widest border transition-all ${filters.datePreset === p.id ? 'bg-blue-600/10 border-blue-500/30 text-blue-400' : 'bg-white/5 border-white/5 text-gray-500'}`}>
                             <span className="text-sm">{p.icon}</span> {p.label}
                         </button>
                     ))}

@@ -14,7 +14,6 @@ import OrderFilters, { FilterState } from '../components/orders/OrderFilters';
 import { ColumnToggler, availableColumns } from '../components/orders/ColumnToggler';
 import OrderDetailModal from '../components/orders/OrderDetailModal';
 import { translations } from '../translations';
-import { useSoundEffects } from '../hooks/useSoundEffects';
 
 interface DesktopOrdersDashboardProps {
     onBack: () => void;
@@ -30,7 +29,6 @@ const DesktopOrdersDashboard: React.FC<DesktopOrdersDashboardProps> = ({ onBack,
     const uiTheme = advancedSettings?.uiTheme || 'default';
     const isBinance = uiTheme === 'binance';
     
-    const { playClick, playPop, playTransition } = useSoundEffects();
     const t = useMemo(() => translations[language || 'km'] || translations['km'], [language]);
 
     const [editingOrderId, setEditingOrderId] = useUrlState<string>('editOrder', '');
@@ -242,7 +240,7 @@ const DesktopOrdersDashboard: React.FC<DesktopOrdersDashboardProps> = ({ onBack,
                         <OrderFilters filters={filters} setFilters={setFilters} orders={enrichedOrders} usersList={appData.users || []} appData={appData} calculatedRange={calculatedRange} />
                     </div>
                     <div className={`mt-6 border-t ${isBinance ? 'border-[#2B3139]' : 'border-white/5'} pt-6`}>
-                        <button onClick={() => { playPop(); setIsFilterModalOpen(false); }} className={`w-full py-4 ${isBinance ? 'bg-[#FCD535] hover:bg-[#f0c51d] text-[#181A20]' : 'bg-blue-600 hover:bg-blue-500 text-white shadow-[0_20px_50px_rgba(37,99,235,0.3)] rounded-2xl'} text-[13px] font-black uppercase tracking-[0.25em]`} style={isBinance ? { borderRadius: '2px' } : undefined}>{t.apply_config}</button>
+                        <button onClick={() => setIsFilterModalOpen(false)} className={`w-full py-4 ${isBinance ? 'bg-[#FCD535] hover:bg-[#f0c51d] text-[#181A20]' : 'bg-blue-600 hover:bg-blue-500 text-white shadow-[0_20px_50px_rgba(37,99,235,0.3)] rounded-2xl'} text-[13px] font-black uppercase tracking-[0.25em]`} style={isBinance ? { borderRadius: '2px' } : undefined}>{t.apply_config}</button>
                     </div>
                 </div>
             </Modal>
@@ -253,7 +251,7 @@ const DesktopOrdersDashboard: React.FC<DesktopOrdersDashboardProps> = ({ onBack,
                 {/* Row 1: Title + Actions */}
                 <div className="flex justify-between items-center mb-3">
                     <div className="flex items-center gap-3">
-                        <button onClick={() => { playTransition(); onBack(); }} className={`p-2 ${isBinance ? 'bg-transparent hover:bg-[#2B3139] text-[#848E9C] hover:text-[#EAECEF]' : 'bg-white/5 hover:bg-white/10 rounded-2xl text-gray-400 hover:text-white'} transition-all active:scale-90`} style={isBinance ? { borderRadius: '4px' } : undefined}>
+                        <button onClick={() => onBack()} className={`p-2 ${isBinance ? 'bg-transparent hover:bg-[#2B3139] text-[#848E9C] hover:text-[#EAECEF]' : 'bg-white/5 hover:bg-white/10 rounded-2xl text-gray-400 hover:text-white'} transition-all active:scale-90`} style={isBinance ? { borderRadius: '4px' } : undefined}>
                             <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2.5}><path d="M15 19l-7-7 7-7" /></svg>
                         </button>
                         <div className="flex items-center gap-2">
@@ -285,13 +283,13 @@ const DesktopOrdersDashboard: React.FC<DesktopOrdersDashboardProps> = ({ onBack,
                         </div>
 
                         {/* Filters Button */}
-                        <button onClick={() => { playClick(); setIsFilterModalOpen(true); }} className={`flex items-center gap-1.5 px-3 py-2 ${isBinance ? 'bg-[#0B0E11] border-[#2B3139] text-[#848E9C] hover:text-[#EAECEF] hover:border-[#474D57]' : 'bg-gray-900 border-gray-800 text-gray-400 hover:text-white rounded-2xl'} border text-[10px] font-bold uppercase tracking-wider transition-all active:scale-95`} style={isBinance ? { borderRadius: '4px' } : undefined}>
+                        <button onClick={() => setIsFilterModalOpen(true)} className={`flex items-center gap-1.5 px-3 py-2 ${isBinance ? 'bg-[#0B0E11] border-[#2B3139] text-[#848E9C] hover:text-[#EAECEF] hover:border-[#474D57]' : 'bg-gray-900 border-gray-800 text-gray-400 hover:text-white rounded-2xl'} border text-[10px] font-bold uppercase tracking-wider transition-all active:scale-95`} style={isBinance ? { borderRadius: '4px' } : undefined}>
                             <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2.5}><path d="M3 4a1 1 0 011-1h16a1 1 0 011 1v2.586a1 1 0 01-.293.707l-6.414 6.414a1 1 0 00-.293.707V17l-4 4v-6.586a1 1 0 00-.293-.707L3.293 7.293A1 1 0 013 6.586V4z" /></svg>
                             Filters
                         </button>
 
                         {/* Export Button */}
-                        <button onClick={() => { playClick(); setIsPdfModalOpen(true); }} className={`flex items-center gap-1.5 px-3 py-2 ${isBinance ? 'bg-transparent border-[#2B3139] text-[#848E9C] hover:text-[#FCD535] hover:border-[#FCD535]' : 'bg-red-600/10 border-red-500/20 text-red-500 hover:bg-red-600 hover:text-white rounded-2xl'} border text-[10px] font-bold uppercase tracking-wider transition-all`} style={isBinance ? { borderRadius: '4px' } : undefined}>
+                        <button onClick={() => setIsPdfModalOpen(true)} className={`flex items-center gap-1.5 px-3 py-2 ${isBinance ? 'bg-transparent border-[#2B3139] text-[#848E9C] hover:text-[#FCD535] hover:border-[#FCD535]' : 'bg-red-600/10 border-red-500/20 text-red-500 hover:bg-red-600 hover:text-white rounded-2xl'} border text-[10px] font-bold uppercase tracking-wider transition-all`} style={isBinance ? { borderRadius: '4px' } : undefined}>
                             <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2.5}><path d="M7 21h10a2 2 0 002-2V9.414a1 1 0 00-.293-.707l-5.414-5.414A1 1 0 0012.586 3H7a2 2 0 00-2 2v14a2 2 0 002 2z" /></svg>
                             Export
                         </button>
@@ -314,7 +312,7 @@ const DesktopOrdersDashboard: React.FC<DesktopOrdersDashboardProps> = ({ onBack,
                         ].map(p => (
                             <button
                                 key={p.id}
-                                onClick={() => { playPop(); setFilters(prev => ({ ...prev, datePreset: p.id as any, startDate: '', endDate: '' })); }}
+                                onClick={() => setFilters(prev => ({ ...prev, datePreset: p.id as any, startDate: '', endDate: '' }))}
                                 className={`px-4 py-2 text-[10px] font-bold uppercase tracking-wider transition-all border-b-2 ${
                                     isBinance
                                     ? (filters.datePreset === p.id
@@ -363,7 +361,6 @@ const DesktopOrdersDashboard: React.FC<DesktopOrdersDashboardProps> = ({ onBack,
                                 <button
                                     key={s}
                                     onClick={() => {
-                                        playClick();
                                         const cur = filters.fulfillmentStore.split(',').map(v => v.trim()).filter(v => v);
                                         const nxt = sel ? cur.filter(v => v.toLowerCase() !== s.toLowerCase()) : [...cur, s];
                                         setFilters(prev => ({...prev, fulfillmentStore: nxt.join(',')}));

@@ -29,24 +29,11 @@ export const WEEKLY_MUSIC_URLS = [
 export const APP_LOGO_URL = "https://drive.google.com/file/d/1vb9IG8wn31LDYtUKLurm6cMow0MI4Tee/view?usp=drive_link";
 
 // ============================================================
-// CURATED SOUND LIBRARY
-// All sounds carefully selected to be pleasant, non-jarring.
-// Sources: Mixkit (royalty free), verified working URLs.
+// SOUND LIBRARY - Notification & Status sounds only
 // ============================================================
 
-// Chat-specific sounds (short, clean)
 export const SOUND_URLS = {
-    // Modern iOS style subtle pop
-    NOTIFICATION: 'https://res.cloudinary.com/dhobzwi7h/video/upload/v1774094352/Apple_Pay_Success_Sound_Effect_ul3ka5.mp3', // Modern Message Ping
-    // Soft elegant bubble for interactions
-    SENT: 'https://assets.mixkit.co/active_storage/sfx/2568/2568-preview.mp3', // Modern Interface Click
-    // Modern Digital Theme
-    TECH_REVEAL: 'https://res.cloudinary.com/dhobzwi7h/video/upload/v1774169953/click_yxuwrw.mp3', // Sharp digital reveal
-    TECH_CLICK: 'https://res.cloudinary.com/dhobzwi7h/video/upload/v1774169953/click_yxuwrw.mp3', // Clean interface tick
-    CRYSTAL_POP: 'https://res.cloudinary.com/dhobzwi7h/video/upload/v1774169953/click_yxuwrw.mp3', // Premium bubbly pop
-    ZIP_SLIDE: 'https://res.cloudinary.com/dhobzwi7h/video/upload/v1774169953/click_yxuwrw.mp3', // Clean modern tap click
-    // TEAM_SELECT: 'https://res.cloudinary.com/dhobzwi7h/video/upload/v1774170475/Slon_hp7sne.mp3', // Modern tech slide for team selection
-    TEAM_SELECT: 'https://res.cloudinary.com/dhobzwi7h/video/upload/v1774842015/welcom_q2ytyf.mp3', // Modern tech slide for team selection
+    NOTIFICATION: 'https://res.cloudinary.com/dhobzwi7h/video/upload/v1774094352/Apple_Pay_Success_Sound_Effect_ul3ka5.mp3',
 };
 
 // Full NOTIFICATION_SOUNDS palette for the settings panel

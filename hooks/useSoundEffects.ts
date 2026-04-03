@@ -3,6 +3,7 @@ import { useContext, useCallback, useRef } from 'react';
 import { AppContext } from '../context/AppContext';
 import { NOTIFICATION_SOUNDS, SOUND_URLS } from '../constants';
 
+
 export const useSoundEffects = () => {
     const { advancedSettings } = useContext(AppContext);
     
@@ -59,23 +60,14 @@ export const useSoundEffects = () => {
     }, [baseVolume]);
 
     return {
-        // Core UI Interactions (Using modern clean URLs)
-        playClick: () => playSound(SOUND_URLS.TECH_CLICK, 0.7), 
-        playTransition: () => playSound(SOUND_URLS.ZIP_SLIDE, 0.4), 
-        playPop: () => playSound(SOUND_URLS.CRYSTAL_POP, 0.7), 
-        playHover: () => playSound(SOUND_URLS.TECH_CLICK, 0.15), 
-        playEntrance: () => playSound(SOUND_URLS.TECH_REVEAL, 0.6), // Matches fadeInUp animation
-        playSlide: () => playSound(SOUND_URLS.TECH_CLICK, 0.3), 
-        playTeamSelect: () => playSound(SOUND_URLS.TEAM_SELECT, 0.5),
-        
         // Status Notifications
-        playSuccess: () => playSound('success', 0.9), 
-        playError: () => playSound('error', 0.9), 
+        playSuccess: () => playSound('success', 0.9),
+        playError: () => playSound('error', 0.9),
         playNotify: () => playSound(SOUND_URLS.NOTIFICATION, 1.0),
-        
+
         // Custom sound from settings
         playCustom: () => playSound(advancedSettings?.notificationSound || 'default', 1.0),
-        
+
         playSound
     };
 };

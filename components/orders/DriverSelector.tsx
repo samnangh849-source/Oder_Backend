@@ -2,7 +2,6 @@ import React, { useMemo } from 'react';
 import { CheckCircle2 } from 'lucide-react';
 import { Driver } from '../../types';
 import { convertGoogleDriveUrl } from '../../utils/fileUtils';
-import { useSoundEffects } from '../../hooks/useSoundEffects';
 
 interface DriverSelectorProps {
     drivers?: Driver[];
@@ -12,11 +11,9 @@ interface DriverSelectorProps {
 
 const DriverSelector: React.FC<DriverSelectorProps> = ({ drivers = [], selectedDriverName, onSelect }) => {
     const safeDrivers = useMemo(() => Array.isArray(drivers) ? drivers : [], [drivers]);
-    const { playHover, playClick } = useSoundEffects();
 
     const handleSelect = (name: string) => {
         if (selectedDriverName !== name) {
-            playClick();
             onSelect(name);
         }
     };
@@ -52,7 +49,6 @@ const DriverSelector: React.FC<DriverSelectorProps> = ({ drivers = [], selectedD
                             driver={d}
                             isSelected={selectedDriverName === d.DriverName}
                             onSelect={() => handleSelect(d.DriverName)}
-                            onHover={playHover}
                         />
                     ))}
                 </div>
@@ -65,14 +61,12 @@ interface DriverCardProps {
     driver: Driver;
     isSelected: boolean;
     onSelect: () => void;
-    onHover: () => void;
 }
 
-const DriverCard: React.FC<DriverCardProps> = ({ driver, isSelected, onSelect, onHover }) => {
+const DriverCard: React.FC<DriverCardProps> = ({ driver, isSelected, onSelect }) => {
     return (
         <div
             onClick={onSelect}
-            onMouseEnter={onHover}
             className={`
                 relative group cursor-pointer transition-all duration-500 rounded-[2rem] p-1.5 
                 ${isSelected 

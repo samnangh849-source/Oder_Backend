@@ -1,6 +1,5 @@
 import React from 'react';
 import { createPortal } from 'react-dom';
-import { useSoundEffects } from '../../hooks/useSoundEffects';
 
 interface BulkActionBarMobileProps {
     selectedCount: number;
@@ -15,8 +14,6 @@ interface BulkActionBarMobileProps {
 const BulkActionBarMobile: React.FC<BulkActionBarMobileProps> = ({ 
     selectedCount, onClearSelection, onVerify, onUnverify, onSendTelegram, onOpenModal, isProcessing 
 }) => {
-    const { playClick, playPop } = useSoundEffects();
-
     if (selectedCount === 0) return null;
 
     return createPortal(
@@ -30,20 +27,20 @@ const BulkActionBarMobile: React.FC<BulkActionBarMobileProps> = ({
                         </div>
                         <span className="text-[10px] font-black text-white uppercase tracking-widest">Selected</span>
                     </div>
-                    <button onClick={() => { playPop(); onClearSelection(); }} className="text-[10px] font-black text-gray-500 uppercase tracking-widest px-2">Clear</button>
+                    <button onClick={() => onClearSelection()} className="text-[10px] font-black text-gray-500 uppercase tracking-widest px-2">Clear</button>
                 </div>
 
                 {/* Actions Toolbar - Scrollable */}
                 <div className="flex items-center gap-2 overflow-x-auto no-scrollbar pb-1 px-1">
                     <button 
-                        onClick={() => { playClick(); onVerify(); }}
+                        onClick={() => onVerify()}
                         className="flex-shrink-0 flex items-center gap-1.5 px-4 py-2.5 bg-emerald-600 text-white rounded-xl text-[9px] font-black uppercase tracking-widest shadow-lg active:scale-95 transition-all"
                         disabled={isProcessing}
                     >
                         Verify
                     </button>
                     <button 
-                        onClick={() => { playClick(); onUnverify(); }}
+                        onClick={() => onUnverify()}
                         className="flex-shrink-0 px-4 py-2.5 bg-gray-800 text-gray-400 rounded-xl text-[9px] font-black uppercase tracking-widest active:scale-95 transition-all border border-white/5"
                         disabled={isProcessing}
                     >
@@ -51,7 +48,7 @@ const BulkActionBarMobile: React.FC<BulkActionBarMobileProps> = ({
                     </button>
 
                     <button 
-                        onClick={() => { playClick(); onSendTelegram?.(); }}
+                        onClick={() => onSendTelegram?.()}
                         className="flex-shrink-0 flex items-center gap-1.5 px-4 py-2.5 bg-blue-600 text-white rounded-xl text-[9px] font-black uppercase tracking-widest shadow-lg shadow-blue-900/40 active:scale-95 transition-all"
                         disabled={isProcessing}
                     >

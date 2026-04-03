@@ -21,7 +21,7 @@ const LoginPage: React.FC = () => {
     const [mousePos, setMousePos] = useState({ x: 0, y: 0 });
 
     const { login } = useContext(AppContext);
-    const { playClick, playError } = useSoundEffects();
+    const { playError } = useSoundEffects();
 
     useEffect(() => {
         const duration = 3000;
@@ -54,10 +54,6 @@ const LoginPage: React.FC = () => {
             window.removeEventListener('mousemove', handleMove);
         };
     }, []);
-
-    const playInteraction = () => {
-        playClick();
-    };
 
     const handleLogin = async (e: React.FormEvent) => {
         e.preventDefault();
@@ -155,7 +151,7 @@ const LoginPage: React.FC = () => {
                         
                         {/* Mobile Optimized Header */}
                         <div className="text-center space-y-5">
-                            <div className="relative inline-block group" onMouseEnter={playInteraction}>
+                            <div className="relative inline-block group">
                                 <div className="absolute inset-0 bg-blue-500/20 rounded-3xl blur-2xl opacity-40 group-hover:opacity-100 transition-opacity"></div>
                                 <div className="relative w-20 h-20 bg-gray-950 border border-white/10 rounded-[1.8rem] flex items-center justify-center shadow-2xl overflow-hidden group-hover:scale-105 transition-all duration-500">
                                     <img src={convertGoogleDriveUrl(APP_LOGO_URL)} alt="Logo" className="w-12 h-12 object-contain" />
@@ -204,7 +200,7 @@ const LoginPage: React.FC = () => {
                                         />
                                         <button 
                                             type="button" 
-                                            onClick={() => { setIsPasswordVisible(!isPasswordVisible); playInteraction(); }} 
+                                            onClick={() => setIsPasswordVisible(!isPasswordVisible)} 
                                             className="absolute right-5 top-1/2 -translate-y-1/2 text-gray-700 hover:text-white transition-colors"
                                         >
                                             {isPasswordVisible ? (
@@ -227,7 +223,6 @@ const LoginPage: React.FC = () => {
                             <button 
                                 type="submit" 
                                 disabled={loading}
-                                onMouseEnter={playInteraction}
                                 className="w-full group relative overflow-hidden h-16 sm:h-20 bg-blue-600 hover:bg-blue-500 text-white rounded-2xl transition-all active:scale-[0.97] disabled:opacity-50 shadow-[0_15px_30px_-5px_rgba(37,99,235,0.4)] border border-white/10"
                             >
                                 <div className="absolute inset-0 bg-[radial-gradient(circle_at_center,_rgba(255,255,255,0.3)_0%,_transparent_70%)] opacity-0 group-hover:opacity-100 transition-opacity duration-500"></div>

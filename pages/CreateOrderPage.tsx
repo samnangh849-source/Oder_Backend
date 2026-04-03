@@ -64,7 +64,7 @@ const STEPS = [
 
 const CreateOrderPage: React.FC<CreateOrderPageProps> = ({ team, onSaveSuccess, onCancel }) => {
     const { appData, currentUser, apiKey, previewImage, hasPermission } = useContext(AppContext);
-    const { playSuccess, playClick } = useSoundEffects();
+    const { playSuccess } = useSoundEffects();
     const [currentStep, setCurrentStep] = useState(1);
     const [isCancelModalOpen, setIsCancelModalOpen] = useState(false);
 

@@ -29,7 +29,7 @@ const STEPS = [
 
 const MobileCreateOrderPage: React.FC<MobileCreateOrderPageProps> = ({ team, onSaveSuccess, onCancel }) => {
     const { appData, currentUser, language, previewImage, advancedSettings, refreshData } = useContext(AppContext);
-    const { playClick, playTransition, playSuccess } = useSoundEffects();
+    const { playSuccess } = useSoundEffects();
     const t = translations[language];
 
     const [currentStep, setCurrentStep] = useState(1);
@@ -112,14 +112,12 @@ const MobileCreateOrderPage: React.FC<MobileCreateOrderPageProps> = ({ team, onS
 
     const handleNext = () => {
         if (validateStep(currentStep)) {
-            playTransition();
             setCurrentStep(prev => prev + 1);
             window.scrollTo({ top: 0, behavior: 'smooth' });
         }
     };
 
     const handlePrev = () => {
-        playTransition();
         setCurrentStep(prev => prev - 1);
         window.scrollTo({ top: 0, behavior: 'smooth' });
     };
@@ -133,7 +131,6 @@ const MobileCreateOrderPage: React.FC<MobileCreateOrderPageProps> = ({ team, onS
             setUndoTimer(null);
             setIsUndoing(false);
             setLoading(false);
-            playClick();
         }, 500);
     };
 

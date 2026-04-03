@@ -1,10 +1,9 @@
-import React, { useContext, useEffect, useState } from 'react';
+import React, { useContext, useState, useEffect } from 'react';
 import { AppContext } from '../context/AppContext';
 import UserAvatar from '../components/common/UserAvatar';
 import { convertGoogleDriveUrl } from '../utils/fileUtils';
 import { APP_LOGO_URL } from '../constants';
 import { translations } from '../translations';
-import { useSoundEffects } from '../hooks/useSoundEffects';
 
 interface RoleSelectionPageProps {
     onSelect: (role: 'admin_dashboard' | 'user_journey' | 'fulfillment' | 'cambodia_map' | 'entertainment') => void;
@@ -13,26 +12,12 @@ interface RoleSelectionPageProps {
 const RoleSelectionPage: React.FC<RoleSelectionPageProps> = ({ onSelect }) => {
     const { currentUser, hasPermission, logout, language } = useContext(AppContext);
     const [mounted, setMounted] = useState(false);
-    const { playClick, playTransition, playHover, playEntrance, playSlide, playPop } = useSoundEffects();
 
     const t = translations[language];
 
     useEffect(() => {
         setMounted(true);
-        
-        // Sequence of sounds to match the CSS animation delays
-        const timer1 = setTimeout(() => playEntrance(), 100); // 0.1s: Avatar reveal
-        const timer2 = setTimeout(() => playSlide(), 200);    // 0.2s: Subtitle reveal
-        const timer3 = setTimeout(() => playSlide(), 300);    // 0.3s: Buttons grid reveal
-        const timer4 = setTimeout(() => playPop(), 600);      // 0.6s: Footer reveal
-        
-        return () => {
-            clearTimeout(timer1);
-            clearTimeout(timer2);
-            clearTimeout(timer3);
-            clearTimeout(timer4);
-        };
-    }, [playEntrance, playSlide, playPop]);
+    }, []);
 
     if (!currentUser) return null;
 
@@ -47,22 +32,18 @@ const RoleSelectionPage: React.FC<RoleSelectionPageProps> = ({ onSelect }) => {
     const visibleCount = (showAdmin ? 1 : 0) + (showFulfillment ? 1 : 0) + (showSales ? 1 : 0) + (showEntertainment ? 1 : 0) + 1; // +1 for Cambodia Map (always visible)
 
     const handleUserPortalClick = () => {
-        playTransition();
         onSelect('user_journey');
     };
 
     const handleAdminClick = () => {
-        playTransition();
         onSelect('admin_dashboard');
     };
 
     const handleFulfillmentClick = () => {
-        playTransition();
         onSelect('fulfillment');
     };
 
     const handleEntertainmentClick = () => {
-        playTransition();
         onSelect('entertainment' as any);
     };
 
@@ -147,7 +128,6 @@ const RoleSelectionPage: React.FC<RoleSelectionPageProps> = ({ onSelect }) => {
                     {showAdmin && (
                         <button 
                             onClick={handleAdminClick}
-                            onMouseEnter={playHover}
                             className="selection-btn group p-1 rounded-[2rem] relative overflow-hidden"
                         >
                             <div className="shimmer"></div>
@@ -169,7 +149,6 @@ const RoleSelectionPage: React.FC<RoleSelectionPageProps> = ({ onSelect }) => {
                     {showFulfillment && (
                         <button 
                             onClick={handleFulfillmentClick}
-                            onMouseEnter={playHover}
                             className="selection-btn group p-1 rounded-[2rem] relative overflow-hidden"
                         >
                             <div className="shimmer"></div>
@@ -191,7 +170,6 @@ const RoleSelectionPage: React.FC<RoleSelectionPageProps> = ({ onSelect }) => {
                     {showSales && (
                         <button 
                             onClick={handleUserPortalClick}
-                            onMouseEnter={playHover}
                             className="selection-btn group p-1 rounded-[2rem] relative overflow-hidden"
                         >
                             <div className="shimmer"></div>
@@ -213,7 +191,6 @@ const RoleSelectionPage: React.FC<RoleSelectionPageProps> = ({ onSelect }) => {
                     {showEntertainment && (
                         <button 
                             onClick={handleEntertainmentClick}
-                            onMouseEnter={playHover}
                             className="selection-btn group p-1 rounded-[2rem] relative overflow-hidden"
                         >
                             <div className="shimmer"></div>
@@ -233,8 +210,7 @@ const RoleSelectionPage: React.FC<RoleSelectionPageProps> = ({ onSelect }) => {
                     )}
 
                     <button
-                        onClick={() => { playTransition(); onSelect('cambodia_map'); }}
-                        onMouseEnter={playHover}
+                        onClick={() => onSelect('cambodia_map')}
                         className="selection-btn group p-1 rounded-[2rem] relative overflow-hidden"
                     >
                         <div className="shimmer"></div>

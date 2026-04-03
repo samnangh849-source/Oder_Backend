@@ -3,7 +3,6 @@ import { AppContext } from '../context/AppContext';
 import { translations } from '../translations';
 import UserOrdersView from '../components/user/UserOrdersView';
 import TopPerformanceUserJourney from '../components/user/TopPerformanceUserJourney';
-import { useSoundEffects } from '../hooks/useSoundEffects';
 import { useOrder } from '../context/OrderContext';
 import { 
     Activity, Server, LogOut, ChevronLeft, BarChart3, 
@@ -28,7 +27,6 @@ const DesktopUserJourney: React.FC<DesktopUserJourneyProps> = ({ onBackToRoleSel
 
     const [localLanguage, setLocalLanguage] = useState<'km' | 'en'>(language);
     const t = translations[localLanguage];
-    const { playClick, playTeamSelect } = useSoundEffects();
     const [isSidebarOpen, setIsSidebarOpen] = useState(true);
     const [searchQuery, setSearchQuery] = useState('');
     const [teamStats, setTeamStats] = useState({ revenue: 0, cost: 0, paid: 0, unpaid: 0, count: 0 });
@@ -57,17 +55,14 @@ const DesktopUserJourney: React.FC<DesktopUserJourneyProps> = ({ onBackToRoleSel
 
     const handleCreateOrder = () => {
         if (!hasPermission('create_order')) return;
-        playClick();
         setAppState('create_order');
     };
-    
+
     const handleTeamSelect = (team: string) => {
-        playTeamSelect();
         setSelectedTeam(team);
     };
 
     const handleSwitchTeam = () => {
-        playClick();
         setSelectedTeam('');
     };
 

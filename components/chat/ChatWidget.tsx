@@ -32,7 +32,7 @@ const ChatWidget: React.FC<ChatWidgetProps> = ({ isOpen, onClose }) => {
     const [recordingTime, setRecordingTime] = useState(0);
     const recordingIntervalRef = useRef<any>(null);
 
-    const { playNotify, playClick } = useSoundEffects();
+    const { playNotify } = useSoundEffects();
 
     const [messages, setMessages] = useState<ChatMessage[]>(() => {
         if (!CACHE_KEY) return [];
@@ -435,7 +435,6 @@ const ChatWidget: React.FC<ChatWidgetProps> = ({ isOpen, onClose }) => {
                 body: JSON.stringify(payload) 
             });
             if (!res.ok) throw new Error("Send failed");
-            if (!isMuted) { playClick(); }
         } catch (e) { 
             setAndCacheMessages(prev => prev.map(m => m.id === tempId ? { ...m, isError: true } : m));
             showNotification(language === 'km' ? "ផ្ញើសារមិនចូល" : "Message failed to send", "error"); 

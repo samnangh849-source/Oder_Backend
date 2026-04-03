@@ -1,5 +1,4 @@
 import React from 'react';
-import { useSoundEffects } from '../../hooks/useSoundEffects';
 
 interface BottomNavBarProps {
     activeDashboard: string;
@@ -7,7 +6,6 @@ interface BottomNavBarProps {
 }
 
 const BottomNavBar: React.FC<BottomNavBarProps> = ({ activeDashboard, onNavChange }) => {
-    const { playClick } = useSoundEffects();
 
     const navItems = [
         { id: 'dashboard', icon: <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2.5}><path d="M4 5a1 1 0 011-1h4a1 1 0 011 1v5a1 1 0 01-1 1H5a1 1 0 01-1-1V5zM14 5a1 1 0 011-1h4a1 1 0 011 1v2a1 1 0 01-1 1h-4a1 1 0 01-1-1V5zM4 15a1 1 0 011-1h4a1 1 0 011 1v5a1 1 0 01-1 1H5a1 1 0 01-1-1v-5zM14 13a1 1 0 011-1h4a1 1 0 011 1v7a1 1 0 01-1 1h-4a1 1 0 01-1-1v-7z" /></svg>, label: 'Hub' },
@@ -18,7 +16,6 @@ const BottomNavBar: React.FC<BottomNavBarProps> = ({ activeDashboard, onNavChang
     ];
 
     const handleClick = (id: string) => {
-        playClick();
         onNavChange(id);
     };
 

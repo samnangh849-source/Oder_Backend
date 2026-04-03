@@ -3,7 +3,6 @@ import { AppContext } from '../context/AppContext';
 import { translations } from '../translations';
 import UserOrdersView from '../components/user/UserOrdersView';
 import TopPerformanceUserJourney from '../components/user/TopPerformanceUserJourney';
-import { useSoundEffects } from '../hooks/useSoundEffects';
 import { useOrder } from '../context/OrderContext';
 import { 
     Activity, Server, LogOut, ChevronLeft, BarChart3, 
@@ -28,7 +27,6 @@ const MobileUserJourney: React.FC<MobileUserJourneyProps> = ({ onBackToRoleSelec
 
     const [localLanguage, setLocalLanguage] = useState<'km' | 'en'>(language);
     const t = translations[localLanguage];
-    const { playClick, playTeamSelect } = useSoundEffects();
     const [teamStats, setTeamStats] = useState({ revenue: 0, cost: 0, paid: 0, unpaid: 0, count: 0 });
     const [dateFilter, setDateFilter] = useState<'today' | 'month' | 'year' | 'custom'>('today');
 
@@ -54,17 +52,14 @@ const MobileUserJourney: React.FC<MobileUserJourneyProps> = ({ onBackToRoleSelec
 
     const handleCreateOrder = () => {
         if (!hasPermission('create_order')) return;
-        playClick();
         setAppState('create_order');
     };
-    
+
     const handleTeamSelect = (team: string) => {
-        playTeamSelect();
         setSelectedTeam(team);
     };
 
     const handleSwitchTeam = () => {
-        playClick();
         setSelectedTeam('');
     };
 

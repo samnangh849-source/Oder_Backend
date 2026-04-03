@@ -1,6 +1,5 @@
 
 import React, { useEffect } from 'react';
-import { useSoundEffects } from '../../hooks/useSoundEffects';
 
 interface ModalProps {
     isOpen: boolean;
@@ -12,17 +11,14 @@ interface ModalProps {
 }
 
 const Modal: React.FC<ModalProps> = ({ isOpen, onClose, children, maxWidth = 'max-w-md', fullScreen = false, zIndex = 'z-[100]' }) => {
-    const { playPop, playClick } = useSoundEffects();
 
     useEffect(() => {
         const handleEsc = (event: KeyboardEvent) => {
             if (event.key === 'Escape') {
-                playClick();
                 onClose();
             }
         };
         if (isOpen) {
-            playPop();
             window.addEventListener('keydown', handleEsc);
             document.body.style.overflow = 'hidden';
         }
@@ -35,7 +31,6 @@ const Modal: React.FC<ModalProps> = ({ isOpen, onClose, children, maxWidth = 'ma
     if (!isOpen) return null;
 
     const handleOverlayClick = () => {
-        playClick();
         onClose();
     };
 

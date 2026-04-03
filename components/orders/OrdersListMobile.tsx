@@ -3,7 +3,6 @@ import { ParsedOrder } from '../../types';
 import { AppContext } from '../../context/AppContext';
 import Spinner from '../common/Spinner';
 import { MobileGrandTotalCard } from './OrderGrandTotal';
-import { useSoundEffects } from '../../hooks/useSoundEffects';
 import { convertGoogleDriveUrl } from '../../utils/fileUtils';
 import { Edit2, Check, Truck, Warehouse, MapPin, Clock, Globe } from 'lucide-react';
 
@@ -34,7 +33,6 @@ const OrdersListMobile: React.FC<OrdersListMobileProps> = ({
 }) => {
     const { currentUser, hasPermission, advancedSettings, language } = useContext(AppContext);
     const t = translations[language];
-    const { playClick, playPop } = useSoundEffects();
     const [displayCount, setDisplayCount] = useState(20);
 
     const isBinance = advancedSettings?.uiTheme === 'binance';

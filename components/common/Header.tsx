@@ -31,7 +31,7 @@ const Header: React.FC<HeaderProps> = ({ onBackToRoleSelect, appState }) => {
     const [isRefreshing, setIsRefreshing] = useState(false);
     const [editProfileModalOpen, setEditProfileModalOpen] = useState(false);
     const [advancedSettingsOpen, setAdvancedSettingsOpen] = useState(false);
-    const { playClick, playNotify, playTransition, playPop, playHover } = useSoundEffects();
+    const { playNotify } = useSoundEffects();
     
     // FIX: Safely initialize notification permission to prevent crash on browsers without Notification support
     const [notificationPermission, setNotificationPermission] = useState(() => {
@@ -60,12 +60,10 @@ const Header: React.FC<HeaderProps> = ({ onBackToRoleSelect, appState }) => {
     }, []);
 
     const toggleLanguage = (lang: 'en' | 'km') => {
-        playClick();
         setLanguage(lang);
     };
 
     const handleEnableNotifications = async () => {
-        playClick();
         const granted = await requestNotificationPermission();
         if (granted && 'Notification' in window) {
             setNotificationPermission(Notification.permission);
@@ -81,14 +79,12 @@ const Header: React.FC<HeaderProps> = ({ onBackToRoleSelect, appState }) => {
     };
 
     const handleDropdownToggle = () => {
-        playPop();
         setDropdownOpen(!dropdownOpen);
     };
 
     const handleHomeClick = (e: React.MouseEvent) => {
         e.preventDefault();
         if (!isSystemAdmin) return;
-        playTransition();
         try {
             const params = new URLSearchParams();
             params.set('view', 'admin_dashboard');
@@ -104,12 +100,10 @@ const Header: React.FC<HeaderProps> = ({ onBackToRoleSelect, appState }) => {
     };
 
     const handleLogout = () => {
-        playClick();
         logout();
     };
 
     const handleBackClick = () => {
-        playTransition();
         onBackToRoleSelect();
     };
 
@@ -125,7 +119,6 @@ const Header: React.FC<HeaderProps> = ({ onBackToRoleSelect, appState }) => {
                     <div 
                         className={`flex items-center gap-3 select-none ${isSystemAdmin ? 'cursor-pointer hover:opacity-90 active:scale-95 transition-all transform' : 'cursor-default'}`}
                         onClick={handleHomeClick}
-                        onMouseEnter={isSystemAdmin ? playHover : undefined}
                     >
                         {/* Custom Mobile Title (If set) */}
                         <div className={`md:hidden ${mobilePageTitle ? 'block' : 'hidden'}`}>
@@ -178,7 +171,6 @@ const Header: React.FC<HeaderProps> = ({ onBackToRoleSelect, appState }) => {
                         <div className="relative" ref={dropdownRef}>
                             <button 
                                 onClick={handleDropdownToggle} 
-                                onMouseEnter={playHover}
                                 className="flex items-center gap-2 p-1 pr-3 rounded-2xl bg-gray-800/50 border border-white/10 hover:bg-gray-800 transition-all active:scale-95 shadow-md group"
                             >
                                 <UserAvatar 
@@ -202,13 +194,13 @@ const Header: React.FC<HeaderProps> = ({ onBackToRoleSelect, appState }) => {
                                     </div>
                                     
                                     {/* Edit Profile */}
-                                    <button onClick={() => { playClick(); setEditProfileModalOpen(true); setDropdownOpen(false); }} className="w-full text-left px-5 py-3 text-sm font-bold text-gray-200 hover:bg-blue-600 transition-colors flex items-center gap-3">
+                                    <button onClick={() => { setEditProfileModalOpen(true); setDropdownOpen(false); }} className="w-full text-left px-5 py-3 text-sm font-bold text-gray-200 hover:bg-blue-600 transition-colors flex items-center gap-3">
                                         <svg className="w-4 h-4 opacity-60" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" /></svg>
                                         {t.edit_profile}
                                     </button>
 
                                     {/* Advanced Settings */}
-                                    <button onClick={() => { playClick(); setAdvancedSettingsOpen(true); setDropdownOpen(false); }} className="w-full text-left px-5 py-3 text-sm font-bold text-gray-200 hover:bg-blue-600 transition-colors flex items-center gap-3">
+                                    <button onClick={() => { setAdvancedSettingsOpen(true); setDropdownOpen(false); }} className="w-full text-left px-5 py-3 text-sm font-bold text-gray-200 hover:bg-blue-600 transition-colors flex items-center gap-3">
                                         <svg className="w-4 h-4 opacity-60" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" /><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" /></svg>
                                         {t.advanced_settings}
                                     </button>
@@ -221,7 +213,6 @@ const Header: React.FC<HeaderProps> = ({ onBackToRoleSelect, appState }) => {
 
                                     {/* Refresh Data */}
                                     <button onClick={async () => {
-                                        playClick();
                                         setIsRefreshing(true);
                                         try { await refreshData(); window.location.reload(); } catch (err) { setIsRefreshing(false); }
                                     }} className="w-full text-left px-5 py-3 text-sm font-bold text-gray-200 hover:bg-blue-600 transition-colors flex items-center justify-between group">
@@ -271,7 +262,7 @@ const Header: React.FC<HeaderProps> = ({ onBackToRoleSelect, appState }) => {
                         {/* Mobile Admin Hamburger Menu */}
                         {isMobileAdmin && (
                             <button 
-                                onClick={() => { playPop(); setIsMobileMenuOpen(!isMobileMenuOpen); }}
+                                onClick={() => setIsMobileMenuOpen(!isMobileMenuOpen)}
                                 className="relative w-10 h-10 flex items-center justify-center rounded-xl bg-blue-600/10 border border-blue-500/20 text-blue-400 transition-all active:scale-90"
                                 aria-label="Toggle Menu"
                             >
@@ -286,7 +277,7 @@ const Header: React.FC<HeaderProps> = ({ onBackToRoleSelect, appState }) => {
                         {/* Chat Button (Hidden on Mobile Admin to make space for Hamburger) */}
                         {!isMobileAdmin && (
                             <button 
-                                onClick={() => { playPop(); setIsChatOpen(true); }}
+                                onClick={() => setIsChatOpen(true)}
                                 className="relative p-2.5 rounded-xl bg-blue-600/10 text-blue-400 border border-blue-500/20 hover:bg-blue-600 hover:text-white transition-all active:scale-90 shadow-md"
                                 aria-label="Open Chat"
                             >
