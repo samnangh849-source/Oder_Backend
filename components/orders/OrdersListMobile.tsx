@@ -1,6 +1,7 @@
 import React, { useContext, useState, useMemo, useRef } from 'react';
 import { ParsedOrder } from '../../types';
 import { AppContext } from '../../context/AppContext';
+import { translations } from '../../translations';
 import Spinner from '../common/Spinner';
 import { MobileGrandTotalCard } from './OrderGrandTotal';
 import { convertGoogleDriveUrl } from '../../utils/fileUtils';
