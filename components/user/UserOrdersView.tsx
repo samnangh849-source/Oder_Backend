@@ -287,7 +287,7 @@ const UserOrdersView: React.FC<UserOrdersViewProps> = ({ onAdd, onStatsUpdate, s
 
     if (editingOrder) return <div className="fixed inset-0 z-[100] bg-[#0B0E11] animate-reveal overflow-y-auto"><EditOrderPage order={editingOrder} onSaveSuccess={handleSaveEdit} onCancel={() => setEditingOrder(null)} /></div>;
 
-    if (showReport) return <div className="animate-fade-in h-full overflow-auto bg-[var(--cm-bg)]"><UserSalesPageReport orders={permittedOrders} onBack={() => setShowReport(false)} team={team || ''} initialFilters={reportFilters as any} onFilterChange={setReportFilters as any} /></div>;
+    if (showReport) return <div className="animate-fade-in h-full overflow-auto bg-[var(--cm-bg)]"><UserSalesPageReport orders={permittedOrders} onBack={() => setShowReport(false)} team={selectedTeam || ''} initialFilters={reportFilters as any} onFilterChange={setReportFilters as any} /></div>;
 
     if (showShippingReport) return <div className="animate-fade-in h-full overflow-auto bg-[var(--cm-bg)]"><ShippingReport orders={permittedOrders} appData={appData} dateFilter={dateRange} onBack={() => setShowShippingReport(false)} /></div>;
 
