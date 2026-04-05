@@ -200,13 +200,6 @@ const DesktopOrdersDashboard: React.FC<DesktopOrdersDashboardProps> = ({ onBack,
         });
     };
 
-    if (editingOrderId) {
-        const order = enrichedOrders.find(o => o['Order ID'] === editingOrderId);
-        return order ? (
-            <EditOrderPage order={order} onSaveSuccess={() => { setEditingOrderId(''); refreshData(); }} onCancel={() => setEditingOrderId('')} />
-        ) : null;
-    }
-
     const calculatedRange = useMemo(() => {
         const now = new Date();
         const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
@@ -224,6 +217,13 @@ const DesktopOrdersDashboard: React.FC<DesktopOrdersDashboardProps> = ({ onBack,
         const formatDate = (d: Date) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
         return start ? `${formatDate(start)} to ${formatDate(end)}` : 'All time data';
     }, [filters.datePreset, filters.startDate, filters.endDate]);
+
+    if (editingOrderId) {
+        const order = enrichedOrders.find(o => o['Order ID'] === editingOrderId);
+        return order ? (
+            <EditOrderPage order={order} onSaveSuccess={() => { setEditingOrderId(''); refreshData(); }} onCancel={() => setEditingOrderId('')} />
+        ) : null;
+    }
 
     return (
         <div className={`w-full h-full flex flex-col animate-reveal relative ${isBinance ? 'bg-[#0B0E11]' : 'bg-[#020617]'} overflow-hidden`}>

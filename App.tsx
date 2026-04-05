@@ -16,6 +16,7 @@ import LongFilmPlayerPage from './pages/LongFilmPlayerPage';
 import ShortFilmPlayerPage from './pages/ShortFilmPlayerPage';
 import CambodiaMapPage from './pages/CambodiaMapPage';
 import PrintLabelPage from './pages/PrintLabelPage';
+import OrderMetadataView from './components/orders/OrderMetadataView';
 import NetflixEntertainment from './components/admin/netflix/NetflixEntertainment';
 import Header from './components/common/Header';
 import Spinner from './components/common/Spinner';
@@ -49,7 +50,7 @@ const AppContent: React.FC = () => {
         orders, appData, isOrdersLoading, isSyncing, refreshTimestamp, fetchData, fetchOrders, refreshData
     } = useOrder();
 
-    const [appState, setAppState] = useUrlState<'login' | 'user_journey' | 'admin_dashboard' | 'create_order' | 'fulfillment' | 'role_selection' | 'confirm_delivery' | 'entertainment' | 'watch' | 'series_player' | 'long_player' | 'short_player' | 'cambodia_map' | 'print_label'>('view', 'login');
+    const [appState, setAppState] = useUrlState<'login' | 'user_journey' | 'admin_dashboard' | 'create_order' | 'fulfillment' | 'role_selection' | 'confirm_delivery' | 'entertainment' | 'watch' | 'series_player' | 'long_player' | 'short_player' | 'cambodia_map' | 'print_label' | 'order_metadata'>('view', 'login');
     const [selectedTeam, setSelectedTeam] = useUrlState<string>('team', '');
     const [selectedMovieId, setSelectedMovieId] = useUrlState<string>('movie', '');
     const [mobilePageTitle, setMobilePageTitle] = useState<string | null>(null);
@@ -173,7 +174,7 @@ const AppContent: React.FC = () => {
 
     // Handle initial state and auth
     useEffect(() => {
-        if (!currentUser && appState !== 'login' && appState !== 'confirm_delivery' && appState !== 'watch' && appState !== 'series_player' && appState !== 'short_player' && appState !== 'long_player' && appState !== 'print_label' && appState !== 'entertainment') {
+        if (!currentUser && appState !== 'login' && appState !== 'confirm_delivery' && appState !== 'watch' && appState !== 'series_player' && appState !== 'short_player' && appState !== 'long_player' && appState !== 'print_label' && appState !== 'entertainment' && appState !== 'order_metadata') {
             setAppState('login');
         }
     }, [currentUser, appState, setAppState]);
@@ -268,7 +269,9 @@ const AppContent: React.FC = () => {
                     setCurrentUser(userWithPerms);
                     
                     const currentView = new URLSearchParams(window.location.search).get('view');
-                    if (currentView !== 'series_player' && currentView !== 'watch' && currentView !== 'confirm_delivery' && currentView !== 'entertainment' && currentView !== 'short_player' && currentView !== 'long_player' && currentView !== 'print_label') {
+                    if (currentView === 'order_metadata') {
+                        setAppState('order_metadata');
+                    } else if (currentView !== 'series_player' && currentView !== 'watch' && currentView !== 'confirm_delivery' && currentView !== 'entertainment' && currentView !== 'short_player' && currentView !== 'long_player' && currentView !== 'print_label') {
                         setAppState('role_selection');
                     }
                 } else {
@@ -302,17 +305,17 @@ const AppContent: React.FC = () => {
     }, []);
 
     const shouldShowHeader = useMemo(() => {
-        if (appState === 'login' || appState === 'user_journey' || appState === 'admin_dashboard' || appState === 'confirm_delivery' || appState === 'entertainment' || appState === 'watch' || appState === 'series_player' || appState === 'long_player' || appState === 'short_player' || appState === 'cambodia_map' || appState === 'print_label' || appState === 'fulfillment') return false;
+        if (appState === 'login' || appState === 'user_journey' || appState === 'admin_dashboard' || appState === 'confirm_delivery' || appState === 'entertainment' || appState === 'watch' || appState === 'series_player' || appState === 'long_player' || appState === 'short_player' || appState === 'cambodia_map' || appState === 'print_label' || appState === 'fulfillment' || appState === 'order_metadata') return false;
         return true;
     }, [appState]);
 
     const containerClass = useMemo(() => {
-        if (appState === 'entertainment' || appState === 'watch' || appState === 'series_player' || appState === 'long_player' || appState === 'short_player' || appState === 'cambodia_map' || appState === 'print_label' || appState === 'fulfillment') return 'w-full';
+        if (appState === 'entertainment' || appState === 'watch' || appState === 'series_player' || appState === 'long_player' || appState === 'short_player' || appState === 'cambodia_map' || appState === 'print_label' || appState === 'fulfillment' || appState === 'order_metadata') return 'w-full';
         return (appState === 'admin_dashboard' || appState === 'role_selection' || appState === 'user_journey') ? 'w-full' : 'w-full px-2 sm:px-6';
     }, [appState, selectedTeam]);
 
     const paddingClass = useMemo(() => {
-        if (appState === 'login' || appState === 'confirm_delivery' || appState === 'entertainment' || appState === 'watch' || appState === 'series_player' || appState === 'long_player' || appState === 'short_player' || appState === 'cambodia_map' || appState === 'print_label' || appState === 'fulfillment') return 'pt-0 pb-0';
+        if (appState === 'login' || appState === 'confirm_delivery' || appState === 'entertainment' || appState === 'watch' || appState === 'series_player' || appState === 'long_player' || appState === 'short_player' || appState === 'cambodia_map' || appState === 'print_label' || appState === 'fulfillment' || appState === 'order_metadata') return 'pt-0 pb-0';
         
         // Base header padding
         let topPadding = isMobile ? 'pt-16' : 'pt-20';
@@ -398,6 +401,8 @@ const AppContent: React.FC = () => {
                     <Suspense fallback={<div className="flex h-full items-center justify-center bg-transparent"><Spinner size="lg" /></div>}>
                         {appState === 'cambodia_map' ? (
                             <CambodiaMapPage />
+                        ) : appState === 'order_metadata' ? (
+                            <OrderMetadataView orderId={new URLSearchParams(window.location.search).get('id') || ''} />
                         ) : appState === 'print_label' ? (
                             <PrintLabelPage />
                         ) : appState === 'confirm_delivery' ? (

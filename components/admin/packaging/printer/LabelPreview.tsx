@@ -15,9 +15,7 @@ interface LabelPreviewProps {
 }
 
 const LabelPreview: React.FC<LabelPreviewProps> = ({ data, theme, margins, isDesignMode, printDensity, watermarkIntensity }) => {
-  const baseUrl = "https://oder-backend-2.onrender.com/CustomerAction.html";
-  const mapParam = data.mapLink ? encodeURIComponent(data.mapLink) : "";
-  const qrValue = `${baseUrl}?id=${encodeURIComponent(data.id)}&name=${encodeURIComponent(data.name)}&phone=${encodeURIComponent(data.phone)}&map=${mapParam}`;
+  const qrValue = `${window.location.origin}${window.location.pathname}?view=order_metadata&id=${encodeURIComponent(data.id)}`;
 
   const getQrFooter = () => {
     const features = [];

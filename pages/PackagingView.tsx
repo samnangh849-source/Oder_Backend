@@ -165,20 +165,60 @@ const PackagingView: React.FC<{ orders?: ParsedOrder[] }> = ({ orders: propOrder
 
     if (!selectedStore) {
         return (
-            <div className="flex flex-col items-center justify-center h-full p-6 bg-[#0B0E11] font-sans">
-                <div className="w-full max-w-sm space-y-8 text-center">
-                    <div className="space-y-2">
-                        <h2 className="text-2xl font-black text-[#EAECEF] uppercase tracking-tighter">Packaging Terminal</h2>
-                        <p className="text-xs text-[#848E9C]">Initialize secure packaging protocol.</p>
+            <div className="flex flex-col items-center justify-center h-full p-6 bg-[#0B0E11] font-sans relative overflow-hidden">
+                {/* Background Decorative Elements */}
+                <div className="absolute top-0 left-0 w-96 h-96 bg-[#FCD535]/5 rounded-full blur-[120px] -translate-x-1/2 -translate-y-1/2"></div>
+                <div className="absolute bottom-0 right-0 w-[500px] h-[500px] bg-[#FCD535]/[0.02] rounded-full blur-[150px] translate-x-1/2 translate-y-1/2"></div>
+                
+                <div className="w-full max-w-md space-y-12 text-center relative z-10 animate-fade-in">
+                    <div className="space-y-4">
+                        <div className="flex justify-center mb-6">
+                            <div className="w-20 h-20 rounded-[2rem] bg-[#FCD535]/10 border border-[#FCD535]/20 flex items-center justify-center shadow-[0_0_50px_rgba(252,213,53,0.1)]">
+                                <svg className="w-10 h-10 text-[#FCD535]" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4" /></svg>
+                            </div>
+                        </div>
+                        <h2 className="text-4xl font-black text-white uppercase tracking-[0.2em] drop-shadow-2xl">Packaging Hub</h2>
+                        <div className="flex items-center justify-center gap-3">
+                            <div className="h-[1px] w-8 bg-white/10"></div>
+                            <p className="text-[10px] font-black text-gray-500 uppercase tracking-[0.4em]">Initialize secure protocol</p>
+                            <div className="h-[1px] w-8 bg-white/10"></div>
+                        </div>
                     </div>
-                    <div className="space-y-2">
-                        {availableStores.map(store => (
-                            <button key={store} onClick={() => setSelectedStore(store)} className={`${bClasses.surface} ${bClasses.surfaceHover} w-full p-5 flex justify-between items-center group transition-all`}>
-                                <span className="text-sm font-bold text-[#EAECEF] uppercase tracking-widest">{store}</span>
-                                <span className="text-[#FCD535] group-hover:translate-x-1 transition-transform">→</span>
+
+                    <div className="grid grid-cols-1 gap-4">
+                        {availableStores.map((store, idx) => (
+                            <button 
+                                key={store} 
+                                onClick={() => setSelectedStore(store)} 
+                                className="group relative overflow-hidden bg-white/[0.03] hover:bg-[#FCD535] border border-white/5 hover:border-[#FCD535] w-full p-8 flex justify-between items-center transition-all duration-500 rounded-2xl active:scale-[0.98] shadow-2xl"
+                                style={{ animationDelay: `${idx * 100}ms` }}
+                            >
+                                <div className="flex flex-col items-start gap-1 relative z-10">
+                                    <span className="text-[10px] font-black text-gray-500 group-hover:text-black/40 uppercase tracking-widest transition-colors">Select Node</span>
+                                    <span className="text-xl font-black text-white group-hover:text-black uppercase tracking-[0.1em] transition-colors">{store}</span>
+                                </div>
+                                <div className="relative z-10 w-12 h-12 rounded-xl bg-white/5 group-hover:bg-black/10 flex items-center justify-center transition-colors">
+                                    <span className="text-[#FCD535] group-hover:text-black group-hover:translate-x-1 transition-all text-2xl">→</span>
+                                </div>
+                                
+                                {/* Hover Decorative Element */}
+                                <div className="absolute top-0 right-0 w-32 h-full bg-gradient-to-l from-white/5 to-transparent opacity-0 group-hover:opacity-100 transition-opacity"></div>
                             </button>
                         ))}
+                        
+                        {availableStores.length === 0 && (
+                            <div className="p-12 rounded-2xl border border-dashed border-white/10 text-gray-600">
+                                <p className="text-sm font-bold uppercase tracking-widest">No Active Nodes Found</p>
+                            </div>
+                        )}
                     </div>
+
+                    <button 
+                        onClick={() => setAppState('role_selection')}
+                        className="text-[10px] font-black text-gray-600 hover:text-[#FCD535] uppercase tracking-[0.4em] transition-colors pt-8"
+                    >
+                        [ Terminate Session ]
+                    </button>
                 </div>
             </div>
         );

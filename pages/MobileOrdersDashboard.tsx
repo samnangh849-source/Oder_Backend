@@ -99,24 +99,6 @@ const MobileOrdersDashboard: React.FC<MobileOrdersDashboardProps> = ({ onBack, i
         return isNaN(d.getTime()) ? 0 : d.getTime();
     };
 
-    const calculatedRange = useMemo(() => {
-        const now = new Date();
-        const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
-        let start: Date | null = null;
-        let end: Date | null = new Date();
-        switch (filters.datePreset) {
-            case 'today': start = today; break;
-            case 'yesterday': start = new Date(today); start.setDate(today.getDate() - 1); end = new Date(today); end.setMilliseconds(-1); break;
-            case 'this_week': const day = now.getDay(); start = new Date(today); start.setDate(today.getDate() - (day === 0 ? 6 : day - 1)); break;
-            case 'this_month': start = new Date(now.getFullYear(), now.getMonth(), 1); break;
-            case 'all': return 'All time data';
-            case 'custom': return `${filters.startDate || '...'} to ${filters.endDate || '...'}`;
-            default: start = today;
-        }
-        const formatDate = (d: Date) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
-        return start ? `${formatDate(start)} to ${formatDate(end)}` : 'All time data';
-    }, [filters.datePreset, filters.startDate, filters.endDate]);
-
     // Sync with URL
     const [, setUrlTeam] = useUrlState('teamFilter', '');
     const [, setUrlDate] = useUrlState('dateFilter', 'this_month');
@@ -227,6 +209,24 @@ const MobileOrdersDashboard: React.FC<MobileOrdersDashboardProps> = ({ onBack, i
             return sortOrder === 'desc' ? vB - vA : vA - vB;
         });
     }, [enrichedOrders, filters, searchQuery, sortBy, sortOrder]);
+
+    const calculatedRange = useMemo(() => {
+        const now = new Date();
+        const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+        let start: Date | null = null;
+        let end: Date | null = new Date();
+        switch (filters.datePreset) {
+            case 'today': start = today; break;
+            case 'yesterday': start = new Date(today); start.setDate(today.getDate() - 1); end = new Date(today); end.setMilliseconds(-1); break;
+            case 'this_week': const day = now.getDay(); start = new Date(today); start.setDate(today.getDate() - (day === 0 ? 6 : day - 1)); break;
+            case 'this_month': start = new Date(now.getFullYear(), now.getMonth(), 1); break;
+            case 'all': return 'All time data';
+            case 'custom': return `${filters.startDate || '...'} to ${filters.endDate || '...'}`;
+            default: start = today;
+        }
+        const formatDate = (d: Date) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+        return start ? `${formatDate(start)} to ${formatDate(end)}` : 'All time data';
+    }, [filters.datePreset, filters.startDate, filters.endDate]);
 
     if (editingOrderId) {
         const order = enrichedOrders.find(o => o['Order ID'] === editingOrderId);

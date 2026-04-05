@@ -1517,6 +1517,27 @@ func handleDeleteChatMessage(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{"status": "success"})
 }
 
+func handleGetOrderMetadata(c *gin.Context) {
+	orderID := c.Param("id")
+	if orderID == "" {
+		c.JSON(http.StatusBadRequest, gin.H{"status": "error", "message": "Missing Order ID"})
+		return
+	}
+
+	var order Order
+	// Case-insensitive search for order_id
+	if err := DB.Where("UPPER(TRIM(order_id)) = UPPER(TRIM(?))", orderID).First(&order).Error; err != nil {
+		if err == gorm.ErrRecordNotFound {
+			c.JSON(http.StatusNotFound, gin.H{"status": "error", "message": "Order not found"})
+		} else {
+			c.JSON(http.StatusInternalServerError, gin.H{"status": "error", "message": "Database error"})
+		}
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{"status": "success", "data": order})
+}
+
 // =========================================================================
 // GOOGLE SHEETS WEBHOOK (Real-time Sync Sheet -> DB)
 // =========================================================================
@@ -1804,6 +1825,7 @@ func main() {
 	// We pass the public group (api) and the admin group (admin) which already has AdminOnlyMiddleware.
 	// But admin group is defined inside protected block, so we'll call it there.
 	api.POST("/webhook/sheets-sync", handleSheetsWebhook)
+	api.GET("/order-metadata/:id", handleGetOrderMetadata)
 	protected := api.Group("/")
 	protected.Use(AuthMiddleware())
 	{
