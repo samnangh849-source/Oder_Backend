@@ -167,13 +167,25 @@ func runMigrations(db *gorm.DB) {
 }
 
 func ensureSeedData() {
-	var adminRole Role
-	if err := DB.Where("LOWER(role_name) = ?", "admin").First(&adminRole).Error; err != nil {
-		if err == gorm.ErrRecordNotFound {
-			adminRole = Role{RoleName: "Admin", Description: "System Administrator"}
-			if err := DB.Create(&adminRole).Error; err == nil {
-				log.Println("✅ Created default Admin role")
-				// Auto-seed basic permissions for Admin if needed
+	// Default roles to create if they don't exist
+	defaultRoles := []Role{
+		{RoleName: "Admin", Description: "System Administrator - Full Access"},
+		{RoleName: "Manager", Description: "Store/Team Manager"},
+		{RoleName: "Sale", Description: "Sales representative"},
+		{RoleName: "Fulfillment", Description: "Order packing & fulfillment staff"},
+		{RoleName: "Driver", Description: "Delivery driver"},
+		{RoleName: "Packer", Description: "Packaging team member"},
+	}
+
+	for _, r := range defaultRoles {
+		var existing Role
+		if err := DB.Where("LOWER(role_name) = LOWER(?)", r.RoleName).First(&existing).Error; err != nil {
+			if err == gorm.ErrRecordNotFound {
+				if createErr := DB.Create(&r).Error; createErr == nil {
+					log.Printf("✅ Created default role: %s", r.RoleName)
+				} else {
+					log.Printf("⚠️ Failed to create role %s: %v", r.RoleName, createErr)
+				}
 			}
 		}
 	}
