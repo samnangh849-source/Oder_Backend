@@ -84,7 +84,8 @@ func HandleGetUserPermissions(c *gin.Context) {
 	role, _ := c.Get("role")
 	var permissions []RolePermission
 
-	if err := DB.Where("role = ?", role).Find(&permissions).Error; err != nil {
+	roleStr := strings.ToLower(fmt.Sprintf("%v", role))
+	if err := DB.Where("LOWER(role) = ?", roleStr).Find(&permissions).Error; err != nil {
 		c.Error(err)
 		return
 	}
