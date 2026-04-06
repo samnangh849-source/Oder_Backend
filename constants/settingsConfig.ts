@@ -9,6 +9,7 @@ export interface ConfigField {
     readOnly?: boolean;
     options?: { label: string; value: string }[];
     dataRef?: string; // Reference to appData key for dynamic options
+    multiple?: boolean;
 }
 
 export interface ConfigSection {
@@ -51,8 +52,8 @@ export const configSections: ConfigSection[] = [
             { name: 'FullName', label: 'ឈ្មោះពេញ', type: 'text' }, 
             { name: 'UserName', label: 'ឈ្មោះគណនី (Login)', type: 'text' }, 
             { name: 'Password', label: 'ពាក្យសម្ងាត់', type: 'password' }, 
-            { name: 'Role', label: 'តួនាទី (Role)', type: 'select', dataRef: 'roles' }, 
-            { name: 'Team', label: 'ក្រុម (Team)', type: 'select', dataRef: 'pages' }, 
+            { name: 'Role', label: 'តួនាទី (Role)', type: 'select', dataRef: 'roles', multiple: true }, 
+            { name: 'Team', label: 'ក្រុម (Team)', type: 'select', dataRef: 'pages', multiple: true }, 
             { name: 'ProfilePictureURL', label: 'URL រូបភាព', type: 'image_url' }, 
             { name: 'IsSystemAdmin', label: 'System Admin?', type: 'checkbox' } 
         ], 

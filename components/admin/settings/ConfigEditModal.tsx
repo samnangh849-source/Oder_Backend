@@ -9,6 +9,7 @@ import { fileToBase64, convertGoogleDriveUrl } from '../../../utils/fileUtils';
 import { CacheService, CACHE_KEYS } from '../../../services/cacheService';
 import { compressImage } from '../../../utils/imageCompressor';
 import { translations } from '../../../translations';
+import SelectFilter from '../../orders/filters/SelectFilter';
 
 interface ConfigEditModalProps {
     section: ConfigSection;
@@ -115,7 +116,11 @@ const ConfigEditModal: React.FC<ConfigEditModalProps> = ({ section, item, onClos
             // Skip validation for readOnly fields or optional fields like Password when editing
             if (field.readOnly) continue;
             
-            if (field.type !== 'checkbox' && (formData[field.name] === undefined || formData[field.name] === '') && field.name !== 'Password' && !item) {
+            if (field.type !== 'checkbox' && (formData[field.name] === undefined || formData[field.name] === '')) {
+                 if (field.name === 'Password' && item) {
+                     // OK to leave empty when editing
+                     continue;
+                 }
                  setError(`សូមបំពេញចន្លោះ "${field.label}"`);
                  return;
             }
@@ -210,20 +215,33 @@ const ConfigEditModal: React.FC<ConfigEditModalProps> = ({ section, item, onClos
                                 </div>
                             ) : field.type === 'select' ? (
                                 <div className="relative group">
-                                    <select 
-                                        name={field.name} 
-                                        value={formData[field.name] || ''} 
-                                        onChange={handleChange}
-                                        className="form-input !py-3.5 !pl-5 !pr-10 bg-gray-900/40 backdrop-blur-xl border border-white/5 rounded-2xl text-[13px] font-bold text-white placeholder:text-gray-600 focus:border-blue-500/50 outline-none transition-all shadow-lg appearance-none w-full cursor-pointer"
-                                    >
-                                        <option value="">-- {t.select_driver || 'Select'} --</option>
-                                        {getOptions(field).map((opt: any) => (
-                                            <option key={opt.value} value={opt.value}>{opt.label}</option>
-                                        ))}
-                                    </select>
-                                    <div className="absolute right-4 top-1/2 -translate-y-1/2 pointer-events-none text-gray-500">
-                                        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M19 9l-7 7-7-7" /></svg>
-                                    </div>
+                                    {field.multiple ? (
+                                        <SelectFilter
+                                            label=""
+                                            value={formData[field.name] || ''}
+                                            onChange={(v) => setFormData((prev: any) => ({ ...prev, [field.name]: v }))}
+                                            options={getOptions(field)}
+                                            placeholder={`-- ${t.select_driver || 'Select'} --`}
+                                            multiple={true}
+                                        />
+                                    ) : (
+                                        <>
+                                            <select 
+                                                name={field.name} 
+                                                value={formData[field.name] || ''} 
+                                                onChange={handleChange}
+                                                className="form-input !py-3.5 !pl-5 !pr-10 bg-gray-900/40 backdrop-blur-xl border border-white/5 rounded-2xl text-[13px] font-bold text-white placeholder:text-gray-600 focus:border-blue-500/50 outline-none transition-all shadow-lg appearance-none w-full cursor-pointer"
+                                            >
+                                                <option value="">-- {t.select_driver || 'Select'} --</option>
+                                                {getOptions(field).map((opt: any) => (
+                                                    <option key={opt.value} value={opt.value}>{opt.label}</option>
+                                                ))}
+                                            </select>
+                                            <div className="absolute right-4 top-1/2 -translate-y-1/2 pointer-events-none text-gray-500">
+                                                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M19 9l-7 7-7-7" /></svg>
+                                            </div>
+                                        </>
+                                    )}
                                 </div>
                             ) : (
                                 <input 
