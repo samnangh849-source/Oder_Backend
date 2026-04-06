@@ -18,6 +18,13 @@ func HandleGetRoles(c *gin.Context) {
 		c.Error(err)
 		return
 	}
+	
+	if len(roles) == 0 {
+		// Auto-seed if empty
+		EnsureSeedData()
+		DB.Find(&roles)
+	}
+	
 	c.JSON(http.StatusOK, gin.H{"status": "success", "data": roles})
 }
 
