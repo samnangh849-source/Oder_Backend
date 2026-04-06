@@ -1098,19 +1098,13 @@ func handleAdminUpdateOrder(c *gin.Context) {
 				team = t
 			}
 
-			// If Force Sync is requested, use 'sendOrderTelegram' action to ensure it sends even if IDs exist
-			action := "updateOrderTelegram"
-			if forceSync {
-				action = "sendOrderTelegram"
-			}
-
-			// SINGLE Sync call to Google Sheets and Telegram.
-			// Apps Script's updateOrderTelegram already handles updating AllOrders and the team's specific sheet.
-			// This saves Apps Script execution time and quota.
-			enqueueSync(action, map[string]interface{}{
+			// Use 'updateOrderTelegram' action. If Force Sync is true, the Apps Script
+			// will trigger sendOrderToTelegram regardless of existing IDs.
+			enqueueSync("updateOrderTelegram", map[string]interface{}{
 				"orderId":       r.OrderID,
 				"updatedFields": sheetData,
 				"team":          team,
+				"Force Sync":    forceSync,
 			}, "", nil)
 		}
 	}()
@@ -1280,14 +1274,21 @@ func handleAdminDeleteRow(c *gin.Context) {
 		return
 	}
 
-	if req.SheetName == "Roles" && strings.EqualFold(fmt.Sprintf("%v", pkVal), "Admin") {
-		c.JSON(403, gin.H{"status": "error", "message": "មិនអាចលុបតួនាទី Admin បានទេ"})
-		return
+	// ── Roles guard: prevent deleting Admin role (check by RoleName in DB) ──
+	if req.SheetName == "Roles" {
+		var role Role
+		if err := DB.Table("roles").Where(pkCol+" = ?", pkVal).First(&role).Error; err == nil {
+			if strings.EqualFold(role.RoleName, "Admin") {
+				c.JSON(403, gin.H{"status": "error", "message": "មិនអាចលុបតួនាទី Admin បានទេ"})
+				return
+			}
+		}
 	}
 
 	tableName := getTableName(req.SheetName)
 	if tableName != "" {
-		DB.Table(tableName).Where(pkCol+" = ?", pkVal).Delete(nil)
+		// Use map model so GORM executes DELETE without needing a struct with primary key
+		DB.Table(tableName).Where(pkCol+" = ?", pkVal).Delete(map[string]interface{}{})
 	}
 
 	strPrimaryKey := make(map[string]string)
@@ -1521,6 +1522,27 @@ func handleDeleteChatMessage(c *gin.Context) {
 	hub.Broadcast <- eventBytes
 
 	c.JSON(http.StatusOK, gin.H{"status": "success"})
+}
+
+func handleGetOrderMetadata(c *gin.Context) {
+	orderID := c.Param("id")
+	if orderID == "" {
+		c.JSON(http.StatusBadRequest, gin.H{"status": "error", "message": "Missing Order ID"})
+		return
+	}
+
+	var order Order
+	// Case-insensitive search for order_id
+	if err := DB.Where("UPPER(TRIM(order_id)) = UPPER(TRIM(?))", orderID).First(&order).Error; err != nil {
+		if err == gorm.ErrRecordNotFound {
+			c.JSON(http.StatusNotFound, gin.H{"status": "error", "message": "Order not found"})
+		} else {
+			c.JSON(http.StatusInternalServerError, gin.H{"status": "error", "message": "Database error"})
+		}
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{"status": "success", "data": order})
 }
 
 // =========================================================================
@@ -1810,6 +1832,7 @@ func main() {
 	// We pass the public group (api) and the admin group (admin) which already has AdminOnlyMiddleware.
 	// But admin group is defined inside protected block, so we'll call it there.
 	api.POST("/webhook/sheets-sync", handleSheetsWebhook)
+	api.GET("/order-metadata/:id", handleGetOrderMetadata)
 	protected := api.Group("/")
 	protected.Use(AuthMiddleware())
 	{
@@ -1875,4 +1898,5 @@ func main() {
 }
 
 
+// នៅពេលមិនទាន់ capture រូបភាព(AIM and Focus)គឺពេលដែលកំពុងScan រក QR Code គឺប្រព័ន្ធត្រូវ zoom និង tracking គ្រប់កន្លែងដើម្បីស្វែង QR Code ដើម្បីល្បឿនចាប់យក QR Code​លឿនខ្លាំង ទោះបីដាក់នៅឆ្ងាយក៏ប្រព័ន្ធចាប់បាន
 
