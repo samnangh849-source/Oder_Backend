@@ -12,6 +12,7 @@ import (
 	"gorm.io/driver/postgres"
 	"gorm.io/gorm"
 	"gorm.io/gorm/logger"
+	"golang.org/x/crypto/bcrypt"
 )
 
 var DB *gorm.DB
@@ -132,7 +133,7 @@ func InitDB() {
 	DB = db
 
 	// Ensure essential data exists
-	ensureSeedData()
+	EnsureSeedData()
 
 	log.Println("✅ Database initialization complete!")
 }
@@ -166,7 +167,10 @@ func runMigrations(db *gorm.DB) {
 	}
 }
 
-func ensureSeedData() {
+func EnsureSeedData() {
+	if DB == nil {
+		return
+	}
 	// Default roles to create if they don't exist
 	defaultRoles := []Role{
 		{RoleName: "Admin", Description: "System Administrator - Full Access"},
@@ -187,6 +191,23 @@ func ensureSeedData() {
 					log.Printf("⚠️ Failed to create role %s: %v", r.RoleName, createErr)
 				}
 			}
+		}
+	}
+
+	// Default admin user
+	var count int64
+	DB.Model(&User{}).Where("user_name = ?", "admin").Count(&count)
+	if count == 0 {
+		hashedPassword, _ := bcrypt.GenerateFromPassword([]byte("admin123"), bcrypt.DefaultCost)
+		admin := User{
+			UserName:      "admin",
+			Password:      string(hashedPassword),
+			FullName:      "Administrator",
+			Role:          "Admin",
+			IsSystemAdmin: true,
+		}
+		if err := DB.Create(&admin).Error; err == nil {
+			log.Println("✅ Created default admin user: Username=admin, Password=admin123")
 		}
 	}
 }
