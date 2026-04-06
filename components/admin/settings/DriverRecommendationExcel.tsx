@@ -191,7 +191,7 @@ const DriverRecommendationExcel: React.FC = () => {
                             <th className="p-4 text-left text-[10px] font-black text-gray-500 uppercase tracking-widest min-w-[200px] border-r border-gray-700/50">{t.store_province}</th>
                             {DAYS_OF_WEEK.map(day => (
                                 <th key={day} className="p-4 text-center text-[10px] font-black text-gray-500 uppercase tracking-widest min-w-[180px] border-r border-gray-700/50">
-                                    {t[day.slice(0, 3).toLowerCase()] || day}
+                                    {t[(day || '').slice(0, 3).toLowerCase()] || day}
                                 </th>
                             ))}
                         </tr>

@@ -103,7 +103,7 @@ const PermissionMatrix: React.FC = () => {
                                     : serverEnabled;
 
                                 const isUpdating = updating === lockKey;
-                                const isAdminRole = role.RoleName.toLowerCase() === 'admin';
+                                const isAdminRole = (role.RoleName || '').toLowerCase() === 'admin';
 
                                 return (
                                     <td key={lockKey} className="px-6 py-4 text-center align-middle">

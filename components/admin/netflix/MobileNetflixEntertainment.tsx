@@ -429,7 +429,7 @@ const MobileNetflixEntertainment: React.FC<MobileNetflixEntertainmentProps> = ({
   const [selectedCategory, setSelectedCategory] = useState<string | null>(null);
 
   const filteredMovies = displayMovies.filter(m => {
-    const matchesSearch = m.Title.toLowerCase().includes(searchQuery.toLowerCase());
+    const matchesSearch = (m.Title || '').toLowerCase().includes((searchQuery || '').toLowerCase());
     const matchesTab = activeTab === 'home' || 
                        (activeTab === 'movies' && m.Type === 'long') ||
                        (activeTab === 'mylist' && myList.includes(m.ID));

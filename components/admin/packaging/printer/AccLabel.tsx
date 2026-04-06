@@ -14,7 +14,7 @@ interface AccLabelProps {
 
 const AccLabel: React.FC<AccLabelProps> = ({ data, qrValue, isDesignMode, printDensity, watermarkIntensity }) => {
   const totalAmount = parseFloat(data.total);
-  const paymentLower = data.payment.toLowerCase();
+  const paymentLower = (data.payment || '').toLowerCase();
   
   const isPaid = paymentLower.includes('paid') && !paymentLower.includes('unpaid');
   const isCOD = !isPaid && totalAmount > 0;

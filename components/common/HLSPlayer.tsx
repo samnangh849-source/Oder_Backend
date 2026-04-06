@@ -160,7 +160,7 @@ const HLSPlayer: React.FC<HLSPlayerProps> = ({ url, startTime = 0, onProgress, o
     }
   }, []);
 
-  const lowerUrl = url.toLowerCase();
+  const lowerUrl = (url || '').toLowerCase();
   const isM3u8 = lowerUrl.includes('.m3u8') || 
                  url.includes('/hlsplaylist/') || 
                  url.includes('/hls/') ||

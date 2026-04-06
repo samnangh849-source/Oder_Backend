@@ -98,7 +98,7 @@ const BulkActionManager: React.FC<BulkActionManagerProps> = ({ orders, selectedI
                 const assignedStores = bank.AssignedStores || '';
                 if (!assignedStores || assignedStores.trim() === '') return true;
                 const storesList = assignedStores.split(',').map((s: string) => s.trim().toLowerCase());
-                return storesList.includes(store.toLowerCase()) || storesList.includes('all');
+                return storesList.includes(String(store || '').toLowerCase()) || storesList.includes('all');
             });
         }
         

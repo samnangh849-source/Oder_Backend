@@ -14,7 +14,7 @@ interface FlexiLabelProps {
 
 const FlexiLabel: React.FC<FlexiLabelProps> = ({ data, qrValue, isDesignMode }) => {
   const totalAmount = parseFloat(data.total);
-  const paymentLower = data.payment.toLowerCase();
+  const paymentLower = (data.payment || '').toLowerCase();
   
   const isPaid = paymentLower.includes('paid') && !paymentLower.includes('unpaid');
   const isCOD = !isPaid && totalAmount > 0;

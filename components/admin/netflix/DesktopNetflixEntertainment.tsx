@@ -490,7 +490,7 @@ const DesktopNetflixEntertainment: React.FC<DesktopNetflixEntertainmentProps> = 
   };
 
   const filteredMovies = displayMovies.filter(m => {
-    const matchesSearch = m.Title.toLowerCase().includes(searchQuery.toLowerCase());
+    const matchesSearch = (m.Title || '').toLowerCase().includes((searchQuery || '').toLowerCase());
     const matchesTab = activeTab === 'home' || 
                        (activeTab === 'movies' && m.Type === 'long') ||
                        (activeTab === 'tv' && m.Type === 'series') ||
