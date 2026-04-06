@@ -693,6 +693,7 @@ func handleGetStaticData(c *gin.Context) {
 		func() { var d []ReturnItem; DB.Find(&d); mu.Lock(); result["returns"] = d; mu.Unlock() },
 		func() { var d []Role; DB.Find(&d); mu.Lock(); result["roles"] = d; mu.Unlock() },
 		func() { var d []RolePermission; DB.Find(&d); mu.Lock(); result["rolePermissions"] = d; mu.Unlock() },
+		func() { var d []User; DB.Find(&d); mu.Lock(); result["users"] = d; mu.Unlock() },
 		func() {
 			var d []DriverRecommendation
 			DB.Find(&d)
@@ -1190,6 +1191,14 @@ func handleAdminUpdateSheet(c *gin.Context) {
 			continue
 		}
 
+		// Hashing password if updating users table
+		if tableName == "users" && dbCol == "password" && v != "" {
+			hashed, err := bcrypt.GenerateFromPassword([]byte(fmt.Sprintf("%v", v)), bcrypt.DefaultCost)
+			if err == nil {
+				v = string(hashed)
+			}
+		}
+
 		mappedData[dbCol] = v
 	}
 
@@ -1238,7 +1247,15 @@ func handleAdminAddRow(c *gin.Context) {
 	if tableName != "" {
 		mappedData := make(map[string]interface{})
 		for k, v := range req.NewData {
-			mappedData[mapToDBColumn(k)] = v
+			colName := mapToDBColumn(k)
+			// Hashing password if adding to users table
+			if tableName == "users" && colName == "password" && v != "" {
+				hashed, err := bcrypt.GenerateFromPassword([]byte(fmt.Sprintf("%v", v)), bcrypt.DefaultCost)
+				if err == nil {
+					v = string(hashed)
+				}
+			}
+			mappedData[colName] = v
 		}
 		DB.Table(tableName).Create(mappedData)
 	}
@@ -1279,16 +1296,27 @@ func handleAdminDeleteRow(c *gin.Context) {
 		var role Role
 		if err := DB.Table("roles").Where(pkCol+" = ?", pkVal).First(&role).Error; err == nil {
 			if strings.EqualFold(role.RoleName, "Admin") {
-				c.JSON(403, gin.H{"status": "error", "message": "មិនអាចលុបតួនាទី Admin បានទេ"})
+				c.JSON(403, gin.H{"status": "error", "message": "មិនអាចលុបតួនាទី Admin បានទេ (Cannot delete Admin role)"})
 				return
 			}
+		}
+	}
+
+	// ── Users guard: prevent deleting Admin user ──
+	if req.SheetName == "Users" {
+		if strings.EqualFold(fmt.Sprintf("%v", pkVal), "admin") {
+			c.JSON(403, gin.H{"status": "error", "message": "មិនអាចលុបអ្នកប្រើប្រាស់ Admin បានទេ (Cannot delete Admin user)"})
+			return
 		}
 	}
 
 	tableName := getTableName(req.SheetName)
 	if tableName != "" {
 		// Use map model so GORM executes DELETE without needing a struct with primary key
-		DB.Table(tableName).Where(pkCol+" = ?", pkVal).Delete(map[string]interface{}{})
+		if err := DB.Table(tableName).Where(pkCol+" = ?", pkVal).Delete(map[string]interface{}{}).Error; err != nil {
+			c.JSON(500, gin.H{"status": "error", "message": "Delete operation failed: " + err.Error()})
+			return
+		}
 	}
 
 	strPrimaryKey := make(map[string]string)
