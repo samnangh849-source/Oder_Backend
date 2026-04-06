@@ -37,12 +37,12 @@ const Step3TargetEntities: React.FC<Step3TargetEntitiesProps> = ({ calcData, app
                             <div className="flex flex-wrap gap-2">
                                 {appData.roles?.map(r => (
                                     <button 
-                                        key={r.roleName} 
+                                        key={r.RoleName} 
                                         type="button" 
-                                        onClick={() => toggleApplyTo(`Role:${r.roleName}`)} 
-                                        className={`px-3 py-1.5 rounded text-[10px] font-bold border transition-all uppercase tracking-widest ${calcData.applyTo?.includes(`Role:${r.roleName}`) ? 'bg-[#F0B90B] text-black border-[#F0B90B] shadow-lg shadow-[#F0B90B]/10' : 'bg-[#121212] border-[#1A1A1A] text-[#707A8A] hover:text-[#EAECEF]'}`}
+                                        onClick={() => toggleApplyTo(`Role:${r.RoleName}`)} 
+                                        className={`px-3 py-1.5 rounded text-[10px] font-bold border transition-all uppercase tracking-widest ${calcData.applyTo?.includes(`Role:${r.RoleName}`) ? 'bg-[#F0B90B] text-black border-[#F0B90B] shadow-lg shadow-[#F0B90B]/10' : 'bg-[#121212] border-[#1A1A1A] text-[#707A8A] hover:text-[#EAECEF]'}`}
                                     >
-                                        {r.roleName}
+                                        {r.RoleName}
                                     </button>
                                 ))}
                             </div>

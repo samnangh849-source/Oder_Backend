@@ -69,7 +69,7 @@ const ConfigEditModal: React.FC<ConfigEditModalProps> = ({ section, item, onClos
             if (field.dataRef === 'locations') return Array.from(new Set(data.map((l: any) => l.Province))).map(p => ({ label: p as string, value: p as string }));
             if (field.dataRef === 'drivers') return data.map((d: any) => ({ label: d.DriverName, value: d.DriverName }));
             if (field.dataRef === 'shippingMethods') return data.map((m: any) => ({ label: m.MethodName, value: m.MethodName }));
-            if (field.dataRef === 'roles') return data.map((r: any) => ({ label: r.roleName, value: r.roleName }));
+            if (field.dataRef === 'roles') return data.map((r: any) => ({ label: r.RoleName, value: r.RoleName }));
             if (field.dataRef === 'pages') {
                 const teams = Array.from(new Set(data.map((p: any) => p.Team))).filter(Boolean);
                 return teams.map(t => ({ label: t as string, value: t as string }));

@@ -29,7 +29,7 @@ export const UserProvider: React.FC<{ children: React.ReactNode }> = ({ children
         // Normalized match (case-insensitive)
         const targetFeature = feature.toLowerCase();
         return currentUser.Permissions.some((p: any) => 
-            (p.feature || '').toLowerCase() === targetFeature && p.isEnabled
+            (p.Feature || '').toLowerCase() === targetFeature && p.IsEnabled
         );
     }, [currentUser]);
 

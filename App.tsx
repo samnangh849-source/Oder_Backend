@@ -197,15 +197,15 @@ const AppContent: React.FC = () => {
             const userRoles = (currentUser.Role || '').split(',').map(r => r.trim().toLowerCase());
             
             // Filter all permissions that match any of the user's roles (case-insensitive)
-            const matchedPerms = appData.permissions.filter(p => 
-                userRoles.includes((p.role || '').toLowerCase())
+            const matchedPerms = appData.permissions.filter(p =>
+                userRoles.includes((p.Role || '').toLowerCase())
             );
 
-            // Deduplicate: If multiple roles define the same feature, priorize isEnabled: true
+            // Deduplicate: If multiple roles define the same feature, priorize IsEnabled: true
             const mergedPermsMap: Record<string, any> = {};
             matchedPerms.forEach(p => {
-                const feature = (p.feature || '').toLowerCase();
-                if (!mergedPermsMap[feature] || p.isEnabled) {
+                const feature = (p.Feature || '').toLowerCase();
+                if (!mergedPermsMap[feature] || p.IsEnabled) {
                     mergedPermsMap[feature] = p;
                 }
             });

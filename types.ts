@@ -234,16 +234,16 @@ export interface ChatMessage {
 }
 
 export interface RolePermission {
-    id?: number;
-    role: string;
-    feature: string;
-    isEnabled: boolean;
+    ID?: number;
+    Role: string;
+    Feature: string;
+    IsEnabled: boolean;
 }
 
 export interface Role {
-    id?: number;
-    roleName: string;
-    description: string;
+    ID?: number;
+    RoleName: string;
+    Description: string;
 }
 
 export interface Notification {

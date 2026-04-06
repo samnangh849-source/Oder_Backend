@@ -67,9 +67,9 @@ const PermissionMatrix: React.FC = () => {
                             Feature / Role
                         </th>
                         {roles.map(role => (
-                            <th key={role.roleName} className="px-6 py-4 text-center font-medium text-[#eaecef] text-sm min-w-[140px] bg-[#1e2329]">
-                                <div className="text-xs text-[#848e9c] block mb-1 font-normal line-clamp-1 truncate">{role.description}</div>
-                                {role.roleName}
+                            <th key={role.RoleName} className="px-6 py-4 text-center font-medium text-[#eaecef] text-sm min-w-[140px] bg-[#1e2329]">
+                                <div className="text-xs text-[#848e9c] block mb-1 font-normal line-clamp-1 truncate">{role.Description}</div>
+                                {role.RoleName}
                             </th>
                         ))}
                     </tr>
@@ -91,19 +91,19 @@ const PermissionMatrix: React.FC = () => {
 
                             {/* Role Toggles */}
                             {roles.map(role => {
-                                const lockKey = `${role.roleName}-${feature}`;
+                                const lockKey = `${role.RoleName}-${feature}`;
                                 // ── Optimistic first, then server data ─────────────────────────
                                 const serverEnabled = permissions.find(p =>
-                                    (p.role || '').toLowerCase() === (role.roleName || '').toLowerCase() &&
-                                    (p.feature || '').toLowerCase() === (feature || '').toLowerCase()
-                                )?.isEnabled || false;
+                                    (p.Role || '').toLowerCase() === (role.RoleName || '').toLowerCase() &&
+                                    (p.Feature || '').toLowerCase() === (feature || '').toLowerCase()
+                                )?.IsEnabled || false;
                                 
                                 const isEnabled = lockKey in pendingChanges
                                     ? pendingChanges[lockKey]
                                     : serverEnabled;
 
                                 const isUpdating = updating === lockKey;
-                                const isAdminRole = role.roleName.toLowerCase() === 'admin';
+                                const isAdminRole = role.RoleName.toLowerCase() === 'admin';
 
                                 return (
                                     <td key={lockKey} className="px-6 py-4 text-center align-middle">
@@ -115,7 +115,7 @@ const PermissionMatrix: React.FC = () => {
                                             </div>
                                         ) : (
                                             <button
-                                                onClick={() => handleToggle(role.roleName, feature, isEnabled)}
+                                                onClick={() => handleToggle(role.RoleName, feature, isEnabled)}
                                                 disabled={isUpdating}
                                                 className={`relative inline-flex h-6 w-11 items-center rounded-full transition-all duration-300 focus:outline-none ${
                                                     isEnabled ? 'bg-[#fcd535]' : 'bg-[#2b3139]'
