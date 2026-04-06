@@ -970,6 +970,8 @@ func PerformDataMigration() {
 	if err := tx.Commit().Error; err != nil {
 		log.Println("❌ Migration failed on commit:", err)
 	} else {
+		// Ensure essential roles exist even if sheet was empty
+		EnsureSeedData()
 		log.Println("🎉 Migration ជោគជ័យ!")
 	}
 }
