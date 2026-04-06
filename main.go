@@ -1,1930 +1,1058 @@
-package main
+package backend
+
+// =========================================================================
+// DATA MIGRATION — Google Sheets → PostgreSQL
+// =========================================================================
+// ឯកសារនេះរួមបញ្ចូល logic ទាំងអស់ដែលពាក់ព័ន្ធនឹងការ Migrate ទិន្នន័យ
+// ពី Google Sheets ទៅ PostgreSQL database:
+//
+//   - SheetRanges              — map ឈ្មោះ Sheet → range A:Z
+//   - SheetsService / DriveService / SpreadsheetID / UploadFolderID
+//                              — shared Google API state (set by main.go)
+//   - CreateGoogleAPIClient()  — init Google Sheets + Drive clients
+//   - FetchSheetDataFromAPI()  — fetch raw rows from one Sheet
+//   - FetchSheetDataToStruct() — fetch + unmarshal to typed slice
+//   - PerformDataMigration()   — full DB reset + re-import from all Sheets
+//   - HandleMigrateData()      — Gin handler → POST /api/admin/migrate-data
+// =========================================================================
 
 import (
-	"bytes"
 	"context"
-	"crypto/subtle"
 	"encoding/json"
 	"fmt"
 	"log"
-	"math/rand"
 	"net/http"
 	"os"
-	"regexp"
 	"strconv"
 	"strings"
-	"sync"
 	"time"
-	"unicode"
 
-	"github.com/gin-contrib/cors"
 	"github.com/gin-gonic/gin"
-	"golang.org/x/crypto/bcrypt"
-
-	backend "github.com/samnangh849-source/Oder_Backend-2-/Backend"
-
-	// Import GORM
+	"google.golang.org/api/drive/v3"
+	"google.golang.org/api/option"
+	"google.golang.org/api/sheets/v4"
 	"gorm.io/gorm"
 )
 
-// --- Configuration ---
+// ── Shared Google API State ───────────────────────────────────────────────
+// main.go reads these after CreateGoogleAPIClient() to wire them back.
+
 var (
-	DB               *gorm.DB
-	appsScriptURL    string
-	appsScriptSecret string
+	SheetsService  *sheets.Service
+	DriveService   *drive.Service
+	SpreadsheetID  string
+	UploadFolderID string
 )
 
-// =========================================================================
-// ម៉ូដែលទិន្នន័យ (GORM Models) - Aliased to Backend package
-// =========================================================================
+// ── Sheet Ranges ──────────────────────────────────────────────────────────
+// Maps sheet name to Google Sheets read range.
 
-type User = backend.User
-type Movie = backend.Movie
-type Store = backend.Store
-type Setting = backend.Setting
-type TeamPage = backend.TeamPage
-type Product = backend.Product
-type Location = backend.Location
-type ShippingMethod = backend.ShippingMethod
-type DriverRecommendation = backend.DriverRecommendation
-type Color = backend.Color
-type Driver = backend.Driver
-type BankAccount = backend.BankAccount
-type PhoneCarrier = backend.PhoneCarrier
-type TelegramTemplate = backend.TelegramTemplate
-type Inventory = backend.Inventory
-type StockTransfer = backend.StockTransfer
-type ReturnItem = backend.ReturnItem
-type Order = backend.Order
-type RevenueEntry = backend.RevenueEntry
-type ChatMessage = backend.ChatMessage
-type EditLog = backend.EditLog
-type UserActivityLog = backend.UserActivityLog
-type Role = backend.Role
-type RolePermission = backend.RolePermission
-type IncentiveCalculator = backend.IncentiveCalculator
-type IncentiveProject = backend.IncentiveProject
-type IncentiveResult = backend.IncentiveResult
-type IncentiveManualData = backend.IncentiveManualData
-type IncentiveCustomPayout = backend.IncentiveCustomPayout
-type DeleteOrderRequest = backend.DeleteOrderRequest
-
-type IncentiveRules = backend.IncentiveRules
-type IncentiveTier = backend.IncentiveTier
-type CommissionTier = backend.CommissionTier
-
-var parseManualDataKey = backend.ParseManualDataKey
-var normalizeTeamKey = backend.NormalizeTeamKey
-var resolveManualTarget = backend.ResolveManualTarget
-var calculatePayout = backend.CalculatePayout
-
-// =========================================================================
-// INIT DATABASE & GOOGLE SERVICES
-// =========================================================================
-func initDB() {
-	backend.InitDB()
-	DB = backend.DB
-	// Explicitly assign to sync.go's package variable
-	backend.DB = backend.DB 
+var SheetRanges = map[string]string{
+	"Users":                  "Users!A:Z",
+	"Stores":                 "Stores!A:Z",
+	"Settings":               "Settings!A:Z",
+	"TeamsPages":             "TeamsPages!A:Z",
+	"Products":               "Products!A:Z",
+	"Locations":              "Locations!A:Z",
+	"ShippingMethods":        "ShippingMethods!A:Z",
+	"Colors":                 "Colors!A:Z",
+	"Drivers":                "Drivers!A:Z",
+	"BankAccounts":           "BankAccounts!A:Z",
+	"PhoneCarriers":          "PhoneCarriers!A:Z",
+	"TelegramTemplates":      "TelegramTemplates!A:Z",
+	"Inventory":              "Inventory!A:Z",
+	"StockTransfers":         "StockTransfers!A:Z",
+	"Returns":                "Returns!A:Z",
+	"AllOrders":              "AllOrders!A:AZ",
+	"RevenueDashboard":       "RevenueDashboard!A:Z",
+	"ChatMessages":           "ChatMessages!A:Z",
+	"EditLogs":               "EditLogs!A:Z",
+	"UserActivityLogs":       "UserActivityLogs!A:Z",
+	"Roles":                  "Roles!A:Z",
+	"RolePermissions":        "RolePermissions!A:Z",
+	"DriverRecommendations":  "DriverRecommendations!A:Z",
+	"IncentiveResults":       "IncentiveResults!A:Z",
+	"Movies":                 "Movies!A:Z",
+	"IncentiveProjects":      "IncentiveProjects!A:Z",
+	"IncentiveCalculators":   "IncentiveCalculators!A:Z",
+	"IncentiveManualData":    "IncentiveManualData!A:Z",
+	"IncentiveCustomPayouts": "IncentiveCustomPayouts!A:Z",
 }
 
-// =========================================================================
-// UTILS
-// =========================================================================
+// ── Google API Client ─────────────────────────────────────────────────────
 
-func generateShortID() string {
-	const chars = "ABCDEFGHJKMNPQRSTUVWXYZ23456789"
-	b := make([]byte, 6)
-	for i := range b {
-		b[i] = chars[rand.Intn(len(chars))]
+// CreateGoogleAPIClient initialises the Google Sheets and Drive API clients
+// using the GCP_CREDENTIALS environment variable (JSON service-account key).
+func CreateGoogleAPIClient(ctx context.Context) error {
+	credentialsJSON := os.Getenv("GCP_CREDENTIALS")
+	if credentialsJSON == "" {
+		return fmt.Errorf("GCP_CREDENTIALS not set")
 	}
-	return string(b)
-}
+	credentialsJSON = strings.Trim(credentialsJSON, "\"")
+	credentialsJSON = strings.ReplaceAll(credentialsJSON, "\\\"", "\"")
 
-func mapToDBColumn(key string) string {
-	specialCases := map[string]string{
-		"Order ID":                  "order_id",
-		"Discount ($)":              "discount_usd",
-		"Total Product Cost ($)":    "total_product_cost",
-		"Shipping Fee (Customer)":   "shipping_fee_customer",
-		"Products":                  "products_json",
-		"Products (JSON)":           "products_json",
-		"Telegram Message ID 1":     "telegram_message_id1",
-		"Telegram Message ID 2":     "telegram_message_id2",
-		"Telegram Message ID 3":     "telegram_message_id3",
-		"Customer Name":             "customer_name",
-		"Customer Phone":            "customer_phone",
-		"Location":                  "location",
-		"Address Details":           "address_details",
-		"Fulfillment Status":        "fulfillment_status",
-		"Fulfillment Store":         "fulfillment_store",
-		"Internal Shipping Method":  "internal_shipping_method",
-		"Internal Shipping Details": "internal_shipping_details",
-		"Internal Cost":             "internal_cost",
-		"Payment Status":            "payment_status",
-		"Payment Info":              "payment_info",
-		"Scheduled Time":            "scheduled_time",
-		"Delivery Unpaid":           "delivery_unpaid",
-		"Delivery Paid":             "delivery_paid",
-		"Package Photo":             "package_photo_url",
-		"Package Photo URL":         "package_photo_url",
-		"Delivery Photo":            "delivery_photo_url",
-		"Delivery Photo URL":        "delivery_photo_url",
-		"Driver Name":               "driver_name",
-		"Tracking Number":           "tracking_number",
-		"Dispatched Time":           "dispatched_time",
-		"Dispatched By":             "dispatched_by",
-		"Delivered Time":            "delivered_time",
-		"Packed By":                 "packed_by",
-		"Packed Time":               "packed_time",
-		"IsVerified":                "is_verified",
-		"UserName":                  "user_name",
-		"FullName":                  "full_name",
-		"ProfilePictureURL":         "profile_picture_url",
-		"IsSystemAdmin":             "is_system_admin",
-		"TelegramUsername":          "telegram_username",
-		"ImageURL":                  "image_url",
-		"Image URL":                 "image_url",
-		"LogosURL":                  "logo_url",
-		"Logos URL":                 "logo_url",
-		"LogoURL":                   "logo_url",
-		"Thumbnail":                 "thumbnail",
-		"Thumbnail URL":             "thumbnail",
-		"ID":                        "id",
-		"Key":                       "config_key",
-		"Value":                     "config_value",
-		"Description":               "description",
-	}
+	clientOptions := option.WithCredentialsJSON([]byte(credentialsJSON))
 
-	for k, v := range specialCases {
-		if strings.EqualFold(k, key) {
-			return v
-		}
-	}
-
-	var res []rune
-	for i, r := range key {
-		if i > 0 && (unicode.IsUpper(r) || r == ' ' || r == '(' || r == ')') {
-			if len(res) > 0 && res[len(res)-1] != '_' {
-				res = append(res, '_')
-			}
-		}
-		if r != ' ' && r != '(' && r != ')' && r != '$' {
-			res = append(res, unicode.ToLower(r))
-		}
-	}
-
-	final := strings.Trim(string(res), "_")
-	final = strings.ReplaceAll(final, "__", "_")
-	return final
-}
-
-func getTableName(sheetName string) string {
-	switch sheetName {
-	case "Users":
-		return "users"
-	case "Stores":
-		return "stores"
-	case "Settings":
-		return "settings"
-	case "TeamsPages":
-		return "team_pages"
-	case "Products":
-		return "products"
-	case "Locations":
-		return "locations"
-	case "ShippingMethods":
-		return "shipping_methods"
-	case "Colors":
-		return "colors"
-	case "Drivers":
-		return "drivers"
-	case "BankAccounts":
-		return "bank_accounts"
-	case "PhoneCarriers":
-		return "phone_carriers"
-	case "Inventory":
-		return "inventories"
-	case "StockTransfers":
-		return "stock_transfers"
-	case "Returns":
-		return "returns"
-	case "AllOrders":
-		return "orders"
-	case "Roles":
-		return "roles"
-	case "RolePermissions":
-		return "role_permissions"
-	case "DriverRecommendations":
-		return "driver_recommendations"
-	case "IncentiveCalculators":
-		return "incentive_calculators"
-	case "IncentiveProjects":
-		return "incentive_projects"
-	case "Movies":
-		return "movies"
-	case "RevenueDashboard":
-		return "revenue_entries"
-	case "ChatMessages":
-		return "chat_messages"
-	case "EditLogs":
-		return "edit_logs"
-	case "UserActivityLogs":
-		return "user_activity_logs"
-	case "IncentiveResults":
-		return "incentive_results"
-	case "IncentiveManualData":
-		return "incentive_manual_data"
-	case "IncentiveCustomPayouts":
-		return "incentive_custom_payouts"
-	case "TelegramTemplates":
-		return "telegram_templates"
-	}
-	if strings.HasPrefix(sheetName, "Orders_") {
-		return "orders"
-	}
-	return ""
-}
-
-// isValidDBIdentifier allows only lowercase letters, digits, and underscores
-// to prevent SQL injection via dynamically constructed column/table identifiers.
-func isValidDBIdentifier(s string) bool {
-	if s == "" {
-		return false
-	}
-	for _, r := range s {
-		if !((r >= 'a' && r <= 'z') || (r >= '0' && r <= '9') || r == '_') {
-			return false
-		}
-	}
-	return true
-}
-
-func isValidOrderColumn(col string) bool {
-	validCols := map[string]bool{
-		"order_id": true, "timestamp": true, "user": true, "page": true, "telegram_value": true,
-		"customer_name": true, "customer_phone": true, "location": true, "address_details": true,
-		"note": true, "shipping_fee_customer": true, "subtotal": true, "grand_total": true,
-		"products_json": true, "internal_shipping_method": true, "internal_shipping_details": true,
-		"internal_cost": true, "payment_status": true, "payment_info": true, "discount_usd": true,
-		"delivery_unpaid": true, "delivery_paid": true, "total_product_cost": true,
-		"telegram_message_id1": true, "telegram_message_id2": true, "telegram_message_id3": true, "scheduled_time": true,
-		"fulfillment_store": true, "team": true, "is_verified": true, "fulfillment_status": true,
-		"packed_by": true, "packed_time": true, "package_photo_url": true, "driver_name": true, "tracking_number": true,
-		"dispatched_time": true, "dispatched_by": true, "delivered_time": true, "delivery_photo_url": true,
-	}
-	return validCols[col]
-}
-
-func ErrorHandlingMiddleware() gin.HandlerFunc {
-	return func(c *gin.Context) {
-		c.Next()
-
-		if len(c.Errors) > 0 {
-			var errMsgs []string
-			for _, err := range c.Errors {
-				errMsgs = append(errMsgs, err.Error())
-				log.Printf("[ERROR] %s: %v\n", c.Request.URL.Path, err.Error())
-			}
-
-			if !c.Writer.Written() {
-				c.JSON(http.StatusInternalServerError, gin.H{
-					"status":  "error",
-					"message": strings.Join(errMsgs, "; "),
-				})
-			}
-		}
-	}
-}
-
-// =========================================================================
-// AUTHENTICATION, JWT & AUTHORIZATION (RBAC) - Aliased to Backend package
-// =========================================================================
-
-type Claims = backend.Claims
-
-var generateJWT = backend.GenerateJWT
-var handleLogin = backend.HandleLogin
-var DBMiddleware = backend.DBMiddleware
-var AuthMiddleware = backend.AuthMiddleware
-var AdminOnlyMiddleware = backend.AdminOnlyMiddleware
-var RequirePermission = backend.RequirePermission
-var hasPermissionInternal = backend.HasPermissionInternal
-
-// =========================================================================
-// API សម្រាប់គ្រប់គ្រងសិទ្ធិ (Role Permissions) - RBAC - Aliased to Backend package
-// =========================================================================
-
-var handleGetRoles = backend.HandleGetRoles
-var handleCreateRole = backend.HandleCreateRole
-var handleGetAllPermissions = backend.HandleGetAllPermissions
-var handleGetUserPermissions = backend.HandleGetUserPermissions
-var handleUpdatePermission = backend.HandleUpdatePermission
-
-// =========================================================================
-
-// =========================================================================
-// API សម្រាប់ប្រព័ន្ធ INCENTIVE (ប្រាក់លើកទឹកចិត្ត)
-// =========================================================================
-
-func handleGetIncentiveCalculators(c *gin.Context) {
-	var calcs []IncentiveCalculator
-	DB.Find(&calcs)
-	c.JSON(200, gin.H{"status": "success", "data": calcs})
-}
-
-func handleCreateIncentiveCalculator(c *gin.Context) {
-	var req IncentiveCalculator
-	if err := c.ShouldBindJSON(&req); err != nil {
-		c.JSON(400, gin.H{"status": "error", "message": err.Error()})
-		return
-	}
-
-	// Always let DB generate unique IDs to avoid collisions when duplicating calculators.
-	req.ID = 0
-
-	if err := DB.Create(&req).Error; err != nil {
-		c.JSON(500, gin.H{"status": "error", "message": err.Error()})
-		return
-	}
-	c.JSON(200, gin.H{"status": "success", "data": req})
-}
-
-func handleGetIncentiveProjects(c *gin.Context) {
-	var projects []IncentiveProject
-	DB.Preload("Calculators").Find(&projects)
-	c.JSON(200, gin.H{"status": "success", "data": projects})
-}
-
-func handleCreateIncentiveProject(c *gin.Context) {
-	var req IncentiveProject
-	if err := c.ShouldBindJSON(&req); err != nil {
-		c.JSON(400, gin.H{"status": "error", "message": err.Error()})
-		return
-	}
-
-	if req.ID == 0 {
-		var maxID uint
-		DB.Model(&IncentiveProject{}).Select("COALESCE(MAX(id), 0)").Row().Scan(&maxID)
-		req.ID = maxID + 1
-	}
-
-	if err := DB.Create(&req).Error; err != nil {
-		c.JSON(500, gin.H{"status": "error", "message": err.Error()})
-		return
-	}
-	c.JSON(200, gin.H{"status": "success", "data": req})
-}
-
-func handleGetIncentiveResults(c *gin.Context) {
-	projectId := c.Query("projectId")
-	var results []IncentiveResult
-	query := DB.Model(&IncentiveResult{})
-	if projectId != "" {
-		query = query.Where("project_id = ?", projectId)
-	}
-	query.Find(&results)
-	c.JSON(200, gin.H{"status": "success", "data": results})
-}
-
-func handleGetIncentiveManualData(c *gin.Context) {
-	projectId := c.Query("projectId")
-	month := c.Query("month")
-
-	if month != "" {
-		matched, _ := regexp.MatchString(`^\d{4}-\d{2}$`, month)
-		if !matched {
-			c.JSON(400, gin.H{"status": "error", "message": "ទម្រង់ខែមិនត្រឹមត្រូវ (ត្រូវប្រើ YYYY-MM)"})
-			return
-		}
-	}
-
-	var data []IncentiveManualData
-	query := DB.Model(&IncentiveManualData{})
-	if projectId != "" {
-		query = query.Where("project_id = ?", projectId)
-	}
-	if month != "" {
-		query = query.Where("month = ?", month)
-	}
-	query.Find(&data)
-	c.JSON(200, gin.H{"status": "success", "data": data})
-}
-
-func handleSaveIncentiveManualData(c *gin.Context) {
-	var req IncentiveManualData
-	if err := c.ShouldBindJSON(&req); err != nil {
-		c.JSON(400, gin.H{"status": "error", "message": "ទិន្នន័យមិនត្រឹមត្រូវ"})
-		return
-	}
-
-	// Validate Month format (YYYY-MM)
-	matched, _ := regexp.MatchString(`^\d{4}-\d{2}$`, req.Month)
-	if !matched {
-		c.JSON(400, gin.H{"status": "error", "message": "ទម្រង់ខែមិនត្រឹមត្រូវ (ត្រូវប្រើ YYYY-MM)"})
-		return
-	}
-
-	var existing IncentiveManualData
-	err := DB.Where("project_id = ? AND month = ? AND metric_type = ? AND data_key = ?", req.ProjectID, req.Month, req.MetricType, req.DataKey).First(&existing).Error
-	if err == nil {
-		DB.Model(&existing).Update("value", req.Value)
-	} else {
-		DB.Create(&req)
-	}
-	c.JSON(200, gin.H{"status": "success"})
-}
-
-func handleGetIncentiveCustomPayouts(c *gin.Context) {
-	projectId := c.Query("projectId")
-	month := c.Query("month")
-
-	if month != "" {
-		matched, _ := regexp.MatchString(`^\d{4}-\d{2}$`, month)
-		if !matched {
-			c.JSON(400, gin.H{"status": "error", "message": "ទម្រង់ខែមិនត្រឹមត្រូវ (ត្រូវប្រើ YYYY-MM)"})
-			return
-		}
-	}
-
-	var payouts []IncentiveCustomPayout
-	query := DB.Model(&IncentiveCustomPayout{})
-	if projectId != "" {
-		query = query.Where("project_id = ?", projectId)
-	}
-	if month != "" {
-		query = query.Where("month = ?", month)
-	}
-	query.Find(&payouts)
-	c.JSON(200, gin.H{"status": "success", "data": payouts})
-}
-
-func handleSaveIncentiveCustomPayout(c *gin.Context) {
-	var req IncentiveCustomPayout
-	if err := c.ShouldBindJSON(&req); err != nil {
-		c.JSON(400, gin.H{"status": "error", "message": "ទិន្នន័យមិនត្រឹមត្រូវ"})
-		return
-	}
-
-	// Validate Month format (YYYY-MM)
-	matched, _ := regexp.MatchString(`^\d{4}-\d{2}$`, req.Month)
-	if !matched {
-		c.JSON(400, gin.H{"status": "error", "message": "ទម្រង់ខែមិនត្រឹមត្រូវ (ត្រូវប្រើ YYYY-MM)"})
-		return
-	}
-
-	var existing IncentiveCustomPayout
-	err := DB.Where("project_id = ? AND month = ? AND user_name = ?", req.ProjectID, req.Month, req.UserName).First(&existing).Error
-	if err == nil {
-		DB.Model(&existing).Update("value", req.Value)
-	} else {
-		DB.Create(&req)
-	}
-	c.JSON(200, gin.H{"status": "success"})
-}
-
-func handleLockIncentivePayout(c *gin.Context) {
-	var req struct {
-		ProjectID uint              `json:"projectId"`
-		Month     string            `json:"month"`
-		Results   []IncentiveResult `json:"results"`
-	}
-	if err := c.ShouldBindJSON(&req); err != nil {
-		c.JSON(400, gin.H{"status": "error", "message": "ទិន្នន័យមិនត្រឹមត្រូវ"})
-		return
-	}
-
-	// Validate Month format (YYYY-MM)
-	matched, _ := regexp.MatchString(`^\d{4}-\d{2}$`, req.Month)
-	if !matched {
-		c.JSON(400, gin.H{"status": "error", "message": "ទម្រង់ខែមិនត្រឹមត្រូវ (ត្រូវប្រើ YYYY-MM)"})
-		return
-	}
-
-	// 1. Delete existing results for this project/month (assuming results are stored per project, but model lacks month. Let's add month if needed, or rely on Project ID if project is 1 per month. For now, just replace).
-	DB.Where("project_id = ?", req.ProjectID).Delete(&IncentiveResult{})
-
-	// 2. Save new results
-	if len(req.Results) > 0 {
-		var maxID uint
-		DB.Model(&IncentiveResult{}).Select("COALESCE(MAX(id), 0)").Row().Scan(&maxID)
-
-		for i := range req.Results {
-			maxID++
-			req.Results[i].ID = maxID
-		}
-		DB.Create(&req.Results)
-
-		// 3. Send to Google Sheet
-		go func() {
-			timestamp := time.Now().Format("2006-01-02 15:04:05")
-			for _, res := range req.Results {
-				sheetData := map[string]interface{}{
-					"Timestamp":       timestamp,
-					"ProjectID":       req.ProjectID,
-					"UserName":        res.UserName,
-					"TotalOrders":     res.TotalOrders,
-					"TotalRevenue":    res.TotalRevenue,
-					"TotalProfit":     res.TotalProfit,
-					"CalculatedValue": res.CalculatedValue,
-					"IsCustom":        res.IsCustom,
-				}
-				// Sync with Google Sheets via managed queue
-				enqueueSync("addRow", sheetData, "IncentiveResults", nil)
-			}
-		}()
-	}
-
-	c.JSON(200, gin.H{"status": "success", "message": "បានរក្សាទុករបាយការណ៍ជោគជ័យ!"})
-}
-
-func handleCalculateIncentive(c *gin.Context) {
-	var req struct {
-		ProjectID uint   `json:"projectId"`
-		Month     string `json:"month"`
-	}
-	if err := c.ShouldBindJSON(&req); err != nil {
-		c.JSON(400, gin.H{"status": "error", "message": "ទិន្នន័យមិនត្រឹមត្រូវ"})
-		return
-	}
-
-	// Validate Month format (YYYY-MM)
-	matched, _ := regexp.MatchString(`^\d{4}-\d{2}$`, req.Month)
-	if !matched {
-		c.JSON(400, gin.H{"status": "error", "message": "ទម្រង់ខែមិនត្រឹមត្រូវ (ត្រូវប្រើ YYYY-MM)"})
-		return
-	}
-
-	results, err := backend.ProcessIncentiveCalculation(DB, req.ProjectID, req.Month)
+	sheetsSrv, err := sheets.NewService(ctx, clientOptions, option.WithScopes(sheets.SpreadsheetsScope))
 	if err != nil {
-		c.JSON(500, gin.H{"status": "error", "message": err.Error()})
-		return
+		return err
 	}
+	SheetsService = sheetsSrv
 
-	c.JSON(200, gin.H{"status": "success", "data": results})
-}
-
-// =========================================================================
-// ប្រព័ន្ធ BACKGROUND QUEUE & SCHEDULER - Aliased to Backend package
-// =========================================================================
-
-type AppsScriptRequest = backend.AppsScriptRequest
-type AppsScriptResponse = backend.AppsScriptResponse
-type SyncTask = backend.SyncTask
-
-var callAppsScriptPOST = backend.CallAppsScriptPOST
-var enqueueSync = backend.EnqueueSync
-var startSyncManager = backend.StartSyncManager
-
-type OrderJob struct {
-	JobID     string
-	OrderID   string
-	UserName  string
-	OrderData map[string]interface{}
-}
-
-var orderChannel = make(chan OrderJob, 2000)
-
-func startOrderWorker() {
-	for job := range orderChannel {
-		func() {
-			defer func() {
-				if r := recover(); r != nil {
-					log.Printf("⚠️ Recovered from panic in OrderWorker for Order %s: %v", job.OrderID, r)
-				}
-			}()
-
-			log.Printf("☁️ Background Worker: Processing Order %s", job.OrderID)
-			reqBody := AppsScriptRequest{Action: "submitOrder", Secret: backend.AppsScriptSecret, OrderData: job.OrderData}
-			jsonData, _ := json.Marshal(reqBody)
-
-			client := &http.Client{Timeout: 45 * time.Second}
-			resp, err := client.Post(backend.AppsScriptURL, "application/json", bytes.NewBuffer(jsonData))
-
-			if err != nil {
-				log.Printf("❌ Worker error for %s: %v", job.OrderID, err)
-				if backend.HubGlobal != nil {
-					msgBytes, _ := json.Marshal(map[string]interface{}{"type": "system_notification", "status": "error", "targetUser": job.UserName, "message": "បញ្ជូនទៅ Telegram បរាជ័យ: " + err.Error(), "jobId": job.JobID})
-					backend.HubGlobal.Broadcast <- msgBytes
-				}
-			} else {
-				defer resp.Body.Close()
-				var scriptResp AppsScriptResponse
-				telegramSent := false
-				if err := json.NewDecoder(resp.Body).Decode(&scriptResp); err == nil {
-					if (scriptResp.MessageIds.ID1 != "" || scriptResp.MessageIds.ID2 != "" || scriptResp.MessageIds.ID3 != "") && DB != nil {
-						DB.Model(&Order{}).Where("order_id = ?", job.OrderID).Updates(map[string]interface{}{
-							"telegram_message_id1": scriptResp.MessageIds.ID1,
-							"telegram_message_id2": scriptResp.MessageIds.ID2,
-							"telegram_message_id3": scriptResp.MessageIds.ID3,
-						})
-						telegramSent = true
-					}
-				}
-				if backend.HubGlobal != nil {
-					notifStatus := "success"
-					notifMsg := "បាញ់ទៅ Telegram ជោគជ័យ!"
-					if !telegramSent {
-						notifStatus = "warning"
-						notifMsg = "កម្មង់បានរក្សាទុក ប៉ុន្តែ Telegram មិនបានផ្ញើ (ពិនិត្យ Stores sheet)"
-						log.Printf("⚠️ Worker: Order %s saved but Telegram message was not sent (messageIds empty)", job.OrderID)
-					}
-					msgBytes, _ := json.Marshal(map[string]interface{}{"type": "system_notification", "status": notifStatus, "targetUser": job.UserName, "message": notifMsg, "jobId": job.JobID})
-					backend.HubGlobal.Broadcast <- msgBytes
-				}
-			}
-		}()
+	driveSrv, err := drive.NewService(ctx, clientOptions, option.WithScopes(drive.DriveFileScope))
+	if err != nil {
+		return err
 	}
+	DriveService = driveSrv
+
+	log.Println("✅ Google API Clients Initialized.")
+	return nil
 }
 
-func startScheduler() {
-	ticker := time.NewTicker(2 * time.Minute)
-	reconcileTicker := time.NewTicker(15 * time.Minute)
+// ── Sheet Data Helpers ────────────────────────────────────────────────────
 
-	go func() {
-		for {
-			select {
-			case <-ticker.C:
-				// Sync with Google Sheets via managed queue
-				enqueueSync("checkScheduledOrders", nil, "", nil)
-			case <-reconcileTicker.C:
-				// 🛡️ Self-Healing: Check for missing photo links in Sheets
-				backend.ReconcileMissingPhotoLinks(DB)
-			}
+// isNumericHeader returns true if the column header should be parsed as float64.
+func IsNumericHeader(h string) bool {
+	h = strings.ToLower(strings.TrimSpace(h))
+	return h == "price" || h == "cost" || h == "grand total" || h == "subtotal" ||
+		h == "shipping fee (customer)" || h == "internal cost" || h == "internalcost" ||
+		h == "discount ($)" || h == "delivery unpaid" || h == "delivery paid" ||
+		h == "total product cost ($)" || h == "revenue" || h == "quantity" ||
+		h == "part" || h == "id" || h == "projectid" ||
+		h == "totalorders" || h == "totalrevenue" || h == "calculatedvalue" ||
+		h == "calculatorid"
+}
+
+// isBoolHeader returns true if the column header should be parsed as bool.
+func IsBoolHeader(h string) bool {
+	h = strings.ToLower(strings.TrimSpace(h))
+	return h == "issystemadmin" || h == "allowmanualdriver" || h == "requiredriverselection" ||
+		h == "isrestocked" || h == "isenabled" ||
+		h == "enabledriverrecommendation" || h == "requireperiodselection" || h == "iscustom"
+}
+
+// convertSheetValuesToMaps converts a raw Sheets ValueRange into a slice of
+// header→value maps, coercing numeric and bool columns appropriately.
+func convertSheetValuesToMaps(sheetName string, values *sheets.ValueRange) ([]map[string]interface{}, error) {
+	if values == nil || len(values.Values) < 2 {
+		return []map[string]interface{}{}, nil
+	}
+	headers := values.Values[0]
+	dataRows := values.Values[1:]
+	result := make([]map[string]interface{}, 0, len(dataRows))
+
+	isIncentiveSheet := strings.HasPrefix(sheetName, "Incentive")
+
+	for _, row := range dataRows {
+		if len(row) == 0 || (len(row) == 1 && row[0] == "") {
+			continue
 		}
-	}()
-}
+		rowData := make(map[string]interface{})
+		for i, cell := range row {
+			if i < len(headers) {
+				header := strings.TrimSpace(fmt.Sprintf("%v", headers[i]))
+				if header != "" {
+					// For incentive sheets, we normalize headers to camelCase to match the new tags
+					targetHeader := header
+					if isIncentiveSheet {
+						if header == "ID" { targetHeader = "id" }
+						if header == "ProjectID" { targetHeader = "projectId" }
+						if header == "CalculatorID" { targetHeader = "calculatorId" }
+						if header == "RulesJSON" { targetHeader = "rulesJson" }
+						if header == "BreakdownJSON" { targetHeader = "breakdownJson" }
+						if header == "UserName" { targetHeader = "userName" }
+						if header == "TotalOrders" { targetHeader = "totalOrders" }
+						if header == "TotalRevenue" { targetHeader = "totalRevenue" }
+						if header == "TotalProfit" { targetHeader = "totalProfit" }
+						if header == "CalculatedValue" { targetHeader = "calculatedValue" }
+						if header == "IsCustom" { targetHeader = "isCustom" }
+						if header == "MetricType" { targetHeader = "metricType" }
+						if header == "DataKey" { targetHeader = "dataKey" }
+						if header == "Month" { targetHeader = "month" }
+						// Also handle first character lowercase for others
+						if targetHeader == header && len(header) > 0 {
+							targetHeader = strings.ToLower(header[:1]) + header[1:]
+						}
+					}
 
-// =========================================================================
-// WEB SOCKET - Aliased to Backend package
-// =========================================================================
-
-type Client = backend.Client
-type Hub = backend.Hub
-
-var NewHub = backend.NewHub
-var serveWs = backend.ServeWs
-var upgrader = backend.Upgrader
-var hub *Hub
-
-// =========================================================================
-
-// =========================================================================
-// MIGRATION SCRIPT
-// =========================================================================
-
-func handleGetStaticData(c *gin.Context) {
-	var wg sync.WaitGroup
-	var mu sync.Mutex
-	result := make(map[string]interface{})
-
-	queries := []func(){
-		func() { var d []Product; DB.Find(&d); mu.Lock(); result["products"] = d; mu.Unlock() },
-		func() { var d []Store; DB.Find(&d); mu.Lock(); result["stores"] = d; mu.Unlock() },
-		func() { var d []TeamPage; DB.Find(&d); mu.Lock(); result["pages"] = d; mu.Unlock() },
-		func() { var d []Location; DB.Find(&d); mu.Lock(); result["locations"] = d; mu.Unlock() },
-		func() { var d []ShippingMethod; DB.Find(&d); mu.Lock(); result["shippingMethods"] = d; mu.Unlock() },
-		func() { var d []Color; DB.Find(&d); mu.Lock(); result["colors"] = d; mu.Unlock() },
-		func() { var d []Driver; DB.Find(&d); mu.Lock(); result["drivers"] = d; mu.Unlock() },
-		func() { var d []BankAccount; DB.Find(&d); mu.Lock(); result["bankAccounts"] = d; mu.Unlock() },
-		func() { var d []PhoneCarrier; DB.Find(&d); mu.Lock(); result["phoneCarriers"] = d; mu.Unlock() },
-		func() { var d []Inventory; DB.Find(&d); mu.Lock(); result["inventory"] = d; mu.Unlock() },
-		func() { var d []StockTransfer; DB.Find(&d); mu.Lock(); result["stockTransfers"] = d; mu.Unlock() },
-		func() { var d []ReturnItem; DB.Find(&d); mu.Lock(); result["returns"] = d; mu.Unlock() },
-		func() { var d []Role; DB.Find(&d); mu.Lock(); result["roles"] = d; mu.Unlock() },
-		func() { var d []RolePermission; DB.Find(&d); mu.Lock(); result["rolePermissions"] = d; mu.Unlock() },
-		func() { var d []User; DB.Find(&d); mu.Lock(); result["users"] = d; mu.Unlock() },
-		func() {
-			var d []DriverRecommendation
-			DB.Find(&d)
-			mu.Lock()
-			result["driverRecommendations"] = d
-			mu.Unlock()
-		},
-		func() { var d []Movie; DB.Find(&d); mu.Lock(); result["movies"] = d; mu.Unlock() },
-		func() { var d []TelegramTemplate; DB.Find(&d); mu.Lock(); result["telegramTemplates"] = d; mu.Unlock() },
-		func() { var d []RevenueEntry; DB.Find(&d); mu.Lock(); result["revenueEntries"] = d; mu.Unlock() },
-		func() {
-			var d []EditLog
-			DB.Limit(500).Order("timestamp desc").Find(&d)
-			mu.Lock()
-			result["editLogs"] = d
-			mu.Unlock()
-		},
-		func() {
-			var d []UserActivityLog
-			DB.Limit(500).Order("timestamp desc").Find(&d)
-			mu.Lock()
-			result["actLogs"] = d
-			mu.Unlock()
-		},
-		func() {
-			var settings []Setting
-			DB.Find(&settings)
-			settingsObj := make(map[string]interface{})
-			for _, s := range settings {
-				settingsObj[s.ConfigKey] = s.ConfigValue
-				if s.ConfigKey == "UploadFolderID" {
-					envVal := os.Getenv("UPLOAD_FOLDER_ID")
-					if envVal != "" {
-						backend.UploadFolderID = envVal
+					if cellStr, ok := cell.(string); ok {
+						if IsNumericHeader(header) {
+							cleaned := strings.ReplaceAll(strings.ReplaceAll(strings.TrimSpace(cellStr), "$", ""), ",", "")
+							if f, err := strconv.ParseFloat(cleaned, 64); err == nil {
+								rowData[targetHeader] = f
+							} else {
+								rowData[targetHeader] = 0.0
+							}
+						} else if IsBoolHeader(header) {
+							rowData[targetHeader] = strings.ToUpper(strings.TrimSpace(cellStr)) == "TRUE"
+						} else {
+							if strings.ToLower(header) == "value" && (strings.TrimSpace(cellStr) == "" || strings.TrimSpace(cellStr) == "-") {
+								rowData[targetHeader] = "0"
+							} else {
+								rowData[targetHeader] = cellStr
+							}
+						}
 					} else {
-						backend.UploadFolderID = s.ConfigValue
+						if IsBoolHeader(header) {
+							if b, ok := cell.(bool); ok {
+								rowData[targetHeader] = b
+							} else {
+								rowData[targetHeader] = false
+							}
+						} else {
+							if b, ok := cell.(bool); ok {
+								if b {
+									rowData[targetHeader] = "TRUE"
+								} else {
+									rowData[targetHeader] = "FALSE"
+								}
+							} else if f, ok := cell.(float64); ok {
+								rowData[targetHeader] = f
+							} else {
+								rowData[targetHeader] = fmt.Sprintf("%v", cell)
+							}
+						}
+					}
+					// Ensure critical IDs are always strings (avoid scientific notation)
+					lowHeader := strings.ToLower(strings.TrimSpace(header))
+					if lowHeader == "telegram message id 1" || lowHeader == "telegram message id 2" || lowHeader == "telegram message id 3" ||
+						lowHeader == "order id" || lowHeader == "customer phone" ||
+						lowHeader == "barcode" || (sheetName == "Movies" && lowHeader == "id") {
+						rowData[targetHeader] = fmt.Sprintf("%v", cell)
 					}
 				}
 			}
-			mu.Lock()
-			result["settings"] = settingsObj
-			mu.Unlock()
-		},
+		}
+		result = append(result, rowData)
 	}
-
-	for _, q := range queries {
-		wg.Add(1)
-		go func(f func()) {
-			defer wg.Done()
-			f()
-		}(q)
-	}
-
-	wg.Wait()
-
-	c.JSON(http.StatusOK, gin.H{"status": "success", "data": result})
+	return result, nil
 }
 
-func handleGetSettings(c *gin.Context) {
-	var settings []Setting
-	if err := DB.Find(&settings).Error; err != nil {
-		c.Error(err)
-		return
+// FetchSheetDataFromAPI reads raw rows from a Google Sheet by name.
+// Requires SheetsService and SpreadsheetID to be set.
+func FetchSheetDataFromAPI(sheetName string) ([]map[string]interface{}, error) {
+	readRange, ok := SheetRanges[sheetName]
+	if !ok {
+		return nil, fmt.Errorf("range not defined for sheet %q", sheetName)
 	}
-	c.JSON(http.StatusOK, gin.H{"status": "success", "data": settings})
+	resp, err := SheetsService.Spreadsheets.Values.Get(SpreadsheetID, readRange).Do()
+	if err != nil {
+		return nil, err
+	}
+	return convertSheetValuesToMaps(sheetName, resp)
 }
 
-// =========================================================================
-// HANDLERS
-// =========================================================================
+// FetchSheetDataToStruct fetches a sheet and unmarshals the rows into target
+// (a pointer to a typed slice, e.g. *[]User).
+func FetchSheetDataToStruct(sheetName string, target interface{}) error {
+	mappedData, err := FetchSheetDataFromAPI(sheetName)
+	if err != nil {
+		return err
+	}
+	jsonData, _ := json.Marshal(mappedData)
+	return json.Unmarshal(jsonData, target)
+}
 
-func handleGetUsers(c *gin.Context) {
+// ── Full Data Migration ───────────────────────────────────────────────────
+
+// PerformDataMigration resets the entire database and re-imports all data
+// from Google Sheets within a single transaction.
+// Requires SheetsService and SpreadsheetID to be set beforehand.
+func PerformDataMigration() {
+	ctx := context.Background()
+	if SheetsService == nil {
+		if err := CreateGoogleAPIClient(ctx); err != nil {
+			log.Println("❌ Migration: Could not initialize Google API client:", err)
+			return
+		}
+	}
+
+	tx := DB.Begin()
+	defer func() {
+		if r := recover(); r != nil {
+			tx.Rollback()
+		}
+	}()
+
+	log.Println("🗑️ លុបទិន្នន័យចាស់ (Resetting Database within transaction)...")
+	tx.Session(&gorm.Session{AllowGlobalUpdate: true}).Delete(&User{})
+	tx.Session(&gorm.Session{AllowGlobalUpdate: true}).Delete(&Store{})
+	tx.Session(&gorm.Session{AllowGlobalUpdate: true}).Delete(&Setting{})
+	tx.Session(&gorm.Session{AllowGlobalUpdate: true}).Delete(&TeamPage{})
+	tx.Session(&gorm.Session{AllowGlobalUpdate: true}).Delete(&Product{})
+	tx.Session(&gorm.Session{AllowGlobalUpdate: true}).Delete(&Location{})
+	tx.Session(&gorm.Session{AllowGlobalUpdate: true}).Delete(&ShippingMethod{})
+	tx.Session(&gorm.Session{AllowGlobalUpdate: true}).Delete(&Color{})
+	tx.Session(&gorm.Session{AllowGlobalUpdate: true}).Delete(&Driver{})
+	tx.Session(&gorm.Session{AllowGlobalUpdate: true}).Delete(&BankAccount{})
+	tx.Session(&gorm.Session{AllowGlobalUpdate: true}).Delete(&PhoneCarrier{})
+	tx.Session(&gorm.Session{AllowGlobalUpdate: true}).Delete(&TelegramTemplate{})
+	tx.Session(&gorm.Session{AllowGlobalUpdate: true}).Delete(&Inventory{})
+	tx.Session(&gorm.Session{AllowGlobalUpdate: true}).Delete(&StockTransfer{})
+	tx.Session(&gorm.Session{AllowGlobalUpdate: true}).Delete(&ReturnItem{})
+	tx.Session(&gorm.Session{AllowGlobalUpdate: true}).Delete(&RevenueEntry{})
+	tx.Session(&gorm.Session{AllowGlobalUpdate: true}).Delete(&ChatMessage{})
+	tx.Session(&gorm.Session{AllowGlobalUpdate: true}).Delete(&EditLog{})
+	tx.Session(&gorm.Session{AllowGlobalUpdate: true}).Delete(&UserActivityLog{})
+	tx.Session(&gorm.Session{AllowGlobalUpdate: true}).Delete(&Order{})
+	tx.Session(&gorm.Session{AllowGlobalUpdate: true}).Delete(&DriverRecommendation{})
+	tx.Session(&gorm.Session{AllowGlobalUpdate: true}).Delete(&Role{})
+	tx.Session(&gorm.Session{AllowGlobalUpdate: true}).Delete(&RolePermission{})
+	tx.Session(&gorm.Session{AllowGlobalUpdate: true}).Delete(&IncentiveCustomPayout{})
+	tx.Session(&gorm.Session{AllowGlobalUpdate: true}).Delete(&IncentiveManualData{})
+	tx.Session(&gorm.Session{AllowGlobalUpdate: true}).Delete(&IncentiveResult{})
+	tx.Session(&gorm.Session{AllowGlobalUpdate: true}).Delete(&IncentiveCalculator{})
+	tx.Session(&gorm.Session{AllowGlobalUpdate: true}).Delete(&IncentiveProject{})
+	tx.Session(&gorm.Session{AllowGlobalUpdate: true}).Delete(&Movie{})
+
+	log.Println("🔄 ចាប់ផ្តើមទាញទិន្នន័យថ្មីពី Google Sheet...")
+
+	// ── Users ──
 	var users []User
-	DB.Find(&users)
-	for i := range users {
-		users[i].Password = ""
-	}
-	c.JSON(200, gin.H{"status": "success", "data": users})
-}
-
-func handleGetAllOrders(c *gin.Context) {
-	var orders []Order
-	query := DB.Order("timestamp desc")
-	countQuery := DB.Model(&Order{})
-
-	role, _ := c.Get("role")
-	team, _ := c.Get("team")
-	isSystemAdmin, _ := c.Get("isSystemAdmin")
-
-	isAdmin := (isSystemAdmin != nil && isSystemAdmin.(bool)) || strings.EqualFold(fmt.Sprintf("%v", role), "Admin")
-
-	if !isAdmin && team != nil {
-		teams := strings.Split(fmt.Sprintf("%v", team), ",")
-		var teamConditions []string
-		var teamArgs []interface{}
-		for _, t := range teams {
-			t = strings.TrimSpace(t)
-			if t != "" {
-				teamConditions = append(teamConditions, "LOWER(team) = LOWER(?)")
-				teamArgs = append(teamArgs, t)
-			}
-		}
-		if len(teamConditions) > 0 {
-			condition := strings.Join(teamConditions, " OR ")
-			query = query.Where(condition, teamArgs...)
-			countQuery = countQuery.Where(condition, teamArgs...)
-		}
-	}
-
-	if err := query.Find(&orders).Error; err != nil {
-		c.Error(err)
+	if err := FetchSheetDataToStruct("Users", &users); err != nil {
+		tx.Rollback()
+		log.Println("❌ Migration failed for Users (fetch):", err)
 		return
 	}
-	var total int64
-	countQuery.Count(&total)
-	c.JSON(200, gin.H{"status": "success", "data": orders, "total": total})
-}
-
-func handleSubmitOrder(c *gin.Context) {
-	var orderRequest struct {
-		CurrentUser      User                     `json:"currentUser"`
-		SelectedTeam     string                   `json:"selectedTeam"`
-		Page             string                   `json:"page"`
-		Customer         map[string]interface{}   `json:"customer"`
-		Products         []map[string]interface{} `json:"products"`
-		Payment          map[string]interface{}   `json:"payment"`
-		Shipping         map[string]interface{}   `json:"shipping"`
-		Subtotal         float64                  `json:"subtotal"`
-		GrandTotal       float64                  `json:"grandTotal"`
-		Note             string                   `json:"note"`
-		FulfillmentStore string                   `json:"fulfillmentStore"`
-		ScheduledTime    string                   `json:"scheduledTime"`
-	}
-	if err := c.ShouldBindJSON(&orderRequest); err != nil {
-		c.Error(err)
-		return
-	}
-
-	productsJSON, _ := json.Marshal(orderRequest.Products)
-	var locationParts []string
-	if p, ok := orderRequest.Customer["province"].(string); ok && p != "" {
-		locationParts = append(locationParts, p)
-	}
-	if d, ok := orderRequest.Customer["district"].(string); ok && d != "" {
-		locationParts = append(locationParts, d)
-	}
-	if s, ok := orderRequest.Customer["sangkat"].(string); ok && s != "" {
-		locationParts = append(locationParts, s)
-	}
-
-	var shippingCost float64 = 0
-	if costVal, ok := orderRequest.Shipping["cost"]; ok {
-		switch v := costVal.(type) {
-		case float64:
-			shippingCost = v
-		case string:
-			if parsed, err := strconv.ParseFloat(v, 64); err == nil {
-				shippingCost = parsed
-			}
+	log.Printf("📊 Users: Fetched %d rows from sheet", len(users))
+	var validUsers []User
+	seen := make(map[string]bool)
+	for _, x := range users {
+		if x.UserName != "" && !seen[x.UserName] {
+			seen[x.UserName] = true
+			validUsers = append(validUsers, x)
 		}
 	}
-
-	var totalDiscount float64 = 0
-	var totalProductCost float64 = 0
-	for _, p := range orderRequest.Products {
-		op, _ := p["originalPrice"].(float64)
-		fp, _ := p["finalPrice"].(float64)
-		q, _ := p["quantity"].(float64)
-		cost, _ := p["cost"].(float64)
-		if op > 0 && q > 0 {
-			totalDiscount += (op - fp) * q
-		}
-		totalProductCost += (cost * q)
-	}
-
-	orderID := generateShortID()
-	timestamp := time.Now().UTC().Format(time.RFC3339)
-	custName, _ := orderRequest.Customer["name"].(string)
-	custPhone, _ := orderRequest.Customer["phone"].(string)
-	paymentStatus, _ := orderRequest.Payment["status"].(string)
-	paymentInfo, _ := orderRequest.Payment["info"].(string)
-	addLocation, _ := orderRequest.Customer["additionalLocation"].(string)
-
-	var shipFeeCustomer float64 = 0
-	if feeVal, ok := orderRequest.Customer["shippingFee"]; ok {
-		switch v := feeVal.(type) {
-		case float64:
-			shipFeeCustomer = v
-		case string:
-			if parsed, err := strconv.ParseFloat(v, 64); err == nil {
-				shipFeeCustomer = parsed
-			}
-		}
-	}
-
-	internalShipMethod, _ := orderRequest.Shipping["method"].(string)
-	internalShipDetails, _ := orderRequest.Shipping["details"].(string)
-
-	// Determine initial status based on scheduling
-	fulfillmentStatus := "Pending"
-	if orderRequest.ScheduledTime != "" {
-		if st, err := time.Parse(time.RFC3339, orderRequest.ScheduledTime); err == nil {
-			if st.After(time.Now().Add(1 * time.Minute)) {
-				fulfillmentStatus = "Scheduled"
-			}
-		}
-	}
-
-	newOrder := Order{
-		OrderID: orderID, Timestamp: timestamp, User: orderRequest.CurrentUser.UserName, Team: orderRequest.SelectedTeam,
-		Page: orderRequest.Page, CustomerName: custName, CustomerPhone: custPhone, Subtotal: orderRequest.Subtotal,
-		GrandTotal: orderRequest.GrandTotal, ProductsJSON: string(productsJSON), Note: orderRequest.Note,
-		FulfillmentStore: orderRequest.FulfillmentStore, ScheduledTime: orderRequest.ScheduledTime, FulfillmentStatus: fulfillmentStatus,
-		PaymentStatus: paymentStatus, PaymentInfo: paymentInfo, InternalCost: shippingCost, DiscountUSD: totalDiscount,
-		TotalProductCost: totalProductCost, Location: strings.Join(locationParts, ", "), AddressDetails: addLocation,
-		ShippingFeeCustomer: shipFeeCustomer, InternalShippingMethod: internalShipMethod, InternalShippingDetails: internalShipDetails,
-	}
-
-	if err := DB.Create(&newOrder).Error; err != nil {
-		c.Error(err)
-		return
-	}
-
-	eventBytes, _ := json.Marshal(map[string]interface{}{"type": "new_order", "data": newOrder})
-	hub.Broadcast <- eventBytes
-
-	orderChannel <- OrderJob{JobID: fmt.Sprintf("job_%d", time.Now().UnixNano()), OrderID: orderID, UserName: orderRequest.CurrentUser.UserName, OrderData: map[string]interface{}{"orderId": orderID, "timestamp": timestamp, "totalDiscount": totalDiscount, "totalProductCost": totalProductCost, "fullLocation": strings.Join(locationParts, ", "), "productsJSON": string(productsJSON), "shippingCost": shippingCost, "originalRequest": orderRequest, "scheduledTime": orderRequest.ScheduledTime}}
-	c.JSON(200, gin.H{"status": "success", "orderId": orderID})
-}
-
-func handleAdminUpdateOrder(c *gin.Context) {
-	var r struct {
-		OrderID string                 `json:"orderId"`
-		NewData map[string]interface{} `json:"newData"`
-	}
-	if err := c.ShouldBindJSON(&r); err != nil {
-		c.Error(err)
-		return
-	}
-
-	if r.NewData == nil {
-		c.JSON(http.StatusBadRequest, gin.H{"status": "error", "message": "ត្រូវការទិន្នន័យថ្មី (NewData is required)"})
-		return
-	}
-
-	var originalOrder Order
-	// Use case-insensitive and robust trimming for matching Order IDs
-	if err := DB.Where("UPPER(TRIM(order_id)) = UPPER(TRIM(?))", r.OrderID).First(&originalOrder).Error; err != nil {
-		c.JSON(http.StatusNotFound, gin.H{"status": "error", "message": "រកមិនឃើញការកម្មង់ " + r.OrderID})
-		return
-	}
-
-	// ✅ Validate status transitions — only allow valid state machine transitions
-	if newStatusRaw, ok := r.NewData["Fulfillment Status"]; ok {
-		newStatus := strings.TrimSpace(fmt.Sprintf("%v", newStatusRaw))
-		currentStatus := strings.TrimSpace(originalOrder.FulfillmentStatus)
-		if currentStatus == "" {
-			currentStatus = "Pending"
-		}
-
-		validTransitions := map[string][]string{
-			"Scheduled":     {"Pending", "Cancelled"},
-			"Pending":       {"Processing", "Ready to Ship", "Cancelled"},
-			"Processing":    {"Ready to Ship", "Pending", "Cancelled"},
-			"Ready to Ship": {"Shipped", "Pending", "Cancelled"},
-			"Shipped":       {"Delivered", "Ready to Ship", "Cancelled"},
-			"Delivered":     {},
-			"Cancelled":     {"Pending", "Scheduled"},
-		}
-
-		allowed, ok := validTransitions[currentStatus]
-		if !ok {
-			c.JSON(http.StatusBadRequest, gin.H{"status": "error", "message": "ស្ថានភាពបច្ចុប្បន្នមិនត្រឹមត្រូវ"})
+	if len(validUsers) > 0 {
+		if err := tx.CreateInBatches(validUsers, 100).Error; err != nil {
+			tx.Rollback()
+			log.Println("❌ Migration failed for Users (save):", err)
 			return
 		}
-		
-		// ✅ Support re-packing / self-updates (allow same status transition)
-		transitionValid := (newStatus == currentStatus) 
-		if !transitionValid {
-			for _, s := range allowed {
-				if s == newStatus {
-					transitionValid = true
-					break
-				}
-			}
-		}
+		log.Printf("✅ Users: Saved %d valid rows", len(validUsers))
+	} else {
+		log.Println("⚠️ Users: No valid rows found to save")
+	}
 
-		if !transitionValid {
-			c.JSON(http.StatusBadRequest, gin.H{"status": "error", "message": fmt.Sprintf("មិនអាចផ្លាស់ប្តូរពី '%s' ទៅ '%s' បានទេ", currentStatus, newStatus)})
+	// ── Stores ──
+	var stores []Store
+	if err := FetchSheetDataToStruct("Stores", &stores); err != nil {
+		tx.Rollback()
+		log.Println("❌ Migration failed for Stores (fetch):", err)
+		return
+	}
+	log.Printf("📊 Stores: Fetched %d rows from sheet", len(stores))
+	var validStores []Store
+	seenStores := make(map[string]bool)
+	for _, x := range stores {
+		if x.StoreName != "" && !seenStores[x.StoreName] {
+			seenStores[x.StoreName] = true
+			validStores = append(validStores, x)
+		}
+	}
+	if len(validStores) > 0 {
+		if err := tx.CreateInBatches(validStores, 100).Error; err != nil {
+			tx.Rollback()
+			log.Println("❌ Migration failed for Stores (save):", err)
 			return
 		}
+		log.Printf("✅ Stores: Saved %d valid rows", len(validStores))
+	}
 
-		// ✅ Validate required fields for each transition
-		switch newStatus {
-		case "Ready to Ship":
-			packedBy, _ := r.NewData["Packed By"]
-			if packedBy == nil || strings.TrimSpace(fmt.Sprintf("%v", packedBy)) == "" {
-				if strings.TrimSpace(originalOrder.PackedBy) == "" {
-					c.JSON(http.StatusBadRequest, gin.H{"status": "error", "message": "ត្រូវការឈ្មោះអ្នកវេចខ្ចប់ (Packed By)"})
-					return
-				}
-			}
-		case "Shipped":
-			dispatchedBy, _ := r.NewData["Dispatched By"]
-			if dispatchedBy == nil || strings.TrimSpace(fmt.Sprintf("%v", dispatchedBy)) == "" {
-				if strings.TrimSpace(originalOrder.DispatchedBy) == "" {
-					c.JSON(http.StatusBadRequest, gin.H{"status": "error", "message": "ត្រូវការឈ្មោះអ្នកបញ្ជូន (Dispatched By)"})
-					return
-				}
-			}
-			// Driver assignment is usually done by logistics/dispatch or during delivery confirmation,
-			// so we should not strictly require it for the 'Shipped' transition to avoid blocking packers.
-		case "Delivered":
-			_, hasDriver := r.NewData["Driver Name"]
-			if !hasDriver && strings.TrimSpace(originalOrder.DriverName) == "" {
-				c.JSON(http.StatusBadRequest, gin.H{"status": "error", "message": "ត្រូវការអ្នកដឹកជញ្ជូន (Driver Name) មុនពេលបញ្ជាក់ការដឹកជញ្ជូន"})
+	// ── Settings ──
+	var settings []Setting
+	if err := FetchSheetDataToStruct("Settings", &settings); err != nil {
+		tx.Rollback()
+		log.Println("❌ Migration failed for Settings:", err)
+		return
+	}
+	for _, s := range settings {
+		if s.ConfigKey != "" {
+			if err := tx.Save(&s).Error; err != nil {
+				tx.Rollback()
+				log.Println("❌ Migration failed to save Setting:", s.ConfigKey, err)
 				return
 			}
-		}
-	}
-
-	// Auto-set Delivered Time when transitioning to Delivered (if not already provided)
-	if newStatusRaw, ok := r.NewData["Fulfillment Status"]; ok {
-		if strings.TrimSpace(fmt.Sprintf("%v", newStatusRaw)) == "Delivered" {
-			if _, hasTime := r.NewData["Delivered Time"]; !hasTime {
-				r.NewData["Delivered Time"] = time.Now().Format("2006-01-02 15:04:05")
-			}
-		}
-	}
-
-	mappedData := make(map[string]interface{})
-	for k, v := range r.NewData {
-		dbCol := mapToDBColumn(k)
-		if isValidOrderColumn(dbCol) && v != nil {
-			if dbCol == "discount_usd" || dbCol == "grand_total" || dbCol == "subtotal" || dbCol == "shipping_fee_customer" || dbCol == "internal_cost" || dbCol == "delivery_unpaid" || dbCol == "delivery_paid" || dbCol == "total_product_cost" {
-				if f, ok := v.(float64); ok {
-					mappedData[dbCol] = f
-				} else if s, ok := v.(string); ok {
-					if fVal, err := strconv.ParseFloat(s, 64); err == nil {
-						mappedData[dbCol] = fVal
-					}
-				}
-			} else {
-				mappedData[dbCol] = fmt.Sprintf("%v", v)
-			}
-		}
-	}
-
-	// Handle 'Force Sync' to trigger Telegram/Google Sheets re-sync
-	forceSync := false
-	if fs, ok := r.NewData["Force Sync"]; ok {
-		if b, ok := fs.(bool); ok && b {
-			forceSync = true
-		}
-	}
-
-	if ObjectSize(mappedData) == 0 && !forceSync {
-		c.JSON(200, gin.H{"status": "success", "message": "No changes to update"})
-		return
-	}
-
-	if ObjectSize(mappedData) > 0 {
-		if err := DB.Model(&Order{}).Where("UPPER(TRIM(order_id)) = UPPER(TRIM(?))", r.OrderID).Updates(mappedData).Error; err != nil {
-			c.Error(err)
-			return
-		}
-
-		eventBytes, _ := json.Marshal(map[string]interface{}{"type": "update_order", "orderId": r.OrderID, "newData": r.NewData})
-		hub.Broadcast <- eventBytes
-	}
-
-	go func() {
-		// Build comprehensive sheet data: start from r.NewData then fill missing
-		// fulfillment fields from DB (e.g. Driver Name set in a prior step).
-		sheetData := make(map[string]interface{})
-		for k, v := range r.NewData {
-			if k != "Force Sync" {
-				sheetData[k] = v
-			}
-		}
-		var current Order
-		if err := DB.Where("UPPER(TRIM(order_id)) = UPPER(TRIM(?))", r.OrderID).First(&current).Error; err == nil {
-			fill := func(key, val string) {
-				if val != "" {
-					if _, exists := sheetData[key]; !exists {
-						sheetData[key] = val
-					}
-				}
-			}
-			fill("Packed By", current.PackedBy)
-			fill("Packed Time", current.PackedTime)
-			fill("Package Photo URL", current.PackagePhotoURL)
-			fill("Driver Name", current.DriverName)
-			fill("Tracking Number", current.TrackingNumber)
-			fill("Dispatched Time", current.DispatchedTime)
-			fill("Dispatched By", current.DispatchedBy)
-			fill("Delivered Time", current.DeliveredTime)
-			fill("Delivery Photo URL", current.DeliveryPhotoURL)
-			
-			// Crucial: Use team from DB if not in NewData
-			team := current.Team
-			if t, ok := r.NewData["Team"].(string); ok && t != "" {
-				team = t
-			}
-
-			// Use 'updateOrderTelegram' action. If Force Sync is true, the Apps Script
-			// will trigger sendOrderToTelegram regardless of existing IDs.
-			enqueueSync("updateOrderTelegram", map[string]interface{}{
-				"orderId":       r.OrderID,
-				"updatedFields": sheetData,
-				"team":          team,
-				"Force Sync":    forceSync,
-			}, "", nil)
-		}
-	}()
-
-	c.JSON(200, gin.H{"status": "success"})
-}
-
-func handleAdminDeleteOrder(c *gin.Context) {
-	var r DeleteOrderRequest
-	if err := c.ShouldBindJSON(&r); err != nil {
-		c.Error(err)
-		return
-	}
-
-	var order Order
-	if err := DB.Where("order_id = ?", r.OrderID).First(&order).Error; err == nil {
-		// Prepare IDs, falling back to request values if DB is empty
-		m1 := order.TelegramMessageID1
-		if m1 == "" {
-			m1 = r.TelegramMessageID1
-		}
-		m2 := order.TelegramMessageID2
-		if m2 == "" {
-			m2 = r.TelegramMessageID2
-		}
-		m3 := order.TelegramMessageID3
-		if m3 == "" {
-			m3 = r.TelegramMessageID3
-		}
-
-		go func() {
-			// ✅ Sync with Google Sheets & Telegram via managed queue.
-			// deleteOrderTelegram in Apps Script already handles BOTH Google Sheets and Telegram deletion.
-			// This is safer and more efficient than calling deleteRow + deleteOrderTelegram separately.
-			enqueueSync("deleteOrderTelegram", map[string]interface{}{
-				"orderId":          r.OrderID,
-				"team":             order.Team,
-				"messageId1":       m1,
-				"messageId2":       m2,
-				"messageId3":       m3,
-				"fulfillmentStore": order.FulfillmentStore,
-			}, "", nil)
-		}()
-		DB.Delete(&order)
-		eventBytes, _ := json.Marshal(map[string]interface{}{"type": "delete_order", "orderId": r.OrderID})
-		hub.Broadcast <- eventBytes
-	}
-	c.JSON(200, gin.H{"status": "success"})
-}
-
-func handleAdminUpdateSheet(c *gin.Context) {
-	var req struct {
-		SheetName  string                 `json:"sheetName"`
-		PrimaryKey map[string]interface{} `json:"primaryKey"`
-		NewData    map[string]interface{} `json:"newData"`
-	}
-	if err := c.ShouldBindJSON(&req); err != nil {
-		c.Error(err)
-		return
-	}
-	tableName := getTableName(req.SheetName)
-	if tableName == "" {
-		c.Error(fmt.Errorf("unknown sheet"))
-		return
-	}
-
-	pkCol := ""
-	var pkVal interface{}
-	originalPKKey := ""
-	for k, v := range req.PrimaryKey {
-		pkCol = mapToDBColumn(k)
-		pkVal = v
-		originalPKKey = k
-	}
-	if !isValidDBIdentifier(pkCol) {
-		c.JSON(http.StatusBadRequest, gin.H{"status": "error", "message": "Invalid primary key field"})
-		return
-	}
-	mappedData := make(map[string]interface{})
-	for k, v := range req.NewData {
-		dbCol := mapToDBColumn(k)
-		if v == nil {
-			continue
-		}
-
-		// Hashing password if updating users table
-		if tableName == "users" && dbCol == "password" && v != "" {
-			hashed, err := bcrypt.GenerateFromPassword([]byte(fmt.Sprintf("%v", v)), bcrypt.DefaultCost)
-			if err == nil {
-				v = string(hashed)
-			}
-		}
-
-		mappedData[dbCol] = v
-	}
-
-	if err := DB.Table(tableName).Where(pkCol+" = ?", pkVal).Updates(mappedData).Error; err != nil {
-		c.Error(err)
-		return
-	}
-
-	eventBytes, _ := json.Marshal(map[string]interface{}{"type": "update_sheet", "sheetName": req.SheetName, "primaryKey": req.PrimaryKey, "newData": req.NewData})
-	hub.Broadcast <- eventBytes
-
-	go func() {
-		sheetPKKey := originalPKKey
-		if req.SheetName == "Roles" && strings.ToLower(originalPKKey) == "id" {
-			sheetPKKey = "ID"
-		}
-		// Sync with Google Sheets via managed queue
-		enqueueSync("updateSheet", req.NewData, req.SheetName, map[string]string{sheetPKKey: fmt.Sprintf("%v", pkVal)})
-
-		// If updating an Order row, also notify Telegram to keep message in sync
-		if req.SheetName == "AllOrders" {
-			orderID := fmt.Sprintf("%v", pkVal)
-			var order Order
-			DB.Where("order_id = ?", orderID).Select("team").First(&order)
-			enqueueSync("updateOrderTelegram", map[string]interface{}{
-				"orderId":       orderID,
-				"updatedFields": req.NewData,
-				"team":          order.Team,
-			}, "", nil)
-		}
-	}()
-	c.JSON(200, gin.H{"status": "success"})
-}
-
-func handleAdminAddRow(c *gin.Context) {
-	var req struct {
-		SheetName string                 `json:"sheetName"`
-		NewData   map[string]interface{} `json:"newData"`
-	}
-	if err := c.ShouldBindJSON(&req); err != nil {
-		c.Error(err)
-		return
-	}
-
-	tableName := getTableName(req.SheetName)
-	if tableName != "" {
-		mappedData := make(map[string]interface{})
-		for k, v := range req.NewData {
-			colName := mapToDBColumn(k)
-			// Hashing password if adding to users table
-			if tableName == "users" && colName == "password" && v != "" {
-				hashed, err := bcrypt.GenerateFromPassword([]byte(fmt.Sprintf("%v", v)), bcrypt.DefaultCost)
-				if err == nil {
-					v = string(hashed)
-				}
-			}
-			mappedData[colName] = v
-		}
-		DB.Table(tableName).Create(mappedData)
-	}
-
-	eventBytes, _ := json.Marshal(map[string]interface{}{"type": "add_row", "sheetName": req.SheetName, "newData": req.NewData})
-	hub.Broadcast <- eventBytes
-
-	go func() {
-		// Sync with Google Sheets via managed queue
-		enqueueSync("addRow", req.NewData, req.SheetName, nil)
-	}()
-	c.JSON(200, gin.H{"status": "success"})
-}
-
-func handleAdminDeleteRow(c *gin.Context) {
-	var req struct {
-		SheetName  string                 `json:"sheetName"`
-		PrimaryKey map[string]interface{} `json:"primaryKey"`
-	}
-	if err := c.ShouldBindJSON(&req); err != nil {
-		c.Error(err)
-		return
-	}
-
-	pkCol := ""
-	var pkVal interface{}
-	for k, v := range req.PrimaryKey {
-		pkCol = mapToDBColumn(k)
-		pkVal = v
-	}
-	if !isValidDBIdentifier(pkCol) {
-		c.JSON(http.StatusBadRequest, gin.H{"status": "error", "message": "Invalid primary key field"})
-		return
-	}
-
-	// ── Roles guard: prevent deleting Admin role (check by RoleName in DB) ──
-	if req.SheetName == "Roles" {
-		var role Role
-		if err := DB.Table("roles").Where(pkCol+" = ?", pkVal).First(&role).Error; err == nil {
-			if strings.EqualFold(role.RoleName, "Admin") {
-				c.JSON(403, gin.H{"status": "error", "message": "មិនអាចលុបតួនាទី Admin បានទេ (Cannot delete Admin role)"})
-				return
-			}
-		}
-	}
-
-	// ── Users guard: prevent deleting Admin user ──
-	if req.SheetName == "Users" {
-		if strings.EqualFold(fmt.Sprintf("%v", pkVal), "admin") {
-			c.JSON(403, gin.H{"status": "error", "message": "មិនអាចលុបអ្នកប្រើប្រាស់ Admin បានទេ (Cannot delete Admin user)"})
-			return
-		}
-	}
-
-	tableName := getTableName(req.SheetName)
-	if tableName != "" {
-		// Use map model so GORM executes DELETE without needing a struct with primary key
-		if err := DB.Table(tableName).Where(pkCol+" = ?", pkVal).Delete(map[string]interface{}{}).Error; err != nil {
-			c.JSON(500, gin.H{"status": "error", "message": "Delete operation failed: " + err.Error()})
-			return
-		}
-	}
-
-	strPrimaryKey := make(map[string]string)
-	for k, v := range req.PrimaryKey {
-		sheetKey := k
-		if req.SheetName == "Roles" && strings.ToLower(k) == "id" {
-			sheetKey = "ID"
-		}
-		strPrimaryKey[sheetKey] = fmt.Sprintf("%v", v)
-	}
-
-	eventBytes, _ := json.Marshal(map[string]interface{}{"type": "delete_row", "sheetName": req.SheetName, "primaryKey": strPrimaryKey})
-	hub.Broadcast <- eventBytes
-
-	go func() {
-		// Sync with Google Sheets via managed queue
-		enqueueSync("deleteRow", nil, req.SheetName, strPrimaryKey)
-	}()
-	c.JSON(200, gin.H{"status": "success"})
-}
-
-func handleGetRevenueSummary(c *gin.Context) {
-	var revs []RevenueEntry
-	DB.Find(&revs)
-	c.JSON(200, gin.H{"status": "success", "data": revs})
-}
-func handleUpdateFormulaReport(c *gin.Context)    { c.JSON(200, gin.H{"status": "success"}) }
-func handleClearCache(c *gin.Context)             { c.JSON(200, gin.H{"status": "success"}) }
-func handleAdminUpdateProductTags(c *gin.Context) { c.JSON(200, gin.H{"status": "success"}) }
-
-func handleGetGlobalShippingCosts(c *gin.Context) {
-	var results []struct {
-		OrderID        string  `json:"Order ID"`
-		Timestamp      string  `json:"Timestamp"`
-		Team           string  `json:"Team"`
-		InternalCost   float64 `json:"Internal Cost"`
-		ShippingMethod string  `json:"Internal Shipping Method"`
-	}
-
-	err := DB.Model(&Order{}).
-		Select("order_id, timestamp, team, internal_cost, internal_shipping_method").
-		Where("order_id NOT LIKE ? AND order_id NOT LIKE ?", "%Opening_Balance%", "%Opening Balance%").
-		Order("timestamp DESC").
-		Scan(&results).Error
-
-	if err != nil {
-		c.JSON(500, gin.H{"status": "error", "message": err.Error()})
-		return
-	}
-
-	c.JSON(200, gin.H{"status": "success", "data": results})
-}
-
-func handleUpdateProfile(c *gin.Context) {
-	var req struct {
-		UserName string                 `json:"userName"`
-		NewData  map[string]interface{} `json:"newData"`
-	}
-	if err := c.ShouldBindJSON(&req); err != nil {
-		c.Error(err)
-		return
-	}
-	mappedData := make(map[string]interface{})
-	for k, v := range req.NewData {
-		if k == "Password" {
-			continue
-		}
-		mappedData[mapToDBColumn(k)] = v
-	}
-	if err := DB.Model(&User{}).Where("user_name = ?", req.UserName).Updates(mappedData).Error; err != nil {
-		c.Error(err)
-		return
-	}
-
-	go func() {
-		if appsScriptURL != "" {
-			// Sync with Google Sheets via managed queue
-			enqueueSync("updateSheet", req.NewData, "Users", map[string]string{"UserName": req.UserName})
-		}
-	}()
-
-	c.JSON(200, gin.H{"status": "success"})
-}
-
-func handleChangePassword(c *gin.Context) {
-	var req struct {
-		UserName    string `json:"userName"`
-		NewPassword string `json:"newPassword"`
-	}
-	if err := c.ShouldBindJSON(&req); err != nil {
-		c.Error(err)
-		return
-	}
-	hashedPassword, err := bcrypt.GenerateFromPassword([]byte(req.NewPassword), bcrypt.DefaultCost)
-	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"status": "error", "message": "មិនអាចកំណត់លេខសម្ងាត់ថ្មីបានទេ"})
-		return
-	}
-	if err := DB.Model(&User{}).Where("user_name = ?", req.UserName).Update("password", string(hashedPassword)).Error; err != nil {
-		c.Error(err)
-		return
-	}
-
-	go func() {
-		if appsScriptURL != "" {
-			enqueueSync("updateSheet", map[string]interface{}{"PasswordChanged": true}, "Users", map[string]string{"UserName": req.UserName})
-		}
-	}()
-
-	c.JSON(200, gin.H{"status": "success"})
-}
-func handleGetChatMessages(c *gin.Context) {
-	limitParam := c.Query("limit")
-	receiverParam := c.Query("receiver")
-	currentUser, _ := c.Get("userName")
-	var messages []ChatMessage
-	query := DB.Order("timestamp desc")
-	if receiverParam != "" {
-		query = query.Where("(user_name = ? AND receiver = ?) OR (user_name = ? AND receiver = ?)", currentUser, receiverParam, receiverParam, currentUser)
-	} else {
-		query = query.Where("receiver = ?", "")
-	}
-	limit, _ := strconv.Atoi(limitParam)
-	if limit <= 0 {
-		limit = 100
-	}
-	query.Limit(limit).Find(&messages)
-	for i, j := 0, len(messages)-1; i < j; i, j = i+1, j-1 {
-		messages[i], messages[j] = messages[j], messages[i]
-	}
-	c.JSON(200, gin.H{"status": "success", "data": messages})
-}
-
-func handleGetSingleChatMessage(c *gin.Context) {
-	id := c.Param("id")
-	var msg ChatMessage
-	if err := DB.Where("id = ?", id).First(&msg).Error; err != nil {
-		c.JSON(404, gin.H{"error": "message not found"})
-		return
-	}
-	c.JSON(200, gin.H{"status": "success", "data": msg})
-}
-
-func handleSendChatMessage(c *gin.Context) {
-	var msg ChatMessage
-	if err := c.ShouldBindJSON(&msg); err != nil {
-		c.JSON(400, gin.H{"status": "error", "message": "Invalid format"})
-		return
-	}
-	if sender, exists := c.Get("userName"); exists {
-		msg.UserName = sender.(string)
-	}
-	msg.Timestamp = time.Now().Format(time.RFC3339)
-
-	msgType := strings.ToLower(msg.MessageType)
-
-	var base64Data string
-	if msgType == "audio" && msg.AudioData != "" {
-		base64Data = msg.AudioData
-	} else if msgType == "image" {
-		base64Data = msg.Content
-	}
-
-	if (msgType == "audio" || msgType == "image") && msg.FileID == "" && len(base64Data) > 100 {
-		mimeType := "application/octet-stream"
-		if strings.Contains(base64Data, "data:") && strings.Contains(base64Data, ";base64,") {
-			parts := strings.Split(base64Data, ";base64,")
-			mimeType = strings.TrimPrefix(parts[0], "data:")
-			base64Data = parts[1]
-		}
-
-		// Upload to Drive synchronously
-		driveURL, fileId, err := backend.UploadToGoogleDriveDirectly(base64Data, "chat_file", mimeType, nil)
-		if err != nil {
-			log.Printf("❌ Chat media upload failed: %v", err)
-			c.JSON(500, gin.H{"status": "error", "message": "បរាជ័យក្នុងការ Upload មេឌៀ"})
-			return
-		}
-
-		msg.FileID = fileId
-		if strings.ToLower(msg.MessageType) == "image" {
-			msg.Content = driveURL
-		}
-
-		DB.Create(&msg)
-		msgBytes, _ := json.Marshal(map[string]interface{}{"type": "new_message", "data": msg})
-		hub.Broadcast <- msgBytes
-
-		c.JSON(200, gin.H{"status": "success", "data": msg})
-		return
-	}
-
-	DB.Create(&msg)
-	msgBytes, _ := json.Marshal(map[string]interface{}{"type": "new_message", "data": msg})
-	hub.Broadcast <- msgBytes
-	c.JSON(200, gin.H{"status": "success", "data": msg})
-}
-
-func handleDeleteChatMessage(c *gin.Context) {
-	var req struct {
-		ID       uint   `json:"id"`
-		UserName string `json:"userName"`
-	}
-	if err := c.ShouldBindJSON(&req); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"status": "error", "message": "ទិន្នន័យមិនត្រឹមត្រូវ"})
-		return
-	}
-
-	var msg ChatMessage
-	if err := DB.First(&msg, req.ID).Error; err != nil {
-		c.JSON(http.StatusNotFound, gin.H{"status": "error", "message": "រកមិនឃើញសារ"})
-		return
-	}
-
-	currentUser, _ := c.Get("userName")
-	isSystemAdmin, _ := c.Get("isSystemAdmin")
-	if msg.UserName != currentUser.(string) && (isSystemAdmin == nil || !isSystemAdmin.(bool)) {
-		c.JSON(http.StatusForbidden, gin.H{"status": "error", "message": "គ្មានសិទ្ធិលុបសារនេះទេ"})
-		return
-	}
-
-	if err := DB.Delete(&msg).Error; err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"status": "error", "message": "ការលុបសារបរាជ័យ"})
-		return
-	}
-
-	eventBytes, _ := json.Marshal(map[string]interface{}{
-		"type": "delete_message",
-		"id":   req.ID,
-	})
-	hub.Broadcast <- eventBytes
-
-	c.JSON(http.StatusOK, gin.H{"status": "success"})
-}
-
-func handleGetOrderMetadata(c *gin.Context) {
-	orderID := c.Param("id")
-	if orderID == "" {
-		c.JSON(http.StatusBadRequest, gin.H{"status": "error", "message": "Missing Order ID"})
-		return
-	}
-
-	var order Order
-	// Case-insensitive search for order_id
-	if err := DB.Where("UPPER(TRIM(order_id)) = UPPER(TRIM(?))", orderID).First(&order).Error; err != nil {
-		if err == gorm.ErrRecordNotFound {
-			c.JSON(http.StatusNotFound, gin.H{"status": "error", "message": "Order not found"})
-		} else {
-			c.JSON(http.StatusInternalServerError, gin.H{"status": "error", "message": "Database error"})
-		}
-		return
-	}
-
-	c.JSON(http.StatusOK, gin.H{"status": "success", "data": order})
-}
-
-// =========================================================================
-// GOOGLE SHEETS WEBHOOK (Real-time Sync Sheet -> DB)
-// =========================================================================
-
-func handleSheetsWebhook(c *gin.Context) {
-	var req struct {
-		Secret    string                 `json:"secret"`
-		SheetName string                 `json:"sheetName"`
-		RowData   map[string]interface{} `json:"rowData"`
-		Action    string                 `json:"action"` // "update" or "delete"
-	}
-
-	if err := c.ShouldBindJSON(&req); err != nil {
-		c.JSON(400, gin.H{"status": "error", "message": "Invalid format"})
-		return
-	}
-
-	if subtle.ConstantTimeCompare([]byte(req.Secret), []byte(appsScriptSecret)) != 1 {
-		c.JSON(401, gin.H{"status": "error", "message": "Unauthorized"})
-		return
-	}
-
-	tableName := getTableName(req.SheetName)
-	if tableName == "" {
-		c.JSON(400, gin.H{"status": "error", "message": "Unknown sheet"})
-		return
-	}
-
-	mappedData := make(map[string]interface{})
-	var pkCol string
-	var pkVal interface{}
-
-	// Identify Primary Key based on SheetName
-	pkName := "ID"
-	if req.SheetName == "Users" {
-		pkName = "UserName"
-	} else if req.SheetName == "Stores" {
-		pkName = "StoreName"
-	} else if req.SheetName == "Settings" {
-		pkName = "Key"
-	} else if req.SheetName == "Products" {
-		pkName = "Barcode"
-	} else if req.SheetName == "ShippingMethods" {
-		pkName = "MethodName"
-	} else if req.SheetName == "Colors" {
-		pkName = "ColorName"
-	} else if req.SheetName == "Drivers" {
-		pkName = "DriverName"
-	} else if req.SheetName == "BankAccounts" {
-		pkName = "BankName"
-	} else if req.SheetName == "PhoneCarriers" {
-		pkName = "CarrierName"
-	} else if req.SheetName == "StockTransfers" {
-		pkName = "TransferID"
-	} else if req.SheetName == "Returns" {
-		pkName = "ReturnID"
-	} else if req.SheetName == "AllOrders" || strings.HasPrefix(req.SheetName, "Orders_") {
-		pkName = "Order ID"
-	} else {
-		// Default to "id" (lowercase) for Roles, Permissions, Incentive, etc.
-		// if "ID" (uppercase) doesn't find a match in RowData.
-		if _, exists := req.RowData["ID"]; !exists {
-			if _, lowerExists := req.RowData["id"]; lowerExists {
-				pkName = "id"
-			}
-		}
-	}
-
-	for k, v := range req.RowData {
-		dbCol := mapToDBColumn(k)
-
-		normalizedK := strings.ReplaceAll(strings.ToLower(k), " ", "")
-		normalizedPK := strings.ReplaceAll(strings.ToLower(pkName), " ", "")
-
-		if normalizedK == normalizedPK {
-			pkCol = dbCol
-			pkVal = v
-			continue
-		}
-
-		// Skip empty or nil values to avoid overwriting with blanks
-		if v == nil || v == "" {
-			continue
-		}
-
-		// Handle Numeric fields
-		if backend.IsNumericHeader(k) {
-			if s, ok := v.(string); ok {
-				if f, err := strconv.ParseFloat(s, 64); err == nil {
-					mappedData[dbCol] = f
-				}
-			} else {
-				mappedData[dbCol] = v
-			}
-		} else if backend.IsBoolHeader(k) {
-			if s, ok := v.(string); ok {
-				mappedData[dbCol] = strings.ToUpper(s) == "TRUE"
-			} else {
-				mappedData[dbCol] = v
-			}
-		} else {
-			mappedData[dbCol] = fmt.Sprintf("%v", v)
-		}
-	}
-
-	// --- Status Protection (State Machine Safeguard) ---
-	if tableName == "orders" {
-		if newStatusRaw, hasNewStatus := mappedData["fulfillment_status"]; hasNewStatus {
-			newStatus := fmt.Sprintf("%v", newStatusRaw)
-			
-			var currentOrder Order
-			// Using TRIM and UPPER for robust matching
-			whereClause := fmt.Sprintf("UPPER(TRIM(%s)) = UPPER(TRIM(?))", pkCol)
-			if err := DB.Where(whereClause, pkVal).Select("fulfillment_status").First(&currentOrder).Error; err == nil {
-				cur := strings.TrimSpace(currentOrder.FulfillmentStatus)
-				if cur == "" { cur = "Pending" }
-				
-				statusWeight := map[string]int{
-					"Pending":       1,
-					"Processing":    2,
-					"Ready to Ship": 3,
-					"Shipped":       4,
-					"Delivered":     5,
-					"Cancelled":     0,
-				}
-
-				// If we are already at "Ready to Ship" or further, don't let it revert to "Pending"
-				if statusWeight[cur] >= 3 && statusWeight[newStatus] < 3 && newStatus != "Cancelled" {
-					log.Printf("🛡️  [Webhook Protection] BLOCKED REVERT for Order %v: Current='%s' -> Incoming='%s' (preventing stale sheet data overwrite)", pkVal, cur, newStatus)
-					delete(mappedData, "fulfillment_status") // Remove status from update map
+			if s.ConfigKey == "UploadFolderID" {
+				if envVal := os.Getenv("UPLOAD_FOLDER_ID"); envVal != "" {
+					UploadFolderID = envVal
 				} else {
-					log.Printf("✅ [Webhook Sync] Allowed status change for Order %v: '%s' -> '%s'", pkVal, cur, newStatus)
+					UploadFolderID = s.ConfigValue
 				}
-			} else if err != nil {
-				log.Printf("⚠️  [Webhook Sync] Error checking current status for Order %v: %v", pkVal, err)
 			}
 		}
 	}
 
-	if pkCol == "" || pkVal == nil {
-		c.JSON(400, gin.H{"status": "error", "message": "Missing primary key"})
+	// ── TeamsPages ──
+	var pages []TeamPage
+	if err := FetchSheetDataToStruct("TeamsPages", &pages); err != nil {
+		tx.Rollback()
+		log.Println("❌ Migration failed for TeamsPages (fetch):", err)
 		return
 	}
+	log.Printf("📊 TeamsPages: Fetched %d rows from sheet", len(pages))
+	var validPages []TeamPage
+	seenPages := make(map[uint]bool)
+	for _, x := range pages {
+		if x.PageName != "" && !seenPages[x.ID] {
+			if x.ID != 0 {
+				seenPages[x.ID] = true
+			}
+			validPages = append(validPages, x)
+		}
+	}
+	if len(validPages) > 0 {
+		if err := tx.CreateInBatches(validPages, 100).Error; err != nil {
+			tx.Rollback()
+			log.Println("❌ Migration failed for TeamsPages (save):", err)
+			return
+		}
+		log.Printf("✅ TeamsPages: Saved %d valid rows", len(validPages))
+	}
 
-	if req.Action == "delete" {
-		whereClause := fmt.Sprintf("UPPER(TRIM(%s)) = UPPER(TRIM(?))", pkCol)
-		DB.Table(tableName).Where(whereClause, pkVal).Delete(nil)
+	// ── Products ──
+	var products []Product
+	if err := FetchSheetDataToStruct("Products", &products); err != nil {
+		tx.Rollback()
+		log.Println("❌ Migration failed for Products (fetch):", err)
+		return
+	}
+	log.Printf("📊 Products: Fetched %d rows from sheet", len(products))
+	var validProducts []Product
+	seenProducts := make(map[string]bool)
+	for _, x := range products {
+		if x.Barcode != "" && !seenProducts[x.Barcode] {
+			seenProducts[x.Barcode] = true
+			validProducts = append(validProducts, x)
+		}
+	}
+	if len(validProducts) > 0 {
+		if err := tx.CreateInBatches(validProducts, 100).Error; err != nil {
+			tx.Rollback()
+			log.Println("❌ Migration failed for Products (save):", err)
+			return
+		}
+		log.Printf("✅ Products: Saved %d valid rows", len(validProducts))
+	}
+
+	// ── Locations ──
+	var locations []Location
+	if err := FetchSheetDataToStruct("Locations", &locations); err != nil {
+		tx.Rollback()
+		log.Println("❌ Migration failed for Locations:", err)
+		return
+	}
+	var validLocations []Location
+	seenLocations := make(map[uint]bool)
+	for _, x := range locations {
+		if !seenLocations[x.ID] {
+			if x.ID != 0 {
+				seenLocations[x.ID] = true
+			}
+			validLocations = append(validLocations, x)
+		}
+	}
+	if len(validLocations) > 0 {
+		if err := tx.CreateInBatches(validLocations, 100).Error; err != nil {
+			tx.Rollback()
+			log.Println("❌ Migration failed to save Locations:", err)
+			return
+		}
+	}
+
+	// ── ShippingMethods ──
+	var shipping []ShippingMethod
+	if err := FetchSheetDataToStruct("ShippingMethods", &shipping); err != nil {
+		tx.Rollback()
+		log.Println("❌ Migration failed for ShippingMethods:", err)
+		return
+	}
+	var validShipping []ShippingMethod
+	seenShipping := make(map[string]bool)
+	for _, x := range shipping {
+		if x.MethodName != "" && !seenShipping[x.MethodName] {
+			seenShipping[x.MethodName] = true
+			validShipping = append(validShipping, x)
+		}
+	}
+	if len(validShipping) > 0 {
+		if err := tx.CreateInBatches(validShipping, 100).Error; err != nil {
+			tx.Rollback()
+			log.Println("❌ Migration failed to save ShippingMethods:", err)
+			return
+		}
+	}
+
+	// ── Colors ──
+	var colors []Color
+	if err := FetchSheetDataToStruct("Colors", &colors); err != nil {
+		tx.Rollback()
+		log.Println("❌ Migration failed for Colors:", err)
+		return
+	}
+	var validColors []Color
+	seenColors := make(map[string]bool)
+	for _, x := range colors {
+		if x.ColorName != "" && !seenColors[x.ColorName] {
+			seenColors[x.ColorName] = true
+			validColors = append(validColors, x)
+		}
+	}
+	if len(validColors) > 0 {
+		if err := tx.CreateInBatches(validColors, 100).Error; err != nil {
+			tx.Rollback()
+			log.Println("❌ Migration failed to save Colors:", err)
+			return
+		}
+	}
+
+	// ── Drivers ──
+	var drivers []Driver
+	if err := FetchSheetDataToStruct("Drivers", &drivers); err != nil {
+		tx.Rollback()
+		log.Println("❌ Migration failed for Drivers:", err)
+		return
+	}
+	var validDrivers []Driver
+	seenDrivers := make(map[string]bool)
+	for _, x := range drivers {
+		if x.DriverName != "" && !seenDrivers[x.DriverName] {
+			seenDrivers[x.DriverName] = true
+			validDrivers = append(validDrivers, x)
+		}
+	}
+	if len(validDrivers) > 0 {
+		if err := tx.CreateInBatches(validDrivers, 100).Error; err != nil {
+			tx.Rollback()
+			log.Println("❌ Migration failed to save Drivers:", err)
+			return
+		}
+	}
+
+	// ── BankAccounts ──
+	var banks []BankAccount
+	if err := FetchSheetDataToStruct("BankAccounts", &banks); err != nil {
+		tx.Rollback()
+		log.Println("❌ Migration failed for BankAccounts:", err)
+		return
+	}
+	var validBanks []BankAccount
+	seenBanks := make(map[string]bool)
+	for _, x := range banks {
+		if x.BankName != "" && !seenBanks[x.BankName] {
+			seenBanks[x.BankName] = true
+			validBanks = append(validBanks, x)
+		}
+	}
+	if len(validBanks) > 0 {
+		if err := tx.CreateInBatches(validBanks, 100).Error; err != nil {
+			tx.Rollback()
+			log.Println("❌ Migration failed to save BankAccounts:", err)
+			return
+		}
+	}
+
+	// ── PhoneCarriers ──
+	var carriers []PhoneCarrier
+	if err := FetchSheetDataToStruct("PhoneCarriers", &carriers); err != nil {
+		tx.Rollback()
+		log.Println("❌ Migration failed for PhoneCarriers:", err)
+		return
+	}
+	var validCarriers []PhoneCarrier
+	seenCarriers := make(map[string]bool)
+	for _, x := range carriers {
+		if x.CarrierName != "" && !seenCarriers[x.CarrierName] {
+			seenCarriers[x.CarrierName] = true
+			validCarriers = append(validCarriers, x)
+		}
+	}
+	if len(validCarriers) > 0 {
+		if err := tx.CreateInBatches(validCarriers, 100).Error; err != nil {
+			tx.Rollback()
+			log.Println("❌ Migration failed to save PhoneCarriers:", err)
+			return
+		}
+	}
+
+	// ── TelegramTemplates ──
+	var templates []TelegramTemplate
+	if err := FetchSheetDataToStruct("TelegramTemplates", &templates); err != nil {
+		tx.Rollback()
+		log.Println("❌ Migration failed for TelegramTemplates:", err)
+		return
+	}
+	var validTemplates []TelegramTemplate
+	seenTemplates := make(map[uint]bool)
+	for _, x := range templates {
+		if !seenTemplates[x.ID] {
+			if x.ID != 0 {
+				seenTemplates[x.ID] = true
+			}
+			validTemplates = append(validTemplates, x)
+		}
+	}
+	if len(validTemplates) > 0 {
+		if err := tx.CreateInBatches(validTemplates, 100).Error; err != nil {
+			tx.Rollback()
+			log.Println("❌ Migration failed to save TelegramTemplates:", err)
+			return
+		}
+	}
+
+	// ── Inventory ──
+	var inventory []Inventory
+	if err := FetchSheetDataToStruct("Inventory", &inventory); err != nil {
+		tx.Rollback()
+		log.Println("❌ Migration failed for Inventory:", err)
+		return
+	}
+	var validInventory []Inventory
+	seenInventory := make(map[uint]bool)
+	for _, x := range inventory {
+		if !seenInventory[x.ID] {
+			if x.ID != 0 {
+				seenInventory[x.ID] = true
+			}
+			validInventory = append(validInventory, x)
+		}
+	}
+	if len(validInventory) > 0 {
+		if err := tx.CreateInBatches(validInventory, 100).Error; err != nil {
+			tx.Rollback()
+			log.Println("❌ Migration failed to save Inventory:", err)
+			return
+		}
+	}
+
+	// ── StockTransfers ──
+	var transfers []StockTransfer
+	if err := FetchSheetDataToStruct("StockTransfers", &transfers); err != nil {
+		tx.Rollback()
+		log.Println("❌ Migration failed for StockTransfers:", err)
+		return
+	}
+	var validTransfers []StockTransfer
+	seenTransfers := make(map[string]bool)
+	for _, x := range transfers {
+		if x.TransferID != "" && !seenTransfers[x.TransferID] {
+			seenTransfers[x.TransferID] = true
+			validTransfers = append(validTransfers, x)
+		}
+	}
+	if len(validTransfers) > 0 {
+		if err := tx.CreateInBatches(validTransfers, 100).Error; err != nil {
+			tx.Rollback()
+			log.Println("❌ Migration failed to save StockTransfers:", err)
+			return
+		}
+	}
+
+	// ── Returns ──
+	var returns []ReturnItem
+	if err := FetchSheetDataToStruct("Returns", &returns); err != nil {
+		tx.Rollback()
+		log.Println("❌ Migration failed for Returns:", err)
+		return
+	}
+	var validReturns []ReturnItem
+	seenReturns := make(map[string]bool)
+	for _, x := range returns {
+		if x.ReturnID != "" && !seenReturns[x.ReturnID] {
+			seenReturns[x.ReturnID] = true
+			validReturns = append(validReturns, x)
+		}
+	}
+	if len(validReturns) > 0 {
+		if err := tx.CreateInBatches(validReturns, 100).Error; err != nil {
+			tx.Rollback()
+			log.Println("❌ Migration failed to save Returns:", err)
+			return
+		}
+	}
+
+	// ── RevenueDashboard ──
+	var revs []RevenueEntry
+	if err := FetchSheetDataToStruct("RevenueDashboard", &revs); err != nil {
+		tx.Rollback()
+		log.Println("❌ Migration failed for RevenueDashboard:", err)
+		return
+	}
+	var validRevs []RevenueEntry
+	seenRevs := make(map[uint]bool)
+	for _, x := range revs {
+		if !seenRevs[x.ID] {
+			if x.ID != 0 {
+				seenRevs[x.ID] = true
+			}
+			validRevs = append(validRevs, x)
+		}
+	}
+	if len(validRevs) > 0 {
+		if err := tx.CreateInBatches(validRevs, 100).Error; err != nil {
+			tx.Rollback()
+			log.Println("❌ Migration failed to save RevenueDashboard:", err)
+			return
+		}
+	}
+
+	// ── ChatMessages ──
+	var chats []ChatMessage
+	if err := FetchSheetDataToStruct("ChatMessages", &chats); err != nil {
+		tx.Rollback()
+		log.Println("❌ Migration failed for ChatMessages:", err)
+		return
+	}
+	var validChats []ChatMessage
+	seenChats := make(map[uint]bool)
+	for _, x := range chats {
+		if !seenChats[x.ID] {
+			if x.ID != 0 {
+				seenChats[x.ID] = true
+			}
+			validChats = append(validChats, x)
+		}
+	}
+	if len(validChats) > 0 {
+		if err := tx.CreateInBatches(validChats, 100).Error; err != nil {
+			tx.Rollback()
+			log.Println("❌ Migration failed to save ChatMessages:", err)
+			return
+		}
+	}
+
+	// ── EditLogs ──
+	var editLogs []EditLog
+	if err := FetchSheetDataToStruct("EditLogs", &editLogs); err != nil {
+		tx.Rollback()
+		log.Println("❌ Migration failed for EditLogs:", err)
+		return
+	}
+	var validEditLogs []EditLog
+	seenEditLogs := make(map[uint]bool)
+	for _, x := range editLogs {
+		if !seenEditLogs[x.ID] {
+			if x.ID != 0 {
+				seenEditLogs[x.ID] = true
+			}
+			validEditLogs = append(validEditLogs, x)
+		}
+	}
+	if len(validEditLogs) > 0 {
+		if err := tx.CreateInBatches(validEditLogs, 100).Error; err != nil {
+			tx.Rollback()
+			log.Println("❌ Migration failed to save EditLogs:", err)
+			return
+		}
+	}
+
+	// ── UserActivityLogs ──
+	var actLogs []UserActivityLog
+	if err := FetchSheetDataToStruct("UserActivityLogs", &actLogs); err != nil {
+		tx.Rollback()
+		log.Println("❌ Migration failed for UserActivityLogs:", err)
+		return
+	}
+	var validActLogs []UserActivityLog
+	seenActLogs := make(map[uint]bool)
+	for _, x := range actLogs {
+		if !seenActLogs[x.ID] {
+			if x.ID != 0 {
+				seenActLogs[x.ID] = true
+			}
+			validActLogs = append(validActLogs, x)
+		}
+	}
+	if len(validActLogs) > 0 {
+		if err := tx.CreateInBatches(validActLogs, 100).Error; err != nil {
+			tx.Rollback()
+			log.Println("❌ Migration failed to save UserActivityLogs:", err)
+			return
+		}
+	}
+
+	// ── DriverRecommendations ──
+	var recs []DriverRecommendation
+	if err := FetchSheetDataToStruct("DriverRecommendations", &recs); err != nil {
+		tx.Rollback()
+		log.Println("❌ Migration failed for DriverRecommendations:", err)
+		return
+	}
+	var validRecs []DriverRecommendation
+	seenRecs := make(map[uint]bool)
+	for _, x := range recs {
+		if !seenRecs[x.ID] {
+			if x.ID != 0 {
+				seenRecs[x.ID] = true
+			}
+			validRecs = append(validRecs, x)
+		}
+	}
+	if len(validRecs) > 0 {
+		if err := tx.CreateInBatches(validRecs, 100).Error; err != nil {
+			tx.Rollback()
+			log.Println("❌ Migration failed to save DriverRecommendations:", err)
+			return
+		}
+	}
+
+	// ── Roles ──
+	var roles []Role
+	if err := FetchSheetDataToStruct("Roles", &roles); err != nil {
+		tx.Rollback()
+		log.Println("❌ Migration failed for Roles:", err)
+		return
+	}
+	var validRoles []Role
+	seenRoles := make(map[uint]bool)
+	for _, x := range roles {
+		if !seenRoles[x.ID] {
+			if x.ID != 0 {
+				seenRoles[x.ID] = true
+			}
+			validRoles = append(validRoles, x)
+		}
+	}
+	if len(validRoles) > 0 {
+		if err := tx.CreateInBatches(validRoles, 100).Error; err != nil {
+			tx.Rollback()
+			log.Println("❌ Migration failed to save Roles:", err)
+			return
+		}
+	}
+
+	// ── RolePermissions ──
+	var perms []RolePermission
+	if err := FetchSheetDataToStruct("RolePermissions", &perms); err != nil {
+		tx.Rollback()
+		log.Println("❌ Migration failed for RolePermissions:", err)
+		return
+	}
+	var validPerms []RolePermission
+	seenPermKeys := make(map[string]bool)
+	for _, x := range perms {
+		key := strings.ToLower(x.Role + "|" + x.Feature)
+		if x.Role != "" && x.Feature != "" && !seenPermKeys[key] {
+			seenPermKeys[key] = true
+			x.ID = 0 // let local DB auto-increment manage PK
+			validPerms = append(validPerms, x)
+		}
+	}
+	if len(validPerms) > 0 {
+		if err := tx.CreateInBatches(validPerms, 100).Error; err != nil {
+			tx.Rollback()
+			log.Printf("❌ Migration failed to save RolePermissions: %v", err)
+			return
+		}
+	}
+
+	// ── AllOrders ──
+	var orders []Order
+	if err := FetchSheetDataToStruct("AllOrders", &orders); err != nil {
+		tx.Rollback()
+		log.Println("❌ Migration failed for AllOrders (fetch):", err)
+		return
+	}
+	log.Printf("📊 AllOrders: Fetched %d rows from sheet", len(orders))
+	var validOrders []Order
+	seenOrderIDs := make(map[string]bool)
+	for _, o := range orders {
+		if o.OrderID != "" && !seenOrderIDs[o.OrderID] {
+			seenOrderIDs[o.OrderID] = true
+			validOrders = append(validOrders, o)
+		}
+	}
+	if len(validOrders) > 0 {
+		if err := tx.CreateInBatches(validOrders, 100).Error; err != nil {
+			tx.Rollback()
+			log.Println("❌ Migration failed for AllOrders (save):", err)
+			return
+		}
+		log.Printf("✅ AllOrders: Saved %d valid rows", len(validOrders))
 	} else {
-		// UPSERT logic: Try to update first
-		whereClause := fmt.Sprintf("UPPER(TRIM(%s)) = UPPER(TRIM(?))", pkCol)
-		result := DB.Table(tableName).Where(whereClause, pkVal).Updates(mappedData)
-		if result.Error != nil {
-			c.JSON(500, gin.H{"status": "error", "message": result.Error.Error()})
+		log.Println("⚠️ AllOrders: No valid rows found to save")
+	}
+
+	// ── Movies ──
+	var movies []Movie
+	if err := FetchSheetDataToStruct("Movies", &movies); err != nil {
+		tx.Rollback()
+		log.Println("❌ Migration failed for Movies:", err)
+		return
+	}
+	var validMovies []Movie
+	seenMovieIDs := make(map[string]bool)
+	for _, x := range movies {
+		if x.ID != "" && !seenMovieIDs[x.ID] {
+			seenMovieIDs[x.ID] = true
+			validMovies = append(validMovies, x)
+		}
+	}
+	if len(validMovies) > 0 {
+		if err := tx.CreateInBatches(validMovies, 100).Error; err != nil {
+			tx.Rollback()
+			log.Println("❌ Migration failed to save Movies:", err)
+			return
+		}
+	}
+
+	// ── Incentive Sheets ──
+	var incProjects []IncentiveProject
+	if err := FetchSheetDataToStruct("IncentiveProjects", &incProjects); err != nil {
+		tx.Rollback()
+		log.Println("❌ Migration failed for IncentiveProjects:", err)
+		return
+	}
+	if len(incProjects) > 0 {
+		if err := tx.CreateInBatches(incProjects, 100).Error; err != nil {
+			tx.Rollback()
+			log.Println("❌ Migration failed to save IncentiveProjects:", err)
+			return
+		}
+	}
+
+	var incCalcs []IncentiveCalculator
+	if err := FetchSheetDataToStruct("IncentiveCalculators", &incCalcs); err != nil {
+		tx.Rollback()
+		log.Println("❌ Migration failed for IncentiveCalculators:", err)
+		return
+	}
+	if len(incCalcs) > 0 {
+		if err := tx.CreateInBatches(incCalcs, 100).Error; err != nil {
+			tx.Rollback()
+			log.Println("❌ Migration failed to save IncentiveCalculators:", err)
+			return
+		}
+	}
+
+	var incResults []IncentiveResult
+	if err := FetchSheetDataToStruct("IncentiveResults", &incResults); err != nil {
+		tx.Rollback()
+		log.Println("❌ Migration failed for IncentiveResults:", err)
+		return
+	}
+	if len(incResults) > 0 {
+		if err := tx.CreateInBatches(incResults, 100).Error; err != nil {
+			tx.Rollback()
+			log.Println("❌ Migration failed to save IncentiveResults:", err)
+			return
+		}
+	}
+
+	var incManual []IncentiveManualData
+	if err := FetchSheetDataToStruct("IncentiveManualData", &incManual); err != nil {
+		tx.Rollback()
+		log.Println("❌ Migration failed for IncentiveManualData:", err)
+		return
+	}
+	if len(incManual) > 0 {
+		if err := tx.CreateInBatches(incManual, 100).Error; err != nil {
+			tx.Rollback()
+			log.Println("❌ Migration failed to save IncentiveManualData:", err)
+			return
+		}
+	}
+
+	var incCustom []IncentiveCustomPayout
+	if err := FetchSheetDataToStruct("IncentiveCustomPayouts", &incCustom); err != nil {
+		tx.Rollback()
+		log.Println("❌ Migration failed for IncentiveCustomPayouts:", err)
+		return
+	}
+	if len(incCustom) > 0 {
+		if err := tx.CreateInBatches(incCustom, 100).Error; err != nil {
+			tx.Rollback()
+			log.Println("❌ Migration failed to save IncentiveCustomPayouts:", err)
+			return
+		}
+	}
+
+	if err := tx.Commit().Error; err != nil {
+		log.Println("❌ Migration failed on commit:", err)
+	} else {
+		// Ensure essential roles exist even if sheet was empty
+		EnsureSeedData()
+		log.Println("🎉 Migration ជោគជ័យ!")
+	}
+}
+
+// HandleMigrateData is the Gin handler for POST /api/admin/migrate-data.
+// It triggers a full data migration in the background.
+func HandleMigrateData(c *gin.Context) {
+	go PerformDataMigration()
+	c.JSON(http.StatusOK, gin.H{"status": "success", "message": "Migration started."})
+}
+
+// HandleMigrateMovies migrates Movie data from Google Sheets to the database (Admin only).
+// After completion (success or failure), broadcasts a "movie_migration_complete" WebSocket
+// event so the frontend can update its UI without relying on a blind timeout.
+func HandleMigrateMovies(c *gin.Context) {
+	go func() {
+		// broadcastResult sends a WebSocket event to all connected clients so the
+		// frontend knows the outcome of the background goroutine.
+		broadcastResult := func(success bool, message string, count int) {
+			if HubGlobal == nil {
+				return
+			}
+			payload, _ := json.Marshal(map[string]interface{}{
+				"type":    "movie_migration_complete",
+				"success": success,
+				"message": message,
+				"count":   count,
+			})
+			HubGlobal.Broadcast <- payload
+		}
+
+		tx := DB.Begin()
+		defer func() {
+			if r := recover(); r != nil {
+				tx.Rollback()
+				broadcastResult(false, fmt.Sprintf("Panic during migration: %v", r), 0)
+			}
+		}()
+
+		log.Println("🗑️ លុបទិន្នន័យ Movie ចាស់ (Resetting Movies table within transaction)...")
+		tx.Session(&gorm.Session{AllowGlobalUpdate: true}).Delete(&Movie{})
+
+		log.Println("🔄 ចាប់ផ្តើមទាញទិន្នន័យ Movie ថ្មីពី Google Sheet...")
+
+		var movies []Movie
+		if err := FetchSheetDataToStruct("Movies", &movies); err != nil {
+			tx.Rollback()
+			log.Println("❌ Movie Migration failed for Movies:", err)
+			broadcastResult(false, "Failed to fetch data from Google Sheet: "+err.Error(), 0)
 			return
 		}
 
-		// If no rows were updated, it's likely a new record. Attempt to Create.
-		if result.RowsAffected == 0 {
-			// Ensure PK is in mappedData for creation
-			mappedData[pkCol] = pkVal
-			if err := DB.Table(tableName).Create(mappedData).Error; err != nil {
-				// Log but don't fail, as it might have been created by another process/worker
-				log.Printf("⚠️ SyncManager: Upsert/Create failed for %s PK %v: %v", tableName, pkVal, err)
+		var validMovies []Movie
+		seenMovieIDs := make(map[string]bool)
+		for _, x := range movies {
+			if x.ID != "" && !seenMovieIDs[x.ID] {
+				seenMovieIDs[x.ID] = true
+				if x.AddedAt == "" {
+					x.AddedAt = time.Now().Format(time.RFC3339)
+				}
+				validMovies = append(validMovies, x)
 			}
 		}
-	}
 
-	// Broadcast update to all connected clients
-	event, _ := json.Marshal(map[string]interface{}{
-		"type":      "sheet_webhook_sync",
-		"sheetName": req.SheetName,
-		"action":    req.Action,
-		"pk":        pkVal,
-	})
-	hub.Broadcast <- event
-
-	// --- NEW: Trigger Telegram Update (if Sheet Edit for an Order) ---
-	if tableName == "orders" && req.Action == "update" && pkVal != nil {
-		go func(orderId interface{}, sheetName string, rowData map[string]interface{}) {
-			// Apps Script re-fetches from the sheet, so we just need Order ID and Team.
-			// 1. Try to get team from rowData
-			team := ""
-			if t, exists := rowData["Team"]; exists {
-				team = fmt.Sprintf("%v", t)
-			} else if strings.HasPrefix(sheetName, "Orders_") {
-				team = strings.TrimPrefix(sheetName, "Orders_")
+		if len(validMovies) > 0 {
+			if err := tx.CreateInBatches(validMovies, 100).Error; err != nil {
+				tx.Rollback()
+				log.Println("❌ Movie Migration failed to save Movies:", err)
+				broadcastResult(false, "Failed to save movies to database: "+err.Error(), 0)
+				return
 			}
+		}
 
-			// 2. If team is still empty, fetch from DB
-			if team == "" {
-				var order Order
-				whereClause := fmt.Sprintf("UPPER(TRIM(%s)) = UPPER(TRIM(?))", pkCol)
-				if err := DB.Where(whereClause, orderId).Select("team").First(&order).Error; err == nil {
-					team = order.Team
-				}
-			}
-
-			if team != "" {
-				log.Printf("📢 [Webhook Sync] Triggering Telegram Edit for Order %v (Team: %s)", orderId, team)
-				
-				// Prepare updatedFields from rowData to pass along (Apps Script uses this to UpdateSheets first)
-				updatedFields := make(map[string]interface{})
-				for k, v := range rowData {
-					updatedFields[k] = v
-				}
-
-				enqueueSync("updateOrderTelegram", map[string]interface{}{
-					"orderId":       fmt.Sprintf("%v", orderId),
-					"team":          team,
-					"updatedFields": updatedFields,
-				}, "", nil)
-			}
-		}(pkVal, req.SheetName, req.RowData)
-	}
-
-	c.JSON(200, gin.H{"status": "success"})
-}
-
-func main() {
-	port := os.Getenv("PORT")
-	if port == "" {
-		port = "8080"
-	}
-	backend.SpreadsheetID = os.Getenv("GOOGLE_SHEET_ID")
-	appsScriptURL = os.Getenv("APPS_SCRIPT_URL")
-	appsScriptSecret = os.Getenv("APPS_SCRIPT_SECRET")
-	backend.AppsScriptURL = appsScriptURL
-	backend.AppsScriptSecret = appsScriptSecret
-
-	// ── Wire Video-package injectable dependencies ──────────────────────────
-	backend.VideoFetchSheetFunc = backend.FetchSheetDataToStruct
-	backend.VideoGenerateIDFunc = generateShortID
-	backend.VideoExtractFileIDFunc = backend.ExtractFileIDFromURL
-
-	// ── Wire Upload-package injectable dependencies ──────────────────────────
-	backend.UploadGenerateIDFunc = generateShortID
-	backend.UploadMapToDBColumnFunc = mapToDBColumn
-	backend.UploadGetTableNameFunc = getTableName
-	backend.UploadIsValidOrderColumnFunc = isValidOrderColumn
-	
-	// Pre-initialize UploadFolderID from environment for immediate use
-	backend.UploadFolderID = os.Getenv("UPLOAD_FOLDER_ID")
-	
-	jwtSecretEnv := os.Getenv("JWT_SECRET")
-	if jwtSecretEnv == "" {
-		jwtSecretEnv = "change-me-in-production"
-	}
-	backend.JwtSecret = []byte(jwtSecretEnv)
-
-	hub = NewHub()
-	backend.HubGlobal = hub
-	go hub.Run()
-
-	// Initialize DB in background to allow fast port binding for Render
-	go func() {
-		initDB()
-		// Start Background Workers ONLY after DB is ready (if they depend on it)
-		startSyncManager(2)
-		go startOrderWorker()
-		startScheduler()
-		backend.CreateGoogleAPIClient(context.Background())
-		log.Println("🚀 Starting automatic data migration on startup...")
-		backend.PerformDataMigration()
+		if err := tx.Commit().Error; err != nil {
+			log.Println("❌ Movie Migration failed on commit:", err)
+			broadcastResult(false, "Database commit failed: "+err.Error(), 0)
+		} else {
+			log.Printf("🎉 Movie Migration ជោគជ័យ! Saved %d movies.", len(validMovies))
+			broadcastResult(true, fmt.Sprintf("Sync ជោគជ័យ! បានរក្សាទុក %d ភាពយន្ត។", len(validMovies)), len(validMovies))
+		}
 	}()
 
-	r := gin.Default()
-	r.Use(ErrorHandlingMiddleware())
-	r.Use(cors.New(cors.Config{
-		AllowOrigins: []string{"*"},
-		AllowMethods: []string{"GET", "POST", "PUT", "DELETE", "OPTIONS"},
-		AllowHeaders: []string{"Origin", "Content-Type", "Authorization"},
-		MaxAge:       12 * time.Hour,
-	}))
-
-	r.GET("/", func(c *gin.Context) { c.JSON(200, gin.H{"status": "ok"}) })
-	r.GET("/healthz", func(c *gin.Context) { c.String(200, "OK") })
-
-	// Apply DBMiddleware to all /api routes except root health checks
-	api := r.Group("/api", DBMiddleware())
-	api.POST("/login", handleLogin)
-	api.GET("/settings", handleGetSettings)
-	// ── Entertainment / Video Player routes (Backend/video.go) ────────────────────────
-	// All video handler logic lives in Backend/video.go (package backend).
-	// We call RegisterVideoRoutes to set up both public and admin routes.
-	// We pass the public group (api) and the admin group (admin) which already has AdminOnlyMiddleware.
-	// But admin group is defined inside protected block, so we'll call it there.
-	api.POST("/webhook/sheets-sync", handleSheetsWebhook)
-	api.GET("/order-metadata/:id", handleGetOrderMetadata)
-	protected := api.Group("/")
-	protected.Use(AuthMiddleware())
-	{
-		protected.GET("/users", handleGetUsers)
-		protected.GET("/static-data", handleGetStaticData)
-		protected.POST("/submit-order", handleSubmitOrder)
-		protected.POST("/upload-image", backend.HandleImageUploadProxy)
-		protected.GET("/permissions", handleGetUserPermissions)
-		protected.GET("/roles", handleGetRoles)
-		
-		protected.GET("/teams/shipping-costs", RequirePermission("view_revenue"), handleGetGlobalShippingCosts)
-
-		chat := protected.Group("/chat")
-		chat.GET("/messages", handleGetChatMessages)
-		chat.GET("/message/:id", handleGetSingleChatMessage)
-		chat.POST("/send", handleSendChatMessage)
-		chat.POST("/delete", handleDeleteChatMessage)
-
-		// ── Admin Group ──
-		adminGroup := protected.Group("/admin")
-		{
-			// Order Management (Accessible by anyone with permission, e.g. Packers/Admins)
-			adminGroup.GET("/orders", RequirePermission("view_order_list"), handleGetAllOrders)
-			adminGroup.GET("/all-orders", RequirePermission("view_order_list"), handleGetAllOrders)
-			adminGroup.POST("/update-order", RequirePermission("edit_order"), handleAdminUpdateOrder)
-
-			// Restricted Admin Actions (Require Admin role)
-			restricted := adminGroup.Group("/")
-			restricted.Use(AdminOnlyMiddleware())
-			{
-				// Video/Movie admin routes from backend package
-				backend.RegisterVideoRoutes(api, restricted)
-
-				restricted.POST("/migrate-data", backend.HandleMigrateData)
-				restricted.GET("/revenue-summary", handleGetRevenueSummary)
-				restricted.POST("/update-sheet", handleAdminUpdateSheet)
-				restricted.POST("/add-row", handleAdminAddRow)
-				restricted.POST("/delete-row", handleAdminDeleteRow)
-				restricted.POST("/delete-order", RequirePermission("delete_order"), handleAdminDeleteOrder)
-				restricted.GET("/permissions", handleGetAllPermissions)
-				restricted.POST("/permissions", handleUpdatePermission)
-				restricted.POST("/roles", handleCreateRole)
-				restricted.GET("/incentive/calculators", handleGetIncentiveCalculators)
-				restricted.POST("/incentive/calculators", handleCreateIncentiveCalculator)
-				restricted.GET("/incentive/projects", handleGetIncentiveProjects)
-				restricted.POST("/incentive/projects", handleCreateIncentiveProject)
-				restricted.GET("/incentive/results", handleGetIncentiveResults)
-				restricted.POST("/incentive/calculate", handleCalculateIncentive)
-				restricted.GET("/incentive/manual-data", handleGetIncentiveManualData)
-				restricted.POST("/incentive/manual-data", handleSaveIncentiveManualData)
-				restricted.GET("/incentive/custom-payout", handleGetIncentiveCustomPayouts)
-				restricted.POST("/incentive/custom-payout", handleSaveIncentiveCustomPayout)
-				restricted.POST("/incentive/lock", handleLockIncentivePayout)
-			}
-		}
-		profile := protected.Group("/profile")
-		profile.POST("/update", handleUpdateProfile)
-		profile.POST("/change-password", handleChangePassword)
-	}
-	api.GET("/chat/ws", AuthMiddleware(), serveWs)
-	api.GET("/chat/audio/:fileID", backend.HandleGetAudioProxy)
-	r.Run("0.0.0.0:" + port)
+	c.JSON(200, gin.H{"status": "success", "message": "Movie migration started."})
 }
-
-
-// នៅពេលមិនទាន់ capture រូបភាព(AIM and Focus)គឺពេលដែលកំពុងScan រក QR Code គឺប្រព័ន្ធត្រូវ zoom និង tracking គ្រប់កន្លែងដើម្បីស្វែង QR Code ដើម្បីល្បឿនចាប់យក QR Code​លឿនខ្លាំង ទោះបីដាក់នៅឆ្ងាយក៏ប្រព័ន្ធចាប់បាន
-
