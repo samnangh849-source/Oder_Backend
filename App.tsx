@@ -313,7 +313,7 @@ const AppContent: React.FC = () => {
         
         setCurrentUser(userWithPerms);
         await CacheService.set(CACHE_KEYS.SESSION, { user: userWithPerms, token, timestamp: Date.now() });
-        fetchData(true);
+        await fetchData(true);
         setAppState('role_selection');
     };
 

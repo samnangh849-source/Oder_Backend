@@ -1,5 +1,5 @@
 
-import React, { useState, useContext, useEffect, useMemo, useCallback } from 'react';
+import React, { useState, useContext, useEffect, useMemo, useCallback, useRef } from 'react';
 import { AppContext } from '../context/AppContext';
 import { WEB_APP_URL } from '../constants';
 import { convertGoogleDriveUrl } from '../utils/fileUtils';
@@ -58,7 +58,11 @@ const SettingsDashboard: React.FC<SettingsDashboardProps> = ({ onBack, initialSe
         return () => setMobilePageTitle(null);
     }, [activeSection, setMobilePageTitle, t]);
 
-    const fetchSectionData = useCallback(async (sectionId: string, forceApi = false) => {
+    // Ref to always read the latest appData without re-creating the callback
+    const appDataRef = useRef(appData);
+    appDataRef.current = appData;
+
+    const fetchSectionData = useCallback(async (sectionId: string, forceRefresh = false) => {
         const section = configSections.find(s => s.id === sectionId);
         if (!section || section.id === 'telegramTemplates' || section.id === 'permissions' || section.id === 'database') {
             setIsLoading(false);
@@ -68,24 +72,37 @@ const SettingsDashboard: React.FC<SettingsDashboardProps> = ({ onBack, initialSe
         setIsLoading(true);
         setFetchError(false);
         try {
-            // Priority 1: Check AppData first (skip if forceApi or no real data)
-            if (!forceApi) {
-                const appDataList = getArrayCaseInsensitive(appData, section.dataKey);
-                if (appDataList.length > 0) {
-                    setLocalData(appDataList);
-                    setIsLoading(false);
-                    return;
-                }
+            // Step 1: Check current appData (always read latest via ref)
+            const currentAppData = appDataRef.current;
+            const appDataList = getArrayCaseInsensitive(currentAppData, section.dataKey);
+            if (!forceRefresh && appDataList.length > 0) {
+                setLocalData(appDataList);
+                setIsLoading(false);
+                return;
             }
 
-            // Priority 2: Fetch from API directly
-            // Use both token sources for resilience
+            // Step 2: appData is empty — call refreshData() to fetch ALL static data globally
+            // This is the SAME call OrderContext uses, ensuring consistent token handling
+            try {
+                await refreshData();
+            } catch (e) {
+                console.warn('refreshData failed, trying direct fetch...', e);
+            }
+
+            // Step 3: Re-check appData after refresh (read latest via ref)
+            const refreshedAppData = appDataRef.current;
+            const refreshedList = getArrayCaseInsensitive(refreshedAppData, section.dataKey);
+            if (refreshedList.length > 0) {
+                setLocalData(refreshedList);
+                return;
+            }
+
+            // Step 4: Last resort — direct API fetch with fallback token
             const session = await CacheService.get<{ token: string }>(CACHE_KEYS.SESSION);
             const token = session?.token || localStorage.getItem('token');
             const headers: HeadersInit = {};
             if (token) headers['Authorization'] = `Bearer ${token}`;
 
-            // Sections served by /api/static-data (returns all data in one call)
             const staticDataSections = ['pages', 'products', 'shippingMethods', 'drivers',
                 'bankAccounts', 'phoneCarriers', 'driverRecommendations', 'roles', 'users',
                 'stores', 'colors', 'locations', 'inventory', 'stockTransfers'];
@@ -103,8 +120,6 @@ const SettingsDashboard: React.FC<SettingsDashboardProps> = ({ onBack, initialSe
             if (res.ok) {
                 const json = await res.json();
                 if (json.status === 'success') {
-                    // static-data returns { data: { roles: [...], products: [...], ... } }
-                    // Direct endpoints return { data: [...] }
                     let data: any[];
                     if (endpoint === 'static-data') {
                         data = getArrayCaseInsensitive(json.data, section.dataKey);
@@ -124,11 +139,20 @@ const SettingsDashboard: React.FC<SettingsDashboardProps> = ({ onBack, initialSe
         } finally {
             setIsLoading(false);
         }
-    }, [appData]);
+    }, [refreshData]);
 
     useEffect(() => {
         if (activeId) fetchSectionData(activeId);
     }, [activeId, fetchSectionData]);
+
+    // Also re-sync localData when appData updates externally (e.g. after global refreshData)
+    useEffect(() => {
+        if (!activeSection) return;
+        const appDataList = getArrayCaseInsensitive(appData, activeSection.dataKey);
+        if (appDataList.length > 0) {
+            setLocalData(appDataList);
+        }
+    }, [appData, activeSection]);
 
     const dataList = useMemo(() => {
         if (!activeSection) return [];
@@ -389,7 +413,7 @@ const SettingsDashboard: React.FC<SettingsDashboardProps> = ({ onBack, initialSe
                                                 </td>
                                             </tr>
                                         )) : !isLoading && (
-                                            <tr><td colSpan={10} className="py-20 text-center"><div className="text-gray-500 font-bold mb-4">{fetchError ? 'មានបញ្ហាក្នុងការទាញទិន្នន័យ' : 'មិនមានទិន្នន័យត្រូវបានរកឃើញទេ'}</div><button onClick={async () => { await refreshData(); fetchSectionData(activeId!, true); }} className="btn btn-secondary text-xs">ចុចដើម្បីសាកល្បងម្ដងទៀត</button></td></tr>
+                                            <tr><td colSpan={10} className="py-20 text-center"><div className="text-gray-500 font-bold mb-4">{fetchError ? 'មានបញ្ហាក្នុងការទាញទិន្នន័យ' : 'មិនមានទិន្នន័យត្រូវបានរកឃើញទេ'}</div><button onClick={() => fetchSectionData(activeId!, true)} className="btn btn-secondary text-xs">ចុចដើម្បីសាកល្បងម្ដងទៀត</button></td></tr>
                                         )}
                                     </tbody>
                                 </table>
@@ -413,7 +437,7 @@ const SettingsDashboard: React.FC<SettingsDashboardProps> = ({ onBack, initialSe
                                         </div>
                                     );
                                 }) : !isLoading && (
-                                    <div className="py-20 text-center"><div className="text-gray-500 font-bold mb-4">{fetchError ? 'មានបញ្ហាក្នុងការទាញទិន្នន័យ' : 'មិនមានទិន្នន័យ'}</div><button onClick={async () => { await refreshData(); fetchSectionData(activeId!, true); }} className="btn btn-secondary text-xs">សាកល្បងម្ដងទៀត</button></div>
+                                    <div className="py-20 text-center"><div className="text-gray-500 font-bold mb-4">{fetchError ? 'មានបញ្ហាក្នុងការទាញទិន្នន័យ' : 'មិនមានទិន្នន័យ'}</div><button onClick={() => fetchSectionData(activeId!, true)} className="btn btn-secondary text-xs">សាកល្បងម្ដងទៀត</button></div>
                                 )}
                             </div>
                         </div>
