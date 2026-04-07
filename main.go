@@ -695,7 +695,10 @@ func handleGetStaticData(c *gin.Context) {
 		func() { var d []RolePermission; DB.Find(&d); mu.Lock(); result["rolePermissions"] = d; mu.Unlock() },
 		func() {
 			var d []User
-			DB.Find(&d)
+			if err := DB.Find(&d).Error; err != nil {
+				log.Printf("⚠️ Failed to fetch users: %v", err)
+				d = []User{} // Ensure non-nil slice so JSON returns [] not null
+			}
 			for i := range d {
 				d[i].Password = ""
 			}
@@ -776,7 +779,10 @@ func handleGetSettings(c *gin.Context) {
 
 func handleGetUsers(c *gin.Context) {
 	var users []User
-	DB.Find(&users)
+	if err := DB.Find(&users).Error; err != nil {
+		log.Printf("⚠️ Failed to fetch users: %v", err)
+		users = []User{} // Ensure non-nil slice so JSON returns [] not null
+	}
 	for i := range users {
 		users[i].Password = ""
 	}
