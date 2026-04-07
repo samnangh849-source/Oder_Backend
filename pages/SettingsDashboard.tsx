@@ -34,7 +34,8 @@ const SettingsDashboard: React.FC<SettingsDashboardProps> = ({ onBack, initialSe
     const [searchQuery, setSearchQuery] = useState('');
     const [modal, setModal] = useState<{ isOpen: boolean, sectionId: string, item: any | null }>({ isOpen: false, sectionId: '', item: null });
     const [localData, setLocalData] = useState<any[]>([]);
-    const [isLoading, setIsLoading] = useState(false);
+    const [isLoading, setIsLoading] = useState(true);
+    const [fetchError, setFetchError] = useState(false);
     const [isPdfOpen, setIsPdfOpen] = useState(false);
     const [isExcelView, setIsExcelView] = useState(true);
     
@@ -57,23 +58,30 @@ const SettingsDashboard: React.FC<SettingsDashboardProps> = ({ onBack, initialSe
         return () => setMobilePageTitle(null);
     }, [activeSection, setMobilePageTitle, t]);
 
-    const fetchSectionData = useCallback(async (sectionId: string) => {
+    const fetchSectionData = useCallback(async (sectionId: string, forceApi = false) => {
         const section = configSections.find(s => s.id === sectionId);
-        if (!section || section.id === 'telegramTemplates' || section.id === 'permissions' || section.id === 'database') return;
+        if (!section || section.id === 'telegramTemplates' || section.id === 'permissions' || section.id === 'database') {
+            setIsLoading(false);
+            return;
+        }
 
         setIsLoading(true);
+        setFetchError(false);
         try {
-            // Priority 1: Check AppData first (skip only if we have real data)
-            const appDataList = getArrayCaseInsensitive(appData, section.dataKey);
-            if (appDataList.length > 0) {
-                setLocalData(appDataList);
-                setIsLoading(false);
-                return;
+            // Priority 1: Check AppData first (skip if forceApi or no real data)
+            if (!forceApi) {
+                const appDataList = getArrayCaseInsensitive(appData, section.dataKey);
+                if (appDataList.length > 0) {
+                    setLocalData(appDataList);
+                    setIsLoading(false);
+                    return;
+                }
             }
 
-            // Priority 2: Fetch from API if empty in appData
+            // Priority 2: Fetch from API directly
+            // Use both token sources for resilience
             const session = await CacheService.get<{ token: string }>(CACHE_KEYS.SESSION);
-            const token = session?.token;
+            const token = session?.token || localStorage.getItem('token');
             const headers: HeadersInit = {};
             if (token) headers['Authorization'] = `Bearer ${token}`;
 
@@ -104,10 +112,15 @@ const SettingsDashboard: React.FC<SettingsDashboardProps> = ({ onBack, initialSe
                         data = Array.isArray(json.data) ? json.data : [];
                     }
                     setLocalData(data);
+                } else {
+                    setFetchError(true);
                 }
+            } else {
+                setFetchError(true);
             }
         } catch (err) {
             console.error(`Failed to fetch ${sectionId}:`, err);
+            setFetchError(true);
         } finally {
             setIsLoading(false);
         }
@@ -376,7 +389,7 @@ const SettingsDashboard: React.FC<SettingsDashboardProps> = ({ onBack, initialSe
                                                 </td>
                                             </tr>
                                         )) : !isLoading && (
-                                            <tr><td colSpan={10} className="py-20 text-center"><div className="text-gray-500 font-bold mb-4">មិនមានទិន្នន័យត្រូវបានរកឃើញទេ</div><button onClick={() => fetchSectionData(activeId!)} className="btn btn-secondary text-xs">ចុចដើម្បីសាកល្បងម្ដងទៀត</button></td></tr>
+                                            <tr><td colSpan={10} className="py-20 text-center"><div className="text-gray-500 font-bold mb-4">{fetchError ? 'មានបញ្ហាក្នុងការទាញទិន្នន័យ' : 'មិនមានទិន្នន័យត្រូវបានរកឃើញទេ'}</div><button onClick={async () => { await refreshData(); fetchSectionData(activeId!, true); }} className="btn btn-secondary text-xs">ចុចដើម្បីសាកល្បងម្ដងទៀត</button></td></tr>
                                         )}
                                     </tbody>
                                 </table>
@@ -400,7 +413,7 @@ const SettingsDashboard: React.FC<SettingsDashboardProps> = ({ onBack, initialSe
                                         </div>
                                     );
                                 }) : !isLoading && (
-                                    <div className="py-20 text-center"><div className="text-gray-500 font-bold mb-4">មិនមានទិន្នន័យ</div><button onClick={() => fetchSectionData(activeId!)} className="btn btn-secondary text-xs">សាកល្បងម្ដងទៀត</button></div>
+                                    <div className="py-20 text-center"><div className="text-gray-500 font-bold mb-4">{fetchError ? 'មានបញ្ហាក្នុងការទាញទិន្នន័យ' : 'មិនមានទិន្នន័យ'}</div><button onClick={async () => { await refreshData(); fetchSectionData(activeId!, true); }} className="btn btn-secondary text-xs">សាកល្បងម្ដងទៀត</button></div>
                                 )}
                             </div>
                         </div>
