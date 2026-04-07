@@ -62,18 +62,25 @@ export const OrderProvider: React.FC<{ children: React.ReactNode }> = ({ childre
             if (response.ok) {
                 const result = await response.json();
                 if (result.status === 'success') {
-                    // Normalize all keys to lowercase to avoid case-sensitivity issues (e.g., Users vs users)
-                    const normalizedData: any = {};
+                    // Map data while keeping original casing AND providing lowercase/aliased versions for consistency
+                    const mappedData: any = { ...result.data };
+                    
                     if (result.data && typeof result.data === 'object') {
                         Object.keys(result.data).forEach(key => {
-                            let targetKey = key.toLowerCase();
-                            // Special case: Backend sends rolePermissions, Frontend expects permissions
-                            if (targetKey === 'rolepermissions') targetKey = 'permissions';
-                            normalizedData[targetKey] = result.data[key];
+                            const val = result.data[key];
+                            const lowerKey = key.toLowerCase();
+                            
+                            // Ensure common keys are available in camelCase/lowercase as expected by frontend
+                            if (lowerKey === 'rolepermissions') mappedData.permissions = val;
+                            if (lowerKey === 'shippingmethods') mappedData.shippingMethods = val;
+                            if (lowerKey === 'teampages') mappedData.pages = val;
+                            
+                            // Also provide a completely lowercase version for each
+                            mappedData[lowerKey] = val;
                         });
                     }
                     
-                    setAppData(prev => ({ ...prev, ...normalizedData }));
+                    setAppData(prev => ({ ...prev, ...mappedData }));
                 }
             }
         } catch (e) {

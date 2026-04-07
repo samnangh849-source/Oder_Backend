@@ -5,97 +5,97 @@ package backend
 // =========================================================================
 
 type User struct {
-	UserName          string `gorm:"primaryKey;column:user_name" json:"UserName"`
-	Password          string `gorm:"column:password" json:"Password"`
-	Team              string `gorm:"column:team" json:"Team"`
-	FullName          string `gorm:"column:full_name" json:"FullName"`
-	ProfilePictureURL string `gorm:"column:profile_picture_url" json:"ProfilePictureURL"`
-	Role              string `gorm:"column:role" json:"Role"`
-	IsSystemAdmin     bool   `gorm:"column:is_system_admin" json:"IsSystemAdmin"`
-	TelegramUsername  string `gorm:"column:telegram_username" json:"TelegramUsername"`
+	UserName          string `gorm:"primaryKey;column:user_name" json:"UserName" json:"userName"`
+	Password          string `gorm:"column:password" json:"Password" json:"password"`
+	Team              string `gorm:"column:team" json:"Team" json:"team"`
+	FullName          string `gorm:"column:full_name" json:"FullName" json:"fullName"`
+	ProfilePictureURL string `gorm:"column:profile_picture_url" json:"ProfilePictureURL" json:"profilePictureUrl"`
+	Role              string `gorm:"column:role" json:"Role" json:"role"`
+	IsSystemAdmin     bool   `gorm:"column:is_system_admin" json:"IsSystemAdmin" json:"isSystemAdmin"`
+	TelegramUsername  string `gorm:"column:telegram_username" json:"TelegramUsername" json:"telegramUsername"`
 }
 
 type Movie struct {
-	ID          string `gorm:"primaryKey;column:id" json:"ID"`
-	Title       string `gorm:"column:title" json:"Title"`
-	Description string `gorm:"column:description" json:"Description"`
-	Thumbnail   string `gorm:"column:thumbnail" json:"Thumbnail"`
-	VideoURL    string `gorm:"column:video_url" json:"VideoURL"`
-	Type        string `gorm:"column:type" json:"Type"`
-	Language    string `gorm:"column:language" json:"Language"`
-	Country     string `gorm:"column:country" json:"Country"`
-	Category    string `gorm:"column:category" json:"Category"`
-	SeriesKey   string `gorm:"column:series_key" json:"SeriesKey"`
-	AddedAt     string `gorm:"column:added_at" json:"AddedAt"`
+	ID          string `gorm:"primaryKey;column:id" json:"ID" json:"id"`
+	Title       string `gorm:"column:title" json:"Title" json:"title"`
+	Description string `gorm:"column:description" json:"Description" json:"description"`
+	Thumbnail   string `gorm:"column:thumbnail" json:"Thumbnail" json:"thumbnail"`
+	VideoURL    string `gorm:"column:video_url" json:"VideoURL" json:"videoUrl"`
+	Type        string `gorm:"column:type" json:"Type" json:"type"`
+	Language    string `gorm:"column:language" json:"Language" json:"language"`
+	Country     string `gorm:"column:country" json:"Country" json:"country"`
+	Category    string `gorm:"column:category" json:"Category" json:"category"`
+	SeriesKey   string `gorm:"column:series_key" json:"SeriesKey" json:"seriesKey"`
+	AddedAt     string `gorm:"column:added_at" json:"AddedAt" json:"addedAt"`
 }
 type Store struct {
-	StoreName        string `gorm:"primaryKey;column:store_name" json:"StoreName"`
-	StoreType        string `gorm:"column:store_type" json:"StoreType"`
-	Address          string `gorm:"column:address" json:"Address"`
-	TelegramBotToken string `gorm:"column:telegram_bot_token" json:"TelegramBotToken"`
-	TelegramGroupID  string `gorm:"column:telegram_group_id" json:"TelegramGroupID"`
-	TelegramTopicID  string `gorm:"column:telegram_topic_id" json:"TelegramTopicID"`
-	LabelPrinterURL  string `gorm:"column:label_printer_url" json:"LabelPrinterURL"`
-	CODAlertGroupID  string `gorm:"column:cod_alert_group_id" json:"CODAlertGroupID"`
+	StoreName        string `gorm:"primaryKey;column:store_name" json:"StoreName" json:"storeName"`
+	StoreType        string `gorm:"column:store_type" json:"StoreType" json:"storeType"`
+	Address          string `gorm:"column:address" json:"Address" json:"address"`
+	TelegramBotToken string `gorm:"column:telegram_bot_token" json:"TelegramBotToken" json:"telegramBotToken"`
+	TelegramGroupID  string `gorm:"column:telegram_group_id" json:"TelegramGroupID" json:"telegramGroupId"`
+	TelegramTopicID  string `gorm:"column:telegram_topic_id" json:"TelegramTopicID" json:"telegramTopicId"`
+	LabelPrinterURL  string `gorm:"column:label_printer_url" json:"LabelPrinterURL" json:"labelPrinterUrl"`
+	CODAlertGroupID  string `gorm:"column:cod_alert_group_id" json:"CODAlertGroupID" json:"codAlertGroupId"`
 }
 type Setting struct {
-	ConfigKey   string `gorm:"primaryKey;column:config_key" json:"Key"`
-	ConfigValue string `gorm:"column:config_value" json:"Value"`
-	Description string `gorm:"column:description" json:"Description"`
+	ConfigKey   string `gorm:"primaryKey;column:config_key" json:"Key" json:"key"`
+	ConfigValue string `gorm:"column:config_value" json:"Value" json:"value"`
+	Description string `gorm:"column:description" json:"Description" json:"description"`
 }
 
 type TeamPage struct {
-	ID              uint   `gorm:"primaryKey;autoIncrement;column:id" json:"ID"`
-	Team            string `gorm:"column:team" json:"Team"`
-	PageName        string `gorm:"column:page_name" json:"PageName"`
-	TelegramValue   string `gorm:"column:telegram_value" json:"TelegramValue"`
-	PageLogoURL     string `gorm:"column:page_logo_url" json:"PageLogoURL"`
-	DefaultStore    string `gorm:"column:default_store" json:"DefaultStore"`
-	TelegramTopicID string `gorm:"column:telegram_topic_id" json:"TelegramTopicID"`
+	ID              uint   `gorm:"primaryKey;autoIncrement;column:id" json:"ID" json:"id"`
+	Team            string `gorm:"column:team" json:"Team" json:"team"`
+	PageName        string `gorm:"column:page_name" json:"PageName" json:"pageName"`
+	TelegramValue   string `gorm:"column:telegram_value" json:"TelegramValue" json:"telegramValue"`
+	PageLogoURL     string `gorm:"column:page_logo_url" json:"PageLogoURL" json:"pageLogoUrl"`
+	DefaultStore    string `gorm:"column:default_store" json:"DefaultStore" json:"defaultStore"`
+	TelegramTopicID string `gorm:"column:telegram_topic_id" json:"TelegramTopicID" json:"telegramTopicId"`
 }
 
 type Product struct {
-	Barcode     string  `gorm:"primaryKey;column:barcode" json:"Barcode"`
-	ProductName string  `gorm:"column:product_name" json:"ProductName"`
-	Price       float64 `gorm:"column:price" json:"Price"`
-	Cost        float64 `gorm:"column:cost" json:"Cost"`
-	ImageURL    string  `gorm:"column:image_url" json:"ImageURL"`
-	Tags        string  `gorm:"column:tags" json:"Tags"`
+	Barcode     string  `gorm:"primaryKey;column:barcode" json:"Barcode" json:"barcode"`
+	ProductName string  `gorm:"column:product_name" json:"ProductName" json:"productName"`
+	Price       float64 `gorm:"column:price" json:"Price" json:"price"`
+	Cost        float64 `gorm:"column:cost" json:"Cost" json:"cost"`
+	ImageURL    string  `gorm:"column:image_url" json:"ImageURL" json:"imageUrl"`
+	Tags        string  `gorm:"column:tags" json:"Tags" json:"tags"`
 }
 type Location struct {
-	ID       uint   `gorm:"primaryKey;autoIncrement;column:id"`
-	Province string `gorm:"column:province" json:"Province"`
-	District string `gorm:"column:district" json:"District"`
-	Sangkat  string `gorm:"column:sangkat" json:"Sangkat"`
+	ID       uint   `gorm:"primaryKey;autoIncrement;column:id" json:"ID" json:"id"`
+	Province string `gorm:"column:province" json:"Province" json:"province"`
+	District string `gorm:"column:district" json:"District" json:"district"`
+	Sangkat  string `gorm:"column:sangkat" json:"Sangkat" json:"sangkat"`
 }
 type ShippingMethod struct {
-	MethodName                 string  `gorm:"primaryKey;column:method_name" json:"MethodName"`
-	LogoURL                    string  `gorm:"column:logo_url" json:"LogoURL"`
-	AllowManualDriver          bool    `gorm:"column:allow_manual_driver" json:"AllowManualDriver"`
-	RequireDriverSelection     bool    `gorm:"column:require_driver_selection" json:"RequireDriverSelection"`
-	InternalCost               float64 `gorm:"column:internal_cost" json:"InternalCost"`
-	CostShortcuts              string  `gorm:"column:cost_shortcuts" json:"CostShortcuts"`
-	EnableDriverRecommendation bool    `gorm:"column:enable_driver_recommendation" json:"EnableDriverRecommendation"`
+	MethodName                 string  `gorm:"primaryKey;column:method_name" json:"MethodName" json:"methodName"`
+	LogoURL                    string  `gorm:"column:logo_url" json:"LogoURL" json:"logoUrl"`
+	AllowManualDriver          bool    `gorm:"column:allow_manual_driver" json:"AllowManualDriver" json:"allowManualDriver"`
+	RequireDriverSelection     bool    `gorm:"column:require_driver_selection" json:"RequireDriverSelection" json:"requireDriverSelection"`
+	InternalCost               float64 `gorm:"column:internal_cost" json:"InternalCost" json:"internalCost"`
+	CostShortcuts              string  `gorm:"column:cost_shortcuts" json:"CostShortcuts" json:"costShortcuts"`
+	EnableDriverRecommendation bool    `gorm:"column:enable_driver_recommendation" json:"EnableDriverRecommendation" json:"enableDriverRecommendation"`
 }
 
 type DriverRecommendation struct {
-	ID             uint   `gorm:"primaryKey;autoIncrement;column:id" json:"ID"`
-	DayOfWeek      string `gorm:"column:day_of_week;index" json:"DayOfWeek"`
-	StoreName      string `gorm:"column:store_name;index" json:"StoreName"`
-	Province       string `gorm:"column:province" json:"Province"`
-	DriverName     string `gorm:"column:driver_name" json:"DriverName"`
-	ShippingMethod string `gorm:"column:shipping_method" json:"ShippingMethod"`
+	ID             uint   `gorm:"primaryKey;autoIncrement;column:id" json:"ID" json:"id"`
+	DayOfWeek      string `gorm:"column:day_of_week;index" json:"DayOfWeek" json:"dayOfWeek"`
+	StoreName      string `gorm:"column:store_name;index" json:"StoreName" json:"storeName"`
+	Province       string `gorm:"column:province" json:"Province" json:"province"`
+	DriverName     string `gorm:"column:driver_name" json:"DriverName" json:"driverName"`
+	ShippingMethod string `gorm:"column:shipping_method" json:"ShippingMethod" json:"shippingMethod"`
 }
 
 type Color struct {
-	ColorName string `gorm:"primaryKey;column:color_name" json:"ColorName"`
+	ColorName string `gorm:"primaryKey;column:color_name" json:"ColorName" json:"colorName"`
 }
 type Driver struct {
-	DriverName     string `gorm:"primaryKey;column:driver_name" json:"DriverName"`
-	ImageURL       string `gorm:"column:image_url" json:"ImageURL"`
-	Phone          string `gorm:"column:phone" json:"Phone"`
-	InternalCost   string `gorm:"column:internal_cost" json:"InternalCost"`
-	AssignedStores string `gorm:"column:assigned_stores" json:"AssignedStores"`
+	DriverName     string `gorm:"primaryKey;column:driver_name" json:"DriverName" json:"driverName"`
+	ImageURL       string `gorm:"column:image_url" json:"ImageURL" json:"imageUrl"`
+	Phone          string `gorm:"column:phone" json:"Phone" json:"phone"`
+	InternalCost   string `gorm:"column:internal_cost" json:"InternalCost" json:"internalCost"`
+	AssignedStores string `gorm:"column:assigned_stores" json:"AssignedStores" json:"assignedStores"`
 }
 type BankAccount struct {
 	BankName       string `gorm:"primaryKey;column:bank_name" json:"BankName"`
@@ -231,16 +231,16 @@ type UserActivityLog struct {
 }
 
 type Role struct {
-	ID          uint   `gorm:"primaryKey;autoIncrement" json:"ID"`
-	RoleName    string `gorm:"uniqueIndex" json:"RoleName"`
-	Description string `json:"Description"`
+	ID          uint   `gorm:"primaryKey;autoIncrement" json:"ID" json:"id"`
+	RoleName    string `gorm:"uniqueIndex" json:"RoleName" json:"roleName"`
+	Description string `json:"Description" json:"description"`
 }
 
 type RolePermission struct {
-	ID        uint   `gorm:"primaryKey;autoIncrement" json:"ID"`
-	Role      string `gorm:"index" json:"Role"`
-	Feature   string `gorm:"index" json:"Feature"`
-	IsEnabled bool   `json:"IsEnabled"`
+	ID        uint   `gorm:"primaryKey;autoIncrement" json:"ID" json:"id"`
+	Role      string `gorm:"index" json:"Role" json:"role"`
+	Feature   string `gorm:"index" json:"Feature" json:"feature"`
+	IsEnabled bool   `json:"IsEnabled" json:"isEnabled"`
 }
 
 type IncentiveCalculator struct {
