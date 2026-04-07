@@ -693,7 +693,16 @@ func handleGetStaticData(c *gin.Context) {
 		func() { var d []ReturnItem; DB.Find(&d); mu.Lock(); result["returns"] = d; mu.Unlock() },
 		func() { var d []Role; DB.Find(&d); mu.Lock(); result["roles"] = d; mu.Unlock() },
 		func() { var d []RolePermission; DB.Find(&d); mu.Lock(); result["rolePermissions"] = d; mu.Unlock() },
-		func() { var d []User; DB.Find(&d); mu.Lock(); result["users"] = d; mu.Unlock() },
+		func() {
+			var d []User
+			DB.Find(&d)
+			for i := range d {
+				d[i].Password = ""
+			}
+			mu.Lock()
+			result["users"] = d
+			mu.Unlock()
+		},
 		func() {
 			var d []DriverRecommendation
 			DB.Find(&d)
@@ -783,7 +792,16 @@ func handleGetAllOrders(c *gin.Context) {
 	team, _ := c.Get("team")
 	isSystemAdmin, _ := c.Get("isSystemAdmin")
 
-	isAdmin := (isSystemAdmin != nil && isSystemAdmin.(bool)) || strings.EqualFold(fmt.Sprintf("%v", role), "Admin")
+	roleString := fmt.Sprintf("%v", role)
+	isAdmin := (isSystemAdmin != nil && isSystemAdmin.(bool))
+	if !isAdmin && roleString != "" {
+		for _, r := range strings.Split(roleString, ",") {
+			if strings.EqualFold(strings.TrimSpace(r), "Admin") {
+				isAdmin = true
+				break
+			}
+		}
+	}
 
 	if !isAdmin && team != nil {
 		teams := strings.Split(fmt.Sprintf("%v", team), ",")
@@ -902,8 +920,16 @@ func handleSubmitOrder(c *gin.Context) {
 		}
 	}
 
+	// Ensure Team is never empty if the user has a team
+	finalTeam := orderRequest.SelectedTeam
+	if finalTeam == "" && orderRequest.CurrentUser.Team != "" {
+		// Take the first team if they have multiple
+		parts := strings.Split(orderRequest.CurrentUser.Team, ",")
+		finalTeam = strings.TrimSpace(parts[0])
+	}
+
 	newOrder := Order{
-		OrderID: orderID, Timestamp: timestamp, User: orderRequest.CurrentUser.UserName, Team: orderRequest.SelectedTeam,
+		OrderID: orderID, Timestamp: timestamp, User: orderRequest.CurrentUser.UserName, Team: finalTeam,
 		Page: orderRequest.Page, CustomerName: custName, CustomerPhone: custPhone, Subtotal: orderRequest.Subtotal,
 		GrandTotal: orderRequest.GrandTotal, ProductsJSON: string(productsJSON), Note: orderRequest.Note,
 		FulfillmentStore: orderRequest.FulfillmentStore, ScheduledTime: orderRequest.ScheduledTime, FulfillmentStatus: fulfillmentStatus,
