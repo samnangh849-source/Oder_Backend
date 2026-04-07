@@ -3,6 +3,7 @@ import React, { useContext, useState } from 'react';
 import { AppContext } from '../../../context/AppContext';
 import { FEATURES } from '../../../constants/permissions';
 import Spinner from '../../common/Spinner';
+import { getArrayCaseInsensitive, getValueCaseInsensitive } from '../../../constants/settingsConfig';
 
 const PermissionMatrix: React.FC = () => {
     const { appData, updatePermission, showNotification } = useContext(AppContext);
@@ -11,13 +12,15 @@ const PermissionMatrix: React.FC = () => {
     // while fetchData() races with SSE or other concurrent refreshes
     const [pendingChanges, setPendingChanges] = useState<Record<string, boolean>>({});
 
-    const roles = appData.roles || [];
-    const permissions = appData.permissions || [];
+    const rolesList = getArrayCaseInsensitive(appData, 'roles');
+    const roles = rolesList.filter((r: any) => getValueCaseInsensitive(r, 'RoleName') || getValueCaseInsensitive(r, 'Role'));
+    const permissions = getArrayCaseInsensitive(appData, 'permissions');
 
     const featureKeys = Object.values(FEATURES);
 
-    const handleToggle = async (role: string, feature: string, currentState: boolean) => {
-        const lockKey = `${role}-${feature}`;
+    const handleToggle = async (roleName: string, feature: string, currentState: boolean) => {
+        if (!roleName) return;
+        const lockKey = `${roleName}-${feature}`;
         const newValue = !currentState;
 
         // ── Optimistic update: show new value immediately ──────────────────
@@ -25,7 +28,7 @@ const PermissionMatrix: React.FC = () => {
         setPendingChanges(prev => ({ ...prev, [lockKey]: newValue }));
 
         try {
-            await updatePermission(role, feature, newValue);
+            await updatePermission(roleName, feature, newValue);
             // After API success, keep pending for 4s to let fetchData settle.
             // If fetchData returns correct data within 4s, clearing pending is fine.
             setTimeout(() => {
@@ -66,12 +69,16 @@ const PermissionMatrix: React.FC = () => {
                             <span className="text-xs text-[#848e9c] uppercase block mb-1">Access Matrix</span>
                             Feature / Role
                         </th>
-                        {roles.map(role => (
-                            <th key={role.RoleName} className="px-6 py-4 text-center font-medium text-[#eaecef] text-sm min-w-[140px] bg-[#1e2329]">
-                                <div className="text-xs text-[#848e9c] block mb-1 font-normal line-clamp-1 truncate">{role.Description}</div>
-                                {role.RoleName}
-                            </th>
-                        ))}
+                        {roles.map((role, idx) => {
+                            const roleName = getValueCaseInsensitive(role, 'RoleName') || getValueCaseInsensitive(role, 'Role');
+                            const description = getValueCaseInsensitive(role, 'Description');
+                            return (
+                                <th key={roleName || idx} className="px-6 py-4 text-center font-medium text-[#eaecef] text-sm min-w-[140px] bg-[#1e2329]">
+                                    <div className="text-xs text-[#848e9c] block mb-1 font-normal line-clamp-1 truncate">{description}</div>
+                                    {roleName}
+                                </th>
+                            );
+                        })}
                     </tr>
                 </thead>
                 <tbody className="divide-y divide-[#2b3139]">
@@ -90,23 +97,27 @@ const PermissionMatrix: React.FC = () => {
                             </td>
 
                             {/* Role Toggles */}
-                            {roles.map(role => {
-                                const lockKey = `${role.RoleName}-${feature}`;
+                            {roles.map((role, idx) => {
+                                const roleName = getValueCaseInsensitive(role, 'RoleName') || getValueCaseInsensitive(role, 'Role');
+                                const lockKey = `${roleName}-${feature}`;
                                 // ── Optimistic first, then server data ─────────────────────────
-                                const serverEnabled = permissions.find(p =>
-                                    (p.Role || '').toLowerCase() === (role.RoleName || '').toLowerCase() &&
-                                    (p.Feature || '').toLowerCase() === (feature || '').toLowerCase()
-                                )?.IsEnabled || false;
-                                
+                                const matchedPerm = permissions.find(p =>
+                                    (getValueCaseInsensitive(p, 'Role') || '').toLowerCase() === (roleName || '').toLowerCase() &&
+                                    (getValueCaseInsensitive(p, 'Feature') || '').toLowerCase() === (feature || '').toLowerCase()
+                                );
+                                const serverEnabled = matchedPerm
+                                    ? (getValueCaseInsensitive(matchedPerm, 'IsEnabled') === true)
+                                    : false;
+
                                 const isEnabled = lockKey in pendingChanges
                                     ? pendingChanges[lockKey]
                                     : serverEnabled;
 
                                 const isUpdating = updating === lockKey;
-                                const isAdminRole = (role.RoleName || '').toLowerCase() === 'admin';
+                                const isAdminRole = (roleName || '').toLowerCase() === 'admin';
 
                                 return (
-                                    <td key={lockKey} className="px-6 py-4 text-center align-middle">
+                                    <td key={lockKey || idx} className="px-6 py-4 text-center align-middle">
                                         {isAdminRole ? (
                                             <div className="flex items-center justify-center">
                                                 <div className="px-3 py-1 bg-[#2b3139] border border-[#474d57] rounded text-xs text-[#848e9c]">
@@ -115,7 +126,7 @@ const PermissionMatrix: React.FC = () => {
                                             </div>
                                         ) : (
                                             <button
-                                                onClick={() => handleToggle(role.RoleName, feature, isEnabled)}
+                                                onClick={() => handleToggle(roleName, feature, isEnabled)}
                                                 disabled={isUpdating}
                                                 className={`relative inline-flex h-6 w-11 items-center rounded-full transition-all duration-300 focus:outline-none ${
                                                     isEnabled ? 'bg-[#fcd535]' : 'bg-[#2b3139]'

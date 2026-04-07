@@ -148,12 +148,24 @@ func AdminOnlyMiddleware() gin.HandlerFunc {
 		isAdminBool, okAdmin := isSystemAdmin.(bool)
 		roleString, okRole := role.(string)
 
-		if (!exists || !okAdmin || !isAdminBool) && (!roleExists || !okRole || roleString != "Admin") {
-			c.JSON(http.StatusForbidden, gin.H{"status": "error", "message": "គ្មានសិទ្ធិអនុញ្ញាត (Forbidden)"})
-			c.Abort()
+		// Check IsSystemAdmin flag
+		if exists && okAdmin && isAdminBool {
+			c.Next()
 			return
 		}
-		c.Next()
+
+		// Check if any comma-separated role is "Admin"
+		if roleExists && okRole && roleString != "" {
+			for _, r := range strings.Split(roleString, ",") {
+				if strings.EqualFold(strings.TrimSpace(r), "Admin") {
+					c.Next()
+					return
+				}
+			}
+		}
+
+		c.JSON(http.StatusForbidden, gin.H{"status": "error", "message": "គ្មានសិទ្ធិអនុញ្ញាត (Forbidden)"})
+		c.Abort()
 	}
 }
 
@@ -169,34 +181,57 @@ func RequirePermission(feature string) gin.HandlerFunc {
 			return
 		}
 
-		if okRole && roleString == "Admin" {
-			c.Next()
-			return
-		}
 		if !okRole || roleString == "" {
 			c.JSON(http.StatusForbidden, gin.H{"status": "error", "message": "អ្នកមិនមានសិទ្ធិសម្រាប់មុខងារនេះទេ (" + feature + ")"})
 			c.Abort()
 			return
 		}
 
-		var perm RolePermission
-		result := DB.Where("LOWER(role) = ? AND LOWER(feature) = ?", strings.ToLower(roleString), strings.ToLower(feature)).First(&perm)
-
-		if result.Error != nil || !perm.IsEnabled {
-			c.JSON(http.StatusForbidden, gin.H{"status": "error", "message": "អ្នកមិនមានសិទ្ធិសម្រាប់មុខងារនេះទេ (" + feature + ")"})
-			c.Abort()
-			return
+		// Split comma-separated roles and check each individually
+		roles := strings.Split(roleString, ",")
+		for _, r := range roles {
+			r = strings.TrimSpace(r)
+			if strings.EqualFold(r, "Admin") {
+				c.Next()
+				return
+			}
 		}
 
-		c.Next()
+		// Query permission for each role until a match is found
+		featureLower := strings.ToLower(feature)
+		for _, r := range roles {
+			r = strings.TrimSpace(r)
+			var perm RolePermission
+			result := DB.Where("LOWER(role) = ? AND LOWER(feature) = ?", strings.ToLower(r), featureLower).First(&perm)
+			if result.Error == nil && perm.IsEnabled {
+				c.Next()
+				return
+			}
+		}
+
+		c.JSON(http.StatusForbidden, gin.H{"status": "error", "message": "អ្នកមិនមានសិទ្ធិសម្រាប់មុខងារនេះទេ (" + feature + ")"})
+		c.Abort()
 	}
 }
 
 func HasPermissionInternal(role string, isSystemAdmin bool, feature string) bool {
-	if isSystemAdmin || role == "Admin" {
+	if isSystemAdmin {
 		return true
 	}
-	var perm RolePermission
-	result := DB.Where("LOWER(role) = ? AND LOWER(feature) = ?", strings.ToLower(role), strings.ToLower(feature)).First(&perm)
-	return result.Error == nil && perm.IsEnabled
+
+	roles := strings.Split(role, ",")
+	featureLower := strings.ToLower(feature)
+
+	for _, r := range roles {
+		r = strings.TrimSpace(r)
+		if strings.EqualFold(r, "Admin") {
+			return true
+		}
+		var perm RolePermission
+		result := DB.Where("LOWER(role) = ? AND LOWER(feature) = ?", strings.ToLower(r), featureLower).First(&perm)
+		if result.Error == nil && perm.IsEnabled {
+			return true
+		}
+	}
+	return false
 }

@@ -25,22 +25,21 @@ export interface ConfigSection {
 }
 
 export const configSections: ConfigSection[] = [
-    { 
-        id: 'roles', 
-        title: 'តួនាទី (Roles)', 
+    {
+        id: 'roles',
+        title: 'តួនាទី (Roles)',
         description: 'គ្រប់គ្រងប្រភេទតួនាទីក្នុងប្រព័ន្ធ',
-        icon: '🎭', 
-        dataKey: 'roles', 
-        sheetName: 'Roles', 
-        primaryKeyField: 'id', 
-        fields: [ 
-            { name: 'id', label: 'ID', type: 'text', readOnly: true, placeholder: 'ស្វ័យប្រវត្តិ (Auto)' },
-            { name: 'roleName', label: 'ឈ្មោះតួនាទី', type: 'text', placeholder: 'ឧទាហរណ៍៖ Admin, Sales, Fulfillment, ...' }, 
-            { name: 'description', label: 'ការពន្យល់', type: 'text', placeholder: 'ឧទាហរណ៍៖ បុគ្គលិកផ្នែកលក់ ឬ អ្នកគ្រប់គ្រង...' } 
-        ], 
-        displayField: 'roleName' 
-    },
-    { 
+        icon: '🎭',
+        dataKey: 'roles',
+        sheetName: 'Roles',
+        primaryKeyField: 'ID',
+        fields: [
+            { name: 'ID', label: 'ID', type: 'text', readOnly: true, placeholder: 'ស្វ័យប្រវត្តិ (Auto)' },
+            { name: 'RoleName', label: 'ឈ្មោះតួនាទី', type: 'text', placeholder: 'ឧទាហរណ៍៖ Admin, Sales, Fulfillment, ...' },
+            { name: 'Description', label: 'ការពន្យល់', type: 'text', placeholder: 'ឧទាហរណ៍៖ បុគ្គលិកផ្នែកលក់ ឬ អ្នកគ្រប់គ្រង...' }
+        ],
+        displayField: 'RoleName'
+    },    { 
         id: 'users', 
         title: 'អ្នកប្រើប្រាស់', 
         description: 'គ្រប់គ្រងគណនីបុគ្គលិក និងសិទ្ធិប្រើប្រាស់',

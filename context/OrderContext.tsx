@@ -51,15 +51,29 @@ export const OrderProvider: React.FC<{ children: React.ReactNode }> = ({ childre
             const headers: HeadersInit = { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` };
 
             const response = await fetch(`${WEB_APP_URL}/api/static-data`, { headers });
+            
+            // Handle 401 Unauthorized globally
+            if (response.status === 401) {
+                console.warn("Session expired during static-data fetch. Redirecting...");
+                handleUnauthorized();
+                return;
+            }
+
             if (response.ok) {
                 const result = await response.json();
                 if (result.status === 'success') {
-                    const mappedData = { ...result.data };
-                    // Fix: Backend sends rolePermissions, Frontend expects permissions
-                    if (mappedData.rolePermissions) {
-                        mappedData.permissions = mappedData.rolePermissions;
+                    // Normalize all keys to lowercase to avoid case-sensitivity issues (e.g., Users vs users)
+                    const normalizedData: any = {};
+                    if (result.data && typeof result.data === 'object') {
+                        Object.keys(result.data).forEach(key => {
+                            let targetKey = key.toLowerCase();
+                            // Special case: Backend sends rolePermissions, Frontend expects permissions
+                            if (targetKey === 'rolepermissions') targetKey = 'permissions';
+                            normalizedData[targetKey] = result.data[key];
+                        });
                     }
-                    setAppData(prev => ({ ...prev, ...mappedData }));
+                    
+                    setAppData(prev => ({ ...prev, ...normalizedData }));
                 }
             }
         } catch (e) {
@@ -80,7 +94,12 @@ export const OrderProvider: React.FC<{ children: React.ReactNode }> = ({ childre
 
             const response = await fetch(endpoint, { headers });
             
-            if (response.status === 401) return;
+            // Handle 401 Unauthorized globally
+            if (response.status === 401) {
+                console.warn("Session expired during orders fetch. Redirecting...");
+                handleUnauthorized();
+                return;
+            }
 
             if (response.ok) {
                 const result = await response.json();
@@ -114,6 +133,41 @@ export const OrderProvider: React.FC<{ children: React.ReactNode }> = ({ childre
     const refreshData = useCallback(async () => {
         await Promise.all([fetchData(true), fetchOrders(true)]);
     }, [fetchData, fetchOrders]);
+
+    // --- Background Polling (Every 5 minutes) ---
+    useEffect(() => {
+        if (!currentUser) return;
+        
+        const POLLING_INTERVAL = 5 * 60 * 1000; // 5 minutes
+        const interval = setInterval(() => {
+            console.log("[OrderContext] Background polling triggered...");
+            refreshData();
+        }, POLLING_INTERVAL);
+
+        return () => clearInterval(interval);
+    }, [currentUser, refreshData]);
+
+    // --- Midnight Transition Watcher ---
+    // Updates refreshTimestamp when the day changes to force dynamic date filters (like "Today") to recalculate
+    useEffect(() => {
+        let timeoutId: any;
+        
+        const checkMidnight = () => {
+            const now = new Date();
+            const tomorrow = new Date(now.getFullYear(), now.getMonth(), now.getDate() + 1);
+            const timeUntilMidnight = tomorrow.getTime() - now.getTime();
+            
+            timeoutId = setTimeout(() => {
+                console.log("[OrderContext] Midnight transition detected. Refreshing data...");
+                setRefreshTimestamp(Date.now());
+                refreshData();
+                checkMidnight(); // Re-schedule for next day
+            }, timeUntilMidnight + 1000); // Buffer of 1s
+        };
+        
+        checkMidnight();
+        return () => clearTimeout(timeoutId);
+    }, [refreshData]);
 
     return (
         <OrderContext.Provider value={{

@@ -15,11 +15,7 @@ import (
 var HubGlobal *Hub
 
 var Upgrader = websocket.Upgrader{
-	CheckOrigin: func(r *http.Request) bool {
-		// Allow all origins for the prototype to avoid CORS issues between
-		// different hosting providers (e.g. GitHub Pages frontend -> Render backend).
-		return true
-	},
+	CheckOrigin: isOriginAllowed,
 }
 
 const (
@@ -39,8 +35,9 @@ func isOriginAllowed(r *http.Request) bool {
 	}
 	allowedRaw := os.Getenv("ALLOWED_WS_ORIGINS")
 	if strings.TrimSpace(allowedRaw) == "" {
-		// Default to same-host only when no explicit allowlist is configured.
-		return strings.EqualFold(originURL.Host, r.Host)
+		// For prototypes, default to true if no explicit allowlist is configured.
+		// Change this to 'return strings.EqualFold(originURL.Host, r.Host)' for production.
+		return true
 	}
 	for _, item := range strings.Split(allowedRaw, ",") {
 		allowed := strings.TrimSpace(item)

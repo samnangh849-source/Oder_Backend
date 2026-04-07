@@ -62,7 +62,6 @@ type SyncTask struct {
 
 var (
 	SyncQueue = make(chan *SyncTask, 1000)
-	DB        *gorm.DB
 
 	// Deduplication map for updateSheet actions
 	// Key: sheetName + primaryKey values

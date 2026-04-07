@@ -103,7 +103,7 @@ const DesktopAdminDashboard: React.FC<{ isTablet?: boolean }> = ({ isTablet }) =
             }
             return d.toDateString() === now.toDateString();
         });
-    }, [orders, dateFilter]);
+    }, [orders, dateFilter, refreshTimestamp]);
 
     const teamRevenueStats = useMemo(() => {
         const stats: Record<string, { name: string, revenue: number, orders: number }> = {};
@@ -230,6 +230,7 @@ const DesktopAdminDashboard: React.FC<{ isTablet?: boolean }> = ({ isTablet }) =
                             onProvinceClick={(p) => navigateToOrders('location', p)}
                             onStoreClick={(s) => navigateToOrders('store', s)}
                             onBrandClick={(b) => navigateToOrders('brand', b)}
+                            refreshTimestamp={refreshTimestamp}
                         />
                     );
                 }

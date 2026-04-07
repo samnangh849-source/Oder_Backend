@@ -126,7 +126,8 @@ function doPost(e) {
                  const idIdx = hdrs.indexOf(normalizeKey("Order ID"));
                  const teamIdx = hdrs.indexOf(normalizeKey("Team"));
                  if (idIdx !== -1 && teamIdx !== -1) {
-                   for (let i = 1; i < vals.length; i++) {
+                   // Search from the bottom as new orders are appended
+                   for (let i = vals.length - 1; i >= 1; i--) {
                      if (normalizeKey(vals[i][idIdx]) === normalizeKey(orderId)) {
                        team = String(vals[i][teamIdx]).trim();
                        break;
@@ -534,9 +535,14 @@ function uploadImageToDrive(base64Data, fileName, mimeType, folderID, userName) 
     const decodedData = Utilities.base64Decode(base64Data);
     const blob = Utilities.newBlob(decodedData, mimeType, fileName);
     const file = folder.createFile(blob);
-    // REMOVED: file.setSharing(DriveApp.Access.ANYONE_WITH_LINK, DriveApp.Permission.VIEW);
-    // Reason: Some organizational policies or Shared Drives restrict public link creation, 
-    // causing an "Access denied: DriveApp" error even if the file was created.
+    
+    // Attempt to set public view access, but don't fail if it's restricted
+    try {
+      file.setSharing(DriveApp.Access.ANYONE_WITH_LINK, DriveApp.Permission.VIEW);
+      console.log("🔓 [uploadImageToDrive] Sharing set to ANYONE_WITH_LINK");
+    } catch (e) {
+      console.warn("⚠️ [uploadImageToDrive] Could not set sharing: " + e.message + ". The file was created but may require manual access settings.");
+    }
 
     return {
       url: file.getUrl(),

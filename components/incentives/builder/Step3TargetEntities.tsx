@@ -1,6 +1,7 @@
 import React from 'react';
 import { IncentiveCalculator, AppData } from '../../../types';
 import { MousePointer2, Target, Users, ShieldCheck, Box } from 'lucide-react';
+import { getArrayCaseInsensitive, getValueCaseInsensitive } from '../../../constants/settingsConfig';
 
 interface Step3TargetEntitiesProps {
     calcData: Partial<IncentiveCalculator>;
@@ -10,6 +11,8 @@ interface Step3TargetEntitiesProps {
 }
 
 const Step3TargetEntities: React.FC<Step3TargetEntitiesProps> = ({ calcData, appData, updateField, toggleApplyTo }) => {
+    const roles = getArrayCaseInsensitive(appData, 'roles');
+
     return (
         <div className="space-y-10">
             <div className="flex items-center gap-4 border-b border-[#1A1A1A] pb-6">
@@ -35,16 +38,19 @@ const Step3TargetEntities: React.FC<Step3TargetEntitiesProps> = ({ calcData, app
                                 Roles_Protocol
                             </span>
                             <div className="flex flex-wrap gap-2">
-                                {appData.roles?.map(r => (
-                                    <button 
-                                        key={r.RoleName} 
-                                        type="button" 
-                                        onClick={() => toggleApplyTo(`Role:${r.RoleName}`)} 
-                                        className={`px-3 py-1.5 rounded text-[10px] font-bold border transition-all uppercase tracking-widest ${calcData.applyTo?.includes(`Role:${r.RoleName}`) ? 'bg-[#F0B90B] text-black border-[#F0B90B] shadow-lg shadow-[#F0B90B]/10' : 'bg-[#121212] border-[#1A1A1A] text-[#707A8A] hover:text-[#EAECEF]'}`}
-                                    >
-                                        {r.RoleName}
-                                    </button>
-                                ))}
+                                {roles.map((r, idx) => {
+                                    const roleName = getValueCaseInsensitive(r, 'RoleName') || getValueCaseInsensitive(r, 'Role');
+                                    return (
+                                        <button 
+                                            key={roleName || idx} 
+                                            type="button" 
+                                            onClick={() => toggleApplyTo(`Role:${roleName}`)} 
+                                            className={`px-3 py-1.5 rounded text-[10px] font-bold border transition-all uppercase tracking-widest ${calcData.applyTo?.includes(`Role:${roleName}`) ? 'bg-[#F0B90B] text-black border-[#F0B90B] shadow-lg shadow-[#F0B90B]/10' : 'bg-[#121212] border-[#1A1A1A] text-[#707A8A] hover:text-[#EAECEF]'}`}
+                                        >
+                                            {roleName}
+                                        </button>
+                                    );
+                                })}
                             </div>
                         </div>
                         <div className="space-y-3 pt-4 border-t border-[#1A1A1A]">

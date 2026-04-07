@@ -43,9 +43,9 @@ const ConfigEditModal: React.FC<ConfigEditModalProps> = ({ section, item, onClos
         } else {
             const defaultData = section.fields.reduce((acc, field) => {
                 // Special case for Role ID (Auto-suggest next ID)
-                if (section.id === 'roles' && field.name === 'id') {
-                    const roles = appData.roles || [];
-                    const maxId = roles.reduce((max: number, r: any) => Math.max(max, Number(r.id) || 0), 0);
+                if (section.id === 'roles' && field.name === 'ID') {
+                    const roles = getArrayCaseInsensitive(appData, 'roles');
+                    const maxId = roles.reduce((max: number, r: any) => Math.max(max, Number(getValueCaseInsensitive(r, 'ID')) || 0), 0);
                     acc[field.name] = maxId + 1;
                 } else {
                     acc[field.name] = field.type === 'checkbox' ? false : field.type === 'number' ? 0 : '';
@@ -54,7 +54,7 @@ const ConfigEditModal: React.FC<ConfigEditModalProps> = ({ section, item, onClos
             }, {} as any);
             setFormData(defaultData);
         }
-    }, [item, section, appData.roles]);
+    }, [item, section, appData]);
 
     const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
         const { name, value, type } = e.target;
@@ -70,10 +70,13 @@ const ConfigEditModal: React.FC<ConfigEditModalProps> = ({ section, item, onClos
             if (field.dataRef === 'locations') return Array.from(new Set(data.map((l: any) => l.Province))).map(p => ({ label: p as string, value: p as string }));
             if (field.dataRef === 'drivers') return data.map((d: any) => ({ label: d.DriverName, value: d.DriverName }));
             if (field.dataRef === 'shippingMethods') return data.map((m: any) => ({ label: m.MethodName, value: m.MethodName }));
-            if (field.dataRef === 'roles') return data.map((r: any) => ({ label: r.RoleName, value: r.RoleName }));
+            if (field.dataRef === 'roles') return data.map((r: any) => {
+                const name = getValueCaseInsensitive(r, 'RoleName') || getValueCaseInsensitive(r, 'Role');
+                return { label: name, value: name };
+            });
             if (field.dataRef === 'pages') {
-                const teams = Array.from(new Set(data.map((p: any) => p.Team))).filter(Boolean);
-                return teams.map(t => ({ label: t as string, value: t as string }));
+                const teams = Array.from(new Set(data.map((p: any) => getValueCaseInsensitive(p, 'Team')))).filter(Boolean);
+                return teams.map(t => ({ label: String(t), value: String(t) }));
             }
         }
         return [];

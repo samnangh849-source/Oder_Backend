@@ -804,12 +804,10 @@ func PerformDataMigration() {
 		return
 	}
 	var validRoles []Role
-	seenRoles := make(map[uint]bool)
+	seenRoles := make(map[string]bool)
 	for _, x := range roles {
-		if !seenRoles[x.ID] {
-			if x.ID != 0 {
-				seenRoles[x.ID] = true
-			}
+		if x.RoleName != "" && !seenRoles[x.RoleName] {
+			seenRoles[x.RoleName] = true
 			validRoles = append(validRoles, x)
 		}
 	}
@@ -970,6 +968,8 @@ func PerformDataMigration() {
 	if err := tx.Commit().Error; err != nil {
 		log.Println("❌ Migration failed on commit:", err)
 	} else {
+		// Ensure essential roles exist even if sheet was empty
+		EnsureSeedData()
 		log.Println("🎉 Migration ជោគជ័យ!")
 	}
 }

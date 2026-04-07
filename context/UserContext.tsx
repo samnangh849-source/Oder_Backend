@@ -19,18 +19,20 @@ export const UserProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
     const hasPermission = useCallback((feature: string) => {
         if (!currentUser) return false;
-        
+
         // Superusers (IsSystemAdmin or Role: Admin) have all permissions
         const userRoles = (currentUser.Role || '').split(',').map(r => r.trim().toLowerCase());
         if (currentUser.IsSystemAdmin || userRoles.includes('admin')) return true;
-        
+
         if (!currentUser.Permissions || !Array.isArray(currentUser.Permissions)) return false;
-        
-        // Normalized match (case-insensitive)
+
+        // Normalized match (case-insensitive for both feature name and enabled state)
         const targetFeature = feature.toLowerCase();
-        return currentUser.Permissions.some((p: any) => 
-            (p.Feature || '').toLowerCase() === targetFeature && p.IsEnabled
-        );
+        return currentUser.Permissions.some((p: any) => {
+            const feat = (p.Feature || p.feature || '').toLowerCase();
+            const enabled = p.IsEnabled ?? p.isEnabled ?? p.is_enabled ?? false;
+            return feat === targetFeature && enabled === true;
+        });
     }, [currentUser]);
 
     const logout = useCallback(() => {

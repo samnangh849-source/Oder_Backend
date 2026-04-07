@@ -694,6 +694,16 @@ func handleGetStaticData(c *gin.Context) {
 		func() { var d []Role; DB.Find(&d); mu.Lock(); result["roles"] = d; mu.Unlock() },
 		func() { var d []RolePermission; DB.Find(&d); mu.Lock(); result["rolePermissions"] = d; mu.Unlock() },
 		func() {
+			var d []User
+			DB.Find(&d)
+			for i := range d {
+				d[i].Password = ""
+			}
+			mu.Lock()
+			result["users"] = d
+			mu.Unlock()
+		},
+		func() {
 			var d []DriverRecommendation
 			DB.Find(&d)
 			mu.Lock()
@@ -1049,12 +1059,12 @@ func handleAdminUpdateOrder(c *gin.Context) {
 		}
 	}
 
-	if ObjectSize(mappedData) == 0 && !forceSync {
+	if len(mappedData) == 0 && !forceSync {
 		c.JSON(200, gin.H{"status": "success", "message": "No changes to update"})
 		return
 	}
 
-	if ObjectSize(mappedData) > 0 {
+	if len(mappedData) > 0 {
 		if err := DB.Model(&Order{}).Where("UPPER(TRIM(order_id)) = UPPER(TRIM(?))", r.OrderID).Updates(mappedData).Error; err != nil {
 			c.Error(err)
 			return
@@ -1190,6 +1200,14 @@ func handleAdminUpdateSheet(c *gin.Context) {
 			continue
 		}
 
+		// Hashing password if updating users table
+		if tableName == "users" && dbCol == "password" && v != "" {
+			hashed, err := bcrypt.GenerateFromPassword([]byte(fmt.Sprintf("%v", v)), bcrypt.DefaultCost)
+			if err == nil {
+				v = string(hashed)
+			}
+		}
+
 		mappedData[dbCol] = v
 	}
 
@@ -1238,7 +1256,15 @@ func handleAdminAddRow(c *gin.Context) {
 	if tableName != "" {
 		mappedData := make(map[string]interface{})
 		for k, v := range req.NewData {
-			mappedData[mapToDBColumn(k)] = v
+			colName := mapToDBColumn(k)
+			// Hashing password if adding to users table
+			if tableName == "users" && colName == "password" && v != "" {
+				hashed, err := bcrypt.GenerateFromPassword([]byte(fmt.Sprintf("%v", v)), bcrypt.DefaultCost)
+				if err == nil {
+					v = string(hashed)
+				}
+			}
+			mappedData[colName] = v
 		}
 		DB.Table(tableName).Create(mappedData)
 	}
@@ -1274,14 +1300,32 @@ func handleAdminDeleteRow(c *gin.Context) {
 		return
 	}
 
-	if req.SheetName == "Roles" && strings.EqualFold(fmt.Sprintf("%v", pkVal), "Admin") {
-		c.JSON(403, gin.H{"status": "error", "message": "មិនអាចលុបតួនាទី Admin បានទេ"})
-		return
+	// ── Roles guard: prevent deleting Admin role (check by RoleName in DB) ──
+	if req.SheetName == "Roles" {
+		var role Role
+		if err := DB.Table("roles").Where(pkCol+" = ?", pkVal).First(&role).Error; err == nil {
+			if strings.EqualFold(role.RoleName, "Admin") {
+				c.JSON(403, gin.H{"status": "error", "message": "មិនអាចលុបតួនាទី Admin បានទេ (Cannot delete Admin role)"})
+				return
+			}
+		}
+	}
+
+	// ── Users guard: prevent deleting Admin user ──
+	if req.SheetName == "Users" {
+		if strings.EqualFold(fmt.Sprintf("%v", pkVal), "admin") {
+			c.JSON(403, gin.H{"status": "error", "message": "មិនអាចលុបអ្នកប្រើប្រាស់ Admin បានទេ (Cannot delete Admin user)"})
+			return
+		}
 	}
 
 	tableName := getTableName(req.SheetName)
 	if tableName != "" {
-		DB.Table(tableName).Where(pkCol+" = ?", pkVal).Delete(nil)
+		// Use map model so GORM executes DELETE without needing a struct with primary key
+		if err := DB.Table(tableName).Where(pkCol+" = ?", pkVal).Delete(map[string]interface{}{}).Error; err != nil {
+			c.JSON(500, gin.H{"status": "error", "message": "Delete operation failed: " + err.Error()})
+			return
+		}
 	}
 
 	strPrimaryKey := make(map[string]string)
@@ -1799,8 +1843,12 @@ func main() {
 		go startOrderWorker()
 		startScheduler()
 		backend.CreateGoogleAPIClient(context.Background())
-		log.Println("🚀 Starting automatic data migration on startup...")
-		backend.PerformDataMigration()
+		if os.Getenv("AUTO_MIGRATE") == "true" {
+			log.Println("🚀 Starting automatic data migration on startup...")
+			backend.PerformDataMigration()
+		} else {
+			log.Println("ℹ️ Automatic migration skipped on startup. Set AUTO_MIGRATE=true if you want to wipe and re-sync DB from Sheets.")
+		}
 	}()
 
 	r := gin.Default()

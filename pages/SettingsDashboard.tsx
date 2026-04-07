@@ -63,7 +63,7 @@ const SettingsDashboard: React.FC<SettingsDashboardProps> = ({ onBack, initialSe
 
         setIsLoading(true);
         try {
-            // Priority 1: Check AppData first
+            // Priority 1: Check AppData first (skip only if we have real data)
             const appDataList = getArrayCaseInsensitive(appData, section.dataKey);
             if (appDataList.length > 0) {
                 setLocalData(appDataList);
@@ -77,14 +77,32 @@ const SettingsDashboard: React.FC<SettingsDashboardProps> = ({ onBack, initialSe
             const headers: HeadersInit = {};
             if (token) headers['Authorization'] = `Bearer ${token}`;
 
-            // Mapping section IDs to their corresponding API endpoints
-            const staticDataSections = ['pages', 'products', 'shippingMethods', 'drivers', 'bankAccounts', 'phoneCarriers', 'driverRecommendations'];
-            const endpoint = staticDataSections.includes(sectionId) ? 'static-data' : (sectionId === 'systemSettings' ? 'settings' : sectionId);
+            // Sections served by /api/static-data (returns all data in one call)
+            const staticDataSections = ['pages', 'products', 'shippingMethods', 'drivers',
+                'bankAccounts', 'phoneCarriers', 'driverRecommendations', 'roles', 'users',
+                'stores', 'colors', 'locations', 'inventory', 'stockTransfers'];
+
+            let endpoint: string;
+            if (staticDataSections.includes(sectionId)) {
+                endpoint = 'static-data';
+            } else if (sectionId === 'systemSettings') {
+                endpoint = 'settings';
+            } else {
+                endpoint = sectionId;
+            }
+
             const res = await fetch(`${WEB_APP_URL}/api/${endpoint}`, { headers });
             if (res.ok) {
                 const json = await res.json();
                 if (json.status === 'success') {
-                    const data = Array.isArray(json.data) ? json.data : (json.data?.[section.dataKey] || []);
+                    // static-data returns { data: { roles: [...], products: [...], ... } }
+                    // Direct endpoints return { data: [...] }
+                    let data: any[];
+                    if (endpoint === 'static-data') {
+                        data = getArrayCaseInsensitive(json.data, section.dataKey);
+                    } else {
+                        data = Array.isArray(json.data) ? json.data : [];
+                    }
                     setLocalData(data);
                 }
             }

@@ -13,11 +13,18 @@ import (
 )
 
 func HandleGetRoles(c *gin.Context) {
-	var roles []Role
+	roles := []Role{}
 	if err := DB.Find(&roles).Error; err != nil {
-		c.Error(err)
+		c.JSON(http.StatusInternalServerError, gin.H{"status": "error", "message": err.Error()})
 		return
 	}
+	
+	if len(roles) == 0 {
+		// Auto-seed if empty
+		EnsureSeedData()
+		DB.Find(&roles)
+	}
+	
 	c.JSON(http.StatusOK, gin.H{"status": "success", "data": roles})
 }
 
@@ -72,9 +79,9 @@ func HandleCreateRole(c *gin.Context) {
 }
 
 func HandleGetAllPermissions(c *gin.Context) {
-	var permissions []RolePermission
+	permissions := []RolePermission{}
 	if err := DB.Find(&permissions).Error; err != nil {
-		c.Error(err)
+		c.JSON(http.StatusInternalServerError, gin.H{"status": "error", "message": err.Error()})
 		return
 	}
 	c.JSON(http.StatusOK, gin.H{"status": "success", "data": permissions})
@@ -82,11 +89,26 @@ func HandleGetAllPermissions(c *gin.Context) {
 
 func HandleGetUserPermissions(c *gin.Context) {
 	role, _ := c.Get("role")
-	var permissions []RolePermission
+	permissions := []RolePermission{}
 
-	roleStr := strings.ToLower(fmt.Sprintf("%v", role))
-	if err := DB.Where("LOWER(role) = ?", roleStr).Find(&permissions).Error; err != nil {
-		c.Error(err)
+	roleStr := fmt.Sprintf("%v", role)
+	// Split comma-separated roles and query permissions for all of them
+	roleParts := strings.Split(roleStr, ",")
+	var trimmedRoles []string
+	for _, r := range roleParts {
+		r = strings.TrimSpace(strings.ToLower(r))
+		if r != "" {
+			trimmedRoles = append(trimmedRoles, r)
+		}
+	}
+
+	if len(trimmedRoles) == 0 {
+		c.JSON(http.StatusOK, gin.H{"status": "success", "data": permissions})
+		return
+	}
+
+	if err := DB.Where("LOWER(role) IN ?", trimmedRoles).Find(&permissions).Error; err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"status": "error", "message": err.Error()})
 		return
 	}
 	c.JSON(http.StatusOK, gin.H{"status": "success", "data": permissions})

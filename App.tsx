@@ -165,8 +165,22 @@ const AppContent: React.FC = () => {
     }, [currentUser]);
 
     const tokenRef = useRef<string | null>(null);
+
+    // --- WebSocket Data Sync ---
+    useEffect(() => {
+        if (lastMessage && lastMessage.type === 'new_order') {
+            console.log("[App] WebSocket: New order detected. Refreshing data...");
+            fetchOrders(true); // Background sync
+        }
+    }, [lastMessage, fetchOrders]);
+
     const isMobile = window.innerWidth < 768;
-    const isAdmin = useMemo(() => currentUser?.IsSystemAdmin || (currentUser?.Role && currentUser.Role.toLowerCase() === 'admin'), [currentUser]);
+    const isAdmin = useMemo(() => {
+        if (!currentUser) return false;
+        if (currentUser.IsSystemAdmin) return true;
+        const userRoles = (currentUser.Role || '').split(',').map(r => r.trim().toLowerCase());
+        return userRoles.includes('admin');
+    }, [currentUser]);
 
     // --- SYNC SETTINGS ---
     useEffect(() => { localStorage.setItem('language', language); }, [language]);
@@ -192,20 +206,23 @@ const AppContent: React.FC = () => {
 
     // --- PERMISSION REFRESH ---
     useEffect(() => {
+        // Only refresh if appData.permissions actually has data to avoid clearing during initial load
         if (currentUser && appData?.permissions && Array.isArray(appData.permissions) && appData.permissions.length > 0) {
             // Split user roles (e.g. "Manager, Driver") and normalize to lowercase
             const userRoles = (currentUser.Role || '').split(',').map(r => r.trim().toLowerCase());
             
             // Filter all permissions that match any of the user's roles (case-insensitive)
-            const matchedPerms = appData.permissions.filter(p =>
-                userRoles.includes((p.Role || '').toLowerCase())
-            );
+            const matchedPerms = appData.permissions.filter(p => {
+                const role = (p.Role || p.role || '').toLowerCase();
+                return userRoles.includes(role);
+            });
 
-            // Deduplicate: If multiple roles define the same feature, priorize IsEnabled: true
+            // Deduplicate: If multiple roles define the same feature, prioritize IsEnabled: true
             const mergedPermsMap: Record<string, any> = {};
             matchedPerms.forEach(p => {
-                const feature = (p.Feature || '').toLowerCase();
-                if (!mergedPermsMap[feature] || p.IsEnabled) {
+                const feature = (p.Feature || p.feature || '').toLowerCase();
+                const enabled = p.IsEnabled ?? p.isEnabled ?? p.is_enabled ?? false;
+                if (!mergedPermsMap[feature] || enabled) {
                     mergedPermsMap[feature] = p;
                 }
             });
@@ -217,8 +234,8 @@ const AppContent: React.FC = () => {
                 if (currentPermsStr !== nextPermsStr) {
                     setCurrentUser(prev => prev ? { ...prev, Permissions: rolePerms } : null);
                 }
-            } else if ((currentUser.Permissions || []).length > 0 && !isAdmin) {
-                // Only clear if we actually have data but none match
+            } else if ((currentUser.Permissions || []).length > 0 && !isAdmin && appData.permissions.length > 5) {
+                // Only clear if we actually have a significant amount of data but none match
                 setCurrentUser(prev => prev ? { ...prev, Permissions: [] } : null);
             }
         }
@@ -350,7 +367,7 @@ const AppContent: React.FC = () => {
                 const response = await fetch(`${WEB_APP_URL}/api/admin/permissions`, {
                     method: 'POST',
                     headers,
-                    body: JSON.stringify([{ role, feature, isEnabled }])
+                    body: JSON.stringify([{ Role: role, Feature: feature, IsEnabled: isEnabled }])
                 });
                 if (response.ok) {
                     await fetchData(true);

@@ -29,13 +29,15 @@ interface DashboardOverviewProps {
     onProvinceClick: (province: string) => void;
     onStoreClick: (store: string) => void;
     onBrandClick: (brand: string) => void;
+    refreshTimestamp: number;
 }
 
 const DashboardOverview: React.FC<DashboardOverviewProps> = ({
     currentUser, parsedOrders, 
     dateFilter, setDateFilter,
     teamRevenueStats, provinceStats, storeStats, brandStats,
-    onTeamClick, onProvinceClick, onStoreClick, onBrandClick
+    onTeamClick, onProvinceClick, onStoreClick, onBrandClick,
+    refreshTimestamp
 }) => {
     // Note: We intentionally do NOT set a mobile page title here.
     // The requirement is to show the App Logo for the Dashboard view.
@@ -72,7 +74,7 @@ const DashboardOverview: React.FC<DashboardOverviewProps> = ({
             return true;
         }
         return true; // Fallback
-    });
+    }, [parsedOrders, dateFilter, refreshTimestamp]);
 
     const metrics = {
         revenue: filteredMetricsOrders.reduce((sum, o) => sum + (Number(o['Grand Total']) || 0), 0),
