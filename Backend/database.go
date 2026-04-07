@@ -1,192 +1,250 @@
 package backend
 
 import (
-	"encoding/json"
-	"fmt"
-	"io"
+	"encoding/base64"
 	"log"
-	"net/http"
+	"net/url"
+	"os"
+	"strconv"
 	"strings"
+	"time"
 
-	"github.com/gin-gonic/gin"
+	"gorm.io/driver/postgres"
 	"gorm.io/gorm"
+	"gorm.io/gorm/logger"
+	"golang.org/x/crypto/bcrypt"
 )
 
-func HandleGetRoles(c *gin.Context) {
-	var roles []Role
-	if err := DB.Find(&roles).Error; err != nil {
-		c.Error(err)
-		return
-	}
-	
-	if len(roles) == 0 {
-		// Auto-seed if empty
-		EnsureSeedData()
-		DB.Find(&roles)
-	}
-	
-	c.JSON(http.StatusOK, gin.H{"status": "success", "data": roles})
-}
+var DB *gorm.DB
 
-func HandleCreateRole(c *gin.Context) {
-	var req Role
-	if err := c.ShouldBindJSON(&req); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"status": "error", "message": "ទិន្នន័យមិនត្រឹមត្រូវ: " + err.Error()})
-		return
-	}
-
-	if req.RoleName == "" {
-		c.JSON(http.StatusBadRequest, gin.H{"status": "error", "message": "ឈ្មោះតួនាទី (Role) មិនអាចទទេរបានទេ"})
-		return
-	}
-	req.RoleName = strings.TrimSpace(req.RoleName)
-
-	var count int64
-	DB.Model(&Role{}).Where("role_name = ?", req.RoleName).Count(&count)
-	if count > 0 {
-		c.JSON(http.StatusBadRequest, gin.H{"status": "error", "message": "ឈ្មោះតួនាទីនេះមានរួចហើយ សូមជ្រើសរើសឈ្មោះផ្សេង!"})
-		return
-	}
-
-	// Let database auto-increment handle role IDs safely under concurrency.
-	req.ID = 0
-
-	if err := DB.Create(&req).Error; err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"status": "error", "message": "ការបង្កើត Role បរាជ័យ: " + err.Error()})
-		return
-	}
-
-	sheetData := map[string]interface{}{
-		"ID":          req.ID,
-		"RoleName":    req.RoleName,
-		"Description": req.Description,
-	}
-
-	eventBytes, _ := json.Marshal(map[string]interface{}{
-		"type":      "add_row",
-		"sheetName": "Roles",
-		"newData":   req,
-	})
-	if HubGlobal != nil {
-		HubGlobal.Broadcast <- eventBytes
-	}
-
-	go func() {
-		EnqueueSync("addRow", sheetData, "Roles", nil)
-	}()
-
-	c.JSON(http.StatusOK, gin.H{"status": "success", "data": req})
-}
-
-func HandleGetAllPermissions(c *gin.Context) {
-	var permissions []RolePermission
-	if err := DB.Find(&permissions).Error; err != nil {
-		c.Error(err)
-		return
-	}
-	c.JSON(http.StatusOK, gin.H{"status": "success", "data": permissions})
-}
-
-func HandleGetUserPermissions(c *gin.Context) {
-	role, _ := c.Get("role")
-	var permissions []RolePermission
-
-	roleStr := strings.ToLower(fmt.Sprintf("%v", role))
-	if err := DB.Where("LOWER(role) = ?", roleStr).Find(&permissions).Error; err != nil {
-		c.Error(err)
-		return
-	}
-	c.JSON(http.StatusOK, gin.H{"status": "success", "data": permissions})
-}
-
-func HandleUpdatePermission(c *gin.Context) {
-	body, err := io.ReadAll(c.Request.Body)
-	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"status": "error", "message": "មិនអាចអានទិន្នន័យបានទេ"})
-		return
-	}
-
-	var reqs []RolePermission
-	var singleReq RolePermission
-
-	if err := json.Unmarshal(body, &reqs); err != nil {
-		if err := json.Unmarshal(body, &singleReq); err != nil {
-			c.JSON(http.StatusBadRequest, gin.H{"status": "error", "message": "ទម្រង់ទិន្នន័យមិនត្រឹមត្រូវ: " + err.Error()})
-			return
+// GetEnvInt returns an integer from environment or a default value
+func GetEnvInt(key string, defaultVal int) int {
+	if val, exists := os.LookupEnv(key); exists {
+		if intVal, err := strconv.Atoi(val); err == nil {
+			return intVal
 		}
-		reqs = []RolePermission{singleReq}
 	}
-	updateErrors := make([]string, 0)
+	return defaultVal
+}
 
-	for _, req := range reqs {
-		if req.Role == "" || req.Feature == "" {
-			updateErrors = append(updateErrors, "role/feature cannot be empty")
-			continue
+func InitDB() {
+	log.Println("🔌 Initializing PostgreSQL database connection...")
+	rawDSN := os.Getenv("DATABASE_URL")
+	if rawDSN == "" {
+		log.Fatal("❌ DATABASE_URL is not set!")
+	}
+
+	// Smart DSN parsing and parameter injection
+	if _, err := url.Parse(rawDSN); err != nil {
+		// If it's not a full URL (e.g. host=localhost...), fallback to string manipulation
+		log.Printf("⚠️ DSN is not a URL format, using string manipulation: %v", err)
+	}
+
+	dsn := rawDSN
+	appendParam := func(d, key, val string) string {
+		if !strings.Contains(d, key+"=") {
+			if strings.Contains(d, "?") {
+				return d + "&" + key + "=" + val
+			}
+			return d + "?" + key + "=" + val
+		}
+		return d
+	}
+
+	dsn = appendParam(dsn, "connect_timeout", "15")
+
+	// --- SSL/TLS Check & Configuration (Aiven.io/DigitalOcean) ---
+	caCertEnv := os.Getenv("DB_CA_CERT")
+	if caCertEnv != "" {
+		caPath := "ca.pem"
+		certData, err := base64.StdEncoding.DecodeString(caCertEnv)
+		if err != nil {
+			certData = []byte(caCertEnv) // Assume raw PEM
 		}
 
-		roleLower := strings.ToLower(strings.TrimSpace(req.Role))
-		featureLower := strings.ToLower(strings.TrimSpace(req.Feature))
-
-		var existing RolePermission
-		result := DB.Where("LOWER(role) = ? AND LOWER(feature) = ?", roleLower, featureLower).First(&existing)
-
-		if result.Error != nil && result.Error == gorm.ErrRecordNotFound {
-			req.ID = 0
-			req.Role = roleLower
-			req.Feature = featureLower
-
-			if err := DB.Create(&req).Error; err != nil {
-				log.Printf("❌ Failed to create permission [%s:%s]: %v", req.Role, req.Feature, err)
-				updateErrors = append(updateErrors, fmt.Sprintf("create failed [%s:%s]", req.Role, req.Feature))
-				continue
-			}
-
-			go func(r RolePermission) {
-				EnqueueSync("addRow", map[string]interface{}{
-					"ID":        r.ID,
-					"Role":      r.Role,
-					"Feature":   r.Feature,
-					"IsEnabled": r.IsEnabled,
-				}, "RolePermissions", nil)
-			}(req)
-
-		} else if result.Error == nil {
-			if err := DB.Model(&existing).Update("is_enabled", req.IsEnabled).Error; err != nil {
-				log.Printf("❌ Failed to update permission ID %d [%s:%s]: %v", existing.ID, existing.Role, existing.Feature, err)
-				updateErrors = append(updateErrors, fmt.Sprintf("update failed [%s:%s]", existing.Role, existing.Feature))
-				continue
-			}
-			req.ID = existing.ID
-			req.Role = existing.Role
-			req.Feature = existing.Feature
-
-			go func(r RolePermission) {
-				EnqueueSync("updateSheet", map[string]interface{}{"IsEnabled": r.IsEnabled}, "RolePermissions", map[string]string{"ID": fmt.Sprintf("%d", r.ID)})
-			}(req)
+		if err := os.WriteFile(caPath, certData, 0600); err != nil {
+			log.Printf("⚠️ Failed to write SSL CA file: %v", err)
 		} else {
-			log.Printf("❌ Failed to query permission [%s:%s]: %v", roleLower, featureLower, result.Error)
-			updateErrors = append(updateErrors, fmt.Sprintf("query failed [%s:%s]", roleLower, featureLower))
-			continue
+			log.Println("🔒 SSL CA Certificate configured (verify-full)")
+			dsn = appendParam(dsn, "sslrootcert", caPath)
+			// Force sslmode to verify-full for security if CA is provided
+			if strings.Contains(dsn, "sslmode=") {
+				// Replace existing sslmode
+				re := []string{"sslmode=disable", "sslmode=require", "sslmode=prefer", "sslmode=allow"}
+				for _, mode := range re {
+					dsn = strings.Replace(dsn, mode, "sslmode=verify-full", 1)
+				}
+			} else {
+				dsn = appendParam(dsn, "sslmode", "verify-full")
+			}
 		}
+	} else {
+		// Default to require for security if not specified
+		dsn = appendParam(dsn, "sslmode", "require")
+	}
 
-		eventBytes, _ := json.Marshal(map[string]interface{}{
-			"type":      "update_permission",
-			"role":      req.Role,
-			"feature":   req.Feature,
-			"isEnabled": req.IsEnabled,
+	var db *gorm.DB
+	var err error
+	maxRetries := GetEnvInt("DB_MAX_RETRIES", 10)
+
+	for i := 0; i < maxRetries; i++ {
+		newLogger := logger.New(
+			log.New(os.Stdout, "\r\n", log.LstdFlags),
+			logger.Config{
+				SlowThreshold:             time.Second,
+				LogLevel:                  logger.Error,
+				IgnoreRecordNotFoundError: true,
+				Colorful:                  true,
+			},
+		)
+
+		db, err = gorm.Open(postgres.Open(dsn), &gorm.Config{
+			Logger: newLogger,
+			// PrepareStmt: true, // Increases performance for repeated queries
 		})
-		if HubGlobal != nil {
-			HubGlobal.Broadcast <- eventBytes
+		if err == nil {
+			break
+		}
+		log.Printf("⚠️ Database connection failed (Attempt %d/%d): %v", i+1, maxRetries, err)
+		time.Sleep(5 * time.Second)
+	}
+
+	if err != nil {
+		log.Fatal("❌ Database connection failed permanently:", err)
+	}
+
+	sqlDB, err := db.DB()
+	if err == nil {
+		// Configurable pool settings - Optimized for Aiven/entry-tier PostgreSQL
+		maxIdle := GetEnvInt("DB_MAX_IDLE_CONNS", 5)
+		maxOpen := GetEnvInt("DB_MAX_OPEN_CONNS", 10)
+		sqlDB.SetMaxIdleConns(maxIdle)
+		sqlDB.SetMaxOpenConns(maxOpen)
+		sqlDB.SetConnMaxLifetime(15 * time.Minute)
+		sqlDB.SetConnMaxIdleTime(5 * time.Minute)
+		log.Printf("⚡ Database Pool: MaxOpen=%d, MaxIdle=%d (Optimized for Workers)", maxOpen, maxIdle)
+	}
+
+	log.Println("✅ Database connection established!")
+	
+	// Smart Migration
+	runMigrations(db)
+
+	DB = db
+
+	// Ensure essential data exists
+	EnsureSeedData()
+
+	log.Println("✅ Database initialization complete!")
+}
+
+func runMigrations(db *gorm.DB) {
+	log.Println("🔄 Running Auto-Migrations...")
+
+	// Helper to check for breaking schema changes before migration
+	checkLegacy := func(model interface{}, tableName, column string) {
+		if db.Migrator().HasTable(tableName) && !db.Migrator().HasColumn(model, column) {
+			log.Printf("🚨 SCHEMA ALERT: Table '%s' is missing expected column '%s'. Migration might be partial.", tableName, column)
 		}
 	}
 
-	if len(updateErrors) > 0 {
-		c.JSON(http.StatusMultiStatus, gin.H{
-			"status":  "partial_success",
-			"message": "បានរក្សាទុកសិទ្ធិខ្លះៗ ប៉ុន្តែមានកំហុសខ្លះ",
-			"errors":  updateErrors,
-		})
+	checkLegacy(&TeamPage{}, "team_pages", "id")
+	checkLegacy(&Order{}, "orders", "customer_name")
+	checkLegacy(&User{}, "users", "user_name")
+
+	err := db.AutoMigrate(
+		&User{}, &Store{}, &Setting{}, &TeamPage{}, &Product{}, &Location{}, &ShippingMethod{},
+		&Color{}, &Driver{}, &BankAccount{}, &PhoneCarrier{}, &TelegramTemplate{},
+		&Inventory{}, &StockTransfer{}, &ReturnItem{},
+		&Order{}, &RevenueEntry{}, &ChatMessage{}, &EditLog{}, &UserActivityLog{},
+		&Role{}, &RolePermission{},
+		&IncentiveProject{}, &IncentiveCalculator{}, &IncentiveResult{},
+		&IncentiveManualData{}, &IncentiveCustomPayout{},
+		&DriverRecommendation{}, &Movie{},
+	)
+	if err != nil {
+		log.Printf("❌ Migration failed: %v", err)
+	}
+
+	// Data Repair: Fill missing Team values in orders based on Page assignment
+	repairMissingTeams(db)
+}
+
+func repairMissingTeams(db *gorm.DB) {
+	log.Println("🛠️ Checking for orders with missing team assignments...")
+	var count int64
+	db.Model(&Order{}).Where("team = '' OR team IS NULL").Count(&count)
+	if count > 0 {
+		log.Printf("🛠️ Found %d orders with missing team. Attempting to repair...", count)
+		// This is a slow but safe repair logic
+		var orders []Order
+		db.Where("team = '' OR team IS NULL").Find(&orders)
+		
+		repaired := 0
+		for _, o := range orders {
+			var tp TeamPage
+			if err := db.Where("page_name = ?", o.Page).First(&tp).Error; err == nil && tp.Team != "" {
+				db.Model(&o).Update("team", tp.Team)
+				repaired++
+			}
+		}
+		log.Printf("✅ Repaired %d orders with team assignments from Page records.", repaired)
+	}
+}
+
+func EnsureSeedData() {
+	if DB == nil {
 		return
 	}
-	c.JSON(http.StatusOK, gin.H{"status": "success", "message": "បានរក្សាទុកសិទ្ធិដោយជោគជ័យ"})
+	// Default roles to create if they don't exist
+	defaultRoles := []Role{
+		{RoleName: "Admin", Description: "System Administrator - Full Access"},
+		{RoleName: "Manager", Description: "Store/Team Manager"},
+		{RoleName: "Sale", Description: "Sales representative"},
+		{RoleName: "Fulfillment", Description: "Order packing & fulfillment staff"},
+		{RoleName: "Driver", Description: "Delivery driver"},
+		{RoleName: "Packer", Description: "Packaging team member"},
+	}
+
+	for _, r := range defaultRoles {
+		var existing Role
+		if err := DB.Where("LOWER(role_name) = LOWER(?)", r.RoleName).First(&existing).Error; err != nil {
+			if err == gorm.ErrRecordNotFound {
+				if createErr := DB.Create(&r).Error; createErr == nil {
+					log.Printf("✅ Created default role: %s", r.RoleName)
+				} else {
+					log.Printf("⚠️ Failed to create role %s: %v", r.RoleName, createErr)
+				}
+			}
+		}
+	}
+
+	// Default admin user
+	var count int64
+	DB.Model(&User{}).Where("user_name = ?", "admin").Count(&count)
+	if count == 0 {
+		hashedPassword, _ := bcrypt.GenerateFromPassword([]byte("admin123"), bcrypt.DefaultCost)
+		admin := User{
+			UserName:      "admin",
+			Password:      string(hashedPassword),
+			FullName:      "Administrator",
+			Role:          "Admin",
+			IsSystemAdmin: true,
+		}
+		if err := DB.Create(&admin).Error; err == nil {
+			log.Println("✅ Created default admin user: Username=admin, Password=admin123")
+		}
+	}
+}
+
+// CheckHealth returns true if the database is reachable
+func CheckHealth() bool {
+	if DB == nil {
+		return false
+	}
+	sqlDB, err := DB.DB()
+	if err != nil {
+		return false
+	}
+	return sqlDB.Ping() == nil
 }
