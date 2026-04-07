@@ -165,6 +165,31 @@ func runMigrations(db *gorm.DB) {
 	if err != nil {
 		log.Printf("❌ Migration failed: %v", err)
 	}
+
+	// Data Repair: Fill missing Team values in orders based on Page assignment
+	repairMissingTeams(db)
+}
+
+func repairMissingTeams(db *gorm.DB) {
+	log.Println("🛠️ Checking for orders with missing team assignments...")
+	var count int64
+	db.Model(&Order{}).Where("team = '' OR team IS NULL").Count(&count)
+	if count > 0 {
+		log.Printf("🛠️ Found %d orders with missing team. Attempting to repair...", count)
+		// This is a slow but safe repair logic
+		var orders []Order
+		db.Where("team = '' OR team IS NULL").Find(&orders)
+		
+		repaired := 0
+		for _, o := range orders {
+			var tp TeamPage
+			if err := db.Where("page_name = ?", o.Page).First(&tp).Error; err == nil && tp.Team != "" {
+				db.Model(&o).Update("team", tp.Team)
+				repaired++
+			}
+		}
+		log.Printf("✅ Repaired %d orders with team assignments from Page records.", repaired)
+	}
 }
 
 func EnsureSeedData() {
