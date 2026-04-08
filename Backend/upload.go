@@ -286,15 +286,8 @@ func HandleImageUploadProxy(c *gin.Context) {
 						sheetData["Packed Time"] = order.PackedTime
 					}
 
-					// 1.3 Direct Sheet Update for Reliability (matched with Profile Picture logic)
-					if req.TargetColumn != "" {
-						EnqueueSync("updateSheet", map[string]interface{}{req.TargetColumn: driveURL}, "AllOrders", map[string]string{"Order ID": orderId})
-						if order.Team != "" {
-							EnqueueSync("updateSheet", map[string]interface{}{req.TargetColumn: driveURL}, "Orders_"+order.Team, map[string]string{"Order ID": orderId})
-						}
-					}
-
-					// 1.4 Full Update including Telegram Notification
+					// 1.3 Full Update including Sheet Sync & Telegram Notification
+					// This single call handles everything robustly.
 					EnqueueSync("updateOrderTelegram", map[string]interface{}{
 						"orderId":       orderId,
 						"team":          order.Team,
