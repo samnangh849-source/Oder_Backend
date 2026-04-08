@@ -30,7 +30,7 @@ export interface AppContextType {
     isSyncing: boolean;
     login: (user: User, token: string) => Promise<void>;
     logout: () => void;
-    refreshData: () => Promise<void>;
+    refreshData: () => Promise<Record<string, any> | null>;
     refreshTimestamp: number;
     originalAdminUser: User | null;
     returnToAdmin: () => void;
@@ -43,7 +43,7 @@ export interface AppContextType {
     appState: 'login' | 'role_selection' | 'admin_dashboard' | 'user_journey' | 'confirm_delivery' | 'fulfillment' | 'create_order' | 'entertainment' | 'watch' | 'series_player';
     setAppState: (newState: 'login' | 'role_selection' | 'admin_dashboard' | 'user_journey' | 'confirm_delivery' | 'fulfillment' | 'create_order' | 'entertainment' | 'watch' | 'series_player') => void;
     setOriginalAdminUser: React.Dispatch<React.SetStateAction<User | null>>;
-    fetchData: (force?: boolean) => Promise<void>;
+    fetchData: (force?: boolean) => Promise<Record<string, any> | null>;
     fetchOrders: (force?: boolean) => Promise<void>;
     setCurrentUser: React.Dispatch<React.SetStateAction<User | null>>;
     setChatVisibility: (visible: boolean) => void;

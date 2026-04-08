@@ -58,9 +58,11 @@ const SettingsDashboard: React.FC<SettingsDashboardProps> = ({ onBack, initialSe
         return () => setMobilePageTitle(null);
     }, [activeSection, setMobilePageTitle, t]);
 
-    // Ref to always read the latest appData without re-creating the callback
+    // Refs to always read the latest values without re-creating callbacks
     const appDataRef = useRef(appData);
     appDataRef.current = appData;
+    const refreshDataRef = useRef(refreshData);
+    refreshDataRef.current = refreshData;
 
     const fetchSectionData = useCallback(async (sectionId: string, forceRefresh = false) => {
         const section = configSections.find(s => s.id === sectionId);
@@ -81,27 +83,34 @@ const SettingsDashboard: React.FC<SettingsDashboardProps> = ({ onBack, initialSe
                 return;
             }
 
-            // Step 2: appData is empty — call refreshData() to fetch ALL static data globally
-            // This is the SAME call OrderContext uses, ensuring consistent token handling
+            // Step 2: Call refreshData() which returns the fetched data directly
+            // (avoids React async state update race condition)
+            // Use ref to avoid re-creating this callback when refreshData reference changes
+            let refreshedData: Record<string, any> | null = null;
             try {
-                await refreshData();
+                refreshedData = await refreshDataRef.current();
             } catch (e) {
-                console.warn('refreshData failed, trying direct fetch...', e);
+                console.warn('[SettingsDashboard] refreshData failed, trying direct fetch...', e);
             }
 
-            // Step 3: Re-check appData after refresh (read latest via ref)
-            const refreshedAppData = appDataRef.current;
-            const refreshedList = getArrayCaseInsensitive(refreshedAppData, section.dataKey);
-            if (refreshedList.length > 0) {
-                setLocalData(refreshedList);
-                return;
+            // Step 3: Use returned data directly
+            if (refreshedData) {
+                const refreshedList = getArrayCaseInsensitive(refreshedData, section.dataKey);
+                if (refreshedList.length > 0) {
+                    setLocalData(refreshedList);
+                    return;
+                }
             }
 
             // Step 4: Last resort — direct API fetch with fallback token
-            const session = await CacheService.get<{ token: string }>(CACHE_KEYS.SESSION);
-            const token = session?.token || localStorage.getItem('token');
-            const headers: HeadersInit = {};
-            if (token) headers['Authorization'] = `Bearer ${token}`;
+            const token = localStorage.getItem('token')
+                || (await CacheService.get<{ token: string }>(CACHE_KEYS.SESSION))?.token;
+            if (!token) {
+                console.warn('[SettingsDashboard] No auth token available for direct fetch');
+                setFetchError(true);
+                return;
+            }
+            const headers: HeadersInit = { 'Authorization': `Bearer ${token}` };
 
             const staticDataSections = ['pages', 'products', 'shippingMethods', 'drivers',
                 'bankAccounts', 'phoneCarriers', 'driverRecommendations', 'roles', 'users',
@@ -134,34 +143,48 @@ const SettingsDashboard: React.FC<SettingsDashboardProps> = ({ onBack, initialSe
                 setFetchError(true);
             }
         } catch (err) {
-            console.error(`Failed to fetch ${sectionId}:`, err);
+            console.error(`[SettingsDashboard] Failed to fetch ${sectionId}:`, err);
             setFetchError(true);
         } finally {
             setIsLoading(false);
         }
-    }, [refreshData]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, []);
 
     useEffect(() => {
         if (activeId) fetchSectionData(activeId);
     }, [activeId, fetchSectionData]);
 
-    // Also re-sync localData when appData updates externally (e.g. after global refreshData)
+    // Re-sync localData when appData updates externally (e.g. after global refreshData)
+    // Also ensures loading is turned off once data arrives
     useEffect(() => {
         if (!activeSection) return;
         const appDataList = getArrayCaseInsensitive(appData, activeSection.dataKey);
-        if (appDataList.length > 0) {
-            setLocalData(appDataList);
+        // Also try direct key access as fallback
+        const directVal = (appData as any)[activeSection.dataKey];
+        const list = appDataList.length > 0 ? appDataList : (Array.isArray(directVal) && directVal.length > 0 ? directVal : []);
+        if (list.length > 0) {
+            setLocalData(list);
+            setIsLoading(false);
         }
     }, [appData, activeSection]);
 
     const dataList = useMemo(() => {
         if (!activeSection) return [];
-        
+
         let list = localData;
         const appDataList = getArrayCaseInsensitive(appData, activeSection.dataKey);
-        
+
         // Prefer appData if it has items
-        if (appDataList.length > 0) list = appDataList;
+        if (appDataList.length > 0) {
+            list = appDataList;
+        } else {
+            // Direct fallback: read the exact key from appData (bypass case-insensitive lookup)
+            const directVal = (appData as any)[activeSection.dataKey];
+            if (Array.isArray(directVal) && directVal.length > 0) {
+                list = directVal;
+            }
+        }
 
         // If we are looking at roles, we ONLY show what's in the list (which now includes auto-generated Admin)
         // No extra filtering needed here as App.tsx handles the Admin existence.

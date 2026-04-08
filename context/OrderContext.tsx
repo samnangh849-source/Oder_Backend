@@ -16,9 +16,9 @@ interface OrderContextType {
     setIsGlobalLoading: (loading: boolean) => void;
     refreshTimestamp: number;
     setRefreshTimestamp: React.Dispatch<React.SetStateAction<number>>;
-    fetchData: (force?: boolean) => Promise<void>;
+    fetchData: (force?: boolean) => Promise<Record<string, any> | null>;
     fetchOrders: (force?: boolean) => Promise<void>;
-    refreshData: () => Promise<void>;
+    refreshData: () => Promise<Record<string, any> | null>;
 }
 
 const OrderContext = createContext<OrderContextType>({} as OrderContextType);
@@ -44,19 +44,26 @@ export const OrderProvider: React.FC<{ children: React.ReactNode }> = ({ childre
         window.location.href = window.location.origin + window.location.pathname + '?view=login';
     }, []);
 
-    const fetchData = useCallback(async (force = false) => {
+    const fetchData = useCallback(async (force = false): Promise<Record<string, any> | null> => {
         try {
             const token = localStorage.getItem('token');
-            if (!token) return;
+            if (!token) return null;
             const headers: HeadersInit = { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` };
 
-            const response = await fetch(`${WEB_APP_URL}/api/static-data`, { headers });
-            
+            // Retry on 503 (DB still initializing)
+            let response: Response | null = null;
+            for (let attempt = 0; attempt < 3; attempt++) {
+                response = await fetch(`${WEB_APP_URL}/api/static-data`, { headers });
+                if (response.status !== 503) break;
+                await new Promise(r => setTimeout(r, 2000 * (attempt + 1)));
+            }
+            if (!response) return null;
+
             // Handle 401 Unauthorized globally
             if (response.status === 401) {
                 console.warn("Session expired during static-data fetch. Redirecting...");
                 handleUnauthorized();
-                return;
+                return null;
             }
 
             if (response.ok) {
@@ -64,28 +71,30 @@ export const OrderProvider: React.FC<{ children: React.ReactNode }> = ({ childre
                 if (result.status === 'success') {
                     // Map data while keeping original casing AND providing lowercase/aliased versions for consistency
                     const mappedData: any = { ...result.data };
-                    
+
                     if (result.data && typeof result.data === 'object') {
                         Object.keys(result.data).forEach(key => {
                             const val = result.data[key];
                             const lowerKey = key.toLowerCase();
-                            
+
                             // Ensure common keys are available in camelCase/lowercase as expected by frontend
                             if (lowerKey === 'rolepermissions') mappedData.permissions = val;
                             if (lowerKey === 'shippingmethods') mappedData.shippingMethods = val;
                             if (lowerKey === 'teampages') mappedData.pages = val;
-                            
+
                             // Also provide a completely lowercase version for each
                             mappedData[lowerKey] = val;
                         });
                     }
-                    
+
                     setAppData(prev => ({ ...prev, ...mappedData }));
+                    return mappedData;
                 }
             }
         } catch (e) {
             console.error("Static data fetch failed", e);
         }
+        return null;
     }, [handleUnauthorized]);
 
     const fetchOrders = useCallback(async (force = false) => {
@@ -137,8 +146,9 @@ export const OrderProvider: React.FC<{ children: React.ReactNode }> = ({ childre
         }
     }, [handleUnauthorized, currentUser]);
 
-    const refreshData = useCallback(async () => {
-        await Promise.all([fetchData(true), fetchOrders(true)]);
+    const refreshData = useCallback(async (): Promise<Record<string, any> | null> => {
+        const [staticData] = await Promise.all([fetchData(true), fetchOrders(true)]);
+        return staticData;
     }, [fetchData, fetchOrders]);
 
     // --- Background Polling (Every 5 minutes) ---
