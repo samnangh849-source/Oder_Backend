@@ -60,34 +60,16 @@ const FastPackTerminal: React.FC<FastPackTerminalProps> = ({ order, onClose, onS
     const [undoTimer, setUndoTimer] = useState<number | null>(null);
     const [isUndoing, setIsUndoing] = useState(false);
     const maxUndoTimer = advancedSettings.packagingGracePeriod || 5;
+    const submitTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+    const submitIntervalRef = useRef<NodeJS.Timeout | null>(null);
 
     const MAX_ATTEMPTS = 5;
-    const uploadPhotoWithRetry = useCallback(async (data: any, token: string, attempt = 1) => {
-        try {
-            const response = await fetch(`${WEB_APP_URL}/api/upload-image`, {
-                method: 'POST',
-                keepalive: true,
-                headers: {
-                    'Content-Type': 'application/json',
-                    'Authorization': `Bearer ${token}`
-                },
-                body: JSON.stringify(data)
-            });
-            if (!response.ok) throw new Error(`Server responded with ${response.status}`);
-            console.log(`✅ Photo upload successful on attempt ${attempt}`);
-        } catch (err) {
-            console.error(`❌ Photo upload failed (Attempt ${attempt}/${MAX_ATTEMPTS}):`, err);
-            if (attempt < MAX_ATTEMPTS) {
-                const delay = attempt * 2000;
-                setTimeout(() => uploadPhotoWithRetry(data, token, attempt + 1), delay);
-            }
-        }
-    }, []);
 
     const executeFinalSubmit = useCallback(async () => {
         try {
             if (!order) return;
             setUploading(true);
+            setUploadProgress(10); // Start progress
 
             const session = await CacheService.get<{ token: string }>(CACHE_KEYS.SESSION);
             const token = session?.token || '';
@@ -98,23 +80,61 @@ const FastPackTerminal: React.FC<FastPackTerminalProps> = ({ order, onClose, onS
                 'Packed Time': new Date().toLocaleString('km-KH')
             };
 
-            const statusResponse = await fetch(`${WEB_APP_URL}/api/admin/update-order`, {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                    'Authorization': `Bearer ${token}`
-                },
-                body: JSON.stringify({
+            setUploadProgress(30);
+
+            let driveUrl = '';
+            if (packagePhoto) {
+                const base64Data = packagePhoto.includes(',') ? packagePhoto.split(',')[1] : packagePhoto;
+                const uploadData = {
+                    action: 'uploadImage',
+                    fileData: base64Data,
+                    fileName: `Package_${order['Order ID'].substring(0,8)}_${Date.now()}.jpg`,
+                    mimeType: 'image/jpeg',
                     orderId: order['Order ID'],
-                    team: order.Team,
-                    userName: currentUser?.FullName || 'System',
+                    targetColumn: 'Package Photo URL',
                     newData: newData
-                })
-            });
+                };
 
-            if (!statusResponse.ok) throw new Error("Status update failed");
+                // Perform the upload with a direct fetch that we await
+                const response = await fetch(`${WEB_APP_URL}/api/upload-image`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Authorization': `Bearer ${token}`
+                    },
+                    body: JSON.stringify(uploadData)
+                });
 
-            onSuccess(packagePhoto || 'manual_sync_ok');
+                if (!response.ok) {
+                    const errResult = await response.json().catch(() => ({}));
+                    throw new Error(errResult.message || `Server responded with ${response.status}`);
+                }
+
+                const result = await response.json();
+                if (result.status !== 'success') throw new Error(result.message || 'Upload failed');
+                driveUrl = result.url;
+                setUploadProgress(90);
+            } else {
+                // Fallback for no-photo case (though UI prevents this)
+                const statusResponse = await fetch(`${WEB_APP_URL}/api/admin/update-order`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Authorization': `Bearer ${token}`
+                    },
+                    body: JSON.stringify({
+                        orderId: order['Order ID'],
+                        team: order.Team,
+                        userName: currentUser?.FullName || 'System',
+                        newData: newData
+                    })
+                });
+                if (!statusResponse.ok) throw new Error("Status update failed");
+                setUploadProgress(90);
+            }
+
+            // Update local state and trigger success
+            onSuccess(driveUrl || packagePhoto || 'manual_sync_ok');
             setOrders(prev => prev.map(o => 
                 o['Order ID'] === order['Order ID'] 
                     ? { 
@@ -123,27 +143,16 @@ const FastPackTerminal: React.FC<FastPackTerminalProps> = ({ order, onClose, onS
                         FulfillmentStatus: 'Ready to Ship',
                         'Packed By': currentUser?.FullName || 'Packer',
                         'Packed Time': new Date().toLocaleString('km-KH'),
-                        'Package Photo URL': packagePhoto || o['Package Photo URL']
+                        'Package Photo URL': driveUrl || o['Package Photo URL']
                       } 
                     : o
             ));
 
-            if (packagePhoto) {
-                const base64Data = packagePhoto.includes(',') ? packagePhoto.split(',')[1] : packagePhoto;
-                const uploadData = {
-                    fileData: base64Data,
-                    fileName: `Package_${order['Order ID'].substring(0,8)}_${Date.now()}.jpg`,
-                    mimeType: 'image/jpeg',
-                    orderId: order['Order ID'],
-                    targetColumn: 'Package Photo URL',
-                    newData: newData
-                };
-                uploadPhotoWithRetry(uploadData, token);
-            }
+            setUploadProgress(100);
 
+            // Send Chat Notification in background
             const id = order['Order ID'].substring(0,8);
             const chatMsg = `📦 **[PACKED]** កញ្ចប់ #${id} (${order['Customer Name']}) វេចខ្ចប់រួចរាល់`;
-
             fetch(`${WEB_APP_URL}/api/chat/send`, {
                 method: 'POST',
                 headers: {
@@ -153,6 +162,9 @@ const FastPackTerminal: React.FC<FastPackTerminalProps> = ({ order, onClose, onS
                 body: JSON.stringify({ UserName: 'System', MessageType: 'Text', Content: chatMsg })
             }).catch(() => {});
 
+            // Refresh data globally after a short delay
+            setTimeout(() => refreshData(), 500);
+
         } catch (err: any) {
             console.error("Critical submission error:", err);
             alert("❌ ការបញ្ជូនបរាជ័យ: " + err.message);
@@ -160,19 +172,53 @@ const FastPackTerminal: React.FC<FastPackTerminalProps> = ({ order, onClose, onS
             setUploading(false);
             setUploadProgress(0);
         }
-    }, [order, currentUser, onSuccess, packagePhoto, setOrders, uploadPhotoWithRetry]);
+    }, [order, currentUser, onSuccess, packagePhoto, setOrders, refreshData]);
 
     const handleSubmit = useCallback(() => {
+        if (submitTimeoutRef.current) clearTimeout(submitTimeoutRef.current);
+        if (submitIntervalRef.current) clearInterval(submitIntervalRef.current);
+
         setUndoTimer(maxUndoTimer);
-    }, [maxUndoTimer]);
+        let secondsLeft = maxUndoTimer;
+
+        submitIntervalRef.current = setInterval(() => {
+            secondsLeft -= 1;
+            setUndoTimer(secondsLeft);
+            if (secondsLeft <= 0 && submitIntervalRef.current) {
+                clearInterval(submitIntervalRef.current);
+                submitIntervalRef.current = null;
+            }
+        }, 1000);
+
+        submitTimeoutRef.current = setTimeout(() => {
+            setUndoTimer(null);
+            executeFinalSubmit();
+        }, maxUndoTimer * 1000);
+    }, [maxUndoTimer, executeFinalSubmit]);
 
     const handleUndo = () => {
+        if (submitTimeoutRef.current) {
+            clearTimeout(submitTimeoutRef.current);
+            submitTimeoutRef.current = null;
+        }
+        if (submitIntervalRef.current) {
+            clearInterval(submitIntervalRef.current);
+            submitIntervalRef.current = null;
+        }
+
         setIsUndoing(true);
         setTimeout(() => {
             setUndoTimer(null);
             setIsUndoing(false);
         }, 500);
     };
+
+    useEffect(() => {
+        return () => {
+            if (submitTimeoutRef.current) clearTimeout(submitTimeoutRef.current);
+            if (submitIntervalRef.current) clearInterval(submitIntervalRef.current);
+        };
+    }, []);
 
     const verifyItem = (name: string) => {
         setVerifiedItems(prev => {
