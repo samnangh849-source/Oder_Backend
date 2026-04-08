@@ -583,11 +583,11 @@ func PerformDataMigration() {
 		return
 	}
 	var validTemplates []TelegramTemplate
-	seenTemplates := make(map[uint]bool)
+	seenTemplates := make(map[string]bool)
 	for _, x := range templates {
-		if !seenTemplates[x.ID] {
-			if x.ID != 0 {
-				seenTemplates[x.ID] = true
+		if !seenTemplates[x.TemplateName] {
+			if x.TemplateName != "" {
+				seenTemplates[x.TemplateName] = true
 			}
 			validTemplates = append(validTemplates, x)
 		}
@@ -656,10 +656,12 @@ func PerformDataMigration() {
 		return
 	}
 	var validReturns []ReturnItem
-	seenReturns := make(map[string]bool)
+	seenReturns := make(map[uint]bool)
 	for _, x := range returns {
-		if x.ReturnID != "" && !seenReturns[x.ReturnID] {
-			seenReturns[x.ReturnID] = true
+		if !seenReturns[x.ID] {
+			if x.ID != 0 {
+				seenReturns[x.ID] = true
+			}
 			validReturns = append(validReturns, x)
 		}
 	}
