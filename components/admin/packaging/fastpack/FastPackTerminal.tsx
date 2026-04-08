@@ -178,23 +178,22 @@ const FastPackTerminal: React.FC<FastPackTerminalProps> = ({ order, onClose, onS
         if (submitTimeoutRef.current) clearTimeout(submitTimeoutRef.current);
         if (submitIntervalRef.current) clearInterval(submitIntervalRef.current);
 
-        setUndoTimer(maxUndoTimer);
-        let secondsLeft = maxUndoTimer;
+        const gracePeriod = advancedSettings.packagingGracePeriod || 5;
+        setUndoTimer(gracePeriod);
+        let secondsLeft = gracePeriod;
 
         submitIntervalRef.current = setInterval(() => {
             secondsLeft -= 1;
-            setUndoTimer(secondsLeft);
-            if (secondsLeft <= 0 && submitIntervalRef.current) {
-                clearInterval(submitIntervalRef.current);
+            if (secondsLeft <= 0) {
+                if (submitIntervalRef.current) clearInterval(submitIntervalRef.current);
                 submitIntervalRef.current = null;
+                setUndoTimer(null);
+                executeFinalSubmit();
+            } else {
+                setUndoTimer(secondsLeft);
             }
         }, 1000);
-
-        submitTimeoutRef.current = setTimeout(() => {
-            setUndoTimer(null);
-            executeFinalSubmit();
-        }, maxUndoTimer * 1000);
-    }, [maxUndoTimer, executeFinalSubmit]);
+    }, [advancedSettings.packagingGracePeriod, maxUndoTimer, executeFinalSubmit]);
 
     const handleUndo = () => {
         if (submitTimeoutRef.current) {
