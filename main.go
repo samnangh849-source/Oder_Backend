@@ -29,7 +29,6 @@ import (
 
 // --- Configuration ---
 var (
-	DB               *gorm.DB
 	appsScriptURL    string
 	appsScriptSecret string
 )
@@ -83,9 +82,6 @@ var calculatePayout = backend.CalculatePayout
 // =========================================================================
 func initDB() {
 	backend.InitDB()
-	DB = backend.DB
-	// Explicitly assign to sync.go's package variable
-	backend.DB = backend.DB 
 }
 
 // =========================================================================
@@ -305,7 +301,19 @@ type Claims = backend.Claims
 
 var generateJWT = backend.GenerateJWT
 var handleLogin = backend.HandleLogin
-var DBMiddleware = backend.DBMiddleware
+func DBMiddleware() gin.HandlerFunc {
+	return func(c *gin.Context) {
+		if backend.DB == nil {
+			c.JSON(http.StatusServiceUnavailable, gin.H{
+				"status":  "error",
+				"message": "សេវាកម្មកំពុងចាប់ផ្តើម (Database is initializing...)",
+			})
+			c.Abort()
+			return
+		}
+		c.Next()
+	}
+}
 var AuthMiddleware = backend.AuthMiddleware
 var AdminOnlyMiddleware = backend.AdminOnlyMiddleware
 var RequirePermission = backend.RequirePermission
@@ -329,7 +337,7 @@ var handleUpdatePermission = backend.HandleUpdatePermission
 
 func handleGetIncentiveCalculators(c *gin.Context) {
 	var calcs []IncentiveCalculator
-	DB.Find(&calcs)
+	backend.DB.Find(&calcs)
 	c.JSON(200, gin.H{"status": "success", "data": calcs})
 }
 
@@ -340,10 +348,10 @@ func handleCreateIncentiveCalculator(c *gin.Context) {
 		return
 	}
 
-	// Always let DB generate unique IDs to avoid collisions when duplicating calculators.
+	// Always let backend.DB generate unique IDs to avoid collisions when duplicating calculators.
 	req.ID = 0
 
-	if err := DB.Create(&req).Error; err != nil {
+	if err := backend.DB.Create(&req).Error; err != nil {
 		c.JSON(500, gin.H{"status": "error", "message": err.Error()})
 		return
 	}
@@ -352,7 +360,7 @@ func handleCreateIncentiveCalculator(c *gin.Context) {
 
 func handleGetIncentiveProjects(c *gin.Context) {
 	var projects []IncentiveProject
-	DB.Preload("Calculators").Find(&projects)
+	backend.DB.Preload("Calculators").Find(&projects)
 	c.JSON(200, gin.H{"status": "success", "data": projects})
 }
 
@@ -365,11 +373,11 @@ func handleCreateIncentiveProject(c *gin.Context) {
 
 	if req.ID == 0 {
 		var maxID uint
-		DB.Model(&IncentiveProject{}).Select("COALESCE(MAX(id), 0)").Row().Scan(&maxID)
+		backend.DB.Model(&IncentiveProject{}).Select("COALESCE(MAX(id), 0)").Row().Scan(&maxID)
 		req.ID = maxID + 1
 	}
 
-	if err := DB.Create(&req).Error; err != nil {
+	if err := backend.DB.Create(&req).Error; err != nil {
 		c.JSON(500, gin.H{"status": "error", "message": err.Error()})
 		return
 	}
@@ -379,7 +387,7 @@ func handleCreateIncentiveProject(c *gin.Context) {
 func handleGetIncentiveResults(c *gin.Context) {
 	projectId := c.Query("projectId")
 	var results []IncentiveResult
-	query := DB.Model(&IncentiveResult{})
+	query := backend.DB.Model(&IncentiveResult{})
 	if projectId != "" {
 		query = query.Where("project_id = ?", projectId)
 	}
@@ -400,7 +408,7 @@ func handleGetIncentiveManualData(c *gin.Context) {
 	}
 
 	var data []IncentiveManualData
-	query := DB.Model(&IncentiveManualData{})
+	query := backend.DB.Model(&IncentiveManualData{})
 	if projectId != "" {
 		query = query.Where("project_id = ?", projectId)
 	}
@@ -426,11 +434,11 @@ func handleSaveIncentiveManualData(c *gin.Context) {
 	}
 
 	var existing IncentiveManualData
-	err := DB.Where("project_id = ? AND month = ? AND metric_type = ? AND data_key = ?", req.ProjectID, req.Month, req.MetricType, req.DataKey).First(&existing).Error
+	err := backend.DB.Where("project_id = ? AND month = ? AND metric_type = ? AND data_key = ?", req.ProjectID, req.Month, req.MetricType, req.DataKey).First(&existing).Error
 	if err == nil {
-		DB.Model(&existing).Update("value", req.Value)
+		backend.DB.Model(&existing).Update("value", req.Value)
 	} else {
-		DB.Create(&req)
+		backend.DB.Create(&req)
 	}
 	c.JSON(200, gin.H{"status": "success"})
 }
@@ -448,7 +456,7 @@ func handleGetIncentiveCustomPayouts(c *gin.Context) {
 	}
 
 	var payouts []IncentiveCustomPayout
-	query := DB.Model(&IncentiveCustomPayout{})
+	query := backend.DB.Model(&IncentiveCustomPayout{})
 	if projectId != "" {
 		query = query.Where("project_id = ?", projectId)
 	}
@@ -474,11 +482,11 @@ func handleSaveIncentiveCustomPayout(c *gin.Context) {
 	}
 
 	var existing IncentiveCustomPayout
-	err := DB.Where("project_id = ? AND month = ? AND user_name = ?", req.ProjectID, req.Month, req.UserName).First(&existing).Error
+	err := backend.DB.Where("project_id = ? AND month = ? AND user_name = ?", req.ProjectID, req.Month, req.UserName).First(&existing).Error
 	if err == nil {
-		DB.Model(&existing).Update("value", req.Value)
+		backend.DB.Model(&existing).Update("value", req.Value)
 	} else {
-		DB.Create(&req)
+		backend.DB.Create(&req)
 	}
 	c.JSON(200, gin.H{"status": "success"})
 }
@@ -502,18 +510,18 @@ func handleLockIncentivePayout(c *gin.Context) {
 	}
 
 	// 1. Delete existing results for this project/month (assuming results are stored per project, but model lacks month. Let's add month if needed, or rely on Project ID if project is 1 per month. For now, just replace).
-	DB.Where("project_id = ?", req.ProjectID).Delete(&IncentiveResult{})
+	backend.DB.Where("project_id = ?", req.ProjectID).Delete(&IncentiveResult{})
 
 	// 2. Save new results
 	if len(req.Results) > 0 {
 		var maxID uint
-		DB.Model(&IncentiveResult{}).Select("COALESCE(MAX(id), 0)").Row().Scan(&maxID)
+		backend.DB.Model(&IncentiveResult{}).Select("COALESCE(MAX(id), 0)").Row().Scan(&maxID)
 
 		for i := range req.Results {
 			maxID++
 			req.Results[i].ID = maxID
 		}
-		DB.Create(&req.Results)
+		backend.DB.Create(&req.Results)
 
 		// 3. Send to Google Sheet
 		go func() {
@@ -555,7 +563,7 @@ func handleCalculateIncentive(c *gin.Context) {
 		return
 	}
 
-	results, err := backend.ProcessIncentiveCalculation(DB, req.ProjectID, req.Month)
+	results, err := backend.ProcessIncentiveCalculation(backend.DB, req.ProjectID, req.Month)
 	if err != nil {
 		c.JSON(500, gin.H{"status": "error", "message": err.Error()})
 		return
@@ -612,8 +620,8 @@ func startOrderWorker() {
 				var scriptResp AppsScriptResponse
 				telegramSent := false
 				if err := json.NewDecoder(resp.Body).Decode(&scriptResp); err == nil {
-					if (scriptResp.MessageIds.ID1 != "" || scriptResp.MessageIds.ID2 != "" || scriptResp.MessageIds.ID3 != "") && DB != nil {
-						DB.Model(&Order{}).Where("order_id = ?", job.OrderID).Updates(map[string]interface{}{
+					if (scriptResp.MessageIds.ID1 != "" || scriptResp.MessageIds.ID2 != "" || scriptResp.MessageIds.ID3 != "") && backend.DB != nil {
+						backend.DB.Model(&Order{}).Where("order_id = ?", job.OrderID).Updates(map[string]interface{}{
 							"telegram_message_id1": scriptResp.MessageIds.ID1,
 							"telegram_message_id2": scriptResp.MessageIds.ID2,
 							"telegram_message_id3": scriptResp.MessageIds.ID3,
@@ -649,7 +657,7 @@ func startScheduler() {
 				enqueueSync("checkScheduledOrders", nil, "", nil)
 			case <-reconcileTicker.C:
 				// 🛡️ Self-Healing: Check for missing photo links in Sheets
-				backend.ReconcileMissingPhotoLinks(DB)
+				backend.ReconcileMissingPhotoLinks(backend.DB)
 			}
 		}
 	}()
@@ -679,26 +687,28 @@ func handleGetStaticData(c *gin.Context) {
 	result := make(map[string]interface{})
 
 	queries := []func(){
-		func() { var d []Product; DB.Find(&d); mu.Lock(); result["products"] = d; mu.Unlock() },
-		func() { var d []Store; DB.Find(&d); mu.Lock(); result["stores"] = d; mu.Unlock() },
-		func() { var d []TeamPage; DB.Find(&d); mu.Lock(); result["pages"] = d; mu.Unlock() },
-		func() { var d []Location; DB.Find(&d); mu.Lock(); result["locations"] = d; mu.Unlock() },
-		func() { var d []ShippingMethod; DB.Find(&d); mu.Lock(); result["shippingMethods"] = d; mu.Unlock() },
-		func() { var d []Color; DB.Find(&d); mu.Lock(); result["colors"] = d; mu.Unlock() },
-		func() { var d []Driver; DB.Find(&d); mu.Lock(); result["drivers"] = d; mu.Unlock() },
-		func() { var d []BankAccount; DB.Find(&d); mu.Lock(); result["bankAccounts"] = d; mu.Unlock() },
-		func() { var d []PhoneCarrier; DB.Find(&d); mu.Lock(); result["phoneCarriers"] = d; mu.Unlock() },
-		func() { var d []Inventory; DB.Find(&d); mu.Lock(); result["inventory"] = d; mu.Unlock() },
-		func() { var d []StockTransfer; DB.Find(&d); mu.Lock(); result["stockTransfers"] = d; mu.Unlock() },
-		func() { var d []ReturnItem; DB.Find(&d); mu.Lock(); result["returns"] = d; mu.Unlock() },
-		func() { var d []Role; DB.Find(&d); mu.Lock(); result["roles"] = d; mu.Unlock() },
-		func() { var d []RolePermission; DB.Find(&d); mu.Lock(); result["rolePermissions"] = d; mu.Unlock() },
+		func() { var d []Product; backend.DB.Find(&d); mu.Lock(); result["products"] = d; mu.Unlock() },
+		func() { var d []Store; backend.DB.Find(&d); mu.Lock(); result["stores"] = d; mu.Unlock() },
+		func() { var d []TeamPage; backend.DB.Find(&d); mu.Lock(); result["pages"] = d; mu.Unlock() },
+		func() { var d []Location; backend.DB.Find(&d); mu.Lock(); result["locations"] = d; mu.Unlock() },
+		func() { var d []ShippingMethod; backend.DB.Find(&d); mu.Lock(); result["shippingMethods"] = d; mu.Unlock() },
+		func() { var d []Color; backend.DB.Find(&d); mu.Lock(); result["colors"] = d; mu.Unlock() },
+		func() { var d []Driver; backend.DB.Find(&d); mu.Lock(); result["drivers"] = d; mu.Unlock() },
+		func() { var d []BankAccount; backend.DB.Find(&d); mu.Lock(); result["bankAccounts"] = d; mu.Unlock() },
+		func() { var d []PhoneCarrier; backend.DB.Find(&d); mu.Lock(); result["phoneCarriers"] = d; mu.Unlock() },
+		func() { var d []Inventory; backend.DB.Find(&d); mu.Lock(); result["inventory"] = d; mu.Unlock() },
+		func() { var d []StockTransfer; backend.DB.Find(&d); mu.Lock(); result["stockTransfers"] = d; mu.Unlock() },
+		func() { var d []ReturnItem; backend.DB.Find(&d); mu.Lock(); result["returns"] = d; mu.Unlock() },
+		func() { var d []Role; backend.DB.Find(&d); mu.Lock(); result["roles"] = d; mu.Unlock() },
+		func() { var d []RolePermission; backend.DB.Find(&d); mu.Lock(); result["rolePermissions"] = d; mu.Unlock() },
 		func() {
 			var d []User
-			if err := DB.Find(&d).Error; err != nil {
-				log.Printf("⚠️ Failed to fetch users: %v", err)
-				d = []User{} // Ensure non-nil slice so JSON returns [] not null
+			// Use backend.DB directly and explicit table name to avoid cross-package naming issues
+			if err := backend.DB.Table("users").Find(&d).Error; err != nil {
+				log.Printf("⚠️ Failed to fetch users in StaticData: %v", err)
+				d = []User{} 
 			}
+			log.Printf("📊 StaticData: Fetched %d users from backend.DB", len(d))
 			for i := range d {
 				d[i].Password = ""
 			}
@@ -708,31 +718,31 @@ func handleGetStaticData(c *gin.Context) {
 		},
 		func() {
 			var d []DriverRecommendation
-			DB.Find(&d)
+			backend.DB.Find(&d)
 			mu.Lock()
 			result["driverRecommendations"] = d
 			mu.Unlock()
 		},
-		func() { var d []Movie; DB.Find(&d); mu.Lock(); result["movies"] = d; mu.Unlock() },
-		func() { var d []TelegramTemplate; DB.Find(&d); mu.Lock(); result["telegramTemplates"] = d; mu.Unlock() },
-		func() { var d []RevenueEntry; DB.Find(&d); mu.Lock(); result["revenueEntries"] = d; mu.Unlock() },
+		func() { var d []Movie; backend.DB.Find(&d); mu.Lock(); result["movies"] = d; mu.Unlock() },
+		func() { var d []TelegramTemplate; backend.DB.Find(&d); mu.Lock(); result["telegramTemplates"] = d; mu.Unlock() },
+		func() { var d []RevenueEntry; backend.DB.Find(&d); mu.Lock(); result["revenueEntries"] = d; mu.Unlock() },
 		func() {
 			var d []EditLog
-			DB.Limit(500).Order("timestamp desc").Find(&d)
+			backend.DB.Limit(500).Order("timestamp desc").Find(&d)
 			mu.Lock()
 			result["editLogs"] = d
 			mu.Unlock()
 		},
 		func() {
 			var d []UserActivityLog
-			DB.Limit(500).Order("timestamp desc").Find(&d)
+			backend.DB.Limit(500).Order("timestamp desc").Find(&d)
 			mu.Lock()
 			result["actLogs"] = d
 			mu.Unlock()
 		},
 		func() {
 			var settings []Setting
-			DB.Find(&settings)
+			backend.DB.Find(&settings)
 			settingsObj := make(map[string]interface{})
 			for _, s := range settings {
 				settingsObj[s.ConfigKey] = s.ConfigValue
@@ -766,7 +776,7 @@ func handleGetStaticData(c *gin.Context) {
 
 func handleGetSettings(c *gin.Context) {
 	var settings []Setting
-	if err := DB.Find(&settings).Error; err != nil {
+	if err := backend.DB.Find(&settings).Error; err != nil {
 		c.Error(err)
 		return
 	}
@@ -779,7 +789,8 @@ func handleGetSettings(c *gin.Context) {
 
 func handleGetUsers(c *gin.Context) {
 	var users []User
-	if err := DB.Find(&users).Error; err != nil {
+	// Use backend.DB directly and explicit table name to avoid cross-package naming issues
+	if err := backend.DB.Table("users").Find(&users).Error; err != nil {
 		log.Printf("⚠️ Failed to fetch users: %v", err)
 		users = []User{} // Ensure non-nil slice so JSON returns [] not null
 	}
@@ -791,8 +802,8 @@ func handleGetUsers(c *gin.Context) {
 
 func handleGetAllOrders(c *gin.Context) {
 	var orders []Order
-	query := DB.Order("timestamp desc")
-	countQuery := DB.Model(&Order{})
+	query := backend.DB.Order("timestamp desc")
+	countQuery := backend.DB.Model(&Order{})
 
 	role, _ := c.Get("role")
 	team, _ := c.Get("team")
@@ -944,7 +955,7 @@ func handleSubmitOrder(c *gin.Context) {
 		ShippingFeeCustomer: shipFeeCustomer, InternalShippingMethod: internalShipMethod, InternalShippingDetails: internalShipDetails,
 	}
 
-	if err := DB.Create(&newOrder).Error; err != nil {
+	if err := backend.DB.Create(&newOrder).Error; err != nil {
 		c.Error(err)
 		return
 	}
@@ -973,7 +984,7 @@ func handleAdminUpdateOrder(c *gin.Context) {
 
 	var originalOrder Order
 	// Use case-insensitive and robust trimming for matching Order IDs
-	if err := DB.Where("UPPER(TRIM(order_id)) = UPPER(TRIM(?))", r.OrderID).First(&originalOrder).Error; err != nil {
+	if err := backend.DB.Where("UPPER(TRIM(order_id)) = UPPER(TRIM(?))", r.OrderID).First(&originalOrder).Error; err != nil {
 		c.JSON(http.StatusNotFound, gin.H{"status": "error", "message": "រកមិនឃើញការកម្មង់ " + r.OrderID})
 		return
 	}
@@ -1088,7 +1099,7 @@ func handleAdminUpdateOrder(c *gin.Context) {
 	}
 
 	if len(mappedData) > 0 {
-		if err := DB.Model(&Order{}).Where("UPPER(TRIM(order_id)) = UPPER(TRIM(?))", r.OrderID).Updates(mappedData).Error; err != nil {
+		if err := backend.DB.Model(&Order{}).Where("UPPER(TRIM(order_id)) = UPPER(TRIM(?))", r.OrderID).Updates(mappedData).Error; err != nil {
 			c.Error(err)
 			return
 		}
@@ -1099,7 +1110,7 @@ func handleAdminUpdateOrder(c *gin.Context) {
 
 	go func() {
 		// Build comprehensive sheet data: start from r.NewData then fill missing
-		// fulfillment fields from DB (e.g. Driver Name set in a prior step).
+		// fulfillment fields from backend.DB (e.g. Driver Name set in a prior step).
 		sheetData := make(map[string]interface{})
 		for k, v := range r.NewData {
 			if k != "Force Sync" {
@@ -1107,7 +1118,7 @@ func handleAdminUpdateOrder(c *gin.Context) {
 			}
 		}
 		var current Order
-		if err := DB.Where("UPPER(TRIM(order_id)) = UPPER(TRIM(?))", r.OrderID).First(&current).Error; err == nil {
+		if err := backend.DB.Where("UPPER(TRIM(order_id)) = UPPER(TRIM(?))", r.OrderID).First(&current).Error; err == nil {
 			fill := func(key, val string) {
 				if val != "" {
 					if _, exists := sheetData[key]; !exists {
@@ -1125,7 +1136,7 @@ func handleAdminUpdateOrder(c *gin.Context) {
 			fill("Delivered Time", current.DeliveredTime)
 			fill("Delivery Photo URL", current.DeliveryPhotoURL)
 			
-			// Crucial: Use team from DB if not in NewData
+			// Crucial: Use team from backend.DB if not in NewData
 			team := current.Team
 			if t, ok := r.NewData["Team"].(string); ok && t != "" {
 				team = t
@@ -1153,8 +1164,8 @@ func handleAdminDeleteOrder(c *gin.Context) {
 	}
 
 	var order Order
-	if err := DB.Where("order_id = ?", r.OrderID).First(&order).Error; err == nil {
-		// Prepare IDs, falling back to request values if DB is empty
+	if err := backend.DB.Where("order_id = ?", r.OrderID).First(&order).Error; err == nil {
+		// Prepare IDs, falling back to request values if backend.DB is empty
 		m1 := order.TelegramMessageID1
 		if m1 == "" {
 			m1 = r.TelegramMessageID1
@@ -1181,7 +1192,7 @@ func handleAdminDeleteOrder(c *gin.Context) {
 				"fulfillmentStore": order.FulfillmentStore,
 			}, "", nil)
 		}()
-		DB.Delete(&order)
+		backend.DB.Delete(&order)
 		eventBytes, _ := json.Marshal(map[string]interface{}{"type": "delete_order", "orderId": r.OrderID})
 		hub.Broadcast <- eventBytes
 	}
@@ -1234,7 +1245,7 @@ func handleAdminUpdateSheet(c *gin.Context) {
 		mappedData[dbCol] = v
 	}
 
-	if err := DB.Table(tableName).Where(pkCol+" = ?", pkVal).Updates(mappedData).Error; err != nil {
+	if err := backend.DB.Table(tableName).Where(pkCol+" = ?", pkVal).Updates(mappedData).Error; err != nil {
 		c.Error(err)
 		return
 	}
@@ -1254,7 +1265,7 @@ func handleAdminUpdateSheet(c *gin.Context) {
 		if req.SheetName == "AllOrders" {
 			orderID := fmt.Sprintf("%v", pkVal)
 			var order Order
-			DB.Where("order_id = ?", orderID).Select("team").First(&order)
+			backend.DB.Where("order_id = ?", orderID).Select("team").First(&order)
 			enqueueSync("updateOrderTelegram", map[string]interface{}{
 				"orderId":       orderID,
 				"updatedFields": req.NewData,
@@ -1289,7 +1300,7 @@ func handleAdminAddRow(c *gin.Context) {
 			}
 			mappedData[colName] = v
 		}
-		DB.Table(tableName).Create(mappedData)
+		backend.DB.Table(tableName).Create(mappedData)
 	}
 
 	eventBytes, _ := json.Marshal(map[string]interface{}{"type": "add_row", "sheetName": req.SheetName, "newData": req.NewData})
@@ -1323,10 +1334,10 @@ func handleAdminDeleteRow(c *gin.Context) {
 		return
 	}
 
-	// ── Roles guard: prevent deleting Admin role (check by RoleName in DB) ──
+	// ── Roles guard: prevent deleting Admin role (check by RoleName in backend.DB) ──
 	if req.SheetName == "Roles" {
 		var role Role
-		if err := DB.Table("roles").Where(pkCol+" = ?", pkVal).First(&role).Error; err == nil {
+		if err := backend.DB.Table("roles").Where(pkCol+" = ?", pkVal).First(&role).Error; err == nil {
 			if strings.EqualFold(role.RoleName, "Admin") {
 				c.JSON(403, gin.H{"status": "error", "message": "មិនអាចលុបតួនាទី Admin បានទេ (Cannot delete Admin role)"})
 				return
@@ -1345,7 +1356,7 @@ func handleAdminDeleteRow(c *gin.Context) {
 	tableName := getTableName(req.SheetName)
 	if tableName != "" {
 		// Use map model so GORM executes DELETE without needing a struct with primary key
-		if err := DB.Table(tableName).Where(pkCol+" = ?", pkVal).Delete(map[string]interface{}{}).Error; err != nil {
+		if err := backend.DB.Table(tableName).Where(pkCol+" = ?", pkVal).Delete(map[string]interface{}{}).Error; err != nil {
 			c.JSON(500, gin.H{"status": "error", "message": "Delete operation failed: " + err.Error()})
 			return
 		}
@@ -1372,7 +1383,7 @@ func handleAdminDeleteRow(c *gin.Context) {
 
 func handleGetRevenueSummary(c *gin.Context) {
 	var revs []RevenueEntry
-	DB.Find(&revs)
+	backend.DB.Find(&revs)
 	c.JSON(200, gin.H{"status": "success", "data": revs})
 }
 func handleUpdateFormulaReport(c *gin.Context)    { c.JSON(200, gin.H{"status": "success"}) }
@@ -1388,7 +1399,7 @@ func handleGetGlobalShippingCosts(c *gin.Context) {
 		ShippingMethod string  `json:"Internal Shipping Method"`
 	}
 
-	err := DB.Model(&Order{}).
+	err := backend.DB.Model(&Order{}).
 		Select("order_id, timestamp, team, internal_cost, internal_shipping_method").
 		Where("order_id NOT LIKE ? AND order_id NOT LIKE ?", "%Opening_Balance%", "%Opening Balance%").
 		Order("timestamp DESC").
@@ -1418,7 +1429,7 @@ func handleUpdateProfile(c *gin.Context) {
 		}
 		mappedData[mapToDBColumn(k)] = v
 	}
-	if err := DB.Model(&User{}).Where("user_name = ?", req.UserName).Updates(mappedData).Error; err != nil {
+	if err := backend.DB.Model(&User{}).Where("user_name = ?", req.UserName).Updates(mappedData).Error; err != nil {
 		c.Error(err)
 		return
 	}
@@ -1447,7 +1458,7 @@ func handleChangePassword(c *gin.Context) {
 		c.JSON(http.StatusInternalServerError, gin.H{"status": "error", "message": "មិនអាចកំណត់លេខសម្ងាត់ថ្មីបានទេ"})
 		return
 	}
-	if err := DB.Model(&User{}).Where("user_name = ?", req.UserName).Update("password", string(hashedPassword)).Error; err != nil {
+	if err := backend.DB.Model(&User{}).Where("user_name = ?", req.UserName).Update("password", string(hashedPassword)).Error; err != nil {
 		c.Error(err)
 		return
 	}
@@ -1465,7 +1476,7 @@ func handleGetChatMessages(c *gin.Context) {
 	receiverParam := c.Query("receiver")
 	currentUser, _ := c.Get("userName")
 	var messages []ChatMessage
-	query := DB.Order("timestamp desc")
+	query := backend.DB.Order("timestamp desc")
 	if receiverParam != "" {
 		query = query.Where("(user_name = ? AND receiver = ?) OR (user_name = ? AND receiver = ?)", currentUser, receiverParam, receiverParam, currentUser)
 	} else {
@@ -1485,7 +1496,7 @@ func handleGetChatMessages(c *gin.Context) {
 func handleGetSingleChatMessage(c *gin.Context) {
 	id := c.Param("id")
 	var msg ChatMessage
-	if err := DB.Where("id = ?", id).First(&msg).Error; err != nil {
+	if err := backend.DB.Where("id = ?", id).First(&msg).Error; err != nil {
 		c.JSON(404, gin.H{"error": "message not found"})
 		return
 	}
@@ -1533,7 +1544,7 @@ func handleSendChatMessage(c *gin.Context) {
 			msg.Content = driveURL
 		}
 
-		DB.Create(&msg)
+		backend.DB.Create(&msg)
 		msgBytes, _ := json.Marshal(map[string]interface{}{"type": "new_message", "data": msg})
 		hub.Broadcast <- msgBytes
 
@@ -1541,7 +1552,7 @@ func handleSendChatMessage(c *gin.Context) {
 		return
 	}
 
-	DB.Create(&msg)
+	backend.DB.Create(&msg)
 	msgBytes, _ := json.Marshal(map[string]interface{}{"type": "new_message", "data": msg})
 	hub.Broadcast <- msgBytes
 	c.JSON(200, gin.H{"status": "success", "data": msg})
@@ -1558,7 +1569,7 @@ func handleDeleteChatMessage(c *gin.Context) {
 	}
 
 	var msg ChatMessage
-	if err := DB.First(&msg, req.ID).Error; err != nil {
+	if err := backend.DB.First(&msg, req.ID).Error; err != nil {
 		c.JSON(http.StatusNotFound, gin.H{"status": "error", "message": "រកមិនឃើញសារ"})
 		return
 	}
@@ -1570,7 +1581,7 @@ func handleDeleteChatMessage(c *gin.Context) {
 		return
 	}
 
-	if err := DB.Delete(&msg).Error; err != nil {
+	if err := backend.DB.Delete(&msg).Error; err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"status": "error", "message": "ការលុបសារបរាជ័យ"})
 		return
 	}
@@ -1593,7 +1604,7 @@ func handleGetOrderMetadata(c *gin.Context) {
 
 	var order Order
 	// Case-insensitive search for order_id
-	if err := DB.Where("UPPER(TRIM(order_id)) = UPPER(TRIM(?))", orderID).First(&order).Error; err != nil {
+	if err := backend.DB.Where("UPPER(TRIM(order_id)) = UPPER(TRIM(?))", orderID).First(&order).Error; err != nil {
 		if err == gorm.ErrRecordNotFound {
 			c.JSON(http.StatusNotFound, gin.H{"status": "error", "message": "Order not found"})
 		} else {
@@ -1606,7 +1617,7 @@ func handleGetOrderMetadata(c *gin.Context) {
 }
 
 // =========================================================================
-// GOOGLE SHEETS WEBHOOK (Real-time Sync Sheet -> DB)
+// GOOGLE SHEETS WEBHOOK (Real-time Sync Sheet -> backend.DB)
 // =========================================================================
 
 func handleSheetsWebhook(c *gin.Context) {
@@ -1718,7 +1729,7 @@ func handleSheetsWebhook(c *gin.Context) {
 			var currentOrder Order
 			// Using TRIM and UPPER for robust matching
 			whereClause := fmt.Sprintf("UPPER(TRIM(%s)) = UPPER(TRIM(?))", pkCol)
-			if err := DB.Where(whereClause, pkVal).Select("fulfillment_status").First(&currentOrder).Error; err == nil {
+			if err := backend.DB.Where(whereClause, pkVal).Select("fulfillment_status").First(&currentOrder).Error; err == nil {
 				cur := strings.TrimSpace(currentOrder.FulfillmentStatus)
 				if cur == "" { cur = "Pending" }
 				
@@ -1751,11 +1762,11 @@ func handleSheetsWebhook(c *gin.Context) {
 
 	if req.Action == "delete" {
 		whereClause := fmt.Sprintf("UPPER(TRIM(%s)) = UPPER(TRIM(?))", pkCol)
-		DB.Table(tableName).Where(whereClause, pkVal).Delete(nil)
+		backend.DB.Table(tableName).Where(whereClause, pkVal).Delete(nil)
 	} else {
 		// UPSERT logic: Try to update first
 		whereClause := fmt.Sprintf("UPPER(TRIM(%s)) = UPPER(TRIM(?))", pkCol)
-		result := DB.Table(tableName).Where(whereClause, pkVal).Updates(mappedData)
+		result := backend.DB.Table(tableName).Where(whereClause, pkVal).Updates(mappedData)
 		if result.Error != nil {
 			c.JSON(500, gin.H{"status": "error", "message": result.Error.Error()})
 			return
@@ -1765,7 +1776,7 @@ func handleSheetsWebhook(c *gin.Context) {
 		if result.RowsAffected == 0 {
 			// Ensure PK is in mappedData for creation
 			mappedData[pkCol] = pkVal
-			if err := DB.Table(tableName).Create(mappedData).Error; err != nil {
+			if err := backend.DB.Table(tableName).Create(mappedData).Error; err != nil {
 				// Log but don't fail, as it might have been created by another process/worker
 				log.Printf("⚠️ SyncManager: Upsert/Create failed for %s PK %v: %v", tableName, pkVal, err)
 			}
@@ -1793,11 +1804,11 @@ func handleSheetsWebhook(c *gin.Context) {
 				team = strings.TrimPrefix(sheetName, "Orders_")
 			}
 
-			// 2. If team is still empty, fetch from DB
+			// 2. If team is still empty, fetch from backend.DB
 			if team == "" {
 				var order Order
 				whereClause := fmt.Sprintf("UPPER(TRIM(%s)) = UPPER(TRIM(?))", pkCol)
-				if err := DB.Where(whereClause, orderId).Select("team").First(&order).Error; err == nil {
+				if err := backend.DB.Where(whereClause, orderId).Select("team").First(&order).Error; err == nil {
 					team = order.Team
 				}
 			}
@@ -1858,10 +1869,10 @@ func main() {
 	backend.HubGlobal = hub
 	go hub.Run()
 
-	// Initialize DB in background to allow fast port binding for Render
+	// Initialize backend.DB in background to allow fast port binding for Render
 	go func() {
 		initDB()
-		// Start Background Workers ONLY after DB is ready (if they depend on it)
+		// Start Background Workers ONLY after backend.DB is ready (if they depend on it)
 		startSyncManager(2)
 		go startOrderWorker()
 		startScheduler()
@@ -1870,7 +1881,7 @@ func main() {
 			log.Println("🚀 Starting automatic data migration on startup...")
 			backend.PerformDataMigration()
 		} else {
-			log.Println("ℹ️ Automatic migration skipped on startup. Set AUTO_MIGRATE=true if you want to wipe and re-sync DB from Sheets.")
+			log.Println("ℹ️ Automatic migration skipped on startup. Set AUTO_MIGRATE=true if you want to wipe and re-sync backend.DB from Sheets.")
 		}
 	}()
 
@@ -1897,6 +1908,7 @@ func main() {
 	// But admin group is defined inside protected block, so we'll call it there.
 	api.POST("/webhook/sheets-sync", handleSheetsWebhook)
 	api.GET("/order-metadata/:id", handleGetOrderMetadata)
+
 	protected := api.Group("/")
 	protected.Use(AuthMiddleware())
 	{
