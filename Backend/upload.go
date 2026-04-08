@@ -239,6 +239,7 @@ func HandleImageUploadProxy(c *gin.Context) {
 		dbUpdateMap := map[string]interface{}{}
 		broadcastMap := map[string]interface{}{}
 
+		// 1.1 Process NewData from request (e.g. status, packer info)
 		if req.NewData != nil {
 			for k, v := range req.NewData {
 				dbCol := UploadMapToDBColumnFunc(k)
@@ -249,13 +250,17 @@ func HandleImageUploadProxy(c *gin.Context) {
 			}
 		}
 
+		// 1.2 Process the uploaded image URL
 		if req.TargetColumn != "" {
 			dbCol := UploadMapToDBColumnFunc(req.TargetColumn)
-			dbUpdateMap[dbCol] = driveURL
-			broadcastMap[req.TargetColumn] = driveURL
+			if UploadIsValidOrderColumnFunc(dbCol) {
+				dbUpdateMap[dbCol] = driveURL
+				broadcastMap[req.TargetColumn] = driveURL
+			}
 		}
 
 		if len(dbUpdateMap) > 0 {
+			// Update Database
 			res := DB.Model(&Order{}).Where("UPPER(TRIM(order_id)) = UPPER(TRIM(?))", req.OrderID).UpdateColumns(dbUpdateMap)
 			if res.Error != nil {
 				log.Printf("❌ [Upload] DB update failed for order %s: %v", req.OrderID, res.Error)
@@ -263,20 +268,33 @@ func HandleImageUploadProxy(c *gin.Context) {
 				log.Printf("✅ [Upload] DB update SUCCESS: orderId=%s rowsAffected=%d fields=%v", req.OrderID, res.RowsAffected, broadcastMap)
 			}
 
-			// Sync to Google Sheets + Telegram
+			// Sync to Google Sheets & Telegram
 			go func(orderId string, bMap map[string]interface{}) {
 				var order Order
 				if err := DB.Where("UPPER(TRIM(order_id)) = UPPER(TRIM(?))", orderId).First(&order).Error; err == nil {
+					// Prepare data for Sheet sync
 					sheetData := make(map[string]interface{})
 					for k, v := range bMap {
 						sheetData[k] = v
 					}
-					if order.PackedBy != "" {
+					
+					// Ensure we have current packer info from DB if not in bMap
+					if sheetData["Packed By"] == nil && order.PackedBy != "" {
 						sheetData["Packed By"] = order.PackedBy
 					}
-					if order.PackedTime != "" {
+					if sheetData["Packed Time"] == nil && order.PackedTime != "" {
 						sheetData["Packed Time"] = order.PackedTime
 					}
+
+					// 1.3 Direct Sheet Update for Reliability (matched with Profile Picture logic)
+					if req.TargetColumn != "" {
+						EnqueueSync("updateSheet", map[string]interface{}{req.TargetColumn: driveURL}, "AllOrders", map[string]string{"Order ID": orderId})
+						if order.Team != "" {
+							EnqueueSync("updateSheet", map[string]interface{}{req.TargetColumn: driveURL}, "Orders_"+order.Team, map[string]string{"Order ID": orderId})
+						}
+					}
+
+					// 1.4 Full Update including Telegram Notification
 					EnqueueSync("updateOrderTelegram", map[string]interface{}{
 						"orderId":       orderId,
 						"team":          order.Team,
