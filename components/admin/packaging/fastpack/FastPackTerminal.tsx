@@ -384,7 +384,7 @@ const FastPackTerminal: React.FC<FastPackTerminalProps> = ({ order, onClose, onS
         if (decoded === lastDetectedQR.current) return;
         lastDetectedQR.current = decoded;
         setAutoCaptureCountdown(3);
-    });
+    }, 'single', { disableScanner: !!packagePhoto });
 
     useEffect(() => {
         if (autoCaptureCountdown === null) return;
