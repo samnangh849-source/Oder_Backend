@@ -113,11 +113,11 @@ func CreateGoogleAPIClient(ctx context.Context) error {
 
 // isNumericHeader returns true if the column header should be parsed as float64.
 func IsNumericHeader(h string) bool {
-	h = strings.ToLower(strings.TrimSpace(h))
-	return h == "price" || h == "cost" || h == "grand total" || h == "subtotal" ||
-		h == "shipping fee (customer)" || h == "internal cost" || h == "internalcost" ||
-		h == "discount ($)" || h == "delivery unpaid" || h == "delivery paid" ||
-		h == "total product cost ($)" || h == "revenue" || h == "quantity" ||
+	h = strings.ToLower(strings.ReplaceAll(strings.TrimSpace(h), " ", ""))
+	return h == "price" || h == "cost" || h == "grandtotal" || h == "subtotal" ||
+		h == "shippingfeecustomer" || h == "internalcost" ||
+		h == "discount" || h == "deliveryunpaid" || h == "deliverypaid" ||
+		h == "totalproductcost" || h == "revenue" || h == "quantity" ||
 		h == "part" || h == "id" || h == "projectid" ||
 		h == "totalorders" || h == "totalrevenue" || h == "calculatedvalue" ||
 		h == "calculatorid"
@@ -125,7 +125,7 @@ func IsNumericHeader(h string) bool {
 
 // isBoolHeader returns true if the column header should be parsed as bool.
 func IsBoolHeader(h string) bool {
-	h = strings.ToLower(strings.TrimSpace(h))
+	h = strings.ToLower(strings.ReplaceAll(strings.TrimSpace(h), " ", ""))
 	return h == "issystemadmin" || h == "allowmanualdriver" || h == "requiredriverselection" ||
 		h == "isrestocked" || h == "isenabled" ||
 		h == "enabledriverrecommendation" || h == "requireperiodselection" || h == "iscustom"
@@ -152,26 +152,42 @@ func convertSheetValuesToMaps(sheetName string, values *sheets.ValueRange) ([]ma
 			if i < len(headers) {
 				header := strings.TrimSpace(fmt.Sprintf("%v", headers[i]))
 				if header != "" {
-					// For incentive sheets, we normalize headers to camelCase to match the new tags
-					targetHeader := header
+					// Normalize header: Remove spaces and handle common variations
+					// Example: "User Name" -> "UserName", "Full Name" -> "FullName"
+					targetHeader := strings.ReplaceAll(header, " ", "")
+
 					if isIncentiveSheet {
-						if header == "ID" { targetHeader = "id" }
-						if header == "ProjectID" { targetHeader = "projectId" }
-						if header == "CalculatorID" { targetHeader = "calculatorId" }
-						if header == "RulesJSON" { targetHeader = "rulesJson" }
-						if header == "BreakdownJSON" { targetHeader = "breakdownJson" }
-						if header == "UserName" { targetHeader = "userName" }
-						if header == "TotalOrders" { targetHeader = "totalOrders" }
-						if header == "TotalRevenue" { targetHeader = "totalRevenue" }
-						if header == "TotalProfit" { targetHeader = "totalProfit" }
-						if header == "CalculatedValue" { targetHeader = "calculatedValue" }
-						if header == "IsCustom" { targetHeader = "isCustom" }
-						if header == "MetricType" { targetHeader = "metricType" }
-						if header == "DataKey" { targetHeader = "dataKey" }
-						if header == "Month" { targetHeader = "month" }
-						// Also handle first character lowercase for others
-						if targetHeader == header && len(header) > 0 {
-							targetHeader = strings.ToLower(header[:1]) + header[1:]
+						// For incentive sheets, we normalize headers to camelCase to match the new tags
+						if strings.EqualFold(targetHeader, "ID") {
+							targetHeader = "id"
+						} else if strings.EqualFold(targetHeader, "ProjectID") {
+							targetHeader = "projectId"
+						} else if strings.EqualFold(targetHeader, "CalculatorID") {
+							targetHeader = "calculatorId"
+						} else if strings.EqualFold(targetHeader, "RulesJSON") {
+							targetHeader = "rulesJson"
+						} else if strings.EqualFold(targetHeader, "BreakdownJSON") {
+							targetHeader = "breakdownJson"
+						} else if strings.EqualFold(targetHeader, "UserName") {
+							targetHeader = "userName"
+						} else if strings.EqualFold(targetHeader, "TotalOrders") {
+							targetHeader = "totalOrders"
+						} else if strings.EqualFold(targetHeader, "TotalRevenue") {
+							targetHeader = "totalRevenue"
+						} else if strings.EqualFold(targetHeader, "TotalProfit") {
+							targetHeader = "totalProfit"
+						} else if strings.EqualFold(targetHeader, "CalculatedValue") {
+							targetHeader = "calculatedValue"
+						} else if strings.EqualFold(targetHeader, "IsCustom") {
+							targetHeader = "isCustom"
+						} else if strings.EqualFold(targetHeader, "MetricType") {
+							targetHeader = "metricType"
+						} else if strings.EqualFold(targetHeader, "DataKey") {
+							targetHeader = "dataKey"
+						} else if strings.EqualFold(targetHeader, "Month") {
+							targetHeader = "month"
+						} else if len(targetHeader) > 0 {
+							targetHeader = strings.ToLower(targetHeader[:1]) + targetHeader[1:]
 						}
 					}
 
@@ -583,11 +599,11 @@ func PerformDataMigration() {
 		return
 	}
 	var validTemplates []TelegramTemplate
-	seenTemplates := make(map[uint]bool)
+	seenTemplates := make(map[string]bool)
 	for _, x := range templates {
-		if !seenTemplates[x.ID] {
-			if x.ID != 0 {
-				seenTemplates[x.ID] = true
+		if !seenTemplates[x.TemplateName] {
+			if x.TemplateName != "" {
+				seenTemplates[x.TemplateName] = true
 			}
 			validTemplates = append(validTemplates, x)
 		}
@@ -656,10 +672,12 @@ func PerformDataMigration() {
 		return
 	}
 	var validReturns []ReturnItem
-	seenReturns := make(map[string]bool)
+	seenReturns := make(map[uint]bool)
 	for _, x := range returns {
-		if x.ReturnID != "" && !seenReturns[x.ReturnID] {
-			seenReturns[x.ReturnID] = true
+		if !seenReturns[x.ID] {
+			if x.ID != 0 {
+				seenReturns[x.ID] = true
+			}
 			validReturns = append(validReturns, x)
 		}
 	}
