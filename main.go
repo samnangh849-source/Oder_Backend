@@ -1753,6 +1753,28 @@ func handleSheetsWebhook(c *gin.Context) {
 				log.Printf("⚠️  [Webhook Sync] Error checking current status for Order %v: %v", pkVal, err)
 			}
 		}
+
+		// --- Photo Protection (Prevent empty sheet data from clearing DB URLs) ---
+		photoFields := []string{"package_photo_url", "delivery_photo_url"}
+		for _, field := range photoFields {
+			if incomingVal, hasVal := mappedData[field]; hasVal && fmt.Sprintf("%v", incomingVal) == "" {
+				var currentOrder Order
+				whereClause := fmt.Sprintf("UPPER(TRIM(%s)) = UPPER(TRIM(?))", pkCol)
+				if err := backend.DB.Where(whereClause, pkVal).Select(field).First(&currentOrder).Error; err == nil {
+					existingVal := ""
+					if field == "package_photo_url" {
+						existingVal = currentOrder.PackagePhotoURL
+					} else {
+						existingVal = currentOrder.DeliveryPhotoURL
+					}
+
+					if existingVal != "" {
+						log.Printf("🛡️  [Webhook Protection] BLOCKED OVERWRITE for %s for Order %v (preventing stale sheet data overwrite)", field, pkVal)
+						delete(mappedData, field)
+					}
+				}
+			}
+		}
 	}
 
 	if pkCol == "" || pkVal == nil {
