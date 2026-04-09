@@ -278,12 +278,18 @@ func HandleImageUploadProxy(c *gin.Context) {
 						sheetData[k] = v
 					}
 					
-					// Ensure we have current packer info from DB if not in bMap
+					// Ensure we have current packer info and photo URL from DB
 					if sheetData["Packed By"] == nil && order.PackedBy != "" {
 						sheetData["Packed By"] = order.PackedBy
 					}
 					if sheetData["Packed Time"] == nil && order.PackedTime != "" {
 						sheetData["Packed Time"] = order.PackedTime
+					}
+					if order.PackagePhotoURL != "" {
+						sheetData["Package Photo URL"] = order.PackagePhotoURL
+					}
+					if order.DeliveryPhotoURL != "" {
+						sheetData["Delivery Photo URL"] = order.DeliveryPhotoURL
 					}
 
 					// 1.3 Full Update including Sheet Sync & Telegram Notification
