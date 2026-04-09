@@ -64,6 +64,7 @@ const SettingsDashboard: React.FC<SettingsDashboardProps> = ({ onBack, initialSe
     const refreshDataRef = useRef(refreshData);
     refreshDataRef.current = refreshData;
 
+    // Fetch section data: try appData first, then direct API call as fallback
     const fetchSectionData = useCallback(async (sectionId: string, forceRefresh = false) => {
         const section = configSections.find(s => s.id === sectionId);
         if (!section || section.id === 'telegramTemplates' || section.id === 'permissions' || section.id === 'database') {
@@ -77,74 +78,68 @@ const SettingsDashboard: React.FC<SettingsDashboardProps> = ({ onBack, initialSe
             // Step 1: Check current appData (always read latest via ref)
             const currentAppData = appDataRef.current;
             const appDataList = getArrayCaseInsensitive(currentAppData, section.dataKey);
-            if (!forceRefresh && appDataList.length > 0) {
-                setLocalData(appDataList);
+            const directVal = (currentAppData as any)[section.dataKey];
+            const fromAppData = appDataList.length > 0 ? appDataList
+                : (Array.isArray(directVal) && directVal.length > 0 ? directVal : []);
+
+            if (!forceRefresh && fromAppData.length > 0) {
+                setLocalData(fromAppData);
                 setIsLoading(false);
                 return;
             }
 
-            // Step 2: Call refreshData() which returns the fetched data directly
-            // (avoids React async state update race condition)
-            // Use ref to avoid re-creating this callback when refreshData reference changes
-            let refreshedData: Record<string, any> | null = null;
-            try {
-                refreshedData = await refreshDataRef.current();
-            } catch (e) {
-                console.warn('[SettingsDashboard] refreshData failed, trying direct fetch...', e);
-            }
-
-            // Step 3: Use returned data directly
-            if (refreshedData) {
-                const refreshedList = getArrayCaseInsensitive(refreshedData, section.dataKey);
-                if (refreshedList.length > 0) {
-                    setLocalData(refreshedList);
-                    return;
-                }
-            }
-
-            // Step 4: Last resort — direct API fetch with fallback token
+            // Step 2: Direct API fetch — only fetch static-data (NOT orders) to avoid unnecessary failures
             const token = localStorage.getItem('token')
                 || (await CacheService.get<{ token: string }>(CACHE_KEYS.SESSION))?.token;
             if (!token) {
-                console.warn('[SettingsDashboard] No auth token available for direct fetch');
+                // No token but appData might have data — use it
+                if (fromAppData.length > 0) { setLocalData(fromAppData); return; }
                 setFetchError(true);
                 return;
             }
             const headers: HeadersInit = { 'Authorization': `Bearer ${token}` };
 
-            const staticDataSections = ['pages', 'products', 'shippingMethods', 'drivers',
-                'bankAccounts', 'phoneCarriers', 'driverRecommendations', 'roles', 'users',
-                'stores', 'colors', 'locations', 'inventory', 'stockTransfers'];
-
-            let endpoint: string;
-            if (staticDataSections.includes(sectionId)) {
-                endpoint = 'static-data';
-            } else if (sectionId === 'systemSettings') {
-                endpoint = 'settings';
-            } else {
-                endpoint = sectionId;
+            // Retry up to 3 times (handles Render cold start / 503)
+            let res: Response | null = null;
+            for (let attempt = 0; attempt < 3; attempt++) {
+                try {
+                    res = await fetch(`${WEB_APP_URL}/api/static-data`, { headers });
+                    if (res.status !== 503) break;
+                } catch (e) {
+                    if (attempt === 2) throw e;
+                }
+                await new Promise(r => setTimeout(r, 2000 * (attempt + 1)));
             }
 
-            const res = await fetch(`${WEB_APP_URL}/api/${endpoint}`, { headers });
-            if (res.ok) {
+            if (res && res.ok) {
                 const json = await res.json();
                 if (json.status === 'success') {
-                    let data: any[];
-                    if (endpoint === 'static-data') {
-                        data = getArrayCaseInsensitive(json.data, section.dataKey);
-                    } else {
-                        data = Array.isArray(json.data) ? json.data : [];
+                    const data = getArrayCaseInsensitive(json.data, section.dataKey);
+                    if (data.length > 0) {
+                        setLocalData(data);
+                        return;
                     }
-                    setLocalData(data);
-                } else {
-                    setFetchError(true);
                 }
+            }
+
+            // If API failed but appData has data from initial load, use it
+            if (fromAppData.length > 0) {
+                setLocalData(fromAppData);
             } else {
                 setFetchError(true);
             }
         } catch (err) {
             console.error(`[SettingsDashboard] Failed to fetch ${sectionId}:`, err);
-            setFetchError(true);
+            // Fallback to appData even on error
+            const currentAppData = appDataRef.current;
+            const fallback = getArrayCaseInsensitive(currentAppData, section.dataKey);
+            const directFallback = (currentAppData as any)[section.dataKey];
+            const list = fallback.length > 0 ? fallback : (Array.isArray(directFallback) && directFallback.length > 0 ? directFallback : []);
+            if (list.length > 0) {
+                setLocalData(list);
+            } else {
+                setFetchError(true);
+            }
         } finally {
             setIsLoading(false);
         }
@@ -155,12 +150,10 @@ const SettingsDashboard: React.FC<SettingsDashboardProps> = ({ onBack, initialSe
         if (activeId) fetchSectionData(activeId);
     }, [activeId, fetchSectionData]);
 
-    // Re-sync localData when appData updates externally (e.g. after global refreshData)
-    // Also ensures loading is turned off once data arrives
+    // Re-sync localData when appData updates externally (e.g. from initial load or background polling)
     useEffect(() => {
         if (!activeSection) return;
         const appDataList = getArrayCaseInsensitive(appData, activeSection.dataKey);
-        // Also try direct key access as fallback
         const directVal = (appData as any)[activeSection.dataKey];
         const list = appDataList.length > 0 ? appDataList : (Array.isArray(directVal) && directVal.length > 0 ? directVal : []);
         if (list.length > 0) {
