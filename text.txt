@@ -1,0 +1,61 @@
+សូមពិនិត្យ @main.go @upload.go @database.go @sync.go @models.go @migration.go តើហេតុអ្វីផ្នែកគ្រប់គ្រង Account User របស់Admin មិនបង្ហាញទិន្នន័យរបស់ user?
+
+
+
+
+I have analyzed your backend code and identified several potential reasons why the User Account Management section might not be displaying data:
+
+  1. Google Sheets Header Mismatch during Migration
+  In Backend/migration.go, the convertSheetValuesToMaps function does not normalize headers for the "Users" sheet (it only does so for "Incentive" sheets). 
+   * The Issue: If your Google Sheet has headers like "User Name" or "Full Name" (with spaces), the migration will create maps with those keys.
+   * The Consequence: When json.Unmarshal attempts to populate the User struct, it looks for exactly UserName and FullName (as defined in your json tags in models.go).
+     Since they don't match "User Name", the fields remain empty. The migration logic then skips these rows because x.UserName == "".
+   * Fix: Ensure the headers in your Google Sheet match the JSON tags in Backend/models.go exactly (e.g., UserName, FullName, Role, IsSystemAdmin, etc.).
+
+  2. JSON Key Case Sensitivity in the Frontend
+  Your User model uses PascalCase for JSON tags:
+
+   1 type User struct {
+   2     UserName string `json:"UserName"` // Upper 'U'
+   3     FullName string `json:"FullName"` // Upper 'F'
+   4     ...
+   5 }
+   * The Issue: If your frontend (React/TypeScript) is expecting camelCase keys (e.g., userName, fullName), it will fail to read the data returned by the API because the
+     keys start with capital letters.
+   * Verification: Check your frontend types.ts or component code to see if it expects user.userName or user.UserName.
+
+  3. Database Table Name Conflict
+  In main.go, you are fetching users using:
+   1 backend.DB.Table("users").Find(&users)
+  While GORM usually pluralizes User to users, sometimes cross-package aliases (like type User = backend.User in main.go) can cause GORM to lose track of the model's
+  metadata if not handled carefully.
+   * Recommendation: Try changing the fetch to use the model directly to let GORM handle the mapping: backend.DB.Find(&users).
+
+  4. Migration Wiping the Admin User
+  If you have AUTO_MIGRATE=true set in your environment:
+   1. The system starts and runs EnsureSeedData(), creating the "admin" user.
+   2. Then it runs PerformDataMigration(), which deletes all users (tx.Delete(&User{})).
+   3. If the Google Sheet import fails (due to the header issue mentioned in #1), the table remains empty.
+   4. Although EnsureSeedData() is called again at the end, if there is any error during the commit, it might not run.
+
+  Suggested Troubleshooting Steps:
+   1. Check Google Sheet Headers: Open your "Users" sheet and make sure the first row headers are exactly: UserName, Password, Team, FullName, ProfilePictureURL, Role,
+      IsSystemAdmin, TelegramUsername.
+   2. Check API Response: Open your browser's Developer Tools (Network tab) and look at the response from /api/users. See if the data is there but the keys are
+      capitalized (e.g., "UserName": "admin").
+   3. Check Backend Logs: Look for "📊 StaticData: Fetched 0 users" or "⚠️ Failed to fetch users" in your server logs to see if the database is actually returning zero
+      rows.
+
+  តើអ្នកចង់ឱ្យខ្ញុំជួយកែសម្រួល Code ក្នុង Backend/migration.go ដើម្បីឱ្យវាស្គាល់ Header ដែលមានដកឃ្លា (ដូចជា "User Name") ឬទេ?
+
+
+
+
+ខ្ញុំបានកែសម្រួល Code ក្នុង constants/settingsConfig.ts ដើម្បីឱ្យ Frontend អាចទាញយកទិន្នន័យបាន កាន់តែរឹងមាំ ទោះបីជាឈ្មោះ Column ក្នុង Google Sheets ឬ Database មានដកឃ្លាក៏ដោយ។
+
+  ឥឡូវនេះ ប្រសិនបើអ្នកបានធ្វើតាមជំហានទាំងនេះ នោះទិន្នន័យ User គួរតែបង្ហាញហើយ៖
+   1. Backend: កែសម្រួល migration.go (ដែលខ្ញុំបានធ្វើរួច)។
+   2. Frontend: កែសម្រួល settingsConfig.ts (ដែលខ្ញុំទើបតែធ្វើរួច)។
+   3. Sync Data: បើក Admin Panel រួចចុច "Migrate Data"។
+
+  តើអ្នកចង់ឱ្យខ្ញុំជួយពិនិត្យមើល Feature ផ្សេងទៀតទេ? ដូចជាការ Upload រូបភាព Profile ឬការកំណត់សិទ្ធិ? (Role Permissions) ព្រោះបើ User បង្ហាញហើយ តែសិទ្ធិមិនត្រូវ ក៏ Admin មិនអាចធ្វើការបានពេញលេញដែរ។

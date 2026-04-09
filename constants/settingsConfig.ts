@@ -241,9 +241,17 @@ export const configSections: ConfigSection[] = [
 
 export const getValueCaseInsensitive = (item: any, key: string) => {
     if (!item || typeof item !== 'object' || !key) return undefined;
+    
+    // 1. Direct match (Fastest)
     if (item[key] !== undefined) return item[key];
-    const lowerKey = key.toLowerCase();
-    const foundKey = Object.keys(item).find(k => k.toLowerCase() === lowerKey || k.toLowerCase().replace(/[_\s]/g, '') === lowerKey.replace(/[_\s]/g, ''));
+    
+    // 2. Case-insensitive match with normalization (No spaces, no underscores)
+    const normalizedKey = key.toLowerCase().replace(/[_\s]/g, '');
+    const foundKey = Object.keys(item).find(k => {
+        const normalizedK = k.toLowerCase().replace(/[_\s]/g, '');
+        return normalizedK === normalizedKey;
+    });
+    
     return foundKey ? item[foundKey] : undefined;
 };
 
