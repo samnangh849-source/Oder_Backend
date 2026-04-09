@@ -318,6 +318,7 @@ function handleUpdateSheet(data) {
       if (updatedCount > 0) {
         // Write the ENTIRE row back in ONE atomic operation
         sheet.getRange(rowIndex, 1, 1, headers.length).setValues([rowData]);
+        SpreadsheetApp.flush(); // Force immediate commit to avoid race conditions
         console.log("✅ [Batch Update] SUCCESS: Atomically updated row " + rowIndex);
       }
       return createJsonResponse({ status: "success", updated: updatedCount });
@@ -569,6 +570,7 @@ function updateOrderInSheets(orderId, team, updatedFields) {
       newData: updatedFields
     });
   });
+  SpreadsheetApp.flush(); // Ensure all updates are committed before any subsequent reads
 }
 
 function appendRowMapped(sheet, data) {
@@ -1093,12 +1095,15 @@ function updateOrderTelegram(data) {
     }
 
     // Prepare normalized data for sendOrderToTelegram
+    // ✅ Merge updatedFields with fullOrderData to ensure newly updated info 
+    // (like photo URLs) isn't lost if the spreadsheet fetch was slightly stale.
     const normalizedData = {
+      ...fullOrderData,
+      ...updatedFields,
       orderId: orderId,
       team: team,
-      fulfillmentStore: fullOrderData["Fulfillment Store"],
-      forceSync: updatedFields["Force Sync"] === true,
-      ...fullOrderData
+      fulfillmentStore: fullOrderData["Fulfillment Store"] || updatedFields["Fulfillment Store"],
+      forceSync: updatedFields["Force Sync"] === true
     };
 
     return sendOrderToTelegram(normalizedData);
