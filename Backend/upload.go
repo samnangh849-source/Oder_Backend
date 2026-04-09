@@ -317,7 +317,8 @@ func HandleImageUploadProxy(c *gin.Context) {
 		})
 		HubGlobal.Broadcast <- notify
 
-		EnqueueSync("updateSheet", map[string]interface{}{"ProfilePictureURL": driveURL}, "Users", map[string]string{"UserName": req.UserName})
+		// Use space-friendly key for Google Sheets sync to match typical headers
+		EnqueueSync("updateSheet", map[string]interface{}{"Profile Picture URL": driveURL}, "Users", map[string]string{"UserName": req.UserName})
 	}
 
 	// ── 3. Movie Update ──────────────────────────────────────────────────
