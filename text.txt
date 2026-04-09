@@ -76,3 +76,4 @@ I have analyzed your backend code and identified several potential reasons why t
 
   តើអ្នកមានសំណួរអ្វីផ្សេងទៀត ឬចង់ឱ្យខ្ញុំជួយលើផ្នែកណាទៀតទេ? (ឧទាហរណ៍៖ ការគ្រប់គ្រង Order ឬ Telegram Notification?)_
 
+ខ្ញុំសូមបញ្ជាក់ថា Column (Package Photo URL) នៃSheet Order គឺមិនទាន់ឃើញបំពេញដោយ Link Google Drive ជោគជ័យឡើយ

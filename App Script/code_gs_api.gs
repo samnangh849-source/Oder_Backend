@@ -260,17 +260,16 @@ function handleUpdateSheet(data) {
     const normalizedHeaders = headers.map(h => normalizeKey(h));
     console.log("📑 [UpdateSheet] Headers: " + normalizedHeaders.join(", "));
     
-    let rowIndex = -1;
     const targetPkVals = {};
     for (const [k, v] of Object.entries(data.primaryKey)) {
-      targetPkVals[normalizeKey(k)] = String(v).trim();
+      targetPkVals[normalizeKey(k)] = normalizeKey(v);
     }
 
     for (let i = 1; i < values.length; i++) {
       let match = true;
       for (const pkKey in targetPkVals) {
         const colIdx = normalizedHeaders.indexOf(pkKey);
-        if (colIdx === -1 || String(values[i][colIdx]).trim() !== targetPkVals[pkKey]) {
+        if (colIdx === -1 || normalizeKey(values[i][colIdx]) !== targetPkVals[pkKey]) {
           match = false; break;
         }
       }
@@ -1009,7 +1008,7 @@ function fetchOrderDataFromSheet(orderId, team) {
   if (idIdx === -1) return null;
   
   for (let i = 1; i < values.length; i++) {
-    if (String(values[i][idIdx]).trim() === String(orderId).trim()) {
+    if (normalizeKey(values[i][idIdx]) === normalizeKey(orderId)) {
       const orderData = {};
       headers.forEach((h, idx) => {
         orderData[h] = values[i][idx];
