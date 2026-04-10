@@ -265,6 +265,7 @@ function handleUpdateSheet(data) {
       targetPkVals[normalizeKey(k)] = normalizeKey(v);
     }
 
+    let rowIndex = -1;
     for (let i = 1; i < values.length; i++) {
       let match = true;
       for (const pkKey in targetPkVals) {
@@ -273,10 +274,10 @@ function handleUpdateSheet(data) {
           match = false; break;
         }
       }
-      if (match) { 
-        rowIndex = i + 1; 
+      if (match) {
+        rowIndex = i + 1;
         console.log("✅ [UpdateSheet] Row found: " + rowIndex);
-        break; 
+        break;
       }
     }
 
@@ -285,19 +286,23 @@ function handleUpdateSheet(data) {
       const rowData = values[rowIndex - 1]; // Get the existing row data (0-indexed locally)
 
       const aliasMap = {
-        "packagephotourl": "packagephoto",
-        "packagephoto": "packagephotourl",
-        "deliveryphotourl": "deliveryphoto",
-        "deliveryphoto": "deliveryphotourl"
+        "packagephotourl": ["packagephoto", "packagephotourl", "packagephotolink", "packagephotoevidence"],
+        "packagephoto": ["packagephotourl", "packagephoto", "packagephotolink", "packagephotoevidence"],
+        "deliveryphotourl": ["deliveryphoto", "deliveryphotourl", "deliveryphotolink", "proofofdelivery"],
+        "deliveryphoto": ["deliveryphotourl", "deliveryphoto", "deliveryphotolink", "proofofdelivery"]
       };
 
       for (const [key, val] of Object.entries(data.newData)) {
         const nKey = normalizeKey(key);
         let colIdx = normalizedHeaders.indexOf(nKey);
         
-        // Fallback to alias if the exact column name isn't found
-        if (colIdx === -1 && aliasMap[nKey]) {
-          colIdx = normalizedHeaders.indexOf(aliasMap[nKey]);
+        // Advanced Fallback: Check aliases if exact match not found
+        if (colIdx === -1) {
+          const aliases = aliasMap[nKey] || [];
+          for (const alias of aliases) {
+            colIdx = normalizedHeaders.indexOf(normalizeKey(alias));
+            if (colIdx !== -1) break;
+          }
         }
 
         if (colIdx !== -1) {
@@ -561,15 +566,29 @@ function updateOrderInSheets(orderId, team, updatedFields) {
 
   sheetsToUpdate.forEach(sheetName => {
     const sheet = ss.getSheetByName(sheetName);
-    if (!sheet) return;
-    
-    handleUpdateSheet({
+    if (!sheet) {
+      console.warn("⚠️ [updateOrderInSheets] Sheet not found: " + sheetName);
+      return;
+    }
+
+    const result = handleUpdateSheet({
       sheetName: sheetName,
       primaryKey: { "Order ID": orderId },
       newData: updatedFields
     });
+
+    // Log failures so they are visible in Apps Script execution logs
+    try {
+      const parsed = JSON.parse(result.getContent());
+      if (parsed.status !== "success") {
+        console.error("❌ [updateOrderInSheets] Failed to update sheet=" + sheetName + " orderId=" + orderId + " reason=" + parsed.message);
+      }
+    } catch (e) {
+      // result might not be JSON if handleUpdateSheet returned something unexpected
+      console.warn("⚠️ [updateOrderInSheets] Could not parse result for sheet=" + sheetName);
+    }
   });
-  SpreadsheetApp.flush(); // Ensure all updates are committed before any subsequent reads
+  SpreadsheetApp.flush();
 }
 
 function appendRowMapped(sheet, data) {
@@ -804,7 +823,7 @@ function sendTelegramMessage(settings, data, templates) {
     "packedTime": data["Packed Time"] || "",
     "driverName": data["Driver Name"] || "",
     "trackingNumber": data["Tracking Number"] || "",
-    "packagePhotoUrl": data["Package Photo URL"] || data["Package Photo"] || "",
+    "packagePhotoUrl": data["Package Photo"] || "",
     "deliveryPhotoUrl": data["Delivery Photo URL"] || data["Delivery Photo"] || ""
   };
 
@@ -874,7 +893,7 @@ function sendTelegramMessage(settings, data, templates) {
   if (part3Tpl) {
     if (msgId3Existing) {
       editSingleTelegramMsg(settings, msgId3Existing, applyTemplate(part3Tpl));
-    } else if (data["Fulfillment Status"] === "Packed" || data["Fulfillment Status"] === "Ready to Ship" || data["Fulfillment Status"] === "Shipped" || data["Fulfillment Status"] === "Delivered" || data["Package Photo URL"]) {
+    } else if (data["Fulfillment Status"] === "Packed" || data["Fulfillment Status"] === "Ready to Ship" || data["Fulfillment Status"] === "Shipped" || data["Fulfillment Status"] === "Delivered" || data["Package Photo"]) {
       msgId3 = sendSingleTelegramMsg(settings, applyTemplate(part3Tpl));
     }
   }

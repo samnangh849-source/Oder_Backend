@@ -188,7 +188,7 @@ type Order struct {
 	FulfillmentStatus       string  `gorm:"column:fulfillment_status;index" json:"Fulfillment Status"`
 	PackedBy                string  `gorm:"column:packed_by" json:"Packed By"`
 	PackedTime              string  `gorm:"column:packed_time" json:"Packed Time"`
-	PackagePhotoURL         string  `gorm:"column:package_photo_url" json:"Package Photo URL"`
+	PackagePhotoURL         string  `gorm:"column:package_photo_url" json:"Package Photo"`
 	DriverName              string  `gorm:"column:driver_name" json:"Driver Name"`
 	TrackingNumber          string  `gorm:"column:tracking_number" json:"Tracking Number"`
 	DispatchedTime          string  `gorm:"column:dispatched_time" json:"Dispatched Time"`

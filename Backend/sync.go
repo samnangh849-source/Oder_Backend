@@ -118,7 +118,7 @@ func ReconcileMissingPhotoLinks(db *gorm.DB) {
 			"orderId": o.OrderID,
 			"team":    o.Team,
 			"updatedFields": map[string]interface{}{
-				"Package Photo URL": o.PackagePhotoURL,
+				"Package Photo": o.PackagePhotoURL,
 			},
 			"healingMode": true,
 		}, "", nil)

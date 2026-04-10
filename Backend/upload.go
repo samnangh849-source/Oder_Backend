@@ -286,7 +286,7 @@ func HandleImageUploadProxy(c *gin.Context) {
 						sheetData["Packed Time"] = order.PackedTime
 					}
 					if order.PackagePhotoURL != "" {
-						sheetData["Package Photo URL"] = order.PackagePhotoURL
+						sheetData["Package Photo"] = order.PackagePhotoURL
 					}
 					if order.DeliveryPhotoURL != "" {
 						sheetData["Delivery Photo URL"] = order.DeliveryPhotoURL

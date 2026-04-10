@@ -150,7 +150,7 @@ const PackagingView: React.FC<{ orders?: ParsedOrder[] }> = ({ orders: propOrder
             const token = session?.token || '';
             
             // Clear local optimistic photo if we are resetting the photo URL
-            if (extraData['Package Photo URL'] === '') {
+            if (extraData['Package Photo'] === '') {
                 localStorage.removeItem(`package_photo_${order['Order ID']}`);
             }
 
@@ -228,7 +228,7 @@ const PackagingView: React.FC<{ orders?: ParsedOrder[] }> = ({ orders: propOrder
         orders: filteredOrders, activeTab, setActiveTab, searchTerm, setSearchTerm,
         onPack: (order: ParsedOrder) => setPackingOrder(order),
         onShip: (order: ParsedOrder) => executeAction(order, 'Shipped', { 'Dispatched Time': new Date().toLocaleString('km-KH'), 'Dispatched By': currentUser?.FullName || 'Packer' }),
-        onUndo: (o: ParsedOrder) => executeAction(o, 'Pending', { 'Packed By': '', 'Packed Time': '', 'Package Photo URL': '' }),
+        onUndo: (o: ParsedOrder) => executeAction(o, 'Pending', { 'Packed By': '', 'Packed Time': '', 'Package Photo': '' }),
         onUndoShipped: (o: ParsedOrder) => executeAction(o, 'Ready to Ship', { 'Dispatched Time': '', 'Dispatched By': '' }),
         onView: (order: ParsedOrder) => setViewingOrder(order),
         onPrintManifest: () => {
@@ -409,9 +409,9 @@ const PackagingView: React.FC<{ orders?: ParsedOrder[] }> = ({ orders: propOrder
 
                                 <div>
                                     <p className="text-[10px] font-bold text-[#848E9C] uppercase tracking-widest mb-2">Package Integrity Evidence</p>
-                                    {getOptimisticPackagePhoto(viewingOrder['Order ID'], viewingOrder['Package Photo URL']) ? (
-                                        <a href={getOptimisticPackagePhoto(viewingOrder['Order ID'], viewingOrder['Package Photo URL'])} target="_blank" rel="noreferrer" className="block relative group overflow-hidden rounded border border-[#2B3139]">
-                                            <img src={getOptimisticPackagePhoto(viewingOrder['Order ID'], viewingOrder['Package Photo URL'])} alt="Package" className="w-full h-32 object-cover transition-transform duration-300 group-hover:scale-105" />
+                                    {getOptimisticPackagePhoto(viewingOrder['Order ID'], viewingOrder['Package Photo']) ? (
+                                        <a href={getOptimisticPackagePhoto(viewingOrder['Order ID'], viewingOrder['Package Photo'])} target="_blank" rel="noreferrer" className="block relative group overflow-hidden rounded border border-[#2B3139]">
+                                            <img src={getOptimisticPackagePhoto(viewingOrder['Order ID'], viewingOrder['Package Photo'])} alt="Package" className="w-full h-32 object-cover transition-transform duration-300 group-hover:scale-105" />
                                             <div className="absolute inset-0 bg-[#0B0E11]/80 opacity-0 group-hover:opacity-100 flex items-center justify-center transition-opacity duration-300">
                                                 <span className="text-[11px] font-bold tracking-wider text-[#FCD535]">VIEW FULL RESOLUTION</span>
                                             </div>

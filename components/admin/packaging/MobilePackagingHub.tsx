@@ -192,7 +192,7 @@ const MobilePackagingHub: React.FC<MobilePackagingHubProps> = ({
                                             <div className="flex flex-col flex-1 min-w-0">
                                                 <h4 className={`text-sm font-bold ${B_TEXT_PRIMARY} truncate uppercase flex items-center gap-1`}>
                                                     {order['Customer Name']}
-                                                    {getOptimisticPackagePhoto(order['Order ID'], order['Package Photo URL']) && <span title="Photo Verified" className="text-[10px]">📸</span>}
+                                                    {getOptimisticPackagePhoto(order['Order ID'], order['Package Photo']) && <span title="Photo Verified" className="text-[10px]">📸</span>}
                                                 </h4>
                                                 <div className="flex justify-between items-center mt-0.5">
                                                     <p className={`text-[11px] ${B_TEXT_SECONDARY} font-mono`}>{order['Customer Phone']}</p>

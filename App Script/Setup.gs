@@ -45,7 +45,7 @@ const SYSTEM_STRUCTURE = {
     "Payment Status", "Payment Info", "Discount ($)", "Delivery Unpaid", "Delivery Paid", 
     "Total Product Cost ($)", "Telegram Message ID 1", "Telegram Message ID 2", "Telegram Message ID 3", "Scheduled Time", 
     "Fulfillment Store", "Team", "IsVerified", "Fulfillment Status", "Packed By", "Packed Time", 
-    "Package Photo URL", "Driver Name", "Tracking Number", "Dispatched Time", "Dispatched By", "Delivered Time", "Delivery Photo URL"
+    "Package Photo", "Driver Name", "Tracking Number", "Dispatched Time", "Dispatched By", "Delivered Time", "Delivery Photo URL"
   ],
   "RevenueDashboard": ["ID", "Timestamp", "Team", "Page", "Revenue", "FulfillmentStore"],
   

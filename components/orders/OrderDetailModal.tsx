@@ -233,12 +233,11 @@ const OrderDetailModal: React.FC<OrderDetailModalProps> = ({ order, onClose }) =
                                 <div className="flex items-center gap-3 ml-1">
                                     <div className="w-1 h-3 bg-[#848E9C]"></div>
                                     <h3 className="text-[10px] font-black uppercase tracking-[0.25em] text-[#848E9C]">Package Photo</h3>
-                                </div>
-                                {getOptimisticPackagePhoto(order['Order ID'], order['Package Photo URL']) ? (
-                                    <div className="relative group aspect-square border-2 border-[#2B3139] bg-[#0B0E11] cursor-pointer overflow-hidden" onClick={() => previewImage(getOptimisticPackagePhoto(order['Order ID'], order['Package Photo URL']))}>
-                                        <img src={getOptimisticPackagePhoto(order['Order ID'], order['Package Photo URL'])} className="w-full h-full object-cover transition-all duration-700 grayscale group-hover:grayscale-0 group-hover:scale-110" alt="Package Proof" />
-                                        <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
-                                            <div className="w-12 h-12 border border-[#FCD535] bg-[#0B0E11]/80 flex items-center justify-center text-[#FCD535] shadow-2xl scale-75 group-hover:scale-100 transition-transform duration-500">
+                                    </div>
+                                    {getOptimisticPackagePhoto(order['Order ID'], order['Package Photo']) ? (
+                                    <div className="relative group aspect-square border-2 border-[#2B3139] bg-[#0B0E11] cursor-pointer overflow-hidden" onClick={() => previewImage(getOptimisticPackagePhoto(order['Order ID'], order['Package Photo']))}>
+                                       <img src={getOptimisticPackagePhoto(order['Order ID'], order['Package Photo'])} className="w-full h-full object-cover transition-all duration-700 grayscale group-hover:grayscale-0 group-hover:scale-110" alt="Package Proof" />
+                                       <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">                                            <div className="w-12 h-12 border border-[#FCD535] bg-[#0B0E11]/80 flex items-center justify-center text-[#FCD535] shadow-2xl scale-75 group-hover:scale-100 transition-transform duration-500">
                                                 <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0zM10 7v3m0 0v3m0-3h3m-3 0H7" strokeWidth={2.5} /></svg>
                                             </div>
                                         </div>

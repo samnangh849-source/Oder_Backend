@@ -123,9 +123,7 @@ func mapToDBColumn(key string) string {
 		"Delivery Unpaid":           "delivery_unpaid",
 		"Delivery Paid":             "delivery_paid",
 		"Package Photo":             "package_photo_url",
-		"Package Photo URL":         "package_photo_url",
 		"Delivery Photo":            "delivery_photo_url",
-		"Delivery Photo URL":        "delivery_photo_url",
 		"Driver Name":               "driver_name",
 		"Tracking Number":           "tracking_number",
 		"Dispatched Time":           "dispatched_time",
@@ -1128,7 +1126,7 @@ func handleAdminUpdateOrder(c *gin.Context) {
 			}
 			fill("Packed By", current.PackedBy)
 			fill("Packed Time", current.PackedTime)
-			fill("Package Photo URL", current.PackagePhotoURL)
+			fill("Package Photo", current.PackagePhotoURL)
 			fill("Driver Name", current.DriverName)
 			fill("Tracking Number", current.TrackingNumber)
 			fill("Dispatched Time", current.DispatchedTime)

@@ -91,7 +91,7 @@ const FastPackTerminal: React.FC<FastPackTerminalProps> = ({ order, onClose, onS
                     fileName: `Package_${order['Order ID'].substring(0,8)}_${Date.now()}.jpg`,
                     mimeType: 'image/jpeg',
                     orderId: order['Order ID'],
-                    targetColumn: 'Package Photo URL',
+                    targetColumn: 'Package Photo',
                     newData: newData
                 };
 
@@ -143,7 +143,7 @@ const FastPackTerminal: React.FC<FastPackTerminalProps> = ({ order, onClose, onS
                         FulfillmentStatus: 'Ready to Ship',
                         'Packed By': currentUser?.FullName || 'Packer',
                         'Packed Time': new Date().toLocaleString('km-KH'),
-                        'Package Photo URL': driveUrl || o['Package Photo URL']
+                        'Package Photo': driveUrl || o['Package Photo']
                       } 
                     : o
             ));
@@ -364,6 +364,9 @@ const FastPackTerminal: React.FC<FastPackTerminalProps> = ({ order, onClose, onS
             setPackagePhoto(dataUrl);
             localStorage.setItem(`package_photo_${order['Order ID']}`, dataUrl);
             setAutoCaptureCountdown(null);
+            
+            // Explicitly stop the camera after capture to save resources and comply with user request
+            setTimeout(() => { stopScanner(); }, 100);
 
             if (!hasAutoAdvanced.current.photo) {
                 hasAutoAdvanced.current.photo = true;
@@ -378,7 +381,7 @@ const FastPackTerminal: React.FC<FastPackTerminalProps> = ({ order, onClose, onS
     }, [order, currentUser, isCapturing, handleSubmit]);
 
     const { 
-        isScannerLoading, scannerError, switchCamera, toggleTorch, isTorchOn, isTorchSupported, handleZoomChange 
+        isScannerLoading, scannerError, switchCamera, toggleTorch, isTorchOn, isTorchSupported, handleZoomChange, stopScanner
     } = useBarcodeScanner('fastpack-scanner-container', (decoded) => {
         if (step !== 'PHOTO' || packagePhoto || autoCaptureCountdown !== null || isCapturing) return;
         if (decoded === lastDetectedQR.current) return;

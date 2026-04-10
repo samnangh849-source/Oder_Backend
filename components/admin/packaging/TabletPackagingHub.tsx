@@ -207,7 +207,7 @@ const TabletPackagingHub: React.FC<TabletPackagingHubProps> = ({
                                             <div className="px-2 pb-2">
                                                 <h4 className={`text-xs font-bold ${B_TEXT_PRIMARY} truncate uppercase flex items-center gap-2`}>
                                                     {order['Customer Name']}
-                                                    {getOptimisticPackagePhoto(order['Order ID'], order['Package Photo URL']) && <span title="Photo Verified">📸</span>}
+                                                    {getOptimisticPackagePhoto(order['Order ID'], order['Package Photo']) && <span title="Photo Verified">📸</span>}
                                                 </h4>
                                                 <div className="flex justify-between items-center mt-0.5">
                                                     <p className={`text-[10px] ${B_TEXT_SECONDARY} font-mono`}>{order['Customer Phone']}</p>

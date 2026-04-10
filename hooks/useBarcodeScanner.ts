@@ -131,6 +131,25 @@ export const useBarcodeScanner = (
         } catch (err) { }
     }, [applyConstraints]);
 
+    const stopScanner = useCallback(async () => {
+        if (scannerRef.current && scannerRef.current.isScanning && !isTransitioning.current) {
+            isTransitioning.current = true;
+            try {
+                // @ts-ignore
+                if (scannerRef.current._focusInterval) clearInterval(scannerRef.current._focusInterval);
+                await scannerRef.current.stop();
+                await scannerRef.current.clear();
+                scannerRef.current = null;
+                trackRef.current = null;
+                videoRef.current = null;
+            } catch (e) {
+                console.error("Error stopping scanner:", e);
+            } finally {
+                isTransitioning.current = false;
+            }
+        }
+    }, []);
+
     // --- File Scan Logic ---
     const scanFromImage = useCallback(async (file: File): Promise<string> => {
         if (!scannerRef.current) throw new Error("Scanner not initialized");
@@ -312,6 +331,7 @@ export const useBarcodeScanner = (
         isAutoZooming, 
         triggerFocus,
         switchCamera,
+        stopScanner,
         facingMode,
         scanFromImage,
         trackingBox: null

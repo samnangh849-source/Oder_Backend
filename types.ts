@@ -70,7 +70,7 @@ export interface FullOrder {
     FulfillmentStatus: FulfillmentStatus;
     "Packed By": string;
     "Packed Time": string;
-    "Package Photo URL": string;
+    "Package Photo": string;
     "Driver Name": string;
     "Tracking Number": string;
     "Dispatched Time": string;
