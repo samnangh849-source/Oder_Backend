@@ -364,21 +364,13 @@ const FastPackTerminal: React.FC<FastPackTerminalProps> = ({ order, onClose, onS
             setPackagePhoto(dataUrl);
             localStorage.setItem(`package_photo_${order['Order ID']}`, dataUrl);
             setAutoCaptureCountdown(null);
-            
-            // Explicitly stop the camera after capture to save resources and comply with user request
-            setTimeout(() => { stopScanner(); }, 100);
-
-            if (!hasAutoAdvanced.current.photo) {
-                hasAutoAdvanced.current.photo = true;
-                setTimeout(() => { handleSubmit(); }, 2000);
-            }
         } catch (err) {
             console.error("Capture failed:", err);
             alert("❌ ការថតរូបមានបញ្ហា (Capture Error)");
         } finally {
             setIsCapturing(false);
         }
-    }, [order, currentUser, isCapturing, handleSubmit]);
+    }, [order, currentUser, isCapturing]);
 
     const { 
         isScannerLoading, scannerError, switchCamera, toggleTorch, isTorchOn, isTorchSupported, handleZoomChange, stopScanner
@@ -387,7 +379,7 @@ const FastPackTerminal: React.FC<FastPackTerminalProps> = ({ order, onClose, onS
         if (decoded === lastDetectedQR.current) return;
         lastDetectedQR.current = decoded;
         setAutoCaptureCountdown(3);
-    }, 'single', { disableScanner: !!packagePhoto });
+    }, 'single', { disableScanner: step !== 'PHOTO' || !!packagePhoto });
 
     useEffect(() => {
         if (autoCaptureCountdown === null) return;
@@ -400,6 +392,18 @@ const FastPackTerminal: React.FC<FastPackTerminalProps> = ({ order, onClose, onS
         }, 1000);
         return () => { if (countdownTimerRef.current) clearTimeout(countdownTimerRef.current); };
     }, [autoCaptureCountdown, capturePhotoFromStream]);
+
+    // Speed up final submit after auto-capture (Reduce from 2s to 0.5s)
+    useEffect(() => {
+        if (packagePhoto && !hasAutoAdvanced.current.photo && step === 'PHOTO') {
+            hasAutoAdvanced.current.photo = true;
+            // Immediate stop of camera stream
+            stopScanner();
+            // Start submission process sooner
+            const timer = setTimeout(() => { handleSubmit(); }, 800);
+            return () => clearTimeout(timer);
+        }
+    }, [packagePhoto, step, handleSubmit, stopScanner]);
 
     useEffect(() => {
         if (step === 'VERIFYING' && isOrderVerified && !hasAutoAdvanced.current.verify) {

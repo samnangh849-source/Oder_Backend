@@ -112,45 +112,12 @@ function doPost(e) {
           console.log("📤 [uploadImage] Upload success: " + upRes.url);
 
           // 2. Metadata Updates (Sync to Sheets)
+          // Orders: Sheet sync is fully delegated to the Go backend's EnqueueSync
+          // (updateOrderTelegram), same pattern as Profile Picture → EnqueueSync(updateSheet).
+          // Apps Script only uploads to Drive and returns the URL.
           const orderId = contents.orderId || contents.orderID;
           if (orderId) {
-             console.log("📝 [uploadImage] Syncing Order: " + orderId);
-             let team = contents.team || (contents.orderData && contents.orderData.team) || "";
-
-             if (!team) {
-               const ss = SpreadsheetApp.getActiveSpreadsheet();
-               const allOrders = ss.getSheetByName(CONFIG.ALL_ORDERS_SHEET);
-               if (allOrders) {
-                 const vals = allOrders.getDataRange().getValues();
-                 const hdrs = vals[0].map(h => normalizeKey(h));
-                 const idIdx = hdrs.indexOf(normalizeKey("Order ID"));
-                 const teamIdx = hdrs.indexOf(normalizeKey("Team"));
-                 if (idIdx !== -1 && teamIdx !== -1) {
-                   // Search from the bottom as new orders are appended
-                   for (let i = vals.length - 1; i >= 1; i--) {
-                     if (normalizeKey(vals[i][idIdx]) === normalizeKey(orderId)) {
-                       team = String(vals[i][teamIdx]).trim();
-                       break;
-                     }
-                   }
-                 }
-               }
-             }
-             
-             const updatedFields = {};
-             if (contents.targetColumn) updatedFields[contents.targetColumn] = upRes.url;
-             if (contents.newData) {
-                for (let k in contents.newData) updatedFields[k] = contents.newData[k];
-             }
-
-             // Sheet sync is best-effort: failure here must NOT fail the Drive upload response.
-             // The Go backend's async updateOrderTelegram goroutine will retry the sheet sync.
-             try {
-               updateOrderInSheets(orderId, team, updatedFields);
-               console.log("✅ [uploadImage] Sync finished for: " + orderId);
-             } catch (sheetErr) {
-               console.error("⚠️ [uploadImage] Sheet sync failed (Drive upload still succeeded): " + sheetErr.message);
-             }
+             console.log("✅ [uploadImage] Order Drive upload done, Sheet sync delegated to Go backend: " + orderId);
           } else if (contents.sheetName && contents.primaryKey && contents.targetColumn) {
              // Handle generic table updates
              const newData = {};

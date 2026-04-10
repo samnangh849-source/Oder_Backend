@@ -137,6 +137,20 @@ export const useBarcodeScanner = (
             try {
                 // @ts-ignore
                 if (scannerRef.current._focusInterval) clearInterval(scannerRef.current._focusInterval);
+                
+                // Explicitly stop tracks before calling scanner.stop() to be sure
+                const track = getActiveTrack();
+                if (track) {
+                    track.stop();
+                }
+                
+                // Also stop any tracks from the video element directly
+                const videoElement = document.querySelector(`#${elementId} video`) as HTMLVideoElement;
+                if (videoElement && videoElement.srcObject) {
+                    const stream = videoElement.srcObject as MediaStream;
+                    stream.getTracks().forEach(t => t.stop());
+                }
+
                 await scannerRef.current.stop();
                 await scannerRef.current.clear();
                 scannerRef.current = null;
@@ -148,7 +162,7 @@ export const useBarcodeScanner = (
                 isTransitioning.current = false;
             }
         }
-    }, []);
+    }, [elementId]);
 
     // --- File Scan Logic ---
     const scanFromImage = useCallback(async (file: File): Promise<string> => {
