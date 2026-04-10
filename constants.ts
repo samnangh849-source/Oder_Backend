@@ -11,18 +11,6 @@ export const WEB_APP_URL = "https://oder-backend-2.onrender.com";
 // សូមបញ្ចូល URL សម្រាប់ Label Printer នៅទីនេះ (Order ID នឹងត្រូវបានបន្ថែមដោយស្វ័យប្រវត្តិ)
 export const LABEL_PRINTER_URL_BASE = "https://samnangh849-source.github.io/LabelPro/";
 
-// Background Music URLs (7 songs for 7 days)
-// Monday to Sunday order
-export const WEEKLY_MUSIC_URLS = [
-    "https://www.soundhelix.com/examples/mp3/SoundHelix-Song-1.mp3", // Monday
-    "https://www.soundhelix.com/examples/mp3/SoundHelix-Song-2.mp3", // Tuesday
-    "https://www.soundhelix.com/examples/mp3/SoundHelix-Song-3.mp3", // Wednesday
-    "https://www.soundhelix.com/examples/mp3/SoundHelix-Song-4.mp3", // Thursday
-    "https://www.soundhelix.com/examples/mp3/SoundHelix-Song-5.mp3", // Friday
-    "https://www.soundhelix.com/examples/mp3/SoundHelix-Song-6.mp3", // Saturday
-    "https://www.soundhelix.com/examples/mp3/SoundHelix-Song-7.mp3"  // Sunday
-];
-
 // APP LOGO URL
 // សូមប្ដូរ Link រូបភាព Logo របស់អ្នកនៅទីនេះ (Google Drive Link ឬ Direct URL)
 // ប្រសិនបើទុកចោល (empty string) កម្មវិធីនឹងប្រើរូបតំណាងលំនាំដើម។

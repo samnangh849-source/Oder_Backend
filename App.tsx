@@ -24,7 +24,7 @@ import ChatWidget from './components/chat/ChatWidget';
 import Modal from './components/common/Modal';
 import DeliveryAgentView from './components/orders/DeliveryAgentView';
 import NotificationStack from './components/common/NotificationStack';
-import BackgroundMusic from './components/common/BackgroundMusic';
+
 import ImpersonationBanner from './components/common/ImpersonationBanner';
 import { AppContext, AdvancedSettings } from './context/AppContext';
 import { UIProvider, useUI } from './context/UIContext';
@@ -414,7 +414,7 @@ const AppContent: React.FC = () => {
                 </div>
 
                 <div className="relative z-10 flex flex-col h-full w-full overflow-hidden">
-                    <BackgroundMusic />
+
                     <Suspense fallback={<div className="flex h-full items-center justify-center bg-transparent"><Spinner size="lg" /></div>}>
                         {appState === 'cambodia_map' ? (
                             <CambodiaMapPage />
