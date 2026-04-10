@@ -397,8 +397,12 @@ const FastPackTerminal: React.FC<FastPackTerminalProps> = ({ order, onClose, onS
     useEffect(() => {
         if (packagePhoto && !hasAutoAdvanced.current.photo && step === 'PHOTO') {
             hasAutoAdvanced.current.photo = true;
-            // Immediate stop of camera stream
-            stopScanner();
+            // Immediate stop of camera stream with safety check
+            try {
+                stopScanner();
+            } catch (e) {
+                console.warn("Scanner stop suppressed:", e);
+            }
             // Start submission process sooner
             const timer = setTimeout(() => { handleSubmit(); }, 800);
             return () => clearTimeout(timer);
@@ -442,8 +446,9 @@ const FastPackTerminal: React.FC<FastPackTerminalProps> = ({ order, onClose, onS
 
     const qrValue = `${window.location.origin}${window.location.pathname}?view=order_metadata&id=${encodeURIComponent(order['Order ID'])}`;
     
-    const printerBaseURL = `${window.location.origin}${window.location.pathname}?view=print_label`;
-    const fullPrinterURL = `${printerBaseURL}&id=${encodeURIComponent(order['Order ID'])}&name=${encodeURIComponent(order['Customer Name'])}&phone=${encodeURIComponent(order['Customer Phone'])}&location=${encodeURIComponent(order.Location)}&total=${order['Grand Total']}&autoPrint=true`;
+    // Robust URL construction for GitHub Pages
+    const baseUrl = window.location.href.split('?')[0].split('#')[0];
+    const fullPrinterURL = `${baseUrl}?view=print_label&id=${encodeURIComponent(order['Order ID'])}&name=${encodeURIComponent(order['Customer Name'])}&phone=${encodeURIComponent(order['Customer Phone'])}&location=${encodeURIComponent(order.Location)}&total=${order['Grand Total']}&autoPrint=true`;
 
     return (
         <div className="fixed inset-0 z-[200] bg-[#0B0E11] flex flex-col animate-fade-in font-sans text-[#EAECEF]">

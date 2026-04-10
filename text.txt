@@ -246,3 +246,4 @@ I have analyzed your backend code and identified several potential reasons why t
    * លុប File តេស្តដែលខ្ញុំបានបង្កើតចោលវិញ (test_*.go) ដើម្បីឱ្យ Project ស្អាត។
    * ត្រួតពិនិត្យមុខងារផ្សេងទៀត (ដូចជា ការបញ្ជូនទៅ Telegram ឬការស្កេន Barcode)។
    * ឬប្រសិនបើលោកអ្នកមានសំណួរផ្សេងៗទៀត ខ្ញុំរីករាយនឹងឆ្លើយជូន!
+តែឥឡូវនេះ ខ្ញុំតេស្តផ្ទាល់ពី Frontend គឺមិនឃើញរូបភាពកញ្ចប់ Upload ជោគជ័យ

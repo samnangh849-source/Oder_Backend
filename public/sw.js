@@ -139,6 +139,11 @@ self.addEventListener('fetch', (event) => {
     event.respondWith(fetch(event.request));
     return;
   }
+
+  // Bypass cache and SW fetch for external audio sources like soundhelix to avoid CORS issues
+  if (event.request.url.includes('soundhelix.com')) {
+    return; // Let the browser handle it natively
+  }
   
   event.respondWith(
     caches.match(event.request)

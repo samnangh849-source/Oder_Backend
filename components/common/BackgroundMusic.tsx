@@ -109,7 +109,6 @@ const BackgroundMusic: React.FC = () => {
             src={musicSource} 
             loop 
             preload="auto"
-            crossOrigin="anonymous"
             onError={handleAudioError}
             style={{ position: 'absolute', width: 0, height: 0, opacity: 0, pointerEvents: 'none' }}
         />

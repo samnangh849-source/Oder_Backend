@@ -263,26 +263,47 @@ func HandleImageUploadProxy(c *gin.Context) {
 				if err := DB.Where("UPPER(TRIM(order_id)) = UPPER(TRIM(?))", orderId).First(&order).Error; err == nil {
 					// Prepare data for Sheet sync
 					sheetData := make(map[string]interface{})
+					
+					// IMPORTANT: Map database column names back to Spreadsheet Header names
+					// apps script needs "Package Photo", not "package_photo_url"
 					for k, v := range bMap {
-						sheetData[k] = v
+						headerName := k // Default to original key
+						
+						// Inverse mapping: DB Column -> Spreadsheet Header
+						switch k {
+						case "package_photo_url":
+							headerName = "Package Photo"
+						case "delivery_photo_url":
+							headerName = "Delivery Photo URL"
+						case "fulfillment_status":
+							headerName = "Fulfillment Status"
+						case "packed_by":
+							headerName = "Packed By"
+						case "packed_time":
+							headerName = "Packed Time"
+						case "dispatched_by":
+							headerName = "Dispatched By"
+						case "dispatched_time":
+							headerName = "Dispatched Time"
+						case "delivered_time":
+							headerName = "Delivered Time"
+						case "driver_name":
+							headerName = "Driver Name"
+						case "tracking_number":
+							headerName = "Tracking Number"
+						}
+						sheetData[headerName] = v
 					}
 					
-					// Ensure we have current packer info and photo URL from DB
-					if sheetData["Packed By"] == nil && order.PackedBy != "" {
-						sheetData["Packed By"] = order.PackedBy
-					}
-					if sheetData["Packed Time"] == nil && order.PackedTime != "" {
-						sheetData["Packed Time"] = order.PackedTime
-					}
-					if order.PackagePhotoURL != "" {
+					// Ensure we have current photo URLs from DB if they weren't in the update map
+					if sheetData["Package Photo"] == nil && order.PackagePhotoURL != "" {
 						sheetData["Package Photo"] = order.PackagePhotoURL
 					}
-					if order.DeliveryPhotoURL != "" {
+					if sheetData["Delivery Photo URL"] == nil && order.DeliveryPhotoURL != "" {
 						sheetData["Delivery Photo URL"] = order.DeliveryPhotoURL
 					}
 
 					// 1.3 Full Update including Sheet Sync & Telegram Notification
-					// This single call handles everything robustly.
 					EnqueueSync("updateOrderTelegram", map[string]interface{}{
 						"orderId":       orderId,
 						"team":          order.Team,
