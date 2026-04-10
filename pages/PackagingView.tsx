@@ -143,6 +143,21 @@ const PackagingView: React.FC<{ orders?: ParsedOrder[] }> = ({ orders: propOrder
         shipped: allFilteredOrders.filter(o => o.FulfillmentStatus === 'Shipped').length
     }), [allFilteredOrders]);
 
+    const progressStats = useMemo(() => {
+        const todayStr = new Date().toLocaleDateString('km-KH');
+        const packedByUserToday = allFilteredOrders.filter(o => {
+            const isPackedByMe = (o['Packed By'] || '') === (currentUser?.FullName || '');
+            const isToday = (o['Packed Time'] || '').startsWith(todayStr.split(',')[0]);
+            return isPackedByMe && isToday &&
+                (o.FulfillmentStatus === 'Ready to Ship' || o.FulfillmentStatus === 'Shipped');
+        }).length;
+        const storeTotalToday = allFilteredOrders.length;
+        const progressPercentage = storeTotalToday > 0
+            ? Math.round((packedByUserToday / storeTotalToday) * 100)
+            : 0;
+        return { packedByUserToday, storeTotalToday, progressPercentage };
+    }, [allFilteredOrders, currentUser]);
+
     const executeAction = async (order: ParsedOrder, newStatus: string, extraData: any = {}) => {
         setLoadingActionId(order['Order ID']);
         try {
@@ -295,7 +310,7 @@ const PackagingView: React.FC<{ orders?: ParsedOrder[] }> = ({ orders: propOrder
         onToggleSelectAll,
         onBulkShip,
         isBulkProcessing,
-        progressStats: { storeTotalToday: allFilteredOrders.length, progressPercentage: 0 }
+        progressStats
     };
 
     return (

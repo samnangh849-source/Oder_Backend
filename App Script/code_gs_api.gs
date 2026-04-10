@@ -142,35 +142,53 @@ function doPost(e) {
              if (contents.newData) {
                 for (let k in contents.newData) updatedFields[k] = contents.newData[k];
              }
-             
-             updateOrderInSheets(orderId, team, updatedFields);
-             console.log("✅ [uploadImage] Sync finished for: " + orderId);
+
+             // Sheet sync is best-effort: failure here must NOT fail the Drive upload response.
+             // The Go backend's async updateOrderTelegram goroutine will retry the sheet sync.
+             try {
+               updateOrderInSheets(orderId, team, updatedFields);
+               console.log("✅ [uploadImage] Sync finished for: " + orderId);
+             } catch (sheetErr) {
+               console.error("⚠️ [uploadImage] Sheet sync failed (Drive upload still succeeded): " + sheetErr.message);
+             }
           } else if (contents.sheetName && contents.primaryKey && contents.targetColumn) {
              // Handle generic table updates
              const newData = {};
              newData[contents.targetColumn] = upRes.url;
-             handleUpdateSheet({
-               sheetName: contents.sheetName,
-               primaryKey: contents.primaryKey,
-               newData: newData
-             });
-             console.log("✅ [uploadImage] Generic Sheet updated: " + contents.sheetName);
+             try {
+               handleUpdateSheet({
+                 sheetName: contents.sheetName,
+                 primaryKey: contents.primaryKey,
+                 newData: newData
+               });
+               console.log("✅ [uploadImage] Generic Sheet updated: " + contents.sheetName);
+             } catch (sheetErr) {
+               console.error("⚠️ [uploadImage] Generic sheet sync failed: " + sheetErr.message);
+             }
           } else if (contents.userName && contents.fileName === 'profile_picture') {
              // Handle user profile picture
-             handleUpdateSheet({
-               sheetName: CONFIG.USERS_SHEET,
-               primaryKey: { "UserName": contents.userName },
-               newData: { "ProfilePictureURL": upRes.url }
-             });
-             console.log("✅ [uploadImage] User profile updated for: " + contents.userName);
+             try {
+               handleUpdateSheet({
+                 sheetName: CONFIG.USERS_SHEET,
+                 primaryKey: { "UserName": contents.userName },
+                 newData: { "ProfilePictureURL": upRes.url }
+               });
+               console.log("✅ [uploadImage] User profile updated for: " + contents.userName);
+             } catch (sheetErr) {
+               console.error("⚠️ [uploadImage] User profile sheet sync failed: " + sheetErr.message);
+             }
           } else if (contents.movieId && contents.targetColumn) {
              // Handle movies
-             handleUpdateSheet({
-               sheetName: CONFIG.MOVIES_SHEET,
-               primaryKey: { "ID": contents.movieId },
-               newData: { [contents.targetColumn]: upRes.url }
-             });
-             console.log("✅ [uploadImage] Movie updated for ID: " + contents.movieId);
+             try {
+               handleUpdateSheet({
+                 sheetName: CONFIG.MOVIES_SHEET,
+                 primaryKey: { "ID": contents.movieId },
+                 newData: { [contents.targetColumn]: upRes.url }
+               });
+               console.log("✅ [uploadImage] Movie updated for ID: " + contents.movieId);
+             } catch (sheetErr) {
+               console.error("⚠️ [uploadImage] Movie sheet sync failed: " + sheetErr.message);
+             }
           }
 
           return createJsonResponse({ status: 'success', url: upRes.url, fileID: upRes.fileID, message: 'Upload completed successfully' });
