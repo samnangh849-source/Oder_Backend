@@ -123,7 +123,9 @@ func UploadToGoogleDriveDirectly(base64Data string, fileName string, mimeType st
 		UploadFolderID: targetFolder,
 	}
 
-	// ✅ Pass metadata for immediate Google Sheet sync
+	// Pass caller metadata so Apps Script can route non-order uploads
+	// (generic table, user profile, movies). For orders, Apps Script only
+	// uploads to Drive — Sheet sync is handled by the Go backend via EnqueueSync.
 	if originalReq != nil {
 		req.OrderID = originalReq.OrderID
 		req.SheetName = originalReq.SheetName
@@ -132,19 +134,6 @@ func UploadToGoogleDriveDirectly(base64Data string, fileName string, mimeType st
 		req.NewData = originalReq.NewData
 		req.UserName = originalReq.UserName
 		req.MovieID = originalReq.MovieID
-
-		// For orders, we need the team to update the correct sheet
-		if originalReq.OrderID != "" {
-			teamVal := ""
-			var teamOrder Order
-			if err := DB.Where("UPPER(TRIM(order_id)) = UPPER(TRIM(?))", originalReq.OrderID).Select("team").First(&teamOrder).Error; err == nil {
-				teamVal = teamOrder.Team
-			} else {
-				log.Printf("⚠️ [Drive Upload] Cannot find team for order %s: %v", originalReq.OrderID, err)
-			}
-			// Always set OrderData so Apps Script receives team context (even if empty)
-			req.OrderData = map[string]interface{}{"team": teamVal}
-		}
 	}
 
 	log.Printf("🚀 [Drive Upload] Calling Apps Script uploadImage action...")
