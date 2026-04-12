@@ -239,6 +239,10 @@ func HandleImageUploadProxy(c *gin.Context) {
 				if UploadIsValidOrderColumnFunc(dbCol) {
 					dbUpdateMap[dbCol] = v
 					broadcastMap[k] = v
+					// Special case: frontend often expects FulfillmentStatus (camelCase) for state management
+					if k == "Fulfillment Status" {
+						broadcastMap["FulfillmentStatus"] = v
+					}
 				}
 			}
 		}
@@ -249,6 +253,10 @@ func HandleImageUploadProxy(c *gin.Context) {
 			if UploadIsValidOrderColumnFunc(dbCol) {
 				dbUpdateMap[dbCol] = driveURL
 				broadcastMap[req.TargetColumn] = driveURL
+				// Ensure Package Photo is also mapped to the field name the frontend expects in orders
+				if req.TargetColumn == "Package Photo" {
+					broadcastMap["package_photo_url"] = driveURL
+				}
 			}
 		}
 
