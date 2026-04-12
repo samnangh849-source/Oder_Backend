@@ -1752,23 +1752,48 @@ func handleSheetsWebhook(c *gin.Context) {
 			}
 		}
 
-		// --- Photo Protection (Prevent empty sheet data from clearing DB URLs) ---
-		photoFields := []string{"package_photo_url", "delivery_photo_url"}
-		for _, field := range photoFields {
-			if incomingVal, hasVal := mappedData[field]; hasVal && fmt.Sprintf("%v", incomingVal) == "" {
-				var currentOrder Order
-				whereClause := fmt.Sprintf("UPPER(TRIM(%s)) = UPPER(TRIM(?))", pkCol)
-				if err := backend.DB.Where(whereClause, pkVal).Select(field).First(&currentOrder).Error; err == nil {
-					existingVal := ""
-					if field == "package_photo_url" {
-						existingVal = currentOrder.PackagePhotoURL
-					} else {
-						existingVal = currentOrder.DeliveryPhotoURL
+		// --- Fulfillment Data Protection (Crucial for preventing race conditions) ---
+		// We protect these fields from being cleared (made empty) by stale sheet webhooks.
+		protectedFields := []string{
+			"package_photo_url", "delivery_photo_url", 
+			"packed_by", "packed_time", 
+			"driver_name", "tracking_number",
+			"dispatched_by", "dispatched_time",
+			"delivered_time",
+		}
+
+		var existingOrder Order
+		hasFetchedExisting := false
+
+		for _, field := range protectedFields {
+			if incomingVal, hasVal := mappedData[field]; hasVal {
+				incomingStr := strings.TrimSpace(fmt.Sprintf("%v", incomingVal))
+				
+				// If incoming data is empty, check if we already have data in DB
+				if incomingStr == "" || incomingStr == "<nil>" || incomingStr == "undefined" {
+					if !hasFetchedExisting {
+						whereClause := fmt.Sprintf("UPPER(TRIM(%s)) = UPPER(TRIM(?))", pkCol)
+						backend.DB.Where(whereClause, pkVal).First(&existingOrder)
+						hasFetchedExisting = true
 					}
 
-					if existingVal != "" {
-						log.Printf("🛡️  [Webhook Protection] BLOCKED OVERWRITE for %s for Order %v (preventing stale sheet data overwrite)", field, pkVal)
-						delete(mappedData, field)
+					// Get existing value for this field
+					existingStr := ""
+					switch field {
+					case "package_photo_url": existingStr = existingOrder.PackagePhotoURL
+					case "delivery_photo_url": existingStr = existingOrder.DeliveryPhotoURL
+					case "packed_by": existingStr = existingOrder.PackedBy
+					case "packed_time": existingStr = existingOrder.PackedTime
+					case "driver_name": existingStr = existingOrder.DriverName
+					case "tracking_number": existingStr = existingOrder.TrackingNumber
+					case "dispatched_by": existingStr = existingOrder.DispatchedBy
+					case "dispatched_time": existingStr = existingOrder.DispatchedTime
+					case "delivered_time": existingStr = existingOrder.DeliveredTime
+					}
+
+					if existingStr != "" {
+						log.Printf("🛡️  [Webhook Protection] REJECTED clearing of %s for Order %v (stale sheet update)", field, pkVal)
+						delete(mappedData, field) // Don't let sheet clear existing data
 					}
 				}
 			}
