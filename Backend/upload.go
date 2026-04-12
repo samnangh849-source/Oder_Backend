@@ -261,8 +261,9 @@ func HandleImageUploadProxy(c *gin.Context) {
 		}
 
 		if len(dbUpdateMap) > 0 {
+			log.Printf("🛠️ [Upload] Applying DB Update for %s: %v", req.OrderID, dbUpdateMap)
 			// Update Database with robust matching
-			res := DB.Model(&Order{}).Where("UPPER(TRIM(order_id)) = UPPER(TRIM(?))", req.OrderID).UpdateColumns(dbUpdateMap)
+			res := DB.Table("orders").Where("UPPER(TRIM(order_id)) = UPPER(TRIM(?))", req.OrderID).Updates(dbUpdateMap)
 			
 			if res.Error != nil {
 				log.Printf("❌ [Upload] DB update failed for order %s: %v", req.OrderID, res.Error)
@@ -271,7 +272,7 @@ func HandleImageUploadProxy(c *gin.Context) {
 			}
 			
 			if res.RowsAffected == 0 {
-				log.Printf("⚠️ [Upload] No rows updated for order %s (order not found during update)", req.OrderID)
+				log.Printf("⚠️ [Upload] No rows updated for order %s (order not found during update). Request ID: %s", req.OrderID, req.OrderID)
 				c.JSON(404, gin.H{"status": "error", "message": "មិនអាចធ្វើបច្ចុប្បន្នភាពបានទេ៖ រកមិនឃើញការកម្មង់ " + req.OrderID})
 				return
 			}
