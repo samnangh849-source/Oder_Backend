@@ -198,11 +198,14 @@ func HandleImageUploadProxy(c *gin.Context) {
 
 			allowed, ok := validTransitions[currentStatus]
 			if ok {
-				transitionValid := false
-				for _, s := range allowed {
-					if s == newStatus {
-						transitionValid = true
-						break
+				// Allow same-status transitions (e.g. re-packing an already "Ready to Ship" order)
+				transitionValid := (newStatus == currentStatus)
+				if !transitionValid {
+					for _, s := range allowed {
+						if s == newStatus {
+							transitionValid = true
+							break
+						}
 					}
 				}
 				if !transitionValid {
