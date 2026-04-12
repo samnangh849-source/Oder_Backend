@@ -1162,7 +1162,7 @@ func handleAdminDeleteOrder(c *gin.Context) {
 	}
 
 	var order Order
-	if err := backend.DB.Where("order_id = ?", r.OrderID).First(&order).Error; err == nil {
+	if err := backend.DB.Where("UPPER(TRIM(order_id)) = UPPER(TRIM(?))", r.OrderID).First(&order).Error; err == nil {
 		// Prepare IDs, falling back to request values if backend.DB is empty
 		m1 := order.TelegramMessageID1
 		if m1 == "" {
