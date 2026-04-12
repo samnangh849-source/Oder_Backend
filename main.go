@@ -150,10 +150,16 @@ func mapToDBColumn(key string) string {
 		"Description":               "description",
 	}
 
+	// Standard mapping logic
 	for k, v := range specialCases {
-		if strings.EqualFold(k, key) {
+		if strings.EqualFold(strings.TrimSpace(k), strings.TrimSpace(key)) {
 			return v
 		}
+	}
+
+	// If it's already a DB column (no spaces), return it
+	if !strings.Contains(key, " ") {
+		return strings.ToLower(key)
 	}
 
 	var res []rune
