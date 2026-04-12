@@ -118,7 +118,7 @@ func ReconcileMissingPhotoLinks(db *gorm.DB) {
 			"orderId": o.OrderID,
 			"team":    o.Team,
 			"updatedFields": map[string]interface{}{
-				"Package Photo URL": o.PackagePhotoURL,
+				"Package Photo": o.PackagePhotoURL,
 			},
 			"healingMode": true,
 		}, "", nil)
@@ -340,6 +340,37 @@ func processTask(workerID int, task SyncTask) {
 		} else {
 			log.Printf("🔥 SyncManager: Task %s reached max retries. Dropping. Sheet=%s PK=%v",
 				task.Request.Action, task.Request.SheetName, task.Request.PrimaryKey)
+
+			// 🚨 ADDED: Notify User and System Admin about the failure
+			errorMessage := "ការ Sync ទៅ Google Sheets បរាជ័យលើសពី ៥ ដង"
+			if task.Request.OrderID != "" {
+				errorMessage = fmt.Sprintf("❌ បរាជ័យក្នុងការ Sync រូបភាព/ទិន្នន័យ សម្រាប់ការកម្មង់ #%s ទៅកាន់ Google Sheets (ព្យាយាម ៥ ដងហើយនៅតែមិនបាន)", task.Request.OrderID)
+			}
+
+			// 1. Broadcast to UI via WebSocket
+			if HubGlobal != nil {
+				notify, _ := json.Marshal(map[string]interface{}{
+					"type":    "sync_error",
+					"message": errorMessage,
+					"action":  task.Request.Action,
+					"orderId": task.Request.OrderID,
+				})
+				HubGlobal.Broadcast <- notify
+			}
+
+			// 2. Send Telegram System Alert (if it's an important action)
+			if task.Request.OrderID != "" {
+				go func() {
+					alertMsg := fmt.Sprintf("🚨 **[SYNC FAILURE]**\nAction: %s\nOrder ID: %s\nError: %s\n\nសូមពិនិត្យមើល Google Sheets ព្រោះទិន្នន័យអាចនឹងមិនទាន់បញ្ចូល។",
+						task.Request.Action, task.Request.OrderID, errorMessage)
+					
+					// Re-use updateOrderTelegram or a dedicated system channel if available
+					EnqueueSync("updateSheet", map[string]interface{}{
+						"Message": alertMsg,
+						"Type":    "SystemAlert",
+					}, "ChatMessages", nil)
+				}()
+			}
 		}
 	} else {
 		log.Printf("✅ SyncManager [Worker %d]: Task %s SUCCESS on sheet=%s pk=%v", workerID, task.Request.Action, task.Request.SheetName, task.Request.PrimaryKey)
