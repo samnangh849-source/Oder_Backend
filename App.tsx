@@ -168,11 +168,20 @@ const AppContent: React.FC = () => {
 
     // --- WebSocket Data Sync ---
     useEffect(() => {
-        if (lastMessage && lastMessage.type === 'new_order') {
+        if (!lastMessage) return;
+
+        if (lastMessage.type === 'new_order') {
             console.log("[App] WebSocket: New order detected. Refreshing data...");
             fetchOrders(true); // Background sync
+        } else if (lastMessage.type === 'sync_error') {
+            console.error("[App] WebSocket: Sync Error!", lastMessage.message);
+            showNotification(
+                lastMessage.message || "ការ Sync ទិន្នន័យទៅ Google Sheets បរាជ័យ!", 
+                'error', 
+                'Sync Failure'
+            );
         }
-    }, [lastMessage, fetchOrders]);
+    }, [lastMessage, fetchOrders, showNotification]);
 
     const isMobile = window.innerWidth < 768;
     const isAdmin = useMemo(() => {
