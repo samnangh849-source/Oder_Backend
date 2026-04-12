@@ -175,9 +175,10 @@ func HandleImageUploadProxy(c *gin.Context) {
 			newStatus := strings.TrimSpace(fmt.Sprintf("%v", newStatusRaw))
 
 			var currentOrder Order
-			if err := DB.Where("order_id = ?", req.OrderID).Select("fulfillment_status").First(&currentOrder).Error; err != nil {
+			// Using robust matching (UPPER/TRIM) to avoid 404s due to case or space mismatches
+			if err := DB.Where("UPPER(TRIM(order_id)) = UPPER(TRIM(?))", req.OrderID).Select("fulfillment_status").First(&currentOrder).Error; err != nil {
 				log.Printf("⚠️ [Upload] Cannot find order %s for validation: %v", req.OrderID, err)
-				c.JSON(404, gin.H{"status": "error", "message": "រកមិនឃើញការកម្មង់"})
+				c.JSON(404, gin.H{"status": "error", "message": "រកមិនឃើញការកម្មង់ " + req.OrderID})
 				return
 			}
 
@@ -252,17 +253,27 @@ func HandleImageUploadProxy(c *gin.Context) {
 		}
 
 		if len(dbUpdateMap) > 0 {
-			// Update Database
+			// Update Database with robust matching
 			res := DB.Model(&Order{}).Where("UPPER(TRIM(order_id)) = UPPER(TRIM(?))", req.OrderID).UpdateColumns(dbUpdateMap)
+			
 			if res.Error != nil {
 				log.Printf("❌ [Upload] DB update failed for order %s: %v", req.OrderID, res.Error)
-			} else {
-				log.Printf("✅ [Upload] DB update SUCCESS: orderId=%s rowsAffected=%d fields=%v", req.OrderID, res.RowsAffected, broadcastMap)
+				c.JSON(500, gin.H{"status": "error", "message": "ការធ្វើបច្ចុប្បន្នភាពមូលដ្ឋានទិន្នន័យបរាជ័យ: " + res.Error.Error()})
+				return
 			}
+			
+			if res.RowsAffected == 0 {
+				log.Printf("⚠️ [Upload] No rows updated for order %s (order not found during update)", req.OrderID)
+				c.JSON(404, gin.H{"status": "error", "message": "មិនអាចធ្វើបច្ចុប្បន្នភាពបានទេ៖ រកមិនឃើញការកម្មង់ " + req.OrderID})
+				return
+			}
+
+			log.Printf("✅ [Upload] DB update SUCCESS: orderId=%s rowsAffected=%d fields=%v", req.OrderID, res.RowsAffected, broadcastMap)
 
 			// Sync to Google Sheets & Telegram
 			go func(orderId string, bMap map[string]interface{}) {
 				var order Order
+				// Use the same robust matching in the background sync to ensure the order is found
 				if err := DB.Where("UPPER(TRIM(order_id)) = UPPER(TRIM(?))", orderId).First(&order).Error; err == nil {
 					// Prepare data for Sheet sync
 					sheetData := make(map[string]interface{})
