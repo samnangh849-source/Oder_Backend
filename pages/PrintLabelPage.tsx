@@ -137,7 +137,20 @@ const PrintLabelPage: React.FC<PrintLabelPageProps> = ({ initialData, onClose, s
     document.body.classList.remove('print-mode-label', 'print-mode-qr');
     document.body.classList.add(target === 'label' ? 'print-mode-label' : 'print-mode-qr');
     setIsMobileMenuOpen(false);
-    setTimeout(() => window.print(), 100);
+    
+    // Dispatch event so parent window (FastPackTerminal) can advance steps
+    const event = new CustomEvent('print-success', { detail: { target } });
+    window.dispatchEvent(event);
+    try {
+        if (window.parent && window.parent !== window) {
+            window.parent.dispatchEvent(event);
+        }
+    } catch (e) {}
+    
+    setTimeout(() => {
+        window.focus();
+        window.print();
+    }, 150);
   };
 
   useEffect(() => {
@@ -145,7 +158,7 @@ const PrintLabelPage: React.FC<PrintLabelPageProps> = ({ initialData, onClose, s
     if (params.get('autoPrint') === 'true') {
       const timer = setTimeout(() => {
         handlePrint('label');
-      }, 800);
+      }, 1200);
       return () => clearTimeout(timer);
     }
   }, []);

@@ -190,7 +190,7 @@ func getDedupeKey(action, sheetName string, pk map[string]string) string {
 	return fmt.Sprintf("%s:%s:%v", action, sheetName, pk)
 }
 
-// EnqueueSync adds a task to the background synchronization queue
+// EnqueueSync adds a task to the background synchronization queue (now persistent in DB)
 func EnqueueSync(action string, data map[string]interface{}, sheetName string, pk map[string]string) {
 	req := AppsScriptRequest{
 		Action:     action,
@@ -202,67 +202,57 @@ func EnqueueSync(action string, data map[string]interface{}, sheetName string, p
 
 	// Handle special fields if present in data
 	if data != nil {
-		if val, ok := data["fileID"].(string); ok {
-			req.FileID = val
-		}
-		if val, ok := data["newName"].(string); ok {
-			req.NewName = val
-		}
-		// Correctly extract orderId from data map
-		if val, ok := data["orderId"].(string); ok {
-			req.OrderID = val
-		} else if val, ok := data["OrderID"].(string); ok {
-			req.OrderID = val
-		}
+		if val, ok := data["fileID"].(string); ok { req.FileID = val }
+		if val, ok := data["newName"].(string); ok { req.NewName = val }
+		if val, ok := data["orderId"].(string); ok { req.OrderID = val } else if val, ok := data["OrderID"].(string); ok { req.OrderID = val }
 	}
 
-	// If OrderID is set but OrderData is not, ensure backend has context
 	if req.OrderID != "" && (req.OrderData == nil || len(req.OrderData.(map[string]interface{})) == 0) {
 		req.OrderData = data
 	}
 
-	task := &SyncTask{
-		Request:    req,
-		MaxRetries: 5,
-		EnqueuedAt: time.Now(),
-	}
-
-	// Deduplication Logic
+	// Deduplication Logic (Optional: can still use memory map for efficiency, but DB is safer)
 	dedupeKey := getDedupeKey(action, sheetName, pk)
 	if dedupeKey != "" {
 		updateMutex.Lock()
 		if existing, exists := pendingUpdates[dedupeKey]; exists {
-			// Merge NewData: newer fields overwrite older ones
-			if existing.Request.NewData == nil {
-				existing.Request.NewData = make(map[string]interface{})
-			}
-			for k, v := range data {
-				existing.Request.NewData[k] = v
-			}
-			// Update OrderData as well for compatibility
+			if existing.Request.NewData == nil { existing.Request.NewData = make(map[string]interface{}) }
+			for k, v := range data { existing.Request.NewData[k] = v }
 			existing.Request.OrderData = existing.Request.NewData
 			updateMutex.Unlock()
-			// log.Printf("🔄 SyncManager: Merged update for %s", dedupeKey)
 			return
 		}
-		pendingUpdates[dedupeKey] = task
+		// Create a temporary task for the dedupe map
+		pendingUpdates[dedupeKey] = &SyncTask{Request: req}
 		updateMutex.Unlock()
 	}
 
-	select {
-	case SyncQueue <- task:
-	case <-time.After(2 * time.Second):
-		log.Printf("⚠️ SyncQueue is full. Dropping task action=%s sheet=%s after timeout", action, sheetName)
-		if dedupeKey != "" {
-			updateMutex.Lock()
-			delete(pendingUpdates, dedupeKey)
-			updateMutex.Unlock()
+	// Persist to Database immediately to prevent data loss
+	if DB != nil {
+		payload, _ := json.Marshal(req)
+		syncRecord := PendingSync{
+			Payload:    string(payload),
+			Status:     "pending",
+			MaxRetries: 10, // Increased for safety
+			CreatedAt:  time.Now(),
+		}
+		if err := DB.Create(&syncRecord).Error; err != nil {
+			log.Printf("❌ Failed to persist sync task to DB: %v", err)
+		} else {
+			// Signal workers by pushing the record ID to the queue
+			// This is now much safer because if the queue is full, the record is already in the DB
+			select {
+			case SyncQueue <- &SyncTask{Request: req, RetryCount: int(syncRecord.ID)}: // Use RetryCount as ID container temporarily
+			default:
+				// If channel full, it's okay - the background poller will pick it up
+			}
 		}
 	}
 }
 
 // StartSyncManager runs background workers for Google Sheets synchronization
 func StartSyncManager(workerCount int) {
+	// Worker loop
 	for i := 0; i < workerCount; i++ {
 		workerWG.Add(1)
 		go func(workerID int) {
@@ -272,25 +262,63 @@ func StartSyncManager(workerCount int) {
 			for {
 				select {
 				case <-stopChan:
-					log.Printf("🛑 SyncManager [Worker %d]: Stopping...", workerID)
 					return
-				case task, ok := <-SyncQueue:
-					if !ok {
-						return
-					}
-
-					// Remove from dedupe map if it was there
-					dedupeKey := getDedupeKey(task.Request.Action, task.Request.SheetName, task.Request.PrimaryKey)
-					if dedupeKey != "" {
-						updateMutex.Lock()
-						delete(pendingUpdates, dedupeKey)
-						updateMutex.Unlock()
-					}
-
-					processTask(workerID, *task)
+				case task := <-SyncQueue:
+					processPersistentTask(workerID, task)
+				case <-time.After(30 * time.Second):
+					// Poller: Check for stuck or missed tasks in DB
+					processStuckTasks(workerID)
 				}
 			}
 		}(i)
+	}
+}
+
+func processPersistentTask(workerID int, task *SyncTask) {
+	dbID := uint(task.RetryCount)
+	var record PendingSync
+	if err := DB.First(&record, dbID).Error; err != nil { return }
+	if record.Status != "pending" && record.Status != "failed" { return }
+
+	// Mark as processing
+	DB.Model(&record).Update("status", "processing")
+
+	var req AppsScriptRequest
+	json.Unmarshal([]byte(record.Payload), &req)
+
+	resp, err := CallAppsScriptPOST(req)
+
+	if err != nil || resp.Status != "success" {
+		newStatus := "failed"
+		if record.RetryCount >= record.MaxRetries {
+			newStatus = "permanent_failure"
+			log.Printf("🔥 SyncManager: Task %d permanent failure", dbID)
+		}
+		DB.Model(&record).Updates(map[string]interface{}{
+			"status":      newStatus,
+			"retry_count": record.RetryCount + 1,
+		})
+	} else {
+		// SUCCESS
+		DB.Delete(&record) // Remove successful tasks to keep table clean
+		
+		// Update local DB with Telegram Message IDs if returned
+		if (resp.MessageIds.ID1 != "" || resp.MessageIds.ID2 != "" || resp.MessageIds.ID3 != "") && req.OrderID != "" {
+			updates := make(map[string]interface{})
+			if resp.MessageIds.ID1 != "" { updates["telegram_message_id1"] = resp.MessageIds.ID1 }
+			if resp.MessageIds.ID2 != "" { updates["telegram_message_id2"] = resp.MessageIds.ID2 }
+			if resp.MessageIds.ID3 != "" { updates["telegram_message_id3"] = resp.MessageIds.ID3 }
+			DB.Table("orders").Where("order_id = ?", req.OrderID).Updates(updates)
+		}
+	}
+}
+
+func processStuckTasks(workerID int) {
+	var records []PendingSync
+	// Find pending/failed tasks that haven't been updated in 5 minutes
+	DB.Where("(status = 'pending' OR status = 'failed') AND updated_at < ?", time.Now().Add(-5*time.Minute)).Limit(5).Find(&records)
+	for _, r := range records {
+		processPersistentTask(workerID, &SyncTask{RetryCount: int(r.ID)})
 	}
 }
 
@@ -299,100 +327,4 @@ func StopSyncManager() {
 	close(stopChan)
 	workerWG.Wait()
 	log.Println("✅ SyncManager: All workers stopped gracefully")
-}
-
-func processTask(workerID int, task SyncTask) {
-	log.Printf("🔄 SyncManager [Worker %d]: Processing task action=%s sheet=%s pk=%v", workerID, task.Request.Action, task.Request.SheetName, task.Request.PrimaryKey)
-
-	resp, err := CallAppsScriptPOST(task.Request)
-
-	if err != nil || resp.Status != "success" {
-		errorMessage := "Unknown error"
-		if err != nil {
-			errorMessage = err.Error()
-		} else if resp.Message != "" {
-			errorMessage = fmt.Sprintf("status=%s: %s", resp.Status, resp.Message)
-		} else {
-			errorMessage = fmt.Sprintf("unexpected status: %s", resp.Status)
-		}
-
-		log.Printf("❌ SyncManager [Worker %d]: Task %s failed: %v", workerID, task.Request.Action, errorMessage)
-
-		if task.RetryCount < task.MaxRetries {
-			task.RetryCount++
-			// Exponential backoff with jitter: 2^retry + 0-1000ms jitter
-			delay := time.Duration(1<<uint(task.RetryCount)) * time.Second
-			jitter := time.Duration(rand.Intn(1000)) * time.Millisecond
-			backoff := delay + jitter
-
-			log.Printf("⏳ SyncManager: Retrying task %s in %v (Attempt %d/%d)", task.Request.Action, backoff, task.RetryCount, task.MaxRetries)
-
-			go func(t SyncTask, d time.Duration) {
-				select {
-				case <-time.After(d):
-					select {
-					case SyncQueue <- &t:
-					case <-stopChan:
-					}
-				case <-stopChan:
-				}
-			}(task, backoff)
-		} else {
-			log.Printf("🔥 SyncManager: Task %s reached max retries. Dropping. Sheet=%s PK=%v",
-				task.Request.Action, task.Request.SheetName, task.Request.PrimaryKey)
-
-			// 🚨 ADDED: Notify User and System Admin about the failure
-			errorMessage := "ការ Sync ទៅ Google Sheets បរាជ័យលើសពី ៥ ដង"
-			if task.Request.OrderID != "" {
-				errorMessage = fmt.Sprintf("❌ បរាជ័យក្នុងការ Sync រូបភាព/ទិន្នន័យ សម្រាប់ការកម្មង់ #%s ទៅកាន់ Google Sheets (ព្យាយាម ៥ ដងហើយនៅតែមិនបាន)", task.Request.OrderID)
-			}
-
-			// 1. Broadcast to UI via WebSocket
-			if HubGlobal != nil {
-				notify, _ := json.Marshal(map[string]interface{}{
-					"type":    "sync_error",
-					"message": errorMessage,
-					"action":  task.Request.Action,
-					"orderId": task.Request.OrderID,
-				})
-				HubGlobal.Broadcast <- notify
-			}
-
-			// 2. Send Telegram System Alert (if it's an important action)
-			if task.Request.OrderID != "" {
-				go func() {
-					alertMsg := fmt.Sprintf("🚨 **[SYNC FAILURE]**\nAction: %s\nOrder ID: %s\nError: %s\n\nសូមពិនិត្យមើល Google Sheets ព្រោះទិន្នន័យអាចនឹងមិនទាន់បញ្ចូល។",
-						task.Request.Action, task.Request.OrderID, errorMessage)
-					
-					// Re-use updateOrderTelegram or a dedicated system channel if available
-					EnqueueSync("updateSheet", map[string]interface{}{
-						"Message": alertMsg,
-						"Type":    "SystemAlert",
-					}, "ChatMessages", nil)
-				}()
-			}
-		}
-	} else {
-		log.Printf("✅ SyncManager [Worker %d]: Task %s SUCCESS on sheet=%s pk=%v", workerID, task.Request.Action, task.Request.SheetName, task.Request.PrimaryKey)
-
-		// ✅ Update local DB with Telegram Message IDs if returned
-		if (resp.MessageIds.ID1 != "" || resp.MessageIds.ID2 != "" || resp.MessageIds.ID3 != "") && task.Request.OrderID != "" && DB != nil {
-			updates := make(map[string]interface{})
-			if resp.MessageIds.ID1 != "" {
-				updates["telegram_message_id1"] = resp.MessageIds.ID1
-			}
-			if resp.MessageIds.ID2 != "" {
-				updates["telegram_message_id2"] = resp.MessageIds.ID2
-			}
-			if resp.MessageIds.ID3 != "" {
-				updates["telegram_message_id3"] = resp.MessageIds.ID3
-			}
-
-			if err := DB.Table("orders").Where("order_id = ?", task.Request.OrderID).Updates(updates).Error; err != nil {
-				log.Printf("❌ [SyncManager] Failed to update local DB with Message IDs for Order %s: %v", task.Request.OrderID, err)
-			} else {
-				log.Printf("📝 [SyncManager] Updated local DB with Message IDs for Order %s: ID1=%s, ID2=%s, ID3=%s", task.Request.OrderID, resp.MessageIds.ID1, resp.MessageIds.ID2, resp.MessageIds.ID3)
-			}
-		}
-	}
 }

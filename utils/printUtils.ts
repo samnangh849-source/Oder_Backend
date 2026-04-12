@@ -11,23 +11,28 @@ export const printViaIframe = (url: string) => {
     if (!iframe) {
         iframe = document.createElement('iframe');
         iframe.id = 'hidden-print-iframe';
-        iframe.style.visibility = 'hidden';
-        iframe.style.position = 'absolute';
-        iframe.style.width = '0';
-        iframe.style.height = '0';
+        // Use a more standard "hidden" approach that still allows printing
+        iframe.style.position = 'fixed';
+        iframe.style.top = '0';
+        iframe.style.left = '0';
+        iframe.style.width = '1px';
+        iframe.style.height = '1px';
+        iframe.style.opacity = '0.01';
+        iframe.style.pointerEvents = 'none';
         iframe.style.border = 'none';
+        iframe.style.zIndex = '-1';
         
-        // Append it to the body
         document.body.appendChild(iframe);
     }
     
     iframe.onload = () => {
-        // For Cross-Origin URLs (like Google Apps Script), we cannot call iframe.contentWindow.print()
-        // due to browser security policies (Same-Origin Policy).
-        // 
-        // IMPORTANT: The target URL's HTML MUST include the following script to trigger the print dialog itself:
-        // <script> window.onload = function() { window.print(); } </script>
-        console.log("Iframe loaded label. Awaiting self-print from the label's script...");
+        try {
+            if (iframe.contentWindow) {
+                iframe.contentWindow.focus();
+                // If it's same-origin, we can try to help trigger it
+                // but we mostly rely on the autoPrint script inside
+            }
+        } catch (e) {}
     };
     
     // Append autoPrint=true parameter to tell the Label page to auto-print itself

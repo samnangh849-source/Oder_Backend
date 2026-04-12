@@ -197,6 +197,8 @@ ${dateStr}
             shipping: order['Internal Shipping Method'] || 'N/A',
             page: order.Page || '',
             user: order.User || '',
+            note: order.Note || '',
+            store: order['Fulfillment Store'] || '',
         });
         const note = order.Note || '';
         const mapMatch = note.match(/https?:\/\/(www\.)?(google\.com\/maps|maps\.app\.goo\.gl)\/[^\s]+/);

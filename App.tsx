@@ -47,7 +47,7 @@ const AppContent: React.FC = () => {
     } = useUser();
 
     const {
-        orders, appData, isOrdersLoading, isSyncing, refreshTimestamp, fetchData, fetchOrders, refreshData
+        orders, setOrders, appData, isOrdersLoading, isSyncing, refreshTimestamp, fetchData, fetchOrders, refreshData
     } = useOrder();
 
     const [appState, setAppState] = useUrlState<'login' | 'user_journey' | 'admin_dashboard' | 'create_order' | 'fulfillment' | 'role_selection' | 'confirm_delivery' | 'entertainment' | 'watch' | 'series_player' | 'long_player' | 'short_player' | 'cambodia_map' | 'print_label' | 'order_metadata'>('view', 'login');
@@ -173,6 +173,15 @@ const AppContent: React.FC = () => {
         if (lastMessage.type === 'new_order') {
             console.log("[App] WebSocket: New order detected. Refreshing data...");
             fetchOrders(true); // Background sync
+        } else if (lastMessage.type === 'update_order') {
+            console.log("[App] WebSocket: Order update received for", lastMessage.orderId);
+            const { orderId, newData } = lastMessage;
+            if (orderId && newData) {
+                // Manually update the local orders state for immediate UI feedback
+                setOrders(prev => prev.map(o => 
+                    o['Order ID'] === orderId ? { ...o, ...newData } : o
+                ));
+            }
         } else if (lastMessage.type === 'sync_error') {
             console.error("[App] WebSocket: Sync Error!", lastMessage.message);
             showNotification(

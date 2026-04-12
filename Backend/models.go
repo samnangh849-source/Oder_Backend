@@ -300,6 +300,16 @@ type IncentiveCustomPayout struct {
 	Value     float64 `gorm:"column:value" json:"value"`
 }
 
+type PendingSync struct {
+	ID         uint      `gorm:"primaryKey;autoIncrement" json:"id"`
+	Payload    string    `gorm:"type:text" json:"payload"` // JSON of AppsScriptRequest
+	Status     string    `gorm:"index;default:'pending'" json:"status"` // pending, processing, failed
+	RetryCount int       `gorm:"default:0" json:"retryCount"`
+	MaxRetries int       `gorm:"default:5" json:"maxRetries"`
+	CreatedAt  time.Time `gorm:"index" json:"createdAt"`
+	UpdatedAt  time.Time `json:"updatedAt"`
+}
+
 type DeleteOrderRequest struct {
 	OrderID            string `json:"orderId"`
 	Team               string `json:"team"`

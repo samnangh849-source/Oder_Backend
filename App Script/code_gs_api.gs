@@ -119,11 +119,20 @@ function doPost(e) {
           const orderId = contents.orderId || contents.orderID;
           if (orderId) {
              console.log("✅ [uploadImage] Order Drive upload done, updating Sheet for Order: " + orderId);
+             
+             // Combine photo URL with other metadata (Status, Packed By, etc.)
+             const updateData = contents.newData || {};
+             if (contents.targetColumn) {
+               updateData[contents.targetColumn] = upRes.url;
+             } else {
+               updateData["Package Photo"] = upRes.url;
+             }
+
              try {
                const updateResult = handleUpdateSheet({
                  sheetName: CONFIG.ALL_ORDERS_SHEET,
                  primaryKey: { "Order ID": orderId },
-                 newData: { "Package Photo": upRes.url }
+                 newData: updateData
                });
                
                // Also update the Team-specific sheet if needed
@@ -131,7 +140,7 @@ function doPost(e) {
                  handleUpdateSheet({
                    sheetName: `${CONFIG.ORDER_SHEET_PREFIX}${contents.team}`,
                    primaryKey: { "Order ID": orderId },
-                   newData: { "Package Photo": upRes.url }
+                   newData: updateData
                  });
                }
                
@@ -214,9 +223,37 @@ function handleAddRow(data) {
   if (!sheet) return createJsonResponse({ status: "error", message: "រកមិនឃើញ Sheet" }, 404);
   
   const headers = sheet.getRange(1, 1, 1, sheet.getLastColumn()).getValues()[0];
-  const idColIdx = headers.findIndex(h => normalizeKey(h) === "id");
+  const normalizedHeaders = headers.map(h => normalizeKey(h));
   
-  // Auto-generate ID if missing
+  // 1. Identify Primary Key for Idempotency
+  let pkField = "id"; // Default
+  if (data.sheetName === "Users") pkField = "username";
+  else if (data.sheetName === "Stores") pkField = "storename";
+  else if (data.sheetName === "Products") pkField = "barcode";
+  else if (data.sheetName === "AllOrders" || data.sheetName.indexOf("Orders_") === 0) pkField = "orderid";
+  
+  const pkValue = data.newData[Object.keys(data.newData).find(k => normalizeKey(k) === pkField)];
+
+  // 2. If PK value exists, check if row already exists to prevent duplicates
+  if (pkValue) {
+    const pkIdx = normalizedHeaders.indexOf(pkField);
+    if (pkIdx !== -1) {
+      const values = sheet.getDataRange().getValues();
+      for (let i = 1; i < values.length; i++) {
+        if (normalizeKey(values[i][pkIdx]) === normalizeKey(pkValue)) {
+          console.warn("⚠️ [Idempotency] Row already exists for PK: " + pkValue + " in " + data.sheetName + ". Updating instead.");
+          return handleUpdateSheet({
+            sheetName: data.sheetName,
+            primaryKey: { [headers[pkIdx]]: pkValue },
+            newData: data.newData
+          });
+        }
+      }
+    }
+  }
+
+  // 3. Auto-generate numeric ID if required and missing
+  const idColIdx = normalizedHeaders.indexOf("id");
   if (idColIdx !== -1 && (!data.newData.ID && !data.newData.id)) {
     const values = sheet.getDataRange().getValues();
     let maxId = 0;
@@ -262,46 +299,53 @@ function handleUpdateSheet(data) {
   try {
     const ss = SpreadsheetApp.getActiveSpreadsheet();
     const sheet = ss.getSheetByName(data.sheetName);
-    if (!sheet) {
-      console.error("❌ [UpdateSheet] Sheet not found: " + data.sheetName);
-      return createJsonResponse({ status: "error", message: "រកមិនឃើញ Sheet: " + data.sheetName }, 404);
-    }
+    if (!sheet) return createJsonResponse({ status: "error", message: "រកមិនឃើញ Sheet: " + data.sheetName }, 404);
     
-    console.log("📋 [UpdateSheet] Sheet found: " + data.sheetName + " rows=" + sheet.getLastRow());
-
-    const values = sheet.getDataRange().getValues();
-    const headers = values[0];
+    const headers = sheet.getRange(1, 1, 1, sheet.getLastColumn()).getValues()[0];
     const normalizedHeaders = headers.map(h => normalizeKey(h));
-    console.log("📑 [UpdateSheet] Headers: " + normalizedHeaders.join(", "));
     
-    const targetPkVals = {};
-    for (const [k, v] of Object.entries(data.primaryKey)) {
-      targetPkVals[normalizeKey(k)] = normalizeKey(v);
+    // 1. Optimized Row Lookup using TextFinder
+    const pkColName = Object.keys(data.primaryKey)[0];
+    const pkValue = data.primaryKey[pkColName];
+    const pkIdx = normalizedHeaders.indexOf(normalizeKey(pkColName));
+    
+    let rowIndex = -1;
+    if (pkIdx !== -1) {
+      // Search ONLY in the specific Primary Key column for maximum speed
+      const searchRange = sheet.getRange(1, pkIdx + 1, sheet.getLastRow(), 1);
+      const finder = searchRange.createTextFinder(pkValue).matchEntireCell(true);
+      const match = finder.findNext();
+      if (match) {
+        rowIndex = match.getRow();
+        console.log("🚀 [UpdateSheet] Fast lookup success! Row: " + rowIndex);
+      }
     }
 
-    let rowIndex = -1;
-    for (let i = 1; i < values.length; i++) {
-      let match = true;
-      for (const pkKey in targetPkVals) {
-        const colIdx = normalizedHeaders.indexOf(pkKey);
-        if (colIdx === -1 || normalizeKey(values[i][colIdx]) !== targetPkVals[pkKey]) {
-          match = false; break;
+    // Fallback to manual scan if TextFinder fails or complex PK
+    if (rowIndex === -1) {
+      console.warn("⚠️ [UpdateSheet] Fast lookup failed, falling back to scan...");
+      const values = sheet.getDataRange().getValues();
+      const targetPkVals = {};
+      for (const [k, v] of Object.entries(data.primaryKey)) { targetPkVals[normalizeKey(k)] = normalizeKey(v); }
+
+      for (let i = 1; i < values.length; i++) {
+        let match = true;
+        for (const pkKey in targetPkVals) {
+          const col = normalizedHeaders.indexOf(pkKey);
+          if (col === -1 || normalizeKey(values[i][col]) !== targetPkVals[pkKey]) { match = false; break; }
         }
-      }
-      if (match) {
-        rowIndex = i + 1;
-        console.log("✅ [UpdateSheet] Row found: " + rowIndex);
-        break;
+        if (match) { rowIndex = i + 1; break; }
       }
     }
 
     if (rowIndex !== -1) {
       let updatedCount = 0;
-      const rowData = values[rowIndex - 1]; // Get the existing row data (0-indexed locally)
+      const rowRange = sheet.getRange(rowIndex, 1, 1, headers.length);
+      const rowData = rowRange.getValues()[0];
 
       const aliasMap = {
-        "packagephotourl": ["packagephoto", "packagephotourl", "packagephotolink", "packagephotoevidence", "packagephotourl", "packphoto"],
-        "packagephoto": ["packagephotourl", "packagephoto", "packagephotolink", "packagephotoevidence", "packagephotourl", "packphoto"],
+        "packagephotourl": ["packagephoto", "packagephotourl", "packagephotolink", "packagephotoevidence", "packphoto"],
+        "packagephoto": ["packagephotourl", "packagephoto", "packagephotolink", "packagephotoevidence", "packphoto"],
         "orderid": ["orderid", "id", "orderno", "order#"],
         "deliveryphotourl": ["deliveryphoto", "deliveryphotourl", "deliveryphotolink", "proofofdelivery", "deliveryphotoevidence"],
         "deliveryphoto": ["deliveryphotourl", "deliveryphoto", "deliveryphotolink", "proofofdelivery", "deliveryphotoevidence"]
@@ -311,7 +355,6 @@ function handleUpdateSheet(data) {
         const nKey = normalizeKey(key);
         let colIdx = normalizedHeaders.indexOf(nKey);
         
-        // Advanced Fallback: Check aliases if exact match not found
         if (colIdx === -1) {
           const aliases = aliasMap[nKey] || [];
           for (const alias of aliases) {
@@ -326,26 +369,20 @@ function handleUpdateSheet(data) {
             if (v.toLowerCase() === 'true') v = true;
             else if (v.toLowerCase() === 'false') v = false;
           }
-          rowData[colIdx] = v; // Update the local row array
+          rowData[colIdx] = v;
           updatedCount++;
-          console.log("📝 [Batch Update] Changed col " + (colIdx+1) + " (" + key + ") = " + v);
-        } else {
-          console.warn("⚠️ [Batch Update] Column not found in headers: " + key);
         }
       }
 
       if (updatedCount > 0) {
-        // Write the ENTIRE row back in ONE atomic operation
-        sheet.getRange(rowIndex, 1, 1, headers.length).setValues([rowData]);
-        SpreadsheetApp.flush(); // Force immediate commit to avoid race conditions
-        console.log("✅ [Batch Update] SUCCESS: Atomically updated row " + rowIndex);
+        rowRange.setValues([rowData]);
+        SpreadsheetApp.flush();
+        console.log("✅ [UpdateSheet] Atomic update success for row " + rowIndex);
       }
       return createJsonResponse({ status: "success", updated: updatedCount });
     }
-    console.error("❌ [UpdateSheet] Row not found with PK: " + JSON.stringify(data.primaryKey));
-    return createJsonResponse({ status: "error", message: "រកមិនឃើញជួរទិន្នន័យ (Row) ដើម្បីកែប្រែ" }, 404);
+    return createJsonResponse({ status: "error", message: "រកមិនឃើញជួរទិន្នន័យដើម្បីកែប្រែ" }, 404);
   } catch (e) {
-    console.error("❌ [UpdateSheet] Exception: " + e.message);
     return createJsonResponse({ status: "error", message: "Update failed: " + e.message }, 500);
   }
 }
@@ -765,20 +802,42 @@ function sendTelegramMessage(settings, data, templates) {
   let productsList = "";
   try {
     let products = [];
-    const rawProducts = data.productsJSON || data["Products (JSON)"] || req.products;
+    let rawProducts = data.productsJSON || data["Products (JSON)"] || req.products;
+    
     if (rawProducts) {
-      products = typeof rawProducts === 'string' ? JSON.parse(rawProducts) : rawProducts;
+      if (typeof rawProducts === 'string') {
+        // CLEANING LOGIC: Remove common JSON-breaking characters
+        let cleanedJSON = rawProducts
+          .replace(/[\u201C\u201D]/g, '"') // Replace smart double quotes
+          .replace(/[\u2018\u2019]/g, "'") // Replace smart single quotes
+          .trim();
+        
+        try {
+          products = JSON.parse(cleanedJSON);
+        } catch (innerErr) {
+          console.warn("⚠️ [JSON Parse] Standard parse failed, attempting loose cleaning...");
+          // Try to handle unescaped newlines or other minor issues
+          cleanedJSON = cleanedJSON.replace(/\n/g, "\\n").replace(/\r/g, "\\r");
+          products = JSON.parse(cleanedJSON);
+        }
+      } else {
+        products = rawProducts;
+      }
     }
-    if (products && products.length > 0) {
+
+    if (Array.isArray(products) && products.length > 0) {
       productsList = products.map(function(p, i) {
         const name = p.productName || p.ProductName || p.name || "N/A";
         const qty = p.quantity || p.Quantity || 1;
+        const color = p.colorInfo || p.color || "";
         const price = p.finalPrice !== undefined ? p.finalPrice : (p.price || p.Price || 0);
-        return (i + 1) + ". " + name + " x" + qty + " = $" + (price * qty).toFixed(2);
+        const colorText = color ? " (" + color + ")" : "";
+        return (i + 1) + ". " + name + colorText + " x" + qty + " = $" + (price * qty).toFixed(2);
       }).join("\n");
     }
   } catch (e) {
-    console.warn("⚠️ [sendTelegramMessage] Failed to parse products: " + e.message);
+    console.warn("❌ [sendTelegramMessage] Critical JSON failure: " + e.message);
+    productsList = "⚠️ មិនអាចបង្ហាញបញ្ជីផលិតផលបាន (JSON Error)";
   }
 
   // --- Source info ---
@@ -843,8 +902,17 @@ function sendTelegramMessage(settings, data, templates) {
   };
 
   function applyTemplate(tpl) {
+    if (!tpl) return "";
     return tpl.replace(/\{\{(\w+)\}\}/g, function(m, key) {
-      return vars[key] !== undefined ? vars[key] : m;
+      let val = vars[key] !== undefined ? vars[key] : m;
+      
+      // ESCAPE LOGIC: Protect Telegram Markdown V1 special characters
+      // We only escape if the value is a string and not already formatted by our logic
+      if (typeof val === 'string' && key !== 'paymentStatus' && key !== 'note' && key !== 'shippingDetails') {
+        // Characters to escape: * _ ` [
+        return val.replace(/([*_`\[])/g, '\\$1');
+      }
+      return val;
     });
   }
 
@@ -1128,16 +1196,38 @@ function updateOrderTelegram(data) {
     }
 
     // Prepare normalized data for sendOrderToTelegram
-    // ✅ Merge updatedFields with fullOrderData to ensure newly updated info 
-    // (like photo URLs) isn't lost if the spreadsheet fetch was slightly stale.
-    const normalizedData = {
-      ...fullOrderData,
-      ...updatedFields,
-      orderId: orderId,
-      team: team,
-      fulfillmentStore: fullOrderData["Fulfillment Store"] || updatedFields["Fulfillment Store"],
-      forceSync: updatedFields["Force Sync"] === true
-    };
+    // ✅ SMART MERGE: Ensure newly updated info from Backend (updatedFields) 
+    // strictly overwrites Sheet data (fullOrderData) even if header names 
+    // vary slightly in case or spacing.
+    const normalizedData = {};
+    
+    // 1. Fill with sheet data first
+    for (let key in fullOrderData) {
+      normalizedData[key] = fullOrderData[key];
+    }
+    
+    // 2. Overwrite with backend updates (using case-insensitive matching)
+    const sheetHeaders = Object.keys(fullOrderData);
+    for (let bKey in updatedFields) {
+      const normBKey = normalizeKey(bKey);
+      let found = false;
+      for (let sKey of sheetHeaders) {
+        if (normalizeKey(sKey) === normBKey) {
+          normalizedData[sKey] = updatedFields[bKey];
+          found = true;
+          break;
+        }
+      }
+      if (!found) {
+        normalizedData[bKey] = updatedFields[bKey]; // Add as new field if no header match
+      }
+    }
+
+    // Add metadata for routing
+    normalizedData.orderId = orderId;
+    normalizedData.team = team;
+    normalizedData.fulfillmentStore = normalizedData["Fulfillment Store"] || updatedFields["Fulfillment Store"];
+    normalizedData.forceSync = updatedFields["Force Sync"] === true;
 
     return sendOrderToTelegram(normalizedData);
   } catch (e) {

@@ -36,6 +36,10 @@ export function useUrlState<T extends string>(param: string, defaultValue: T): [
             
             // Standard relative update to avoid SecurityError and double-origin bugs
             window.history.pushState(null, '', url.pathname + url.search);
+
+            // CRITICAL: pushState does not trigger 'popstate' event. 
+            // We must manually dispatch it so App.tsx and other instances of this hook react.
+            window.dispatchEvent(new PopStateEvent('popstate'));
         } catch (e) {
             // Silently catch to prevent app crash in restricted origins
             console.debug('URL update suppressed');

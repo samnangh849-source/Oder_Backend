@@ -213,6 +213,20 @@ const FastPackTerminal: React.FC<FastPackTerminalProps> = ({ order, onClose, onS
     };
 
     useEffect(() => {
+        const handlePrintSuccess = (e: any) => {
+            if (e.detail?.target === 'label') {
+                setHasGeneratedLabel(true);
+                // Automatically move to PHOTO step after a short delay
+                setTimeout(() => {
+                    setStep('PHOTO');
+                }, 1500);
+            }
+        };
+        window.addEventListener('print-success', handlePrintSuccess);
+        return () => window.removeEventListener('print-success', handlePrintSuccess);
+    }, []);
+
+    useEffect(() => {
         return () => {
             if (submitTimeoutRef.current) clearTimeout(submitTimeoutRef.current);
             if (submitIntervalRef.current) clearInterval(submitIntervalRef.current);
@@ -417,38 +431,15 @@ const FastPackTerminal: React.FC<FastPackTerminalProps> = ({ order, onClose, onS
         }
     }, [step, isOrderVerified]);
 
-    useEffect(() => {
-        if (step === 'LABELING' && hasGeneratedLabel && !hasAutoAdvanced.current.label) {
-            hasAutoAdvanced.current.label = true;
-            setIsAdvancingLabel(true);
-            const timer = setTimeout(() => { setStep('PHOTO'); setIsAdvancingLabel(false); }, 5000);
-            return () => { clearTimeout(timer); setIsAdvancingLabel(false); };
-        }
-    }, [step, hasGeneratedLabel]);
-
-    useEffect(() => {
-        if (isAdvancingLabel) {
-            setAdvancementProgress(0);
-            const start = Date.now();
-            const duration = 5000;
-            const interval = setInterval(() => {
-                const elapsed = Date.now() - start;
-                if (elapsed >= duration) { setAdvancementProgress(100); clearInterval(interval); }
-                else { setAdvancementProgress((elapsed / duration) * 100); }
-            }, 50);
-            return () => clearInterval(interval);
-        } else { setAdvancementProgress(0); }
-    }, [isAdvancingLabel]);
-
     useEffect(() => { if (step === 'PHOTO') handleZoomChange(1); }, [step, handleZoomChange]);
 
     if (!order) return null;
 
     const qrValue = `${window.location.origin}${window.location.pathname}?view=order_metadata&id=${encodeURIComponent(order['Order ID'])}`;
     
-    // Robust URL construction for GitHub Pages
-    const baseUrl = window.location.href.split('?')[0].split('#')[0];
-    const fullPrinterURL = `${baseUrl}?view=print_label&id=${encodeURIComponent(order['Order ID'])}&name=${encodeURIComponent(order['Customer Name'])}&phone=${encodeURIComponent(order['Customer Phone'])}&location=${encodeURIComponent(order.Location)}&total=${order['Grand Total']}&autoPrint=true`;
+    // Robust URL construction for the printer page
+    const baseUrl = `${window.location.origin}${window.location.pathname}`;
+    const fullPrinterURL = `${baseUrl}?view=print_label&id=${encodeURIComponent(order['Order ID'])}&name=${encodeURIComponent(order['Customer Name'])}&phone=${encodeURIComponent(order['Customer Phone'])}&location=${encodeURIComponent(order.Location)}&address=${encodeURIComponent(order['Address Details'] || '')}&total=${order['Grand Total']}&store=${encodeURIComponent(order['Fulfillment Store'] || '')}&page=${encodeURIComponent(order.Page || '')}&user=${encodeURIComponent(order.User || '')}&shipping=${encodeURIComponent(order['Internal Shipping Method'] || '')}&payment=${encodeURIComponent(order['Payment Status'] || '')}&note=${encodeURIComponent(order.Note || '')}&autoPrint=true`;
 
     return (
         <div className="fixed inset-0 z-[200] bg-[#0B0E11] flex flex-col animate-fade-in font-sans text-[#EAECEF]">
@@ -473,47 +464,39 @@ const FastPackTerminal: React.FC<FastPackTerminalProps> = ({ order, onClose, onS
                 </div>
             )}
 
-            {/* Binance Official Header */}
-            <header className="relative z-30 px-4 py-2.5 bg-[#181A20] border-b border-[#2B3139] flex justify-between items-center flex-shrink-0 shadow-sm">
-                <div className="flex items-center gap-4 h-10">
+            {/* Header */}
+            <header className="relative z-30 px-6 py-4 bg-[#181A20] border-b border-white/10 flex justify-between items-center flex-shrink-0 shadow-md">
+                <div className="flex items-center gap-6">
                     <button 
                         onClick={onClose} 
-                        className="text-[#848E9C] hover:text-[#FCD535] transition-colors"
+                        className="text-gray-400 hover:text-[#FCD535] transition-colors p-2 -ml-2"
                     >
-                        <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M15 19l-7-7 7-7" /></svg>
+                        <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M15 19l-7-7 7-7" /></svg>
                     </button>
                     
-                    <div className="flex items-center gap-2">
-                        <span className="text-lg font-bold text-white uppercase tracking-tight">PACK</span>
-                        <span className="text-lg font-bold text-[#848E9C]">/</span>
-                        <span className="text-lg font-bold text-[#848E9C] uppercase tracking-tight">SYSTEM</span>
+                    <div className="flex flex-col">
+                        <h1 className="text-xl font-bold text-white tracking-tight leading-none">Pack System</h1>
+                        <p className="text-xs font-medium text-gray-500 mt-1">Fulfillment Node: {order.Team}</p>
                     </div>
 
-                    <div className="hidden lg:flex items-center gap-6 ml-6 border-l border-[#2B3139] pl-6">
+                    <div className="hidden lg:flex items-center gap-8 ml-8 border-l border-white/10 pl-8">
                         <div className="flex flex-col">
-                            <span className="text-[10px] text-[#848E9C] font-medium leading-none">ORDER ID</span>
-                            <span className="text-xs font-mono font-bold text-[#0ECB81] mt-1.5">#{order['Order ID'].substring(0, 12)}...</span>
+                            <span className="text-[11px] text-gray-500 font-bold uppercase tracking-wider">Order Reference</span>
+                            <span className="text-sm font-mono font-bold text-[#0ECB81] mt-0.5">#{order['Order ID'].substring(0, 16)}</span>
                         </div>
-                        <div className="flex flex-col">
-                            <span className="text-[10px] text-[#848E9C] font-medium leading-none">FULFILLMENT</span>
-                            <span className="text-xs font-bold text-white mt-1.5 uppercase">{order.Team} Node</span>
-                        </div>
-                        <div className="flex flex-col">
-                            <span className="text-[10px] text-[#848E9C] font-medium leading-none">STATUS</span>
-                            <div className="flex items-center gap-1.5 mt-1.5">
-                                <div className="w-1 h-1 rounded-full bg-[#0ECB81] animate-pulse"></div>
-                                <span className="text-xs font-bold text-[#0ECB81] uppercase tracking-wider">Online</span>
-                            </div>
+                        <div className="flex items-center gap-2 px-3 py-1.5 bg-[#0ECB81]/10 rounded-lg border border-[#0ECB81]/20">
+                            <div className="w-2 h-2 rounded-full bg-[#0ECB81] animate-pulse"></div>
+                            <span className="text-xs font-bold text-[#0ECB81] uppercase tracking-wider">System Online</span>
                         </div>
                     </div>
                 </div>
 
                 <div className="flex items-center gap-4">
-                    <div className="flex items-center gap-2 bg-[#2B3139]/40 px-3 py-1.5 rounded-lg border border-[#2B3139]">
-                        <div className="w-5 h-5 rounded-full bg-[#FCD535] flex items-center justify-center text-[10px] font-black text-black">
-                            {currentUser?.FullName?.charAt(0) || 'S'}
+                    <div className="flex items-center gap-3 bg-white/5 px-4 py-2 rounded-xl border border-white/10">
+                        <div className="w-6 h-6 rounded-lg bg-[#FCD535] flex items-center justify-center text-xs font-black text-black">
+                            {currentUser?.FullName?.charAt(0) || 'P'}
                         </div>
-                        <span className="text-xs font-bold text-white">{currentUser?.FullName || 'System'}</span>
+                        <span className="text-sm font-bold text-white">{currentUser?.FullName || 'Packer'}</span>
                     </div>
                 </div>
             </header>
@@ -522,148 +505,143 @@ const FastPackTerminal: React.FC<FastPackTerminalProps> = ({ order, onClose, onS
                 <OrderSummaryPanel order={order} appData={appData} step={step} verifiedItems={verifiedItems} isOrderVerified={isOrderVerified} verifyItem={verifyItem} showFullImage={showFullImage} />
 
                 <div className="flex-grow flex flex-col bg-[#0B0E11] relative">
-                    {/* Official Binance Ticker Row */}
-                    <div className="px-6 py-3 bg-[#181A20] border-b border-[#2B3139] flex items-center gap-10 flex-shrink-0 overflow-x-auto custom-scrollbar no-scrollbar">
-                        <div className="flex flex-col min-w-fit">
-                            <span className="text-[10px] text-[#848E9C] font-medium">TOTAL VALUE</span>
-                            <span className="text-sm font-mono font-bold text-[#0ECB81] mt-0.5">${(Number(order['Grand Total']) || 0).toFixed(2)}</span>
+                    {/* Info Ticker */}
+                    <div className="px-8 py-4 bg-[#1e2329] border-b border-white/10 flex items-center gap-12 flex-shrink-0 overflow-x-auto no-scrollbar">
+                        <div className="flex flex-col">
+                            <span className="text-[11px] text-gray-500 font-bold uppercase tracking-wider">Total Collection</span>
+                            <span className="text-lg font-mono font-bold text-[#0ECB81]">${(Number(order['Grand Total']) || 0).toFixed(2)}</span>
                         </div>
-                        <div className="flex flex-col min-w-fit">
-                            <span className="text-[10px] text-[#848E9C] font-medium">CUSTOMER</span>
-                            <span className="text-sm font-bold text-white mt-0.5 truncate max-w-[120px]">{order['Customer Name']}</span>
+                        <div className="flex flex-col">
+                            <span className="text-[11px] text-gray-500 font-bold uppercase tracking-wider">Customer Name</span>
+                            <span className="text-base font-bold text-white">{order['Customer Name']}</span>
                         </div>
-                        <div className="flex flex-col min-w-fit">
-                            <span className="text-[10px] text-[#848E9C] font-medium">CONTACT</span>
-                            <span className="text-sm font-mono font-bold text-[#FCD535] mt-0.5">{order['Customer Phone']}</span>
+                        <div className="flex flex-col">
+                            <span className="text-[11px] text-gray-500 font-bold uppercase tracking-wider">Contact Number</span>
+                            <span className="text-base font-mono font-bold text-[#FCD535]">{order['Customer Phone']}</span>
                         </div>
-                        <div className="flex flex-col min-w-fit">
-                            <span className="text-[10px] text-[#848E9C] font-medium">LOCATION</span>
-                            <span className="text-xs font-bold text-white mt-0.5 uppercase">{order.Location}</span>
+                        <div className="flex flex-col max-w-xs">
+                            <span className="text-[11px] text-gray-500 font-bold uppercase tracking-wider">Shipping Method</span>
+                            <span className="text-sm font-bold text-white truncate">{order['Internal Shipping Method'] || 'Standard'}</span>
                         </div>
                     </div>
 
-                    <div className="flex-grow flex flex-col p-6 overflow-y-auto">
+                    <div className="flex-grow flex flex-col p-8 overflow-y-auto">
                         <div className="w-full h-full flex flex-col max-w-5xl mx-auto">
                             {uploading && undoTimer === null && (
-                                <div className="bg-[#1E2329] border border-[#2B3139] rounded-xl p-5 mb-6 shadow-xl">
-                                    <div className="flex justify-between items-center mb-3">
+                                <div className="bg-[#1E2329] border border-white/10 rounded-2xl p-6 mb-8 shadow-xl">
+                                    <div className="flex justify-between items-center mb-4">
                                         <div className="flex items-center gap-3">
-                                            <div className="w-2 h-2 rounded-full bg-[#FCD535] animate-pulse"></div>
-                                            <span className="text-xs font-bold text-[#EAECEF] uppercase tracking-wider">Broadcasting Packaging Metadata...</span>
+                                            <div className="w-2.5 h-2.5 rounded-full bg-[#FCD535] animate-pulse"></div>
+                                            <span className="text-sm font-bold text-white">Uploading Packaging Evidence...</span>
                                         </div>
-                                        <span className="text-sm font-mono font-bold text-[#FCD535]">{uploadProgress}%</span>
+                                        <span className="text-base font-mono font-bold text-[#FCD535]">{uploadProgress}%</span>
                                     </div>
-                                    <div className="w-full h-1 bg-[#0B0E11] rounded-full overflow-hidden">
-                                        <div className="h-full bg-[#FCD535] transition-all duration-300" style={{ width: `${uploadProgress}%` }}></div>
+                                    <div className="w-full h-2 bg-black/40 rounded-full overflow-hidden">
+                                        <div className="h-full bg-[#FCD535] transition-all duration-300 shadow-[0_0_10px_rgba(252,213,53,0.5)]" style={{ width: `${uploadProgress}%` }}></div>
                                     </div>
                                 </div>
                             )}
 
                             <div className="flex-grow flex flex-col">
                                 {step === 'VERIFYING' && (
-                                    <div className="bg-[#181A20] border border-[#2B3139] rounded-2xl flex-grow flex flex-col overflow-hidden shadow-2xl">
-                                        <div className="px-6 py-4 border-b border-[#2B3139] flex items-center justify-between bg-[#1E2329]">
-                                            <h3 className="text-sm font-bold text-white uppercase tracking-wider">Protocol Verification</h3>
-                                            <span className="text-[10px] font-bold text-[#848E9C] uppercase tracking-widest">v4.3.0 stable</span>
+                                    <div className="bg-[#181A20] border border-white/5 rounded-3xl flex-grow flex flex-col overflow-hidden shadow-2xl">
+                                        <div className="px-8 py-6 border-b border-white/5 flex items-center justify-between bg-white/[0.02]">
+                                            <h3 className="text-base font-bold text-white tracking-tight">Order Verification</h3>
+                                            <span className="text-[11px] font-bold text-gray-500 uppercase tracking-widest">Awaiting Manual Pack</span>
                                         </div>
                                         
-                                        <div className="p-8 grid grid-cols-1 md:grid-cols-2 gap-8">
-                                            <div className="space-y-6">
-                                                <div className="flex flex-col gap-1.5">
-                                                    <span className="text-[10px] font-bold text-[#848E9C] uppercase tracking-widest">Routing Node</span>
-                                                    <div className="bg-[#0B0E11] p-4 rounded-xl border border-[#2B3139] flex items-center justify-between">
-                                                        <span className="text-xs font-bold text-white uppercase">{order?.['Internal Shipping Method'] || 'SYSTEM'}</span>
-                                                        <svg className="w-4 h-4 text-[#848E9C]" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" /></svg>
+                                        <div className="p-10 grid grid-cols-1 md:grid-cols-2 gap-10">
+                                            <div className="space-y-8">
+                                                <div className="flex flex-col gap-2">
+                                                    <span className="text-xs font-bold text-gray-500 uppercase tracking-widest">Shipping Service</span>
+                                                    <div className="bg-black/40 p-5 rounded-2xl border border-white/5 flex items-center justify-between">
+                                                        <span className="text-base font-bold text-white">{order?.['Internal Shipping Method'] || 'Regular'}</span>
+                                                        <svg className="w-5 h-5 text-gray-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" /></svg>
                                                     </div>
                                                 </div>
-                                                <div className="flex flex-col gap-1.5">
-                                                    <span className="text-[10px] font-bold text-[#848E9C] uppercase tracking-widest">Counterparty</span>
-                                                    <div className="bg-[#0B0E11] p-4 rounded-xl border border-[#2B3139] space-y-2">
-                                                        <div className="flex justify-between">
-                                                            <span className="text-[10px] text-gray-500 font-bold uppercase">Name</span>
-                                                            <span className="text-xs text-white font-bold">{order?.['Customer Name']}</span>
+                                                <div className="flex flex-col gap-2">
+                                                    <span className="text-xs font-bold text-gray-500 uppercase tracking-widest">Customer Details</span>
+                                                    <div className="bg-black/40 p-5 rounded-2xl border border-white/5 space-y-3">
+                                                        <div className="flex justify-between items-center">
+                                                            <span className="text-xs text-gray-500 font-bold">Name</span>
+                                                            <span className="text-base text-white font-bold">{order?.['Customer Name']}</span>
                                                         </div>
-                                                        <div className="flex justify-between">
-                                                            <span className="text-[10px] text-gray-500 font-bold uppercase">Contact</span>
-                                                            <span className="text-xs text-[#FCD535] font-mono">{order?.['Customer Phone']}</span>
+                                                        <div className="flex justify-between items-center">
+                                                            <span className="text-xs text-gray-500 font-bold">Phone</span>
+                                                            <span className="text-base text-[#FCD535] font-mono font-bold">{order?.['Customer Phone']}</span>
                                                         </div>
                                                     </div>
                                                 </div>
                                             </div>
 
-                                            <div className="space-y-6">
-                                                <div className="flex flex-col gap-1.5">
-                                                    <span className="text-[10px] font-bold text-[#848E9C] uppercase tracking-widest">Settlement Info</span>
-                                                    <div className="bg-[#0B0E11] p-4 rounded-xl border border-[#2B3139] space-y-3">
+                                            <div className="space-y-8">
+                                                <div className="flex flex-col gap-2">
+                                                    <span className="text-xs font-bold text-gray-500 uppercase tracking-widest">Financial Summary</span>
+                                                    <div className="bg-black/40 p-5 rounded-2xl border border-white/5 space-y-4">
                                                         <div className="flex justify-between items-center">
-                                                            <span className="text-[10px] text-gray-500 font-bold uppercase">Gateway</span>
-                                                            <span className="text-xs text-white font-bold uppercase">{order?.['Payment Info'] || 'SYSTEM'}</span>
+                                                            <span className="text-xs text-gray-500 font-bold uppercase">Payment Mode</span>
+                                                            <span className="text-sm text-white font-bold bg-white/5 px-3 py-1 rounded-lg uppercase">{order?.['Payment Info'] || 'Cash'}</span>
                                                         </div>
-                                                        <div className="flex justify-between items-center pt-2 border-t border-[#2B3139]">
-                                                            <span className="text-[10px] text-gray-500 font-bold uppercase">Net Total</span>
-                                                            <span className="text-xl font-mono font-bold text-[#0ECB81]">${(Number(order?.['Grand Total']) || 0).toFixed(2)}</span>
+                                                        <div className="flex justify-between items-center pt-3 border-t border-white/10">
+                                                            <span className="text-sm text-gray-500 font-bold uppercase">Grand Total</span>
+                                                            <span className="text-2xl font-mono font-bold text-[#0ECB81]">${(Number(order?.['Grand Total']) || 0).toFixed(2)}</span>
                                                         </div>
                                                     </div>
                                                 </div>
                                                 {order.Note && (
-                                                    <div className="bg-[#F6465D]/5 border border-[#F6465D]/20 p-4 rounded-xl">
+                                                    <div className="bg-red-500/10 border border-red-500/20 p-5 rounded-2xl">
                                                         <div className="flex items-center gap-2 mb-2">
-                                                            <div className="w-1 h-3 bg-[#F6465D] rounded-full"></div>
-                                                            <span className="text-[9px] font-bold text-[#F6465D] uppercase tracking-widest">System Note</span>
+                                                            <div className="w-1.5 h-4 bg-red-500 rounded-full"></div>
+                                                            <span className="text-[11px] font-bold text-red-500 uppercase tracking-wider">Instruction</span>
                                                         </div>
-                                                        <p className="text-xs text-gray-400 font-medium italic">"{order.Note}"</p>
+                                                        <p className="text-sm text-red-100/80 font-medium italic leading-relaxed">"{order.Note}"</p>
                                                     </div>
                                                 )}
                                             </div>
                                         </div>
 
-                                        <div className="mt-auto bg-[#1E2329] px-8 py-4 border-t border-[#2B3139] flex items-center justify-center gap-3">
-                                            <div className="w-1.5 h-1.5 rounded-full bg-[#FCD535] animate-ping"></div>
-                                            <span className="text-[10px] font-bold text-[#848E9C] uppercase tracking-[0.3em]">Awaiting item verification protocol...</span>
+                                        <div className="mt-auto bg-white/[0.03] px-10 py-6 border-t border-white/5 flex items-center justify-center gap-4">
+                                            <div className="w-2 h-2 rounded-full bg-[#FCD535] animate-ping"></div>
+                                            <span className="text-sm font-bold text-gray-400">Please pack items and verify counts on the left...</span>
                                         </div>
                                     </div>
                                 )}
 
                                 {step === 'LABELING' && (
-                                    <div className="bg-[#181A20] rounded-3xl p-16 border border-[#2B3139] flex-grow flex flex-col items-center justify-center gap-10 shadow-2xl relative">
-                                        <div className="w-24 h-24 bg-[#2B3139] rounded-2xl flex items-center justify-center text-[#FCD535] shadow-inner border border-white/5">
-                                            <svg className="w-12 h-12" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M17 17h2a2 2 0 002-2v-4a2 2 0 00-2-2H5a2 2 0 00-2-2v4a2 2 0 002 2h2m2 4h6a2 2 0 002-2v-4a2 2 0 00-2-2H9a2 2 0 00-2 2v4a2 2 0 002 2zm8-12V5a2 2 0 00-2-2H9a2 2 0 00-2 2v4h10z"/></svg>
+                                    <div className="bg-[#181A20] rounded-[2.5rem] p-20 border border-white/5 flex-grow flex flex-col items-center justify-center gap-12 shadow-2xl relative">
+                                        <div className="w-28 h-28 bg-white/5 rounded-3xl flex items-center justify-center text-[#FCD535] shadow-inner border border-white/10">
+                                            <svg className="w-16 h-16" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M17 17h2a2 2 0 002-2v-4a2 2 0 00-2-2H5a2 2 0 00-2-2v4a2 2 0 002 2h2m2 4h6a2 2 0 002-2v-4a2 2 0 00-2-2H9a2 2 0 00-2 2v4a2 2 0 002 2zm8-12V5a2 2 0 00-2-2H9a2 2 0 00-2 2v4h10z"/></svg>
                                         </div>
-                                        <div className="text-center space-y-3">
-                                            <h3 className="text-2xl font-bold text-white uppercase tracking-wide">Identity Generation</h3>
-                                            <p className="text-xs text-[#848E9C] font-medium tracking-widest uppercase">Protocol: Thermal Matrix X-200</p>
+                                        <div className="text-center space-y-2">
+                                            <h3 className="text-3xl font-bold text-white tracking-tight">Generate Shipping Label</h3>
+                                            <p className="text-sm text-gray-500 font-medium">Connect thermal printer for best results</p>
                                         </div>
 
-                                        <div className="flex flex-col sm:flex-row items-center gap-4 w-full max-w-md">
+                                        <div className="flex flex-col sm:flex-row items-center gap-6 w-full max-w-xl">
                                             <button 
                                                 onClick={() => { printViaIframe(fullPrinterURL || ''); setHasGeneratedLabel(true); }} 
-                                                disabled={isAdvancingLabel}
-                                                className={`relative overflow-hidden w-full py-4 rounded-xl font-bold uppercase text-xs tracking-[0.2em] flex items-center justify-center gap-3 transition-all active:scale-95 ${
-                                                    isAdvancingLabel ? 'bg-[#2B3139] text-[#FCD535] cursor-default' : 
-                                                    hasGeneratedLabel ? 'bg-[#0ECB81] text-black shadow-[0_8px_20px_rgba(14,203,129,0.2)]' : 
-                                                    'bg-[#FCD535] text-black shadow-[0_8px_20px_rgba(252,213,53,0.2)]'
+                                                className={`relative overflow-hidden w-full py-6 rounded-2xl font-bold text-lg transition-all active:scale-95 flex items-center justify-center gap-4 ${
+                                                    hasGeneratedLabel ? 'bg-[#0ECB81] text-white shadow-xl shadow-[#0ECB81]/20' : 
+                                                    'bg-[#FCD535] text-black shadow-xl shadow-[#FCD535]/20'
                                                 }`}
                                             >
-                                                {isAdvancingLabel && (
-                                                    <div className="absolute inset-y-0 left-0 bg-white/10" style={{ width: `${advancementProgress}%` }}></div>
-                                                )}
-                                                <span className="relative z-10 flex items-center gap-2">
-                                                    {isAdvancingLabel ? 'Auto-Syncing...' : hasGeneratedLabel ? 'Ready for Photo' : 'Print Thermal Label'}
+                                                <span className="relative z-10 flex items-center gap-3">
+                                                    {hasGeneratedLabel ? 'Label Printed ✓' : 'Print Thermal Label'}
                                                 </span>
                                             </button>
                                             <button 
                                                 onClick={() => setShowLabelEditor(true)} 
-                                                className="w-full py-4 bg-[#2B3139] hover:bg-[#2B3139]/80 text-[#EAECEF] rounded-xl font-bold uppercase text-xs tracking-[0.2em] flex items-center justify-center gap-3 transition-colors border border-[#2B3139]"
+                                                className="w-full py-6 bg-white/5 hover:bg-white/10 text-white rounded-2xl font-bold text-lg transition-all border border-white/10 flex items-center justify-center gap-3"
                                             >
-                                                Adjust Metadata
+                                                Edit Details
                                             </button>
                                         </div>
                                     </div>
                                 )}
 
-                                <div className={`bg-[#181A20] rounded-3xl p-6 sm:p-10 flex-grow flex flex-col items-center justify-center gap-8 animate-fade-in border border-[#2B3139] shadow-2xl relative overflow-hidden ${step === 'PHOTO' ? 'flex' : 'hidden'}`}>
+                                <div className={`bg-[#181A20] rounded-[2.5rem] p-8 sm:p-12 flex-grow flex flex-col items-center justify-center gap-10 animate-fade-in border border-white/5 shadow-2xl relative overflow-hidden ${step === 'PHOTO' ? 'flex' : 'hidden'}`}>
                                     <div className="relative group w-full max-w-4xl aspect-video">
-                                        <div className={`w-full h-full bg-black rounded-2xl flex items-center justify-center border-2 transition-all duration-500 overflow-hidden relative ${packagePhoto ? 'border-[#0ECB81]' : autoCaptureCountdown !== null ? 'border-[#FCD535]' : 'border-[#2B3139]'}`}>
+                                        <div className={`w-full h-full bg-black rounded-3xl flex items-center justify-center border-[3px] transition-all duration-500 overflow-hidden relative ${packagePhoto ? 'border-[#0ECB81]' : autoCaptureCountdown !== null ? 'border-[#FCD535]' : 'border-white/10'}`}>
                                             <div id="fastpack-scanner-container" className={`absolute inset-0 z-0 transition-opacity duration-700 ${packagePhoto ? 'opacity-0' : 'opacity-100'}`}></div>
                                             
                                             {packagePhoto && (
@@ -673,68 +651,68 @@ const FastPackTerminal: React.FC<FastPackTerminalProps> = ({ order, onClose, onS
                                             )}
 
                                             {autoCaptureCountdown !== null && !packagePhoto && (
-                                                <div className="absolute inset-0 z-20 flex flex-col items-center justify-center bg-black/60 backdrop-blur-sm animate-fade-in">
-                                                    <div className="text-[10rem] font-black text-[#FCD535] animate-pulse drop-shadow-[0_0_30px_rgba(252,213,53,0.5)]">
+                                                <div className="absolute inset-0 z-20 flex flex-col items-center justify-center bg-black/70 backdrop-blur-sm animate-fade-in">
+                                                    <div className="text-[12rem] font-black text-[#FCD535] animate-pulse drop-shadow-[0_0_50px_rgba(252,213,53,0.5)]">
                                                         {autoCaptureCountdown}
                                                     </div>
-                                                    <p className="text-[10px] font-black text-[#FCD535] uppercase tracking-[0.5em] mt-4 animate-pulse">Capturing Proof...</p>
+                                                    <p className="text-xs font-bold text-[#FCD535] uppercase tracking-[0.5em] mt-4 animate-pulse">Capturing Evidence...</p>
                                                 </div>
                                             )}
 
                                             {!packagePhoto && !isScannerLoading && autoCaptureCountdown === null && (
                                                 <div className="absolute inset-0 z-10 pointer-events-none flex items-center justify-center">
-                                                    <div className="w-full h-full max-w-[350px] max-h-[350px] relative">
-                                                        <div className="absolute top-0 left-0 w-10 h-10 border-t-[3px] border-l-[3px] border-[#FCD535]/60 rounded-tl-xl"></div>
-                                                        <div className="absolute top-0 right-0 w-10 h-10 border-t-[3px] border-r-[3px] border-[#FCD535]/60 rounded-tr-xl"></div>
-                                                        <div className="absolute bottom-0 left-0 w-10 h-10 border-b-[3px] border-l-[3px] border-[#FCD535]/60 rounded-bl-xl"></div>
-                                                        <div className="absolute bottom-0 right-0 w-10 h-10 border-b-[3px] border-r-[3px] border-[#FCD535]/60 rounded-br-xl"></div>
-                                                        <div className="absolute inset-x-0 h-0.5 bg-gradient-to-r from-transparent via-[#FCD535]/40 to-transparent animate-scan-line z-20"></div>
+                                                    <div className="w-full h-full max-w-[400px] max-h-[400px] relative">
+                                                        <div className="absolute top-0 left-0 w-12 h-12 border-t-[4px] border-l-[4px] border-[#FCD535]/50 rounded-tl-2xl"></div>
+                                                        <div className="absolute top-0 right-0 w-12 h-12 border-t-[4px] border-r-[4px] border-[#FCD535]/50 rounded-tr-2xl"></div>
+                                                        <div className="absolute bottom-0 left-0 w-12 h-12 border-b-[4px] border-l-[4px] border-[#FCD535]/50 rounded-bl-2xl"></div>
+                                                        <div className="absolute bottom-0 right-0 w-12 h-12 border-b-[4px] border-r-[4px] border-[#FCD535]/50 rounded-br-2xl"></div>
+                                                        <div className="absolute inset-x-0 h-1 bg-gradient-to-r from-transparent via-[#FCD535]/40 to-transparent animate-scan-line z-20"></div>
                                                     </div>
                                                 </div>
                                             )}
 
                                             {!packagePhoto && !isScannerLoading && (
-                                                <div className="absolute bottom-6 left-1/2 -translate-x-1/2 z-30 flex items-center gap-4 p-2 bg-[#1E2329]/80 backdrop-blur-xl border border-[#2B3139] rounded-2xl shadow-2xl">
-                                                    <button onClick={switchCamera} className="p-3 bg-[#2B3139] hover:bg-[#FCD535] text-white hover:text-black rounded-xl transition-all active:scale-90 group">
-                                                        <svg className="w-5 h-5 group-hover:rotate-180 transition-transform duration-500" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2.5}><path strokeLinecap="round" strokeLinejoin="round" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" /></svg>
+                                                <div className="absolute bottom-8 left-1/2 -translate-x-1/2 z-30 flex items-center gap-6 p-3 bg-black/60 backdrop-blur-2xl border border-white/10 rounded-[2rem] shadow-2xl">
+                                                    <button onClick={switchCamera} className="p-4 bg-white/10 hover:bg-[#FCD535] text-white hover:text-black rounded-2xl transition-all active:scale-90 group">
+                                                        <svg className="w-6 h-6 group-hover:rotate-180 transition-transform duration-500" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2.5}><path strokeLinecap="round" strokeLinejoin="round" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" /></svg>
                                                     </button>
                                                     {isTorchSupported && (
-                                                        <button onClick={toggleTorch} className={`p-3 rounded-xl transition-all active:scale-90 flex items-center justify-center border ${isTorchOn ? 'bg-[#FCD535] text-black border-[#FCD535]' : 'bg-[#2B3139] text-white border-[#2B3139]'}`}>
-                                                            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2.5}><path strokeLinecap="round" strokeLinejoin="round" d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z" /></svg>
+                                                        <button onClick={toggleTorch} className={`p-4 rounded-2xl transition-all active:scale-90 flex items-center justify-center border-2 ${isTorchOn ? 'bg-[#FCD535] text-black border-[#FCD535]' : 'bg-white/10 text-white border-white/10'}`}>
+                                                            <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2.5}><path strokeLinecap="round" strokeLinejoin="round" d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z" /></svg>
                                                         </button>
                                                     )}
                                                 </div>
                                             )}
 
                                             {packagePhoto && (
-                                                <button onClick={() => setPackagePhoto(null)} className="absolute top-4 right-4 z-30 bg-[#F6465D] text-white p-3 rounded-xl shadow-lg hover:scale-110 active:scale-95 transition-all flex items-center justify-center">
-                                                    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={3}><path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" /></svg>
+                                                <button onClick={() => setPackagePhoto(null)} className="absolute top-6 right-6 z-30 bg-red-500 text-white p-4 rounded-2xl shadow-xl hover:scale-110 active:scale-95 transition-all flex items-center justify-center">
+                                                    <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={3}><path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" /></svg>
                                                 </button>
                                             )}
                                         </div>
                                     </div>
 
-                                    <div className="flex flex-col items-center gap-6 w-full relative">
+                                    <div className="flex flex-col items-center gap-8 w-full relative">
                                         <button 
                                             onClick={capturePhotoFromStream}
                                             disabled={isCapturing || !!packagePhoto || isScannerLoading}
-                                            className={`w-full max-w-md py-5 rounded-2xl font-bold uppercase text-xs tracking-[0.3em] flex items-center justify-center gap-4 transition-all duration-300 active:scale-95 shadow-xl ${
-                                                packagePhoto ? 'bg-[#0ECB81]/10 text-[#0ECB81] border border-[#0ECB81]/20 cursor-default' : 
-                                                'bg-[#FCD535] hover:shadow-[0_15px_30px_rgba(252,213,53,0.2)] text-black'
+                                            className={`w-full max-w-xl py-6 rounded-3xl font-bold text-lg transition-all duration-300 active:scale-95 shadow-2xl flex items-center justify-center gap-4 ${
+                                                packagePhoto ? 'bg-[#0ECB81]/10 text-[#0ECB81] border-2 border-[#0ECB81]/20 cursor-default' : 
+                                                'bg-[#FCD535] hover:shadow-[0_20px_40px_rgba(252,213,53,0.3)] text-black'
                                             }`}
                                         >
                                             {isCapturing ? (
-                                                <><Spinner size="sm" />Analyzing...</>
+                                                <><Spinner size="sm" />Capturing...</>
                                             ) : packagePhoto ? (
-                                                <><svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={3}><path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" /></svg>Captured Securely</>
+                                                <><svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={3}><path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" /></svg>Photo Saved Successfully</>
                                             ) : (
-                                                <><svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2.5}><path strokeLinecap="round" strokeLinejoin="round" d="M3 9a2 2 0 012-2h.93a2 2 0 001.664-.89l.812-1.22A2 2 0 0110.07 4h3.86a2 2 0 011.664.89l.812 1.22A2 2 0 0018.07 7H19a2 2 0 012 2v9a2 2 0 01-2 2H5a2 2 0 01-2-2V9z" /></svg>Capture Manual Proof</>
+                                                <><svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2.5}><path strokeLinecap="round" strokeLinejoin="round" d="M3 9a2 2 0 012-2h.93a2 2 0 001.664-.89l.812-1.22A2 2 0 0110.07 4h3.86a2 2 0 011.664.89l.812 1.22A2 2 0 0018.07 7H19a2 2 0 012 2v9a2 2 0 01-2 2H5a2 2 0 01-2-2V9z" /></svg>Capture Evidence Photo</>
                                             )}
                                         </button>
                                         
-                                        <div className="flex items-center gap-8 px-8 py-3 bg-[#1E2329] rounded-xl border border-[#2B3139]">
-                                            <div className="flex items-center gap-2"><div className={`w-1.5 h-1.5 rounded-full ${packagePhoto ? 'bg-gray-600' : 'bg-[#0ECB81] animate-pulse'}`}></div><span className="text-[10px] font-bold text-[#848E9C] uppercase tracking-wider">Vision: Ready</span></div>
-                                            <div className="flex items-center gap-2"><div className={`w-1.5 h-1.5 rounded-full ${packagePhoto ? 'bg-gray-600' : 'bg-[#FCD535] animate-pulse'}`}></div><span className="text-[10px] font-bold text-[#848E9C] uppercase tracking-wider">Auto-Scan: Active</span></div>
+                                        <div className="flex items-center gap-10 px-8 py-4 bg-white/5 rounded-2xl border border-white/10">
+                                            <div className="flex items-center gap-3"><div className={`w-2 h-2 rounded-full ${packagePhoto ? 'bg-gray-600' : 'bg-[#0ECB81] animate-pulse'}`}></div><span className="text-xs font-bold text-gray-400">Camera Active</span></div>
+                                            <div className="flex items-center gap-3"><div className={`w-2 h-2 rounded-full ${packagePhoto ? 'bg-gray-600' : 'bg-[#FCD535] animate-pulse'}`}></div><span className="text-xs font-bold text-gray-400">QR Auto-Scan</span></div>
                                         </div>
                                     </div>
 

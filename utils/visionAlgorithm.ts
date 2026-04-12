@@ -15,6 +15,7 @@ export interface DetectionResult {
     barcodeBox?: { x: number, y: number, w: number, h: number } | null;
     barcodeValue?: string;
     barcodeFormat?: string;
+    candidates?: { x: number, y: number }[];
 }
 
 export class PackageDetector {
@@ -147,6 +148,32 @@ export class PackageDetector {
         this.lastBarcodeValue = foundValue;
         this.lastBarcodeFormat = foundFormat;
 
+        // --- SMART QR CANDIDATE DETECTION (For Auto-Zoom) ---
+        let candidates: { x: number, y: number }[] = [];
+        if (!foundBox && this.frameCount % 2 === 0) { // Scan for candidates every other frame
+            const { ctx, width, height, scale } = this.getScanContext(video);
+            if (ctx) {
+                const data = ctx.getImageData(0, 0, width, height).data;
+                // Look for "finder patterns" heuristic (simplified contrast-based search)
+                // In a real scenario, we might use a lightweight ML model or 
+                // specialized edge detection. For now, we use a simple grid search
+                // for high-variance regions which often indicate barcodes/QR codes.
+                const step = Math.floor(width / 20);
+                for (let y = step; y < height - step; y += step) {
+                    for (let x = step; x < width - step; x += step) {
+                        const idx = (y * width + x) * 4;
+                        const brightness = (data[idx] + data[idx+1] + data[idx+2]) / 3;
+                        // Simplistic "interest point" detection
+                        if (brightness < 100) { // Dark pixel (potential QR module)
+                            candidates.push({ x: x / scale, y: y / scale });
+                            if (candidates.length > 5) break; 
+                        }
+                    }
+                    if (candidates.length > 5) break;
+                }
+            }
+        }
+
         if (this.detector) {
             try {
                 const hands = await this.detector.estimateHands(video, { flipHorizontal: false });
@@ -198,7 +225,8 @@ export class PackageDetector {
             confidence,
             barcodeBox: this.lastBarcodeBox,
             barcodeValue: this.lastBarcodeValue,
-            barcodeFormat: this.lastBarcodeFormat
+            barcodeFormat: this.lastBarcodeFormat,
+            candidates: candidates.length > 0 ? candidates : undefined
         };
     }
 }

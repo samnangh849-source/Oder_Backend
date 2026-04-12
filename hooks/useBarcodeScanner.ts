@@ -94,12 +94,17 @@ export const useBarcodeScanner = (
         }
     }, [zoomCapabilities, applyConstraints, elementId]);
 
-    const { isAutoZooming, notifyManualZoom } = useSmartZoom(
+    const { isAutoZooming, notifyManualZoom, trackingBox } = useSmartZoom(
         videoRef.current,
         trackRef.current,
         zoom,
         setZoom, 
-        (z) => applyConstraints({ zoom: z }) 
+        (z) => {
+            const track = getActiveTrack();
+            if (track) {
+                track.applyConstraints({ advanced: [{ zoom: z }] } as any).catch(() => {});
+            }
+        }
     );
 
     const handleManualZoom = useCallback((z: number) => {
@@ -348,6 +353,6 @@ export const useBarcodeScanner = (
         stopScanner,
         facingMode,
         scanFromImage,
-        trackingBox: null
+        trackingBox
     };
 };
