@@ -58,14 +58,14 @@ const Sidebar: React.FC<SidebarProps> = ({
     };
 
     const navItems = useMemo(() => [
-        { id: 'dashboard', component: 'admin', label: t.dashboard, icon: <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6" /></svg> },
-        { id: 'performance', component: 'admin', label: t.performance, icon: <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" /></svg> },
-        { id: 'orders', component: 'orders', label: t.manage_orders, icon: <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" /></svg> },
-        { id: 'fulfillment', component: 'fulfillment', label: t.fulfillment || 'Ops', icon: <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4" /></svg> },
-        { id: 'inventory', component: 'inventory', label: t.inventory, icon: <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M20 13V6a2 2 0 00-2-2H6a2 2 0 00-2 2v7m16 0v5a2 2 0 01-2 2H6a2 2 0 01-2-2v-5m16 0h-2.586a1 1 0 00-.707.293l-2.414 2.414a1 1 0 01-.707.293h-3.172a1 1 0 01-.707-.293l-2.414-2.414A1 1 0 006.586 13H4" /></svg> },
-        { id: 'reports', component: 'reports', label: t.reports, icon: <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 12l3-3 3 3 4-4M8 21l4-4 4 4M3 4h18M4 4h16v12a1 1 0 01-1 1H5a1 1 0 01-1-1V4z" /></svg> },
-        { id: 'incentives', component: 'incentives', label: t.incentives || 'Incentives', icon: <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M20 12V8a2 2 0 00-2-2h-3.93a2 2 0 01-1.66-.9l-.82-1.2C11.17 3.34 10.57 3 9.82 3H6a2 2 0 00-2 2v14a2 2 0 002 2h12a2 2 0 002-2v-4M7 8h10M7 12h10M7 16h6" /></svg> },
-        { id: 'settings', component: 'settings', label: t.settings, icon: <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" /><path d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" /></svg> },
+        { id: 'dashboard', component: 'admin', label: t.dashboard, icon: <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6" /></svg> },
+        { id: 'performance', component: 'admin', label: t.performance, icon: <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" /></svg> },
+        { id: 'orders', component: 'orders', label: t.manage_orders, icon: <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" /></svg> },
+        { id: 'fulfillment', component: 'fulfillment', label: t.fulfillment || 'Ops', icon: <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4" /></svg> },
+        { id: 'inventory', component: 'inventory', label: t.inventory, icon: <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M20 13V6a2 2 0 00-2-2H6a2 2 0 00-2 2v7m16 0v5a2 2 0 01-2 2H6a2 2 0 01-2-2v-5m16 0h-2.586a1 1 0 00-.707.293l-2.414 2.414a1 1 0 01-.707.293h-3.172a1 1 0 01-.707-.293l-2.414-2.414A1 1 0 006.586 13H4" /></svg> },
+        { id: 'reports', component: 'reports', label: t.reports, icon: <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 12l3-3 3 3 4-4M8 21l4-4 4 4M3 4h18M4 4h16v12a1 1 0 01-1 1H5a1 1 0 01-1-1V4z" /></svg> },
+        { id: 'incentives', component: 'incentives', label: t.incentives || 'Incentives', icon: <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M20 12V8a2 2 0 00-2-2h-3.93a2 2 0 01-1.66-.9l-.82-1.2C11.17 3.34 10.57 3 9.82 3H6a2 2 0 00-2 2v14a2 2 0 002 2h12a2 2 0 002-2v-4M7 8h10M7 12h10M7 16h6" /></svg> },
+        { id: 'settings', component: 'settings', label: t.settings, icon: <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" /><path d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" /></svg> },
     ], [t]);
 
     const reportSections = useMemo(() => [
@@ -105,16 +105,22 @@ const Sidebar: React.FC<SidebarProps> = ({
                     border: "border-white/5",
                     logoBg: "bg-[#e50914]"
                 };
-            default: // Default / Professional Blue
+            default: // Default / Professional Blue (Matches Template)
                 return {
-                    container: isMobile ? "bg-[#020617]/95" : `bg-[#020617]/95 ${isLightMode ? 'bg-white border-gray-200' : 'border-white/5'} ${isSidebarCollapsed ? 'w-20' : 'w-64'}`,
-                    itemActive: "text-white bg-gradient-to-r from-blue-600/30 to-transparent border-blue-500",
-                    itemHover: isLightMode ? "text-gray-500 hover:text-blue-600 hover:bg-blue-50" : "text-gray-400 hover:text-white hover:bg-white/5",
+                    container: isMobile
+                        ? (isLightMode ? "bg-slate-50" : "bg-[#0d0f15]")
+                        : `${isLightMode ? 'bg-slate-50 border-slate-200' : 'bg-[#0d0f15] border-white/[0.06]'} ${isSidebarCollapsed ? 'w-20' : 'w-64'}`,
+                    itemActive: isLightMode
+                        ? "text-blue-600 bg-blue-50 border-l-[3px] border-l-blue-600"
+                        : "text-white bg-[rgba(59,130,246,0.1)] border-l-[3px] border-l-[#3b82f6]",
+                    itemHover: isLightMode
+                        ? "text-slate-700 hover:bg-slate-100"
+                        : "text-slate-400 hover:text-white hover:bg-white/[0.05]",
                     accent: "#3b82f6",
-                    textPrimary: isLightMode ? "text-gray-900" : "text-white",
-                    textSecondary: "text-gray-400",
-                    border: isLightMode ? "border-gray-100" : "border-white/5",
-                    logoBg: "bg-blue-600"
+                    textPrimary: isLightMode ? "text-slate-900" : "text-white",
+                    textSecondary: isLightMode ? "text-slate-500" : "text-slate-400",
+                    border: isLightMode ? "border-slate-200" : "border-white/[0.06]",
+                    logoBg: "bg-[#264b96]"
                 };
         }
     };
@@ -123,73 +129,63 @@ const Sidebar: React.FC<SidebarProps> = ({
 
     const containerClasses = isMobile 
         ? `w-full flex flex-col h-full ${styles.container}`
-        : `fixed left-0 top-0 h-screen border-r ${styles.border} z-50 transition-all duration-300 ease-in-out ${styles.container} flex flex-col shadow-2xl`;
+        : `fixed left-0 top-0 h-screen border-r ${styles.border} z-50 transition-all duration-300 ease-in-out ${styles.container} flex flex-col shadow-sm`;
 
     return (
         <aside className={`${containerClasses} select-none`}>
             
-            {/* Desktop Header (Logo) */}
+            {/* Desktop Header (Logo Area) */}
             {!isMobile && (
-                <div className={`h-16 flex items-center ${isSidebarCollapsed ? 'justify-center' : 'px-5'} border-b ${styles.border} overflow-hidden shrink-0`}>
-                    <div className={`w-8 h-8 ${styles.logoBg} ${uiTheme === 'binance' ? 'rounded-[2px]' : 'rounded-md'} flex items-center justify-center flex-shrink-0 shadow-lg`}>
-                        <img src={convertGoogleDriveUrl(APP_LOGO_URL)} alt="Logo" className="w-5 h-5 object-contain" />
+                <div className={`h-16 flex items-center ${isSidebarCollapsed ? 'justify-center' : 'px-6'} ${styles.logoBg} overflow-hidden shrink-0`}>
+                    <div className="w-8 h-8 flex items-center justify-center flex-shrink-0">
+                        <img src={convertGoogleDriveUrl(APP_LOGO_URL)} alt="Logo" className="w-6 h-6 object-contain brightness-0 invert" />
                     </div>
                     
                     {!isSidebarCollapsed && (
-                        <div className="ml-3 flex flex-col min-w-0 animate-in fade-in slide-in-from-left-2">
-                            <h1 className={`text-sm font-black ${styles.textPrimary} uppercase tracking-tighter leading-none`}>
+                        <div className="ml-3 flex flex-col min-w-0">
+                            <h1 className="text-sm font-black text-white uppercase tracking-tighter leading-none">
                                 O-System
                             </h1>
-                            <span className={`text-[9px] ${uiTheme === 'binance' ? 'text-[#FCD535]' : 'text-blue-400'} font-black uppercase tracking-[0.2em] mt-1`}>Admin Terminal</span>
+                            <span className="text-[9px] text-blue-200 font-black uppercase tracking-[0.2em] mt-1">Admin Terminal</span>
                         </div>
                     )}
                 </div>
             )}
 
-            {/* Desktop Collapse Button */}
-            {!isMobile && (
-                <button 
-                    onClick={() => setIsSidebarCollapsed(!isSidebarCollapsed)}
-                    className={`absolute top-20 -right-3 w-6 h-6 ${isLightMode ? 'bg-white border-gray-200' : 'bg-[#0f172a] border-[#474D57]'} border rounded-full flex items-center justify-center text-[#848E9C] hover:text-[#FCD535] z-[60] transition-all hover:scale-110 shadow-xl`}
-                >
-                    <svg className={`w-3 h-3 transition-transform duration-300 ${isSidebarCollapsed ? 'rotate-180' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={3}><path d="M15 19l-7-7 7-7" /></svg>
-                </button>
-            )}
-
             {/* Navigation Section */}
-            <div className="flex-grow overflow-y-auto custom-scrollbar py-4">
+            <div className="flex-grow overflow-y-auto custom-scrollbar py-4 px-3 space-y-1">
                 {navItems.map((item) => {
                     const isReports = item.id === 'reports';
                     const isActive = (activeDashboard === item.component) && (item.component !== 'admin' || item.id === currentAdminView);
                     const isExpanded = isReports && isReportSubMenuOpen;
                     
                     return (
-                        <div key={item.id} className="mb-1">
+                        <div key={item.id}>
                             <button 
                                 onClick={() => onNavChange(item.id)} 
                                 className={`
-                                    w-full flex items-center justify-between transition-all duration-150 group relative py-3
-                                    ${isSidebarCollapsed && !isMobile ? 'px-0 justify-center' : 'px-5'}
+                                    w-full flex items-center transition-all duration-150 group relative py-2.5 rounded-md
+                                    ${isSidebarCollapsed && !isMobile ? 'px-0 justify-center' : 'px-3'}
                                     ${isActive 
-                                        ? `${styles.itemActive} border-l-[3px]` 
-                                        : `${styles.itemHover} border-l-[3px] border-transparent`
+                                        ? `${styles.itemActive} font-semibold` 
+                                        : `${styles.itemHover}`
                                     }
                                 `}
                                 title={isSidebarCollapsed && !isMobile ? item.label : ''}
                             >
                                 <div className="flex items-center gap-3 relative z-10">
-                                    <span className={`transition-transform duration-200 ${isActive ? 'scale-110' : 'group-hover:scale-105'}`}>
+                                    <span className={`transition-colors duration-200 ${isActive ? (isLightMode ? 'text-blue-600' : 'text-blue-400') : (isLightMode ? 'text-slate-400 group-hover:text-slate-600' : 'text-slate-500 group-hover:text-white')}`}>
                                         {item.icon}
                                     </span>
                                     {(isMobile || !isSidebarCollapsed) && (
-                                        <span className={`text-[11px] font-bold uppercase tracking-widest ${isActive ? styles.textPrimary : ''}`}>
+                                        <span className={`text-sm font-medium ${isActive ? (isLightMode ? 'text-blue-600' : 'text-white') : (isLightMode ? 'text-slate-700' : 'text-slate-400 group-hover:text-white')}`}>
                                             {item.label}
                                         </span>
                                     )}
                                 </div>
                                 
                                 {isReports && (isMobile || !isSidebarCollapsed) && (
-                                    <svg className={`w-3 h-3 transition-transform duration-300 opacity-40 ${isExpanded ? 'rotate-180' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={3}><path strokeLinecap="round" strokeLinejoin="round" d="M19 9l-7 7-7-7" /></svg>
+                                    <svg className={`w-3 h-3 transition-transform duration-300 opacity-40 ml-auto ${isExpanded ? 'rotate-180' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={3}><path strokeLinecap="round" strokeLinejoin="round" d="M19 9l-7 7-7-7" /></svg>
                                 )}
                             </button>
 
@@ -210,62 +206,84 @@ const Sidebar: React.FC<SidebarProps> = ({
                 })}
             </div>
 
-            {/* Bottom Section */}
-            <div className={`border-t ${styles.border} p-3 shrink-0 ${uiTheme === 'binance' ? 'bg-[#1E2329]' : 'bg-black/20'}`}>
-                <button 
-                    onClick={() => setIsProfileSubMenuOpen(!isProfileSubMenuOpen)}
-                    className={`
-                        w-full flex items-center gap-3 p-2 rounded-lg transition-all duration-200
-                        ${isProfileSubMenuOpen ? (uiTheme === 'binance' ? 'bg-[#2B3139]' : 'bg-white/10') : 'hover:bg-white/5'}
-                        ${(!isMobile && isSidebarCollapsed) ? 'justify-center' : ''}
-                    `}
-                >
-                    <UserAvatar avatarUrl={currentUser?.ProfilePictureURL} name={currentUser?.FullName || ''} size="sm" className={`border ${styles.border} flex-shrink-0`} />
-                    {(isMobile || !isSidebarCollapsed) && (
-                        <div className="min-w-0 flex-grow text-left">
-                            <p className={`text-[11px] font-black ${styles.textPrimary} truncate leading-tight uppercase tracking-tight`}>{currentUser?.FullName}</p>
-                            <p className={`text-[9px] ${uiTheme === 'binance' ? 'text-[#FCD535]' : 'text-blue-400'} font-black uppercase tracking-widest mt-0.5 truncate`}>Verified</p>
+            {/* Bottom Section - Matches 1.png Profile Card */}
+            <div className={`mt-auto border-t ${styles.border} p-4 space-y-4 ${isLightMode ? 'bg-slate-200/50' : 'bg-[#0a0c12]'}`}>
+                {(!isMobile && isSidebarCollapsed) ? (
+                    <div className="flex justify-center">
+                        <UserAvatar avatarUrl={currentUser?.ProfilePictureURL} name={currentUser?.FullName || ''} size="sm" className={`border-2 ${isLightMode ? 'border-white' : 'border-slate-700'} shadow-md`} />
+                    </div>
+                ) : (
+                    <div className="flex items-center gap-3">
+                        <div className="relative flex-shrink-0">
+                            <UserAvatar avatarUrl={currentUser?.ProfilePictureURL} name={currentUser?.FullName || ''} size="md" className={`border-2 ${isLightMode ? 'border-white' : 'border-slate-700'} shadow-md`} />
+                            <span className="absolute bottom-0 right-0 block h-2.5 w-2.5 rounded-full bg-green-400 ring-2 ring-[#0a0c12]"></span>
                         </div>
-                    )}
-                </button>
-
-                {/* Account Menu */}
-                <div className={`
-                    overflow-hidden transition-all duration-300 ease-in-out
-                    ${isProfileSubMenuOpen && (isMobile || !isSidebarCollapsed) ? 'max-h-[500px] mt-2 opacity-100' : 'max-h-0 opacity-0'}
-                `}>
-                    <div className="space-y-1 p-1">
-                        <div className={`flex ${isLightMode ? 'bg-gray-100' : 'bg-[#0B0E11]'} p-1 rounded-md border ${styles.border} mb-2`}>
-                            <button onClick={() => setLanguage('en')} className={`flex-1 py-1.5 text-[9px] font-black rounded transition-all ${language === 'en' ? (uiTheme === 'binance' ? 'bg-[#FCD535] text-[#1E2329]' : 'bg-blue-600 text-white') : 'text-[#848E9C] hover:text-[#EAECEF]'}`}>ENG</button>
-                            <button onClick={() => setLanguage('km')} className={`flex-1 py-1.5 text-[9px] font-black rounded transition-all ${language === 'km' ? (uiTheme === 'binance' ? 'bg-[#FCD535] text-[#1E2329]' : 'bg-blue-600 text-white') : 'text-[#848E9C] hover:text-[#EAECEF]'}`}>KH</button>
-                        </div>
-
-                        <div className="grid grid-cols-1 gap-1">
-                            <button onClick={() => setEditProfileModalOpen(true)} className={`w-full flex items-center gap-3 px-3 py-2 text-[10px] font-bold ${styles.textSecondary} hover:text-[#EAECEF] hover:bg-[#2B3139] rounded transition-all uppercase tracking-wider`}>
-                                <svg className={`w-4 h-4 ${uiTheme === 'binance' ? 'text-[#FCD535]' : 'text-blue-400'}`} fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" /></svg>
-                                Account Center
-                            </button>
-                            <button onClick={() => setAdvancedSettingsOpen(true)} className={`w-full flex items-center gap-3 px-3 py-2 text-[10px] font-bold ${styles.textSecondary} hover:text-[#EAECEF] hover:bg-[#2B3139] rounded transition-all uppercase tracking-wider`}>
-                                <svg className={`w-4 h-4 ${uiTheme === 'binance' ? 'text-[#FCD535]' : 'text-blue-400'}`} fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" /><path d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" /></svg>
-                                Preferences
-                            </button>
-                            <button onClick={handleRefresh} className={`w-full flex items-center gap-3 px-3 py-2 text-[10px] font-bold ${styles.textSecondary} hover:text-[#EAECEF] hover:bg-[#2B3139] rounded transition-all uppercase tracking-wider`}>
-                                <svg className={`w-4 h-4 ${uiTheme === 'binance' ? 'text-[#FCD535]' : 'text-emerald-400'} ${isRefreshing ? 'animate-spin' : ''}`} fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" /></svg>
-                                Sync Data
-                            </button>
-                            {!originalAdminUser && (
-                                <button onClick={() => setAppState('role_selection')} className={`w-full flex items-center gap-3 px-3 py-2 text-[10px] font-bold ${uiTheme === 'binance' ? 'text-[#FCD535] hover:bg-[#FCD535]/10' : 'text-yellow-400 hover:bg-yellow-500/10'} rounded transition-all uppercase tracking-wider mt-2 border-t border-[#2B3139] pt-3`}>
-                                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7h12m0 0l-4-4m4 4l-4 4m0 6H4m0 0l4 4m-4-4l4-4" /></svg>
-                                    {language === 'km' ? 'ប្តូរតួនាទី' : 'Switch Role'}
-                                </button>
-                            )}
-                            <button onClick={logout} className={`w-full flex items-center gap-3 px-3 py-2 text-[10px] font-bold text-[#F6465D] hover:bg-[#F6465D]/10 rounded transition-all uppercase tracking-wider ${originalAdminUser ? 'mt-2 border-t border-[#2B3139] pt-3' : 'mt-1'}`}>
-                                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" /></svg>
-                                {language === 'km' ? 'ចាកចេញ' : 'Logout'}
-                            </button>
+                        <div className="min-w-0 flex-grow">
+                            <p className={`text-[11px] font-black ${styles.textPrimary} truncate uppercase tracking-tight`}>
+                                {currentUser?.FullName}
+                            </p>
+                            <span className={`text-[9px] font-bold ${isLightMode ? 'text-blue-500' : 'text-green-400'} uppercase tracking-widest flex items-center gap-1`}>
+                                <i className="fa-solid fa-circle text-[6px]"></i>
+                                Online
+                            </span>
                         </div>
                     </div>
-                </div>
+                )}
+
+                {/* Language Switcher - 1.png Style */}
+                {(!isSidebarCollapsed || isMobile) && (
+                    <div className={`flex ${isLightMode ? 'bg-slate-900' : 'bg-slate-950'} p-1 rounded-md shadow-inner`}>
+                        <button 
+                            onClick={() => setLanguage('en')} 
+                            className={`flex-1 py-1 text-[9px] font-black rounded transition-all ${language === 'en' ? 'bg-blue-600 text-white shadow-lg' : 'text-slate-500 hover:text-slate-300'}`}
+                        >
+                            ENG
+                        </button>
+                        <button 
+                            onClick={() => setLanguage('km')} 
+                            className={`flex-1 py-1 text-[9px] font-black rounded transition-all ${language === 'km' ? 'bg-blue-600 text-white shadow-lg' : 'text-slate-500 hover:text-slate-300'}`}
+                        >
+                            KH
+                        </button>
+                    </div>
+                )}
+
+                {/* Action Menu - 1.png Style */}
+                {(!isSidebarCollapsed || isMobile) && (
+                    <div className="space-y-1">
+                        {[
+                            { id: 'profile', icon: 'fa-user-gear', label: t.edit_profile || 'Account Center' },
+                            { id: 'settings', icon: 'fa-sliders', label: t.advanced_settings || 'Preferences' },
+                            { id: 'sync', icon: 'fa-arrows-rotate', label: t.refresh_data || 'Sync Data' },
+                        ].map((menu) => (
+                            <button 
+                                key={menu.id}
+                                onClick={() => {
+                                    if (menu.id === 'profile') setEditProfileModalOpen(true);
+                                    if (menu.id === 'settings') setAdvancedSettingsOpen(true);
+                                    if (menu.id === 'sync') handleRefresh();
+                                }}
+                                className={`w-full flex items-center gap-3 px-2 py-2 text-[10px] font-bold ${isLightMode ? 'text-slate-500 hover:text-blue-600' : 'text-slate-400 hover:text-white'} transition-colors uppercase tracking-wider group text-left`}
+                            >
+                                <i className={`fa-solid ${menu.icon} w-4 opacity-50 group-hover:opacity-100 transition-opacity`}></i>
+                                {menu.label}
+                            </button>
+                        ))}
+                        
+                        <div className={`my-2 border-t ${isLightMode ? 'border-slate-300' : 'border-slate-800'}`}></div>
+
+                        {!originalAdminUser && (
+                            <button onClick={() => setAppState('role_selection')} className="w-full flex items-center gap-3 px-2 py-2 text-[10px] font-bold text-yellow-600 hover:text-yellow-500 transition-colors uppercase tracking-wider text-left">
+                                <i className="fa-solid fa-users-viewfinder w-4"></i>
+                                {language === 'km' ? 'ប្តូរតួនាទី' : 'Switch Role'}
+                            </button>
+                        )}
+                        <button onClick={logout} className="w-full flex items-center gap-3 px-2 py-2 text-[10px] font-bold text-red-500 hover:text-red-400 transition-colors uppercase tracking-wider text-left">
+                            <i className="fa-solid fa-right-from-bracket w-4"></i>
+                            {language === 'km' ? 'ចាកចេញ' : 'Logout'}
+                        </button>
+                    </div>
+                )}
             </div>
         </aside>
     );

@@ -1,4 +1,3 @@
-
 import React, { useContext, useState, useRef, useEffect } from 'react';
 import Sidebar from './Sidebar';
 import { AppContext } from '../../context/AppContext';
@@ -60,7 +59,7 @@ const DesktopAdminLayout: React.FC<DesktopAdminLayoutProps> = ({
     const getPageBg = () => {
         if (uiTheme === 'binance') return 'bg-[#0B0E11]';
         if (uiTheme === 'netflix') return 'bg-[#141414]';
-        return 'bg-gray-950';
+        return isLightMode ? 'bg-slate-50' : 'bg-[#121318]';
     };
 
     return (
@@ -108,72 +107,75 @@ const DesktopAdminLayout: React.FC<DesktopAdminLayoutProps> = ({
                     </header>
                 )}
 
-                {/* Desktop Header - Conditionally Hidden */}
+                {/* Desktop Header - Matches Template */}
                 {showHeader && (
-                    <header className="flex-shrink-0 z-[60] bg-[#0f172a]/80 backdrop-blur-2xl border-b border-white/5 px-6 py-3 flex justify-between items-center shadow-lg relative" style={originalAdminUser ? { top: '40px' } : {}}>
-                        <div>
-                            <h1 className="text-xl font-black text-white italic uppercase tracking-tighter flex items-center gap-2">
-                                <span>O-System</span>
-                                <span className="text-xs bg-blue-500/20 text-blue-400 px-2 py-0.5 rounded border border-blue-500/30">ADMIN CORE</span>
-                            </h1>
-                        </div>
+                    <header className={`h-16 ${isLightMode ? 'bg-white border-slate-200 shadow-sm' : 'bg-[#0d0f15] border-white/[0.06]'} border-b flex items-center justify-between px-6 z-10 relative`} style={originalAdminUser ? { top: '40px' } : {}}>
+                        <h1 className={`text-xl font-semibold ${isLightMode ? 'text-slate-900' : 'text-white'} truncate`}>Admin Dashboard - Order System</h1>
 
-                        <div className="flex items-center gap-6">
+                        <div className="flex items-center space-x-6">
+                            {/* Notifications */}
+                            <button className={`relative p-2 ${isLightMode ? 'text-slate-400 hover:text-slate-500' : 'text-white/40 hover:text-white'} focus:outline-none transition-colors`}>
+                                <i className="fa-regular fa-bell text-xl"></i>
+                                <span className={`absolute top-1.5 right-1.5 block h-2 w-2 rounded-full bg-red-500 ring-2 ${isLightMode ? 'ring-white' : 'ring-[#0d0f15]'}`}></span>
+                            </button>
+
                             {/* Profile Dropdown */}
                             <div className="relative" ref={dropdownRef}>
-                                <button 
-                                    onClick={() => setDropdownOpen(!dropdownOpen)} 
-                                    className="flex items-center gap-3 p-1.5 pr-4 rounded-2xl bg-gray-800/50 border border-white/10 hover:bg-gray-800 transition-all active:scale-95 shadow-md group"
+                                <button
+                                    onClick={() => setDropdownOpen(!dropdownOpen)}
+                                    className="flex items-center space-x-2 cursor-pointer focus:outline-none"
                                 >
-                                    <UserAvatar 
+                                    <UserAvatar
                                         avatarUrl={currentUser?.ProfilePictureURL}
                                         name={currentUser?.FullName || ''}
-                                        className={`w-9 h-9 border-2 shadow-xl transition-all ${dropdownOpen ? 'border-blue-500' : 'border-white/5'}`}
+                                        className="h-8 w-8 rounded-full bg-slate-200"
                                     />
-                                    <div className="text-left">
-                                        <p className="text-xs font-black text-white leading-none mb-1">{currentUser?.FullName}</p>
-                                        <p className="text-[9px] text-blue-500 font-black uppercase tracking-widest opacity-70">{currentUser?.Role}</p>
-                                    </div>
-                                    <svg className={`w-3.5 h-3.5 text-gray-500 transition-transform duration-300 ${dropdownOpen ? 'rotate-180' : ''}`} xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="3"><path strokeLinecap="round" strokeLinejoin="round" d="M19 9l-7 7-7-7" /></svg>
+                                    <span className={`text-sm font-medium ${isLightMode ? 'text-slate-700' : 'text-white/80'} hidden sm:block`}>{currentUser?.FullName}</span>
+                                    <i className={`fa-solid fa-chevron-down ${isLightMode ? 'text-slate-400' : 'text-white/30'} text-xs transition-transform duration-300 ${dropdownOpen ? 'rotate-180' : ''}`}></i>
                                 </button>
 
                                 {dropdownOpen && (
-                                    <div className="absolute right-0 mt-3 w-64 bg-[#1a2235] border border-white/10 rounded-[1.8rem] shadow-[0_30px_70px_rgba(0,0,0,0.8)] py-3 z-[70] animate-fade-in-scale backdrop-blur-3xl overflow-hidden">
-                                        <button onClick={() => { setEditProfileModalOpen(true); setDropdownOpen(false); }} className="w-full text-left px-5 py-3 text-sm font-bold text-gray-200 hover:bg-blue-600 transition-colors flex items-center gap-3">
-                                            <svg className="w-4 h-4 opacity-60 text-blue-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" /></svg>
+                                    <div className={`absolute right-0 mt-3 w-64 ${isLightMode ? 'bg-white border-slate-200' : 'bg-[#1a1d27] border-white/[0.08]'} border rounded-lg shadow-xl py-2 z-[70] animate-in fade-in zoom-in-95 overflow-hidden`}>
+                                        <div className={`px-4 py-3 border-b ${isLightMode ? 'border-slate-100 bg-slate-50' : 'border-white/[0.06] bg-white/[0.03]'}`}>
+                                            <p className={`text-sm font-bold ${isLightMode ? 'text-slate-900' : 'text-white'}`}>{currentUser?.FullName}</p>
+                                            <p className={`text-xs ${isLightMode ? 'text-slate-500' : 'text-white/40'} truncate`}>{currentUser?.Role}</p>
+                                        </div>
+
+                                        <button onClick={() => { setEditProfileModalOpen(true); setDropdownOpen(false); }} className={`w-full text-left px-4 py-2 text-sm ${isLightMode ? 'text-slate-700 hover:bg-slate-50' : 'text-white/70 hover:bg-white/[0.05] hover:text-white'} flex items-center gap-3 transition-colors`}>
+                                            <i className={`fa-solid fa-user-gear ${isLightMode ? 'text-slate-400' : 'text-white/30'} w-5`}></i>
                                             {t.edit_profile}
                                         </button>
 
-                                        <button onClick={() => { setAdvancedSettingsOpen(true); setDropdownOpen(false); }} className="w-full text-left px-5 py-3 text-sm font-bold text-gray-200 hover:bg-blue-600 transition-colors flex items-center gap-3">
-                                            <svg className="w-4 h-4 opacity-60 text-indigo-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" /><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" /></svg>
+                                        <button onClick={() => { setAdvancedSettingsOpen(true); setDropdownOpen(false); }} className={`w-full text-left px-4 py-2 text-sm ${isLightMode ? 'text-slate-700 hover:bg-slate-50' : 'text-white/70 hover:bg-white/[0.05] hover:text-white'} flex items-center gap-3 transition-colors`}>
+                                            <i className={`fa-solid fa-sliders ${isLightMode ? 'text-slate-400' : 'text-white/30'} w-5`}></i>
                                             {t.advanced_settings}
                                         </button>
 
-                                        <button onClick={handleTestNotification} className="w-full text-left px-5 py-3 text-sm font-bold text-gray-200 hover:bg-blue-600 transition-colors flex items-center gap-3">
-                                            <svg className="w-4 h-4 opacity-60 text-blue-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V5a2 2 0 10-4 0v.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9" /></svg>
+                                        <button onClick={handleTestNotification} className={`w-full text-left px-4 py-2 text-sm ${isLightMode ? 'text-slate-700 hover:bg-slate-50' : 'text-white/70 hover:bg-white/[0.05] hover:text-white'} flex items-center gap-3 transition-colors`}>
+                                            <i className={`fa-solid fa-bell ${isLightMode ? 'text-slate-400' : 'text-white/30'} w-5`}></i>
                                             {t.test_notification}
                                         </button>
 
                                         <button onClick={async () => {
                                             setIsRefreshing(true);
                                             try { await refreshData(); window.location.reload(); } catch (err) { setIsRefreshing(false); }
-                                        }} className="w-full text-left px-5 py-3 text-sm font-bold text-gray-200 hover:bg-blue-600 transition-colors flex items-center justify-between group">
+                                        }} className={`w-full text-left px-4 py-2 text-sm ${isLightMode ? 'text-slate-700 hover:bg-slate-50' : 'text-white/70 hover:bg-white/[0.05] hover:text-white'} flex items-center justify-between group transition-colors`}>
                                             <div className="flex items-center gap-3">
-                                                <svg className={`w-4 h-4 opacity-60 ${isRefreshing ? 'animate-spin' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" /></svg>
+                                                <i className={`fa-solid fa-arrows-rotate ${isLightMode ? 'text-slate-400' : 'text-white/30'} w-5 ${isRefreshing ? 'fa-spin' : ''}`}></i>
                                                 {t.refresh_data}
                                             </div>
                                             {isRefreshing && <Spinner size="xs" />}
                                         </button>
 
                                         {!originalAdminUser && (
-                                             <button onClick={() => { setAppState('role_selection'); setDropdownOpen(false); }} className="w-full text-left px-5 py-3 text-sm font-bold text-gray-200 hover:bg-blue-600 transition-colors border-t border-white/5 mt-2 flex items-center gap-3">
-                                                <svg className="w-4 h-4 text-yellow-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7h12m0 0l-4-4m4 4l-4 4m0 6H4m0 0l4 4m-4-4l4-4" /></svg>
+                                             <button onClick={() => { setAppState('role_selection'); setDropdownOpen(false); }} className={`w-full text-left px-4 py-2 text-sm ${isLightMode ? 'text-slate-700 hover:bg-slate-50 border-slate-100' : 'text-white/70 hover:bg-white/[0.05] hover:text-white border-white/[0.06]'} border-t mt-1 flex items-center gap-3 transition-colors`}>
+                                                <i className="fa-solid fa-users-viewfinder text-yellow-600 w-5"></i>
                                                 {t.change_team}
                                              </button>
                                         )}
 
-                                        <button onClick={logout} className="w-full text-left px-5 py-3 text-sm font-black text-red-400 hover:bg-red-500 hover:text-white transition-colors border-t border-white/5 mt-2 flex items-center gap-3">
-                                            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" /></svg>
+                                        <button onClick={logout} className={`w-full text-left px-4 py-2 text-sm font-bold text-red-500 hover:bg-red-500/[0.08] ${isLightMode ? 'border-slate-100' : 'border-white/[0.06]'} border-t mt-1 flex items-center gap-3 transition-colors`}>
+                                            <i className="fa-solid fa-right-from-bracket w-5"></i>
                                             {t.logout}
                                         </button>
                                     </div>

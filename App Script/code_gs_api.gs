@@ -109,15 +109,42 @@ function doPost(e) {
         try {
           // 1. Upload to Drive
           const upRes = uploadImageToDrive(contents.fileData, contents.fileName, contents.mimeType, contents.uploadFolderID, contents.userName);
+          if (!upRes || !upRes.url) {
+            console.error("❌ [uploadImage] Drive upload failed, no URL returned.");
+            return createJsonResponse({ status: 'error', message: 'ការបង្ហោះរូបភាពទៅ Drive បរាជ័យ' }, 500);
+          }
           console.log("📤 [uploadImage] Upload success: " + upRes.url);
 
           // 2. Metadata Updates (Sync to Sheets)
-          // Orders: Sheet sync is fully delegated to the Go backend's EnqueueSync
-          // (updateOrderTelegram), same pattern as Profile Picture → EnqueueSync(updateSheet).
-          // Apps Script only uploads to Drive and returns the URL.
           const orderId = contents.orderId || contents.orderID;
           if (orderId) {
-             console.log("✅ [uploadImage] Order Drive upload done, Sheet sync delegated to Go backend: " + orderId);
+             console.log("✅ [uploadImage] Order Drive upload done, updating Sheet for Order: " + orderId);
+             try {
+               const updateResult = handleUpdateSheet({
+                 sheetName: CONFIG.ALL_ORDERS_SHEET,
+                 primaryKey: { "Order ID": orderId },
+                 newData: { "Package Photo": upRes.url }
+               });
+               
+               // Also update the Team-specific sheet if needed
+               if (contents.team) {
+                 handleUpdateSheet({
+                   sheetName: `${CONFIG.ORDER_SHEET_PREFIX}${contents.team}`,
+                   primaryKey: { "Order ID": orderId },
+                   newData: { "Package Photo": upRes.url }
+                 });
+               }
+               
+               return createJsonResponse({ 
+                 status: 'success', 
+                 url: upRes.url, 
+                 fileID: upRes.fileID,
+                 sheetUpdated: updateResult.status === 'success'
+               });
+             } catch (sheetErr) {
+               console.error("⚠️ [uploadImage] Sheet sync failed but Drive OK: " + sheetErr.message);
+               return createJsonResponse({ status: 'success', url: upRes.url, fileID: upRes.fileID, warning: "Sheet sync failed" });
+             }
           } else if (contents.sheetName && contents.primaryKey && contents.targetColumn) {
              // Handle generic table updates
              const newData = {};
@@ -129,8 +156,10 @@ function doPost(e) {
                  newData: newData
                });
                console.log("✅ [uploadImage] Generic Sheet updated: " + contents.sheetName);
+               return createJsonResponse({ status: 'success', url: upRes.url, fileID: upRes.fileID });
              } catch (sheetErr) {
                console.error("⚠️ [uploadImage] Generic sheet sync failed: " + sheetErr.message);
+               return createJsonResponse({ status: 'success', url: upRes.url, warning: "Sheet sync failed" });
              }
           } else if (contents.userName && contents.fileName === 'profile_picture') {
              // Handle user profile picture
@@ -271,10 +300,11 @@ function handleUpdateSheet(data) {
       const rowData = values[rowIndex - 1]; // Get the existing row data (0-indexed locally)
 
       const aliasMap = {
-        "packagephotourl": ["packagephoto", "packagephotourl", "packagephotolink", "packagephotoevidence"],
-        "packagephoto": ["packagephotourl", "packagephoto", "packagephotolink", "packagephotoevidence"],
-        "deliveryphotourl": ["deliveryphoto", "deliveryphotourl", "deliveryphotolink", "proofofdelivery"],
-        "deliveryphoto": ["deliveryphotourl", "deliveryphoto", "deliveryphotolink", "proofofdelivery"]
+        "packagephotourl": ["packagephoto", "packagephotourl", "packagephotolink", "packagephotoevidence", "packagephotourl", "packphoto"],
+        "packagephoto": ["packagephotourl", "packagephoto", "packagephotolink", "packagephotoevidence", "packagephotourl", "packphoto"],
+        "orderid": ["orderid", "id", "orderno", "order#"],
+        "deliveryphotourl": ["deliveryphoto", "deliveryphotourl", "deliveryphotolink", "proofofdelivery", "deliveryphotoevidence"],
+        "deliveryphoto": ["deliveryphotourl", "deliveryphoto", "deliveryphotolink", "proofofdelivery", "deliveryphotoevidence"]
       };
 
       for (const [key, val] of Object.entries(data.newData)) {
@@ -1113,6 +1143,40 @@ function updateOrderTelegram(data) {
   } catch (e) {
     console.error("❌ updateOrderTelegram Error: " + e.message);
     return { id1: null, id2: null, id3: null };
+  }
+}
+
+/**
+ * មុខងារសម្រាប់តេស្តសិទ្ធិ (Permissions Test)
+ * ដើម្បីដឹងថា Script មានសិទ្ធិ Upload ទៅ Drive និងយក Link បានឬនៅ។
+ * របៀបប្រើ៖ ជ្រើសរើស function នេះក្នុង Apps Script Editor រួចចុច 'Run'។
+ */
+function testDriveAccess() {
+  console.log("🚀 កំពុងសាកល្បងសិទ្ធិ Google Drive...");
+  try {
+    // ១. សាកល្បងបង្កើត File ជារូបភាពតូចមួយ
+    const blob = Utilities.newBlob("Test Data: Permissions Verification", "text/plain", "Test_Permissions_" + Date.now() + ".txt");
+    const file = DriveApp.createFile(blob);
+    
+    console.log("📁 បង្កើត File ជោគជ័យ: " + file.getName());
+
+    // ២. សាកល្បងកំណត់ Permission ឱ្យមើលបាន (Public Link)
+    file.setSharing(DriveApp.Access.ANYONE_WITH_LINK, DriveApp.Permission.VIEW);
+    
+    // ៣. បង្ហាញលទ្ធផលក្នុង Log
+    console.log("✅ ជោគជ័យ! Script មានសិទ្ធិពេញលេញ។");
+    console.log("🔗 Link ឯកសារតេស្ត: " + file.getUrl());
+    console.log("🆔 File ID: " + file.getId());
+    
+    // ៤. លុប File តេស្តចោលវិញ ដើម្បីកុំឱ្យធ្ងន់ Drive
+    file.setTrashed(true);
+    console.log("🗑️ បានលុប File តេស្តចេញពី Drive វិញរួចរាល់។");
+    
+  } catch (e) {
+    console.error("❌ បរាជ័យ! Script មិនមានសិទ្ធិទេ: " + e.message);
+    if (e.message.includes("permission")) {
+      console.warn("💡 យោបល់៖ សូមពិនិត្យមើលថា តើលោកអ្នកបានចុច 'Authorize' ឱ្យ Script នេះហើយឬនៅ?");
+    }
   }
 }
 

@@ -47,58 +47,54 @@ const TeamRevenueTable: React.FC<TeamRevenueTableProps> = ({ stats, onStatClick 
     const isBinance = uiTheme === 'binance';
 
     return (
-        <div className={isBinance ? '' : 'space-y-4'}>
-            {!isBinance && (
-                <h3 className={`text-lg font-black ${isLightMode ? 'text-gray-800' : 'text-white'} flex items-center px-1 uppercase tracking-tight`}>
-                    <svg xmlns="http://www.w3.org/2000/svg" className={`h-5 w-5 mr-2 ${getAccentColor()}`} viewBox="0 0 20 20" fill="currentColor">
-                        <path d="M2 10a8 8 0 018-8v8h8a8 8 0 11-16 0z" />
-                        <path d="M12 2.252A8.014 8.014 0 0117.748 8H12V2.252z" />
-                    </svg>
-                    ចំណូលតាមក្រុម
-                </h3>
-            )}
-            <div className={`${getCardBg()} ${isBinance ? 'rounded-none' : 'rounded-2xl'} border transition-all duration-500 overflow-hidden ${isBinance ? '' : 'shadow-xl'} ${uiTheme === 'netflix' ? 'border-white/5' : ''}`}>
-                {isBinance && (
-                    <div className="px-4 py-3 border-b border-[#2B3139] bg-[#1E2329]">
-                        <span className="text-[11px] text-[#848E9C] uppercase tracking-wider font-semibold">Team Revenue</span>
-                    </div>
-                )}
+        <div className="space-y-3">
+            <h3 className={`text-sm font-bold ${isLightMode ? 'text-slate-400' : 'text-slate-500'} flex items-center px-1 uppercase tracking-wider`}>
+                <i className="fa-solid fa-clock-rotate-left mr-2 text-green-500 opacity-70"></i>
+                ចំណូលតាមក្រុម
+            </h3>
+            <div className={`${isLightMode ? 'bg-white border-slate-200' : 'bg-[#1a1d27] border-white/[0.06]'} border rounded-xl overflow-hidden shadow-sm transition-all duration-300`}>
                 <div className="overflow-x-auto">
-                    <table className="w-full text-sm text-left">
-                        <thead className={`text-[10px] ${isBinance ? 'text-[#848E9C] bg-[#0B0E11] border-[#2B3139]' : isLightMode ? 'text-gray-500 bg-gray-50 border-gray-100' : 'text-gray-500 bg-gray-900/50 border-gray-700'} font-${isBinance ? 'semibold' : 'black'} uppercase tracking-${isBinance ? 'wider' : '[0.2em]'} border-b sticky top-0 z-10`}>
+                    <table className="w-full text-sm text-left border-collapse">
+                        <thead className={`text-[11px] ${isLightMode ? 'bg-slate-700 text-slate-300' : 'bg-[#141720] text-[#6b7280]'} font-bold uppercase tracking-[0.05em]`}>
                             <tr>
                                 <th className="px-4 py-3">ក្រុម (Teams)</th>
                                 <th className="px-4 py-3 text-center">ការកម្មង់</th>
                                 <th className="px-4 py-3 text-right">ចំណូល</th>
                             </tr>
                         </thead>
-                        <tbody className={`divide-y ${isBinance ? 'divide-[#2B3139]/50' : isLightMode ? 'divide-gray-100' : 'divide-gray-700/30'}`}>
+                        <tbody className={`divide-y ${isLightMode ? 'divide-slate-100' : 'divide-white/[0.04]'}`}>
                             {stats.map((team, idx) => (
-                                <tr key={team.name} className={`${getHoverBg()} transition-colors group cursor-pointer`} onClick={() => onStatClick(team.name)}>
-                                    <td className={`px-4 py-3 font-bold ${isBinance ? 'text-[#EAECEF]' : isLightMode ? 'text-gray-700' : 'text-gray-100'} flex items-center gap-3`}>
-                                        <span className={`w-5 h-5 ${isBinance ? 'rounded-[2px] bg-[#2B3139] text-[#848E9C] border-[#474D57]' : 'rounded-lg ' + (isLightMode ? 'bg-gray-100 text-gray-500 border-gray-200' : 'bg-gray-700 text-gray-400 border-gray-600')} flex items-center justify-center text-[9px] border`}>#{idx + 1}</span>
-                                        <span className={`${isBinance ? 'group-hover:text-[#FCD535]' : uiTheme === 'netflix' ? 'group-hover:text-[#e50914]' : 'group-hover:text-blue-500'} transition-colors`}>{team.name}</span>
+                                <tr key={team.name} className={`${isLightMode ? 'hover:bg-slate-50' : 'even:bg-white/[0.02] hover:bg-white/[0.05]'} transition-colors group cursor-pointer`} onClick={() => onStatClick(team.name)}>
+                                    <td className="px-4 py-3 flex items-center gap-3">
+                                        <span className={`w-6 h-6 rounded-full flex items-center justify-center text-[10px] font-bold border ${
+                                            idx === 0 ? (isLightMode ? 'bg-yellow-50 text-yellow-600 border-yellow-200' : 'bg-[rgba(251,191,36,0.15)] text-[#fbbf24] border-[rgba(251,191,36,0.3)]')
+                                            : idx === 1 ? (isLightMode ? 'bg-slate-100 text-slate-500 border-slate-200' : 'bg-[rgba(148,163,184,0.15)] text-[#94a3b8] border-[rgba(148,163,184,0.3)]')
+                                            : idx === 2 ? (isLightMode ? 'bg-orange-50 text-orange-600 border-orange-200' : 'bg-[rgba(205,124,50,0.15)] text-[#cd7c32] border-[rgba(205,124,50,0.3)]')
+                                            : (isLightMode ? 'bg-slate-100 text-slate-500 border-slate-200' : 'bg-slate-800 text-slate-400 border-slate-700')}`}>
+                                            {idx + 1}
+                                        </span>
+                                        <span className={`font-bold ${isLightMode ? 'text-slate-600' : 'text-slate-200'}`}>{team.name}</span>
                                     </td>
-                                    <td className={`px-4 py-3 text-center font-bold tabular-nums ${isBinance ? 'text-[#EAECEF]' : uiTheme === 'netflix' ? 'text-white' : 'text-blue-500'}`}>
+                                    <td className="px-4 py-3 text-center font-bold text-blue-500 tabular-nums">
                                         {team.orders}
                                     </td>
-                                    <td className={`px-4 py-3 text-right font-bold tabular-nums ${isBinance ? 'text-[#0ECB81]' : uiTheme === 'netflix' ? 'text-[#e50914]' : 'text-green-500'} transition-colors`}>
+                                    <td className={`px-4 py-3 text-right font-bold tabular-nums ${isLightMode ? 'text-green-600' : 'text-green-500'}`}>
                                         ${team.revenue.toLocaleString(undefined, { minimumFractionDigits: 2 })}
                                     </td>
                                 </tr>
                             ))}
                             {stats.length === 0 && (
                                 <tr>
-                                    <td colSpan={3} className={`px-4 py-12 text-center ${isBinance ? 'text-[#848E9C]' : 'text-gray-500'} italic uppercase text-[10px] tracking-widest`}>មិនទាន់មានទិន្នន័យ</td>
+                                    <td colSpan={3} className="px-4 py-10 text-center text-slate-400 italic text-xs uppercase tracking-widest">មិនទាន់មានទិន្នន័យ</td>
                                 </tr>
                             )}
                         </tbody>
                         {stats.length > 0 && (
-                            <tfoot className={`${isBinance ? 'bg-[#0B0E11] border-[#2B3139]' : isLightMode ? 'bg-gray-50 border-gray-100' : 'bg-gray-900/80 border-gray-700'} font-black border-t-2 ${isBinance ? 'border-t-[#FCD535]/20' : ''}`}>
+                            <tfoot className={`${isLightMode ? 'bg-slate-800 text-white' : 'bg-[rgba(59,130,246,0.08)] text-slate-200 border-t border-white/[0.06]'} font-semibold`}>
                                 <tr>
-                                    <td className={`px-4 py-3 uppercase tracking-widest ${isBinance ? 'text-[#848E9C]' : 'text-gray-500'} text-[10px]`}>សរុបរួម</td>
-                                    <td className={`px-4 py-3 text-center text-base whitespace-nowrap tabular-nums ${isBinance ? 'text-[#EAECEF]' : uiTheme === 'netflix' ? 'text-white' : 'text-blue-500'}`}>{grandTotals.orders}</td>
-                                    <td className={`px-4 py-3 text-right text-base whitespace-nowrap tabular-nums ${isBinance ? 'text-[#0ECB81]' : uiTheme === 'netflix' ? 'text-[#e50914]' : 'text-green-600'}`}>
+                                    <td className="px-4 py-3 text-[11px] uppercase tracking-widest opacity-80">សរុបរួម</td>
+                                    <td className="px-4 py-3 text-center text-blue-400">{grandTotals.orders}</td>
+                                    <td className="px-4 py-3 text-right text-green-400">
                                         ${grandTotals.revenue.toLocaleString(undefined, { minimumFractionDigits: 2 })}
                                     </td>
                                 </tr>

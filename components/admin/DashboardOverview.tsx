@@ -1,4 +1,3 @@
-
 import React, { useEffect, useContext, useMemo } from 'react';
 import { User, ParsedOrder } from '../../types';
 import StatCard from '../performance/StatCard';
@@ -300,29 +299,11 @@ const DashboardOverview: React.FC<DashboardOverviewProps> = ({
     }
 
     return (
-        <div className="space-y-4 lg:space-y-8 animate-fade-in pb-10">
-            {/* Header - More compact on mobile */}
-            <div className={`flex flex-col gap-4 ${isLightMode ? 'bg-white shadow-md border-gray-100' : 'bg-gray-800/10 border-white/5 backdrop-blur-md'} p-4 sm:p-6 rounded-[2rem] border`}>
-                <div className="flex justify-between items-start">
-                    <div className="flex flex-col">
-                        <div className="flex items-center gap-2 mb-1">
-                            <div className="w-1.5 h-4 bg-blue-600 rounded-full"></div>
-                            <h2 className={`text-lg sm:text-xl lg:text-2xl font-black ${isLightMode ? 'text-gray-900' : 'text-white'} leading-none`}>សួស្តី, {currentUser?.FullName} 👋</h2>
-                        </div>
-                        <p className="text-gray-500 text-[9px] font-bold uppercase tracking-widest ml-3.5">
-                            {new Date().toLocaleDateString('km-KH', { weekday: 'long', month: 'long', day: 'numeric' })}
-                        </p>
-                    </div>
-                    <div className={`${isLightMode ? 'bg-blue-50 border-blue-100' : 'bg-white/5 border-white/10'} border px-3 py-1.5 rounded-xl hidden sm:flex`}>
-                        <span className="text-[10px] font-black text-blue-400">
-                            {metrics.orders} <span className={`${isLightMode ? 'text-blue-600/50' : 'text-gray-500'} ml-1`}>Processed</span>
-                        </span>
-                    </div>
-                </div>
-                
-                {/* Date Filter Component */}
-                <div className="w-full">
-                    <DateRangeFilter 
+        <div className="py-6 px-6 max-w-7xl mx-auto space-y-6 animate-fade-in pb-10">
+            <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 mb-2">
+                <h2 className={`text-2xl font-semibold ${isLightMode ? 'text-slate-800' : 'text-white'}`}>Dashboard</h2>
+                <div className="w-full sm:w-auto">
+                    <DateRangeFilter
                         dateRange={dateFilter.preset as DateRangePreset}
                         onRangeChange={(r) => setDateFilter({ ...dateFilter, preset: r })}
                         customStart={dateFilter.start}
@@ -333,27 +314,157 @@ const DashboardOverview: React.FC<DashboardOverviewProps> = ({
                 </div>
             </div>
 
-            {/* Metrics - Compact on mobile */}
-            <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-3 lg:gap-6">
-                <StatCard label="ចំណូលសរុប" value={`$${metrics.revenue.toLocaleString(undefined, {maximumFractionDigits: 0})}`} icon="💰" colorClass="from-blue-600 to-blue-400" />
-                <StatCard label="ចំនួនការកម្មង់" value={metrics.orders} icon="📦" colorClass="from-emerald-600 to-emerald-400" />
-                <StatCard label="មិនទាន់ទូទាត់" value={metrics.unpaid} icon="⏳" colorClass="from-orange-500 to-yellow-400" />
+            {/* BEGIN: Stats Cards */}
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6 mb-6">
+                {/* Card 1: Revenue */}
+                <div className={`${isLightMode ? 'bg-white border-slate-200 shadow-sm' : 'bg-[#1a1d27] border-white/[0.06] shadow-[0_4px_24px_rgba(0,0,0,0.3)]'} rounded-xl border p-5 flex items-center space-x-5 transition-all duration-300 hover:-translate-y-0.5`}>
+                    <div className={`h-14 w-14 rounded-full ${isLightMode ? 'bg-blue-50' : 'bg-blue-500/[0.2]'} flex items-center justify-center flex-shrink-0 border ${isLightMode ? 'border-blue-100' : 'border-blue-400/40'}`}>
+                        <svg className={`w-7 h-7 ${isLightMode ? 'text-blue-500' : 'text-blue-400'}`} fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={1.8}><path strokeLinecap="round" strokeLinejoin="round" d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
+                    </div>
+                    <div className="flex-1 min-w-0">
+                        <div className="flex justify-between items-baseline">
+                            <p className={`text-xs font-normal ${isLightMode ? 'text-slate-400' : 'text-[#8b8fa3]'} truncate uppercase tracking-wider`}>
+                                {language === 'km' ? 'ចំណូលសរុប' : 'Total Revenue'}
+                            </p>
+                            <span className={`text-[10px] font-semibold ${isLightMode ? 'text-green-500 bg-green-500/10' : 'text-[#22c55e] bg-[rgba(34,197,94,0.15)] border border-[rgba(34,197,94,0.3)]'} px-2 py-0.5 rounded-full`}>+5.2%</span>
+                        </div>
+                        <p className={`text-[28px] font-bold ${isLightMode ? 'text-slate-900' : 'text-white'} mt-1 tabular-nums tracking-tight`}>
+                            ${metrics.revenue.toLocaleString()}
+                        </p>
+                    </div>
+                </div>
+
+                {/* Card 2: Orders */}
+                <div className={`${isLightMode ? 'bg-white border-slate-200 shadow-sm' : 'bg-[#1a1d27] border-white/[0.06] shadow-[0_4px_24px_rgba(0,0,0,0.3)]'} rounded-xl border p-5 flex items-center space-x-5 transition-all duration-300 hover:-translate-y-0.5`}>
+                    <div className={`h-14 w-14 rounded-full ${isLightMode ? 'bg-emerald-50' : 'bg-emerald-500/[0.2]'} flex items-center justify-center flex-shrink-0 border ${isLightMode ? 'border-emerald-100' : 'border-emerald-400/40'}`}>
+                        <svg className={`w-7 h-7 ${isLightMode ? 'text-emerald-500' : 'text-emerald-400'}`} fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={1.8}><path strokeLinecap="round" strokeLinejoin="round" d="M3 3h2l.4 2M7 13h10l4-8H5.4M7 13L5.4 5M7 13l-2.293 2.293c-.63.63-.184 1.707.707 1.707H17m0 0a2 2 0 100 4 2 2 0 000-4zm-8 2a2 2 0 11-4 0 2 2 0 014 0z" /></svg>
+                    </div>
+                    <div className="flex-1 min-w-0">
+                        <div className="flex justify-between items-baseline">
+                            <p className={`text-xs font-normal ${isLightMode ? 'text-slate-400' : 'text-[#8b8fa3]'} truncate uppercase tracking-wider`}>
+                                {language === 'km' ? 'ចំនួនការកម្មង់' : 'Total Orders'}
+                            </p>
+                            <span className={`text-[10px] font-semibold ${isLightMode ? 'text-emerald-500 bg-emerald-500/10' : 'text-[#22c55e] bg-[rgba(34,197,94,0.15)] border border-[rgba(34,197,94,0.3)]'} px-2 py-0.5 rounded-full`}>+3.1%</span>
+                        </div>
+                        <p className={`text-[28px] font-bold ${isLightMode ? 'text-slate-900' : 'text-white'} mt-1 tabular-nums tracking-tight`}>
+                            {metrics.orders.toLocaleString()}
+                        </p>
+                    </div>
+                </div>
+
+                {/* Card 3: Unpaid */}
+                <div className={`${isLightMode ? 'bg-white border-slate-200 shadow-sm' : 'bg-[#1a1d27] border-white/[0.06] shadow-[0_4px_24px_rgba(0,0,0,0.3)]'} rounded-xl border p-5 flex items-center space-x-5 transition-all duration-300 hover:-translate-y-0.5`}>
+                    <div className={`h-14 w-14 rounded-full ${isLightMode ? 'bg-orange-50' : 'bg-orange-500/[0.2]'} flex items-center justify-center flex-shrink-0 border ${isLightMode ? 'border-orange-100' : 'border-orange-400/40'}`}>
+                        <svg className={`w-7 h-7 ${isLightMode ? 'text-orange-500' : 'text-orange-400'}`} fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={1.8}><path strokeLinecap="round" strokeLinejoin="round" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
+                    </div>
+                    <div className="flex-1 min-w-0">
+                        <div className="flex justify-between items-baseline">
+                            <p className={`text-xs font-normal ${isLightMode ? 'text-slate-400' : 'text-[#8b8fa3]'} truncate uppercase tracking-wider`}>
+                                {language === 'km' ? 'មិនទាន់ទូទាត់' : 'Pending Payment'}
+                            </p>
+                            <span className={`text-[10px] font-semibold ${isLightMode ? 'text-orange-500 bg-orange-500/10' : 'text-[#fbbf24] bg-[rgba(251,191,36,0.15)] border border-[rgba(251,191,36,0.3)]'} px-2 py-0.5 rounded-full animate-pulse`}>Active</span>
+                        </div>
+                        <p className={`text-[28px] font-bold ${isLightMode ? 'text-slate-900' : 'text-white'} mt-1 tabular-nums tracking-tight`}>
+                            {metrics.unpaid.toLocaleString()}
+                        </p>
+                    </div>
+                </div>
+
+                {/* Card 4: Sync Status */}
+                <div className={`${isLightMode ? 'bg-white border-slate-200 shadow-sm' : 'bg-[#1a1d27] border-white/[0.06] shadow-[0_4px_24px_rgba(0,0,0,0.3)]'} rounded-xl border p-5 flex items-center space-x-5 transition-all duration-300 hover:-translate-y-0.5`}>
+                    <div className={`h-14 w-14 rounded-full ${isLightMode ? 'bg-slate-50' : 'bg-slate-500/[0.2]'} flex items-center justify-center flex-shrink-0 border ${isLightMode ? 'border-slate-100' : 'border-slate-400/40'}`}>
+                        <svg className={`w-7 h-7 ${isLightMode ? 'text-slate-500' : 'text-slate-300'} ${isSyncing ? 'animate-spin' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={1.8}><path strokeLinecap="round" strokeLinejoin="round" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" /></svg>
+                    </div>
+                    <div className="flex-1 min-w-0">
+                        <div className="flex justify-between items-baseline">
+                            <p className={`text-xs font-normal ${isLightMode ? 'text-slate-400' : 'text-[#8b8fa3]'} truncate uppercase tracking-wider`}>
+                                {language === 'km' ? 'ស្ថានភាពសម័យកាល' : 'Sync Status'}
+                            </p>
+                        </div>
+                        <p className={`text-xl font-bold ${isLightMode ? 'text-slate-700' : 'text-slate-300'} mt-1 uppercase tracking-tighter`}>
+                            {isSyncing ? (language === 'km' ? 'កំពុងធ្វើបច្ចុប្បន្នភាព...' : 'Syncing...') : (language === 'km' ? 'Up to date' : 'Up to date')}
+                        </p>
+                    </div>
+                </div>
             </div>
-            
-            {/* Main Tables */}
-            {/* Top row with 3 main breakdown tables */}
-            <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 lg:gap-8">
-                <TeamRevenueTable stats={teamRevenueStats} onStatClick={onTeamClick} />
+
+            {/* Recent Orders Table & Breakdown Row */}
+            <div className="flex flex-col lg:flex-row gap-6">
+                <div className={`flex-1 ${isLightMode ? 'bg-white border-slate-200' : 'bg-[#1a1d27] border-white/[0.06]'} border rounded-xl overflow-hidden`}>
+                    <div className={`px-6 py-5 border-b ${isLightMode ? 'border-slate-200' : 'border-white/[0.06]'} flex justify-between items-center`}>
+                        <h3 className={`text-lg leading-6 font-semibold ${isLightMode ? 'text-slate-900' : 'text-white'}`}>{language === 'km' ? 'ការកម្មង់ចុងក្រោយ' : 'Recent Orders'}</h3>
+                        <button onClick={() => onTeamClick('')} className={`text-sm font-medium ${isLightMode ? 'text-blue-500 hover:underline' : 'text-[#60a5fa] flex items-center gap-1.5 border border-white/[0.1] px-3 py-1.5 rounded-md hover:border-white/20 hover:bg-white/[0.05] transition-all'}`}>
+                            View All {!isLightMode && <span className="text-xs">→</span>}
+                        </button>
+                    </div>
+                    <div className="overflow-x-auto">
+                        <table className={`min-w-full divide-y ${isLightMode ? 'divide-slate-200' : 'divide-white/[0.04]'}`}>
+                            <thead className={isLightMode ? 'bg-slate-50' : 'bg-[#141720]'}>
+                                <tr>
+                                    <th className={`px-6 py-3 text-left text-xs font-medium ${isLightMode ? 'text-slate-500' : 'text-[#6b7280]'} uppercase tracking-[0.05em]`}>Order ID</th>
+                                    <th className={`px-6 py-3 text-left text-xs font-medium ${isLightMode ? 'text-slate-500' : 'text-[#6b7280]'} uppercase tracking-[0.05em]`}>Customer</th>
+                                    <th className={`px-6 py-3 text-left text-xs font-medium ${isLightMode ? 'text-slate-500' : 'text-[#6b7280]'} uppercase tracking-[0.05em]`}>Status</th>
+                                    <th className={`px-6 py-3 text-left text-xs font-medium ${isLightMode ? 'text-slate-500' : 'text-[#6b7280]'} uppercase tracking-[0.05em]`}>Date</th>
+                                    <th className={`px-6 py-3 text-left text-xs font-medium ${isLightMode ? 'text-slate-500' : 'text-[#6b7280]'} uppercase tracking-[0.05em]`}>Amount</th>
+                                </tr>
+                            </thead>
+                            <tbody className={`${isLightMode ? 'bg-white divide-slate-200' : 'bg-transparent divide-white/[0.04]'} divide-y`}>
+                                {filteredMetricsOrders.slice(0, 5).map((order, idx) => (
+                                    <tr key={idx} className={`${isLightMode ? 'hover:bg-slate-50' : 'even:bg-white/[0.02] hover:bg-white/[0.05]'} transition-colors`}>
+                                        <td className={`px-6 py-4 whitespace-nowrap text-sm font-medium ${isLightMode ? 'text-blue-500' : 'text-[#60a5fa]'}`}>#{order['Order ID'] || idx}</td>
+                                        <td className={`px-6 py-4 whitespace-nowrap text-sm ${isLightMode ? 'text-slate-700' : 'text-[#d1d5db]'}`}>{order['Customer Name'] || 'N/A'}</td>
+                                        <td className="px-6 py-4 whitespace-nowrap text-sm">
+                                            <span className={`px-2 py-1 rounded-full text-xs font-medium border ${
+                                                order['Payment Status'] === 'Paid'
+                                                    ? (isLightMode ? 'bg-green-500/20 text-green-600 border-green-500/30' : 'bg-[rgba(34,197,94,0.15)] text-[#4ade80] border-[rgba(34,197,94,0.2)]')
+                                                    : order['Payment Status'] === 'Unpaid'
+                                                    ? (isLightMode ? 'bg-red-500/15 text-red-500 border-red-500/20' : 'bg-[rgba(239,68,68,0.15)] text-[#f87171] border-[rgba(239,68,68,0.3)]')
+                                                    : (isLightMode ? 'bg-slate-100 text-slate-700 border-slate-200' : 'bg-[rgba(251,191,36,0.15)] text-[#fbbf24] border-[rgba(251,191,36,0.2)]')
+                                            }`}>
+                                                {order['Payment Status'] || 'Pending'}
+                                            </span>
+                                        </td>
+                                        <td className={`px-6 py-4 whitespace-nowrap text-sm ${isLightMode ? 'text-slate-500' : 'text-[#6b7280]'}`}>
+                                            {order.Timestamp ? new Date(order.Timestamp).toLocaleDateString() : 'N/A'}
+                                        </td>
+                                        <td className={`px-6 py-4 whitespace-nowrap text-sm font-bold ${isLightMode ? 'text-slate-900' : 'text-white'}`}>
+                                            ${(Number(order['Grand Total']) || 0).toLocaleString()}
+                                        </td>
+                                    </tr>
+                                ))}
+                                {filteredMetricsOrders.length === 0 && (
+                                    <tr>
+                                        <td colSpan={5} className={`px-6 py-10 text-center ${isLightMode ? 'text-slate-400' : 'text-[#6b7280]'}`}>No recent orders found</td>
+                                    </tr>
+                                )}
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+
+                <div className="w-full lg:w-80 space-y-6">
+                    <TeamRevenueTable stats={teamRevenueStats} onStatClick={onTeamClick} />
+                </div>
+            </div>
+
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 lg:gap-8">
                 <SalesStoreTable stats={brandStats} onStatClick={onBrandClick} />
                 <FulfillmentStoreTable stats={storeStats} onStatClick={onStoreClick} />
             </div>
-            
-            {/* Map and Summary row */}
+
             <div className="grid grid-cols-1 xl:grid-cols-12 gap-6 lg:gap-8">
-                <div className="xl:col-span-8">
-                    <ProvincialMap data={provinceStats} onProvinceClick={onProvinceClick} />
+                <div className={`xl:col-span-8 ${isLightMode ? 'bg-white border-slate-200' : 'bg-[#1a1d27] border-white/[0.06]'} border rounded-xl overflow-hidden`}>
+                    <div className={`px-6 py-4 border-b ${isLightMode ? 'border-slate-200 bg-slate-50' : 'border-white/[0.06] bg-white/[0.03]'}`}>
+                        <h3 className={`font-semibold ${isLightMode ? 'text-slate-800' : 'text-white'}`}>Regional Distribution</h3>
+                    </div>
+                    <div className="p-4">
+                        <ProvincialMap data={provinceStats} onProvinceClick={onProvinceClick} />
+                    </div>
                 </div>
-                <div className="xl:col-span-4">
+                <div className={`xl:col-span-4 ${isLightMode ? 'bg-white border-slate-200' : 'bg-[#1a1d27] border-white/[0.06]'} border rounded-xl overflow-hidden`}>
+                    <div className={`px-6 py-4 border-b ${isLightMode ? 'border-slate-200 bg-slate-50' : 'border-white/[0.06] bg-white/[0.03]'}`}>
+                        <h3 className={`font-semibold ${isLightMode ? 'text-slate-800' : 'text-white'}`}>Provincial Summary</h3>
+                    </div>
                     <ProvincialSummaryList stats={provinceStats} onProvinceClick={onProvinceClick} />
                 </div>
             </div>
