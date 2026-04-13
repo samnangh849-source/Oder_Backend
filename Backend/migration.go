@@ -276,6 +276,7 @@ func FetchSheetDataToStruct(sheetName string, target interface{}) error {
 // Requires SheetsService and SpreadsheetID to be set beforehand.
 // broadcastFullSyncProgress sends a real-time WebSocket event to all connected clients
 // so the frontend can display live progress (step name, percentage, elapsed time, row count).
+// Uses a goroutine to avoid blocking the migration when no clients are connected.
 func broadcastFullSyncProgress(step, totalSteps int, stepName string, count int, elapsed float64) {
 	if HubGlobal == nil {
 		return
@@ -293,10 +294,7 @@ func broadcastFullSyncProgress(step, totalSteps int, stepName string, count int,
 		"count":      count,
 		"elapsed":    elapsed,
 	})
-	select {
-	case HubGlobal.Broadcast <- payload:
-	default:
-	}
+	go func() { HubGlobal.Broadcast <- payload }()
 }
 
 // broadcastFullSyncComplete sends the final result of a full sync to all connected clients.
@@ -310,10 +308,7 @@ func broadcastFullSyncComplete(success bool, message string, elapsed float64) {
 		"message": message,
 		"elapsed": elapsed,
 	})
-	select {
-	case HubGlobal.Broadcast <- payload:
-	default:
-	}
+	go func() { HubGlobal.Broadcast <- payload }()
 }
 
 func PerformDataMigration() {
