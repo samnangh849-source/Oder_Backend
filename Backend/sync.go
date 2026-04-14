@@ -32,6 +32,7 @@ type AppsScriptRequest struct {
 	UserName       string                 `json:"userName,omitempty"`
 	OrderData      interface{}            `json:"orderData"`
 	OrderID        string                 `json:"orderId,omitempty"`
+	Team           string                 `json:"team,omitempty"`
 	MovieID        string                 `json:"movieId,omitempty"`
 	TargetColumn   string                 `json:"targetColumn,omitempty"`
 	SheetName      string                 `json:"sheetName,omitempty"`
