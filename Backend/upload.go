@@ -193,8 +193,10 @@ func HandleImageUploadProxy(c *gin.Context) {
 				if UploadIsValidOrderColumnFunc(dbCol) {
 					dbUpdateMap[dbCol] = v
 					broadcastMap[k] = v
-					// Special case: frontend often expects FulfillmentStatus (camelCase) for state management
-					if k == "Fulfillment Status" {
+					
+					// Ensure consistency between different naming conventions
+					if dbCol == "fulfillment_status" {
+						broadcastMap["Fulfillment Status"] = v
 						broadcastMap["FulfillmentStatus"] = v
 					}
 				}
@@ -207,8 +209,10 @@ func HandleImageUploadProxy(c *gin.Context) {
 			if UploadIsValidOrderColumnFunc(dbCol) {
 				dbUpdateMap[dbCol] = driveURL
 				broadcastMap[req.TargetColumn] = driveURL
-				// Ensure Package Photo is also mapped to the field name the frontend expects in orders
-				if req.TargetColumn == "Package Photo" {
+				
+				// Standardize field names for frontend/sync
+				if dbCol == "package_photo_url" {
+					broadcastMap["Package Photo"] = driveURL
 					broadcastMap["package_photo_url"] = driveURL
 				}
 			}
