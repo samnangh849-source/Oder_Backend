@@ -1,6 +1,7 @@
 package backend
 
 import (
+	"encoding/json"
 	"log"
 	"net/http"
 	"net/url"
@@ -32,19 +33,27 @@ func isOriginAllowed(r *http.Request) bool {
 		return true
 	}
 
-	originURL, err := url.Parse(origin)
-	if err != nil {
-		log.Printf("⛔ [WS] Rejected invalid origin header: %q", origin)
-		return false
-	}
-
 	allowedRaw := os.Getenv("ALLOWED_WS_ORIGINS")
 	if strings.TrimSpace(allowedRaw) == "" {
-		// No allowlist configured — fall back to same-host check
+		// Fallback to same-host check if no allowlist is set
+		originURL, err := url.Parse(origin)
+		if err != nil {
+			return false
+		}
+		// Match Host directly (includes port)
 		if strings.EqualFold(originURL.Host, r.Host) {
 			return true
 		}
-		log.Printf("⛔ [WS] Rejected cross-origin request (no ALLOWED_WS_ORIGINS set): origin=%q host=%q", origin, r.Host)
+		log.Printf("⛔ [WS] Rejected cross-origin request: origin=%q host=%q", origin, r.Host)
+		return false
+	}
+
+	if allowedRaw == "*" {
+		return true
+	}
+
+	originURL, err := url.Parse(origin)
+	if err != nil {
 		return false
 	}
 
@@ -53,12 +62,13 @@ func isOriginAllowed(r *http.Request) bool {
 		if allowed == "" {
 			continue
 		}
+		// Check both full URL and just the Host
 		if strings.EqualFold(allowed, origin) || strings.EqualFold(allowed, originURL.Host) {
 			return true
 		}
 	}
 
-	log.Printf("⛔ [WS] Rejected origin not in allowlist: %q", origin)
+	log.Printf("⛔ [WS] Origin not in allowlist: %q", origin)
 	return false
 }
 
@@ -73,26 +83,31 @@ type Hub struct {
 	Broadcast  chan []byte
 	Register   chan *Client
 	Unregister chan *Client
+	quit       chan struct{}
 }
 
 func NewHub() *Hub {
 	return &Hub{
-		Broadcast:  make(chan []byte),
-		Register:   make(chan *Client),
-		Unregister: make(chan *Client),
+		Broadcast:  make(chan []byte, 4096), // Buffered to prevent blocking
+		Register:   make(chan *Client, 128),
+		Unregister: make(chan *Client, 128),
 		Clients:    make(map[*Client]bool),
+		quit:       make(chan struct{}),
 	}
 }
 
 func (h *Hub) Run() {
+	log.Println("🚀 WebSocket Hub is running...")
 	for {
 		select {
 		case client := <-h.Register:
 			h.Clients[client] = true
+			log.Printf("🔌 Client connected. Total: %d", len(h.Clients))
 		case client := <-h.Unregister:
 			if _, ok := h.Clients[client]; ok {
 				delete(h.Clients, client)
 				close(client.Send)
+				log.Printf("🔌 Client disconnected. Total: %d", len(h.Clients))
 			}
 		case message := <-h.Broadcast:
 			for client := range h.Clients {
@@ -103,8 +118,29 @@ func (h *Hub) Run() {
 					delete(h.Clients, client)
 				}
 			}
+		case <-h.quit:
+			log.Println("🛑 Stopping WebSocket Hub...")
+			for client := range h.Clients {
+				close(client.Send)
+				delete(h.Clients, client)
+			}
+			return
 		}
 	}
+}
+
+func (h *Hub) Stop() {
+	close(h.quit)
+}
+
+// BroadcastJSON is a helper to broadcast structured data
+func (h *Hub) BroadcastJSON(v interface{}) {
+	data, err := json.Marshal(v)
+	if err != nil {
+		log.Printf("❌ Hub: Failed to marshal JSON for broadcast: %v", err)
+		return
+	}
+	h.Broadcast <- data
 }
 
 func (c *Client) WritePump() {
