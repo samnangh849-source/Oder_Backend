@@ -907,6 +907,9 @@ function sendTelegramMessage(settings, data, templates) {
     "packedTime": data["Packed Time"] || "",
     "driverName": data["Driver Name"] || "",
     "trackingNumber": data["Tracking Number"] || "",
+    "dispatchedBy": data["Dispatched By"] || "",
+    "dispatchedTime": data["Dispatched Time"] || "",
+    "deliveredTime": data["Delivered Time"] || "",
     "packagePhotoUrl": data["Package Photo"] || "",
     "deliveryPhotoUrl": data["Delivery Photo URL"] || data["Delivery Photo"] || ""
   };

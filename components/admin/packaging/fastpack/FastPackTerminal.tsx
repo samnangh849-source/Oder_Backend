@@ -91,6 +91,7 @@ const FastPackTerminal: React.FC<FastPackTerminalProps> = ({ order, onClose, onS
                     fileName: `Package_${order['Order ID'].substring(0,8)}_${Date.now()}.jpg`,
                     mimeType: 'image/jpeg',
                     orderId: order['Order ID'],
+                    team: order.Team,
                     targetColumn: 'Package Photo',
                     newData: newData
                 };
