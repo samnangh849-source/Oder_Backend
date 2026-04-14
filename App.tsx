@@ -114,6 +114,14 @@ const AppContent: React.FC = () => {
         let reconnectAttempts = 0;
         let isDisposed = false;
 
+        const scheduleReconnect = () => {
+            if (reconnectTimeout) clearTimeout(reconnectTimeout);
+            const delay = Math.min(1000 * Math.pow(1.5, reconnectAttempts), 30000);
+            reconnectAttempts++;
+            console.log(`⏳ [WS] Attempting reconnect ${reconnectAttempts} in ${Math.round(delay/1000)}s...`);
+            reconnectTimeout = setTimeout(connect, delay);
+        };
+
         const connect = async () => {
             if (isDisposed) return;
             const session = await CacheService.get<{ token: string }>(CACHE_KEYS.SESSION);
@@ -160,15 +168,6 @@ const AppContent: React.FC = () => {
             }
         };
 
-        const scheduleReconnect = () => {
-            if (reconnectTimeout) clearTimeout(reconnectTimeout);
-            // Exponential backoff with a cap of 30 seconds
-            const delay = Math.min(1000 * Math.pow(1.5, reconnectAttempts), 30000);
-            reconnectAttempts++;
-            console.log(`⏳ [WS] Attempting reconnect ${reconnectAttempts} in ${Math.round(delay/1000)}s...`);
-            reconnectTimeout = setTimeout(connect, delay);
-        };
-
         connect();
 
         return () => {
@@ -189,26 +188,42 @@ const AppContent: React.FC = () => {
         if (!lastMessage) return;
 
         if (lastMessage.type === 'new_order') {
-            console.log("[App] WebSocket: New order detected. Refreshing data...");
+            console.log("[App] 🔔 New order detected. Refreshing data...");
             fetchOrders(true); // Background sync
         } else if (lastMessage.type === 'update_order') {
-            console.log("[App] WebSocket: Order update received for", lastMessage.orderId);
             const { orderId, newData } = lastMessage;
             if (orderId && newData) {
-                // Manually update the local orders state for immediate UI feedback
-                setOrders(prev => prev.map(o => 
-                    o['Order ID'] === orderId ? { ...o, ...newData } : o
-                ));
+                // Manually update the local orders state for immediate UI feedback without a full fetch
+                setOrders(prev => {
+                    const exists = prev.some(o => o['Order ID'] === orderId);
+                    if (!exists) {
+                        fetchOrders(true); // If we don't have it, fetch full list
+                        return prev;
+                    }
+                    return prev.map(o => o['Order ID'] === orderId ? { ...o, ...newData } : o);
+                });
+            }
+        } else if (lastMessage.type === 'delete_order') {
+            const { orderId } = lastMessage;
+            if (orderId) {
+                setOrders(prev => prev.filter(o => o['Order ID'] !== orderId));
             }
         } else if (lastMessage.type === 'sync_error') {
-            console.error("[App] WebSocket: Sync Error!", lastMessage.message);
+            console.error("[App] ❌ Sync Error:", lastMessage.message);
             showNotification(
                 lastMessage.message || "ការ Sync ទិន្នន័យទៅ Google Sheets បរាជ័យ!", 
                 'error', 
                 'Sync Failure'
             );
+        } else if (lastMessage.type === 'sheet_webhook_sync') {
+             // A sheet was updated directly, trigger a background refresh to catch any changes not captured by optimistic updates
+             if (lastMessage.sheetName === 'AllOrders' || lastMessage.sheetName?.startsWith('Orders_')) {
+                 fetchOrders(true);
+             } else {
+                 fetchData(true);
+             }
         }
-    }, [lastMessage, fetchOrders, showNotification]);
+    }, [lastMessage, fetchOrders, fetchData, setOrders, showNotification]);
 
     const isMobile = window.innerWidth < 768;
     const isAdmin = useMemo(() => {
@@ -421,7 +436,7 @@ const AppContent: React.FC = () => {
         advancedSettings, setAdvancedSettings,
         selectedTeam, setSelectedTeam,
         selectedMovieId, setSelectedMovieId,
-        lastMessage
+        lastMessage, setOrders
     }), [
         currentUser, appData, orders, isOrdersLoading, isSyncing, login, logout, refreshData, refreshTimestamp,
         originalAdminUser, setUnreadCount, unreadCount, appState, setAppState, setOriginalAdminUser,
@@ -429,7 +444,7 @@ const AppContent: React.FC = () => {
         isSidebarCollapsed, setIsSidebarCollapsed, setIsChatOpen, isMobileMenuOpen, 
         setIsMobileMenuOpen, language, setLanguage, showNotification, mobilePageTitle, 
         setMobilePageTitle, advancedSettings, setAdvancedSettings, selectedTeam, setSelectedTeam,
-        selectedMovieId, setSelectedMovieId, lastMessage
+        selectedMovieId, setSelectedMovieId, lastMessage, setOrders
     ]);
 
     if (isGlobalLoading) return <div className="flex h-screen items-center justify-center bg-dark" style={{ backgroundColor: 'var(--bg-dark)' }}><Spinner size="lg" /></div>;
