@@ -2,6 +2,7 @@ package backend
 
 import (
 	"errors"
+	"log"
 	"net/http"
 	"strings"
 	"time"
@@ -143,19 +144,18 @@ func AuthMiddleware() gin.HandlerFunc {
 
 func AdminOnlyMiddleware() gin.HandlerFunc {
 	return func(c *gin.Context) {
-		isSystemAdmin, exists := c.Get("isSystemAdmin")
-		role, roleExists := c.Get("role")
-		isAdminBool, okAdmin := isSystemAdmin.(bool)
-		roleString, okRole := role.(string)
+		isSystemAdmin, _ := c.Get("isSystemAdmin")
+		role, _ := c.Get("role")
+		
+		isAdminBool, _ := isSystemAdmin.(bool)
+		roleString, _ := role.(string)
 
-		// Check IsSystemAdmin flag
-		if exists && okAdmin && isAdminBool {
+		if isAdminBool {
 			c.Next()
 			return
 		}
 
-		// Check if any comma-separated role is "Admin"
-		if roleExists && okRole && roleString != "" {
+		if roleString != "" {
 			for _, r := range strings.Split(roleString, ",") {
 				if strings.EqualFold(strings.TrimSpace(r), "Admin") {
 					c.Next()
@@ -164,74 +164,83 @@ func AdminOnlyMiddleware() gin.HandlerFunc {
 			}
 		}
 
-		c.JSON(http.StatusForbidden, gin.H{"status": "error", "message": "គ្មានសិទ្ធិអនុញ្ញាត (Forbidden)"})
+		c.JSON(http.StatusForbidden, gin.H{"status": "error", "message": "មុខងារនេះសម្រាប់តែ Admin ប៉ុណ្ណោះ"})
 		c.Abort()
 	}
 }
 
-func RequirePermission(feature string) gin.HandlerFunc {
-	return func(c *gin.Context) {
-		isSystemAdmin, _ := c.Get("isSystemAdmin")
-		role, _ := c.Get("role")
-		isAdminBool, okAdmin := isSystemAdmin.(bool)
-		roleString, okRole := role.(string)
+func RefreshToken(c *gin.Context) {
+	userName, _ := c.Get("userName")
+	team, _ := c.Get("team")
+	role, _ := c.Get("role")
+	isSystemAdmin, _ := c.Get("isSystemAdmin")
 
-		if okAdmin && isAdminBool {
-			c.Next()
-			return
-		}
-
-		if !okRole || roleString == "" {
-			c.JSON(http.StatusForbidden, gin.H{"status": "error", "message": "អ្នកមិនមានសិទ្ធិសម្រាប់មុខងារនេះទេ (" + feature + ")"})
-			c.Abort()
-			return
-		}
-
-		// Split comma-separated roles and check each individually
-		roles := strings.Split(roleString, ",")
-		for _, r := range roles {
-			r = strings.TrimSpace(r)
-			if strings.EqualFold(r, "Admin") {
-				c.Next()
-				return
-			}
-		}
-
-		// Query permission for each role until a match is found
-		featureLower := strings.ToLower(feature)
-		for _, r := range roles {
-			r = strings.TrimSpace(r)
-			var perm RolePermission
-			result := DB.Where("LOWER(role) = ? AND LOWER(feature) = ?", strings.ToLower(r), featureLower).First(&perm)
-			if result.Error == nil && perm.IsEnabled {
-				c.Next()
-				return
-			}
-		}
-
-		c.JSON(http.StatusForbidden, gin.H{"status": "error", "message": "អ្នកមិនមានសិទ្ធិសម្រាប់មុខងារនេះទេ (" + feature + ")"})
-		c.Abort()
+	user := User{
+		UserName:      userName.(string),
+		Team:          team.(string),
+		Role:          role.(string),
+		IsSystemAdmin: isSystemAdmin.(bool),
 	}
+
+	newToken, err := GenerateJWT(user)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"status": "error", "message": "Failed to refresh token"})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{
+		"status": "success",
+		"token":  newToken,
+	})
 }
 
-func HasPermissionInternal(role string, isSystemAdmin bool, feature string) bool {
+func checkPermission(role string, isSystemAdmin bool, feature string) bool {
 	if isSystemAdmin {
 		return true
 	}
 
 	roles := strings.Split(role, ",")
-	featureLower := strings.ToLower(feature)
+	featureLower := strings.ToLower(strings.TrimSpace(feature))
 
 	for _, r := range roles {
 		r = strings.TrimSpace(r)
 		if strings.EqualFold(r, "Admin") {
 			return true
 		}
+		
 		var perm RolePermission
-		result := DB.Where("LOWER(role) = ? AND LOWER(feature) = ?", strings.ToLower(r), featureLower).First(&perm)
-		if result.Error == nil && perm.IsEnabled {
+		// Using a more efficient check: case-insensitive match on role and feature
+		err := DB.Where("LOWER(TRIM(role)) = LOWER(TRIM(?)) AND LOWER(TRIM(feature)) = ? AND is_enabled = ?", r, featureLower, true).First(&perm).Error
+		if err == nil {
 			return true
 		}
 	}
 	return false
+}
+
+func RequirePermission(feature string) gin.HandlerFunc {
+	return func(c *gin.Context) {
+		userName, _ := c.Get("userName")
+		role, _ := c.Get("role")
+		isSystemAdmin, _ := c.Get("isSystemAdmin")
+
+		roleString, _ := role.(string)
+		isAdminBool, _ := isSystemAdmin.(bool)
+
+		if checkPermission(roleString, isAdminBool, feature) {
+			c.Next()
+			return
+		}
+
+		log.Printf("⛔ [Auth] Permission Denied: User=%v, Role=%v, Feature=%s", userName, role, feature)
+		c.JSON(http.StatusForbidden, gin.H{
+			"status":  "error",
+			"message": "អ្នកមិនមានសិទ្ធិសម្រាប់មុខងារនេះទេ (" + feature + ")",
+		})
+		c.Abort()
+	}
+}
+
+func HasPermissionInternal(role string, isSystemAdmin bool, feature string) bool {
+	return checkPermission(role, isSystemAdmin, feature)
 }
