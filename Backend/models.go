@@ -18,17 +18,17 @@ type User struct {
 }
 
 type Movie struct {
-	ID          string `gorm:"primaryKey;column:id" json:"ID"`
-	Title       string `gorm:"column:title" json:"Title"`
-	Description string `gorm:"column:description" json:"Description"`
-	Thumbnail   string `gorm:"column:thumbnail" json:"Thumbnail"`
-	VideoURL    string `gorm:"column:video_url" json:"VideoURL"`
-	Type        string `gorm:"column:type" json:"Type"`
-	Language    string `gorm:"column:language" json:"Language"`
-	Country     string `gorm:"column:country" json:"Country"`
-	Category    string `gorm:"column:category" json:"Category"`
-	SeriesKey   string `gorm:"column:series_key" json:"SeriesKey"`
-	AddedAt     string `gorm:"column:added_at" json:"AddedAt"`
+	ID          string    `gorm:"primaryKey;column:id" json:"ID"`
+	Title       string    `gorm:"column:title" json:"Title"`
+	Description string    `gorm:"column:description" json:"Description"`
+	Thumbnail   string    `gorm:"column:thumbnail" json:"Thumbnail"`
+	VideoURL    string    `gorm:"column:video_url" json:"VideoURL"`
+	Type        string    `gorm:"column:type" json:"Type"`
+	Language    string    `gorm:"column:language" json:"Language"`
+	Country     string    `gorm:"column:country" json:"Country"`
+	Category    string    `gorm:"column:category" json:"Category"`
+	SeriesKey   string    `gorm:"column:series_key" json:"SeriesKey"`
+	AddedAt     time.Time `gorm:"column:added_at" json:"AddedAt"`
 }
 
 type Store struct {
@@ -282,7 +282,64 @@ type IncentiveResult struct {
 	TotalProfit     float64 `gorm:"column:total_profit" json:"totalProfit"`
 	CalculatedValue float64 `gorm:"column:calculated_value" json:"calculatedValue"`
 	IsCustom        bool    `gorm:"column:is_custom" json:"isCustom"`
-	BreakdownJSON   string  `gorm:"type:text;breakdown_json" json:"breakdownJson"`
+	BreakdownJSON   string  `gorm:"type:text;column:breakdown_json" json:"breakdownJson"`
+}
+
+// Additional Structs for Incentive Logic (Defined in incentive_logic.go)
+type IncentiveRules struct {
+	Description         string           `json:"description"`
+	ApplyTo             []string         `json:"applyTo"`
+	MetricType          string           `json:"metricType"`
+	MetricUnit          string           `json:"metricUnit"`
+	CalculationPeriod   string           `json:"calculationPeriod"`
+	ResetEveryPeriod    bool             `json:"resetEveryPeriod"`
+	IsMarathon          bool             `json:"isMarathon"`
+	AchievementTiers    []IncentiveTier  `json:"achievementTiers"`
+	CommissionType      string           `json:"commissionType"`
+	CommissionMethod    string           `json:"commissionMethod"`
+	CommissionCondition string           `json:"commissionCondition"`
+	CommissionRate      float64          `json:"commissionRate"`
+	TargetAmount        float64          `json:"targetAmount"`
+	CommissionTiers     []CommissionTier `json:"commissionTiers"`
+	DistributionRule    DistributionRule `json:"distributionRule"`
+	MinSalesRequired    float64          `json:"minSalesRequired"`
+	MaxCommissionCap    float64          `json:"maxCommissionCap"`
+	RequireApproval     bool             `json:"requireApproval"`
+	ExcludeRefunded     bool             `json:"excludeRefunded"`
+	IncludeTax          bool             `json:"includeTax"`
+}
+
+type DistributionRule struct {
+	Method      string       `json:"method"`
+	Allocations []Allocation `json:"allocations"`
+}
+
+type Allocation struct {
+	MemberRoleOrName string  `json:"memberRoleOrName"`
+	Percentage       float64 `json:"percentage"`
+}
+
+type IncentiveTier struct {
+	ID           string  `json:"id"`
+	Name         string  `json:"name"`
+	Target       float64 `json:"target"`
+	RewardAmount float64 `json:"rewardAmount"`
+	RewardType   string  `json:"rewardType"`
+	SubPeriod    string  `json:"subPeriod"`
+}
+
+type CommissionTier struct {
+	From float64  `json:"from"`
+	To   *float64 `json:"to"`
+	Rate float64  `json:"rate"`
+}
+
+type PayoutResult struct {
+	CalculatorID   uint    `json:"calculatorId"`
+	CalculatorName string  `json:"name"`
+	MetricValue    float64 `json:"metricValue"`
+	Amount         float64 `json:"amount"`
+	Description    string  `json:"description"`
 }
 
 type IncentiveManualData struct {
