@@ -69,18 +69,19 @@ const FastPackTerminal: React.FC<FastPackTerminalProps> = ({ order, onClose, onS
         try {
             if (!order) return;
             setUploading(true);
-            setUploadProgress(10); // Start progress
+            setUploadProgress(5); 
 
             const session = await CacheService.get<{ token: string }>(CACHE_KEYS.SESSION);
             const token = session?.token || '';
             
+            const packTime = new Date().toLocaleString('km-KH');
             const newData = {
                 'Fulfillment Status': 'Ready to Ship',
                 'Packed By': currentUser?.FullName || 'Packer',
-                'Packed Time': new Date().toLocaleString('km-KH')
+                'Packed Time': packTime
             };
 
-            setUploadProgress(30);
+            setUploadProgress(20);
 
             let driveUrl = '';
             if (packagePhoto) {
@@ -96,7 +97,8 @@ const FastPackTerminal: React.FC<FastPackTerminalProps> = ({ order, onClose, onS
                     newData: newData
                 };
 
-                // Perform the upload with a direct fetch that we await
+                setUploadProgress(40);
+
                 const response = await fetch(`${WEB_APP_URL}/api/upload-image`, {
                     method: 'POST',
                     headers: {
@@ -114,9 +116,8 @@ const FastPackTerminal: React.FC<FastPackTerminalProps> = ({ order, onClose, onS
                 const result = await response.json();
                 if (result.status !== 'success') throw new Error(result.message || 'Upload failed');
                 driveUrl = result.url;
-                setUploadProgress(90);
+                setUploadProgress(85);
             } else {
-                // Fallback for no-photo case (though UI prevents this)
                 const statusResponse = await fetch(`${WEB_APP_URL}/api/admin/update-order`, {
                     method: 'POST',
                     headers: {
@@ -131,11 +132,10 @@ const FastPackTerminal: React.FC<FastPackTerminalProps> = ({ order, onClose, onS
                     })
                 });
                 if (!statusResponse.ok) throw new Error("Status update failed");
-                setUploadProgress(90);
+                setUploadProgress(85);
             }
 
-            // Apply optimistic update FIRST so the UI reflects the new status
-            // before onSuccess triggers tab switch and refreshData
+            // Apply optimistic update with EXACT same packTime
             setOrders(prev => prev.map(o =>
                 o['Order ID'] === order['Order ID']
                     ? {
@@ -143,7 +143,7 @@ const FastPackTerminal: React.FC<FastPackTerminalProps> = ({ order, onClose, onS
                         'Fulfillment Status': 'Ready to Ship',
                         FulfillmentStatus: 'Ready to Ship',
                         'Packed By': currentUser?.FullName || 'Packer',
-                        'Packed Time': new Date().toLocaleString('km-KH'),
+                        'Packed Time': packTime,
                         'Package Photo': driveUrl || o['Package Photo']
                       }
                     : o
@@ -151,10 +151,10 @@ const FastPackTerminal: React.FC<FastPackTerminalProps> = ({ order, onClose, onS
 
             setUploadProgress(100);
 
-            // Trigger success (closes terminal, switches tab, calls refreshData once)
+            // Trigger success
             onSuccess(driveUrl || packagePhoto || 'manual_sync_ok');
 
-            // Send Chat Notification in background
+            // Send Chat Notification with correct keys: Sender, Message, Type, Team
             const id = order['Order ID'].substring(0,8);
             const chatMsg = `📦 **[PACKED]** កញ្ចប់ #${id} (${order['Customer Name']}) វេចខ្ចប់រួចរាល់`;
             fetch(`${WEB_APP_URL}/api/chat/send`, {
@@ -163,7 +163,12 @@ const FastPackTerminal: React.FC<FastPackTerminalProps> = ({ order, onClose, onS
                     'Content-Type': 'application/json',
                     'Authorization': `Bearer ${token}`
                 },
-                body: JSON.stringify({ UserName: 'System', MessageType: 'Text', Content: chatMsg })
+                body: JSON.stringify({ 
+                    Sender: 'System', 
+                    Type: 'text', 
+                    Message: chatMsg, 
+                    Team: order.Team 
+                })
             }).catch(() => {});
 
         } catch (err: any) {

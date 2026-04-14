@@ -111,6 +111,7 @@ const AppContent: React.FC = () => {
         
         let ws: WebSocket | null = null;
         let reconnectTimeout: any = null;
+        let reconnectAttempts = 0;
         let isDisposed = false;
 
         const connect = async () => {
@@ -126,6 +127,11 @@ const AppContent: React.FC = () => {
             try {
                 ws = new WebSocket(`${protocol}://${host}/api/chat/ws?token=${encodeURIComponent(token)}`);
                 
+                ws.onopen = () => {
+                    console.log("🟢 [WS] Connected to System Hub");
+                    reconnectAttempts = 0; // Reset attempts on successful connection
+                };
+
                 ws.onmessage = (event) => {
                     if (isDisposed) return;
                     try {
@@ -136,28 +142,40 @@ const AppContent: React.FC = () => {
                     }
                 };
 
-                ws.onclose = () => {
+                ws.onclose = (event) => {
+                    console.log(`🔴 [WS] Disconnected (Code: ${event.code})`);
+                    ws = null;
                     if (!isDisposed) {
-                        reconnectTimeout = setTimeout(connect, 3000);
+                        scheduleReconnect();
                     }
                 };
 
-                ws.onerror = () => {
-                    ws?.close();
+                ws.onerror = (error) => {
+                    console.error("⚠️ [WS] Connection Error:", error);
+                    // Error will trigger onclose, which handles reconnect
                 };
             } catch (e) {
-                if (!isDisposed) {
-                    reconnectTimeout = setTimeout(connect, 3000);
-                }
+                console.error("❌ [WS] Failed to initialize:", e);
+                if (!isDisposed) scheduleReconnect();
             }
+        };
+
+        const scheduleReconnect = () => {
+            if (reconnectTimeout) clearTimeout(reconnectTimeout);
+            // Exponential backoff with a cap of 30 seconds
+            const delay = Math.min(1000 * Math.pow(1.5, reconnectAttempts), 30000);
+            reconnectAttempts++;
+            console.log(`⏳ [WS] Attempting reconnect ${reconnectAttempts} in ${Math.round(delay/1000)}s...`);
+            reconnectTimeout = setTimeout(connect, delay);
         };
 
         connect();
 
         return () => {
+            console.log("🛑 [WS] Cleaning up connection...");
             isDisposed = true;
             if (ws) {
-                ws.onclose = null;
+                ws.onclose = null; // Prevent reconnect loop
                 ws.close();
             }
             if (reconnectTimeout) clearTimeout(reconnectTimeout);

@@ -42,10 +42,13 @@ const ActionControls: React.FC<ActionControlsProps> = ({
                     <button 
                         onClick={() => setStep('LABELING')} 
                         disabled={!isOrderVerified} 
-                        className={`flex-1 sm:flex-none px-16 py-5 rounded-2xl font-bold text-base tracking-tight transition-all flex items-center justify-center gap-3 active:scale-95 ${!isOrderVerified ? 'bg-white/5 text-gray-600 border border-white/5 cursor-not-allowed opacity-50' : 'bg-[#FCD535] text-black hover:bg-[#FCD535]/90 shadow-xl shadow-[#FCD535]/20'}`}
+                        className={`flex-1 sm:flex-none px-16 py-5 rounded-2xl font-bold text-base tracking-tight transition-all flex flex-col items-center justify-center gap-1 active:scale-95 ${!isOrderVerified ? 'bg-white/5 text-gray-600 border border-white/5 cursor-not-allowed opacity-50' : 'bg-[#FCD535] text-black hover:bg-[#FCD535]/90 shadow-xl shadow-[#FCD535]/20'}`}
                     >
-                        Proceed to Label
-                        <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={3}><path strokeLinecap="round" strokeLinejoin="round" d="M9 5l7 7-7 7" /></svg>
+                        <div className="flex items-center gap-3">
+                            Proceed to Label
+                            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={3}><path strokeLinecap="round" strokeLinejoin="round" d="M9 5l7 7-7 7" /></svg>
+                        </div>
+                        <span className="text-[10px] opacity-70">បន្តទៅកាន់ការព្រីនឡាប៊ែល</span>
                     </button>
                 )}
 
@@ -53,10 +56,13 @@ const ActionControls: React.FC<ActionControlsProps> = ({
                     <button 
                         onClick={() => setStep('PHOTO')} 
                         disabled={!hasGeneratedLabel} 
-                        className={`flex-1 sm:flex-none px-16 py-5 rounded-2xl font-bold text-base tracking-tight transition-all flex items-center justify-center gap-3 active:scale-95 ${!hasGeneratedLabel ? 'bg-white/5 text-gray-600 border border-white/5 cursor-not-allowed opacity-50' : 'bg-[#FCD535] text-black hover:bg-[#FCD535]/90 shadow-xl shadow-[#FCD535]/20'}`}
+                        className={`flex-1 sm:flex-none px-16 py-5 rounded-2xl font-bold text-base tracking-tight transition-all flex flex-col items-center justify-center gap-1 active:scale-95 ${!hasGeneratedLabel ? 'bg-white/5 text-gray-600 border border-white/5 cursor-not-allowed opacity-50' : 'bg-[#FCD535] text-black hover:bg-[#FCD535]/90 shadow-xl shadow-[#FCD535]/20'}`}
                     >
-                        Initialize Camera
-                        <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2.5}><path strokeLinecap="round" strokeLinejoin="round" d="M3 9a2 2 0 012-2h.93a2 2 0 001.664-.89l.812-1.22A2 2 0 0110.07 4h3.86a2 2 0 011.664.89l.812 1.22A2 2 0 0018.07 7H19a2 2 0 012 2v9a2 2 0 01-2 2H5a2 2 0 01-2-2V9z" /><path strokeLinecap="round" strokeLinejoin="round" d="M15 13a3 3 0 11-6 0 3 3 0 016 0z" /></svg>
+                        <div className="flex items-center gap-3">
+                            Initialize Camera
+                            <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2.5}><path strokeLinecap="round" strokeLinejoin="round" d="M3 9a2 2 0 012-2h.93a2 2 0 001.664-.89l.812-1.22A2 2 0 0110.07 4h3.86a2 2 0 011.664.89l.812 1.22A2 2 0 0018.07 7H19a2 2 0 012 2v9a2 2 0 01-2 2H5a2 2 0 01-2-2V9z" /><path strokeLinecap="round" strokeLinejoin="round" d="M15 13a3 3 0 11-6 0 3 3 0 016 0z" /></svg>
+                        </div>
+                        <span className="text-[10px] opacity-70">បើកកាមេរ៉ាដើម្បីថតរូប</span>
                     </button>
                 )}
 
@@ -64,7 +70,7 @@ const ActionControls: React.FC<ActionControlsProps> = ({
                     <button 
                         onClick={handleSubmit} 
                         disabled={!packagePhoto || uploading} 
-                        className={`flex-1 sm:flex-none px-16 py-5 rounded-2xl font-bold text-base tracking-tight transition-all flex items-center justify-center gap-3 active:scale-95 ${!packagePhoto || uploading ? 'bg-white/5 text-gray-600 border border-white/5 cursor-not-allowed opacity-50' : 'bg-[#0ECB81] text-white hover:bg-[#0ECB81]/90 shadow-xl shadow-[#0ECB81]/20'}`}
+                        className={`flex-1 sm:flex-none px-16 py-5 rounded-2xl font-bold text-base tracking-tight transition-all flex flex-col items-center justify-center gap-1 active:scale-95 ${!packagePhoto || uploading ? 'bg-white/5 text-gray-600 border border-white/5 cursor-not-allowed opacity-50' : 'bg-[#0ECB81] text-white hover:bg-[#0ECB81]/90 shadow-xl shadow-[#0ECB81]/20'}`}
                     >
                         {uploading && undoTimer === null ? (
                             <div className="flex items-center gap-3">
@@ -73,8 +79,11 @@ const ActionControls: React.FC<ActionControlsProps> = ({
                             </div>
                         ) : (
                             <>
-                                Finalize Packing 
-                                <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={3}><path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" /></svg>
+                                <div className="flex items-center gap-3">
+                                    Finalize Packing 
+                                    <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={3}><path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" /></svg>
+                                </div>
+                                <span className="text-[10px] opacity-70">បញ្ចប់ការវេចខ្ចប់ និងរក្សាទុក</span>
                             </>
                         )}
                     </button>

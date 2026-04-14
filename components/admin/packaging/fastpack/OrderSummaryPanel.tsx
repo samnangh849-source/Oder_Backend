@@ -178,15 +178,25 @@ const OrderSummaryPanel: React.FC<OrderSummaryPanelProps> = ({
                         </div>
                         
                         <div className="flex items-center gap-4 mt-4 pt-3 border-t border-white/5">
-                            <div className="flex-grow h-3 bg-black/50 rounded-full overflow-hidden">
+                            <div className="flex-grow h-3 bg-black/50 rounded-full overflow-hidden relative">
                                 <div className={`h-full rounded-full transition-all duration-500 ${isComplete ? 'bg-[#0ECB81]' : 'bg-[#FCD535]'}`} style={{ width: `${p.quantity > 0 ? (verified / p.quantity) * 100 : 0}%` }}></div>
+                                {isComplete && (
+                                    <div className="absolute inset-0 bg-[#0ECB81]/20 animate-pulse"></div>
+                                )}
                             </div>
                             <div className="flex items-center gap-3">
-                                <span className="text-xs font-bold text-gray-400">{verified} / {p.quantity} <span className="text-[10px] opacity-60">Packed</span></span>
+                                {isComplete ? (
+                                    <div className="flex items-center gap-2 px-3 py-1 bg-[#0ECB81]/10 border border-[#0ECB81]/20 rounded-lg">
+                                        <svg className="w-4 h-4 text-[#0ECB81]" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={3}><path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" /></svg>
+                                        <span className="text-[10px] font-black text-[#0ECB81] uppercase">Complete</span>
+                                    </div>
+                                ) : (
+                                    <span className="text-xs font-bold text-gray-400">{verified} / {p.quantity} <span className="text-[10px] opacity-60 uppercase">Packed</span></span>
+                                )}
                                 {!isComplete && (
                                     <button 
                                         onClick={() => verifyItem(p.name)} 
-                                        className="h-10 px-6 bg-[#FCD535] hover:bg-[#FCD535]/90 text-black rounded-lg text-xs font-bold uppercase tracking-wider transition-all active:scale-95 shadow-md"
+                                        className="h-10 px-6 bg-[#FCD535] hover:bg-[#FCD535]/90 text-black rounded-lg text-xs font-bold uppercase tracking-wider transition-all active:scale-95 shadow-md flex items-center gap-2"
                                     >
                                         Pack Item
                                     </button>

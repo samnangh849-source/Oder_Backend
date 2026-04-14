@@ -35,20 +35,21 @@ func InitDB() {
 	}
 
 	// Smart DSN parsing and parameter injection
-	if _, err := url.Parse(rawDSN); err != nil {
-		// If it's not a full URL (e.g. host=localhost...), fallback to string manipulation
-		log.Printf("⚠️ DSN is not a URL format, using string manipulation: %v", err)
-	}
-
+	isURL := strings.HasPrefix(rawDSN, "postgres://") || strings.HasPrefix(rawDSN, "postgresql://")
 	dsn := rawDSN
+	
 	appendParam := func(d, key, val string) string {
-		if !strings.Contains(d, key+"=") {
+		if strings.Contains(d, key+"=") {
+			return d
+		}
+		if isURL {
 			if strings.Contains(d, "?") {
 				return d + "&" + key + "=" + val
 			}
 			return d + "?" + key + "=" + val
 		}
-		return d
+		// Key=Value format (fallback)
+		return d + " " + key + "=" + val
 	}
 
 	dsn = appendParam(dsn, "connect_timeout", "15")
@@ -68,12 +69,15 @@ func InitDB() {
 		} else {
 			log.Println("🔒 SSL CA Certificate configured (verify-full)")
 			dsn = appendParam(dsn, "sslrootcert", caPath)
-			// Force sslmode to verify-full for security if CA is provided
+			
+			// Replace any existing sslmode with verify-full for security when CA is provided
 			if strings.Contains(dsn, "sslmode=") {
-				// Replace existing sslmode
-				re := []string{"sslmode=disable", "sslmode=require", "sslmode=prefer", "sslmode=allow"}
-				for _, mode := range re {
-					dsn = strings.Replace(dsn, mode, "sslmode=verify-full", 1)
+				for _, mode := range []string{"disable", "require", "prefer", "allow", "verify-ca"} {
+					target := "sslmode=" + mode
+					if strings.Contains(dsn, target) {
+						dsn = strings.Replace(dsn, target, "sslmode=verify-full", 1)
+						break
+					}
 				}
 			} else {
 				dsn = appendParam(dsn, "sslmode", "verify-full")

@@ -46,62 +46,8 @@ const (
 	MetricOrderCount  = "Number of Orders"
 )
 
-type IncentiveRules struct {
-	Description         string           `json:"description"`
-	ApplyTo             []string         `json:"applyTo"`
-	MetricType          string           `json:"metricType"`
-	MetricUnit          string           `json:"metricUnit"`
-	CalculationPeriod   string           `json:"calculationPeriod"`
-	ResetEveryPeriod    bool             `json:"resetEveryPeriod"`
-	IsMarathon          bool             `json:"isMarathon"`
-	AchievementTiers    []IncentiveTier  `json:"achievementTiers"`
-	CommissionType      string           `json:"commissionType"`
-	CommissionMethod    string           `json:"commissionMethod"`
-	CommissionCondition string           `json:"commissionCondition"`
-	CommissionRate      float64          `json:"commissionRate"`
-	TargetAmount        float64          `json:"targetAmount"`
-	CommissionTiers     []CommissionTier `json:"commissionTiers"`
-	DistributionRule    DistributionRule `json:"distributionRule"`
-	MinSalesRequired    float64          `json:"minSalesRequired"`
-	MaxCommissionCap    float64          `json:"maxCommissionCap"`
-	RequireApproval     bool             `json:"requireApproval"`
-	ExcludeRefunded     bool             `json:"excludeRefunded"`
-	IncludeTax          bool             `json:"includeTax"`
-}
-
-type DistributionRule struct {
-	Method      string       `json:"method"`
-	Allocations []Allocation `json:"allocations"`
-}
-
-type Allocation struct {
-	MemberRoleOrName string  `json:"memberRoleOrName"`
-	Percentage       float64 `json:"percentage"`
-}
-
-type IncentiveTier struct {
-	ID           string  `json:"id"`
-	Name         string  `json:"name"`
-	Target       float64 `json:"target"`
-	RewardAmount float64 `json:"rewardAmount"`
-	RewardType   string  `json:"rewardType"`
-	SubPeriod    string  `json:"subPeriod"`
-}
-
-type CommissionTier struct {
-	From float64  `json:"from"`
-	To   *float64 `json:"to"`
-	Rate float64  `json:"rate"`
-}
-
 // PayoutResult represents the result of a single calculation breakdown
-type PayoutResult struct {
-	CalculatorID   uint    `json:"calculatorId"`
-	CalculatorName string  `json:"name"`
-	MetricValue    float64 `json:"metricValue"`
-	Amount         float64 `json:"amount"`
-	Description    string  `json:"description"`
-}
+// (Moved to models.go)
 
 func ParseManualDataKey(dataKey string) (string, string, bool) {
 	parts := strings.SplitN(strings.TrimSpace(dataKey), "_", 2)

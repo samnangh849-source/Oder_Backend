@@ -56,7 +56,17 @@ function doPost(e) {
 
   try {
     if (!e.postData || !e.postData.contents) return createJsonResponse({ status: 'error', message: 'មិនមានទិន្នន័យបញ្ជូនមកទេ' }, 400);
-    const contents = JSON.parse(e.postData.contents);
+    
+    let contents;
+    try {
+      contents = JSON.parse(e.postData.contents);
+    } catch (parseErr) {
+      return createJsonResponse({ status: 'error', message: 'JSON Invalid: ' + parseErr.message }, 400);
+    }
+
+    if (!contents || typeof contents !== 'object') {
+      return createJsonResponse({ status: 'error', message: 'Payload ត្រូវតែជា JSON Object' }, 400);
+    }
 
     if (contents.secret !== SCRIPT_SECRET_KEY) return createJsonResponse({ status: 'error', message: 'គ្មានសិទ្ធិអនុញ្ញាតទេ' }, 401);
 
@@ -655,9 +665,16 @@ function updateOrderInSheets(orderId, team, updatedFields) {
 
 function appendRowMapped(sheet, data) {
   const headers = sheet.getRange(1, 1, 1, sheet.getLastColumn()).getValues()[0];
+  
+  // Pre-normalize data keys to ensure they match normalized headers
+  const normalizedData = {};
+  for (let k in data) {
+    normalizedData[normalizeKey(k)] = data[k];
+  }
+  
   const row = headers.map(h => {
     const key = normalizeKey(h);
-    return data[key] !== undefined ? data[key] : "";
+    return normalizedData[key] !== undefined ? normalizedData[key] : "";
   });
   sheet.appendRow(row);
 }
