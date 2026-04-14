@@ -1207,7 +1207,7 @@ function deleteOrderTelegramMessages(data) {
 function updateOrderTelegram(data, lock) {
   try {
     const orderId = data.orderId || data.OrderID;
-    const team = data.team || data.Team;
+    let team = data.team || data.Team;
     const updatedFields = data.updatedFields || data.newData || {};
 
     if (!orderId) {
@@ -1217,15 +1217,20 @@ function updateOrderTelegram(data, lock) {
 
     // Phase 1: Sheet update (must happen under the script lock to prevent row corruption)
     if (Object.keys(updatedFields).length > 0) {
+      // If team is missing from request, try to find it from the main sheet first
+      if (!team) {
+        const tempOrder = fetchOrderDataFromSheet(orderId, "");
+        if (tempOrder) team = tempOrder["Team"];
+      }
+      
       updateOrderInSheets(orderId, team, updatedFields);
-      console.log("✅ updateOrderTelegram: Sheets updated for ID: " + orderId);
+      console.log("✅ updateOrderTelegram: Sheets updated for ID: " + orderId + " (Team: " + team + ")");
     }
 
     // Fetch full order data while still under lock (fast — uses TextFinder)
     const fullOrderData = fetchOrderDataFromSheet(orderId, team);
 
     // Phase 2: Release lock BEFORE slow Telegram API calls.
-    // This unblocks other packers from writing their Sheet rows in parallel.
     if (lock) {
       try { lock.releaseLock(); } catch (_) {}
     }
@@ -1235,10 +1240,8 @@ function updateOrderTelegram(data, lock) {
       return { id1: null, id2: null, id3: null };
     }
 
-    // ✅ SMART MERGE: updatedFields (fresh from backend) strictly overwrite Sheet data,
-    // matching headers case-insensitively to handle minor naming differences.
+    // ✅ SMART MERGE
     const normalizedData = {};
-
     for (let key in fullOrderData) {
       normalizedData[key] = fullOrderData[key];
     }
@@ -1260,9 +1263,9 @@ function updateOrderTelegram(data, lock) {
     }
 
     normalizedData.orderId = orderId;
-    normalizedData.team = team;
+    normalizedData.team = team || normalizedData["Team"];
     normalizedData.fulfillmentStore = normalizedData["Fulfillment Store"] || updatedFields["Fulfillment Store"];
-    normalizedData.forceSync = updatedFields["Force Sync"] === true;
+    normalizedData.forceSync = updatedFields["Force Sync"] === true || data.forceSync === true;
 
     return sendOrderToTelegram(normalizedData);
   } catch (e) {

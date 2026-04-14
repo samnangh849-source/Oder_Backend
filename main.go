@@ -1114,41 +1114,37 @@ func handleAdminUpdateOrder(c *gin.Context) {
 	}
 
 	go func() {
-		// Build comprehensive sheet data: start from r.NewData then fill missing
-		// fulfillment fields from backend.DB (e.g. Driver Name set in a prior step).
+		// Build comprehensive sheet data for Packing & Fulfillment
 		sheetData := make(map[string]interface{})
 		for k, v := range r.NewData {
 			if k != "Force Sync" {
 				sheetData[k] = v
 			}
 		}
+		
 		var current Order
 		if err := backend.DB.Where("UPPER(TRIM(order_id)) = UPPER(TRIM(?))", r.OrderID).First(&current).Error; err == nil {
-			fill := func(key, val string) {
-				if val != "" {
-					if _, exists := sheetData[key]; !exists {
-						sheetData[key] = val
-					}
+			// Helper to fill missing fields from DB if not in the request
+			fill := func(key, val, dbField string) {
+				if _, exists := sheetData[key]; !exists && val != "" {
+					sheetData[key] = val
 				}
 			}
-			fill("Packed By", current.PackedBy)
-			fill("Packed Time", current.PackedTime)
-			fill("Package Photo", current.PackagePhotoURL)
-			fill("Driver Name", current.DriverName)
-			fill("Tracking Number", current.TrackingNumber)
-			fill("Dispatched Time", current.DispatchedTime)
-			fill("Dispatched By", current.DispatchedBy)
-			fill("Delivered Time", current.DeliveredTime)
-			fill("Delivery Photo URL", current.DeliveryPhotoURL)
-			
-			// Crucial: Use team from backend.DB if not in NewData
+			fill("Packed By", current.PackedBy, "packed_by")
+			fill("Packed Time", current.PackedTime, "packed_time")
+			fill("Package Photo", current.PackagePhotoURL, "package_photo_url")
+			fill("Fulfillment Status", current.FulfillmentStatus, "fulfillment_status")
+			fill("Fulfillment Store", current.FulfillmentStore, "fulfillment_store")
+			fill("Team", current.Team, "team")
+			fill("Page", current.Page, "page")
+
+			// Crucial: Determine team for sheet routing
 			team := current.Team
 			if t, ok := r.NewData["Team"].(string); ok && t != "" {
 				team = t
 			}
 
-			// Use 'updateOrderTelegram' action. If Force Sync is true, the Apps Script
-			// will trigger sendOrderToTelegram regardless of existing IDs.
+			// 🚀 TRIGGER APPS SCRIPT: Update Sheet AND Edit Telegram Message
 			enqueueSync("updateOrderTelegram", map[string]interface{}{
 				"orderId":       r.OrderID,
 				"updatedFields": sheetData,

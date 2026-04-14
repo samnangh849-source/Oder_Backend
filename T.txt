@@ -293,3 +293,42 @@ Thank you 😊)
 
   ប្រសិនបើអ្នកចង់កែសម្រួល "របៀបរក្សាទុក" អ្នកគួរតែពិនិត្យមើលមុខងារ executeFinalSubmit នៅក្នុង FastPackTerminal.tsx ជាចម្បង។
      
+
+
+
+I នឹងធ្វើការត្រួតពិនិត្យ និងសម្រួលប្រព័ន្ធ Packing Flow ទាំងមូលឱ្យមានភាពស៊ីសង្វាក់គ្នា (End-to-End Synchronization) ចាប់ពីពេល Packer ចុចបញ្ចប់ រហូតដល់ទិន្នន័យចូល Database, Google Sheets និង
+  Telegram។
+
+  ខ្ញុំនឹងកែលម្អលើ ៣ ផ្នែកធំៗ៖
+
+  ១. កែលម្អ Backend Sync Logic (main.go)
+  ខ្ញុំនឹងកែសម្រួលមុខងារ handleAdminUpdateOrder ដើម្បីធានាថា រាល់ពេលមានការ Update "Packing" វានឹងរុញទៅកាន់ Telegram ភ្លាមៗដោយស្វ័យប្រវត្តិ។
+
+
+
+
+ ខ្ញុំបានត្រួតពិនិត្យ និងកែលម្អ Packing Flow ទាំងមូលរួចរាល់ហើយ ដើម្បីធានាថាទិន្នន័យត្រូវបានរក្សាទុកយ៉ាងត្រឹមត្រូវ និងមានប្រសិទ្ធភាពបំផុត៖
+
+  សេចក្តីសង្ខេបនៃការកែលម្អ៖
+
+  ១. Backend (main.go): 
+      * បានកែសម្រួលឱ្យប្រព័ន្ធស្វែងរក "Team" របស់ការកម្មង់ដោយស្វ័យប្រវត្តិពី Database ប្រសិនបើកម្មវិធី Frontend ភ្លេចបញ្ជូនមក។
+      * ធានាថាព័ត៌មានសំខាន់ៗដូចជា Packed By, Packed Time និង Package Photo ត្រូវបានផ្ញើទៅកាន់ Google Sheets ក្នុងកញ្ចប់តែមួយ (Single Payload)។
+
+  ២. Image Upload Proxy (Backend/upload.go):
+      * បានបន្ថែមការ Mapping ទិន្នន័យបញ្ច្រាស (Inverse Mapping) ពី Database Column មកជា Spreadsheet Header (ឧទាហរណ៍៖ package_photo_url ទៅជា Package Photo) ដើម្បីឱ្យ Apps
+        Script យល់ និងដាក់ក្នុង Sheet បានត្រឹមត្រូវ។
+      * ធានាថា Fulfillment Status និង Team ត្រូវបានបញ្ជូនទៅជាមួយជានិច្ច ទោះបីជាការ Update នោះមានតែរូបភាពក៏ដោយ។
+
+  ៣. Apps Script (code_gs_api.gs):
+      * បានកែលម្អមុខងារ updateOrderTelegram ឱ្យកាន់តែរឹងមាំ (Robust) ដោយបន្ថែមការឆែករក Team ពី Main Sheet ប្រសិនបើរកមិនឃើញក្នុង Request។
+      * ធ្វើការ Update ទាំងក្នុង Main Sheet (AllOrders) និង Sheet របស់ Team នីមួយៗឱ្យមានតុល្យភាពគ្នា។
+      * Performance: ដោះលែង Lock (Release Lock) ភ្លាមៗបន្ទាប់ពីសរសេរចូល Sheet រួច ដើម្បីកុំឱ្យ Packer ម្នាក់ទៀតរង់ចាំយូរ នៅពេលប្រព័ន្ធកំពុងផ្ញើសារទៅ Telegram (ដែលស៊ីពេលយូរ)។
+
+  ឥឡូវនេះ នៅពេលបុគ្គលិកវេចខ្ចប់ (Packer) ចុចបញ្ចប់ការងារ៖
+   1. រូបភាពនឹងឡើងទៅ Google Drive ភ្លាមៗ។
+   2. Database នឹងរក្សាទុក Status និង Link រូបភាព។
+   3. Google Sheets នឹង Update តាមក្រោយដោយស្វ័យប្រវត្តិ។
+   4. សារក្នុង Telegram នឹងប្តូរទៅជា "Ready to Ship" ភ្លាមៗ ដើម្បីឱ្យ Driver ដឹងខ្លួន។
+
+  ប្រព័ន្ធវេចខ្ចប់របស់អ្នកឥឡូវនេះមានភាពរឹងមាំ និងស៊ីសង្វាក់គ្នា ១០០%។

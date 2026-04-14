@@ -193,14 +193,22 @@ const AppContent: React.FC = () => {
         } else if (lastMessage.type === 'update_order') {
             const { orderId, newData } = lastMessage;
             if (orderId && newData) {
-                // Manually update the local orders state for immediate UI feedback without a full fetch
+                // Prepare normalized data for local state
+                const normalizedUpdate = { ...newData };
+                if (newData['Fulfillment Status'] && !newData['FulfillmentStatus']) {
+                    normalizedUpdate['FulfillmentStatus'] = newData['Fulfillment Status'];
+                }
+                if (newData['FulfillmentStatus'] && !newData['Fulfillment Status']) {
+                    normalizedUpdate['Fulfillment Status'] = newData['FulfillmentStatus'];
+                }
+
                 setOrders(prev => {
                     const exists = prev.some(o => o['Order ID'] === orderId);
                     if (!exists) {
-                        fetchOrders(true); // If we don't have it, fetch full list
+                        fetchOrders(true); 
                         return prev;
                     }
-                    return prev.map(o => o['Order ID'] === orderId ? { ...o, ...newData } : o);
+                    return prev.map(o => o['Order ID'] === orderId ? { ...o, ...normalizedUpdate } : o);
                 });
             }
         } else if (lastMessage.type === 'delete_order') {
