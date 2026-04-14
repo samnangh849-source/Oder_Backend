@@ -303,23 +303,18 @@ func HandleImageUploadProxy(c *gin.Context) {
 			// Sync to Google Sheets & Telegram
 			go func(orderId string, bMap map[string]interface{}) {
 				var order Order
-				// Use the same robust matching in the background sync to ensure the order is found
 				if err := DB.Where("UPPER(TRIM(order_id)) = UPPER(TRIM(?))", orderId).First(&order).Error; err == nil {
-					// Prepare data for Sheet sync
 					sheetData := make(map[string]interface{})
 					
 					// IMPORTANT: Map database column names back to Spreadsheet Header names
-					// apps script needs "Package Photo", not "package_photo_url"
 					for k, v := range bMap {
-						headerName := k // Default to original key
-						
-						// Inverse mapping: DB Column -> Spreadsheet Header
+						headerName := k 
 						switch k {
-						case "package_photo_url":
+						case "package_photo_url", "Package Photo URL":
 							headerName = "Package Photo"
-						case "delivery_photo_url":
+						case "delivery_photo_url", "Delivery Photo URL":
 							headerName = "Delivery Photo URL"
-						case "fulfillment_status":
+						case "fulfillment_status", "FulfillmentStatus":
 							headerName = "Fulfillment Status"
 						case "packed_by":
 							headerName = "Packed By"
@@ -339,12 +334,12 @@ func HandleImageUploadProxy(c *gin.Context) {
 						sheetData[headerName] = v
 					}
 					
-					// Ensure we have current photo URLs from DB if they weren't in the update map
-					if sheetData["Package Photo"] == nil && order.PackagePhotoURL != "" {
-						sheetData["Package Photo"] = order.PackagePhotoURL
+					// Fill in required context for Apps Script
+					if sheetData["Fulfillment Status"] == nil {
+						sheetData["Fulfillment Status"] = order.FulfillmentStatus
 					}
-					if sheetData["Delivery Photo URL"] == nil && order.DeliveryPhotoURL != "" {
-						sheetData["Delivery Photo URL"] = order.DeliveryPhotoURL
+					if sheetData["Team"] == nil {
+						sheetData["Team"] = order.Team
 					}
 
 					// 1.3 Full Update including Sheet Sync & Telegram Notification
