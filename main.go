@@ -123,6 +123,7 @@ func mapToDBColumn(key string) string {
 		"Delivery Unpaid":           "delivery_unpaid",
 		"Delivery Paid":             "delivery_paid",
 		"Package Photo":             "package_photo_url",
+		"Delivery Photo URL":        "delivery_photo_url",
 		"Delivery Photo":            "delivery_photo_url",
 		"Driver Name":               "driver_name",
 		"Tracking Number":           "tracking_number",
@@ -1514,20 +1515,18 @@ func handleSendChatMessage(c *gin.Context) {
 		return
 	}
 	if sender, exists := c.Get("userName"); exists {
-		msg.UserName = sender.(string)
+		msg.Sender = sender.(string)
 	}
 	msg.Timestamp = time.Now().Format(time.RFC3339)
 
-	msgType := strings.ToLower(msg.MessageType)
+	msgType := strings.ToLower(msg.Type)
 
 	var base64Data string
-	if msgType == "audio" && msg.AudioData != "" {
-		base64Data = msg.AudioData
-	} else if msgType == "image" {
-		base64Data = msg.Content
+	if msgType == "audio" || msgType == "image" {
+		base64Data = msg.Message
 	}
 
-	if (msgType == "audio" || msgType == "image") && msg.FileID == "" && len(base64Data) > 100 {
+	if (msgType == "audio" || msgType == "image") && msg.FileURL == "" && len(base64Data) > 100 {
 		mimeType := "application/octet-stream"
 		if strings.Contains(base64Data, "data:") && strings.Contains(base64Data, ";base64,") {
 			parts := strings.Split(base64Data, ";base64,")
@@ -1543,9 +1542,9 @@ func handleSendChatMessage(c *gin.Context) {
 			return
 		}
 
-		msg.FileID = fileId
-		if strings.ToLower(msg.MessageType) == "image" {
-			msg.Content = driveURL
+		msg.FileURL = fileId
+		if msgType == "image" {
+			msg.Message = driveURL
 		}
 
 		backend.DB.Create(&msg)
@@ -1580,7 +1579,7 @@ func handleDeleteChatMessage(c *gin.Context) {
 
 	currentUser, _ := c.Get("userName")
 	isSystemAdmin, _ := c.Get("isSystemAdmin")
-	if msg.UserName != currentUser.(string) && (isSystemAdmin == nil || !isSystemAdmin.(bool)) {
+	if msg.Sender != currentUser.(string) && (isSystemAdmin == nil || !isSystemAdmin.(bool)) {
 		c.JSON(http.StatusForbidden, gin.H{"status": "error", "message": "គ្មានសិទ្ធិលុបសារនេះទេ"})
 		return
 	}
