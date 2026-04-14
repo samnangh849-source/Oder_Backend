@@ -162,7 +162,11 @@ export const useBarcodeScanner = (
                 trackRef.current = null;
                 videoRef.current = null;
             } catch (e) {
-                console.error("Error stopping scanner:", e);
+                // "already under transition" is a benign race from the html5-qrcode library;
+                // suppress it so it doesn't pollute the console.
+                if (!String(e).includes('already under transition')) {
+                    console.error("Error stopping scanner:", e);
+                }
             } finally {
                 isTransitioning.current = false;
             }

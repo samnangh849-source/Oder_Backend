@@ -204,7 +204,7 @@ ${dateStr}
         const mapMatch = note.match(/https?:\/\/(www\.)?(google\.com\/maps|maps\.app\.goo\.gl)\/[^\s]+/);
         if (mapMatch) queryParams.set('map', mapMatch[0]);
         queryParams.set('view', 'print_label');
-        printViaIframe(`${window.location.origin}${window.location.pathname}?${queryParams.toString()}`);
+        printViaIframe(`${window.location.origin}${import.meta.env.BASE_URL}?${queryParams.toString()}`);
     };
 
     const [viewType, setViewType] = useState<'mobile' | 'tablet' | 'desktop'>('desktop');

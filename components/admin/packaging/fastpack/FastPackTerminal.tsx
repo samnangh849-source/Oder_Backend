@@ -133,22 +133,25 @@ const FastPackTerminal: React.FC<FastPackTerminalProps> = ({ order, onClose, onS
                 setUploadProgress(90);
             }
 
-            // Update local state and trigger success
-            onSuccess(driveUrl || packagePhoto || 'manual_sync_ok');
-            setOrders(prev => prev.map(o => 
-                o['Order ID'] === order['Order ID'] 
-                    ? { 
-                        ...o, 
+            // Apply optimistic update FIRST so the UI reflects the new status
+            // before onSuccess triggers tab switch and refreshData
+            setOrders(prev => prev.map(o =>
+                o['Order ID'] === order['Order ID']
+                    ? {
+                        ...o,
                         'Fulfillment Status': 'Ready to Ship',
                         FulfillmentStatus: 'Ready to Ship',
                         'Packed By': currentUser?.FullName || 'Packer',
                         'Packed Time': new Date().toLocaleString('km-KH'),
                         'Package Photo': driveUrl || o['Package Photo']
-                      } 
+                      }
                     : o
             ));
 
             setUploadProgress(100);
+
+            // Trigger success (closes terminal, switches tab, calls refreshData once)
+            onSuccess(driveUrl || packagePhoto || 'manual_sync_ok');
 
             // Send Chat Notification in background
             const id = order['Order ID'].substring(0,8);
@@ -161,9 +164,6 @@ const FastPackTerminal: React.FC<FastPackTerminalProps> = ({ order, onClose, onS
                 },
                 body: JSON.stringify({ UserName: 'System', MessageType: 'Text', Content: chatMsg })
             }).catch(() => {});
-
-            // Refresh data globally after a short delay
-            setTimeout(() => refreshData(), 500);
 
         } catch (err: any) {
             console.error("Critical submission error:", err);
@@ -234,10 +234,11 @@ const FastPackTerminal: React.FC<FastPackTerminalProps> = ({ order, onClose, onS
     }, []);
 
     const verifyItem = (name: string) => {
+        if (!name) return; // Guard against products with missing name (legacy data)
         setVerifiedItems(prev => {
             const product = order?.Products.find(p => p.name === name);
             const current = prev[name] || 0;
-            const max = product?.quantity || 0;
+            const max = Number(product?.quantity) || 1;
             if (current >= max) return prev;
             return { ...prev, [name]: current + 1 };
         });
@@ -386,8 +387,8 @@ const FastPackTerminal: React.FC<FastPackTerminalProps> = ({ order, onClose, onS
         }
     }, [order, currentUser, isCapturing]);
 
-    const { 
-        isScannerLoading, scannerError, switchCamera, toggleTorch, isTorchOn, isTorchSupported, handleZoomChange, stopScanner
+    const {
+        isInitializing: isScannerLoading, error: scannerError, switchCamera, toggleTorch, isTorchOn, isTorchSupported, handleZoomChange, stopScanner
     } = useBarcodeScanner('fastpack-scanner-container', (decoded) => {
         if (step !== 'PHOTO' || packagePhoto || autoCaptureCountdown !== null || isCapturing) return;
         if (decoded === lastDetectedQR.current) return;
@@ -437,8 +438,9 @@ const FastPackTerminal: React.FC<FastPackTerminalProps> = ({ order, onClose, onS
 
     const qrValue = `${window.location.origin}${window.location.pathname}?view=order_metadata&id=${encodeURIComponent(order['Order ID'])}`;
     
-    // Robust URL construction for the printer page
-    const baseUrl = `${window.location.origin}${window.location.pathname}`;
+    // Use import.meta.env.BASE_URL (always '/Order_System/') so the URL is correct
+    // even if window.location.pathname is temporarily wrong (e.g. assets/ sub-path).
+    const baseUrl = `${window.location.origin}${import.meta.env.BASE_URL}`;
     const fullPrinterURL = `${baseUrl}?view=print_label&id=${encodeURIComponent(order['Order ID'])}&name=${encodeURIComponent(order['Customer Name'])}&phone=${encodeURIComponent(order['Customer Phone'])}&location=${encodeURIComponent(order.Location)}&address=${encodeURIComponent(order['Address Details'] || '')}&total=${order['Grand Total']}&store=${encodeURIComponent(order['Fulfillment Store'] || '')}&page=${encodeURIComponent(order.Page || '')}&user=${encodeURIComponent(order.User || '')}&shipping=${encodeURIComponent(order['Internal Shipping Method'] || '')}&payment=${encodeURIComponent(order['Payment Status'] || '')}&note=${encodeURIComponent(order.Note || '')}&autoPrint=true`;
 
     return (

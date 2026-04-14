@@ -151,7 +151,13 @@ self.addEventListener('fetch', (event) => {
         if (response) {
           return response;
         }
-        return fetch(event.request);
+        return fetch(event.request).catch(() => {
+          // SPA fallback: if a navigation request fails (e.g. assets/?view=... 404),
+          // serve the cached index.html so the app can handle the route itself.
+          if (event.request.mode === 'navigate') {
+            return caches.match('./index.html');
+          }
+        });
       })
   );
 });

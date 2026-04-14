@@ -136,3 +136,60 @@ Colunm (Fulfillment Status) នៅតែឃើញDataជា (Pending)
 
 
 please check @AppScript/
+
+នៅក្នុងឯកសារ services/geminiService.ts កូដប្រើប្រាស់ Gemini API តាមរយៈ VITE_GEMINI_API_KEY ដែលទាញចេញពី environment variables (ដូចជាក្នុងឯកសារ .env)។
+
+  មុខងារសំខាន់ៗដែលមានក្នុងនោះរួមមាន៖
+   * summarizeText: សម្រាប់សង្ខេបអត្ថបទចំណាំ (notes) របស់ការកុម្ម៉ង់។
+   * generateProductDescription: សម្រាប់បង្កើតការពិពណ៌នាផលិតផលជាភាសាខ្មែរ។
+   * analyzeReportData: សម្រាប់វិភាគទិន្នន័យលក់ និងផ្ដល់អនុសាសន៍ជាភាសាខ្មែរ។
+   * generateSalesForecast: សម្រាប់ព្យាករណ៍ការលក់នាពេលអនាគតជាភាសាខ្មែរ។
+
+  តើអ្នកចង់ឱ្យខ្ញុំជួយស្វែងរកឯកសារ .env ដើម្បីមើលថាវាត្រូវបានកំណត់យ៉ាងដូចម្តេច ឬចង់ឱ្យខ្ញុំកែប្រែអ្វីនៅក្នុង Service នេះទេ?
+
+
+
+
+
+
+សូមត្រួតពិនិត្យ File Sheet ដែលខ្ញុំផ្ដល់អោយ ដែលមានជួរឈរដូចជា:(Date	Client Name	Contact	Branch	Service Name	 Team 	 Amount 	Client	Booking	Came	Package	Closed Deal	Remark)
++គោលបំណង:
+ខ្ញុំបានការផ្ញើរសារ Report ជាទម្រង់ដូចខាងក្រោមទៅកាន់ Group Telegram ដោយ Telegram_Bot:
+
+//ក្បាល: (បញ្ជូនតែម្ដង)
+Dear Management
+💻 Marketing Sale Report
+🗓️ Date (X/X/X)
+
+//កណ្ដាល(បញ្ជូនអាស្រ័យលើចំនួន Page)
+🌐 Page: X
+» Number of Chat: X
+» Online Booking: X
+» Visit: X
+» Close Deal: X
+» Package : X
+» Total Sale Amount: X
+
+♻️ Summary Conversion rate % 
+» Online Booking: X%
+» Visit: X%
+» Close Deal: X%
+» Package: X%
+» Total Sale Amount: X%
+
+//ចុង(បញ្ជូនតែម្ដង)
+Thank you 😊)
+
++ព័ត៌មានបន្ថែម:
+ - សម្រាប់ការផ្ញើរសារ Report គឺជា Report ប្រចាំថ្ងៃ នៃថ្ងៃបច្ចុប្បន្ន 
+ - ផ្ញើរដោយស្វ័យប្រវត្ដិក្នុងមួយថ្ងៃរៀងរាល់ម៉ោងដែលបានកំណត់
+ - ឈ្មោះ របស់Pageគឺជាឈ្មោះSheet
+ - Page មួយគឺមាន Sheet មួយដាច់ដោយឡែក តែ Report របស់ Page ដែលត្រូវSend គឺលុះត្រាតែ បានកំណត់ក្នុង Code នៃ App Script
+ - Page ផ្សេងគ្នាគឺបញ្ជូនសារផ្សេងៗគ្នា(សារផ្នែក កណ្ដាល) គ្រាន់តែបន្តបន្ទាប់គ្នា 
+ - (X) គឹខ្ញុំតំណាងអោយទិន្នន័យជាក់ស្ដែង
+ - Summary Conversion rate % 
+   +Online Booking: ធៀបនឹង Number of Chat
+   +Visit: ធៀបនឹង Number of Chat
+   +Close Deal: ធៀបនឹង Number of Chat
+   +Package: ធៀបនឹង Closed Deals
+   +Total Sale Amount: ធៀបនឹង Target(សម្រាប់ Target របស់ Page នីមួយៗ គឺខុសៗគ្នា)

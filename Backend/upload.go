@@ -20,6 +20,8 @@ import (
 	"time"
 
 	"github.com/gin-gonic/gin"
+	"gorm.io/gorm"
+	"gorm.io/gorm/clause"
 )
 
 // ── Injectable Dependencies ───────────────────────────────────────────────
@@ -169,55 +171,6 @@ func HandleImageUploadProxy(c *gin.Context) {
 		return
 	}
 
-	// ── Validate state machine transitions for orders ─────────────────────
-	if req.OrderID != "" && req.NewData != nil {
-		if newStatusRaw, hasStatus := req.NewData["Fulfillment Status"]; hasStatus {
-			newStatus := strings.TrimSpace(fmt.Sprintf("%v", newStatusRaw))
-
-			var currentOrder Order
-			// Using robust matching (UPPER/TRIM) to avoid 404s due to case or space mismatches
-			if err := DB.Where("UPPER(TRIM(order_id)) = UPPER(TRIM(?))", req.OrderID).Select("fulfillment_status").First(&currentOrder).Error; err != nil {
-				log.Printf("⚠️ [Upload] Cannot find order %s for validation: %v", req.OrderID, err)
-				c.JSON(404, gin.H{"status": "error", "message": "រកមិនឃើញការកម្មង់ " + req.OrderID})
-				return
-			}
-
-			currentStatus := strings.TrimSpace(currentOrder.FulfillmentStatus)
-			if currentStatus == "" {
-				currentStatus = "Pending"
-			}
-
-			validTransitions := map[string][]string{
-				"Scheduled":     {"Pending", "Cancelled"},
-				"Pending":       {"Processing", "Ready to Ship", "Cancelled"},
-				"Processing":    {"Ready to Ship", "Pending", "Cancelled"},
-				"Ready to Ship": {"Shipped", "Pending", "Cancelled"},
-				"Shipped":       {"Delivered", "Ready to Ship", "Cancelled"},
-				"Delivered":     {},
-				"Cancelled":     {"Pending", "Scheduled"},
-			}
-
-			allowed, ok := validTransitions[currentStatus]
-			if ok {
-				// Allow same-status transitions (e.g. re-packing an already "Ready to Ship" order)
-				transitionValid := (newStatus == currentStatus)
-				if !transitionValid {
-					for _, s := range allowed {
-						if s == newStatus {
-							transitionValid = true
-							break
-						}
-					}
-				}
-				if !transitionValid {
-					log.Printf("⛔ [Upload] Invalid transition: %s → %s for order %s", currentStatus, newStatus, req.OrderID)
-					c.JSON(400, gin.H{"status": "error", "message": fmt.Sprintf("មិនអាចផ្លាស់ប្តូរពី '%s' ទៅ '%s' បានទេ", currentStatus, newStatus)})
-					return
-				}
-			}
-		}
-	}
-
 	// ── Upload to Google Drive synchronously ──────────────────────────────
 	log.Printf("📤 [Upload] Uploading to Drive synchronously for file=%q", req.FileName)
 	driveURL, fileID, err := UploadToGoogleDriveDirectly(data, req.FileName, req.MimeType, &req)
@@ -262,22 +215,89 @@ func HandleImageUploadProxy(c *gin.Context) {
 
 		if len(dbUpdateMap) > 0 {
 			log.Printf("🛠️ [Upload] Applying DB Update for %s: %v", req.OrderID, dbUpdateMap)
-			// Update Database with robust matching
-			res := DB.Table("orders").Where("UPPER(TRIM(order_id)) = UPPER(TRIM(?))", req.OrderID).Updates(dbUpdateMap)
-			
-			if res.Error != nil {
-				log.Printf("❌ [Upload] DB update failed for order %s: %v", req.OrderID, res.Error)
-				c.JSON(500, gin.H{"status": "error", "message": "ការធ្វើបច្ចុប្បន្នភាពមូលដ្ឋានទិន្នន័យបរាជ័យ: " + res.Error.Error()})
-				return
+
+			// ── Atomic: validate state machine transition + apply update in one transaction ──
+			// This prevents TOCTOU: another request cannot change the status between our check and update.
+			var hasStatus bool
+			var newStatusRaw interface{}
+			if req.NewData != nil {
+				newStatusRaw, hasStatus = req.NewData["Fulfillment Status"]
 			}
-			
-			if res.RowsAffected == 0 {
-				log.Printf("⚠️ [Upload] No rows updated for order %s (order not found during update). Request ID: %s", req.OrderID, req.OrderID)
-				c.JSON(404, gin.H{"status": "error", "message": "មិនអាចធ្វើបច្ចុប្បន្នភាពបានទេ៖ រកមិនឃើញការកម្មង់ " + req.OrderID})
+			var rowsAffected int64
+			txErr := DB.Transaction(func(tx *gorm.DB) error {
+				if hasStatus && req.NewData != nil {
+					newStatus := strings.TrimSpace(fmt.Sprintf("%v", newStatusRaw))
+
+					var currentOrder Order
+					if err := tx.Clauses(clause.Locking{Strength: "UPDATE"}).
+						Where("UPPER(TRIM(order_id)) = UPPER(TRIM(?))", req.OrderID).
+						Select("fulfillment_status").
+						First(&currentOrder).Error; err != nil {
+						return fmt.Errorf("រកមិនឃើញការកម្មង់ %s: %w", req.OrderID, err)
+					}
+
+					currentStatus := strings.TrimSpace(currentOrder.FulfillmentStatus)
+					if currentStatus == "" {
+						currentStatus = "Pending"
+					}
+
+					validTransitions := map[string][]string{
+						"Scheduled":     {"Pending", "Cancelled"},
+						"Pending":       {"Processing", "Ready to Ship", "Cancelled"},
+						"Processing":    {"Ready to Ship", "Pending", "Cancelled"},
+						"Ready to Ship": {"Shipped", "Pending", "Cancelled"},
+						"Shipped":       {"Delivered", "Ready to Ship", "Cancelled"},
+						"Delivered":     {},
+						"Cancelled":     {"Pending", "Scheduled"},
+					}
+
+					allowed, ok := validTransitions[currentStatus]
+					if ok && newStatus != currentStatus {
+						transitionValid := false
+						for _, s := range allowed {
+							if s == newStatus {
+								transitionValid = true
+								break
+							}
+						}
+						if !transitionValid {
+							log.Printf("⛔ [Upload] Invalid transition: %s → %s for order %s", currentStatus, newStatus, req.OrderID)
+							return fmt.Errorf("INVALID_TRANSITION:%s→%s", currentStatus, newStatus)
+						}
+					}
+				}
+
+				res := tx.Table("orders").Where("UPPER(TRIM(order_id)) = UPPER(TRIM(?))", req.OrderID).Updates(dbUpdateMap)
+				if res.Error != nil {
+					return res.Error
+				}
+				if res.RowsAffected == 0 {
+					return fmt.Errorf("NOT_FOUND:%s", req.OrderID)
+				}
+				rowsAffected = res.RowsAffected
+				return nil
+			})
+
+			if txErr != nil {
+				errStr := txErr.Error()
+				if strings.HasPrefix(errStr, "INVALID_TRANSITION:") {
+					parts := strings.SplitN(strings.TrimPrefix(errStr, "INVALID_TRANSITION:"), "→", 2)
+					from, to := parts[0], parts[1]
+					c.JSON(400, gin.H{"status": "error", "message": fmt.Sprintf("មិនអាចផ្លាស់ប្តូរពី '%s' ទៅ '%s' បានទេ", from, to)})
+				} else if strings.HasPrefix(errStr, "NOT_FOUND:") {
+					log.Printf("⚠️ [Upload] No rows updated for order %s", req.OrderID)
+					c.JSON(404, gin.H{"status": "error", "message": "មិនអាចធ្វើបច្ចុប្បន្នភាពបានទេ៖ រកមិនឃើញការកម្មង់ " + req.OrderID})
+				} else if strings.Contains(errStr, "រកមិនឃើញការកម្មង់") {
+					log.Printf("⚠️ [Upload] Cannot find order %s for validation: %v", req.OrderID, txErr)
+					c.JSON(404, gin.H{"status": "error", "message": txErr.Error()})
+				} else {
+					log.Printf("❌ [Upload] DB transaction failed for order %s: %v", req.OrderID, txErr)
+					c.JSON(500, gin.H{"status": "error", "message": "ការធ្វើបច្ចុប្បន្នភាពមូលដ្ឋានទិន្នន័យបរាជ័យ: " + txErr.Error()})
+				}
 				return
 			}
 
-			log.Printf("✅ [Upload] DB update SUCCESS: orderId=%s rowsAffected=%d fields=%v", req.OrderID, res.RowsAffected, broadcastMap)
+			log.Printf("✅ [Upload] DB update SUCCESS: orderId=%s rowsAffected=%d fields=%v", req.OrderID, rowsAffected, broadcastMap)
 
 			// Sync to Google Sheets & Telegram
 			go func(orderId string, bMap map[string]interface{}) {

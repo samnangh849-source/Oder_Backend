@@ -274,11 +274,52 @@ func FetchSheetDataToStruct(sheetName string, target interface{}) error {
 // PerformDataMigration resets the entire database and re-imports all data
 // from Google Sheets within a single transaction.
 // Requires SheetsService and SpreadsheetID to be set beforehand.
+// broadcastFullSyncProgress sends a real-time WebSocket event to all connected clients
+// so the frontend can display live progress (step name, percentage, elapsed time, row count).
+// Uses a goroutine to avoid blocking the migration when no clients are connected.
+func broadcastFullSyncProgress(step, totalSteps int, stepName string, count int, elapsed float64) {
+	if HubGlobal == nil {
+		return
+	}
+	percent := 0
+	if totalSteps > 0 {
+		percent = int(float64(step) / float64(totalSteps) * 100)
+	}
+	payload, _ := json.Marshal(map[string]interface{}{
+		"type":       "full_sync_progress",
+		"step":       step,
+		"totalSteps": totalSteps,
+		"stepName":   stepName,
+		"percent":    percent,
+		"count":      count,
+		"elapsed":    elapsed,
+	})
+	go func() { HubGlobal.Broadcast <- payload }()
+}
+
+// broadcastFullSyncComplete sends the final result of a full sync to all connected clients.
+func broadcastFullSyncComplete(success bool, message string, elapsed float64) {
+	if HubGlobal == nil {
+		return
+	}
+	payload, _ := json.Marshal(map[string]interface{}{
+		"type":    "full_sync_complete",
+		"success": success,
+		"message": message,
+		"elapsed": elapsed,
+	})
+	go func() { HubGlobal.Broadcast <- payload }()
+}
+
 func PerformDataMigration() {
+	startTime := time.Now()
+	const totalSteps = 31
+
 	ctx := context.Background()
 	if SheetsService == nil {
 		if err := CreateGoogleAPIClient(ctx); err != nil {
 			log.Println("❌ Migration: Could not initialize Google API client:", err)
+			broadcastFullSyncComplete(false, "Could not initialize Google API client: "+err.Error(), time.Since(startTime).Seconds())
 			return
 		}
 	}
@@ -287,9 +328,11 @@ func PerformDataMigration() {
 	defer func() {
 		if r := recover(); r != nil {
 			tx.Rollback()
+			broadcastFullSyncComplete(false, "Panic during migration", time.Since(startTime).Seconds())
 		}
 	}()
 
+	broadcastFullSyncProgress(0, totalSteps, "កំពុងលុបទិន្នន័យចាស់...", 0, time.Since(startTime).Seconds())
 	log.Println("🗑️ លុបទិន្នន័យចាស់ (Resetting Database within transaction)...")
 	tx.Session(&gorm.Session{AllowGlobalUpdate: true}).Delete(&User{})
 	tx.Session(&gorm.Session{AllowGlobalUpdate: true}).Delete(&Store{})
@@ -321,6 +364,7 @@ func PerformDataMigration() {
 	tx.Session(&gorm.Session{AllowGlobalUpdate: true}).Delete(&IncentiveProject{})
 	tx.Session(&gorm.Session{AllowGlobalUpdate: true}).Delete(&Movie{})
 
+	broadcastFullSyncProgress(1, totalSteps, "កំពុងទាញ Users...", 0, time.Since(startTime).Seconds())
 	log.Println("🔄 ចាប់ផ្តើមទាញទិន្នន័យថ្មីពី Google Sheet...")
 
 	// ── Users ──
@@ -328,6 +372,7 @@ func PerformDataMigration() {
 	if err := FetchSheetDataToStruct("Users", &users); err != nil {
 		tx.Rollback()
 		log.Println("❌ Migration failed for Users (fetch):", err)
+		broadcastFullSyncComplete(false, "Failed to fetch Users: "+err.Error(), time.Since(startTime).Seconds())
 		return
 	}
 	log.Printf("📊 Users: Fetched %d rows from sheet", len(users))
@@ -343,18 +388,21 @@ func PerformDataMigration() {
 		if err := tx.CreateInBatches(validUsers, 100).Error; err != nil {
 			tx.Rollback()
 			log.Println("❌ Migration failed for Users (save):", err)
+			broadcastFullSyncComplete(false, "Failed to save Users: "+err.Error(), time.Since(startTime).Seconds())
 			return
 		}
 		log.Printf("✅ Users: Saved %d valid rows", len(validUsers))
 	} else {
 		log.Println("⚠️ Users: No valid rows found to save")
 	}
+	broadcastFullSyncProgress(2, totalSteps, "កំពុងទាញ Stores...", len(validUsers), time.Since(startTime).Seconds())
 
 	// ── Stores ──
 	var stores []Store
 	if err := FetchSheetDataToStruct("Stores", &stores); err != nil {
 		tx.Rollback()
 		log.Println("❌ Migration failed for Stores (fetch):", err)
+		broadcastFullSyncComplete(false, "Failed to fetch Stores: "+err.Error(), time.Since(startTime).Seconds())
 		return
 	}
 	log.Printf("📊 Stores: Fetched %d rows from sheet", len(stores))
@@ -370,16 +418,19 @@ func PerformDataMigration() {
 		if err := tx.CreateInBatches(validStores, 100).Error; err != nil {
 			tx.Rollback()
 			log.Println("❌ Migration failed for Stores (save):", err)
+			broadcastFullSyncComplete(false, "Failed to save Stores: "+err.Error(), time.Since(startTime).Seconds())
 			return
 		}
 		log.Printf("✅ Stores: Saved %d valid rows", len(validStores))
 	}
+	broadcastFullSyncProgress(3, totalSteps, "កំពុងទាញ Settings...", len(validStores), time.Since(startTime).Seconds())
 
 	// ── Settings ──
 	var settings []Setting
 	if err := FetchSheetDataToStruct("Settings", &settings); err != nil {
 		tx.Rollback()
 		log.Println("❌ Migration failed for Settings:", err)
+		broadcastFullSyncComplete(false, "Failed to fetch Settings: "+err.Error(), time.Since(startTime).Seconds())
 		return
 	}
 	for _, s := range settings {
@@ -387,6 +438,7 @@ func PerformDataMigration() {
 			if err := tx.Save(&s).Error; err != nil {
 				tx.Rollback()
 				log.Println("❌ Migration failed to save Setting:", s.ConfigKey, err)
+				broadcastFullSyncComplete(false, "Failed to save Settings: "+err.Error(), time.Since(startTime).Seconds())
 				return
 			}
 			if s.ConfigKey == "UploadFolderID" {
@@ -398,12 +450,14 @@ func PerformDataMigration() {
 			}
 		}
 	}
+	broadcastFullSyncProgress(4, totalSteps, "កំពុងទាញ TeamsPages...", len(settings), time.Since(startTime).Seconds())
 
 	// ── TeamsPages ──
 	var pages []TeamPage
 	if err := FetchSheetDataToStruct("TeamsPages", &pages); err != nil {
 		tx.Rollback()
 		log.Println("❌ Migration failed for TeamsPages (fetch):", err)
+		broadcastFullSyncComplete(false, "Failed to fetch TeamsPages: "+err.Error(), time.Since(startTime).Seconds())
 		return
 	}
 	log.Printf("📊 TeamsPages: Fetched %d rows from sheet", len(pages))
@@ -421,16 +475,19 @@ func PerformDataMigration() {
 		if err := tx.CreateInBatches(validPages, 100).Error; err != nil {
 			tx.Rollback()
 			log.Println("❌ Migration failed for TeamsPages (save):", err)
+			broadcastFullSyncComplete(false, "Failed to save TeamsPages: "+err.Error(), time.Since(startTime).Seconds())
 			return
 		}
 		log.Printf("✅ TeamsPages: Saved %d valid rows", len(validPages))
 	}
+	broadcastFullSyncProgress(5, totalSteps, "កំពុងទាញ Products...", len(validPages), time.Since(startTime).Seconds())
 
 	// ── Products ──
 	var products []Product
 	if err := FetchSheetDataToStruct("Products", &products); err != nil {
 		tx.Rollback()
 		log.Println("❌ Migration failed for Products (fetch):", err)
+		broadcastFullSyncComplete(false, "Failed to fetch Products: "+err.Error(), time.Since(startTime).Seconds())
 		return
 	}
 	log.Printf("📊 Products: Fetched %d rows from sheet", len(products))
@@ -446,16 +503,19 @@ func PerformDataMigration() {
 		if err := tx.CreateInBatches(validProducts, 100).Error; err != nil {
 			tx.Rollback()
 			log.Println("❌ Migration failed for Products (save):", err)
+			broadcastFullSyncComplete(false, "Failed to save Products: "+err.Error(), time.Since(startTime).Seconds())
 			return
 		}
 		log.Printf("✅ Products: Saved %d valid rows", len(validProducts))
 	}
+	broadcastFullSyncProgress(6, totalSteps, "កំពុងទាញ Locations...", len(validProducts), time.Since(startTime).Seconds())
 
 	// ── Locations ──
 	var locations []Location
 	if err := FetchSheetDataToStruct("Locations", &locations); err != nil {
 		tx.Rollback()
 		log.Println("❌ Migration failed for Locations:", err)
+		broadcastFullSyncComplete(false, "Failed to fetch Locations: "+err.Error(), time.Since(startTime).Seconds())
 		return
 	}
 	var validLocations []Location
@@ -472,15 +532,18 @@ func PerformDataMigration() {
 		if err := tx.CreateInBatches(validLocations, 100).Error; err != nil {
 			tx.Rollback()
 			log.Println("❌ Migration failed to save Locations:", err)
+			broadcastFullSyncComplete(false, "Failed to save Locations: "+err.Error(), time.Since(startTime).Seconds())
 			return
 		}
 	}
+	broadcastFullSyncProgress(7, totalSteps, "កំពុងទាញ ShippingMethods...", len(validLocations), time.Since(startTime).Seconds())
 
 	// ── ShippingMethods ──
 	var shipping []ShippingMethod
 	if err := FetchSheetDataToStruct("ShippingMethods", &shipping); err != nil {
 		tx.Rollback()
 		log.Println("❌ Migration failed for ShippingMethods:", err)
+		broadcastFullSyncComplete(false, "Failed to fetch ShippingMethods: "+err.Error(), time.Since(startTime).Seconds())
 		return
 	}
 	var validShipping []ShippingMethod
@@ -495,15 +558,18 @@ func PerformDataMigration() {
 		if err := tx.CreateInBatches(validShipping, 100).Error; err != nil {
 			tx.Rollback()
 			log.Println("❌ Migration failed to save ShippingMethods:", err)
+			broadcastFullSyncComplete(false, "Failed to save ShippingMethods: "+err.Error(), time.Since(startTime).Seconds())
 			return
 		}
 	}
+	broadcastFullSyncProgress(8, totalSteps, "កំពុងទាញ Colors...", len(validShipping), time.Since(startTime).Seconds())
 
 	// ── Colors ──
 	var colors []Color
 	if err := FetchSheetDataToStruct("Colors", &colors); err != nil {
 		tx.Rollback()
 		log.Println("❌ Migration failed for Colors:", err)
+		broadcastFullSyncComplete(false, "Failed to fetch Colors: "+err.Error(), time.Since(startTime).Seconds())
 		return
 	}
 	var validColors []Color
@@ -518,15 +584,18 @@ func PerformDataMigration() {
 		if err := tx.CreateInBatches(validColors, 100).Error; err != nil {
 			tx.Rollback()
 			log.Println("❌ Migration failed to save Colors:", err)
+			broadcastFullSyncComplete(false, "Failed to save Colors: "+err.Error(), time.Since(startTime).Seconds())
 			return
 		}
 	}
+	broadcastFullSyncProgress(9, totalSteps, "កំពុងទាញ Drivers...", len(validColors), time.Since(startTime).Seconds())
 
 	// ── Drivers ──
 	var drivers []Driver
 	if err := FetchSheetDataToStruct("Drivers", &drivers); err != nil {
 		tx.Rollback()
 		log.Println("❌ Migration failed for Drivers:", err)
+		broadcastFullSyncComplete(false, "Failed to fetch Drivers: "+err.Error(), time.Since(startTime).Seconds())
 		return
 	}
 	var validDrivers []Driver
@@ -541,15 +610,18 @@ func PerformDataMigration() {
 		if err := tx.CreateInBatches(validDrivers, 100).Error; err != nil {
 			tx.Rollback()
 			log.Println("❌ Migration failed to save Drivers:", err)
+			broadcastFullSyncComplete(false, "Failed to save Drivers: "+err.Error(), time.Since(startTime).Seconds())
 			return
 		}
 	}
+	broadcastFullSyncProgress(10, totalSteps, "កំពុងទាញ BankAccounts...", len(validDrivers), time.Since(startTime).Seconds())
 
 	// ── BankAccounts ──
 	var banks []BankAccount
 	if err := FetchSheetDataToStruct("BankAccounts", &banks); err != nil {
 		tx.Rollback()
 		log.Println("❌ Migration failed for BankAccounts:", err)
+		broadcastFullSyncComplete(false, "Failed to fetch BankAccounts: "+err.Error(), time.Since(startTime).Seconds())
 		return
 	}
 	var validBanks []BankAccount
@@ -564,15 +636,18 @@ func PerformDataMigration() {
 		if err := tx.CreateInBatches(validBanks, 100).Error; err != nil {
 			tx.Rollback()
 			log.Println("❌ Migration failed to save BankAccounts:", err)
+			broadcastFullSyncComplete(false, "Failed to save BankAccounts: "+err.Error(), time.Since(startTime).Seconds())
 			return
 		}
 	}
+	broadcastFullSyncProgress(11, totalSteps, "កំពុងទាញ PhoneCarriers...", len(validBanks), time.Since(startTime).Seconds())
 
 	// ── PhoneCarriers ──
 	var carriers []PhoneCarrier
 	if err := FetchSheetDataToStruct("PhoneCarriers", &carriers); err != nil {
 		tx.Rollback()
 		log.Println("❌ Migration failed for PhoneCarriers:", err)
+		broadcastFullSyncComplete(false, "Failed to fetch PhoneCarriers: "+err.Error(), time.Since(startTime).Seconds())
 		return
 	}
 	var validCarriers []PhoneCarrier
@@ -587,15 +662,18 @@ func PerformDataMigration() {
 		if err := tx.CreateInBatches(validCarriers, 100).Error; err != nil {
 			tx.Rollback()
 			log.Println("❌ Migration failed to save PhoneCarriers:", err)
+			broadcastFullSyncComplete(false, "Failed to save PhoneCarriers: "+err.Error(), time.Since(startTime).Seconds())
 			return
 		}
 	}
+	broadcastFullSyncProgress(12, totalSteps, "កំពុងទាញ TelegramTemplates...", len(validCarriers), time.Since(startTime).Seconds())
 
 	// ── TelegramTemplates ──
 	var templates []TelegramTemplate
 	if err := FetchSheetDataToStruct("TelegramTemplates", &templates); err != nil {
 		tx.Rollback()
 		log.Println("❌ Migration failed for TelegramTemplates:", err)
+		broadcastFullSyncComplete(false, "Failed to fetch TelegramTemplates: "+err.Error(), time.Since(startTime).Seconds())
 		return
 	}
 	var validTemplates []TelegramTemplate
@@ -612,15 +690,18 @@ func PerformDataMigration() {
 		if err := tx.CreateInBatches(validTemplates, 100).Error; err != nil {
 			tx.Rollback()
 			log.Println("❌ Migration failed to save TelegramTemplates:", err)
+			broadcastFullSyncComplete(false, "Failed to save TelegramTemplates: "+err.Error(), time.Since(startTime).Seconds())
 			return
 		}
 	}
+	broadcastFullSyncProgress(13, totalSteps, "កំពុងទាញ Inventory...", len(validTemplates), time.Since(startTime).Seconds())
 
 	// ── Inventory ──
 	var inventory []Inventory
 	if err := FetchSheetDataToStruct("Inventory", &inventory); err != nil {
 		tx.Rollback()
 		log.Println("❌ Migration failed for Inventory:", err)
+		broadcastFullSyncComplete(false, "Failed to fetch Inventory: "+err.Error(), time.Since(startTime).Seconds())
 		return
 	}
 	var validInventory []Inventory
@@ -637,15 +718,18 @@ func PerformDataMigration() {
 		if err := tx.CreateInBatches(validInventory, 100).Error; err != nil {
 			tx.Rollback()
 			log.Println("❌ Migration failed to save Inventory:", err)
+			broadcastFullSyncComplete(false, "Failed to save Inventory: "+err.Error(), time.Since(startTime).Seconds())
 			return
 		}
 	}
+	broadcastFullSyncProgress(14, totalSteps, "កំពុងទាញ StockTransfers...", len(validInventory), time.Since(startTime).Seconds())
 
 	// ── StockTransfers ──
 	var transfers []StockTransfer
 	if err := FetchSheetDataToStruct("StockTransfers", &transfers); err != nil {
 		tx.Rollback()
 		log.Println("❌ Migration failed for StockTransfers:", err)
+		broadcastFullSyncComplete(false, "Failed to fetch StockTransfers: "+err.Error(), time.Since(startTime).Seconds())
 		return
 	}
 	var validTransfers []StockTransfer
@@ -660,15 +744,18 @@ func PerformDataMigration() {
 		if err := tx.CreateInBatches(validTransfers, 100).Error; err != nil {
 			tx.Rollback()
 			log.Println("❌ Migration failed to save StockTransfers:", err)
+			broadcastFullSyncComplete(false, "Failed to save StockTransfers: "+err.Error(), time.Since(startTime).Seconds())
 			return
 		}
 	}
+	broadcastFullSyncProgress(15, totalSteps, "កំពុងទាញ Returns...", len(validTransfers), time.Since(startTime).Seconds())
 
 	// ── Returns ──
 	var returns []ReturnItem
 	if err := FetchSheetDataToStruct("Returns", &returns); err != nil {
 		tx.Rollback()
 		log.Println("❌ Migration failed for Returns:", err)
+		broadcastFullSyncComplete(false, "Failed to fetch Returns: "+err.Error(), time.Since(startTime).Seconds())
 		return
 	}
 	var validReturns []ReturnItem
@@ -685,15 +772,18 @@ func PerformDataMigration() {
 		if err := tx.CreateInBatches(validReturns, 100).Error; err != nil {
 			tx.Rollback()
 			log.Println("❌ Migration failed to save Returns:", err)
+			broadcastFullSyncComplete(false, "Failed to save Returns: "+err.Error(), time.Since(startTime).Seconds())
 			return
 		}
 	}
+	broadcastFullSyncProgress(16, totalSteps, "កំពុងទាញ RevenueDashboard...", len(validReturns), time.Since(startTime).Seconds())
 
 	// ── RevenueDashboard ──
 	var revs []RevenueEntry
 	if err := FetchSheetDataToStruct("RevenueDashboard", &revs); err != nil {
 		tx.Rollback()
 		log.Println("❌ Migration failed for RevenueDashboard:", err)
+		broadcastFullSyncComplete(false, "Failed to fetch RevenueDashboard: "+err.Error(), time.Since(startTime).Seconds())
 		return
 	}
 	var validRevs []RevenueEntry
@@ -710,15 +800,18 @@ func PerformDataMigration() {
 		if err := tx.CreateInBatches(validRevs, 100).Error; err != nil {
 			tx.Rollback()
 			log.Println("❌ Migration failed to save RevenueDashboard:", err)
+			broadcastFullSyncComplete(false, "Failed to save RevenueDashboard: "+err.Error(), time.Since(startTime).Seconds())
 			return
 		}
 	}
+	broadcastFullSyncProgress(17, totalSteps, "កំពុងទាញ ChatMessages...", len(validRevs), time.Since(startTime).Seconds())
 
 	// ── ChatMessages ──
 	var chats []ChatMessage
 	if err := FetchSheetDataToStruct("ChatMessages", &chats); err != nil {
 		tx.Rollback()
 		log.Println("❌ Migration failed for ChatMessages:", err)
+		broadcastFullSyncComplete(false, "Failed to fetch ChatMessages: "+err.Error(), time.Since(startTime).Seconds())
 		return
 	}
 	var validChats []ChatMessage
@@ -735,15 +828,18 @@ func PerformDataMigration() {
 		if err := tx.CreateInBatches(validChats, 100).Error; err != nil {
 			tx.Rollback()
 			log.Println("❌ Migration failed to save ChatMessages:", err)
+			broadcastFullSyncComplete(false, "Failed to save ChatMessages: "+err.Error(), time.Since(startTime).Seconds())
 			return
 		}
 	}
+	broadcastFullSyncProgress(18, totalSteps, "កំពុងទាញ EditLogs...", len(validChats), time.Since(startTime).Seconds())
 
 	// ── EditLogs ──
 	var editLogs []EditLog
 	if err := FetchSheetDataToStruct("EditLogs", &editLogs); err != nil {
 		tx.Rollback()
 		log.Println("❌ Migration failed for EditLogs:", err)
+		broadcastFullSyncComplete(false, "Failed to fetch EditLogs: "+err.Error(), time.Since(startTime).Seconds())
 		return
 	}
 	var validEditLogs []EditLog
@@ -760,15 +856,18 @@ func PerformDataMigration() {
 		if err := tx.CreateInBatches(validEditLogs, 100).Error; err != nil {
 			tx.Rollback()
 			log.Println("❌ Migration failed to save EditLogs:", err)
+			broadcastFullSyncComplete(false, "Failed to save EditLogs: "+err.Error(), time.Since(startTime).Seconds())
 			return
 		}
 	}
+	broadcastFullSyncProgress(19, totalSteps, "កំពុងទាញ UserActivityLogs...", len(validEditLogs), time.Since(startTime).Seconds())
 
 	// ── UserActivityLogs ──
 	var actLogs []UserActivityLog
 	if err := FetchSheetDataToStruct("UserActivityLogs", &actLogs); err != nil {
 		tx.Rollback()
 		log.Println("❌ Migration failed for UserActivityLogs:", err)
+		broadcastFullSyncComplete(false, "Failed to fetch UserActivityLogs: "+err.Error(), time.Since(startTime).Seconds())
 		return
 	}
 	var validActLogs []UserActivityLog
@@ -785,15 +884,18 @@ func PerformDataMigration() {
 		if err := tx.CreateInBatches(validActLogs, 100).Error; err != nil {
 			tx.Rollback()
 			log.Println("❌ Migration failed to save UserActivityLogs:", err)
+			broadcastFullSyncComplete(false, "Failed to save UserActivityLogs: "+err.Error(), time.Since(startTime).Seconds())
 			return
 		}
 	}
+	broadcastFullSyncProgress(20, totalSteps, "កំពុងទាញ DriverRecommendations...", len(validActLogs), time.Since(startTime).Seconds())
 
 	// ── DriverRecommendations ──
 	var recs []DriverRecommendation
 	if err := FetchSheetDataToStruct("DriverRecommendations", &recs); err != nil {
 		tx.Rollback()
 		log.Println("❌ Migration failed for DriverRecommendations:", err)
+		broadcastFullSyncComplete(false, "Failed to fetch DriverRecommendations: "+err.Error(), time.Since(startTime).Seconds())
 		return
 	}
 	var validRecs []DriverRecommendation
@@ -810,15 +912,18 @@ func PerformDataMigration() {
 		if err := tx.CreateInBatches(validRecs, 100).Error; err != nil {
 			tx.Rollback()
 			log.Println("❌ Migration failed to save DriverRecommendations:", err)
+			broadcastFullSyncComplete(false, "Failed to save DriverRecommendations: "+err.Error(), time.Since(startTime).Seconds())
 			return
 		}
 	}
+	broadcastFullSyncProgress(21, totalSteps, "កំពុងទាញ Roles...", len(validRecs), time.Since(startTime).Seconds())
 
 	// ── Roles ──
 	var roles []Role
 	if err := FetchSheetDataToStruct("Roles", &roles); err != nil {
 		tx.Rollback()
 		log.Println("❌ Migration failed for Roles:", err)
+		broadcastFullSyncComplete(false, "Failed to fetch Roles: "+err.Error(), time.Since(startTime).Seconds())
 		return
 	}
 	var validRoles []Role
@@ -833,15 +938,18 @@ func PerformDataMigration() {
 		if err := tx.CreateInBatches(validRoles, 100).Error; err != nil {
 			tx.Rollback()
 			log.Println("❌ Migration failed to save Roles:", err)
+			broadcastFullSyncComplete(false, "Failed to save Roles: "+err.Error(), time.Since(startTime).Seconds())
 			return
 		}
 	}
+	broadcastFullSyncProgress(22, totalSteps, "កំពុងទាញ RolePermissions...", len(validRoles), time.Since(startTime).Seconds())
 
 	// ── RolePermissions ──
 	var perms []RolePermission
 	if err := FetchSheetDataToStruct("RolePermissions", &perms); err != nil {
 		tx.Rollback()
 		log.Println("❌ Migration failed for RolePermissions:", err)
+		broadcastFullSyncComplete(false, "Failed to fetch RolePermissions: "+err.Error(), time.Since(startTime).Seconds())
 		return
 	}
 	var validPerms []RolePermission
@@ -858,15 +966,18 @@ func PerformDataMigration() {
 		if err := tx.CreateInBatches(validPerms, 100).Error; err != nil {
 			tx.Rollback()
 			log.Printf("❌ Migration failed to save RolePermissions: %v", err)
+			broadcastFullSyncComplete(false, "Failed to save RolePermissions: "+err.Error(), time.Since(startTime).Seconds())
 			return
 		}
 	}
+	broadcastFullSyncProgress(23, totalSteps, "កំពុងទាញ AllOrders... (ធំជាងគេ)", len(validPerms), time.Since(startTime).Seconds())
 
 	// ── AllOrders ──
 	var orders []Order
 	if err := FetchSheetDataToStruct("AllOrders", &orders); err != nil {
 		tx.Rollback()
 		log.Println("❌ Migration failed for AllOrders (fetch):", err)
+		broadcastFullSyncComplete(false, "Failed to fetch AllOrders: "+err.Error(), time.Since(startTime).Seconds())
 		return
 	}
 	log.Printf("📊 AllOrders: Fetched %d rows from sheet", len(orders))
@@ -882,18 +993,21 @@ func PerformDataMigration() {
 		if err := tx.CreateInBatches(validOrders, 100).Error; err != nil {
 			tx.Rollback()
 			log.Println("❌ Migration failed for AllOrders (save):", err)
+			broadcastFullSyncComplete(false, "Failed to save AllOrders: "+err.Error(), time.Since(startTime).Seconds())
 			return
 		}
 		log.Printf("✅ AllOrders: Saved %d valid rows", len(validOrders))
 	} else {
 		log.Println("⚠️ AllOrders: No valid rows found to save")
 	}
+	broadcastFullSyncProgress(24, totalSteps, "កំពុងទាញ Movies...", len(validOrders), time.Since(startTime).Seconds())
 
 	// ── Movies ──
 	var movies []Movie
 	if err := FetchSheetDataToStruct("Movies", &movies); err != nil {
 		tx.Rollback()
 		log.Println("❌ Migration failed for Movies:", err)
+		broadcastFullSyncComplete(false, "Failed to fetch Movies: "+err.Error(), time.Since(startTime).Seconds())
 		return
 	}
 	var validMovies []Movie
@@ -908,87 +1022,106 @@ func PerformDataMigration() {
 		if err := tx.CreateInBatches(validMovies, 100).Error; err != nil {
 			tx.Rollback()
 			log.Println("❌ Migration failed to save Movies:", err)
+			broadcastFullSyncComplete(false, "Failed to save Movies: "+err.Error(), time.Since(startTime).Seconds())
 			return
 		}
 	}
+	broadcastFullSyncProgress(25, totalSteps, "កំពុងទាញ IncentiveProjects...", len(validMovies), time.Since(startTime).Seconds())
 
 	// ── Incentive Sheets ──
 	var incProjects []IncentiveProject
 	if err := FetchSheetDataToStruct("IncentiveProjects", &incProjects); err != nil {
 		tx.Rollback()
 		log.Println("❌ Migration failed for IncentiveProjects:", err)
+		broadcastFullSyncComplete(false, "Failed to fetch IncentiveProjects: "+err.Error(), time.Since(startTime).Seconds())
 		return
 	}
 	if len(incProjects) > 0 {
 		if err := tx.CreateInBatches(incProjects, 100).Error; err != nil {
 			tx.Rollback()
 			log.Println("❌ Migration failed to save IncentiveProjects:", err)
+			broadcastFullSyncComplete(false, "Failed to save IncentiveProjects: "+err.Error(), time.Since(startTime).Seconds())
 			return
 		}
 	}
+	broadcastFullSyncProgress(26, totalSteps, "កំពុងទាញ IncentiveCalculators...", len(incProjects), time.Since(startTime).Seconds())
 
 	var incCalcs []IncentiveCalculator
 	if err := FetchSheetDataToStruct("IncentiveCalculators", &incCalcs); err != nil {
 		tx.Rollback()
 		log.Println("❌ Migration failed for IncentiveCalculators:", err)
+		broadcastFullSyncComplete(false, "Failed to fetch IncentiveCalculators: "+err.Error(), time.Since(startTime).Seconds())
 		return
 	}
 	if len(incCalcs) > 0 {
 		if err := tx.CreateInBatches(incCalcs, 100).Error; err != nil {
 			tx.Rollback()
 			log.Println("❌ Migration failed to save IncentiveCalculators:", err)
+			broadcastFullSyncComplete(false, "Failed to save IncentiveCalculators: "+err.Error(), time.Since(startTime).Seconds())
 			return
 		}
 	}
+	broadcastFullSyncProgress(27, totalSteps, "កំពុងទាញ IncentiveResults...", len(incCalcs), time.Since(startTime).Seconds())
 
 	var incResults []IncentiveResult
 	if err := FetchSheetDataToStruct("IncentiveResults", &incResults); err != nil {
 		tx.Rollback()
 		log.Println("❌ Migration failed for IncentiveResults:", err)
+		broadcastFullSyncComplete(false, "Failed to fetch IncentiveResults: "+err.Error(), time.Since(startTime).Seconds())
 		return
 	}
 	if len(incResults) > 0 {
 		if err := tx.CreateInBatches(incResults, 100).Error; err != nil {
 			tx.Rollback()
 			log.Println("❌ Migration failed to save IncentiveResults:", err)
+			broadcastFullSyncComplete(false, "Failed to save IncentiveResults: "+err.Error(), time.Since(startTime).Seconds())
 			return
 		}
 	}
+	broadcastFullSyncProgress(28, totalSteps, "កំពុងទាញ IncentiveManualData...", len(incResults), time.Since(startTime).Seconds())
 
 	var incManual []IncentiveManualData
 	if err := FetchSheetDataToStruct("IncentiveManualData", &incManual); err != nil {
 		tx.Rollback()
 		log.Println("❌ Migration failed for IncentiveManualData:", err)
+		broadcastFullSyncComplete(false, "Failed to fetch IncentiveManualData: "+err.Error(), time.Since(startTime).Seconds())
 		return
 	}
 	if len(incManual) > 0 {
 		if err := tx.CreateInBatches(incManual, 100).Error; err != nil {
 			tx.Rollback()
 			log.Println("❌ Migration failed to save IncentiveManualData:", err)
+			broadcastFullSyncComplete(false, "Failed to save IncentiveManualData: "+err.Error(), time.Since(startTime).Seconds())
 			return
 		}
 	}
+	broadcastFullSyncProgress(29, totalSteps, "កំពុងទាញ IncentiveCustomPayouts...", len(incManual), time.Since(startTime).Seconds())
 
 	var incCustom []IncentiveCustomPayout
 	if err := FetchSheetDataToStruct("IncentiveCustomPayouts", &incCustom); err != nil {
 		tx.Rollback()
 		log.Println("❌ Migration failed for IncentiveCustomPayouts:", err)
+		broadcastFullSyncComplete(false, "Failed to fetch IncentiveCustomPayouts: "+err.Error(), time.Since(startTime).Seconds())
 		return
 	}
 	if len(incCustom) > 0 {
 		if err := tx.CreateInBatches(incCustom, 100).Error; err != nil {
 			tx.Rollback()
 			log.Println("❌ Migration failed to save IncentiveCustomPayouts:", err)
+			broadcastFullSyncComplete(false, "Failed to save IncentiveCustomPayouts: "+err.Error(), time.Since(startTime).Seconds())
 			return
 		}
 	}
+	broadcastFullSyncProgress(30, totalSteps, "កំពុង Commit និង Seed ទិន្នន័យ...", len(incCustom), time.Since(startTime).Seconds())
 
 	if err := tx.Commit().Error; err != nil {
 		log.Println("❌ Migration failed on commit:", err)
+		broadcastFullSyncComplete(false, "Database commit failed: "+err.Error(), time.Since(startTime).Seconds())
 	} else {
 		// Ensure essential roles exist even if sheet was empty
 		EnsureSeedData()
 		log.Println("🎉 Migration ជោគជ័យ!")
+		broadcastFullSyncComplete(true, fmt.Sprintf("Sync ជោគជ័យ! Orders: %d rows", len(validOrders)), time.Since(startTime).Seconds())
 	}
 }
 

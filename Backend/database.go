@@ -52,6 +52,7 @@ func InitDB() {
 	}
 
 	dsn = appendParam(dsn, "connect_timeout", "15")
+	dsn = appendParam(dsn, "application_name", "order-system")
 
 	// --- SSL/TLS Check & Configuration (Aiven.io/DigitalOcean) ---
 	caCertEnv := os.Getenv("DB_CA_CERT")
@@ -99,8 +100,8 @@ func InitDB() {
 		)
 
 		db, err = gorm.Open(postgres.Open(dsn), &gorm.Config{
-			Logger: newLogger,
-			// PrepareStmt: true, // Increases performance for repeated queries
+			Logger:      newLogger,
+			PrepareStmt: true,
 		})
 		if err == nil {
 			break
@@ -166,20 +167,35 @@ func runMigrations(db *gorm.DB) {
 		log.Printf("❌ Migration failed: %v", err)
 	}
 
+	// Functional index: allow UPPER(TRIM(order_id)) queries to use index instead of full table scan
+	if err := db.Exec(`CREATE INDEX IF NOT EXISTS idx_orders_order_id_upper ON orders (UPPER(TRIM(order_id)))`).Error; err != nil {
+		log.Printf("⚠️ Could not create functional index on order_id: %v", err)
+	} else {
+		log.Println("✅ Functional index idx_orders_order_id_upper ensured")
+	}
+
 	// Data Repair: Fill missing Team values in orders based on Page assignment
 	repairMissingTeams(db)
 }
 
 func repairMissingTeams(db *gorm.DB) {
+	const flagKey = "team_repair_done"
+
+	// Check if repair has already been completed in a previous startup
+	var flag Setting
+	if err := db.Where("config_key = ?", flagKey).First(&flag).Error; err == nil {
+		log.Println("⏭️ Team repair already completed — skipping.")
+		return
+	}
+
 	log.Println("🛠️ Checking for orders with missing team assignments...")
 	var count int64
 	db.Model(&Order{}).Where("team = '' OR team IS NULL").Count(&count)
 	if count > 0 {
 		log.Printf("🛠️ Found %d orders with missing team. Attempting to repair...", count)
-		// This is a slow but safe repair logic
 		var orders []Order
 		db.Where("team = '' OR team IS NULL").Find(&orders)
-		
+
 		repaired := 0
 		for _, o := range orders {
 			var tp TeamPage
@@ -189,7 +205,16 @@ func repairMissingTeams(db *gorm.DB) {
 			}
 		}
 		log.Printf("✅ Repaired %d orders with team assignments from Page records.", repaired)
+	} else {
+		log.Println("✅ No orders with missing team — nothing to repair.")
 	}
+
+	// Mark repair as done so it never runs again on future startups
+	db.Create(&Setting{
+		ConfigKey:   flagKey,
+		ConfigValue: "true",
+		Description: "One-time team repair completed. Do not delete.",
+	})
 }
 
 func EnsureSeedData() {

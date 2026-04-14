@@ -26,19 +26,28 @@ const (
 
 func isOriginAllowed(r *http.Request) bool {
 	origin := r.Header.Get("Origin")
+
+	// No Origin header — allow (same-origin requests from native clients)
 	if origin == "" {
 		return true
 	}
+
 	originURL, err := url.Parse(origin)
 	if err != nil {
+		log.Printf("⛔ [WS] Rejected invalid origin header: %q", origin)
 		return false
 	}
+
 	allowedRaw := os.Getenv("ALLOWED_WS_ORIGINS")
 	if strings.TrimSpace(allowedRaw) == "" {
-		// For prototypes, default to true if no explicit allowlist is configured.
-		// Change this to 'return strings.EqualFold(originURL.Host, r.Host)' for production.
-		return true
+		// No allowlist configured — fall back to same-host check
+		if strings.EqualFold(originURL.Host, r.Host) {
+			return true
+		}
+		log.Printf("⛔ [WS] Rejected cross-origin request (no ALLOWED_WS_ORIGINS set): origin=%q host=%q", origin, r.Host)
+		return false
 	}
+
 	for _, item := range strings.Split(allowedRaw, ",") {
 		allowed := strings.TrimSpace(item)
 		if allowed == "" {
@@ -48,6 +57,8 @@ func isOriginAllowed(r *http.Request) bool {
 			return true
 		}
 	}
+
+	log.Printf("⛔ [WS] Rejected origin not in allowlist: %q", origin)
 	return false
 }
 

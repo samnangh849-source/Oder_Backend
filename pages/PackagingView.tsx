@@ -27,7 +27,6 @@ const PackagingView: React.FC<{ orders?: ParsedOrder[] }> = ({ orders: propOrder
     const [viewMode, setViewMode] = useState<'card' | 'list'>('card');
     const [selectedOrderIds, setSelectedOrderIds] = useState<Set<string>>(new Set());
     const [viewingOrder, setViewingOrder] = useState<ParsedOrder | null>(null);
-    const [localOrders, setLocalOrders] = useState<ParsedOrder[]>([]);
     const [searchTerm, setSearchTerm] = useState('');
     const [deviceType, setDeviceType] = useState<'mobile' | 'tablet' | 'desktop'>('desktop');
     const [isBulkProcessing, setIsBulkProcessing] = useState(false);
@@ -62,7 +61,7 @@ const PackagingView: React.FC<{ orders?: ParsedOrder[] }> = ({ orders: propOrder
             // Execute updates in parallel with a small delay to avoid overwhelming the server if needed, 
             // but for now simple Promise.all or sequential is fine.
             await Promise.all(ids.map(async (id) => {
-                const order = localOrders.find(o => o['Order ID'] === id);
+                const order = allOrdersMapped.find(o => o['Order ID'] === id);
                 if (!order) return;
 
                 return fetch(`${WEB_APP_URL}/api/admin/update-order`, {
@@ -117,8 +116,6 @@ const PackagingView: React.FC<{ orders?: ParsedOrder[] }> = ({ orders: propOrder
             })) as ParsedOrder[];
     }, [appData.orders, propOrders]);
 
-    useEffect(() => { setLocalOrders(allOrdersMapped); }, [allOrdersMapped]);
-
     useEffect(() => {
         setMobilePageTitle(selectedStore ? `PACK: ${selectedStore}` : 'Packaging Hub');
         return () => setMobilePageTitle(null);
@@ -128,13 +125,13 @@ const PackagingView: React.FC<{ orders?: ParsedOrder[] }> = ({ orders: propOrder
     
     const allFilteredOrders = useMemo(() => {
         if (!selectedStore) return [];
-        let filtered = localOrders.filter(o => (o['Fulfillment Store'] || 'Unassigned').trim().toLowerCase() === selectedStore.trim().toLowerCase());
+        let filtered = allOrdersMapped.filter(o => (o['Fulfillment Store'] || 'Unassigned').trim().toLowerCase() === selectedStore.trim().toLowerCase());
         if (searchTerm.trim()) {
             const q = searchTerm.toLowerCase();
             filtered = filtered.filter(o => o['Order ID'].toLowerCase().includes(q) || (o['Customer Name'] || '').toLowerCase().includes(q));
         }
         return filtered;
-    }, [localOrders, selectedStore, searchTerm]);
+    }, [allOrdersMapped, selectedStore, searchTerm]);
 
     const filteredOrders = useMemo(() => allFilteredOrders.filter(o => o.FulfillmentStatus === activeTab), [allFilteredOrders, activeTab]);
 

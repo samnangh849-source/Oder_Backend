@@ -75,7 +75,9 @@ function doPost(e) {
         
       case 'updateOrderTelegram':
         const updateData = contents.orderData || contents;
-        const updateRes = updateOrderTelegram(updateData);
+        // Pass the lock so updateOrderTelegram can release it before slow Telegram API calls.
+        // This lets concurrent packers proceed in parallel once Sheet writes are done.
+        const updateRes = updateOrderTelegram(updateData, lock);
         return createJsonResponse({ status: 'success', messageIds: updateRes });
         
       case 'deleteOrderTelegram':
@@ -311,9 +313,10 @@ function handleUpdateSheet(data) {
     
     let rowIndex = -1;
     if (pkIdx !== -1) {
-      // Search ONLY in the specific Primary Key column for maximum speed
+      // Search ONLY in the specific Primary Key column for maximum speed.
+      // Trim pkValue so TextFinder matches even if the value from Go has trailing spaces.
       const searchRange = sheet.getRange(1, pkIdx + 1, sheet.getLastRow(), 1);
-      const finder = searchRange.createTextFinder(pkValue).matchEntireCell(true);
+      const finder = searchRange.createTextFinder(String(pkValue).trim()).matchEntireCell(true);
       const match = finder.findNext();
       if (match) {
         rowIndex = match.getRow();
@@ -549,20 +552,27 @@ function processScheduledOrders() {
       // ប្រសិនបើដល់ពេល ឬហួសពេលកំណត់
       if (scheduledDate <= now) {
         Logger.log(`⏰ ដល់ពេលបញ្ចេញការកម្មង់ដែលកំណត់ម៉ោង: ${orderId}`);
-        
-        // 1. ប្តូរ Status ទៅជា Pending ក្នុង AllOrders និង Team Sheet
-        updateOrderInSheets(orderId, team, { "Fulfillment Status": "Pending" });
-        
-        // 2. ទាញទិន្នន័យពេញលេញ និងដំណើរការផ្ញើទៅ Telegram
+
+        // 1. ទាញទិន្នន័យពេញលេញ (fetch ម្ដងគត់ — sendOrderToTelegram នឹងប្រើ forceSync:true)
         const orderData = fetchOrderDataFromSheet(orderId, team);
         if (orderData) {
-           sendOrderToTelegram({
-             orderId: orderId,
-             team: team,
-             fulfillmentStore: orderData["Fulfillment Store"],
-             ...orderData
-           });
-           processedCount++;
+          // 2. ផ្ញើ Telegram ជាមុន — ប្រសិនបើបរាជ័យ status នៅជា "Scheduled" ដើម្បីអាច retry ម្ដងទៀត
+          const msgIds = sendOrderToTelegram({
+            orderId: orderId,
+            team: team,
+            fulfillmentStore: orderData["Fulfillment Store"],
+            forceSync: true, // skip duplicate fetchOrderDataFromSheet inside sendOrderToTelegram
+            ...orderData
+          });
+
+          // 3. ប្តូរ Status ទៅជា Pending — ធ្វើបន្ទាប់ពីព្យាយាមផ្ញើ Telegram
+          //    បើ msgIds ទទេ (Telegram fail) សូម log warning — status នៅ Scheduled ដើម្បី retry
+          if (msgIds && (msgIds.id1 || msgIds.id2 || msgIds.id3)) {
+            updateOrderInSheets(orderId, team, { "Fulfillment Status": "Pending" });
+            processedCount++;
+          } else {
+            Logger.log(`⚠️ Telegram failed for scheduled order ${orderId} — keeping status Scheduled for retry`);
+          }
         }
       }
     }
@@ -976,7 +986,7 @@ function sendTelegramMessage(settings, data, templates) {
   if (part3Tpl) {
     if (msgId3Existing) {
       editSingleTelegramMsg(settings, msgId3Existing, applyTemplate(part3Tpl));
-    } else if (data["Fulfillment Status"] === "Packed" || data["Fulfillment Status"] === "Ready to Ship" || data["Fulfillment Status"] === "Shipped" || data["Fulfillment Status"] === "Delivered" || data["Package Photo"]) {
+    } else if (data["Fulfillment Status"] === "Ready to Ship" || data["Fulfillment Status"] === "Shipped" || data["Fulfillment Status"] === "Delivered" || data["Package Photo"]) {
       msgId3 = sendSingleTelegramMsg(settings, applyTemplate(part3Tpl));
     }
   }
@@ -1101,24 +1111,25 @@ function fetchOrderDataFromSheet(orderId, team) {
   const ss = SpreadsheetApp.getActiveSpreadsheet();
   const sheet = ss.getSheetByName(CONFIG.ALL_ORDERS_SHEET);
   if (!sheet) return null;
-  
-  const values = sheet.getDataRange().getValues();
-  const headers = values[0];
+
+  const lastCol = sheet.getLastColumn();
+  const lastRow = sheet.getLastRow();
+  if (lastRow < 2) return null;
+
+  const headers = sheet.getRange(1, 1, 1, lastCol).getValues()[0];
   const normalizedHeaders = headers.map(h => normalizeKey(h));
   const idIdx = normalizedHeaders.indexOf(normalizeKey("Order ID"));
-  
   if (idIdx === -1) return null;
-  
-  for (let i = 1; i < values.length; i++) {
-    if (normalizeKey(values[i][idIdx]) === normalizeKey(orderId)) {
-      const orderData = {};
-      headers.forEach((h, idx) => {
-        orderData[h] = values[i][idx];
-      });
-      return orderData;
-    }
-  }
-  return null;
+
+  // Fast lookup via TextFinder — avoids loading the entire sheet into memory
+  const idColRange = sheet.getRange(2, idIdx + 1, lastRow - 1, 1);
+  const match = idColRange.createTextFinder(String(orderId).trim()).matchEntireCell(true).findNext();
+  if (!match) return null;
+
+  const rowValues = sheet.getRange(match.getRow(), 1, 1, lastCol).getValues()[0];
+  const orderData = {};
+  headers.forEach((h, idx) => { orderData[h] = rowValues[idx]; });
+  return orderData;
 }
 
 function logUserActivity(user, action, details) {
@@ -1171,7 +1182,9 @@ function deleteOrderTelegramMessages(data) {
   }
 }
 
-function updateOrderTelegram(data) {
+// lock is optional — passed from doPost so we can release it before slow Telegram API calls.
+// When called without a lock (e.g. from scheduled triggers), it behaves as before.
+function updateOrderTelegram(data, lock) {
   try {
     const orderId = data.orderId || data.OrderID;
     const team = data.team || data.Team;
@@ -1182,31 +1195,34 @@ function updateOrderTelegram(data) {
       return { id1: null, id2: null, id3: null };
     }
 
-    // 1. Update Sheet first
+    // Phase 1: Sheet update (must happen under the script lock to prevent row corruption)
     if (Object.keys(updatedFields).length > 0) {
       updateOrderInSheets(orderId, team, updatedFields);
       console.log("✅ updateOrderTelegram: Sheets updated for ID: " + orderId);
     }
 
-    // 2. Fetch full data and send to Telegram
+    // Fetch full order data while still under lock (fast — uses TextFinder)
     const fullOrderData = fetchOrderDataFromSheet(orderId, team);
+
+    // Phase 2: Release lock BEFORE slow Telegram API calls.
+    // This unblocks other packers from writing their Sheet rows in parallel.
+    if (lock) {
+      try { lock.releaseLock(); } catch (_) {}
+    }
+
     if (!fullOrderData) {
       console.error("❌ updateOrderTelegram: Order not found for ID: " + orderId);
       return { id1: null, id2: null, id3: null };
     }
 
-    // Prepare normalized data for sendOrderToTelegram
-    // ✅ SMART MERGE: Ensure newly updated info from Backend (updatedFields) 
-    // strictly overwrites Sheet data (fullOrderData) even if header names 
-    // vary slightly in case or spacing.
+    // ✅ SMART MERGE: updatedFields (fresh from backend) strictly overwrite Sheet data,
+    // matching headers case-insensitively to handle minor naming differences.
     const normalizedData = {};
-    
-    // 1. Fill with sheet data first
+
     for (let key in fullOrderData) {
       normalizedData[key] = fullOrderData[key];
     }
-    
-    // 2. Overwrite with backend updates (using case-insensitive matching)
+
     const sheetHeaders = Object.keys(fullOrderData);
     for (let bKey in updatedFields) {
       const normBKey = normalizeKey(bKey);
@@ -1219,11 +1235,10 @@ function updateOrderTelegram(data) {
         }
       }
       if (!found) {
-        normalizedData[bKey] = updatedFields[bKey]; // Add as new field if no header match
+        normalizedData[bKey] = updatedFields[bKey];
       }
     }
 
-    // Add metadata for routing
     normalizedData.orderId = orderId;
     normalizedData.team = team;
     normalizedData.fulfillmentStore = normalizedData["Fulfillment Store"] || updatedFields["Fulfillment Store"];

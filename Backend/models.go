@@ -4,6 +4,8 @@ package backend
 // ម៉ូដែលទិន្នន័យ (GORM Models)
 // =========================================================================
 
+import "time"
+
 type User struct {
 	UserName          string `gorm:"primaryKey;column:user_name" json:"UserName"`
 	Password          string `gorm:"column:password" json:"Password,omitempty"`
@@ -182,10 +184,10 @@ type Order struct {
 	TelegramMessageID2      string  `gorm:"column:telegram_message_id2" json:"Telegram Message ID 2"`
 	TelegramMessageID3      string  `gorm:"column:telegram_message_id3" json:"Telegram Message ID 3"`
 	ScheduledTime           string  `gorm:"column:scheduled_time" json:"Scheduled Time"`
-	FulfillmentStore        string  `gorm:"column:fulfillment_store;index" json:"Fulfillment Store"`
+	FulfillmentStore        string  `gorm:"column:fulfillment_store;index:idx_store_status,priority:1" json:"Fulfillment Store"`
 	Team                    string  `gorm:"column:team;index" json:"Team"`
 	IsVerified              string  `gorm:"column:is_verified" json:"IsVerified"`
-	FulfillmentStatus       string  `gorm:"column:fulfillment_status;index" json:"Fulfillment Status"`
+	FulfillmentStatus       string  `gorm:"column:fulfillment_status;index:idx_store_status,priority:2" json:"Fulfillment Status"`
 	PackedBy                string  `gorm:"column:packed_by" json:"Packed By"`
 	PackedTime              string  `gorm:"column:packed_time" json:"Packed Time"`
 	PackagePhotoURL         string  `gorm:"column:package_photo_url" json:"Package Photo"`

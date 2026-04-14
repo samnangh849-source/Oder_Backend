@@ -179,7 +179,7 @@ const OrderSummaryPanel: React.FC<OrderSummaryPanelProps> = ({
                         
                         <div className="flex items-center gap-4 mt-4 pt-3 border-t border-white/5">
                             <div className="flex-grow h-3 bg-black/50 rounded-full overflow-hidden">
-                                <div className={`h-full rounded-full transition-all duration-500 ${isComplete ? 'bg-[#0ECB81]' : 'bg-[#FCD535]'}`} style={{ width: `${(verified / p.quantity) * 100}%` }}></div>
+                                <div className={`h-full rounded-full transition-all duration-500 ${isComplete ? 'bg-[#0ECB81]' : 'bg-[#FCD535]'}`} style={{ width: `${p.quantity > 0 ? (verified / p.quantity) * 100 : 0}%` }}></div>
                             </div>
                             <div className="flex items-center gap-3">
                                 <span className="text-xs font-bold text-gray-400">{verified} / {p.quantity} <span className="text-[10px] opacity-60">Packed</span></span>

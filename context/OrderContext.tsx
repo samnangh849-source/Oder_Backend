@@ -121,10 +121,21 @@ export const OrderProvider: React.FC<{ children: React.ReactNode }> = ({ childre
                 const result = await response.json();
                 if (result.status === 'success') {
                     const parsedOrders = (result.data || []).map((o: any) => {
-                        let products = [];
+                        let products: any[] = [];
                         try {
                             const rawProducts = o['Products (JSON)'] || o.Products;
-                            products = typeof rawProducts === 'string' ? JSON.parse(rawProducts) : (rawProducts || []);
+                            const parsed = typeof rawProducts === 'string' ? JSON.parse(rawProducts) : (rawProducts || []);
+                            // Normalize product fields — different code paths and older data may use
+                            // productName/ProductName instead of name, Quantity instead of quantity, etc.
+                            // The checklist and all downstream UI use only the canonical field names.
+                            products = (Array.isArray(parsed) ? parsed : []).map((p: any) => ({
+                                ...p,
+                                name:     p.name     || p.productName || p.ProductName || '',
+                                quantity: Number(p.quantity ?? p.Quantity ?? 1) || 1,
+                                image:    p.image    || p.imageUrl    || p.ImageURL   || '',
+                                cost:     Number(p.cost ?? p.Cost ?? 0),
+                                finalPrice: Number(p.finalPrice ?? p.FinalPrice ?? p.price ?? p.Price ?? 0),
+                            }));
                         } catch (e) { console.warn("Failed to parse products for order", o['Order ID']); }
                         return {
                             ...o,
