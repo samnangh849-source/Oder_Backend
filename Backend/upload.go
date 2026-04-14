@@ -130,6 +130,7 @@ func UploadToGoogleDriveDirectly(base64Data string, fileName string, mimeType st
 	// uploads to Drive — Sheet sync is handled by the Go backend via EnqueueSync.
 	if originalReq != nil {
 		req.OrderID = originalReq.OrderID
+		req.Team = originalReq.Team
 		req.SheetName = originalReq.SheetName
 		req.PrimaryKey = originalReq.PrimaryKey
 		req.TargetColumn = originalReq.TargetColumn
