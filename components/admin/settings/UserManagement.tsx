@@ -1,5 +1,5 @@
 
-import React, { useState, useContext, useMemo, useCallback } from 'react';
+import React, { useState, useContext, useMemo, useCallback, useEffect } from 'react';
 import { AppContext } from '../../../context/AppContext';
 import { WEB_APP_URL } from '../../../constants';
 import { CacheService, CACHE_KEYS } from '../../../services/cacheService';
@@ -69,9 +69,70 @@ const UserManagement: React.FC = () => {
     const [searchQuery, setSearchQuery] = useState('');
     const [modal, setModal] = useState<{ isOpen: boolean; item: any | null }>({ isOpen: false, item: null });
     const [isLoading, setIsLoading] = useState(false);
+    const [localUsers, setLocalUsers] = useState<any[]>([]);
+    const [fetchError, setFetchError] = useState(false);
+    const [isFetching, setIsFetching] = useState(false);
 
     const userSection = configSections.find(s => s.id === 'users')!;
-    const allUsers: any[] = useMemo(() => getArrayCaseInsensitive(appData, 'users'), [appData]);
+
+    // Fetch users: try appData first, fallback to direct API
+    const loadUsers = useCallback(async (force = false) => {
+        const fromAppData = getArrayCaseInsensitive(appData, 'users');
+        if (!force && fromAppData.length > 0) {
+            setLocalUsers(fromAppData);
+            setFetchError(false);
+            return;
+        }
+        setIsFetching(true);
+        setFetchError(false);
+        try {
+            const token = localStorage.getItem('token');
+            const headers: HeadersInit = { 'Content-Type': 'application/json' };
+            if (token) headers['Authorization'] = `Bearer ${token}`;
+
+            // Retry up to 3 times for Render cold start
+            let res: Response | null = null;
+            for (let attempt = 0; attempt < 3; attempt++) {
+                try {
+                    res = await fetch(`${WEB_APP_URL}/api/users`, { headers });
+                    if (res.status !== 503) break;
+                } catch (e) {
+                    if (attempt === 2) throw e;
+                }
+                await new Promise(r => setTimeout(r, 2000 * (attempt + 1)));
+            }
+            if (res && res.ok) {
+                const json = await res.json();
+                if (json.status === 'success' && Array.isArray(json.data)) {
+                    setLocalUsers(json.data);
+                    return;
+                }
+            }
+            // Fallback: use whatever appData has
+            if (fromAppData.length > 0) {
+                setLocalUsers(fromAppData);
+            } else {
+                setFetchError(true);
+            }
+        } catch (err) {
+            const fromAppData2 = getArrayCaseInsensitive(appData, 'users');
+            if (fromAppData2.length > 0) setLocalUsers(fromAppData2);
+            else setFetchError(true);
+        } finally {
+            setIsFetching(false);
+        }
+    }, [appData]);
+
+    // Load on mount
+    useEffect(() => { loadUsers(); }, []); // eslint-disable-line react-hooks/exhaustive-deps
+
+    // Sync when appData updates externally (WebSocket push / refreshData call)
+    useEffect(() => {
+        const fromAppData = getArrayCaseInsensitive(appData, 'users');
+        if (fromAppData.length > 0) setLocalUsers(fromAppData);
+    }, [appData]);
+
+    const allUsers: any[] = localUsers;
 
     const filteredUsers = useMemo(() => {
         if (!searchQuery.trim()) return allUsers;
@@ -84,6 +145,11 @@ const UserManagement: React.FC = () => {
             String(getValueCaseInsensitive(u, 'TelegramUsername') || '').toLowerCase().includes(q)
         );
     }, [allUsers, searchQuery]);
+
+    const handleRefresh = useCallback(async () => {
+        await refreshData();
+        await loadUsers(true);
+    }, [refreshData, loadUsers]);
 
     const handleDelete = useCallback(async (user: any) => {
         const name = getValueCaseInsensitive(user, 'FullName') || getValueCaseInsensitive(user, 'UserName');
@@ -164,6 +230,16 @@ const UserManagement: React.FC = () => {
                     )}
                 </div>
                 <button
+                    onClick={handleRefresh}
+                    disabled={isFetching}
+                    className="p-3 bg-[#1e2329] border border-[#2b3139] rounded-2xl text-[#848e9c] hover:text-[#eaecef] hover:border-[#3d4451] transition-all disabled:opacity-50"
+                    title="Refresh"
+                >
+                    <svg className={`w-4 h-4 ${isFetching ? 'animate-spin' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" strokeWidth={2} />
+                    </svg>
+                </button>
+                <button
                     onClick={() => setModal({ isOpen: true, item: null })}
                     className="px-6 py-3 bg-[#fcd535] text-black rounded-2xl font-black text-sm hover:bg-[#f0c832] transition-all whitespace-nowrap active:scale-95 shadow-lg shadow-[#fcd535]/10"
                 >
@@ -193,7 +269,16 @@ const UserManagement: React.FC = () => {
                             </tr>
                         </thead>
                         <tbody>
-                            {filteredUsers.length > 0 ? filteredUsers.map((user: any, idx: number) => {
+                            {isFetching ? (
+                                <tr><td colSpan={8} className="py-20 text-center"><Spinner size="lg" /></td></tr>
+                            ) : fetchError ? (
+                                <tr><td colSpan={8} className="py-20 text-center">
+                                    <p className="text-[#848e9c] font-bold mb-3">មានបញ្ហាក្នុងការទាញទិន្នន័យ</p>
+                                    <button onClick={() => loadUsers(true)} className="px-4 py-2 bg-[#2b3139] text-[#eaecef] rounded-xl text-xs font-black hover:bg-[#3d4451] transition-all">
+                                        ចុចដើម្បីសាកល្បងម្ដងទៀត
+                                    </button>
+                                </td></tr>
+                            ) : filteredUsers.length > 0 ? filteredUsers.map((user: any, idx: number) => {
                                 const fullName  = String(getValueCaseInsensitive(user, 'FullName') || '');
                                 const userName  = String(getValueCaseInsensitive(user, 'UserName') || '');
                                 const role      = String(getValueCaseInsensitive(user, 'Role') || '');
@@ -300,7 +385,16 @@ const UserManagement: React.FC = () => {
                         <Spinner size="lg" />
                     </div>
                 )}
-                {filteredUsers.length > 0 ? filteredUsers.map((user: any, idx: number) => {
+                {isFetching ? (
+                    <div className="py-20 flex justify-center"><Spinner size="lg" /></div>
+                ) : fetchError ? (
+                    <div className="py-20 text-center">
+                        <p className="text-[#848e9c] font-bold mb-3">មានបញ្ហាក្នុងការទាញទិន្នន័យ</p>
+                        <button onClick={() => loadUsers(true)} className="px-4 py-2 bg-[#2b3139] text-[#eaecef] rounded-xl text-xs font-black hover:bg-[#3d4451] transition-all">
+                            ចុចដើម្បីសាកល្បងម្ដងទៀត
+                        </button>
+                    </div>
+                ) : filteredUsers.length > 0 ? filteredUsers.map((user: any, idx: number) => {
                     const fullName  = String(getValueCaseInsensitive(user, 'FullName') || '');
                     const userName  = String(getValueCaseInsensitive(user, 'UserName') || '');
                     const role      = String(getValueCaseInsensitive(user, 'Role') || '');
