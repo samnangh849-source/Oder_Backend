@@ -113,19 +113,18 @@ const ConfigEditModal: React.FC<ConfigEditModalProps> = ({ section, item, onClos
         } catch (err: any) { setError(err.message); } finally { setUploadingFields(prev => ({ ...prev, [fieldName]: false })); }
     };
     
+    // Fields that are always optional (never block save)
+    const OPTIONAL_FIELDS = new Set(['Team', 'TelegramUsername', 'ProfilePictureURL', 'Description']);
+
     const handleSave = async () => {
         setError('');
         for (const field of section.fields) {
-            // Skip validation for readOnly fields or optional fields like Password when editing
             if (field.readOnly) continue;
-            
+            if (OPTIONAL_FIELDS.has(field.name)) continue;
             if (field.type !== 'checkbox' && (formData[field.name] === undefined || formData[field.name] === '')) {
-                 if (field.name === 'Password' && item) {
-                     // OK to leave empty when editing
-                     continue;
-                 }
-                 setError(`សូមបំពេញចន្លោះ "${field.label}"`);
-                 return;
+                if (field.name === 'Password' && item) continue; // OK to leave empty when editing
+                setError(`សូមបំពេញចន្លោះ "${field.label}"`);
+                return;
             }
         }
         setIsLoading(true);
@@ -254,7 +253,7 @@ const ConfigEditModal: React.FC<ConfigEditModalProps> = ({ section, item, onClos
         const telegramField = section.fields.find(f => f.name === 'TelegramUsername');
 
         return (
-            <Modal isOpen={true} onClose={onClose} maxWidth="max-w-lg">
+            <Modal isOpen={true} onClose={onClose} maxWidth="max-w-[520px]">
                 <div className="flex flex-col" style={{ maxHeight: '90vh' }}>
 
                     {/* ── Header ── */}
@@ -342,21 +341,21 @@ const ConfigEditModal: React.FC<ConfigEditModalProps> = ({ section, item, onClos
                         <div className="grid grid-cols-2 gap-3">
                             <div>
                                 {renderLabel('តួនាទី (Role)')}
-                                <SelectFilter label="" value={formData['Role'] || ''} onChange={(v) => setFormData((prev: any) => ({ ...prev, Role: v }))} options={getOptions(roleField)} placeholder="-- ជ្រើសរើស --" multiple={true} />
+                                <SelectFilter label="" value={formData['Role'] || ''} onChange={(v) => setFormData((prev: any) => ({ ...prev, Role: v }))} options={getOptions(roleField)} placeholder="-- ជ្រើសរើស --" multiple={true} variant="modal" />
                             </div>
                             <div>
-                                {renderLabel('ក្រុម (Team)')}
-                                <SelectFilter label="" value={formData['Team'] || ''} onChange={(v) => setFormData((prev: any) => ({ ...prev, Team: v }))} options={getOptions(teamField)} placeholder="-- ជ្រើសរើស --" multiple={true} />
+                                {renderLabel('ក្រុម (Team) — ស្រេចចិត្ត')}
+                                <SelectFilter label="" value={formData['Team'] || ''} onChange={(v) => setFormData((prev: any) => ({ ...prev, Team: v }))} options={getOptions(teamField)} placeholder="-- ជ្រើសរើស --" multiple={true} variant="modal" />
                             </div>
                         </div>
 
                         {/* Telegram */}
                         {telegramField && (
                             <div>
-                                {renderLabel('Telegram Username')}
-                                <div className="relative">
-                                    <span className="absolute left-4 top-1/2 -translate-y-1/2 text-[#5e6673] font-bold text-sm select-none">@</span>
-                                    <input type="text" name="TelegramUsername" value={formData['TelegramUsername'] || ''} onChange={handleChange} placeholder="john_doe" className="form-input !py-3 !pl-8 !pr-4 text-sm w-full font-mono" />
+                                {renderLabel('Telegram Username — ស្រេចចិត្ត')}
+                                <div className="flex items-center bg-[#1e2329] border border-[#2b3139] rounded-xl overflow-hidden focus-within:border-[#fcd535]/40 transition-colors">
+                                    <span className="pl-4 pr-2 text-[#5e6673] font-black text-sm select-none flex-shrink-0">@</span>
+                                    <input type="text" name="TelegramUsername" value={formData['TelegramUsername'] || ''} onChange={handleChange} placeholder="john_doe" className="flex-grow py-3 pr-4 bg-transparent text-sm font-mono text-[#eaecef] placeholder:text-[#5e6673] outline-none" />
                                 </div>
                             </div>
                         )}

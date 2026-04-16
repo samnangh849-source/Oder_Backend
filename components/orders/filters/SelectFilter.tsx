@@ -7,9 +7,9 @@ interface SelectFilterProps {
     onChange: (value: string) => void;
     options: (string | { label: string; value: string })[];
     placeholder?: string;
-    variant?: 'default' | 'payment';
+    variant?: 'default' | 'payment' | 'modal';
     multiple?: boolean;
-    searchable?: boolean; 
+    searchable?: boolean;
     isInline?: boolean; // New prop for direct rendering
 }
 
@@ -146,6 +146,16 @@ const SelectFilter: React.FC<SelectFilterProps> = ({
         );
     }
 
+    // ── variant-aware style tokens ──────────────────────────────────────────
+    const isModal = variant === 'modal';
+    const r = isModal ? 'rounded-xl' : 'rounded-sm';             // corner radius token
+    const rItem = isModal ? 'rounded-lg' : 'rounded-sm';
+    const bgTrigger = isModal ? 'bg-[#1e2329]' : 'bg-[#0B0E11]';
+    const bgHover   = isModal ? 'hover:bg-[#252a33]' : 'hover:bg-[#181A20]';
+    const bgMenu    = isModal ? 'bg-[#1e2329]'   : 'bg-[#181A20]';
+    const bgSearch  = isModal ? 'bg-[#181a20]'   : 'bg-[#0B0E11]';
+    const borderFocus = isModal ? 'focus:border-[#fcd535]/50' : 'focus:border-[#FCD535]';
+
     // Display Text Logic for dropdown mode
     let displayText = placeholder;
     if (selectedValues.length > 0) {
@@ -158,64 +168,67 @@ const SelectFilter: React.FC<SelectFilterProps> = ({
     }
 
     // Style logic for dropdown mode
-    let baseClass = "relative w-full cursor-pointer bg-[#0B0E11] border border-[#2B3139] py-3.5 px-4 rounded-sm font-bold transition-all hover:bg-[#181A20] flex justify-between items-center group/select";
-    let textClass = "text-gray-400";
+    let baseClass = `relative w-full cursor-pointer ${bgTrigger} border border-[#2B3139] py-3 px-4 ${r} font-bold transition-all ${bgHover} flex justify-between items-center group/select`;
+    let textClass = isModal ? 'text-[#848e9c]' : 'text-gray-400';
 
     if (variant === 'payment') {
         if (selectedValues.includes('Paid')) {
-            baseClass += " border-[#0ECB81]/50 bg-[#0ECB81]/10";
+            baseClass += " !border-[#0ECB81]/50 !bg-[#0ECB81]/10";
             textClass = "text-[#0ECB81]";
         } else if (selectedValues.includes('Unpaid')) {
-            baseClass += " border-[#F6465D]/50 bg-[#F6465D]/10";
+            baseClass += " !border-[#F6465D]/50 !bg-[#F6465D]/10";
             textClass = "text-[#F6465D]";
         }
     } else {
         if (selectedValues.length > 0) {
             textClass = "text-[#FCD535]";
-            baseClass += " border-[#FCD535]/50 bg-[#FCD535]/10";
+            baseClass += " !border-[#FCD535]/40 !bg-[#FCD535]/8";
         }
     }
 
-    if (isOpen) baseClass += " border-[#FCD535] bg-[#181A20]";
+    if (isOpen) baseClass += isModal ? " !border-[#fcd535]/50" : " border-[#FCD535] bg-[#181A20]";
 
     return (
         <div className={`w-full transition-all ${isOpen ? 'relative z-[60]' : 'relative z-10'}`} ref={dropdownRef}>
-            <label className="text-[10px] font-black text-gray-500 mb-2 uppercase tracking-widest flex items-center gap-2">
-                {label} 
-                {multiple && <span className="text-[8px] font-black text-[#FCD535] bg-[#FCD535]/10 px-2 py-0.5 rounded-sm border border-[#FCD535]/20">MULTI</span>}
-            </label>
-            
-            <div 
-                className={baseClass} 
+            {/* Only render label row when label has text OR when NOT modal (to show MULTI badge elsewhere) */}
+            {(label || (!isModal && multiple)) && (
+                <label className="text-[10px] font-black text-gray-500 mb-2 uppercase tracking-widest flex items-center gap-2">
+                    {label}
+                    {multiple && <span className="text-[8px] font-black text-[#FCD535] bg-[#FCD535]/10 px-2 py-0.5 rounded-sm border border-[#FCD535]/20">MULTI</span>}
+                </label>
+            )}
+
+            <div
+                className={baseClass}
                 onClick={() => setIsOpen(!isOpen)}
             >
                 <span className={`truncate mr-2 text-sm ${textClass}`}>{displayText}</span>
-                
-                <div className="flex items-center gap-2">
+
+                <div className="flex items-center gap-1.5">
                     {selectedValues.length > 0 && (
-                        <button 
+                        <button
                             onClick={handleClear}
-                            className="p-1.5 hover:bg-white/10 rounded-xl text-gray-500 hover:text-white transition-all active:scale-90"
+                            className={`p-1.5 hover:bg-white/10 ${rItem} text-gray-500 hover:text-white transition-all active:scale-90`}
                         >
-                            <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M6 18L18 6M6 6l12 12" /></svg>
+                            <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M6 18L18 6M6 6l12 12" /></svg>
                         </button>
                     )}
-                    <svg className={`w-4 h-4 text-gray-500 transition-transform duration-300 ${isOpen ? 'rotate-180 text-blue-400' : 'group-hover/select:text-gray-300'}`} fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M19 9l-7 7-7-7" /></svg>
+                    <svg className={`w-4 h-4 transition-transform duration-300 ${isOpen ? 'rotate-180 text-[#fcd535]' : 'text-[#5e6673] group-hover/select:text-gray-300'}`} fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M19 9l-7 7-7-7" /></svg>
                 </div>
 
                 {/* Dropdown Menu */}
                 {isOpen && (
-                    <div className="absolute top-full left-0 w-full mt-1 bg-[#181A20] border border-[#2B3139] rounded-sm shadow-2xl z-50 overflow-hidden animate-dropdown-in md:max-h-[400px] flex flex-col">
+                    <div className={`absolute top-full left-0 w-full mt-1.5 ${bgMenu} border border-[#2B3139] ${r} shadow-2xl z-50 overflow-hidden animate-dropdown-in max-h-[280px] flex flex-col`}>
                         {/* Search Bar */}
                         {searchable && (
-                            <div className="p-2 border-b border-[#2B3139] sticky top-0 bg-[#181A20] z-10">
+                            <div className="p-2 border-b border-[#2B3139] sticky top-0 z-10" style={{ background: 'inherit' }}>
                                 <div className="relative">
-                                    <svg className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" /></svg>
+                                    <svg className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-[#5e6673]" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" /></svg>
                                     <input
                                         ref={searchInputRef}
                                         type="text"
-                                        className="w-full bg-[#0B0E11] border border-[#2B3139] rounded-sm pl-10 pr-4 py-2 text-sm text-white focus:border-[#FCD535] focus:outline-none transition-all"
-                                        placeholder="Type to filter..."
+                                        className={`w-full ${bgSearch} border border-[#2B3139] ${rItem} pl-9 pr-4 py-2 text-xs font-bold text-white ${borderFocus} outline-none transition-all placeholder:text-[#5e6673]`}
+                                        placeholder="ស្វែងរក..."
                                         value={searchTerm}
                                         onChange={(e) => setSearchTerm(e.target.value)}
                                         onClick={(e) => e.stopPropagation()}
@@ -224,7 +237,7 @@ const SelectFilter: React.FC<SelectFilterProps> = ({
                             </div>
                         )}
 
-                        <div className="overflow-y-auto custom-scrollbar flex-grow py-1">
+                        <div className="overflow-y-auto no-scrollbar flex-grow py-1">
                             {filteredOptions.length > 0 ? (
                                 filteredOptions.map((opt, idx) => {
                                     const optValue = getOptionValue(opt);
@@ -232,33 +245,30 @@ const SelectFilter: React.FC<SelectFilterProps> = ({
                                     const isSelected = selectedValues.includes(optValue);
 
                                     return (
-                                        <div 
+                                        <div
                                             key={`${optValue}-${idx}`}
                                             onClick={(e) => { e.stopPropagation(); handleSelect(optValue); }}
-                                            className={`
-                                                px-3 py-2.5 flex items-center justify-between cursor-pointer transition-all mx-1 rounded-sm
-                                                ${isSelected ? 'bg-[#2B3139] text-[#FCD535]' : 'text-gray-300 hover:bg-[#2B3139]'}
-                                            `}
+                                            className={`px-3 py-2.5 flex items-center justify-between cursor-pointer transition-all mx-1.5 my-0.5 ${rItem} ${isSelected ? 'bg-[#fcd535]/10 text-[#FCD535]' : 'text-[#848e9c] hover:bg-[#2B3139] hover:text-[#eaecef]'}`}
                                         >
                                             <span className={`text-xs font-bold truncate ${isSelected ? 'text-[#FCD535]' : ''}`}>
                                                 {optLabel}
                                             </span>
                                             {isSelected ? (
-                                                <div className="w-4 h-4 bg-[#FCD535] rounded-sm flex items-center justify-center flex-shrink-0 ml-2">
-                                                    <svg className="w-3 h-3 text-black" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 13l4 4L19 7" /></svg>
+                                                <div className={`w-4 h-4 bg-[#FCD535] ${rItem} flex items-center justify-center flex-shrink-0 ml-2`}>
+                                                    <svg className="w-2.5 h-2.5 text-black" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3.5} d="M5 13l4 4L19 7" /></svg>
                                                 </div>
                                             ) : multiple && (
-                                                <div className="w-4 h-4 rounded-sm border border-[#2B3139] flex-shrink-0 ml-2"></div>
+                                                <div className={`w-4 h-4 ${rItem} border border-[#3d4451] flex-shrink-0 ml-2`}></div>
                                             )}
                                         </div>
                                     );
                                 })
                             ) : (
-                                <div className="p-8 text-center flex flex-col items-center gap-3">
-                                    <div className="w-10 h-10 bg-[#2B3139] rounded-sm flex items-center justify-center text-gray-500">
-                                        <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" /></svg>
+                                <div className="p-6 text-center flex flex-col items-center gap-2">
+                                    <div className={`w-9 h-9 bg-[#2B3139] ${rItem} flex items-center justify-center text-[#5e6673]`}>
+                                        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" /></svg>
                                     </div>
-                                    <div className="text-[10px] text-gray-500 font-bold uppercase tracking-widest">No Matches Found</div>
+                                    <div className="text-[10px] text-[#5e6673] font-bold uppercase tracking-widest">រកមិនឃើញ</div>
                                 </div>
                             )}
                         </div>
@@ -267,10 +277,10 @@ const SelectFilter: React.FC<SelectFilterProps> = ({
             </div>
             <style>{`
                 @keyframes dropdown-in {
-                    from { transform: translateY(-10px); opacity: 0; }
-                    to { transform: translateY(0); opacity: 1; }
+                    from { transform: translateY(-6px); opacity: 0; }
+                    to   { transform: translateY(0);    opacity: 1; }
                 }
-                .animate-dropdown-in { animation: dropdown-in 0.2s cubic-bezier(0, 0, 0.2, 1) forwards; }
+                .animate-dropdown-in { animation: dropdown-in 0.15s cubic-bezier(0,0,0.2,1) forwards; }
             `}</style>
         </div>
     );
