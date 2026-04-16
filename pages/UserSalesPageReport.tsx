@@ -20,6 +20,9 @@ interface UserSalesPageReportProps {
     onBack: () => void;
     team: string;
     onNavigate?: (filters: any) => void;
+    dateFilter?: string;
+    customStart?: string;
+    customEnd?: string;
 }
 
 type SortKey = 'revenue' | 'pageName';
@@ -31,6 +34,9 @@ const UserSalesPageReport: React.FC<UserSalesPageReportProps> = ({
     onBack,
     team,
     onNavigate,
+    dateFilter,
+    customStart,
+    customEnd,
 }) => {
     const { appData, previewImage, language, advancedSettings } = useContext(AppContext);
     const [showBorders, setShowBorders] = useState(true);
@@ -73,10 +79,52 @@ const UserSalesPageReport: React.FC<UserSalesPageReportProps> = ({
     };
 
     const filteredOrders = useMemo(() => {
-        return sourceOrders.filter(o =>
+        const teamOrders = sourceOrders.filter(o =>
             (o.Team || '').trim().toLowerCase() === team.trim().toLowerCase()
         );
-    }, [sourceOrders, team]);
+
+        if (!dateFilter || dateFilter === 'all') return teamOrders;
+
+        const now = new Date();
+        const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+        const endOfToday = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 23, 59, 59, 999);
+        let start: Date | null = null;
+        let end: Date | null = endOfToday;
+
+        switch (dateFilter) {
+            case 'today': start = today; end = endOfToday; break;
+            case 'yesterday':
+                start = new Date(today); start.setDate(today.getDate() - 1);
+                end = new Date(today); end.setMilliseconds(-1); break;
+            case 'this_week': {
+                const d = now.getDay();
+                start = new Date(today); start.setDate(today.getDate() - (d === 0 ? 6 : d - 1));
+                end = endOfToday; break;
+            }
+            case 'this_month': start = new Date(now.getFullYear(), now.getMonth(), 1); end = endOfToday; break;
+            case 'last_month':
+                start = new Date(now.getFullYear(), now.getMonth() - 1, 1);
+                end = new Date(now.getFullYear(), now.getMonth(), 0, 23, 59, 59, 999); break;
+            case 'this_year': start = new Date(now.getFullYear(), 0, 1); end = endOfToday; break;
+            case 'last_year':
+                start = new Date(now.getFullYear() - 1, 0, 1);
+                end = new Date(now.getFullYear() - 1, 11, 31, 23, 59, 59, 999); break;
+            case 'custom':
+                if (customStart) start = new Date(customStart + 'T00:00:00');
+                if (customEnd) end = new Date(customEnd + 'T23:59:59');
+                break;
+            default: return teamOrders;
+        }
+
+        return teamOrders.filter(o => {
+            if (!o.Timestamp) return false;
+            const d = safeParseDate(o.Timestamp);
+            if (!d || isNaN(d.getTime())) return false;
+            if (start && d < start) return false;
+            if (end && d > end) return false;
+            return true;
+        });
+    }, [sourceOrders, team, dateFilter, customStart, customEnd]);
 
     const pageStats = useMemo(() => {
         const stats: Record<string, any> = {};
@@ -130,6 +178,17 @@ const UserSalesPageReport: React.FC<UserSalesPageReportProps> = ({
         return totals;
     }, [pageStats]);
 
+    const filterLabel = useMemo(() => {
+        const labels: Record<string, string> = {
+            today: 'TODAY', yesterday: 'YESTERDAY', this_week: 'THIS WEEK',
+            this_month: 'THIS MONTH', last_month: 'LAST MONTH',
+            this_year: 'THIS YEAR', last_year: 'LAST YEAR',
+            all: 'ALL TIME',
+            custom: customStart && customEnd ? `${customStart} → ${customEnd}` : 'CUSTOM',
+        };
+        return labels[dateFilter || 'all'] || 'ALL TIME';
+    }, [dateFilter, customStart, customEnd]);
+
     const handleExportPDF = () => {
         setIsExporting(true);
         setTimeout(() => {
@@ -139,7 +198,7 @@ const UserSalesPageReport: React.FC<UserSalesPageReportProps> = ({
                 doc.setFontSize(18);
                 doc.text(`Sales Report - Team: ${team}`, pageWidth / 2, 15, { align: 'center' });
                 doc.setFontSize(12);
-                doc.text(`Period: ALL`, pageWidth / 2, 22, { align: 'center' });
+                doc.text(`Period: ${filterLabel}`, pageWidth / 2, 22, { align: 'center' });
                 doc.autoTable({
                     startY: 30, head: [['Metric', 'Value']],
                     body: [['Total Revenue', `$${grandTotals.revenue.toLocaleString()}`], ['Total Orders', grandTotals.orders]],
@@ -179,6 +238,8 @@ const UserSalesPageReport: React.FC<UserSalesPageReportProps> = ({
                             <div className="flex items-center gap-2 mt-1">
                                 <div className="w-1 h-3 bg-[#F0B90B] rounded-full"></div>
                                 <p className="text-[10px] text-[#848E9C] font-black uppercase tracking-[0.1em]">TEAM: {team}</p>
+                                <span className="text-[10px] text-[#474D57] font-black">·</span>
+                                <p className="text-[10px] text-[#F0B90B] font-black uppercase tracking-[0.1em]">{filterLabel}</p>
                             </div>
                         </div>
                     </div>
