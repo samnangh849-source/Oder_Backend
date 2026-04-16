@@ -53,8 +53,9 @@ export const configSections: ConfigSection[] = [
             { name: 'Password', label: 'ពាក្យសម្ងាត់', type: 'password' }, 
             { name: 'Role', label: 'តួនាទី (Role)', type: 'select', dataRef: 'roles', multiple: true }, 
             { name: 'Team', label: 'ក្រុម (Team)', type: 'select', dataRef: 'pages', multiple: true }, 
-            { name: 'ProfilePictureURL', label: 'URL រូបភាព', type: 'image_url' }, 
-            { name: 'IsSystemAdmin', label: 'System Admin?', type: 'checkbox' } 
+            { name: 'ProfilePictureURL', label: 'URL រូបភាព', type: 'image_url' },
+            { name: 'TelegramUsername', label: 'Telegram Username', type: 'text', placeholder: 'ឧ. john_doe (មិនត្រូវវាយ @)' },
+            { name: 'IsSystemAdmin', label: 'System Admin?', type: 'checkbox' }
         ], 
         displayField: 'FullName' 
     },

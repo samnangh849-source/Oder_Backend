@@ -1,7 +1,7 @@
 
 import React, { useState, useContext, useRef, useEffect } from 'react';
 import { AppContext } from '../../../context/AppContext';
-import { ConfigSection, getValueCaseInsensitive } from '../../../constants/settingsConfig';
+import { ConfigSection, getValueCaseInsensitive, getArrayCaseInsensitive } from '../../../constants/settingsConfig';
 import Spinner from '../../common/Spinner';
 import Modal from '../../common/Modal';
 import { WEB_APP_URL } from '../../../constants';

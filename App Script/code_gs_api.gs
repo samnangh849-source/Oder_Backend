@@ -357,11 +357,13 @@ function handleUpdateSheet(data) {
       const rowData = rowRange.getValues()[0];
 
       const aliasMap = {
-        "packagephotourl": ["packagephoto", "packagephotourl", "packagephotolink", "packagephotoevidence", "packphoto"],
-        "packagephoto": ["packagephotourl", "packagephoto", "packagephotolink", "packagephotoevidence", "packphoto"],
-        "orderid": ["orderid", "id", "orderno", "order#"],
-        "deliveryphotourl": ["deliveryphoto", "deliveryphotourl", "deliveryphotolink", "proofofdelivery", "deliveryphotoevidence"],
-        "deliveryphoto": ["deliveryphotourl", "deliveryphoto", "deliveryphotolink", "proofofdelivery", "deliveryphotoevidence"]
+        "packagephotourl": ["packagephoto", "packagephotourl", "packagephotolink", "packagephotoevidence", "packphoto", "package photo"],
+        "packagephoto": ["packagephotourl", "packagephoto", "packagephotolink", "packagephotoevidence", "packphoto", "package photo"],
+        "orderid": ["orderid", "id", "orderno", "order#", "order id"],
+        "deliveryphotourl": ["deliveryphoto", "deliveryphotourl", "deliveryphotolink", "proofofdelivery", "deliveryphotoevidence", "delivery photo url"],
+        "deliveryphoto": ["deliveryphotourl", "deliveryphoto", "deliveryphotolink", "proofofdelivery", "deliveryphotoevidence", "delivery photo url"],
+        "fulfillmentstatus": ["fulfillmentstatus", "status", "orderstatus", "fulfillment status"],
+        "fulfillmentstore": ["fulfillmentstore", "store", "warehouse", "fulfillment store"]
       };
 
       for (const [key, val] of Object.entries(data.newData)) {
