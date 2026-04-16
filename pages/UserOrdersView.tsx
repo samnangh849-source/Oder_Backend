@@ -43,7 +43,7 @@ const UserOrdersView: React.FC<{ team: string; onAdd: () => void }> = ({ team, o
     const [customStart, setCustomStart] = useState(new Date().toISOString().split('T')[0]);
     const [customEnd, setCustomEnd] = useState(new Date().toISOString().split('T')[0]);
     const [reportFilters, setReportFilters] = useState<ReportFilterState>({
-        datePreset: 'this_month',
+        datePreset: 'all',
         customStart: new Date().toISOString().split('T')[0],
         customEnd: new Date().toISOString().split('T')[0]
     });
