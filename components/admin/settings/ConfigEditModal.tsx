@@ -177,6 +177,218 @@ const ConfigEditModal: React.FC<ConfigEditModalProps> = ({ section, item, onClos
         } catch (err: any) { setError(err.message); } finally { setIsLoading(false); }
     };
     
+    // ─── Shared field renderers ────────────────────────────────────────────
+    const renderField = (field: any) => {
+        if (field.type === 'checkbox') return (
+            <button
+                type="button"
+                onClick={() => setFormData((prev: any) => ({ ...prev, [field.name]: !prev[field.name] }))}
+                className={`relative w-12 h-6 rounded-full transition-all duration-300 flex-shrink-0 ${formData[field.name] ? 'bg-[#fcd535]' : 'bg-[#2b3139]'}`}
+            >
+                <span className={`absolute top-0.5 left-0.5 w-5 h-5 bg-white rounded-full shadow transition-transform duration-300 ${formData[field.name] ? 'translate-x-6' : 'translate-x-0'}`} />
+            </button>
+        );
+        if (field.type === 'image_url') return (
+            <div className="space-y-2">
+                <div className="flex items-center gap-2">
+                    <input type="text" name={field.name} value={formData[field.name] || ''} onChange={handleChange} placeholder={field.placeholder || "Link ឬ Upload រូបភាព"} className="form-input flex-grow !py-3 !px-4 text-sm" />
+                    <input type="file" accept="image/*" ref={el => { fileInputRefs.current[field.name] = el; }} onChange={(e) => e.target.files && handleImageUpload(field.name, e.target.files[0])} className="hidden" />
+                    <button type="button" onClick={() => fileInputRefs.current[field.name]?.click()} className="w-10 h-10 bg-[#2b3139] text-[#848e9c] rounded-xl border border-[#3d4451] hover:border-[#fcd535]/40 hover:text-[#fcd535] transition-all flex-shrink-0 flex items-center justify-center" disabled={uploadingFields[field.name]}>
+                        {uploadingFields[field.name] ? <Spinner size="sm" /> : <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h14a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" /></svg>}
+                    </button>
+                </div>
+                {formData[field.name] && <img src={convertGoogleDriveUrl(formData[field.name])} className="w-16 h-16 rounded-xl object-cover bg-[#1e2329] border border-[#2b3139]" alt="preview" />}
+            </div>
+        );
+        if (field.type === 'password') return (
+            <div className="relative">
+                <input type={passwordVisibility[field.name] ? 'text' : 'password'} name={field.name} value={formData[field.name] || ''} onChange={handleChange} className="form-input !py-3.5 !px-5 pr-14" placeholder={field.placeholder || (item ? 'ទុកទទេបើមិនចង់ប្តូរ' : 'បញ្ចូលពាក្យសម្ងាត់')} />
+                <button type="button" onClick={() => setPasswordVisibility(prev => ({ ...prev, [field.name]: !prev[field.name] }))} className="absolute inset-y-0 right-0 px-4 text-gray-500 hover:text-white transition-colors"><svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d={passwordVisibility[field.name] ? "M13.875 18.825A10.05 10.05 0 0112 19c-4.478 0-8.268-2.943-9.542-7 1.274-4.057 5.064-7 9.542-7 .847 0 1.67 .126 2.454 .364m-3.033 2.446a3 3 0 11-4.243 4.243m4.242-4.242l4.243 4.243M3 3l18 18" : "M15 12a3 3 0 11-6 0 3 3 0 016 0z M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z"} /></svg></button>
+            </div>
+        );
+        if (field.type === 'select') return field.multiple ? (
+            <SelectFilter label="" value={formData[field.name] || ''} onChange={(v) => setFormData((prev: any) => ({ ...prev, [field.name]: v }))} options={getOptions(field)} placeholder="-- ជ្រើសរើស --" multiple={true} />
+        ) : (
+            <div className="relative">
+                <select name={field.name} value={formData[field.name] || ''} onChange={handleChange} className="form-input !py-3.5 !pl-5 !pr-10 appearance-none w-full cursor-pointer">
+                    <option value="">-- ជ្រើសរើស --</option>
+                    {getOptions(field).map((opt: any) => <option key={opt.value} value={opt.value}>{opt.label}</option>)}
+                </select>
+                <div className="absolute right-4 top-1/2 -translate-y-1/2 pointer-events-none text-gray-500"><svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M19 9l-7 7-7-7" /></svg></div>
+            </div>
+        );
+        return (
+            <input type={field.type} name={field.name} value={formData[field.name] || ''} onChange={handleChange} placeholder={field.placeholder}
+                className={`form-input !py-3.5 !px-5 ${field.readOnly ? 'opacity-50 cursor-not-allowed' : ''}`}
+                readOnly={field.readOnly || (item && field.name === section.primaryKeyField)} />
+        );
+    };
+
+    const renderLabel = (label: string) => (
+        <p className="text-[10px] font-black text-[#5e6673] uppercase tracking-[0.18em] mb-1.5">{label}</p>
+    );
+
+    // ─── Shared footer ──────────────────────────────────────────────────────
+    const renderFooter = () => (
+        <>
+            {error && <div className="mt-4 px-4 py-3 bg-red-500/10 text-red-400 border border-red-500/20 rounded-2xl text-sm font-bold">{error}</div>}
+            <div className="flex justify-end gap-3 mt-5 pt-5 border-t border-[#2b3139]">
+                <button type="button" onClick={onClose} className="px-6 py-2.5 text-[#848e9c] hover:text-[#eaecef] font-black text-xs uppercase tracking-widest transition-colors">{t.cancel}</button>
+                <button type="button" onClick={handleSave} disabled={isLoading} className="px-8 py-2.5 bg-[#fcd535] text-black rounded-xl font-black text-xs uppercase tracking-widest hover:bg-[#f0c832] transition-all active:scale-95 disabled:opacity-60 flex items-center gap-2">
+                    {isLoading ? <Spinner size="sm" /> : null}{t.save}
+                </button>
+            </div>
+        </>
+    );
+
+    // ─── USERS: dedicated beautiful form ───────────────────────────────────
+    if (section.id === 'users') {
+        const avatarUrl    = formData['ProfilePictureURL'] || '';
+        const fullName     = formData['FullName'] || '';
+        const userName     = formData['UserName'] || '';
+        const words        = fullName.trim().split(/\s+/);
+        const initials     = (words.length >= 2 ? words[0][0] + words[words.length - 1][0] : fullName.slice(0, 2)).toUpperCase();
+        const isAdmin      = !!formData['IsSystemAdmin'];
+        const roleField    = section.fields.find(f => f.name === 'Role')!;
+        const teamField    = section.fields.find(f => f.name === 'Team')!;
+        const telegramField = section.fields.find(f => f.name === 'TelegramUsername');
+
+        return (
+            <Modal isOpen={true} onClose={onClose} maxWidth="max-w-lg">
+                <div className="flex flex-col" style={{ maxHeight: '90vh' }}>
+
+                    {/* ── Header ── */}
+                    <div className="flex items-center justify-between px-6 pt-6 pb-4 border-b border-[#2b3139] flex-shrink-0">
+                        <div className="flex items-center gap-3">
+                            <div className="w-1 h-6 bg-[#fcd535] rounded-full" />
+                            <div>
+                                <h2 className="text-base font-black text-[#eaecef] uppercase tracking-wider">
+                                    {item ? 'កែសម្រួល' : 'បន្ថែម'} អ្នកប្រើប្រាស់
+                                </h2>
+                                {item && <p className="text-[11px] text-[#5e6673] font-bold mt-0.5">@{userName}</p>}
+                            </div>
+                        </div>
+                        <button onClick={onClose} className="w-8 h-8 rounded-xl bg-[#2b3139] text-[#848e9c] hover:text-[#eaecef] transition-all flex items-center justify-center active:scale-90">
+                            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M6 18L18 6M6 6l12 12" /></svg>
+                        </button>
+                    </div>
+
+                    {/* ── Scrollable body ── */}
+                    <div className="overflow-y-auto no-scrollbar flex-grow px-6 py-5 space-y-5">
+
+                        {/* Avatar upload row */}
+                        <div className="flex items-center gap-5">
+                            {/* Avatar */}
+                            <div className="relative flex-shrink-0 group">
+                                <div className="w-20 h-20 rounded-2xl overflow-hidden bg-gradient-to-br from-blue-500 to-purple-600 border-2 border-[#2b3139]">
+                                    {avatarUrl
+                                        ? <img src={convertGoogleDriveUrl(avatarUrl)} className="w-full h-full object-cover" alt="avatar" onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }} />
+                                        : <div className="w-full h-full flex items-center justify-center text-white text-2xl font-black select-none">{initials || '?'}</div>
+                                    }
+                                </div>
+                                <button
+                                    type="button"
+                                    onClick={() => fileInputRefs.current['ProfilePictureURL']?.click()}
+                                    disabled={uploadingFields['ProfilePictureURL']}
+                                    className="absolute -bottom-1.5 -right-1.5 w-7 h-7 bg-[#fcd535] text-black rounded-lg flex items-center justify-center shadow-lg hover:bg-[#f0c832] transition-all active:scale-90"
+                                >
+                                    {uploadingFields['ProfilePictureURL']
+                                        ? <Spinner size="sm" />
+                                        : <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M3 9a2 2 0 012-2h.93a2 2 0 001.664-.89l.812-1.22A2 2 0 0110.07 4h3.86a2 2 0 011.664.89l.812 1.22A2 2 0 0018.07 7H19a2 2 0 012 2v9a2 2 0 01-2 2H5a2 2 0 01-2-2V9z" /><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M15 13a3 3 0 11-6 0 3 3 0 016 0z" /></svg>
+                                    }
+                                </button>
+                                <input type="file" accept="image/*" ref={el => { fileInputRefs.current['ProfilePictureURL'] = el; }} onChange={(e) => e.target.files && handleImageUpload('ProfilePictureURL', e.target.files[0])} className="hidden" />
+                            </div>
+                            {/* Name/username overview */}
+                            <div className="flex-grow min-w-0">
+                                <p className="text-[#eaecef] font-black text-base truncate">{fullName || 'ឈ្មោះពេញ'}</p>
+                                <p className="text-[#5e6673] font-mono text-sm mt-0.5">@{userName || 'username'}</p>
+                                <p className="text-[10px] text-[#5e6673] mt-2 font-bold">ចុចប្រអប់ 📷 ដើម្បីប្តូររូបភាព</p>
+                            </div>
+                        </div>
+
+                        {/* Full Name + Username (2-col) */}
+                        <div className="grid grid-cols-2 gap-3">
+                            <div>
+                                {renderLabel('ឈ្មោះពេញ')}
+                                <input type="text" name="FullName" value={formData['FullName'] || ''} onChange={handleChange} placeholder="ឧ. Chan Dara" className="form-input !py-3 !px-4 text-sm w-full" />
+                            </div>
+                            <div>
+                                {renderLabel('Username (Login)')}
+                                <input type="text" name="UserName" value={formData['UserName'] || ''} onChange={handleChange} placeholder="ឧ. chandara" className={`form-input !py-3 !px-4 text-sm w-full font-mono ${item ? 'opacity-60 cursor-not-allowed' : ''}`} readOnly={!!item} />
+                            </div>
+                        </div>
+
+                        {/* Password */}
+                        <div>
+                            {renderLabel('ពាក្យសម្ងាត់')}
+                            <div className="relative">
+                                <input
+                                    type={passwordVisibility['Password'] ? 'text' : 'password'}
+                                    name="Password"
+                                    value={formData['Password'] || ''}
+                                    onChange={handleChange}
+                                    className="form-input !py-3 !px-4 pr-12 text-sm w-full"
+                                    placeholder={item ? 'ទុកទទេបើមិនចង់ប្តូរ' : 'បញ្ចូលពាក្យសម្ងាត់'}
+                                />
+                                <button type="button" onClick={() => setPasswordVisibility(prev => ({ ...prev, Password: !prev['Password'] }))} className="absolute inset-y-0 right-0 px-3.5 text-[#5e6673] hover:text-[#eaecef] transition-colors">
+                                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d={passwordVisibility['Password'] ? "M13.875 18.825A10.05 10.05 0 0112 19c-4.478 0-8.268-2.943-9.542-7 1.274-4.057 5.064-7 9.542-7 .847 0 1.67 .126 2.454 .364m-3.033 2.446a3 3 0 11-4.243 4.243m4.242-4.242l4.243 4.243M3 3l18 18" : "M15 12a3 3 0 11-6 0 3 3 0 016 0z M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z"} /></svg>
+                                </button>
+                            </div>
+                            {item && <p className="text-[10px] text-[#5e6673] font-bold mt-1.5 ml-1">ទុកទទេ = រក្សាពាក្យសម្ងាត់ចាស់</p>}
+                        </div>
+
+                        {/* Role + Team (2-col) */}
+                        <div className="grid grid-cols-2 gap-3">
+                            <div>
+                                {renderLabel('តួនាទី (Role)')}
+                                <SelectFilter label="" value={formData['Role'] || ''} onChange={(v) => setFormData((prev: any) => ({ ...prev, Role: v }))} options={getOptions(roleField)} placeholder="-- ជ្រើសរើស --" multiple={true} />
+                            </div>
+                            <div>
+                                {renderLabel('ក្រុម (Team)')}
+                                <SelectFilter label="" value={formData['Team'] || ''} onChange={(v) => setFormData((prev: any) => ({ ...prev, Team: v }))} options={getOptions(teamField)} placeholder="-- ជ្រើសរើស --" multiple={true} />
+                            </div>
+                        </div>
+
+                        {/* Telegram */}
+                        {telegramField && (
+                            <div>
+                                {renderLabel('Telegram Username')}
+                                <div className="relative">
+                                    <span className="absolute left-4 top-1/2 -translate-y-1/2 text-[#5e6673] font-bold text-sm select-none">@</span>
+                                    <input type="text" name="TelegramUsername" value={formData['TelegramUsername'] || ''} onChange={handleChange} placeholder="john_doe" className="form-input !py-3 !pl-8 !pr-4 text-sm w-full font-mono" />
+                                </div>
+                            </div>
+                        )}
+
+                        {/* System Admin toggle */}
+                        <div className="flex items-center justify-between bg-[#1e2329] border border-[#2b3139] rounded-2xl px-4 py-3.5">
+                            <div>
+                                <p className="text-sm font-black text-[#eaecef]">System Admin</p>
+                                <p className="text-[11px] text-[#5e6673] font-bold mt-0.5">អ្នកប្រើប្រាស់នេះមានសិទ្ធិគ្រប់គ្រងពេញលេញ</p>
+                            </div>
+                            <button
+                                type="button"
+                                onClick={() => setFormData((prev: any) => ({ ...prev, IsSystemAdmin: !prev.IsSystemAdmin }))}
+                                className={`relative w-12 h-6 rounded-full transition-all duration-300 flex-shrink-0 ${isAdmin ? 'bg-[#fcd535]' : 'bg-[#2b3139]'}`}
+                            >
+                                <span className={`absolute top-0.5 left-0.5 w-5 h-5 bg-white rounded-full shadow transition-transform duration-300 ${isAdmin ? 'translate-x-6' : 'translate-x-0'}`} />
+                            </button>
+                        </div>
+
+                    </div>
+
+                    {/* ── Footer ── */}
+                    <div className="px-6 pb-6 flex-shrink-0">
+                        {renderFooter()}
+                    </div>
+
+                </div>
+            </Modal>
+        );
+    }
+
+    // ─── GENERIC form (all other sections) ─────────────────────────────────
     return (
         <Modal isOpen={true} onClose={onClose} maxWidth="max-w-2xl">
             <div className="p-8 flex flex-col h-full">
@@ -189,82 +401,15 @@ const ConfigEditModal: React.FC<ConfigEditModalProps> = ({ section, item, onClos
                         <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M6 18L18 6M6 6l12 12" /></svg>
                     </button>
                 </div>
-                
                 <div className="space-y-6 max-h-[60vh] overflow-y-auto pr-4 custom-scrollbar flex-grow">
                     {section.fields.map(field => (
                         <div key={field.name} className="space-y-2">
                             <label className="block text-[10px] font-black text-gray-500 uppercase tracking-[0.2em] ml-2">{t[`field_${field.name}`] || field.label}</label>
-                            
-                            {field.type === 'checkbox' ? (
-                                <div className="flex items-center gap-4 bg-gray-900/50 p-4 rounded-[1.5rem] border border-gray-800 transition-all hover:border-gray-700">
-                                    <input type="checkbox" name={field.name} checked={!!formData[field.name]} onChange={handleChange} className="h-6 w-6 rounded-lg border-gray-600 bg-gray-700 text-blue-600 focus:ring-blue-500" />
-                                    <span className="text-sm font-bold text-gray-300">បើកដំណើរការមុខងារនេះ</span>
-                                </div>
-                            ) : field.type === 'image_url' ? (
-                                <div className="space-y-4">
-                                    <div className="flex items-center gap-3">
-                                        <input type="text" name={field.name} value={formData[field.name] || ''} onChange={handleChange} placeholder={field.placeholder || "បិទភ្ជាប់ Link ឬ Upload រូបភាព"} className="form-input flex-grow !py-3.5 !px-5" />
-                                        <input type="file" accept="image/*" ref={el => { fileInputRefs.current[field.name] = el; }} onChange={(e) => e.target.files && handleImageUpload(field.name, e.target.files[0])} className="hidden" />
-                                        <button type="button" onClick={() => fileInputRefs.current[field.name]?.click()} className="w-12 h-12 bg-blue-600/10 text-blue-400 rounded-2xl border border-blue-500/20 hover:bg-blue-600 hover:text-white transition-all flex flex-shrink-0 items-center justify-center shadow-lg" disabled={uploadingFields[field.name]}>
-                                            {uploadingFields[field.name] ? <Spinner size="sm" /> : <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h14a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" /></svg>}
-                                        </button>
-                                    </div>
-                                    {formData[field.name] && <div className="relative w-24 h-24 bg-gray-900 rounded-2xl border border-gray-800 p-2 overflow-hidden shadow-inner mx-auto sm:mx-0"><img src={convertGoogleDriveUrl(formData[field.name])} className="w-full h-full object-contain" alt="preview" /></div>}
-                                </div>
-                            ) : field.type === 'password' ? (
-                                <div className="relative">
-                                    <input type={passwordVisibility[field.name] ? 'text' : 'password'} name={field.name} value={formData[field.name] || ''} onChange={handleChange} className="form-input !py-3.5 !px-5 pr-14" placeholder={field.placeholder || (item ? 'ទុកទទេបើមិនចង់ប្តូរ' : 'បញ្ចូលពាក្យសម្ងាត់')} />
-                                    <button type="button" onClick={() => setPasswordVisibility(prev => ({ ...prev, [field.name]: !prev[field.name] }))} className="absolute inset-y-0 right-0 px-4 text-gray-500 hover:text-white transition-colors"><svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d={passwordVisibility[field.name] ? "M13.875 18.825A10.05 10.05 0 0112 19c-4.478 0-8.268-2.943-9.542-7 1.274-4.057 5.064-7 9.542-7 .847 0 1.67 .126 2.454 .364m-3.033 2.446a3 3 0 11-4.243 4.243m4.242-4.242l4.243 4.243M3 3l18 18" : "M15 12a3 3 0 11-6 0 3 3 0 016 0z M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z"} /></svg></button>
-                                </div>
-                            ) : field.type === 'select' ? (
-                                <div className="relative group">
-                                    {field.multiple ? (
-                                        <SelectFilter
-                                            label=""
-                                            value={formData[field.name] || ''}
-                                            onChange={(v) => setFormData((prev: any) => ({ ...prev, [field.name]: v }))}
-                                            options={getOptions(field)}
-                                            placeholder={`-- ${t.select_driver || 'Select'} --`}
-                                            multiple={true}
-                                        />
-                                    ) : (
-                                        <>
-                                            <select 
-                                                name={field.name} 
-                                                value={formData[field.name] || ''} 
-                                                onChange={handleChange}
-                                                className="form-input !py-3.5 !pl-5 !pr-10 bg-gray-900/40 backdrop-blur-xl border border-white/5 rounded-2xl text-[13px] font-bold text-white placeholder:text-gray-600 focus:border-blue-500/50 outline-none transition-all shadow-lg appearance-none w-full cursor-pointer"
-                                            >
-                                                <option value="">-- {t.select_driver || 'Select'} --</option>
-                                                {getOptions(field).map((opt: any) => (
-                                                    <option key={opt.value} value={opt.value}>{opt.label}</option>
-                                                ))}
-                                            </select>
-                                            <div className="absolute right-4 top-1/2 -translate-y-1/2 pointer-events-none text-gray-500">
-                                                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M19 9l-7 7-7-7" /></svg>
-                                            </div>
-                                        </>
-                                    )}
-                                </div>
-                            ) : (
-                                <input 
-                                    type={field.type} 
-                                    name={field.name} 
-                                    value={formData[field.name] || ''} 
-                                    onChange={handleChange} 
-                                    placeholder={field.placeholder}
-                                    className={`form-input !py-3.5 !px-5 ${field.readOnly ? 'bg-gray-800/50 text-gray-500 cursor-not-allowed' : ''}`} 
-                                    readOnly={field.readOnly || (item && field.name === section.primaryKeyField)} 
-                                />
-                            )}
+                            {renderField(field)}
                         </div>
                     ))}
                 </div>
-                {error && <div className="mt-6 p-4 bg-red-500/10 text-red-400 border border-red-500/20 rounded-2xl text-sm font-bold animate-shake">{error}</div>}
-                <div className="flex justify-end gap-4 mt-8 pt-6 border-t border-white/5">
-                    <button type="button" onClick={onClose} className="px-8 py-3 text-gray-400 hover:text-white font-black uppercase text-xs tracking-widest transition-colors">{t.cancel}</button>
-                    <button type="button" onClick={handleSave} className="btn btn-primary px-10 py-3 shadow-lg shadow-blue-600/20 active:scale-95 text-xs font-black uppercase tracking-widest rounded-2xl" disabled={isLoading}>{isLoading ? <Spinner size="sm" /> : t.save}</button>
-                </div>
+                {renderFooter()}
             </div>
         </Modal>
     );
