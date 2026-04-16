@@ -277,21 +277,38 @@ const UserOrdersView: React.FC<UserOrdersViewProps> = ({ onAdd, onStatsUpdate, s
 
     const handleSaveEdit = () => { setEditingOrder(null); refreshData(); };
 
-    if (!hasPermission('view_order_list') || ordersFetchError === 'permission_denied') return (
-        <div className="flex flex-col justify-center items-center h-96 gap-4 p-6 text-center">
-            <div className="w-14 h-14 flex items-center justify-center rounded mb-1" style={{ backgroundColor: '#F6465D10', border: '1px solid #F6465D20' }}>
-                <ShieldX className="w-7 h-7 text-[#F6465D]" />
+    const isFrontendDenied = !hasPermission('view_order_list');
+    const isBackendDenied = ordersFetchError === 'permission_denied';
+
+    if (isFrontendDenied || isBackendDenied) {
+        const userRole = currentUser?.Role || '(unknown)';
+        // Log to console so developer can debug in browser DevTools
+        console.warn(
+            `[UserOrdersView] Access Denied — frontend=${isFrontendDenied}, backend403=${isBackendDenied}\n` +
+            `  User role in JWT/session: "${userRole}"\n` +
+            `  Admin must enable view_order_list for EXACTLY this role name in Permission Matrix.`
+        );
+        return (
+            <div className="flex flex-col justify-center items-center h-96 gap-4 p-6 text-center">
+                <div className="w-14 h-14 flex items-center justify-center rounded mb-1" style={{ backgroundColor: '#F6465D10', border: '1px solid #F6465D20' }}>
+                    <ShieldX className="w-7 h-7 text-[#F6465D]" />
+                </div>
+                <h3 className="text-[#EAECEF] font-bold uppercase tracking-wider text-sm">
+                    {language === 'km' ? 'បដិសេធសិទ្ធិចូល' : 'Access Denied'}
+                </h3>
+                <p className="text-[#848E9C] text-xs max-w-xs leading-relaxed">
+                    {language === 'km'
+                        ? `គណនីរបស់អ្នក (Role: "${userRole}") មិនមានសិទ្ធិ view_order_list ។ Admin ត្រូវបើកសិទ្ធិនេះសម្រាប់ Role ត្រឹមត្រូវ។`
+                        : `Role "${userRole}" lacks view_order_list permission. Admin must enable it for exactly this role name.`}
+                </p>
+                {isBackendDenied && !isFrontendDenied && (
+                    <p className="text-[11px] mt-1 px-3 py-1.5 rounded" style={{ backgroundColor: '#F6465D15', color: '#F6465D', border: '1px solid #F6465D30' }}>
+                        {language === 'km' ? '⚠ Server បដិសេធ (403) — ឈ្មោះ Role ក្នុង DB មិនត្រូវគ្នា' : '⚠ Server rejected (403) — Role name in DB may differ from your Role'}
+                    </p>
+                )}
             </div>
-            <h3 className="text-[#EAECEF] font-bold uppercase tracking-wider text-sm">
-                {language === 'km' ? 'បដិសេធសិទ្ធិចូល' : 'Access Denied'}
-            </h3>
-            <p className="text-[#848E9C] text-xs max-w-xs leading-relaxed">
-                {language === 'km'
-                    ? 'គណនីរបស់អ្នកមិនមានសិទ្ធិ view_order_list។ សូមទាក់ទង Admin ដើម្បីបើកសិទ្ធិ។'
-                    : 'Your account lacks the view_order_list permission. Contact your administrator to grant access.'}
-            </p>
-        </div>
-    );
+        );
+    }
 
     if (isOrdersLoading && (!orders || orders.length === 0)) return (
         <div className="flex flex-col justify-center items-center h-[60vh] gap-6"><Spinner size="lg" /></div>

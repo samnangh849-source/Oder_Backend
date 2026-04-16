@@ -207,12 +207,24 @@ func checkPermission(role string, isSystemAdmin bool, feature string) bool {
 		if strings.EqualFold(r, "Admin") {
 			return true
 		}
-		
+
 		var perm RolePermission
-		// Using a more efficient check: case-insensitive match on role and feature
 		err := DB.Where("LOWER(TRIM(role)) = LOWER(TRIM(?)) AND LOWER(TRIM(feature)) = ? AND is_enabled = ?", r, featureLower, true).First(&perm).Error
 		if err == nil {
 			return true
+		}
+		// Log exactly what role/feature was checked vs what exists in DB (debug aid)
+		log.Printf("🔍 [checkPermission] No match: JWT_role=%q feature=%q (checked DB: LOWER(role)=%q)", r, featureLower, strings.ToLower(strings.TrimSpace(r)))
+	}
+
+	// Log all permission rows for this feature so mismatch is obvious in server logs
+	var allPerms []RolePermission
+	if dbErr := DB.Where("LOWER(TRIM(feature)) = ?", featureLower).Find(&allPerms).Error; dbErr == nil {
+		for _, p := range allPerms {
+			log.Printf("   📋 DB has: role=%q feature=%q is_enabled=%v", p.Role, p.Feature, p.IsEnabled)
+		}
+		if len(allPerms) == 0 {
+			log.Printf("   ⚠️  No rows in role_permissions for feature=%q at all!", featureLower)
 		}
 	}
 	return false
