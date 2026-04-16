@@ -1,48 +1,36 @@
 
-import React, { useState, useMemo, useContext, useEffect } from 'react';
+import React, { useState, useMemo, useContext } from 'react';
 import { AppContext } from '../context/AppContext';
 import { ParsedOrder } from '../types';
 import StatCard from '../components/performance/StatCard';
 import { jsPDF } from 'jspdf';
 import 'jspdf-autotable';
 import Spinner from '../components/common/Spinner';
-import { convertGoogleDriveUrl } from '../utils/fileUtils';
 import SimpleBarChart from '../components/admin/SimpleBarChart';
-import { safeParseDate, getTimestamp } from '../utils/dateUtils';
-import { ChevronLeft, Download, FileText, BarChart3, TrendingUp, Package, Layout, Calendar } from 'lucide-react';
+import { safeParseDate } from '../utils/dateUtils';
+import { ChevronLeft, Download, BarChart3, TrendingUp, Package, Layout } from 'lucide-react';
 
 // Import separate view components
 import SalesByPageDesktop from '../components/reports/SalesByPageDesktop';
 import SalesByPageTablet from '../components/reports/SalesByPageTablet';
 import SalesByPageMobile from '../components/reports/SalesByPageMobile';
 
-interface ReportFilterState {
-    datePreset: DateRangePreset;
-    customStart: string;
-    customEnd: string;
-}
-
 interface UserSalesPageReportProps {
-    orders: ParsedOrder[]; 
+    orders: ParsedOrder[];
     onBack: () => void;
     team: string;
     onNavigate?: (filters: any) => void;
-    initialFilters: ReportFilterState;
-    onFilterChange: (newFilters: ReportFilterState) => void;
 }
 
 type SortKey = 'revenue' | 'pageName';
-type DateRangePreset = 'today' | 'yesterday' | 'this_week' | 'this_month' | 'last_month' | 'this_year' | 'last_year' | 'all' | 'custom';
 
 const MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
 
-const UserSalesPageReport: React.FC<UserSalesPageReportProps> = ({ 
-    orders: sourceOrders, 
-    onBack, 
+const UserSalesPageReport: React.FC<UserSalesPageReportProps> = ({
+    orders: sourceOrders,
+    onBack,
     team,
     onNavigate,
-    initialFilters,
-    onFilterChange
 }) => {
     const { appData, previewImage, language, advancedSettings } = useContext(AppContext);
     const [showBorders, setShowBorders] = useState(true);
@@ -61,25 +49,9 @@ const UserSalesPageReport: React.FC<UserSalesPageReportProps> = ({
         }));
     };
 
-    const handlePresetChange = (preset: DateRangePreset) => {
-        const newFilters = { ...initialFilters, datePreset: preset };
-        onFilterChange(newFilters);
-    };
-
-    const handleCustomDateChange = (key: 'customStart' | 'customEnd', value: string) => {
-        const newFilters = { ...initialFilters, [key]: value };
-        onFilterChange(newFilters);
-    };
-
     const handleNavigate = (key: string, value: string) => {
         if (onNavigate) {
             const filters: any = { team };
-            filters.datePreset = initialFilters.datePreset;
-            if (initialFilters.datePreset === 'custom') {
-                filters.customStart = initialFilters.customStart;
-                filters.customEnd = initialFilters.customEnd;
-            }
-            
             if (key === 'page') filters.page = value;
             onNavigate(filters);
         }
@@ -87,66 +59,24 @@ const UserSalesPageReport: React.FC<UserSalesPageReportProps> = ({
 
     const handleMonthClick = (pageName: string, monthIndex: number) => {
         if (onNavigate) {
-            const now = new Date();
-            const currentYear = now.getFullYear();
-            let targetYear = initialFilters.datePreset === 'last_year' ? currentYear - 1 : currentYear;
-            if (initialFilters.datePreset === 'custom' && initialFilters.customStart) {
-                const customY = new Date(initialFilters.customStart).getFullYear();
-                if (!isNaN(customY)) targetYear = customY;
-            }
-            const monthStart = new Date(targetYear, monthIndex, 1);
-            const monthEnd = new Date(targetYear, monthIndex + 1, 0, 23, 59, 59);
-            let filterStart: Date | null = null;
-            let filterEnd: Date | null = null;
-            switch (initialFilters.datePreset) {
-                case 'today': filterStart = new Date(now.getFullYear(), now.getMonth(), now.getDate()); filterEnd = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 23, 59, 59); break;
-                case 'yesterday': const y = new Date(now); y.setDate(now.getDate() - 1); filterStart = new Date(y.getFullYear(), y.getMonth(), y.getDate()); filterEnd = new Date(y.getFullYear(), y.getMonth(), y.getDate(), 23, 59, 59); break;
-                case 'this_week': const day = now.getDay(); const wStart = new Date(now); wStart.setDate(now.getDate() - (day === 0 ? 6 : day - 1)); const wEnd = new Date(wStart); wEnd.setDate(wStart.getDate() + 6); filterStart = new Date(wStart.setHours(0,0,0,0)); filterEnd = new Date(wEnd.setHours(23,59,59,999)); break;
-                case 'this_month': filterStart = new Date(currentYear, now.getMonth(), 1); filterEnd = new Date(currentYear, now.getMonth() + 1, 0, 23, 59, 59); break;
-                case 'custom': if (initialFilters.customStart) filterStart = new Date(initialFilters.customStart + 'T00:00:00'); if (initialFilters.customEnd) filterEnd = new Date(initialFilters.customEnd + 'T23:59:59'); break;
-                default: filterStart = null; filterEnd = null;
-            }
-            let finalStart = monthStart;
-            let finalEnd = monthEnd;
-            if (filterStart && filterStart > monthStart) finalStart = filterStart;
-            if (filterEnd && filterEnd < monthEnd) finalEnd = filterEnd;
-            if (finalStart > finalEnd) { finalStart = monthStart; finalEnd = monthEnd; }
+            const year = new Date().getFullYear();
             const fmt = (d: Date) => {
                 const y = d.getFullYear();
                 const m = String(d.getMonth() + 1).padStart(2, '0');
                 const day = String(d.getDate()).padStart(2, '0');
                 return `${y}-${m}-${day}`;
             };
-            onNavigate({ team, page: pageName, datePreset: 'custom', customStart: fmt(finalStart), customEnd: fmt(finalEnd), isMonthlyDrilldown: true });
+            const monthStart = new Date(year, monthIndex, 1);
+            const monthEnd = new Date(year, monthIndex + 1, 0, 23, 59, 59);
+            onNavigate({ team, page: pageName, datePreset: 'custom', customStart: fmt(monthStart), customEnd: fmt(monthEnd), isMonthlyDrilldown: true });
         }
     };
 
-    // --- Date Filtering Logic ---
     const filteredOrders = useMemo(() => {
-        const now = new Date();
-        const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
-        let start: Date | null = null;
-        let end: Date | null = null; 
-        switch (initialFilters.datePreset) {
-            case 'today': start = today; end = new Date(today); end.setHours(23, 59, 59, 999); break;
-            case 'yesterday': start = new Date(today); start.setDate(today.getDate() - 1); end = new Date(today); end.setMilliseconds(-1); break;
-            case 'this_week': const day = now.getDay(); start = new Date(today); start.setDate(today.getDate() - (day === 0 ? 6 : day - 1)); end = new Date(start); end.setDate(start.getDate() + 6); end.setHours(23, 59, 59, 999); break;
-            case 'this_month': start = new Date(now.getFullYear(), now.getMonth(), 1); end = new Date(now.getFullYear(), now.getMonth() + 1, 0, 23, 59, 59, 999); break;
-            case 'last_month': start = new Date(now.getFullYear(), now.getMonth() - 1, 1); end = new Date(now.getFullYear(), now.getMonth(), 0, 23, 59, 59, 999); break;
-            case 'this_year': start = new Date(now.getFullYear(), 0, 1); end = new Date(now.getFullYear(), 11, 31, 23, 59, 59, 999); break;
-            case 'last_year': start = new Date(now.getFullYear() - 1, 0, 1); end = new Date(now.getFullYear() - 1, 11, 31, 23, 59, 59, 999); break;
-            case 'all': start = null; end = null; break;
-            case 'custom': start = safeParseDate(initialFilters.customStart + 'T00:00:00'); end = safeParseDate(initialFilters.customEnd + 'T23:59:59'); break;
-        }
-        return sourceOrders.filter(o => {
-            if ((o.Team || '').trim().toLowerCase() !== team.trim().toLowerCase()) return false;
-            if (!start) return true; 
-            const orderDate = safeParseDate(o.Timestamp);
-            if (!orderDate) return false;
-            if (end) return orderDate >= start && orderDate <= end;
-            return orderDate >= start;
-        });
-    }, [sourceOrders, team, initialFilters]);
+        return sourceOrders.filter(o =>
+            (o.Team || '').trim().toLowerCase() === team.trim().toLowerCase()
+        );
+    }, [sourceOrders, team]);
 
     const pageStats = useMemo(() => {
         const stats: Record<string, any> = {};
@@ -209,7 +139,7 @@ const UserSalesPageReport: React.FC<UserSalesPageReportProps> = ({
                 doc.setFontSize(18);
                 doc.text(`Sales Report - Team: ${team}`, pageWidth / 2, 15, { align: 'center' });
                 doc.setFontSize(12);
-                doc.text(`Period: ${initialFilters.datePreset.toUpperCase()}`, pageWidth / 2, 22, { align: 'center' });
+                doc.text(`Period: ALL`, pageWidth / 2, 22, { align: 'center' });
                 doc.autoTable({
                     startY: 30, head: [['Metric', 'Value']],
                     body: [['Total Revenue', `$${grandTotals.revenue.toLocaleString()}`], ['Total Orders', grandTotals.orders]],
@@ -227,22 +157,6 @@ const UserSalesPageReport: React.FC<UserSalesPageReportProps> = ({
     return (
         <div className="w-full space-y-6 select-none animate-fade-in pb-12">
             <style>{`
-                .setup-pill {
-                    background: #1E2329;
-                    border: 1px solid #2B3139;
-                    border-radius: 2px;
-                    padding: 6px 12px;
-                    font-size: 10px;
-                    font-weight: 800;
-                    text-transform: uppercase;
-                    color: #848E9C;
-                    transition: all 0.15s;
-                }
-                .setup-pill.active {
-                    background: #F0B90B;
-                    color: #181A20;
-                    border-color: #F0B90B;
-                }
                 .finance-header {
                     background: #1E2329;
                     border-bottom: 1px solid #2B3139;
@@ -251,7 +165,7 @@ const UserSalesPageReport: React.FC<UserSalesPageReportProps> = ({
             `}</style>
 
             {/* Premium Header */}
-            <div className="finance-header flex flex-col gap-6">
+            <div className="finance-header">
                 <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
                     <div className="flex items-center gap-4">
                         <button onClick={onBack} className="w-10 h-10 flex items-center justify-center bg-[#2B3139] rounded-sm hover:bg-[#363c45] active:scale-95 transition-all">
@@ -277,37 +191,9 @@ const UserSalesPageReport: React.FC<UserSalesPageReportProps> = ({
                     </div>
                 </div>
 
-                {/* Filter Tabs */}
-                <div className="flex flex-wrap gap-2">
-                    {(['today', 'yesterday', 'this_week', 'this_month', 'last_month', 'this_year', 'all'] as const).map(preset => (
-                        <button
-                            key={preset}
-                            onClick={() => handlePresetChange(preset)}
-                            className={`setup-pill ${initialFilters.datePreset === preset ? 'active' : ''}`}
-                        >
-                            {preset.replace('_', ' ')}
-                        </button>
-                    ))}
-                    <button
-                        onClick={() => handlePresetChange('custom')}
-                        className={`setup-pill ${initialFilters.datePreset === 'custom' ? 'active' : ''}`}
-                    >
-                        <Calendar size={12} className="inline mr-1" />
-                        Custom
-                    </button>
-                </div>
             </div>
 
             <div className="px-4 space-y-6">
-                {/* Custom Date Inputs */}
-                {initialFilters.datePreset === 'custom' && (
-                    <div className="flex items-center gap-4 bg-[#1E2329] p-4 rounded-sm border border-[#2B3139] animate-fade-in-down shadow-xl">
-                        <input type="date" value={initialFilters.customStart} onChange={e => handleCustomDateChange('customStart', e.target.value)} className="bg-[#0B0E11] border border-[#2B3139] rounded-sm px-4 py-2 text-[#EAECEF] text-xs font-bold focus:border-[#F0B90B] outline-none" />
-                        <span className="text-[#848E9C] font-black uppercase text-[10px]">to</span>
-                        <input type="date" value={initialFilters.customEnd} onChange={e => handleCustomDateChange('customEnd', e.target.value)} className="bg-[#0B0E11] border border-[#2B3139] rounded-sm px-4 py-2 text-[#EAECEF] text-xs font-bold focus:border-[#F0B90B] outline-none" />
-                    </div>
-                )}
-
                 {/* Financial KPIs */}
                 <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
                     <StatCard label={language === 'km' ? 'ចំណូលសរុប' : 'Total Revenue'} value={`$${grandTotals.revenue.toLocaleString()}`} icon={<TrendingUp size={18}/>} colorClass="from-[#F0B90B] to-[#FCD535]" variant="minimal" />

@@ -9,13 +9,6 @@ import DeliveryListGeneratorModal from '../components/orders/DeliveryListGenerat
 import ShippingReport from '../components/reports/ShippingReport';
 import { safeParseDate, getValidDate, getTimestamp } from '../utils/dateUtils';
 
-type DateRangePreset = 'today' | 'yesterday' | 'this_week' | 'this_month' | 'last_month' | 'this_year' | 'last_year' | 'all' | 'custom';
-
-interface ReportFilterState {
-    datePreset: DateRangePreset;
-    customStart: string;
-    customEnd: string;
-}
 
 const UserOrdersView: React.FC<{ team: string; onAdd: () => void }> = ({ team, onAdd }) => {
     const { currentUser, refreshData, appData, orders, isOrdersLoading, hasPermission } = useContext(AppContext);
@@ -38,11 +31,6 @@ const UserOrdersView: React.FC<{ team: string; onAdd: () => void }> = ({ team, o
     const [showReport, setShowReport] = useState(false);
     const [showShippingReport, setShowShippingReport] = useState(false);
     const [isDeliveryModalOpen, setIsDeliveryModalOpen] = useState(false);
-    const [reportFilters, setReportFilters] = useState<ReportFilterState>({
-        datePreset: 'all',
-        customStart: new Date().toISOString().split('T')[0],
-        customEnd: new Date().toISOString().split('T')[0]
-    });
 
     const userVisibleColumns = useMemo(() => new Set([
         'index', 'orderId', 'customerName', 'productInfo', 'location', 'pageInfo', 'total', 'shippingService', 'status', 'date', 'print', 'actions'
@@ -142,7 +130,7 @@ const UserOrdersView: React.FC<{ team: string; onAdd: () => void }> = ({ team, o
         </div>
     );
 
-    if (showReport) return <div className="animate-fade-in h-full overflow-auto"><UserSalesPageReport orders={permittedOrders} onBack={() => setShowReport(false)} team={team} onNavigate={(filters) => setDrilldownFilters(filters)} initialFilters={reportFilters} onFilterChange={setReportFilters} /></div>;
+    if (showReport) return <div className="animate-fade-in h-full overflow-auto"><UserSalesPageReport orders={permittedOrders} onBack={() => setShowReport(false)} team={team} onNavigate={(filters) => setDrilldownFilters(filters)} /></div>;
 
     if (showShippingReport) return <div className="animate-fade-in h-full overflow-auto"><ShippingReport orders={permittedOrders} appData={appData} dateFilter="all" startDate="" endDate="" onNavigate={(filters) => { setDrilldownFilters(filters); setShowShippingReport(false); }} onBack={() => setShowShippingReport(false)} /></div>;
 
