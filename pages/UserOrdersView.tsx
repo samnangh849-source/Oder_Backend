@@ -1,4 +1,4 @@
-import React, { useState, useContext, useEffect, useMemo, useCallback } from 'react';
+import React, { useState, useContext, useEffect, useMemo } from 'react';
 import { AppContext } from '../context/AppContext';
 import { ParsedOrder } from '../types';
 import Spinner from '../components/common/Spinner';
@@ -30,18 +30,14 @@ const UserOrdersView: React.FC<{ team: string; onAdd: () => void }> = ({ team, o
         return orders.filter(o => (o.Team || '').trim().toLowerCase() === requestedTeam);
     }, [orders, team, currentUser]);
 
-    const [viewOrders, setViewOrders] = useState<ParsedOrder[]>([]);
     const [drilldownFilters, setDrilldownFilters] = useState<any>(null);
     const [drilldownData, setDrilldownData] = useState<ParsedOrder[]>([]);
     const [editingOrder, setEditingOrder] = useState<ParsedOrder | null>(null);
-    const [processing, setProcessing] = useState(false); 
+    const [processing, setProcessing] = useState(false);
     const [searchQuery, setSearchQuery] = useState('');
     const [showReport, setShowReport] = useState(false);
-    const [showShippingReport, setShowShippingReport] = useState(false); 
+    const [showShippingReport, setShowShippingReport] = useState(false);
     const [isDeliveryModalOpen, setIsDeliveryModalOpen] = useState(false);
-    const [dateRange, setDateRange] = useState<DateRangePreset>('today');
-    const [customStart, setCustomStart] = useState(new Date().toISOString().split('T')[0]);
-    const [customEnd, setCustomEnd] = useState(new Date().toISOString().split('T')[0]);
     const [reportFilters, setReportFilters] = useState<ReportFilterState>({
         datePreset: 'all',
         customStart: new Date().toISOString().split('T')[0],
@@ -52,58 +48,23 @@ const UserOrdersView: React.FC<{ team: string; onAdd: () => void }> = ({ team, o
         'index', 'orderId', 'customerName', 'productInfo', 'location', 'pageInfo', 'total', 'shippingService', 'status', 'date', 'print', 'actions'
     ]), []);
 
-    const getDateBounds = (preset: DateRangePreset, cStart?: string, cEnd?: string) => {
-        const now = new Date();
-        const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
-        let start: Date | null = null;
-        let end: Date | null = new Date();
-        switch (preset) {
-            case 'today': start = today; end = new Date(today); end.setHours(23, 59, 59, 999); break;
-            case 'yesterday': start = new Date(today); start.setDate(today.getDate() - 1); end = new Date(today); end.setMilliseconds(-1); break;
-            case 'this_week': const d = now.getDay(); start = new Date(today); start.setDate(today.getDate() - (d === 0 ? 6 : d - 1)); end = new Date(start); end.setDate(start.getDate() + 6); end.setHours(23, 59, 59, 999); break;
-            case 'this_month': start = new Date(now.getFullYear(), now.getMonth(), 1); break;
-            case 'last_month': start = new Date(now.getFullYear(), now.getMonth() - 1, 1); end = new Date(now.getFullYear(), now.getMonth(), 0, 23, 59, 59, 999); break;
-            case 'all': start = null; end = null; break;
-            case 'custom': if (cStart) start = getValidDate(cStart + 'T00:00:00'); if (cEnd) end = getValidDate(cEnd + 'T23:59:59'); break;
-        }
-        return { start, end };
-    };
-
-    const processDataForRange = useCallback((range: DateRangePreset) => {
-        setProcessing(true);
-        setTimeout(() => {
-            const { start, end } = getDateBounds(range, customStart, customEnd);
-            const filtered = permittedOrders.filter(o => {
-                if (o['Order ID'] === 'Opening_Balance' || o['Order ID'] === 'Opening Balance') return false;
-                if (!o.Timestamp) return false;
-                const orderDate = safeParseDate(o.Timestamp);
-                if (!orderDate) return false;
-                if (start && orderDate < start) return false;
-                if (end && orderDate > end) return false;
-                return true;
-            });
-            setViewOrders(filtered.sort((a, b) => getTimestamp(b.Timestamp) - getTimestamp(a.Timestamp)));
-            setProcessing(false);
-        }, 10);
-    }, [permittedOrders, customStart, customEnd]);
-
-    useEffect(() => { processDataForRange(dateRange); }, [dateRange, processDataForRange]);
+    const viewOrders = useMemo(() => {
+        return permittedOrders
+            .filter(o => o['Order ID'] !== 'Opening_Balance' && o['Order ID'] !== 'Opening Balance')
+            .sort((a, b) => getTimestamp(b.Timestamp) - getTimestamp(a.Timestamp));
+    }, [permittedOrders]);
 
     useEffect(() => {
         if (drilldownFilters) {
             setProcessing(true);
             setTimeout(() => {
                 let start: Date | null = null;
-                let end: Date | null = new Date();
+                let end: Date | null = null;
                 if (drilldownFilters.isMonthlyDrilldown || drilldownFilters.datePreset === 'custom') {
                     const dStart = drilldownFilters.customStart || drilldownFilters.startDate;
                     const dEnd = drilldownFilters.customEnd || drilldownFilters.endDate;
                     if (dStart) start = getValidDate(dStart + 'T00:00:00');
                     if (dEnd) end = getValidDate(dEnd + 'T23:59:59');
-                } else if (drilldownFilters.datePreset) {
-                    const bounds = getDateBounds(drilldownFilters.datePreset);
-                    start = bounds.start;
-                    end = bounds.end;
                 }
                 const filtered = permittedOrders.filter(o => {
                     if (o['Order ID'] === 'Opening_Balance' || o['Order ID'] === 'Opening Balance') return false;
@@ -139,13 +100,10 @@ const UserOrdersView: React.FC<{ team: string; onAdd: () => void }> = ({ team, o
         orders.forEach(o => {
             if (o['Order ID'] === 'Opening_Balance' || o['Order ID'] === 'Opening Balance') return;
             const tName = (o.Team || 'Unassigned').trim();
-            const { start, end } = getDateBounds(dateRange, customStart, customEnd);
-            const orderDate = safeParseDate(o.Timestamp);
-            if (!orderDate || (start && orderDate < start) || (end && orderDate > end)) return;
             teamStats[tName] = (teamStats[tName] || 0) + (Number(o['Grand Total']) || 0);
         });
         return Object.entries(teamStats).map(([name, revenue]) => ({ name, revenue })).sort((a, b) => b.revenue - a.revenue).slice(0, 3);
-    }, [orders, dateRange, customStart, customEnd]);
+    }, [orders]);
 
     const handleSaveEdit = () => { setEditingOrder(null); refreshData(); };
 
@@ -186,7 +144,7 @@ const UserOrdersView: React.FC<{ team: string; onAdd: () => void }> = ({ team, o
 
     if (showReport) return <div className="animate-fade-in h-full overflow-auto"><UserSalesPageReport orders={permittedOrders} onBack={() => setShowReport(false)} team={team} onNavigate={(filters) => setDrilldownFilters(filters)} initialFilters={reportFilters} onFilterChange={setReportFilters} /></div>;
 
-    if (showShippingReport) return <div className="animate-fade-in h-full overflow-auto"><ShippingReport orders={permittedOrders} appData={appData} dateFilter={dateRange} startDate={customStart} endDate={customEnd} onNavigate={(filters) => { setDrilldownFilters(filters); setShowShippingReport(false); }} onBack={() => setShowShippingReport(false)} /></div>;
+    if (showShippingReport) return <div className="animate-fade-in h-full overflow-auto"><ShippingReport orders={permittedOrders} appData={appData} dateFilter="all" startDate="" endDate="" onNavigate={(filters) => { setDrilldownFilters(filters); setShowShippingReport(false); }} onBack={() => setShowShippingReport(false)} /></div>;
 
     return (
         <div className="flex flex-col space-y-4 pb-32">
@@ -248,21 +206,8 @@ const UserOrdersView: React.FC<{ team: string; onAdd: () => void }> = ({ team, o
                         />
                         <svg className="absolute left-4 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-600 group-focus-within:text-white transition-colors" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" /></svg>
                     </div>
-                    <div className="flex items-center justify-between gap-2">
-                        <div className="flex items-center gap-1.5 overflow-x-auto hide-scrollbar">
-                            {(['today', 'this_week', 'this_month', 'all'] as const).map(p => (
-                                <button 
-                                    key={p} 
-                                    onClick={() => setDateRange(p)} 
-                                    className={`px-4 py-2 text-[10px] font-bold uppercase rounded-xl whitespace-nowrap transition-all ${
-                                        dateRange === p ? 'bg-white text-black shadow-lg' : 'bg-white/5 text-gray-500 hover:text-white'
-                                    }`}
-                                >
-                                    {p === 'this_week' ? 'Week' : p === 'this_month' ? 'Month' : p}
-                                </button>
-                            ))}
-                        </div>
-                        <div className="flex items-center gap-1.5 ml-2">
+                    <div className="flex items-center justify-end gap-2">
+                        <div className="flex items-center gap-1.5">
                             {hasPermission('view_revenue') && (
                                 <>
                                     <button onClick={() => setShowReport(true)} className="flex items-center gap-2 px-3 py-2 bg-white/5 text-gray-400 hover:text-white rounded-xl transition-all border border-white/5" title="Page Report">
