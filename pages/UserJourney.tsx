@@ -1,5 +1,6 @@
-import React, { useContext, useMemo } from 'react';
+import React, { useContext, useMemo, useEffect } from 'react';
 import { AppContext } from '../context/AppContext';
+import { useOrder } from '../context/OrderContext';
 import { translations } from '../translations';
 import { ShieldX, AlertCircle, ChevronLeft, Palette, Monitor } from 'lucide-react';
 import MobileUserJourney from './MobileUserJourney';
@@ -7,6 +8,15 @@ import DesktopUserJourney from './DesktopUserJourney';
 
 const UserJourney: React.FC<{ onBackToRoleSelect: () => void }> = ({ onBackToRoleSelect }) => {
     const { currentUser, language, hasPermission, advancedSettings, setAdvancedSettings } = useContext(AppContext);
+    const { fetchOrders, orders, isOrdersLoading } = useOrder();
+
+    // Ensure orders are fetched when UserJourney mounts (handles cases where
+    // the initial fetch in App.tsx failed or hasn't completed yet)
+    useEffect(() => {
+        if (orders.length === 0 && !isOrdersLoading) {
+            fetchOrders();
+        }
+    }, []);
 
     const userTeams = useMemo(() =>
         (currentUser?.Team || '').split(',').map(t => t.trim()).filter(Boolean),
@@ -211,7 +221,16 @@ const UserJourney: React.FC<{ onBackToRoleSelect: () => void }> = ({ onBackToRol
             </div>
 
             <div className="flex-grow flex flex-col w-full">
-                {isMobile ? (
+                {isOrdersLoading && orders.length === 0 ? (
+                    <div className="flex-1 flex items-center justify-center" style={{ backgroundColor: terminalBg }}>
+                        <div className="flex flex-col items-center gap-3">
+                            <div className="w-8 h-8 border-2 border-t-transparent rounded-full animate-spin" style={{ borderColor: terminalAccent, borderTopColor: 'transparent' }} />
+                            <span className="text-xs font-semibold uppercase tracking-widest" style={{ color: terminalMuted }}>
+                                {language === 'km' ? 'កំពុងទាញទិន្នន័យ...' : 'Loading orders...'}
+                            </span>
+                        </div>
+                    </div>
+                ) : isMobile ? (
                     <MobileUserJourney onBackToRoleSelect={onBackToRoleSelect} userTeams={userTeams} />
                 ) : (
                     <DesktopUserJourney onBackToRoleSelect={onBackToRoleSelect} userTeams={userTeams} />
