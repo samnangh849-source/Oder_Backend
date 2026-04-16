@@ -208,13 +208,14 @@ func checkPermission(role string, isSystemAdmin bool, feature string) bool {
 			return true
 		}
 
+		rLower := strings.ToLower(strings.TrimSpace(r))
 		var perm RolePermission
-		err := DB.Where("LOWER(TRIM(role)) = LOWER(TRIM(?)) AND LOWER(TRIM(feature)) = ? AND is_enabled = ?", r, featureLower, true).First(&perm).Error
+		err := DB.Where("LOWER(TRIM(role)) = ? AND LOWER(TRIM(feature)) = ? AND is_enabled = true", rLower, featureLower).First(&perm).Error
 		if err == nil {
 			return true
 		}
 		// Log exactly what role/feature was checked vs what exists in DB (debug aid)
-		log.Printf("🔍 [checkPermission] No match: JWT_role=%q feature=%q (checked DB: LOWER(role)=%q)", r, featureLower, strings.ToLower(strings.TrimSpace(r)))
+		log.Printf("🔍 [checkPermission] No match: JWT_role=%q feature=%q (checked DB: LOWER(role)=%q)", r, featureLower, rLower)
 	}
 
 	// Log all permission rows for this feature so mismatch is obvious in server logs
