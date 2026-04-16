@@ -7,6 +7,7 @@ import { useUser } from './UserContext';
 interface OrderContextType {
     orders: ParsedOrder[];
     setOrders: React.Dispatch<React.SetStateAction<ParsedOrder[]>>;
+    ordersFetchError: 'permission_denied' | 'network_error' | null;
     appData: AppData;
     setAppData: React.Dispatch<React.SetStateAction<AppData>>;
     isOrdersLoading: boolean;
@@ -37,6 +38,7 @@ export const OrderProvider: React.FC<{ children: React.ReactNode }> = ({ childre
     const [isSyncing, setIsSyncing] = useState(false);
     const [isGlobalLoading, setIsGlobalLoading] = useState(true);
     const [refreshTimestamp, setRefreshTimestamp] = useState<number>(Date.now());
+    const [ordersFetchError, setOrdersFetchError] = useState<'permission_denied' | 'network_error' | null>(null);
 
     const handleUnauthorized = useCallback(() => {
         localStorage.removeItem('token');
@@ -124,6 +126,7 @@ export const OrderProvider: React.FC<{ children: React.ReactNode }> = ({ childre
             if (response.status === 403) {
                 console.warn("[fetchOrders] 403 Forbidden — role missing 'view_order_list' permission in database.");
                 setOrders([]);
+                setOrdersFetchError('permission_denied');
                 return;
             }
 
@@ -154,15 +157,18 @@ export const OrderProvider: React.FC<{ children: React.ReactNode }> = ({ childre
                         };
                     });
                     setOrders(parsedOrders);
+                    setOrdersFetchError(null);
                     setRefreshTimestamp(Date.now());
                 } else {
                     console.warn("[fetchOrders] Unexpected response format:", result);
                 }
             } else {
                 console.error("[fetchOrders] HTTP error:", response.status, response.statusText);
+                setOrdersFetchError('network_error');
             }
         } catch (e) {
             console.error("Orders fetch failed", e);
+            setOrdersFetchError('network_error');
         } finally {
             setIsOrdersLoading(false);
             setIsSyncing(false);
@@ -213,6 +219,7 @@ export const OrderProvider: React.FC<{ children: React.ReactNode }> = ({ childre
     return (
         <OrderContext.Provider value={{
             orders, setOrders, appData, setAppData,
+            ordersFetchError,
             isOrdersLoading, isSyncing, setIsOrdersLoading,
             isGlobalLoading, setIsGlobalLoading,
             refreshTimestamp, setRefreshTimestamp,
