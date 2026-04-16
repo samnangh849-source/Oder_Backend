@@ -120,6 +120,13 @@ export const OrderProvider: React.FC<{ children: React.ReactNode }> = ({ childre
                 return;
             }
 
+            // Handle 403 Permission Denied — user lacks 'view_order_list' permission in DB
+            if (response.status === 403) {
+                console.warn("[fetchOrders] 403 Forbidden — role missing 'view_order_list' permission in database.");
+                setOrders([]);
+                return;
+            }
+
             if (response.ok) {
                 const result = await response.json();
                 // Accept both 'success' and 'ok' status from backend
