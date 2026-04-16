@@ -68,28 +68,31 @@ export const OrderProvider: React.FC<{ children: React.ReactNode }> = ({ childre
 
             if (response.ok) {
                 const result = await response.json();
-                if (result.status === 'success') {
-                    // Map data while keeping original casing AND providing lowercase/aliased versions for consistency
-                    const mappedData: any = { ...result.data };
+                // Accept both 'success' and 'ok' status from backend
+                const sourceData = result.data || result.Data || result;
+                if (sourceData && typeof sourceData === 'object' && !Array.isArray(sourceData)) {
+                    const mappedData: any = { ...sourceData };
 
-                    if (result.data && typeof result.data === 'object') {
-                        Object.keys(result.data).forEach(key => {
-                            const val = result.data[key];
-                            const lowerKey = key.toLowerCase();
+                    Object.keys(sourceData).forEach(key => {
+                        const val = sourceData[key];
+                        const lowerKey = key.toLowerCase();
 
-                            // Ensure common keys are available in camelCase/lowercase as expected by frontend
-                            if (lowerKey === 'rolepermissions') mappedData.permissions = val;
-                            if (lowerKey === 'shippingmethods') mappedData.shippingMethods = val;
-                            if (lowerKey === 'teampages') mappedData.pages = val;
+                        // Ensure common keys are available in camelCase/lowercase as expected by frontend
+                        if (lowerKey === 'rolepermissions') mappedData.permissions = val;
+                        if (lowerKey === 'shippingmethods') mappedData.shippingMethods = val;
+                        if (lowerKey === 'teampages') mappedData.pages = val;
 
-                            // Also provide a completely lowercase version for each
-                            mappedData[lowerKey] = val;
-                        });
-                    }
+                        // Also provide a completely lowercase version for each
+                        mappedData[lowerKey] = val;
+                    });
 
                     setAppData(prev => ({ ...prev, ...mappedData }));
                     return mappedData;
+                } else {
+                    console.warn("[fetchData] Unexpected response format:", result);
                 }
+            } else {
+                console.error("[fetchData] HTTP error:", response.status, response.statusText);
             }
         } catch (e) {
             console.error("Static data fetch failed", e);
@@ -119,15 +122,14 @@ export const OrderProvider: React.FC<{ children: React.ReactNode }> = ({ childre
 
             if (response.ok) {
                 const result = await response.json();
-                if (result.status === 'success') {
-                    const parsedOrders = (result.data || []).map((o: any) => {
+                // Accept both 'success' and 'ok' status from backend
+                const rawList = result.data || result.orders || result.Data || [];
+                if (Array.isArray(rawList)) {
+                    const parsedOrders = rawList.map((o: any) => {
                         let products: any[] = [];
                         try {
                             const rawProducts = o['Products (JSON)'] || o.Products;
                             const parsed = typeof rawProducts === 'string' ? JSON.parse(rawProducts) : (rawProducts || []);
-                            // Normalize product fields — different code paths and older data may use
-                            // productName/ProductName instead of name, Quantity instead of quantity, etc.
-                            // The checklist and all downstream UI use only the canonical field names.
                             products = (Array.isArray(parsed) ? parsed : []).map((p: any) => ({
                                 ...p,
                                 name:     p.name     || p.productName || p.ProductName || '',
@@ -146,7 +148,11 @@ export const OrderProvider: React.FC<{ children: React.ReactNode }> = ({ childre
                     });
                     setOrders(parsedOrders);
                     setRefreshTimestamp(Date.now());
+                } else {
+                    console.warn("[fetchOrders] Unexpected response format:", result);
                 }
+            } else {
+                console.error("[fetchOrders] HTTP error:", response.status, response.statusText);
             }
         } catch (e) {
             console.error("Orders fetch failed", e);
