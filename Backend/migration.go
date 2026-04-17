@@ -955,10 +955,15 @@ func PerformDataMigration() {
 	var validPerms []RolePermission
 	seenPermKeys := make(map[string]bool)
 	for _, x := range perms {
-		key := strings.ToLower(x.Role + "|" + x.Feature)
+		key := strings.ToLower(strings.TrimSpace(x.Role) + "|" + strings.ToLower(strings.TrimSpace(x.Feature)))
 		if x.Role != "" && x.Feature != "" && !seenPermKeys[key] {
 			seenPermKeys[key] = true
-			x.ID = 0 // let local DB auto-increment manage PK
+			// Normalize to lowercase so DB values are consistent with checkPermission queries
+			x.Role = strings.ToLower(strings.TrimSpace(x.Role))
+			x.Feature = strings.ToLower(strings.TrimSpace(x.Feature))
+			// Preserve the original sheet ID so DB IDs stay in sync with Google Sheet IDs.
+			// This ensures EnqueueSync("updateSheet", ..., {"ID": "..."}) updates the correct sheet row.
+			// Do NOT reset x.ID = 0 here.
 			validPerms = append(validPerms, x)
 		}
 	}
@@ -1178,8 +1183,8 @@ func HandleMigrateMovies(c *gin.Context) {
 		for _, x := range movies {
 			if x.ID != "" && !seenMovieIDs[x.ID] {
 				seenMovieIDs[x.ID] = true
-				if x.AddedAt == "" {
-					x.AddedAt = time.Now().Format(time.RFC3339)
+				if x.AddedAt.IsZero() {
+					x.AddedAt = time.Now()
 				}
 				validMovies = append(validMovies, x)
 			}

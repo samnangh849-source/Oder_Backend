@@ -230,6 +230,12 @@ const AppContent: React.FC = () => {
              } else {
                  fetchData(true);
              }
+        } else if (lastMessage.type === 'update_permission') {
+            // Admin changed a permission — refresh static data so ALL connected users
+            // (including non-admin Sales/Staff users) get the updated permission state immediately.
+            // Without this, users rely on the 5-minute background poll to see the change.
+            console.log("[App] 🔐 Permission updated by admin. Refreshing permissions...");
+            fetchData(true);
         }
     }, [lastMessage, fetchOrders, fetchData, setOrders, showNotification]);
 
@@ -264,41 +270,41 @@ const AppContent: React.FC = () => {
     }, [setAppState]);
 
     // --- PERMISSION REFRESH ---
+    // Runs whenever appData.permissions changes (e.g. after fetchData, WebSocket update_permission event,
+    // or background 5-min poll). Rebuilds currentUser.Permissions from the authoritative server data.
+    // NOTE: currentUser?.Permissions is intentionally NOT in the dep array — the JSON comparison
+    // inside prevents redundant setCurrentUser calls without causing an update→re-trigger loop.
     useEffect(() => {
-        // Only refresh if appData.permissions actually has data to avoid clearing during initial load
-        if (currentUser && appData?.permissions && Array.isArray(appData.permissions) && appData.permissions.length > 0) {
-            // Split user roles (e.g. "Manager, Driver") and normalize to lowercase
-            const userRoles = (currentUser.Role || '').split(',').map(r => r.trim().toLowerCase());
-            
-            // Filter all permissions that match any of the user's roles (case-insensitive)
-            const matchedPerms = appData.permissions.filter(p => {
-                const role = (p.Role || p.role || '').toLowerCase();
-                return userRoles.includes(role);
-            });
+        if (!currentUser || !appData?.permissions || !Array.isArray(appData.permissions) || appData.permissions.length === 0) return;
 
-            // Deduplicate: If multiple roles define the same feature, prioritize IsEnabled: true
-            const mergedPermsMap: Record<string, any> = {};
-            matchedPerms.forEach(p => {
-                const feature = (p.Feature || p.feature || '').toLowerCase();
-                const enabled = p.IsEnabled ?? p.isEnabled ?? p.is_enabled ?? false;
-                if (!mergedPermsMap[feature] || enabled) {
-                    mergedPermsMap[feature] = p;
-                }
-            });
-            const rolePerms = Object.values(mergedPermsMap);
+        const userRoles = (currentUser.Role || '').split(',').map(r => r.trim().toLowerCase());
 
-            if (rolePerms.length > 0) {
-                const currentPermsStr = JSON.stringify(currentUser.Permissions || []);
-                const nextPermsStr = JSON.stringify(rolePerms);
-                if (currentPermsStr !== nextPermsStr) {
-                    setCurrentUser(prev => prev ? { ...prev, Permissions: rolePerms } : null);
-                }
-            } else if ((currentUser.Permissions || []).length > 0 && !isAdmin && appData.permissions.length > 5) {
-                // Only clear if we actually have a significant amount of data but none match
-                setCurrentUser(prev => prev ? { ...prev, Permissions: [] } : null);
+        // Collect all permission rows that match any of the user's roles (case-insensitive)
+        const matchedPerms = appData.permissions.filter(p => {
+            const role = (p.Role || p.role || '').toLowerCase();
+            return userRoles.includes(role);
+        });
+
+        // Deduplicate by feature: if a user has multiple roles granting the same feature, prefer enabled
+        const mergedPermsMap: Record<string, any> = {};
+        matchedPerms.forEach(p => {
+            const feature = (p.Feature || p.feature || '').toLowerCase();
+            const enabled = p.IsEnabled ?? p.isEnabled ?? p.is_enabled ?? false;
+            if (!mergedPermsMap[feature] || enabled) {
+                mergedPermsMap[feature] = p;
             }
-        }
-    }, [currentUser?.Role, appData?.permissions, currentUser?.Permissions, setCurrentUser, isAdmin]);
+        });
+        const rolePerms = Object.values(mergedPermsMap);
+
+        // Only write to state if content actually changed (avoids re-render cascade)
+        const nextPermsStr = JSON.stringify(rolePerms);
+        setCurrentUser(prev => {
+            if (!prev) return null;
+            if (JSON.stringify(prev.Permissions || []) === nextPermsStr) return prev;
+            return { ...prev, Permissions: rolePerms };
+        });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [currentUser?.Role, appData?.permissions]);
 
     useEffect(() => {
         if (currentUser) fetchOrders();

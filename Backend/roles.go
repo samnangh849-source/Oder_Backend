@@ -107,7 +107,7 @@ func HandleGetUserPermissions(c *gin.Context) {
 		return
 	}
 
-	if err := DB.Where("LOWER(role) IN ?", trimmedRoles).Find(&permissions).Error; err != nil {
+	if err := DB.Where("LOWER(TRIM(role)) IN ?", trimmedRoles).Find(&permissions).Error; err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"status": "error", "message": err.Error()})
 		return
 	}
@@ -143,7 +143,8 @@ func HandleUpdatePermission(c *gin.Context) {
 		featureLower := strings.ToLower(strings.TrimSpace(req.Feature))
 
 		var existing RolePermission
-		result := DB.Where("LOWER(role) = ? AND LOWER(feature) = ?", roleLower, featureLower).First(&existing)
+		// Use LOWER(TRIM(...)) to be consistent with checkPermission and handle any whitespace from sheet imports
+		result := DB.Where("LOWER(TRIM(role)) = ? AND LOWER(TRIM(feature)) = ?", roleLower, featureLower).First(&existing)
 
 		if result.Error != nil && result.Error == gorm.ErrRecordNotFound {
 			req.ID = 0
