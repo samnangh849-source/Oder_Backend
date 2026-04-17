@@ -107,7 +107,7 @@ func HandleGetUserPermissions(c *gin.Context) {
 		return
 	}
 
-	if err := DB.Where("LOWER(role) IN ?", trimmedRoles).Find(&permissions).Error; err != nil {
+	if err := DB.Where("LOWER(TRIM(role)) IN ?", trimmedRoles).Find(&permissions).Error; err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"status": "error", "message": err.Error()})
 		return
 	}
