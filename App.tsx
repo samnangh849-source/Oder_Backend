@@ -434,12 +434,15 @@ const AppContent: React.FC = () => {
                     headers,
                     body: JSON.stringify([{ Role: role, Feature: feature, IsEnabled: isEnabled }])
                 });
-                if (response.ok) {
-                    await fetchData(true);
-                    showNotification("សិទ្ធិត្រូវបានធ្វើបច្ចុប្បន្នភាព", "success");
+                if (!response.ok) {
+                    const errBody = await response.json().catch(() => ({}));
+                    throw new Error(errBody?.message || `Server error: ${response.status}`);
                 }
+                await fetchData(true);
+                showNotification("សិទ្ធិត្រូវបានធ្វើបច្ចុប្បន្នភាព", "success");
             } catch (e) {
                 console.error("Permission update failed", e);
+                throw e; // re-throw so PermissionMatrix catch block shows error notification
             }
         },
         isSidebarCollapsed, setIsSidebarCollapsed, setIsChatOpen,

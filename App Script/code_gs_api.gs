@@ -316,13 +316,16 @@ function handleUpdateSheet(data) {
     const headers = sheet.getRange(1, 1, 1, sheet.getLastColumn()).getValues()[0];
     const normalizedHeaders = headers.map(h => normalizeKey(h));
     
-    // 1. Optimized Row Lookup using TextFinder
-    const pkColName = Object.keys(data.primaryKey)[0];
+    // 1. Optimized Row Lookup using TextFinder (single-key PK only)
+    // When multiple keys are provided (composite PK e.g. Role+Feature), skip the fast path
+    // because TextFinder only checks one column and may match the wrong row.
+    const pkKeys = Object.keys(data.primaryKey);
+    const pkColName = pkKeys[0];
     const pkValue = data.primaryKey[pkColName];
     const pkIdx = normalizedHeaders.indexOf(normalizeKey(pkColName));
-    
+
     let rowIndex = -1;
-    if (pkIdx !== -1) {
+    if (pkKeys.length === 1 && pkIdx !== -1) {
       // Search ONLY in the specific Primary Key column for maximum speed.
       // Trim pkValue so TextFinder matches even if the value from Go has trailing spaces.
       const searchRange = sheet.getRange(1, pkIdx + 1, sheet.getLastRow(), 1);
@@ -334,9 +337,13 @@ function handleUpdateSheet(data) {
       }
     }
 
-    // Fallback to manual scan if TextFinder fails or complex PK
+    // Fallback to manual scan if TextFinder fails, composite PK, or column not found
     if (rowIndex === -1) {
-      console.warn("⚠️ [UpdateSheet] Fast lookup failed, falling back to scan...");
+      if (pkKeys.length > 1) {
+        console.log("🔍 [UpdateSheet] Composite PK detected (" + pkKeys.join("+") + "), using full scan...");
+      } else {
+        console.warn("⚠️ [UpdateSheet] Fast lookup failed, falling back to scan...");
+      }
       const values = sheet.getDataRange().getValues();
       const targetPkVals = {};
       for (const [k, v] of Object.entries(data.primaryKey)) { targetPkVals[normalizeKey(k)] = normalizeKey(v); }
