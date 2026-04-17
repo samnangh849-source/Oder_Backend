@@ -288,6 +288,14 @@ func processPersistentTask(workerID int, task *SyncTask) {
 
 	resp, err := CallAppsScriptPOST(req)
 
+	// Always clear the dedupe map entry after processing so subsequent updates are not silently dropped.
+	dedupeKey := getDedupeKey(req.Action, req.SheetName, req.PrimaryKey)
+	if dedupeKey != "" {
+		updateMutex.Lock()
+		delete(pendingUpdates, dedupeKey)
+		updateMutex.Unlock()
+	}
+
 	if err != nil || resp.Status != "success" {
 		newStatus := "failed"
 		if record.RetryCount >= record.MaxRetries {
@@ -301,7 +309,7 @@ func processPersistentTask(workerID int, task *SyncTask) {
 	} else {
 		// SUCCESS
 		DB.Delete(&record) // Remove successful tasks to keep table clean
-		
+
 		// Update local DB with Telegram Message IDs if returned
 		if (resp.MessageIds.ID1 != "" || resp.MessageIds.ID2 != "" || resp.MessageIds.ID3 != "") && req.OrderID != "" {
 			updates := make(map[string]interface{})
