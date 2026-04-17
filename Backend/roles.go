@@ -177,7 +177,11 @@ func HandleUpdatePermission(c *gin.Context) {
 			req.Feature = existing.Feature
 
 			go func(r RolePermission) {
-				EnqueueSync("updateSheet", map[string]interface{}{"IsEnabled": r.IsEnabled}, "RolePermissions", map[string]string{"Role": r.Role, "Feature": r.Feature})
+				EnqueueSync("updateSheet", map[string]interface{}{"IsEnabled": r.IsEnabled}, "RolePermissions", map[string]string{
+					"ID":      fmt.Sprintf("%d", r.ID),
+					"Role":    r.Role,
+					"Feature": r.Feature,
+				})
 			}(req)
 		} else {
 			log.Printf("❌ Failed to query permission [%s:%s]: %v", roleLower, featureLower, result.Error)
