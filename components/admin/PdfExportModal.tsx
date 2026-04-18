@@ -7,8 +7,12 @@ import { ParsedOrder, AppData } from '../../types';
 import Spinner from '../common/Spinner';
 import { imageUrlToBase64 } from '../../utils/fileUtils';
 
-// Local Khmer TTF font bundled by Vite — guaranteed to exist and be valid
+// Local Khmer TTF — used as fallback if CDN font unavailable
 import domkhFontUrl from '../../Font/DOMKH.ttf?url';
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Types
+// ─────────────────────────────────────────────────────────────────────────────
 
 interface PdfExportModalProps {
     isOpen: boolean;
@@ -29,26 +33,77 @@ interface PdfColumn {
 
 interface LoadedFont {
     base64: string;
-    /** Internal name registered with jsPDF */
     name: string;
 }
 
-// ---- Helpers ----
+interface KhmerImg {
+    dataUrl: string;
+    ar: number; // width / height aspect ratio
+}
 
-/** Ensure every Cambodian phone number starts with a leading 0 */
-const formatPhone = (phone: string): string => {
-    if (!phone) return '';
-    const cleaned = phone.replace(/\s+/g, '').replace(/[^\d+]/g, '');
-    // +855XXXXXXXXX → 0XXXXXXXXX
-    if (cleaned.startsWith('+855')) return '0' + cleaned.slice(4);
-    // 855XXXXXXXXX → 0XXXXXXXXX
-    if (cleaned.startsWith('855') && cleaned.length >= 11) return '0' + cleaned.slice(3);
-    // 8-10 digits with no leading 0 → prepend 0
-    if (!cleaned.startsWith('0') && /^\d{8,10}$/.test(cleaned)) return '0' + cleaned;
-    return cleaned;
+// ─────────────────────────────────────────────────────────────────────────────
+// Pure helpers (module-level, no closures)
+// ─────────────────────────────────────────────────────────────────────────────
+
+/** True when the string contains at least one Khmer Unicode character */
+const containsKhmer = (s: string) => /[\u1780-\u17FF]/.test(s);
+
+/**
+ * Render `text` using the browser's Kantumruy Pro font (which uses HarfBuzz
+ * for correct Khmer shaping / ជើង combining) and return a transparent PNG.
+ *
+ * @param sizePt  Font size in PDF points (1pt = 1/72 inch)
+ * @param cssColor Any valid CSS colour string, e.g. "#ffffff" or "rgb(28,28,30)"
+ */
+const renderKhmerToImg = (
+    text: string,
+    sizePt: number,
+    cssColor: string,
+    bold = false,
+): KhmerImg | null => {
+    if (!text) return null;
+    const SCALE   = 3;                                      // render at 3× for sharpness
+    const fontPx  = Math.round(sizePt * 1.3333 * SCALE);   // pt → CSS px → scaled
+    const weight  = bold ? '700' : '400';
+    const fontStr = `${weight} ${fontPx}px "Kantumruy Pro", "Noto Serif Khmer", sans-serif`;
+
+    // ── Use an off-screen measuring canvas so we never pollute the real canvas ──
+    const measure = document.createElement('canvas');
+    const mCtx    = measure.getContext('2d')!;
+    mCtx.font     = fontStr;
+    const textW   = Math.max(1, Math.ceil(mCtx.measureText(text).width));
+
+    // ── Render canvas (sized from measurement — no post-size context reset) ──
+    const canvas   = document.createElement('canvas');
+    canvas.width   = textW + SCALE * 6;           // horizontal padding
+    canvas.height  = Math.ceil(fontPx * 1.6);     // generous line-height
+    const ctx      = canvas.getContext('2d')!;
+    ctx.font        = fontStr;                     // set AFTER sizing — context is fresh
+    ctx.fillStyle   = cssColor;
+    ctx.textBaseline = 'middle';
+    ctx.fillText(text, SCALE * 3, canvas.height / 2);
+    return { dataUrl: canvas.toDataURL('image/png'), ar: canvas.width / canvas.height };
 };
 
-/** Convert an ArrayBuffer to a Base64 string safely (chunk to avoid stack overflow) */
+/** Draw a KhmerImg into a jsPDF doc at a PDF coordinate (all units = mm) */
+const placeKhmerImg = (
+    doc: any,
+    img: KhmerImg,
+    x: number,
+    y: number,
+    maxW: number,
+    heightMm: number,
+    align: 'left' | 'center' | 'right' = 'left',
+) => {
+    const h = Math.min(heightMm, maxW / img.ar);
+    const w = Math.min(maxW, h * img.ar);
+    let dx = x;
+    if (align === 'center') dx = x + (maxW - w) / 2;
+    else if (align === 'right') dx = x + maxW - w;
+    doc.addImage(img.dataUrl, 'PNG', dx, y, w, h);
+};
+
+/** Convert an ArrayBuffer → Base64 (chunked to avoid stack overflow) */
 const arrayBufferToBase64 = (buf: ArrayBuffer): string => {
     const bytes = new Uint8Array(buf);
     const CHUNK = 0x8000;
@@ -59,20 +114,17 @@ const arrayBufferToBase64 = (buf: ArrayBuffer): string => {
     return btoa(binary);
 };
 
-/** Return true if the ArrayBuffer starts with valid TTF/OTF magic bytes */
+/** Return true for TTF / OTF magic bytes; false for WOFF/WOFF2/HTML */
 const isValidTTF = (buf: ArrayBuffer): boolean => {
     if (buf.byteLength < 4) return false;
     const m = new Uint8Array(buf, 0, 4);
-    // 0x00010000 = TrueType
-    if (m[0] === 0x00 && m[1] === 0x01 && m[2] === 0x00 && m[3] === 0x00) return true;
-    // "true" = Apple TrueType
-    if (m[0] === 0x74 && m[1] === 0x72 && m[2] === 0x75 && m[3] === 0x65) return true;
-    // "OTTO" = CFF-based OTF (jsPDF 2.x supports this too)
-    if (m[0] === 0x4f && m[1] === 0x54 && m[2] === 0x54 && m[3] === 0x4f) return true;
+    if (m[0] === 0x00 && m[1] === 0x01 && m[2] === 0x00 && m[3] === 0x00) return true; // TTF
+    if (m[0] === 0x74 && m[1] === 0x72 && m[2] === 0x75 && m[3] === 0x65) return true; // "true"
+    if (m[0] === 0x4f && m[1] === 0x54 && m[2] === 0x54 && m[3] === 0x4f) return true; // "OTTO" OTF
     return false;
 };
 
-/** Sniff the first bytes of a Base64 blob to determine image format for jsPDF */
+/** Sniff PNG / JPEG / GIF magic bytes from a base64 string */
 const getImageFormat = (base64: string): 'JPEG' | 'PNG' | 'GIF' => {
     try {
         const bytes = atob(base64.slice(0, 16));
@@ -83,147 +135,178 @@ const getImageFormat = (base64: string): 'JPEG' | 'PNG' | 'GIF' => {
     return 'JPEG';
 };
 
-/** Draw a logo image in the left padding area of an autotable cell */
+/** Draw a service logo in the left-padding area of an autotable cell */
 const drawCellLogo = (doc: any, base64: string, x: number, y: number, cellH: number) => {
     if (!base64) return;
     const fmt = getImageFormat(base64);
     const h = Math.max(3, Math.min(cellH - 2, 5.5));
     const w = h * 1.5;
-    try {
-        doc.addImage(base64, fmt, x + 0.8, y + (cellH - h) / 2, w, h);
-    } catch { /* silently ignore corrupt / unsupported image data */ }
+    try { doc.addImage(base64, fmt, x + 0.8, y + (cellH - h) / 2, w, h); }
+    catch { /* silently ignore corrupt images */ }
 };
 
 /**
- * Load a Khmer-capable TTF font for embedding in jsPDF.
- *
- * Priority:
- *  1. Kantumruy Pro from jsDelivr (@fontsource) — matches the app's UI font
- *  2. Local DOMKH.ttf (MiSans Khmer) bundled with the app — always available
+ * Load a Khmer TTF for embedding.
+ * Priority: Kantumruy Pro (jsDelivr) → DOMKH.ttf (local, always available)
  */
 const loadKhmerFont = async (): Promise<LoadedFont | null> => {
-    // ── 1. Try Kantumruy Pro from CDN ──────────────────────────────────────
-    const kantumruyUrls = [
+    const cdnUrls = [
         'https://cdn.jsdelivr.net/npm/@fontsource/kantumruy-pro/files/kantumruy-pro-khmer-400-normal.ttf',
         'https://cdn.jsdelivr.net/npm/@fontsource/kantumruy-pro@5/files/kantumruy-pro-all-400-normal.ttf',
         'https://cdn.jsdelivr.net/npm/@fontsource/kantumruy/files/kantumruy-khmer-400-normal.ttf',
     ];
-    for (const url of kantumruyUrls) {
+    for (const url of cdnUrls) {
         try {
             const res = await fetch(url, { cache: 'force-cache' });
             if (!res.ok) continue;
             const buf = await res.arrayBuffer();
-            if (!isValidTTF(buf)) continue;   // reject WOFF/WOFF2/HTML error pages
+            if (!isValidTTF(buf)) continue;
             return { base64: arrayBufferToBase64(buf), name: 'KantumruyPro' };
         } catch { /* try next */ }
     }
-
-    // ── 2. Guaranteed fallback: local DOMKH.ttf (MiSans Khmer, 166 KB) ────
     try {
         const res = await fetch(domkhFontUrl);
         if (!res.ok) throw new Error(`HTTP ${res.status}`);
         const buf = await res.arrayBuffer();
-        if (!isValidTTF(buf)) throw new Error('Not a valid TTF');
+        if (!isValidTTF(buf)) throw new Error('Not a TTF');
         return { base64: arrayBufferToBase64(buf), name: 'MiSansKhmer' };
     } catch (e) {
-        console.error('Failed to load fallback Khmer font (DOMKH.ttf):', e);
+        console.error('Khmer font load failed:', e);
     }
-
-    return null; // extremely unlikely — PDF will render Khmer as boxes
+    return null;
 };
 
-// ---- Component ----
+// ─────────────────────────────────────────────────────────────────────────────
+// Component
+// ─────────────────────────────────────────────────────────────────────────────
 
 const PdfExportModal: React.FC<PdfExportModalProps> = ({ isOpen, onClose, orders, appData }) => {
-    const [grouping, setGrouping] = useState<GroupingOption>('Page');
-    const [pageSize, setPageSize] = useState<PageSize>('a4');
+    const [grouping, setGrouping]       = useState<GroupingOption>('Page');
+    const [pageSize, setPageSize]       = useState<PageSize>('a4');
     const [orientation, setOrientation] = useState<Orientation>('landscape');
     const [isGenerating, setIsGenerating] = useState(false);
 
     const [columns, setColumns] = useState<Record<string, PdfColumn>>({
-        serialNum:  { label: '#',                 visible: true,  width: 8  },
-        orderId:    { label: 'Order ID',           visible: true,  width: 24 },
-        date:       { label: 'Date',              visible: true,  width: 20 },
-        customer:   { label: 'ឈ្មោះអតិថិជន',     visible: true,  width: 34 },
-        phone:      { label: 'លេខទូរស័ព្ទ',       visible: true,  width: 30 },
-        location:   { label: 'ទីតាំង / អាសយដ្ឋាន', visible: true,  width: 44 },
-        items:      { label: 'ទំនិញ',             visible: true,  width: 50 },
-        shipping:   { label: 'ដឹកជញ្ជូន',         visible: true,  width: 30 },
-        total:      { label: 'សរុប ($)',           visible: true,  width: 20 },
-        status:     { label: 'ស្ថានភាព',           visible: true,  width: 20 },
-        note:       { label: 'កំណត់ចំណាំ',         visible: false, width: 30 },
+        serialNum: { label: '#',                  visible: true,  width: 8  },
+        orderId:   { label: 'Order ID',            visible: true,  width: 24 },
+        date:      { label: 'Date',               visible: true,  width: 20 },
+        customer:  { label: 'ឈ្មោះអតិថិជន',      visible: true,  width: 34 },
+        phone:     { label: 'លេខទូរស័ព្ទ',        visible: true,  width: 30 },
+        location:  { label: 'ទីតាំង / អាសយដ្ឋាន', visible: true,  width: 44 },
+        items:     { label: 'ទំនិញ',              visible: true,  width: 50 },
+        shipping:  { label: 'ដឹកជញ្ជូន',          visible: true,  width: 30 },
+        total:     { label: 'សរុប ($)',            visible: true,  width: 20 },
+        status:    { label: 'ស្ថានភាព',            visible: true,  width: 20 },
+        note:      { label: 'កំណត់ចំណាំ',          visible: false, width: 30 },
     });
 
-    const toggleColumn = (key: keyof typeof columns) => {
-        setColumns(prev => ({
-            ...prev,
-            [key]: { ...prev[key], visible: !prev[key].visible },
-        }));
+    const toggleColumn = (key: string) => {
+        setColumns(prev => ({ ...prev, [key]: { ...prev[key], visible: !prev[key].visible } }));
     };
+
+    // ── Phone helpers ──────────────────────────────────────────────────────────
+
+    const formatPhone = (phone: string): string => {
+        if (!phone) return '';
+        const c = phone.replace(/\s+/g, '').replace(/[^\d+]/g, '');
+        if (c.startsWith('+855')) return '0' + c.slice(4);
+        if (c.startsWith('855') && c.length >= 11) return '0' + c.slice(3);
+        if (!c.startsWith('0') && /^\d{8,10}$/.test(c)) return '0' + c;
+        return c;
+    };
+
+    // ── Main PDF generation ────────────────────────────────────────────────────
 
     const generatePDF = async () => {
         if (isGenerating) return;
         setIsGenerating(true);
 
         try {
-            // ── 1. Load Khmer font (Kantumruy CDN → DOMKH.ttf fallback) ────
+            // ── Step 1: Load fallback font for Latin / non-Khmer text ─────────
             const loadedFont = await loadKhmerFont();
-            const FONT_NAME = loadedFont?.name ?? 'helvetica';
+            const FONT_NAME  = loadedFont?.name ?? 'helvetica';
 
-            // ── 2. Pre-fetch all logos in parallel ─────────────────────────
-            const getCarrierForPhone = (phone: string) => {
+            // ── Step 2: Pre-fetch logos ────────────────────────────────────────
+            const getCarrier = (phone: string) => {
                 const fmt = formatPhone(phone);
                 return appData.phoneCarriers.find(c =>
-                    c.Prefixes.split(',').map(p => p.trim()).some(prefix => fmt.startsWith(prefix))
+                    c.Prefixes.split(',').map(p => p.trim()).some(pfx => fmt.startsWith(pfx))
                 ) ?? null;
             };
 
-            const uniqueMethodNames = [...new Set(orders.map(o => o['Internal Shipping Method']).filter(Boolean))];
-            const uniqueCarrierNames = new Set<string>();
-            orders.forEach(o => { const c = getCarrierForPhone(o['Customer Phone']); if (c) uniqueCarrierNames.add(c.CarrierName); });
+            const uniqueMethods  = [...new Set(orders.map(o => o['Internal Shipping Method']).filter(Boolean))];
+            const uniqueCarriers = new Set<string>();
+            orders.forEach(o => { const c = getCarrier(o['Customer Phone']); if (c) uniqueCarriers.add(c.CarrierName); });
 
-            const [shippingLogoEntries, carrierLogoEntries] = await Promise.all([
-                Promise.all(uniqueMethodNames.map(async name => {
-                    const m = appData.shippingMethods.find(x => x.MethodName === name);
-                    if (!m?.LogoURL) return [name, ''] as [string, string];
-                    const b64 = await imageUrlToBase64(m.LogoURL);
-                    return [name, b64] as [string, string];
+            const [shippingEntries, carrierEntries] = await Promise.all([
+                Promise.all(uniqueMethods.map(async n => {
+                    const m = appData.shippingMethods.find(x => x.MethodName === n);
+                    return [n, m?.LogoURL ? await imageUrlToBase64(m.LogoURL) : ''] as [string, string];
                 })),
-                Promise.all([...uniqueCarrierNames].map(async name => {
-                    const c = appData.phoneCarriers.find(x => x.CarrierName === name);
-                    if (!c?.CarrierLogoURL) return [name, ''] as [string, string];
-                    const b64 = await imageUrlToBase64(c.CarrierLogoURL);
-                    return [name, b64] as [string, string];
+                Promise.all([...uniqueCarriers].map(async n => {
+                    const c = appData.phoneCarriers.find(x => x.CarrierName === n);
+                    return [n, c?.CarrierLogoURL ? await imageUrlToBase64(c.CarrierLogoURL) : ''] as [string, string];
                 })),
             ]);
+            const shippingLogoCache: Record<string, string> = Object.fromEntries(shippingEntries.filter(([, v]) => v));
+            const carrierLogoCache:  Record<string, string> = Object.fromEntries(carrierEntries.filter(([, v]) => v));
 
-            const shippingLogoCache: Record<string, string> = Object.fromEntries(shippingLogoEntries.filter(([, v]) => v));
-            const carrierLogoCache:  Record<string, string> = Object.fromEntries(carrierLogoEntries.filter(([, v]) => v));
+            // ── Step 3: Ensure Kantumruy Pro is ready in browser canvas ──────────
+            // Canvas 2D font rendering is async — if the font is not yet in the
+            // browser font cache, fillText() silently falls back to the system
+            // default and Khmer shaping breaks.  document.fonts.load() resolves
+            // immediately when the font is already loaded (normal case), so this
+            // adds negligible overhead while guaranteeing correct glyph shaping.
+            try {
+                await document.fonts.load('400 32px "Kantumruy Pro"');
+                await document.fonts.load('700 32px "Kantumruy Pro"');
+            } catch { /* non-critical — canvas will use best available font */ }
 
-            // ── 3. Create document ─────────────────────────────────────────
+            // ── Step 4: Create jsPDF document ─────────────────────────────────
             const doc = new jsPDF({ orientation, unit: 'mm', format: pageSize }) as any;
-
             if (loadedFont) {
-                const vfsFileName = `${loadedFont.name}.ttf`;
-                doc.addFileToVFS(vfsFileName, loadedFont.base64);
-                doc.addFont(vfsFileName, loadedFont.name, 'normal');
+                doc.addFileToVFS(`${loadedFont.name}.ttf`, loadedFont.base64);
+                doc.addFont(`${loadedFont.name}.ttf`, loadedFont.name, 'normal');
             }
-            const useKhmer = () => { if (loadedFont) doc.setFont(FONT_NAME, 'normal'); };
-
+            const setFont = () => { if (loadedFont) doc.setFont(FONT_NAME, 'normal'); };
             const pageW = doc.internal.pageSize.width;
 
-            // ── 4. Document header ─────────────────────────────────────────
-            useKhmer();
-            doc.setFontSize(16);
-            doc.setTextColor(30, 30, 30);
-            doc.text('របាយការណ៍បញ្ជាទិញ (Orders Report)', pageW / 2, 14, { align: 'center' });
+            // ── Step 5: addDocText — draws mixed Khmer+Latin correctly ─────────
+            //   Khmer  → browser Canvas2D (HarfBuzz shaping) → PNG embedded in PDF
+            //   Latin  → jsPDF native text
+            const addDocText = (
+                text: string,
+                x: number, y: number,
+                sizePt: number,
+                rgb: [number, number, number],
+                align: 'left' | 'center' | 'right' = 'left',
+                bold = false,
+            ) => {
+                if (!text) return;
+                if (containsKhmer(text)) {
+                    const cssColor = `rgb(${rgb[0]},${rgb[1]},${rgb[2]})`;
+                    const img = renderKhmerToImg(text, sizePt, cssColor, bold);
+                    if (!img) return;
+                    const hMm = sizePt * 0.35278 * 1.45; // pt → mm with leading
+                    const wMm = hMm * img.ar;
+                    let dx = x;
+                    if (align === 'center') dx = x - wMm / 2;
+                    else if (align === 'right') dx = x - wMm;
+                    doc.addImage(img.dataUrl, 'PNG', dx, y - hMm * 0.92, wMm, hMm);
+                } else {
+                    setFont();
+                    doc.setFontSize(sizePt);
+                    doc.setTextColor(...rgb);
+                    doc.text(text, x, y, { align });
+                }
+            };
 
-            doc.setFontSize(9);
-            doc.setTextColor(110, 110, 110);
-            doc.text(`Generated: ${new Date().toLocaleString()}`, pageW / 2, 20, { align: 'center' });
-            doc.text(`ចំនួនបញ្ជាទិញសរុប: ${orders.length}`, pageW / 2, 25, { align: 'center' });
+            // ── Step 6: Document header ────────────────────────────────────────
+            addDocText('របាយការណ៍បញ្ជាទិញ (Orders Report)', pageW / 2, 14, 16, [30, 30, 30], 'center', true);
+            addDocText(`Generated: ${new Date().toLocaleString()}`,  pageW / 2, 21, 9, [110, 110, 110], 'center');
+            addDocText(`ចំនួនបញ្ជាទិញ: ${orders.length}`,           pageW / 2, 26, 9, [110, 110, 110], 'center');
 
-            // ── 5. Group orders ────────────────────────────────────────────
+            // ── Step 7: Grouping ───────────────────────────────────────────────
             const groupedData: Record<string, ParsedOrder[]> = {};
             if (grouping === 'None') {
                 groupedData['All Orders'] = orders;
@@ -235,26 +318,36 @@ const PdfExportModal: React.FC<PdfExportModalProps> = ({ isOpen, onClose, orders
                 });
             }
 
-            // ── 6. Build visible-column index map ──────────────────────────
-            const colKeys = Object.keys(columns) as Array<keyof typeof columns>;
-            const visibleKeys = colKeys.filter(k => columns[k].visible);
+            // ── Step 8: Column index map ───────────────────────────────────────
+            // Object.keys() returns string[] — keeps k typed as string throughout
+            // (avoids "symbol cannot be used as index type" from keyof inference)
+            const colKeys     = Object.keys(columns);                         // string[]
+            const visibleKeys = colKeys.filter(k => columns[k].visible);     // string[]
             const colIdx: Record<string, number> = {};
             visibleKeys.forEach((k, i) => { colIdx[k] = i; });
 
             const tableHead = [visibleKeys.map(k => columns[k].label)];
 
-            // Column widths + extra left-padding for logo columns
-            const columnStyles: Record<number, any> = {};
+            // Pre-render header labels (all contain Khmer except # / Order ID / Date)
+            const headerImgCache: Record<number, KhmerImg> = {};
             visibleKeys.forEach((k, i) => {
-                columnStyles[i] = { cellWidth: columns[k].width };
+                const label = columns[k].label;
+                if (containsKhmer(label)) {
+                    const img = renderKhmerToImg(label, 8, '#FFFFFF', true);
+                    if (img) headerImgCache[i] = img;
+                }
             });
-            const LOGO_LEFT_PAD = 9; // mm reserved for the logo image
-            if (colIdx.phone    !== undefined) columnStyles[colIdx.phone]    = { ...columnStyles[colIdx.phone],    cellPadding: { top: 1.5, bottom: 1.5, right: 2, left: LOGO_LEFT_PAD } };
-            if (colIdx.shipping !== undefined) columnStyles[colIdx.shipping] = { ...columnStyles[colIdx.shipping], cellPadding: { top: 1.5, bottom: 1.5, right: 2, left: LOGO_LEFT_PAD } };
 
-            let finalY = 30;
+            // Column widths + logo padding
+            const LOGO_PAD = 9; // mm left padding in logo columns
+            const columnStyles: Record<number, any> = {};
+            visibleKeys.forEach((k, i) => { columnStyles[i] = { cellWidth: columns[k].width }; });
+            if (colIdx.phone    !== undefined) columnStyles[colIdx.phone]    = { ...columnStyles[colIdx.phone],    cellPadding: { top: 1.5, bottom: 1.5, right: 2, left: LOGO_PAD } };
+            if (colIdx.shipping !== undefined) columnStyles[colIdx.shipping] = { ...columnStyles[colIdx.shipping], cellPadding: { top: 1.5, bottom: 1.5, right: 2, left: LOGO_PAD } };
 
-            // ── 7. Render each group ───────────────────────────────────────
+            let finalY = 31;
+
+            // ── Step 9: Render groups ──────────────────────────────────────────
             Object.entries(groupedData).sort().forEach(([groupName, groupOrders]) => {
                 if (finalY > doc.internal.pageSize.height - 30) {
                     doc.addPage();
@@ -263,33 +356,51 @@ const PdfExportModal: React.FC<PdfExportModalProps> = ({ isOpen, onClose, orders
 
                 // Group heading bar
                 if (grouping !== 'None') {
-                    useKhmer();
-                    doc.setFontSize(11);
-                    doc.setTextColor(30, 64, 175);
                     doc.setFillColor(235, 240, 255);
                     doc.rect(14, finalY, pageW - 28, 8, 'F');
-                    doc.text(`${grouping}: ${groupName}  (${groupOrders.length} orders)`, 16, finalY + 5.5);
+                    addDocText(
+                        `${grouping}: ${groupName}  (${groupOrders.length} orders)`,
+                        16, finalY + 5.5, 11, [30, 64, 175],
+                    );
                     finalY += 10;
                 }
 
-                // Build table body rows
+                // Build tableBody + track Khmer cells for this group
+                const khmerCellMap: Record<number, Record<number, string>> = {};
+                const khmerBodyCache: Record<string, KhmerImg> = {};
+
                 const tableBody = groupOrders.map((order, rowIdx) => {
                     const row: any[] = [];
-                    if (columns.serialNum.visible)  row.push(rowIdx + 1);
-                    if (columns.orderId.visible)     row.push(order['Order ID'] || '');
-                    if (columns.date.visible)        row.push(new Date(order.Timestamp).toLocaleDateString('en-GB'));
-                    if (columns.customer.visible)    row.push(order['Customer Name'] || '');
-                    if (columns.phone.visible)       row.push(formatPhone(order['Customer Phone']));
-                    if (columns.location.visible)    row.push([order.Location, order['Address Details']].filter(Boolean).join(' - '));
-                    if (columns.items.visible)       row.push(order.Products.map(p => `${p.quantity}x ${p.name}`).join(', '));
-                    if (columns.shipping.visible)    row.push(order['Internal Shipping Method'] || '');
-                    if (columns.total.visible)       row.push(`$${(order['Grand Total'] || 0).toFixed(2)}`);
-                    if (columns.status.visible)      row.push(order['Payment Status'] || '');
-                    if (columns.note.visible)        row.push(order.Note || '');
+                    let ci = 0;
+                    const push = (value: any) => {
+                        const str = String(value ?? '');
+                        if (containsKhmer(str)) {
+                            if (!khmerCellMap[rowIdx]) khmerCellMap[rowIdx] = {};
+                            khmerCellMap[rowIdx][ci] = str;
+                            if (!khmerBodyCache[str]) {
+                                const img = renderKhmerToImg(str, 8, '#1C1C1E');
+                                if (img) khmerBodyCache[str] = img;
+                            }
+                        }
+                        row.push(value ?? '');
+                        ci++;
+                    };
+
+                    if (columns.serialNum.visible) push(rowIdx + 1);
+                    if (columns.orderId.visible)   push(order['Order ID'] || '');
+                    if (columns.date.visible)      push(new Date(order.Timestamp).toLocaleDateString('en-GB'));
+                    if (columns.customer.visible)  push(order['Customer Name'] || '');
+                    if (columns.phone.visible)     push(formatPhone(order['Customer Phone']));
+                    if (columns.location.visible)  push([order.Location, order['Address Details']].filter(Boolean).join(' - '));
+                    if (columns.items.visible)     push(order.Products.map(p => `${p.quantity}x ${p.name}`).join(', '));
+                    if (columns.shipping.visible)  push(order['Internal Shipping Method'] || '');
+                    if (columns.total.visible)     push(`$${(order['Grand Total'] || 0).toFixed(2)}`);
+                    if (columns.status.visible)    push(order['Payment Status'] || '');
+                    if (columns.note.visible)      push(order.Note || '');
                     return row;
                 });
 
-                const groupTotal = groupOrders.reduce((sum, o) => sum + (o['Grand Total'] || 0), 0);
+                const groupTotal = groupOrders.reduce((s, o) => s + (o['Grand Total'] || 0), 0);
 
                 doc.autoTable({
                     startY: finalY,
@@ -311,60 +422,88 @@ const PdfExportModal: React.FC<PdfExportModalProps> = ({ isOpen, onClose, orders
                     columnStyles,
                     margin: { top: 20, left: 14, right: 14 },
 
-                    // Draw logos inside body cells
-                    didDrawCell: (data: any) => {
-                        if (data.section !== 'body') return;
-                        const order = groupOrders[data.row.index];
-                        if (!order) return;
+                    // ── willDrawCell: suppress garbled Khmer text ──────────────
+                    willDrawCell: (data: any) => {
+                        if (data.section === 'head') {
+                            if (headerImgCache[data.column.index]) {
+                                data.cell.text = ['']; // prevent garbled header
+                            }
+                        }
+                        if (data.section === 'body') {
+                            if (khmerCellMap[data.row.index]?.[data.column.index]) {
+                                data.cell.text = ['']; // prevent garbled body text
+                            }
+                        }
+                    },
 
-                        // Phone carrier logo
-                        if (data.column.index === colIdx.phone) {
-                            const carrier = getCarrierForPhone(order['Customer Phone']);
-                            if (carrier) {
-                                const logo = carrierLogoCache[carrier.CarrierName];
-                                if (logo) drawCellLogo(doc, logo, data.cell.x, data.cell.y, data.cell.height);
+                    // ── didDrawCell: draw canvas-rendered images + logos ───────
+                    didDrawCell: (data: any) => {
+                        const { cell, section, column, row } = data;
+                        const order = groupOrders[row.index];
+
+                        // Header Khmer labels → browser-rendered PNG
+                        if (section === 'head') {
+                            const img = headerImgCache[column.index];
+                            if (img) {
+                                const maxH = Math.min(cell.height - 1.5, 5);
+                                placeKhmerImg(doc, img, cell.x + 1, cell.y + (cell.height - maxH) / 2, cell.width - 2, maxH, 'center');
                             }
                         }
 
-                        // Shipping service logo
-                        if (data.column.index === colIdx.shipping) {
-                            const logo = shippingLogoCache[order['Internal Shipping Method']];
-                            if (logo) drawCellLogo(doc, logo, data.cell.x, data.cell.y, data.cell.height);
+                        // Body Khmer text → browser-rendered PNG
+                        if (section === 'body') {
+                            const khText = khmerCellMap[row.index]?.[column.index];
+                            if (khText) {
+                                const img = khmerBodyCache[khText];
+                                if (img) {
+                                    const padL = (column.index === colIdx.phone || column.index === colIdx.shipping) ? LOGO_PAD : 2;
+                                    const maxH = Math.min(cell.height - 2, 5);
+                                    const maxW = cell.width - padL - 1;
+                                    placeKhmerImg(doc, img, cell.x + padL, cell.y + (cell.height - maxH) / 2, maxW, maxH);
+                                }
+                            }
+
+                            if (!order) return;
+
+                            // Phone carrier logo
+                            if (column.index === colIdx.phone) {
+                                const carrier = getCarrier(order['Customer Phone']);
+                                if (carrier) {
+                                    const logo = carrierLogoCache[carrier.CarrierName];
+                                    if (logo) drawCellLogo(doc, logo, cell.x, cell.y, cell.height);
+                                }
+                            }
+
+                            // Shipping service logo
+                            if (column.index === colIdx.shipping) {
+                                const logo = shippingLogoCache[order['Internal Shipping Method']];
+                                if (logo) drawCellLogo(doc, logo, cell.x, cell.y, cell.height);
+                            }
                         }
                     },
                 });
 
                 finalY = doc.lastAutoTable.finalY + 2;
 
-                // Group subtotal
                 if (grouping !== 'None') {
-                    useKhmer();
-                    doc.setFontSize(9);
-                    doc.setTextColor(70, 70, 70);
-                    doc.text(`សរុបក្រុម: $${groupTotal.toFixed(2)}`, pageW - 15, finalY + 4, { align: 'right' });
+                    addDocText(`សរុបក្រុម: $${groupTotal.toFixed(2)}`, pageW - 15, finalY + 4, 9, [70, 70, 70], 'right');
                     finalY += 11;
                 } else {
                     finalY += 4;
                 }
             });
 
-            // Grand total (when not grouped)
+            // Grand total
             if (grouping === 'None') {
-                const grandTotal = orders.reduce((sum, o) => sum + (o['Grand Total'] || 0), 0);
-                useKhmer();
-                doc.setFontSize(12);
-                doc.setTextColor(0, 0, 0);
-                doc.text(`សរុបទឹកប្រាក់: $${grandTotal.toFixed(2)}`, pageW - 15, finalY + 5, { align: 'right' });
+                const grand = orders.reduce((s, o) => s + (o['Grand Total'] || 0), 0);
+                addDocText(`សរុបទឹកប្រាក់: $${grand.toFixed(2)}`, pageW - 15, finalY + 5, 12, [0, 0, 0], 'right', true);
             }
 
             // Page numbers
             const pageCount = doc.internal.pages.length - 1;
             for (let i = 1; i <= pageCount; i++) {
                 doc.setPage(i);
-                useKhmer();
-                doc.setFontSize(8);
-                doc.setTextColor(150, 150, 150);
-                doc.text(`ទំព័រ ${i} នៃ ${pageCount}`, pageW / 2, doc.internal.pageSize.height - 5, { align: 'center' });
+                addDocText(`ទំព័រ ${i} នៃ ${pageCount}`, pageW / 2, doc.internal.pageSize.height - 5, 8, [150, 150, 150], 'center');
             }
 
             doc.save(`Orders_Report_${new Date().toISOString().slice(0, 10)}.pdf`);
@@ -377,7 +516,7 @@ const PdfExportModal: React.FC<PdfExportModalProps> = ({ isOpen, onClose, orders
         }
     };
 
-    // ── UI ──────────────────────────────────────────────────────────────────
+    // ── UI ──────────────────────────────────────────────────────────────────────
 
     return (
         <Modal isOpen={isOpen} onClose={onClose} maxWidth="max-w-2xl">
@@ -427,7 +566,7 @@ const PdfExportModal: React.FC<PdfExportModalProps> = ({ isOpen, onClose, orders
                 <div className="bg-gray-800/50 p-4 rounded-lg border border-gray-700">
                     <h3 className="text-lg font-semibold text-blue-300 mb-3">Columns</h3>
                     <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
-                        {(Object.keys(columns) as Array<keyof typeof columns>).map(key => (
+                        {Object.keys(columns).map(key => (
                             <label key={key} className="flex items-center gap-2 cursor-pointer hover:bg-gray-700/60 p-2 rounded transition-colors">
                                 <input
                                     type="checkbox"
@@ -441,10 +580,11 @@ const PdfExportModal: React.FC<PdfExportModalProps> = ({ isOpen, onClose, orders
                     </div>
                 </div>
 
-                {/* Info note */}
+                {/* Note */}
                 <p className="text-xs text-gray-500 px-1">
-                    លេខទូរស័ព្ទត្រូវបាន format ឲ្យចាប់ផ្ដើមដោយ <span className="text-gray-300 font-mono">0</span> ដោយស្វ័យប្រវត្តិ។
-                    Logo ក្រុមហ៊ុនដឹក &amp; network carrier នឹងបង្ហាញក្នុង PDF បើអ៊ីនធឺណិតអនុញ្ញាត។
+                    អក្សរខ្មែរ render តាម browser canvas (ជើង / vowel signs ត្រឹមត្រូវ) ·
+                    លេខទូរស័ព្ទ format ចាប់ផ្ដើមដោយ <span className="text-gray-300 font-mono">0</span> ·
+                    Logo បង្ហាញបើ internet ព្រម
                 </p>
 
                 {/* Actions */}
