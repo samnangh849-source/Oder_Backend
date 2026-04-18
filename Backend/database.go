@@ -3,7 +3,6 @@ package backend
 import (
 	"encoding/base64"
 	"log"
-	"net/url"
 	"os"
 	"strconv"
 	"strings"

@@ -90,11 +90,11 @@ func HandleGetMovies(c *gin.Context) {
 
 	// Inject sample series data for testing UX
 	sampleSeries := []Movie{
-		{ID: "series-1-ep1", Title: "Squid Game - Ep 1", Description: "Red Light, Green Light.", Thumbnail: "https://image.tmdb.org/t/p/original/dDlEmu3EZ0Pgg93K2SVNLCjCSvE.jpg", VideoURL: "https://test-streams.mux.dev/x36xhzz/x36xhzz.m3u8", Type: "series", Language: "Korean", Country: "South Korea", Category: "Thriller", AddedAt: time.Now().Format(time.RFC3339)},
-		{ID: "series-1-ep2", Title: "Squid Game - Ep 2", Description: "Hell.", Thumbnail: "https://image.tmdb.org/t/p/original/dDlEmu3EZ0Pgg93K2SVNLCjCSvE.jpg", VideoURL: "https://test-streams.mux.dev/x36xhzz/x36xhzz.m3u8", Type: "series", Language: "Korean", Country: "South Korea", Category: "Thriller", AddedAt: time.Now().Format(time.RFC3339)},
-		{ID: "series-1-ep3", Title: "Squid Game - Ep 3", Description: "The Man with the Umbrella.", Thumbnail: "https://image.tmdb.org/t/p/original/dDlEmu3EZ0Pgg93K2SVNLCjCSvE.jpg", VideoURL: "https://test-streams.mux.dev/x36xhzz/x36xhzz.m3u8", Type: "series", Language: "Korean", Country: "South Korea", Category: "Thriller", AddedAt: time.Now().Format(time.RFC3339)},
-		{ID: "series-2-ep1", Title: "Stranger Things - Ep 1", Description: "The Vanishing of Will Byers.", Thumbnail: "https://image.tmdb.org/t/p/original/x2LSRK2Cm7MZhjluni1msVJ3wDF.jpg", VideoURL: "https://test-streams.mux.dev/x36xhzz/x36xhzz.m3u8", Type: "series", Language: "English", Country: "USA", Category: "Sci-Fi", AddedAt: time.Now().Format(time.RFC3339)},
-		{ID: "series-2-ep2", Title: "Stranger Things - Ep 2", Description: "The Weirdo on Maple Street.", Thumbnail: "https://image.tmdb.org/t/p/original/x2LSRK2Cm7MZhjluni1msVJ3wDF.jpg", VideoURL: "https://test-streams.mux.dev/x36xhzz/x36xhzz.m3u8", Type: "series", Language: "English", Country: "USA", Category: "Sci-Fi", AddedAt: time.Now().Format(time.RFC3339)},
+		{ID: "series-1-ep1", Title: "Squid Game - Ep 1", Description: "Red Light, Green Light.", Thumbnail: "https://image.tmdb.org/t/p/original/dDlEmu3EZ0Pgg93K2SVNLCjCSvE.jpg", VideoURL: "https://test-streams.mux.dev/x36xhzz/x36xhzz.m3u8", Type: "series", Language: "Korean", Country: "South Korea", Category: "Thriller", AddedAt: time.Now()},
+		{ID: "series-1-ep2", Title: "Squid Game - Ep 2", Description: "Hell.", Thumbnail: "https://image.tmdb.org/t/p/original/dDlEmu3EZ0Pgg93K2SVNLCjCSvE.jpg", VideoURL: "https://test-streams.mux.dev/x36xhzz/x36xhzz.m3u8", Type: "series", Language: "Korean", Country: "South Korea", Category: "Thriller", AddedAt: time.Now()},
+		{ID: "series-1-ep3", Title: "Squid Game - Ep 3", Description: "The Man with the Umbrella.", Thumbnail: "https://image.tmdb.org/t/p/original/dDlEmu3EZ0Pgg93K2SVNLCjCSvE.jpg", VideoURL: "https://test-streams.mux.dev/x36xhzz/x36xhzz.m3u8", Type: "series", Language: "Korean", Country: "South Korea", Category: "Thriller", AddedAt: time.Now()},
+		{ID: "series-2-ep1", Title: "Stranger Things - Ep 1", Description: "The Vanishing of Will Byers.", Thumbnail: "https://image.tmdb.org/t/p/original/x2LSRK2Cm7MZhjluni1msVJ3wDF.jpg", VideoURL: "https://test-streams.mux.dev/x36xhzz/x36xhzz.m3u8", Type: "series", Language: "English", Country: "USA", Category: "Sci-Fi", AddedAt: time.Now()},
+		{ID: "series-2-ep2", Title: "Stranger Things - Ep 2", Description: "The Weirdo on Maple Street.", Thumbnail: "https://image.tmdb.org/t/p/original/x2LSRK2Cm7MZhjluni1msVJ3wDF.jpg", VideoURL: "https://test-streams.mux.dev/x36xhzz/x36xhzz.m3u8", Type: "series", Language: "English", Country: "USA", Category: "Sci-Fi", AddedAt: time.Now()},
 	}
 
 	hasSeries := false
@@ -122,8 +122,8 @@ func HandleCreateMovie(c *gin.Context) {
 	if movie.ID == "" && VideoGenerateIDFunc != nil {
 		movie.ID = VideoGenerateIDFunc()
 	}
-	if movie.AddedAt == "" {
-		movie.AddedAt = time.Now().Format(time.RFC3339)
+	if movie.AddedAt.IsZero() {
+		movie.AddedAt = time.Now()
 	}
 
 	if err := DB.Create(&movie).Error; err != nil {

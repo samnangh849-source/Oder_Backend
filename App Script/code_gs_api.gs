@@ -104,6 +104,9 @@ function doPost(e) {
       case 'updateSheet':
         return handleUpdateSheet(contents);
 
+      case 'diagnose':
+        return handleDiagnose(contents);
+
       case 'renameFile':
         if (!contents.fileID || !contents.newName) {
           return createJsonResponse({ status: 'error', message: 'fileID និង newName ត្រូវតែមាន' });
@@ -316,45 +319,72 @@ function handleUpdateSheet(data) {
     const headers = sheet.getRange(1, 1, 1, sheet.getLastColumn()).getValues()[0];
     const normalizedHeaders = headers.map(h => normalizeKey(h));
     
-    // 1. Optimized Row Lookup using TextFinder (single-key PK only)
-    // When multiple keys are provided (composite PK e.g. Role+Feature), skip the fast path
-    // because TextFinder only checks one column and may match the wrong row.
     const pkKeys = Object.keys(data.primaryKey);
-    const pkColName = pkKeys[0];
-    const pkValue = data.primaryKey[pkColName];
-    const pkIdx = normalizedHeaders.indexOf(normalizeKey(pkColName));
-
     let rowIndex = -1;
-    if (pkKeys.length === 1 && pkIdx !== -1) {
-      // Search ONLY in the specific Primary Key column for maximum speed.
-      // Trim pkValue so TextFinder matches even if the value from Go has trailing spaces.
-      const searchRange = sheet.getRange(1, pkIdx + 1, sheet.getLastRow(), 1);
-      const finder = searchRange.createTextFinder(String(pkValue).trim()).matchEntireCell(true);
-      const match = finder.findNext();
-      if (match) {
-        rowIndex = match.getRow();
-        console.log("🚀 [UpdateSheet] Fast lookup success! Row: " + rowIndex);
+
+    // 1. Try to find by 'ID' first if it exists in primaryKey, as it's the most reliable and fastest
+    const idKey = pkKeys.find(k => normalizeKey(k) === "id");
+    if (idKey) {
+      const idVal = data.primaryKey[idKey];
+      const idColIdx = normalizedHeaders.indexOf("id");
+      if (idColIdx !== -1) {
+        const searchRange = sheet.getRange(1, idColIdx + 1, sheet.getLastRow(), 1);
+        const finder = searchRange.createTextFinder(String(idVal).trim()).matchEntireCell(true);
+        const match = finder.findNext();
+        if (match) {
+          rowIndex = match.getRow();
+          console.log("🚀 [UpdateSheet] ID lookup success! Row: " + rowIndex);
+        }
       }
     }
 
-    // Fallback to manual scan if TextFinder fails, composite PK, or column not found
-    if (rowIndex === -1) {
-      if (pkKeys.length > 1) {
-        console.log("🔍 [UpdateSheet] Composite PK detected (" + pkKeys.join("+") + "), using full scan...");
-      } else {
-        console.warn("⚠️ [UpdateSheet] Fast lookup failed, falling back to scan...");
+    // 2. Optimized Row Lookup using TextFinder (single-key PK only, if ID not found)
+    if (rowIndex === -1 && pkKeys.length === 1) {
+      const pkColName = pkKeys[0];
+      const pkValue = data.primaryKey[pkColName];
+      const pkIdx = normalizedHeaders.indexOf(normalizeKey(pkColName));
+
+      if (pkIdx !== -1) {
+        const searchRange = sheet.getRange(1, pkIdx + 1, sheet.getLastRow(), 1);
+        const finder = searchRange.createTextFinder(String(pkValue).trim()).matchEntireCell(true);
+        const match = finder.findNext();
+        if (match) {
+          rowIndex = match.getRow();
+          console.log("🚀 [UpdateSheet] Fast lookup success! Row: " + rowIndex);
+        }
       }
+    }
+
+    // 3. Fallback to manual scan if TextFinder fails, composite PK, or column not found
+    if (rowIndex === -1) {
+      console.log("🔍 [UpdateSheet] Using full scan for PK matching...");
       const values = sheet.getDataRange().getValues();
       const targetPkVals = {};
-      for (const [k, v] of Object.entries(data.primaryKey)) { targetPkVals[normalizeKey(k)] = normalizeKey(v); }
+      for (const [k, v] of Object.entries(data.primaryKey)) { 
+        targetPkVals[normalizeKey(k)] = normalizeKey(v); 
+      }
 
       for (let i = 1; i < values.length; i++) {
         let match = true;
         for (const pkKey in targetPkVals) {
           const col = normalizedHeaders.indexOf(pkKey);
-          if (col === -1 || normalizeKey(values[i][col]) !== targetPkVals[pkKey]) { match = false; break; }
+          if (col === -1) {
+            match = false;
+            break;
+          }
+          
+          const cellVal = normalizeKey(values[i][col]);
+          const targetVal = targetPkVals[pkKey];
+          
+          if (cellVal !== targetVal) {
+            match = false;
+            break;
+          }
         }
-        if (match) { rowIndex = i + 1; break; }
+        if (match) {
+          rowIndex = i + 1;
+          break;
+        }
       }
     }
 
@@ -375,6 +405,11 @@ function handleUpdateSheet(data) {
 
       for (const [key, val] of Object.entries(data.newData)) {
         const nKey = normalizeKey(key);
+        // Skip if this key is part of the primaryKey and it already matches
+        if (data.primaryKey[key] !== undefined && normalizeKey(data.primaryKey[key]) === normalizeKey(val)) {
+          continue;
+        }
+
         let colIdx = normalizedHeaders.indexOf(nKey);
         
         if (colIdx === -1) {
@@ -387,9 +422,11 @@ function handleUpdateSheet(data) {
 
         if (colIdx !== -1) {
           let v = val;
+          // Robust boolean handling
           if (typeof v === 'string') {
-            if (v.toLowerCase() === 'true') v = true;
-            else if (v.toLowerCase() === 'false') v = false;
+            const lowV = v.toLowerCase().trim();
+            if (lowV === 'true') v = true;
+            else if (lowV === 'false') v = false;
           }
           rowData[colIdx] = v;
           updatedCount++;
@@ -399,12 +436,17 @@ function handleUpdateSheet(data) {
       if (updatedCount > 0) {
         rowRange.setValues([rowData]);
         SpreadsheetApp.flush();
-        console.log("✅ [UpdateSheet] Atomic update success for row " + rowIndex);
+        console.log("✅ [UpdateSheet] Atomic update success for row " + rowIndex + " (Fields: " + updatedCount + ")");
+      } else {
+        console.log("ℹ️ [UpdateSheet] No fields actually needed updating for row " + rowIndex);
       }
-      return createJsonResponse({ status: "success", updated: updatedCount });
+      return createJsonResponse({ status: "success", updated: updatedCount, rowIndex: rowIndex });
     }
+    
+    console.error("❌ [UpdateSheet] Row not found for PK: " + JSON.stringify(data.primaryKey));
     return createJsonResponse({ status: "error", message: "រកមិនឃើញជួរទិន្នន័យដើម្បីកែប្រែ" }, 404);
   } catch (e) {
+    console.error("❌ [UpdateSheet] FAILED: " + e.message);
     return createJsonResponse({ status: "error", message: "Update failed: " + e.message }, 500);
   }
 }
@@ -1317,3 +1359,40 @@ function testDriveAccess() {
   }
 }
 
+
+function handleDiagnose(data) {
+  try {
+    const ss = SpreadsheetApp.getActiveSpreadsheet();
+    const sheets = ss.getSheets();
+    const sheetNames = sheets.map(s => "'" + s.getName() + "'");
+    
+    const rolePermSheet = ss.getSheetByName("RolePermissions");
+    let sampleData = [];
+    let headers = [];
+    
+    if (rolePermSheet) {
+      const lastRow = Math.min(rolePermSheet.getLastRow(), 6);
+      const lastCol = rolePermSheet.getLastColumn();
+      if (lastRow > 0 && lastCol > 0) {
+        const values = rolePermSheet.getRange(1, 1, lastRow, lastCol).getValues();
+        headers = values[0];
+        sampleData = values.slice(1);
+      }
+    }
+
+    return createJsonResponse({
+      status: "success",
+      spreadsheetName: ss.getName(),
+      spreadsheetId: ss.getId(),
+      allSheetNames: sheetNames,
+      rolePermissionsInfo: {
+        exists: !!rolePermSheet,
+        rowCount: rolePermSheet ? rolePermSheet.getLastRow() : 0,
+        headers: headers,
+        sampleRows: sampleData
+      }
+    });
+  } catch (e) {
+    return createJsonResponse({ status: "error", message: "Diagnose failed: " + e.message });
+  }
+}

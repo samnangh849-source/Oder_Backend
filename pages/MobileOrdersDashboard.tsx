@@ -381,7 +381,7 @@ const MobileOrdersDashboard: React.FC<MobileOrdersDashboardProps> = ({ onBack, i
             )}
 
 
-            {isPdfModalOpen && <PdfExportModal isOpen={true} onClose={() => setIsPdfModalOpen(false)} orders={filteredOrders} />}
+            {isPdfModalOpen && <PdfExportModal isOpen={true} onClose={() => setIsPdfModalOpen(false)} orders={filteredOrders} appData={appData} />}
             {viewingOrder && <OrderDetailModal order={viewingOrder} onClose={() => setViewingOrder(null)} />}
         </div>
     );

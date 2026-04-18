@@ -27,6 +27,25 @@
     
     <link rel="stylesheet" href="index.css">
     <script>
+      // Single Page Application Redirect for GitHub Pages
+      (function() {
+        var path = window.location.pathname;
+        var search = window.location.search;
+        var hash = window.location.hash;
+        
+        // If the path contains '/assets/' or other sub-paths that cause 404, 
+        // redirect back to the root index with the parameters intact.
+        if (path.includes('/Order_System/')) {
+          var cleanPath = path.split('/Order_System/')[1];
+          // If we are not at the root of the app, redirect to the root with a special parameter
+          if (cleanPath && cleanPath !== '' && cleanPath !== 'index.html') {
+             // Convert the path into a query parameter so index.tsx can handle it if needed
+             // but for this app, usually just returning to root with the existing 'search' is enough
+             window.location.replace('/Order_System/' + search + hash);
+          }
+        }
+      })();
+
       (function() {
         window.global = window;
         window.process = window.process || {

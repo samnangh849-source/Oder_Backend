@@ -413,7 +413,7 @@ const DesktopOrdersDashboard: React.FC<DesktopOrdersDashboardProps> = ({ onBack,
                 onClearSelection={() => setSelectedIds(new Set())} 
                 onOptimisticUpdate={(ids, status) => optimisticUpdateRef.current?.(ids, status)}
             />
-            {isPdfModalOpen && <PdfExportModal isOpen={true} onClose={() => setIsPdfModalOpen(false)} orders={filteredOrders} />}
+            {isPdfModalOpen && <PdfExportModal isOpen={true} onClose={() => setIsPdfModalOpen(false)} orders={filteredOrders} appData={appData} />}
             {viewingOrder && <OrderDetailModal order={viewingOrder} onClose={() => setViewingOrder(null)} />}
         </div>
     );
