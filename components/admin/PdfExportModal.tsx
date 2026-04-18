@@ -7,6 +7,9 @@ import { ParsedOrder, AppData } from '../../types';
 import Spinner from '../common/Spinner';
 import { imageUrlToBase64 } from '../../utils/fileUtils';
 
+// Local Khmer TTF font bundled by Vite — guaranteed to exist and be valid
+import domkhFontUrl from '../../Font/DOMKH.ttf?url';
+
 interface PdfExportModalProps {
     isOpen: boolean;
     onClose: () => void;
@@ -24,6 +27,12 @@ interface PdfColumn {
     width: number;
 }
 
+interface LoadedFont {
+    base64: string;
+    /** Internal name registered with jsPDF */
+    name: string;
+}
+
 // ---- Helpers ----
 
 /** Ensure every Cambodian phone number starts with a leading 0 */
@@ -39,7 +48,7 @@ const formatPhone = (phone: string): string => {
     return cleaned;
 };
 
-/** Convert an ArrayBuffer to a Base64 string in chunks to avoid stack overflow */
+/** Convert an ArrayBuffer to a Base64 string safely (chunk to avoid stack overflow) */
 const arrayBufferToBase64 = (buf: ArrayBuffer): string => {
     const bytes = new Uint8Array(buf);
     const CHUNK = 0x8000;
@@ -48,6 +57,19 @@ const arrayBufferToBase64 = (buf: ArrayBuffer): string => {
         binary += String.fromCharCode(...Array.from(bytes.subarray(i, Math.min(i + CHUNK, bytes.length))));
     }
     return btoa(binary);
+};
+
+/** Return true if the ArrayBuffer starts with valid TTF/OTF magic bytes */
+const isValidTTF = (buf: ArrayBuffer): boolean => {
+    if (buf.byteLength < 4) return false;
+    const m = new Uint8Array(buf, 0, 4);
+    // 0x00010000 = TrueType
+    if (m[0] === 0x00 && m[1] === 0x01 && m[2] === 0x00 && m[3] === 0x00) return true;
+    // "true" = Apple TrueType
+    if (m[0] === 0x74 && m[1] === 0x72 && m[2] === 0x75 && m[3] === 0x65) return true;
+    // "OTTO" = CFF-based OTF (jsPDF 2.x supports this too)
+    if (m[0] === 0x4f && m[1] === 0x54 && m[2] === 0x54 && m[3] === 0x4f) return true;
+    return false;
 };
 
 /** Sniff the first bytes of a Base64 blob to determine image format for jsPDF */
@@ -61,7 +83,7 @@ const getImageFormat = (base64: string): 'JPEG' | 'PNG' | 'GIF' => {
     return 'JPEG';
 };
 
-/** Try to draw a base64 logo image inside a jsPDF-autotable cell */
+/** Draw a logo image in the left padding area of an autotable cell */
 const drawCellLogo = (doc: any, base64: string, x: number, y: number, cellH: number) => {
     if (!base64) return;
     const fmt = getImageFormat(base64);
@@ -69,36 +91,45 @@ const drawCellLogo = (doc: any, base64: string, x: number, y: number, cellH: num
     const w = h * 1.5;
     try {
         doc.addImage(base64, fmt, x + 0.8, y + (cellH - h) / 2, w, h);
-    } catch { /* silently ignore corrupt / unsupported image */ }
+    } catch { /* silently ignore corrupt / unsupported image data */ }
 };
 
 /**
- * Fetch Kantumruy Pro font as a Base64-encoded TTF string.
- * Tries jsDelivr (@fontsource) first, then falls back gracefully.
+ * Load a Khmer-capable TTF font for embedding in jsPDF.
+ *
+ * Priority:
+ *  1. Kantumruy Pro from jsDelivr (@fontsource) — matches the app's UI font
+ *  2. Local DOMKH.ttf (MiSans Khmer) bundled with the app — always available
  */
-const loadKantumruyFont = async (): Promise<string | null> => {
-    const candidates = [
+const loadKhmerFont = async (): Promise<LoadedFont | null> => {
+    // ── 1. Try Kantumruy Pro from CDN ──────────────────────────────────────
+    const kantumruyUrls = [
         'https://cdn.jsdelivr.net/npm/@fontsource/kantumruy-pro/files/kantumruy-pro-khmer-400-normal.ttf',
         'https://cdn.jsdelivr.net/npm/@fontsource/kantumruy-pro@5/files/kantumruy-pro-all-400-normal.ttf',
         'https://cdn.jsdelivr.net/npm/@fontsource/kantumruy/files/kantumruy-khmer-400-normal.ttf',
     ];
-    for (const url of candidates) {
+    for (const url of kantumruyUrls) {
         try {
             const res = await fetch(url, { cache: 'force-cache' });
             if (!res.ok) continue;
             const buf = await res.arrayBuffer();
-            // Validate TTF magic bytes (0x00010000 or "OTTO" or "true")
-            const magic = new Uint8Array(buf, 0, 4);
-            const isOTF = magic[0] === 0x4f && magic[1] === 0x54; // "OT"
-            const isTTF =
-                (magic[0] === 0x00 && magic[1] === 0x01 && magic[2] === 0x00 && magic[3] === 0x00) ||
-                (magic[0] === 0x74 && magic[1] === 0x72 && magic[2] === 0x75 && magic[3] === 0x65) || // "true"
-                isOTF;
-            if (!isTTF) continue; // Skip WOFF/WOFF2 – jsPDF can't use them
-            return arrayBufferToBase64(buf);
+            if (!isValidTTF(buf)) continue;   // reject WOFF/WOFF2/HTML error pages
+            return { base64: arrayBufferToBase64(buf), name: 'KantumruyPro' };
         } catch { /* try next */ }
     }
-    return null; // font unavailable; PDF will still generate without Khmer rendering
+
+    // ── 2. Guaranteed fallback: local DOMKH.ttf (MiSans Khmer, 166 KB) ────
+    try {
+        const res = await fetch(domkhFontUrl);
+        if (!res.ok) throw new Error(`HTTP ${res.status}`);
+        const buf = await res.arrayBuffer();
+        if (!isValidTTF(buf)) throw new Error('Not a valid TTF');
+        return { base64: arrayBufferToBase64(buf), name: 'MiSansKhmer' };
+    } catch (e) {
+        console.error('Failed to load fallback Khmer font (DOMKH.ttf):', e);
+    }
+
+    return null; // extremely unlikely — PDF will render Khmer as boxes
 };
 
 // ---- Component ----
@@ -135,9 +166,9 @@ const PdfExportModal: React.FC<PdfExportModalProps> = ({ isOpen, onClose, orders
         setIsGenerating(true);
 
         try {
-            // ── 1. Load Kantumruy font ──────────────────────────────────────
-            const fontBase64 = await loadKantumruyFont();
-            const FONT_NAME = 'KantumruyPro';
+            // ── 1. Load Khmer font (Kantumruy CDN → DOMKH.ttf fallback) ────
+            const loadedFont = await loadKhmerFont();
+            const FONT_NAME = loadedFont?.name ?? 'helvetica';
 
             // ── 2. Pre-fetch all logos in parallel ─────────────────────────
             const getCarrierForPhone = (phone: string) => {
@@ -172,11 +203,12 @@ const PdfExportModal: React.FC<PdfExportModalProps> = ({ isOpen, onClose, orders
             // ── 3. Create document ─────────────────────────────────────────
             const doc = new jsPDF({ orientation, unit: 'mm', format: pageSize }) as any;
 
-            if (fontBase64) {
-                doc.addFileToVFS('KantumruyPro-Regular.ttf', fontBase64);
-                doc.addFont('KantumruyPro-Regular.ttf', FONT_NAME, 'normal');
+            if (loadedFont) {
+                const vfsFileName = `${loadedFont.name}.ttf`;
+                doc.addFileToVFS(vfsFileName, loadedFont.base64);
+                doc.addFont(vfsFileName, loadedFont.name, 'normal');
             }
-            const useKhmer = () => { if (fontBase64) doc.setFont(FONT_NAME, 'normal'); };
+            const useKhmer = () => { if (loadedFont) doc.setFont(FONT_NAME, 'normal'); };
 
             const pageW = doc.internal.pageSize.width;
 
@@ -268,13 +300,13 @@ const PdfExportModal: React.FC<PdfExportModalProps> = ({ isOpen, onClose, orders
                         fillColor: [43, 53, 72],
                         textColor: [255, 255, 255],
                         fontSize: 8,
-                        ...(fontBase64 ? { font: FONT_NAME } : {}),
+                        ...(loadedFont ? { font: FONT_NAME } : {}),
                     },
                     styles: {
                         fontSize: 8,
                         cellPadding: 2,
                         overflow: 'linebreak',
-                        ...(fontBase64 ? { font: FONT_NAME } : {}),
+                        ...(loadedFont ? { font: FONT_NAME } : {}),
                     },
                     columnStyles,
                     margin: { top: 20, left: 14, right: 14 },
