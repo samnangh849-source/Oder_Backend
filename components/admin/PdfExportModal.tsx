@@ -138,11 +138,14 @@ const getImageFormat = (base64: string): 'JPEG' | 'PNG' | 'GIF' => {
 /** Draw a service logo in the left-padding area of an autotable cell */
 const drawCellLogo = (doc: any, base64: string, x: number, y: number, cellH: number) => {
     if (!base64) return;
-    const fmt = getImageFormat(base64);
+    // jsPDF 2.x addImage requires a proper data-URL string (not raw base64)
+    const fmt      = getImageFormat(base64);
+    const mimeType = fmt === 'PNG' ? 'image/png' : fmt === 'GIF' ? 'image/gif' : 'image/jpeg';
+    const dataUrl  = `data:${mimeType};base64,${base64}`;
     const h = Math.max(3, Math.min(cellH - 2, 5.5));
     const w = h * 1.5;
-    try { doc.addImage(base64, fmt, x + 0.8, y + (cellH - h) / 2, w, h); }
-    catch { /* silently ignore corrupt images */ }
+    try { doc.addImage(dataUrl, fmt, x + 0.8, y + (cellH - h) / 2, w, h); }
+    catch { /* silently ignore corrupt / CORS-blocked images */ }
 };
 
 /**
@@ -294,7 +297,7 @@ const PdfExportModal: React.FC<PdfExportModalProps> = ({ isOpen, onClose, orders
                     else if (align === 'right') dx = x - wMm;
                     doc.addImage(img.dataUrl, 'PNG', dx, y - hMm * 0.92, wMm, hMm);
                 } else {
-                    setFont();
+                    doc.setFont('helvetica', 'normal');
                     doc.setFontSize(sizePt);
                     doc.setTextColor(...rgb);
                     doc.text(text, x, y, { align });
@@ -411,13 +414,11 @@ const PdfExportModal: React.FC<PdfExportModalProps> = ({ isOpen, onClose, orders
                         fillColor: [43, 53, 72],
                         textColor: [255, 255, 255],
                         fontSize: 8,
-                        ...(loadedFont ? { font: FONT_NAME } : {}),
                     },
                     styles: {
                         fontSize: 8,
                         cellPadding: 2,
                         overflow: 'linebreak',
-                        ...(loadedFont ? { font: FONT_NAME } : {}),
                     },
                     columnStyles,
                     margin: { top: 20, left: 14, right: 14 },
