@@ -198,25 +198,59 @@ const getImageFormat = (base64: string): 'JPEG' | 'PNG' | 'GIF' => {
 
 /**
  * Fetch any image URL and return it as a PNG base64 string (no data: prefix).
- * Uses browser canvas so WebP / AVIF / GIF / SVG all work — jsPDF always
- * receives plain PNG which it handles reliably.
+ *
+ * Strategy:
+ *  1. Extract the Google Drive file ID (if present) and try the lh3.googleusercontent.com
+ *     CDN first — it reliably returns Access-Control-Allow-Origin: * for public files.
+ *  2. Fall back to the drive.google.com/thumbnail endpoint.
+ *  3. Fall back to the original URL as-is.
+ *
+ * Each attempt has a 10-second timeout.  naturalWidth === 0 signals that Google
+ * returned an HTML redirect page (login) instead of the actual image.
  */
 const fetchLogoPng = (url: string): Promise<string> =>
     new Promise(resolve => {
         if (!url) return resolve('');
-        const img = new Image();
-        img.crossOrigin = 'anonymous';
-        img.onload = () => {
-            try {
-                const c = document.createElement('canvas');
-                c.width  = Math.max(1, img.naturalWidth);
-                c.height = Math.max(1, img.naturalHeight);
-                c.getContext('2d')!.drawImage(img, 0, 0);
-                resolve(c.toDataURL('image/png').split(',')[1]);
-            } catch { resolve(''); }
+
+        // Extract Drive file ID from any recognised Drive URL pattern
+        const idMatch = url.match(/[?&/]id=([a-zA-Z0-9_-]{25,45})|\/d\/([a-zA-Z0-9_-]{25,45})/);
+        const fileId  = idMatch?.[1] ?? idMatch?.[2] ?? '';
+
+        // Build candidate URLs: lh3 CDN first (best CORS support), then thumbnail, then raw
+        const candidates: string[] = fileId
+            ? [
+                `https://lh3.googleusercontent.com/d/${fileId}=s400`,
+                `https://drive.google.com/thumbnail?id=${fileId}&sz=w400`,
+                url,
+              ]
+            : [url];
+
+        let idx = 0;
+        const tryNext = () => {
+            if (idx >= candidates.length) return resolve('');
+            const src = candidates[idx++];
+            const img = new Image();
+            img.crossOrigin = 'anonymous';
+
+            // Abort after 10 s so one bad URL doesn't stall the whole export
+            const timer = setTimeout(() => { img.src = ''; tryNext(); }, 10_000);
+
+            img.onload = () => {
+                clearTimeout(timer);
+                // naturalWidth = 0 → got HTML redirect (Google login page), not an image
+                if (!img.naturalWidth || !img.naturalHeight) return tryNext();
+                try {
+                    const c = document.createElement('canvas');
+                    c.width  = img.naturalWidth;
+                    c.height = img.naturalHeight;
+                    c.getContext('2d')!.drawImage(img, 0, 0);
+                    resolve(c.toDataURL('image/png').split(',')[1]);
+                } catch { tryNext(); }
+            };
+            img.onerror = () => { clearTimeout(timer); tryNext(); };
+            img.src = src;
         };
-        img.onerror = () => resolve('');
-        img.src = url;
+        tryNext();
     });
 
 /**
