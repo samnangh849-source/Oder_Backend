@@ -15,6 +15,7 @@ import (
 	"io"
 	"log"
 	"net/http"
+	"net/url"
 	"os"
 	"strings"
 	"time"
@@ -443,5 +444,45 @@ func HandleGetAudioProxy(c *gin.Context) {
 	}
 	defer resp.Body.Close()
 	c.Writer.Header().Set("Content-Type", resp.Header.Get("Content-Type"))
+	io.Copy(c.Writer, resp.Body)
+}
+
+// HandleProxyImage fetches an external image server-side and returns it to the browser.
+// This bypasses browser CORS restrictions that prevent canvas.toDataURL() on cross-origin
+// images — the server has no such restriction.
+//
+// GET /api/proxy-image?url=<encoded-image-url>
+func HandleProxyImage(c *gin.Context) {
+	rawURL := c.Query("url")
+	if rawURL == "" {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "url parameter required"})
+		return
+	}
+
+	parsed, err := url.ParseRequestURI(rawURL)
+	if err != nil || (parsed.Scheme != "http" && parsed.Scheme != "https") {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid url"})
+		return
+	}
+
+	client := &http.Client{Timeout: 10 * time.Second}
+	resp, err := client.Get(rawURL)
+	if err != nil {
+		c.JSON(http.StatusBadGateway, gin.H{"error": "fetch failed"})
+		return
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		c.JSON(http.StatusBadGateway, gin.H{"error": fmt.Sprintf("upstream %d", resp.StatusCode)})
+		return
+	}
+
+	ct := resp.Header.Get("Content-Type")
+	if ct == "" {
+		ct = "image/png"
+	}
+	c.Header("Content-Type", ct)
+	c.Header("Cache-Control", "public, max-age=3600")
 	io.Copy(c.Writer, resp.Body)
 }
