@@ -305,9 +305,20 @@ const PdfExportModal: React.FC<PdfExportModalProps> = ({ isOpen, onClose, orders
             };
 
             // ── Step 6: Document header ────────────────────────────────────────
-            addDocText('របាយការណ៍បញ្ជាទិញ (Orders Report)', pageW / 2, 14, 16, [30, 30, 30], 'center', true);
-            addDocText(`Generated: ${new Date().toLocaleString()}`,  pageW / 2, 21, 9, [110, 110, 110], 'center');
-            addDocText(`ចំនួនបញ្ជាទិញ: ${orders.length}`,           pageW / 2, 26, 9, [110, 110, 110], 'center');
+            // Top accent bar
+            doc.setFillColor(30, 42, 68);
+            doc.rect(0, 0, pageW, 4, 'F');
+            doc.setFillColor(59, 130, 246);
+            doc.rect(0, 3.5, pageW, 1, 'F');
+
+            addDocText('របាយការណ៍បញ្ជាទិញ (Orders Report)', pageW / 2, 15, 16, [30, 30, 30], 'center', true);
+            addDocText(`Generated: ${new Date().toLocaleString()}`,  pageW / 2, 22, 9, [110, 110, 110], 'center');
+            addDocText(`ចំនួនបញ្ជាទិញ: ${orders.length}`,           pageW / 2, 27, 9, [110, 110, 110], 'center');
+
+            // Separator line under header
+            doc.setDrawColor(200, 210, 230);
+            doc.setLineWidth(0.4);
+            doc.line(14, 31, pageW - 14, 31);
 
             // ── Step 7: Grouping ───────────────────────────────────────────────
             const groupedData: Record<string, ParsedOrder[]> = {};
@@ -341,14 +352,17 @@ const PdfExportModal: React.FC<PdfExportModalProps> = ({ isOpen, onClose, orders
                 }
             });
 
-            // Column widths + logo padding
+            // Column widths + logo padding + per-column alignment
             const LOGO_PAD = 9; // mm left padding in logo columns
             const columnStyles: Record<number, any> = {};
             visibleKeys.forEach((k, i) => { columnStyles[i] = { cellWidth: columns[k].width }; });
-            if (colIdx.phone    !== undefined) columnStyles[colIdx.phone]    = { ...columnStyles[colIdx.phone],    cellPadding: { top: 1.5, bottom: 1.5, right: 2, left: LOGO_PAD } };
-            if (colIdx.shipping !== undefined) columnStyles[colIdx.shipping] = { ...columnStyles[colIdx.shipping], cellPadding: { top: 1.5, bottom: 1.5, right: 2, left: LOGO_PAD } };
+            if (colIdx.serialNum !== undefined) columnStyles[colIdx.serialNum] = { ...columnStyles[colIdx.serialNum], halign: 'center', fontStyle: 'bold' };
+            if (colIdx.total     !== undefined) columnStyles[colIdx.total]     = { ...columnStyles[colIdx.total],     halign: 'right'  };
+            if (colIdx.status    !== undefined) columnStyles[colIdx.status]    = { ...columnStyles[colIdx.status],    halign: 'center' };
+            if (colIdx.phone     !== undefined) columnStyles[colIdx.phone]     = { ...columnStyles[colIdx.phone],     cellPadding: { top: 1.5, bottom: 1.5, right: 2, left: LOGO_PAD } };
+            if (colIdx.shipping  !== undefined) columnStyles[colIdx.shipping]  = { ...columnStyles[colIdx.shipping],  cellPadding: { top: 1.5, bottom: 1.5, right: 2, left: LOGO_PAD } };
 
-            let finalY = 31;
+            let finalY = 34;
 
             // ── Step 9: Render groups ──────────────────────────────────────────
             Object.entries(groupedData).sort().forEach(([groupName, groupOrders]) => {
@@ -359,13 +373,21 @@ const PdfExportModal: React.FC<PdfExportModalProps> = ({ isOpen, onClose, orders
 
                 // Group heading bar
                 if (grouping !== 'None') {
-                    doc.setFillColor(235, 240, 255);
-                    doc.rect(14, finalY, pageW - 28, 8, 'F');
+                    // Left accent stripe
+                    doc.setFillColor(59, 130, 246);
+                    doc.rect(14, finalY, 3, 9, 'F');
+                    // Main background
+                    doc.setFillColor(239, 246, 255);
+                    doc.rect(17, finalY, pageW - 31, 9, 'F');
+                    // Outer border
+                    doc.setDrawColor(147, 197, 253);
+                    doc.setLineWidth(0.3);
+                    doc.rect(14, finalY, pageW - 28, 9, 'S');
                     addDocText(
-                        `${grouping}: ${groupName}  (${groupOrders.length} orders)`,
-                        16, finalY + 5.5, 11, [30, 64, 175],
+                        `${groupName}  (${groupOrders.length} orders)`,
+                        22, finalY + 6.2, 10, [30, 64, 175],
                     );
-                    finalY += 10;
+                    finalY += 12;
                 }
 
                 // Build tableBody + track Khmer cells for this group
@@ -409,16 +431,28 @@ const PdfExportModal: React.FC<PdfExportModalProps> = ({ isOpen, onClose, orders
                     startY: finalY,
                     head: tableHead,
                     body: tableBody,
-                    theme: 'striped',
+                    theme: 'grid',
+                    tableLineWidth: 0.35,
+                    tableLineColor: [120, 140, 180],
                     headStyles: {
-                        fillColor: [43, 53, 72],
+                        fillColor: [30, 42, 68],
                         textColor: [255, 255, 255],
                         fontSize: 8,
+                        minCellHeight: 9,
+                        halign: 'center',
+                        lineWidth: 0.3,
+                        lineColor: [80, 100, 140],
                     },
                     styles: {
                         fontSize: 8,
-                        cellPadding: 2,
+                        cellPadding: { top: 2.5, bottom: 2.5, left: 2, right: 2 },
                         overflow: 'linebreak',
+                        lineWidth: 0.25,
+                        lineColor: [190, 200, 220],
+                        textColor: [25, 25, 30],
+                    },
+                    alternateRowStyles: {
+                        fillColor: [245, 247, 252],
                     },
                     columnStyles,
                     margin: { top: 20, left: 14, right: 14 },
@@ -487,24 +521,45 @@ const PdfExportModal: React.FC<PdfExportModalProps> = ({ isOpen, onClose, orders
                 finalY = doc.lastAutoTable.finalY + 2;
 
                 if (grouping !== 'None') {
-                    addDocText(`សរុបក្រុម: $${groupTotal.toFixed(2)}`, pageW - 15, finalY + 4, 9, [70, 70, 70], 'right');
-                    finalY += 11;
+                    // Subtotal pill box
+                    const stW = 58; const stH = 7;
+                    const stX = pageW - 14 - stW;
+                    doc.setFillColor(239, 246, 255);
+                    doc.rect(stX, finalY, stW, stH, 'F');
+                    doc.setDrawColor(147, 197, 253);
+                    doc.setLineWidth(0.35);
+                    doc.rect(stX, finalY, stW, stH, 'S');
+                    // Left accent on subtotal
+                    doc.setFillColor(59, 130, 246);
+                    doc.rect(stX, finalY, 2.5, stH, 'F');
+                    addDocText(`សរុបក្រុម: $${groupTotal.toFixed(2)}`, pageW - 16, finalY + stH * 0.72, 9, [30, 64, 175], 'right');
+                    finalY += stH + 6;
                 } else {
                     finalY += 4;
                 }
             });
 
-            // Grand total
+            // Grand total dark box
             if (grouping === 'None') {
                 const grand = orders.reduce((s, o) => s + (o['Grand Total'] || 0), 0);
-                addDocText(`សរុបទឹកប្រាក់: $${grand.toFixed(2)}`, pageW - 15, finalY + 5, 12, [0, 0, 0], 'right', true);
+                const gtW = 70; const gtH = 9;
+                const gtX = pageW - 14 - gtW;
+                doc.setFillColor(30, 42, 68);
+                doc.rect(gtX, finalY, gtW, gtH, 'F');
+                doc.setFillColor(59, 130, 246);
+                doc.rect(gtX, finalY, 3, gtH, 'F');
+                addDocText(`សរុបទឹកប្រាក់: $${grand.toFixed(2)}`, pageW - 16, finalY + gtH * 0.72, 11, [255, 255, 255], 'right', true);
             }
 
-            // Page numbers
+            // Page numbers + footer line
             const pageCount = doc.internal.pages.length - 1;
+            const pageH = doc.internal.pageSize.height;
             for (let i = 1; i <= pageCount; i++) {
                 doc.setPage(i);
-                addDocText(`ទំព័រ ${i} នៃ ${pageCount}`, pageW / 2, doc.internal.pageSize.height - 5, 8, [150, 150, 150], 'center');
+                doc.setDrawColor(200, 210, 230);
+                doc.setLineWidth(0.3);
+                doc.line(14, pageH - 9, pageW - 14, pageH - 9);
+                addDocText(`ទំព័រ ${i} នៃ ${pageCount}`, pageW / 2, pageH - 5, 8, [150, 150, 150], 'center');
             }
 
             doc.save(`Orders_Report_${new Date().toISOString().slice(0, 10)}.pdf`);
