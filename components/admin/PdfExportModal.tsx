@@ -590,19 +590,31 @@ const PdfExportModal: React.FC<PdfExportModalProps> = ({ isOpen, onClose, orders
                             const khText = khmerCellMap[data.row.index]?.[data.column.index];
                             if (khText) {
                                 if (data.column.index === colIdx.location) {
-                                    // Allocate correct row height: one empty line per '\n'-separated segment
                                     const lineCount = Math.max(1, khText.split('\n').filter(Boolean).length);
                                     data.cell.text = Array(lineCount).fill('');
                                 } else {
                                     data.cell.text = [''];
                                 }
                             }
+
+                            // ── Status: style the WHOLE CELL in willDrawCell so autotable
+                            //    handles fill + text + borders in one pass — no didDrawCell
+                            //    patch needed, so adjacent-column borders never overlay the badge.
                             if (data.column.index === colIdx.status) {
-                                data.cell.text = [''];
-                                // Suppress autotable-drawn borders for status cells.
-                                // Autotable draws grid lines AFTER didDrawCell, which would
-                                // overlay the badge. We redraw borders manually instead.
-                                data.cell.styles.lineWidth = 0;
+                                const statusText = String(data.cell.raw ?? '').trim();
+                                const lower      = statusText.toLowerCase();
+                                if (lower === 'paid') {
+                                    data.cell.styles.fillColor  = [220, 252, 231]; // green-100
+                                    data.cell.styles.textColor  = [21, 128, 61];   // green-700
+                                    data.cell.styles.fontStyle  = 'bold';
+                                } else if (lower === 'unpaid' || lower === 'pending') {
+                                    data.cell.styles.fillColor  = [254, 226, 226]; // red-100
+                                    data.cell.styles.textColor  = [185, 28, 28];   // red-700
+                                    data.cell.styles.fontStyle  = 'bold';
+                                }
+                                // Keep text visible so autotable renders it (not suppressed)
+                                data.cell.styles.halign = 'center';
+                                data.cell.styles.valign = 'middle';
                             }
                         }
                     },
@@ -664,43 +676,8 @@ const PdfExportModal: React.FC<PdfExportModalProps> = ({ isOpen, onClose, orders
                                 if (logo) drawCellLogo(doc, logo, cell.x, cell.y, cell.height, LOGO_AREA_W);
                             }
 
-                            // ── Payment Status badge ──────────────────────────────
-                            // Note: autotable borders for this cell are disabled in willDrawCell
-                            // (lineWidth=0) to prevent grid lines from overlaying the badge.
-                            // We redraw the cell border manually here, after the badge.
-                            if (column.index === colIdx.status) {
-                                const statusText = String((cell as any).raw ?? '').trim();
-                                const lower      = statusText.toLowerCase();
-                                const isPaid     = lower === 'paid';
-                                const isUnpaid   = lower === 'unpaid' || lower === 'pending';
-                                if (isPaid || isUnpaid) {
-                                    const bg     = isPaid ? [220, 252, 231] : [254, 226, 226];
-                                    const fg     = isPaid ? [21, 128, 61]   : [185, 28, 28];
-                                    const border = isPaid ? [134, 239, 172] : [252, 165, 165];
-                                    const padX = 3; const padY = 2.5;
-                                    const bx = cell.x + padX;
-                                    const by = cell.y + padY;
-                                    const bw = cell.width  - padX * 2;
-                                    const bh = cell.height - padY * 2;
-                                    // Plain rect (no roundedRect) — avoids rendering artifacts
-                                    doc.setFillColor(...bg);
-                                    doc.rect(bx, by, bw, bh, 'F');
-                                    doc.setDrawColor(...border);
-                                    doc.setLineWidth(0.25);
-                                    doc.rect(bx, by, bw, bh, 'S');
-                                    doc.setFont('helvetica', 'bold');
-                                    doc.setFontSize(7.5);
-                                    doc.setTextColor(...fg);
-                                    doc.text(statusText, cell.x + cell.width / 2, cell.y + cell.height / 2,
-                                        { align: 'center', baseline: 'middle' });
-                                    doc.setFont('helvetica', 'normal');
-                                    doc.setTextColor(15, 23, 42);
-                                }
-                                // Redraw cell border after badge so grid stays consistent
-                                doc.setDrawColor(199, 210, 254);
-                                doc.setLineWidth(0.2);
-                                doc.rect(cell.x, cell.y, cell.width, cell.height, 'S');
-                            }
+                            // Status cell is fully styled in willDrawCell (fill + text color).
+                            // Nothing extra needed here — autotable renders it cleanly.
                         }
                     },
                 });
