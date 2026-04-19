@@ -478,8 +478,8 @@ const PdfExportModal: React.FC<PdfExportModalProps> = ({ isOpen, onClose, orders
             if (colIdx.date      !== undefined) columnStyles[colIdx.date]      = { ...columnStyles[colIdx.date],      halign: 'center' };
             if (colIdx.total     !== undefined) columnStyles[colIdx.total]     = { ...columnStyles[colIdx.total],     halign: 'right'  };
             if (colIdx.status    !== undefined) columnStyles[colIdx.status]    = { ...columnStyles[colIdx.status],    halign: 'center' };
-            if (colIdx.phone     !== undefined) columnStyles[colIdx.phone]     = { ...columnStyles[colIdx.phone],     cellPadding: { top: 1.5, bottom: 1.5, right: 2, left: LOGO_PAD } };
-            if (colIdx.shipping  !== undefined) columnStyles[colIdx.shipping]  = { ...columnStyles[colIdx.shipping],  cellPadding: { top: 1.5, bottom: 1.5, right: 2, left: LOGO_PAD } };
+            if (colIdx.phone     !== undefined) columnStyles[colIdx.phone]     = { ...columnStyles[colIdx.phone],     cellPadding: { top: 1.5, bottom: 1.5, right: 2, left: LOGO_PAD }, valign: 'middle' };
+            if (colIdx.shipping  !== undefined) columnStyles[colIdx.shipping]  = { ...columnStyles[colIdx.shipping],  cellPadding: { top: 1.5, bottom: 1.5, right: 2, left: LOGO_PAD }, valign: 'middle' };
 
             let finalY = 38;
 
@@ -571,6 +571,7 @@ const PdfExportModal: React.FC<PdfExportModalProps> = ({ isOpen, onClose, orders
                         lineWidth: 0.2,
                         lineColor: [199, 210, 254],    // indigo-200
                         textColor: [15, 23, 42],       // slate-900
+                        valign: 'middle',              // keep all text centered with logos
                     },
                     alternateRowStyles: {
                         fillColor: [238, 242, 255],    // indigo-50
@@ -598,6 +599,10 @@ const PdfExportModal: React.FC<PdfExportModalProps> = ({ isOpen, onClose, orders
                             }
                             if (data.column.index === colIdx.status) {
                                 data.cell.text = [''];
+                                // Suppress autotable-drawn borders for status cells.
+                                // Autotable draws grid lines AFTER didDrawCell, which would
+                                // overlay the badge. We redraw borders manually instead.
+                                data.cell.styles.lineWidth = 0;
                             }
                         }
                     },
@@ -660,6 +665,9 @@ const PdfExportModal: React.FC<PdfExportModalProps> = ({ isOpen, onClose, orders
                             }
 
                             // ── Payment Status badge ──────────────────────────────
+                            // Note: autotable borders for this cell are disabled in willDrawCell
+                            // (lineWidth=0) to prevent grid lines from overlaying the badge.
+                            // We redraw the cell border manually here, after the badge.
                             if (column.index === colIdx.status) {
                                 const statusText = String((cell as any).raw ?? '').trim();
                                 const lower      = statusText.toLowerCase();
@@ -669,16 +677,17 @@ const PdfExportModal: React.FC<PdfExportModalProps> = ({ isOpen, onClose, orders
                                     const bg     = isPaid ? [220, 252, 231] : [254, 226, 226];
                                     const fg     = isPaid ? [21, 128, 61]   : [185, 28, 28];
                                     const border = isPaid ? [134, 239, 172] : [252, 165, 165];
-                                    const padX = 3; const padY = 2;
+                                    const padX = 3; const padY = 2.5;
                                     const bx = cell.x + padX;
                                     const by = cell.y + padY;
                                     const bw = cell.width  - padX * 2;
                                     const bh = cell.height - padY * 2;
+                                    // Plain rect (no roundedRect) — avoids rendering artifacts
                                     doc.setFillColor(...bg);
-                                    doc.roundedRect(bx, by, bw, bh, 1, 1, 'F');
+                                    doc.rect(bx, by, bw, bh, 'F');
                                     doc.setDrawColor(...border);
                                     doc.setLineWidth(0.25);
-                                    doc.roundedRect(bx, by, bw, bh, 1, 1, 'S');
+                                    doc.rect(bx, by, bw, bh, 'S');
                                     doc.setFont('helvetica', 'bold');
                                     doc.setFontSize(7.5);
                                     doc.setTextColor(...fg);
@@ -687,6 +696,10 @@ const PdfExportModal: React.FC<PdfExportModalProps> = ({ isOpen, onClose, orders
                                     doc.setFont('helvetica', 'normal');
                                     doc.setTextColor(15, 23, 42);
                                 }
+                                // Redraw cell border after badge so grid stays consistent
+                                doc.setDrawColor(199, 210, 254);
+                                doc.setLineWidth(0.2);
+                                doc.rect(cell.x, cell.y, cell.width, cell.height, 'S');
                             }
                         }
                     },
