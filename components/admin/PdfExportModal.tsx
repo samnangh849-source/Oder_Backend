@@ -5,7 +5,7 @@ import { jsPDF } from 'jspdf';
 import 'jspdf-autotable';
 import { ParsedOrder, AppData } from '../../types';
 import Spinner from '../common/Spinner';
-import { imageUrlToBase64 } from '../../utils/fileUtils';
+import { convertGoogleDriveUrl } from '../../utils/fileUtils';
 
 // Local Khmer TTF — used as fallback if CDN font unavailable
 import domkhFontUrl from '../../Font/DOMKH.ttf?url';
@@ -135,17 +135,51 @@ const getImageFormat = (base64: string): 'JPEG' | 'PNG' | 'GIF' => {
     return 'JPEG';
 };
 
-/** Draw a service logo in the left-padding area of an autotable cell */
-const drawCellLogo = (doc: any, base64: string, x: number, y: number, cellH: number) => {
-    if (!base64) return;
-    // jsPDF 2.x addImage requires a proper data-URL string (not raw base64)
-    const fmt      = getImageFormat(base64);
-    const mimeType = fmt === 'PNG' ? 'image/png' : fmt === 'GIF' ? 'image/gif' : 'image/jpeg';
-    const dataUrl  = `data:${mimeType};base64,${base64}`;
-    const h = Math.max(3, Math.min(cellH - 2, 5.5));
-    const w = h * 1.5;
-    try { doc.addImage(dataUrl, fmt, x + 0.8, y + (cellH - h) / 2, w, h); }
-    catch { /* silently ignore corrupt / CORS-blocked images */ }
+/**
+ * Fetch any image URL and return it as a PNG base64 string (no data: prefix).
+ * Uses browser canvas so WebP / AVIF / GIF / SVG all work — jsPDF always
+ * receives plain PNG which it handles reliably.
+ */
+const fetchLogoPng = (url: string): Promise<string> =>
+    new Promise(resolve => {
+        if (!url) return resolve('');
+        const img = new Image();
+        img.crossOrigin = 'anonymous';
+        img.onload = () => {
+            try {
+                const c = document.createElement('canvas');
+                c.width  = Math.max(1, img.naturalWidth);
+                c.height = Math.max(1, img.naturalHeight);
+                c.getContext('2d')!.drawImage(img, 0, 0);
+                resolve(c.toDataURL('image/png').split(',')[1]);
+            } catch { resolve(''); }
+        };
+        img.onerror = () => resolve('');
+        img.src = url;
+    });
+
+/**
+ * Draw a logo PNG inside the left-padding area of an autotable cell.
+ * Logo is sized to fit within LOGO_AREA_W so it never overlaps the cell text.
+ *
+ * @param logoAreaW  Available width for the logo in mm (must match LOGO_PAD - gap)
+ */
+const drawCellLogo = (
+    doc: any,
+    pngBase64: string,
+    x: number,
+    y: number,
+    cellH: number,
+    logoAreaW: number,
+) => {
+    if (!pngBase64) return;
+    const dataUrl = `data:image/png;base64,${pngBase64}`;
+    // Fit logo into the reserved area: height ≤ cell height minus padding, width ≤ logoAreaW
+    const h = Math.max(2.5, Math.min(cellH - 3, 5));
+    const w = Math.min(h * 2.5, logoAreaW);          // allow up to 2.5:1 ratio, cap at area
+    try {
+        doc.addImage(dataUrl, 'PNG', x + 1, y + (cellH - h) / 2, w, h);
+    } catch { /* silently ignore — corrupt or tainted-canvas image */ }
 };
 
 /**
@@ -241,14 +275,18 @@ const PdfExportModal: React.FC<PdfExportModalProps> = ({ isOpen, onClose, orders
             const uniqueCarriers = new Set<string>();
             orders.forEach(o => { const c = getCarrier(o['Customer Phone']); if (c) uniqueCarriers.add(c.CarrierName); });
 
+            // fetchLogoPng via canvas → always PNG → jsPDF handles it reliably
+            // (raw fetch can return WebP/AVIF which jsPDF cannot decode)
             const [shippingEntries, carrierEntries] = await Promise.all([
                 Promise.all(uniqueMethods.map(async n => {
                     const m = appData.shippingMethods.find(x => x.MethodName === n);
-                    return [n, m?.LogoURL ? await imageUrlToBase64(m.LogoURL) : ''] as [string, string];
+                    const logoUrl = m?.LogoURL ? convertGoogleDriveUrl(m.LogoURL) : '';
+                    return [n, logoUrl ? await fetchLogoPng(logoUrl) : ''] as [string, string];
                 })),
                 Promise.all([...uniqueCarriers].map(async n => {
                     const c = appData.phoneCarriers.find(x => x.CarrierName === n);
-                    return [n, c?.CarrierLogoURL ? await imageUrlToBase64(c.CarrierLogoURL) : ''] as [string, string];
+                    const logoUrl = c?.CarrierLogoURL ? convertGoogleDriveUrl(c.CarrierLogoURL) : '';
+                    return [n, logoUrl ? await fetchLogoPng(logoUrl) : ''] as [string, string];
                 })),
             ]);
             const shippingLogoCache: Record<string, string> = Object.fromEntries(shippingEntries.filter(([, v]) => v));
@@ -353,7 +391,9 @@ const PdfExportModal: React.FC<PdfExportModalProps> = ({ isOpen, onClose, orders
             });
 
             // Column widths + logo padding + per-column alignment
-            const LOGO_PAD = 9; // mm left padding in logo columns
+            // LOGO_PAD: total left padding of the cell (logo sits in left LOGO_AREA_W of that space)
+            const LOGO_PAD      = 11;  // mm — left cell padding for phone/shipping columns
+            const LOGO_AREA_W   = 8;   // mm — usable width for the logo image (gap of 3mm before text)
             const columnStyles: Record<number, any> = {};
             visibleKeys.forEach((k, i) => { columnStyles[i] = { cellWidth: columns[k].width }; });
             if (colIdx.serialNum !== undefined) columnStyles[colIdx.serialNum] = { ...columnStyles[colIdx.serialNum], halign: 'center', fontStyle: 'bold' };
@@ -510,14 +550,14 @@ const PdfExportModal: React.FC<PdfExportModalProps> = ({ isOpen, onClose, orders
                                 const carrier = getCarrier(order['Customer Phone']);
                                 if (carrier) {
                                     const logo = carrierLogoCache[carrier.CarrierName];
-                                    if (logo) drawCellLogo(doc, logo, cell.x, cell.y, cell.height);
+                                    if (logo) drawCellLogo(doc, logo, cell.x, cell.y, cell.height, LOGO_AREA_W);
                                 }
                             }
 
                             // Shipping service logo
                             if (column.index === colIdx.shipping) {
                                 const logo = shippingLogoCache[order['Internal Shipping Method']];
-                                if (logo) drawCellLogo(doc, logo, cell.x, cell.y, cell.height);
+                                if (logo) drawCellLogo(doc, logo, cell.x, cell.y, cell.height, LOGO_AREA_W);
                             }
 
                             // ── Payment Status badge (Paid = green, Unpaid/Pending = red) ──
