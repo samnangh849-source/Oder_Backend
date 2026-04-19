@@ -199,59 +199,72 @@ const getImageFormat = (base64: string): 'JPEG' | 'PNG' | 'GIF' => {
 /**
  * Fetch any image URL and return it as a PNG base64 string (no data: prefix).
  *
- * Strategy:
- *  1. Extract the Google Drive file ID (if present) and try the lh3.googleusercontent.com
- *     CDN first — it reliably returns Access-Control-Allow-Origin: * for public files.
- *  2. Fall back to the drive.google.com/thumbnail endpoint.
- *  3. Fall back to the original URL as-is.
+ * Uses fetch() + createObjectURL() instead of <img crossOrigin="anonymous"> to avoid
+ * two common failures:
+ *   1. Browser cache conflict — if the UI already loaded the image via a plain <img> tag
+ *      (no CORS headers), a subsequent crossOrigin='anonymous' request hits the same cached
+ *      entry which lacks CORS validation → SecurityError on canvas.toDataURL().
+ *   2. Canvas taint — a blob: URL is always same-origin, so canvas.toDataURL() never throws
+ *      regardless of the original server's CORS policy.
  *
- * Each attempt has a 10-second timeout.  naturalWidth === 0 signals that Google
- * returned an HTML redirect page (login) instead of the actual image.
+ * Candidate order for Google Drive files:
+ *   lh3.googleusercontent.com CDN  →  thumbnail endpoint  →  original URL
+ * For plain image addresses the original URL is tried directly.
  */
-const fetchLogoPng = (url: string): Promise<string> =>
-    new Promise(resolve => {
-        if (!url) return resolve('');
+const fetchLogoPng = async (url: string): Promise<string> => {
+    if (!url) return '';
 
-        // Extract Drive file ID from any recognised Drive URL pattern
-        const idMatch = url.match(/[?&/]id=([a-zA-Z0-9_-]{25,45})|\/d\/([a-zA-Z0-9_-]{25,45})/);
-        const fileId  = idMatch?.[1] ?? idMatch?.[2] ?? '';
+    // Extract Drive file ID from any recognised Drive URL pattern
+    const idMatch = url.match(/[?&/]id=([a-zA-Z0-9_-]{25,45})|\/d\/([a-zA-Z0-9_-]{25,45})/);
+    const fileId  = idMatch?.[1] ?? idMatch?.[2] ?? '';
 
-        // Build candidate URLs: lh3 CDN first (best CORS support), then thumbnail, then raw
-        const candidates: string[] = fileId
-            ? [
-                `https://lh3.googleusercontent.com/d/${fileId}=s400`,
-                `https://drive.google.com/thumbnail?id=${fileId}&sz=w400`,
-                url,
-              ]
-            : [url];
+    const candidates: string[] = fileId
+        ? [
+            `https://lh3.googleusercontent.com/d/${fileId}=s400`,
+            `https://drive.google.com/thumbnail?id=${fileId}&sz=w400`,
+            url,
+          ]
+        : [url];
 
-        let idx = 0;
-        const tryNext = () => {
-            if (idx >= candidates.length) return resolve('');
-            const src = candidates[idx++];
-            const img = new Image();
-            img.crossOrigin = 'anonymous';
+    /** Fetch one URL → blob → same-origin blob URL → canvas PNG */
+    const tryOne = (src: string): Promise<string> =>
+        new Promise(resolve => {
+            const controller = new AbortController();
+            const timer = setTimeout(() => { controller.abort(); resolve(''); }, 10_000);
 
-            // Abort after 10 s so one bad URL doesn't stall the whole export
-            const timer = setTimeout(() => { img.src = ''; tryNext(); }, 10_000);
+            fetch(src, { mode: 'cors', credentials: 'omit', signal: controller.signal })
+                .then(res => {
+                    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+                    return res.blob();
+                })
+                .then(blob => {
+                    if (!blob.size) { clearTimeout(timer); resolve(''); return; }
+                    const blobUrl = URL.createObjectURL(blob);
+                    const img = new Image();
+                    img.onload = () => {
+                        clearTimeout(timer);
+                        URL.revokeObjectURL(blobUrl);
+                        if (!img.naturalWidth || !img.naturalHeight) { resolve(''); return; }
+                        try {
+                            const c = document.createElement('canvas');
+                            c.width  = img.naturalWidth;
+                            c.height = img.naturalHeight;
+                            c.getContext('2d')!.drawImage(img, 0, 0);
+                            resolve(c.toDataURL('image/png').split(',')[1]);
+                        } catch { resolve(''); }
+                    };
+                    img.onerror = () => { clearTimeout(timer); URL.revokeObjectURL(blobUrl); resolve(''); };
+                    img.src = blobUrl;
+                })
+                .catch(() => { clearTimeout(timer); resolve(''); });
+        });
 
-            img.onload = () => {
-                clearTimeout(timer);
-                // naturalWidth = 0 → got HTML redirect (Google login page), not an image
-                if (!img.naturalWidth || !img.naturalHeight) return tryNext();
-                try {
-                    const c = document.createElement('canvas');
-                    c.width  = img.naturalWidth;
-                    c.height = img.naturalHeight;
-                    c.getContext('2d')!.drawImage(img, 0, 0);
-                    resolve(c.toDataURL('image/png').split(',')[1]);
-                } catch { tryNext(); }
-            };
-            img.onerror = () => { clearTimeout(timer); tryNext(); };
-            img.src = src;
-        };
-        tryNext();
-    });
+    for (const src of candidates) {
+        const result = await tryOne(src);
+        if (result) return result;
+    }
+    return '';
+};
 
 /**
  * Draw a logo PNG inside the left-padding area of an autotable cell.
