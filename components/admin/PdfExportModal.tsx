@@ -320,9 +320,8 @@ const PdfExportModal: React.FC<PdfExportModalProps> = ({ isOpen, onClose, orders
         setIsGenerating(true);
 
         try {
-            // ── Step 1: Load fallback font for Latin / non-Khmer text ─────────
+            // ── Step 1: Load fallback font (TTF embedded for Khmer) ───────────
             const loadedFont = await loadKhmerFont();
-            const FONT_NAME  = loadedFont?.name ?? 'helvetica';
 
             // ── Step 2: Pre-fetch logos ────────────────────────────────────────
             const getCarrier = (phone: string) => {
@@ -370,7 +369,6 @@ const PdfExportModal: React.FC<PdfExportModalProps> = ({ isOpen, onClose, orders
                 doc.addFileToVFS(`${loadedFont.name}.ttf`, loadedFont.base64);
                 doc.addFont(`${loadedFont.name}.ttf`, loadedFont.name, 'normal');
             }
-            const setFont = () => { if (loadedFont) doc.setFont(FONT_NAME, 'normal'); };
             const pageW = doc.internal.pageSize.width;
 
             // ── Step 5: addDocText — draws mixed Khmer+Latin correctly ─────────
@@ -414,26 +412,24 @@ const PdfExportModal: React.FC<PdfExportModalProps> = ({ isOpen, onClose, orders
             doc.setFillColor(250, 250, 255);
             doc.rect(0, 5, pageW, 30, 'F');
 
-            // Decorative left circle accent
-            doc.setFillColor(238, 242, 255);
-            doc.circle(10, 20, 12, 'F');
+            // Decorative circle accent — keep fully inside page (x ≥ radius)
+            doc.setFillColor(224, 231, 255);
+            doc.circle(16, 20, 10, 'F');
             doc.setFillColor(199, 210, 254);
-            doc.circle(10, 20, 8, 'F');
+            doc.circle(16, 20, 6, 'F');
 
             addDocText('របាយការណ៍បញ្ជាទិញ (Orders Report)', pageW / 2, 16, 17, [30, 27, 75], 'center', true);
 
-            // Info pills
-            const pillY = 23;
-            const dateStr  = `📅  ${new Date().toLocaleString()}`;
-            const countStr = `📦  ចំនួនសរុប: ${orders.length}`;
+            // Info pills — pillY is baseline; pill fills pillY-3 to pillY+4
+            const pillY = 24;
             // Left pill — date
             doc.setFillColor(224, 231, 255);
-            doc.roundedRect(pageW / 2 - 72, pillY - 2.5, 68, 7, 1.5, 1.5, 'F');
-            addDocText(`Generated: ${new Date().toLocaleString()}`, pageW / 2 - 38, pillY + 2, 7.5, [67, 56, 202], 'center');
+            doc.roundedRect(pageW / 2 - 72, pillY - 3, 68, 7, 1.5, 1.5, 'F');
+            addDocText(`Generated: ${new Date().toLocaleString()}`, pageW / 2 - 38, pillY + 1, 7.5, [67, 56, 202], 'center');
             // Right pill — count
             doc.setFillColor(220, 252, 231);
-            doc.roundedRect(pageW / 2 + 4, pillY - 2.5, 40, 7, 1.5, 1.5, 'F');
-            addDocText(`ចំនួនសរុប: ${orders.length}`, pageW / 2 + 24, pillY + 2, 7.5, [21, 128, 61], 'center');
+            doc.roundedRect(pageW / 2 + 4, pillY - 3, 40, 7, 1.5, 1.5, 'F');
+            addDocText(`ចំនួនសរុប: ${orders.length}`, pageW / 2 + 24, pillY + 1, 7.5, [21, 128, 61], 'center');
 
             // Separator line under header card
             doc.setDrawColor(199, 210, 254);
@@ -580,7 +576,7 @@ const PdfExportModal: React.FC<PdfExportModalProps> = ({ isOpen, onClose, orders
                         fillColor: [238, 242, 255],    // indigo-50
                     },
                     columnStyles,
-                    margin: { top: 20, left: 14, right: 14 },
+                    margin: { top: 20, left: 14, right: 14, bottom: 16 },
 
                     // ── willDrawCell: suppress text that we'll draw ourselves ──
                     willDrawCell: (data: any) => {
@@ -716,17 +712,21 @@ const PdfExportModal: React.FC<PdfExportModalProps> = ({ isOpen, onClose, orders
                 }
             });
 
-            // Grand total — vibrant indigo pill
+            // Grand total — solid indigo pill with a simple left stripe accent
             if (grouping === 'None') {
                 const grand = orders.reduce((s, o) => s + (o['Grand Total'] || 0), 0);
                 const gtW = 75; const gtH = 10;
                 const gtX = pageW - 14 - gtW;
-                doc.setFillColor(79, 70, 229);             // indigo-600
-                doc.roundedRect(gtX, finalY, gtW, gtH, 2.5, 2.5, 'F');
-                doc.setFillColor(167, 139, 250);           // violet-400 left accent
-                doc.roundedRect(gtX, finalY, 8, gtH, 2.5, 2.5, 'F');
+                // 1. Main pill
                 doc.setFillColor(79, 70, 229);
-                doc.rect(gtX + 5, finalY, 3, gtH, 'F');   // square off right side of accent
+                doc.roundedRect(gtX, finalY, gtW, gtH, 2.5, 2.5, 'F');
+                // 2. Accent stripe — drawn as a plain rect INSIDE the pill so rounded
+                //    corners of the main box clip it naturally (no artifact)
+                doc.setFillColor(139, 92, 246);            // violet-500
+                doc.rect(gtX + 2.5, finalY, 6, gtH, 'F'); // sits within rounded radius zone
+                // 3. Re-draw main fill on the right part so stripe blends cleanly
+                doc.setFillColor(79, 70, 229);
+                doc.rect(gtX + 8.5, finalY, gtW - 8.5, gtH, 'F');
                 addDocText(`សរុបទឹកប្រាក់: $${grand.toFixed(2)}`, pageW - 16, finalY + gtH * 0.72, 11, [255, 255, 255], 'right', true);
             }
 
@@ -735,17 +735,25 @@ const PdfExportModal: React.FC<PdfExportModalProps> = ({ isOpen, onClose, orders
             const pageH = doc.internal.pageSize.height;
             for (let i = 1; i <= pageCount; i++) {
                 doc.setPage(i);
-                // Outer page border (indigo-200)
-                doc.setDrawColor(199, 210, 254);
+                doc.setDrawColor(199, 210, 254);  // indigo-200
                 doc.setLineWidth(0.4);
-                doc.rect(4, 4, pageW - 8, pageH - 8, 'S');
-                // Bottom footer bar
+                if (i === 1) {
+                    // Page 1: header fill covers y=0→35, so skip the top border line.
+                    // Draw only left, right, and bottom sides manually.
+                    doc.line(4,          4,          4,          pageH - 4); // left
+                    doc.line(pageW - 4,  4,          pageW - 4,  pageH - 4); // right
+                    doc.line(4,          pageH - 4,  pageW - 4,  pageH - 4); // bottom
+                } else {
+                    // Page 2+: full border on all 4 sides
+                    doc.rect(4, 4, pageW - 8, pageH - 8, 'S');
+                }
+                // Bottom footer bar (all pages)
                 doc.setFillColor(249, 250, 255);
-                doc.rect(4, pageH - 11, pageW - 8, 7, 'F');
+                doc.rect(4, pageH - 12, pageW - 8, 8, 'F');
                 doc.setDrawColor(199, 210, 254);
                 doc.setLineWidth(0.3);
-                doc.line(4, pageH - 11, pageW - 4, pageH - 11);
-                addDocText(`ទំព័រ ${i} នៃ ${pageCount}`, pageW / 2, pageH - 6.5, 8, [107, 114, 128], 'center');
+                doc.line(4, pageH - 12, pageW - 4, pageH - 12);
+                addDocText(`ទំព័រ ${i} នៃ ${pageCount}`, pageW / 2, pageH - 7, 8, [107, 114, 128], 'center');
             }
 
             doc.save(`Orders_Report_${new Date().toISOString().slice(0, 10)}.pdf`);
