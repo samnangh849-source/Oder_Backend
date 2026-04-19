@@ -311,9 +311,9 @@ const PdfExportModal: React.FC<PdfExportModalProps> = ({ isOpen, onClose, orders
             doc.setFillColor(59, 130, 246);
             doc.rect(0, 3.5, pageW, 1, 'F');
 
-            addDocText('របាយការណ៍បញ្ជាទិញ (Orders Report)', pageW / 2, 15, 16, [30, 30, 30], 'center', true);
-            addDocText(`Generated: ${new Date().toLocaleString()}`,  pageW / 2, 22, 9, [110, 110, 110], 'center');
-            addDocText(`ចំនួនបញ្ជាទិញ: ${orders.length}`,           pageW / 2, 27, 9, [110, 110, 110], 'center');
+            addDocText('របាយការណ៍បញ្ជាទិញ (Orders Report)', pageW / 2, 15, 16, [25, 35, 60], 'center', true);
+            addDocText(`Generated: ${new Date().toLocaleString()}`,  pageW / 2, 22, 8.5, [110, 110, 110], 'center');
+            addDocText(`ចំនួនសរុប: ${orders.length}`,                pageW / 2, 27, 8.5, [110, 110, 110], 'center');
 
             // Separator line under header
             doc.setDrawColor(200, 210, 230);
@@ -357,6 +357,7 @@ const PdfExportModal: React.FC<PdfExportModalProps> = ({ isOpen, onClose, orders
             const columnStyles: Record<number, any> = {};
             visibleKeys.forEach((k, i) => { columnStyles[i] = { cellWidth: columns[k].width }; });
             if (colIdx.serialNum !== undefined) columnStyles[colIdx.serialNum] = { ...columnStyles[colIdx.serialNum], halign: 'center', fontStyle: 'bold' };
+            if (colIdx.date      !== undefined) columnStyles[colIdx.date]      = { ...columnStyles[colIdx.date],      halign: 'center' };
             if (colIdx.total     !== undefined) columnStyles[colIdx.total]     = { ...columnStyles[colIdx.total],     halign: 'right'  };
             if (colIdx.status    !== undefined) columnStyles[colIdx.status]    = { ...columnStyles[colIdx.status],    halign: 'center' };
             if (colIdx.phone     !== undefined) columnStyles[colIdx.phone]     = { ...columnStyles[colIdx.phone],     cellPadding: { top: 1.5, bottom: 1.5, right: 2, left: LOGO_PAD } };
@@ -457,7 +458,7 @@ const PdfExportModal: React.FC<PdfExportModalProps> = ({ isOpen, onClose, orders
                     columnStyles,
                     margin: { top: 20, left: 14, right: 14 },
 
-                    // ── willDrawCell: suppress garbled Khmer text ──────────────
+                    // ── willDrawCell: suppress text that we'll draw ourselves ──
                     willDrawCell: (data: any) => {
                         if (data.section === 'head') {
                             if (headerImgCache[data.column.index]) {
@@ -467,6 +468,10 @@ const PdfExportModal: React.FC<PdfExportModalProps> = ({ isOpen, onClose, orders
                         if (data.section === 'body') {
                             if (khmerCellMap[data.row.index]?.[data.column.index]) {
                                 data.cell.text = ['']; // prevent garbled body text
+                            }
+                            // Status badge — suppress autotable text; we draw it manually
+                            if (data.column.index === colIdx.status) {
+                                data.cell.text = [''];
                             }
                         }
                     },
@@ -514,6 +519,40 @@ const PdfExportModal: React.FC<PdfExportModalProps> = ({ isOpen, onClose, orders
                                 const logo = shippingLogoCache[order['Internal Shipping Method']];
                                 if (logo) drawCellLogo(doc, logo, cell.x, cell.y, cell.height);
                             }
+
+                            // ── Payment Status badge (Paid = green, Unpaid/Pending = red) ──
+                            if (column.index === colIdx.status) {
+                                const statusText = String((cell as any).raw ?? '').trim();
+                                const lower      = statusText.toLowerCase();
+                                const isPaid     = lower === 'paid';
+                                const isUnpaid   = lower === 'unpaid' || lower === 'pending';
+                                if (isPaid || isUnpaid) {
+                                    const bg     = isPaid ? [220, 252, 231] : [254, 226, 226];
+                                    const fg     = isPaid ? [21, 128, 61]   : [185, 28, 28];
+                                    const border = isPaid ? [134, 239, 172] : [252, 165, 165];
+                                    const padX = 3; const padY = 1.8;
+                                    const bx = cell.x + padX;
+                                    const by = cell.y + padY;
+                                    const bw = cell.width  - padX * 2;
+                                    const bh = cell.height - padY * 2;
+                                    doc.setFillColor(...bg);
+                                    doc.rect(bx, by, bw, bh, 'F');
+                                    doc.setDrawColor(...border);
+                                    doc.setLineWidth(0.25);
+                                    doc.rect(bx, by, bw, bh, 'S');
+                                    doc.setFont('helvetica', 'bold');
+                                    doc.setFontSize(7.5);
+                                    doc.setTextColor(...fg);
+                                    doc.text(
+                                        statusText,
+                                        cell.x + cell.width / 2,
+                                        cell.y + cell.height / 2,
+                                        { align: 'center', baseline: 'middle' },
+                                    );
+                                    doc.setFont('helvetica', 'normal');
+                                    doc.setTextColor(25, 25, 30);
+                                }
+                            }
                         }
                     },
                 });
@@ -551,11 +590,16 @@ const PdfExportModal: React.FC<PdfExportModalProps> = ({ isOpen, onClose, orders
                 addDocText(`សរុបទឹកប្រាក់: $${grand.toFixed(2)}`, pageW - 16, finalY + gtH * 0.72, 11, [255, 255, 255], 'right', true);
             }
 
-            // Page numbers + footer line
+            // Page numbers + footer line + outer page border
             const pageCount = doc.internal.pages.length - 1;
             const pageH = doc.internal.pageSize.height;
             for (let i = 1; i <= pageCount; i++) {
                 doc.setPage(i);
+                // Outer page border
+                doc.setDrawColor(160, 180, 210);
+                doc.setLineWidth(0.5);
+                doc.rect(5, 5, pageW - 10, pageH - 10, 'S');
+                // Footer separator
                 doc.setDrawColor(200, 210, 230);
                 doc.setLineWidth(0.3);
                 doc.line(14, pageH - 9, pageW - 14, pageH - 9);
