@@ -1961,6 +1961,7 @@ func main() {
 		protected.GET("/static-data", handleGetStaticData)
 		protected.POST("/submit-order", handleSubmitOrder)
 		protected.POST("/upload-image", backend.HandleImageUploadProxy)
+		protected.GET("/proxy-image", backend.HandleProxyImage)
 		protected.GET("/permissions", handleGetUserPermissions)
 		protected.GET("/roles", handleGetRoles)
 		

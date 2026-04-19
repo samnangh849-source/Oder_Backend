@@ -122,6 +122,12 @@ function doPost(e) {
       case 'uploadImage':
         console.log("📤 [uploadImage] Request received: fileName=" + contents.fileName + " mimeType=" + contents.mimeType);
         try {
+          // Release lock BEFORE Drive upload — Drive upload is slow (~10-30s) and doesn't
+          // touch the spreadsheet. Holding the script lock during upload blocks all other
+          // concurrent requests (e.g. updateOrderTelegram from another packer).
+          // The finally block's releaseLock() is a safe no-op if already released.
+          lock.releaseLock();
+
           // 1. Upload to Drive
           const upRes = uploadImageToDrive(contents.fileData, contents.fileName, contents.mimeType, contents.uploadFolderID, contents.userName);
           if (!upRes || !upRes.url) {

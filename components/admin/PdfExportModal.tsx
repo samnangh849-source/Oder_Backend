@@ -6,6 +6,7 @@ import 'jspdf-autotable';
 import { ParsedOrder, AppData } from '../../types';
 import Spinner from '../common/Spinner';
 import { convertGoogleDriveUrl } from '../../utils/fileUtils';
+import { WEB_APP_URL } from '../../constants';
 
 // Local Khmer TTF — used as fallback if CDN font unavailable
 import domkhFontUrl from '../../Font/DOMKH.ttf?url';
@@ -218,13 +219,18 @@ const fetchLogoPng = async (url: string): Promise<string> => {
     const idMatch = url.match(/[?&/]id=([a-zA-Z0-9_-]{25,45})|\/d\/([a-zA-Z0-9_-]{25,45})/);
     const fileId  = idMatch?.[1] ?? idMatch?.[2] ?? '';
 
+    // Backend proxy URL — server-side fetch has no CORS restriction, so any
+    // publicly accessible image (even those without CORS headers) will work.
+    const proxyUrl = `${WEB_APP_URL}/api/proxy-image?url=${encodeURIComponent(url)}`;
+
     const candidates: string[] = fileId
         ? [
             `https://lh3.googleusercontent.com/d/${fileId}=s400`,
             `https://drive.google.com/thumbnail?id=${fileId}&sz=w400`,
             url,
+            proxyUrl,
           ]
-        : [url];
+        : [url, proxyUrl];
 
     /** Fetch one URL → blob → same-origin blob URL → canvas PNG */
     const tryOne = (src: string): Promise<string> =>
