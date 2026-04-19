@@ -85,6 +85,67 @@ const renderKhmerToImg = (
     return { dataUrl: canvas.toDataURL('image/png'), ar: canvas.width / canvas.height };
 };
 
+/**
+ * Render Khmer text with automatic word-wrap via browser canvas.
+ * Lines are broken at '\n' and at word boundaries to fit `maxWidthMm`.
+ * Returns a KhmerImg whose aspect ratio encodes the multi-line height.
+ */
+const renderKhmerMultiline = (
+    text: string,
+    sizePt: number,
+    cssColor: string,
+    maxWidthMm: number,
+    bold = false,
+): KhmerImg | null => {
+    if (!text) return null;
+    const SCALE   = 3;
+    const fontPx  = Math.round(sizePt * 1.3333 * SCALE);
+    const weight  = bold ? '700' : '400';
+    const fontStr = `${weight} ${fontPx}px "Kantumruy Pro", "Noto Serif Khmer", sans-serif`;
+    const maxWPx  = Math.max(1, Math.round(maxWidthMm * 3.7795 * SCALE));
+
+    const measure = document.createElement('canvas');
+    const mCtx    = measure.getContext('2d')!;
+    mCtx.font     = fontStr;
+
+    // Wrap each paragraph (split at '\n') into display lines
+    const finalLines: string[] = [];
+    for (const para of text.split('\n')) {
+        if (!para.trim()) { finalLines.push(''); continue; }
+        const words = para.split(/(\s+)/);
+        let line = '';
+        for (const w of words) {
+            const test = line + w;
+            if (!line.trim() || mCtx.measureText(test).width <= maxWPx) {
+                line = test;
+            } else {
+                finalLines.push(line.trimEnd());
+                line = w.trimStart();
+            }
+        }
+        if (line.trim()) finalLines.push(line.trim());
+    }
+    if (!finalLines.length) return null;
+
+    const lineH  = Math.ceil(fontPx * 1.6);
+    const canW   = finalLines.reduce(
+        (mx, l) => Math.max(mx, Math.ceil(mCtx.measureText(l).width)), 1,
+    ) + SCALE * 6;
+    const canH   = lineH * finalLines.length + SCALE * 4;
+
+    const canvas  = document.createElement('canvas');
+    canvas.width  = canW;
+    canvas.height = canH;
+    const ctx     = canvas.getContext('2d')!;
+    ctx.font       = fontStr;
+    ctx.fillStyle  = cssColor;
+    ctx.textBaseline = 'middle';
+    finalLines.forEach((ln, i) =>
+        ctx.fillText(ln, SCALE * 3, SCALE * 2 + lineH * (i + 0.5)),
+    );
+    return { dataUrl: canvas.toDataURL('image/png'), ar: canvas.width / canvas.height };
+};
+
 /** Draw a KhmerImg into a jsPDF doc at a PDF coordinate (all units = mm) */
 const placeKhmerImg = (
     doc: any,
@@ -342,21 +403,42 @@ const PdfExportModal: React.FC<PdfExportModalProps> = ({ isOpen, onClose, orders
                 }
             };
 
-            // ── Step 6: Document header ────────────────────────────────────────
-            // Top accent bar
-            doc.setFillColor(30, 42, 68);
-            doc.rect(0, 0, pageW, 4, 'F');
-            doc.setFillColor(59, 130, 246);
-            doc.rect(0, 3.5, pageW, 1, 'F');
+            // ── Step 6: Document header (Friendly style) ──────────────────────
+            // Top gradient bar — deep indigo + violet stripe
+            doc.setFillColor(79, 70, 229);
+            doc.rect(0, 0, pageW, 5, 'F');
+            doc.setFillColor(167, 139, 250);
+            doc.rect(0, 4.5, pageW, 1, 'F');
 
-            addDocText('របាយការណ៍បញ្ជាទិញ (Orders Report)', pageW / 2, 15, 16, [25, 35, 60], 'center', true);
-            addDocText(`Generated: ${new Date().toLocaleString()}`,  pageW / 2, 22, 8.5, [110, 110, 110], 'center');
-            addDocText(`ចំនួនសរុប: ${orders.length}`,                pageW / 2, 27, 8.5, [110, 110, 110], 'center');
+            // Header card background
+            doc.setFillColor(250, 250, 255);
+            doc.rect(0, 5, pageW, 30, 'F');
 
-            // Separator line under header
-            doc.setDrawColor(200, 210, 230);
-            doc.setLineWidth(0.4);
-            doc.line(14, 31, pageW - 14, 31);
+            // Decorative left circle accent
+            doc.setFillColor(238, 242, 255);
+            doc.circle(10, 20, 12, 'F');
+            doc.setFillColor(199, 210, 254);
+            doc.circle(10, 20, 8, 'F');
+
+            addDocText('របាយការណ៍បញ្ជាទិញ (Orders Report)', pageW / 2, 16, 17, [30, 27, 75], 'center', true);
+
+            // Info pills
+            const pillY = 23;
+            const dateStr  = `📅  ${new Date().toLocaleString()}`;
+            const countStr = `📦  ចំនួនសរុប: ${orders.length}`;
+            // Left pill — date
+            doc.setFillColor(224, 231, 255);
+            doc.roundedRect(pageW / 2 - 72, pillY - 2.5, 68, 7, 1.5, 1.5, 'F');
+            addDocText(`Generated: ${new Date().toLocaleString()}`, pageW / 2 - 38, pillY + 2, 7.5, [67, 56, 202], 'center');
+            // Right pill — count
+            doc.setFillColor(220, 252, 231);
+            doc.roundedRect(pageW / 2 + 4, pillY - 2.5, 40, 7, 1.5, 1.5, 'F');
+            addDocText(`ចំនួនសរុប: ${orders.length}`, pageW / 2 + 24, pillY + 2, 7.5, [21, 128, 61], 'center');
+
+            // Separator line under header card
+            doc.setDrawColor(199, 210, 254);
+            doc.setLineWidth(0.5);
+            doc.line(0, 35, pageW, 35);
 
             // ── Step 7: Grouping ───────────────────────────────────────────────
             const groupedData: Record<string, ParsedOrder[]> = {};
@@ -403,7 +485,7 @@ const PdfExportModal: React.FC<PdfExportModalProps> = ({ isOpen, onClose, orders
             if (colIdx.phone     !== undefined) columnStyles[colIdx.phone]     = { ...columnStyles[colIdx.phone],     cellPadding: { top: 1.5, bottom: 1.5, right: 2, left: LOGO_PAD } };
             if (colIdx.shipping  !== undefined) columnStyles[colIdx.shipping]  = { ...columnStyles[colIdx.shipping],  cellPadding: { top: 1.5, bottom: 1.5, right: 2, left: LOGO_PAD } };
 
-            let finalY = 34;
+            let finalY = 38;
 
             // ── Step 9: Render groups ──────────────────────────────────────────
             Object.entries(groupedData).sort().forEach(([groupName, groupOrders]) => {
@@ -412,23 +494,23 @@ const PdfExportModal: React.FC<PdfExportModalProps> = ({ isOpen, onClose, orders
                     finalY = 15;
                 }
 
-                // Group heading bar
+                // Group heading bar — warm amber style
                 if (grouping !== 'None') {
-                    // Left accent stripe
-                    doc.setFillColor(59, 130, 246);
-                    doc.rect(14, finalY, 3, 9, 'F');
-                    // Main background
-                    doc.setFillColor(239, 246, 255);
-                    doc.rect(17, finalY, pageW - 31, 9, 'F');
+                    // Amber accent stripe
+                    doc.setFillColor(245, 158, 11);
+                    doc.rect(14, finalY, 3.5, 10, 'F');
+                    // Warm amber background
+                    doc.setFillColor(255, 251, 235);
+                    doc.rect(17.5, finalY, pageW - 31.5, 10, 'F');
                     // Outer border
-                    doc.setDrawColor(147, 197, 253);
+                    doc.setDrawColor(253, 224, 71);
                     doc.setLineWidth(0.3);
-                    doc.rect(14, finalY, pageW - 28, 9, 'S');
+                    doc.rect(14, finalY, pageW - 28, 10, 'S');
                     addDocText(
                         `${groupName}  (${groupOrders.length} orders)`,
-                        22, finalY + 6.2, 10, [30, 64, 175],
+                        24, finalY + 6.8, 10, [120, 53, 15],
                     );
-                    finalY += 12;
+                    finalY += 13;
                 }
 
                 // Build tableBody + track Khmer cells for this group
@@ -438,13 +520,14 @@ const PdfExportModal: React.FC<PdfExportModalProps> = ({ isOpen, onClose, orders
                 const tableBody = groupOrders.map((order, rowIdx) => {
                     const row: any[] = [];
                     let ci = 0;
-                    const push = (value: any) => {
+                    // skipPrerender: location cells render on-the-fly (need cell.width)
+                    const push = (value: any, skipPrerender = false) => {
                         const str = String(value ?? '');
                         if (containsKhmer(str)) {
                             if (!khmerCellMap[rowIdx]) khmerCellMap[rowIdx] = {};
                             khmerCellMap[rowIdx][ci] = str;
-                            if (!khmerBodyCache[str]) {
-                                const img = renderKhmerToImg(str, 8, '#1C1C1E');
+                            if (!skipPrerender && !khmerBodyCache[str]) {
+                                const img = renderKhmerToImg(str, 8, '#1E293B');
                                 if (img) khmerBodyCache[str] = img;
                             }
                         }
@@ -457,7 +540,8 @@ const PdfExportModal: React.FC<PdfExportModalProps> = ({ isOpen, onClose, orders
                     if (columns.date.visible)      push(new Date(order.Timestamp).toLocaleDateString('en-GB'));
                     if (columns.customer.visible)  push(order['Customer Name'] || '');
                     if (columns.phone.visible)     push(formatPhone(order['Customer Phone']));
-                    if (columns.location.visible)  push([order.Location, order['Address Details']].filter(Boolean).join(' - '));
+                    // Location: join with '\n' so multiline renderer splits correctly; skip pre-render
+                    if (columns.location.visible)  push([order.Location, order['Address Details']].filter(Boolean).join('\n'), true);
                     if (columns.items.visible)     push(order.Products.map(p => `${p.quantity}x ${p.name}`).join(', '));
                     if (columns.shipping.visible)  push(order['Internal Shipping Method'] || '');
                     if (columns.total.visible)     push(`$${(order['Grand Total'] || 0).toFixed(2)}`);
@@ -473,27 +557,27 @@ const PdfExportModal: React.FC<PdfExportModalProps> = ({ isOpen, onClose, orders
                     head: tableHead,
                     body: tableBody,
                     theme: 'grid',
-                    tableLineWidth: 0.35,
-                    tableLineColor: [120, 140, 180],
+                    tableLineWidth: 0.3,
+                    tableLineColor: [199, 210, 254],   // indigo-200
                     headStyles: {
-                        fillColor: [30, 42, 68],
+                        fillColor: [79, 70, 229],      // indigo-600
                         textColor: [255, 255, 255],
                         fontSize: 8,
-                        minCellHeight: 9,
+                        minCellHeight: 10,
                         halign: 'center',
                         lineWidth: 0.3,
-                        lineColor: [80, 100, 140],
+                        lineColor: [99, 102, 241],     // indigo-500
                     },
                     styles: {
                         fontSize: 8,
-                        cellPadding: { top: 2.5, bottom: 2.5, left: 2, right: 2 },
+                        cellPadding: { top: 3, bottom: 3, left: 2.5, right: 2.5 },
                         overflow: 'linebreak',
-                        lineWidth: 0.25,
-                        lineColor: [190, 200, 220],
-                        textColor: [25, 25, 30],
+                        lineWidth: 0.2,
+                        lineColor: [199, 210, 254],    // indigo-200
+                        textColor: [15, 23, 42],       // slate-900
                     },
                     alternateRowStyles: {
-                        fillColor: [245, 247, 252],
+                        fillColor: [238, 242, 255],    // indigo-50
                     },
                     columnStyles,
                     margin: { top: 20, left: 14, right: 14 },
@@ -502,14 +586,20 @@ const PdfExportModal: React.FC<PdfExportModalProps> = ({ isOpen, onClose, orders
                     willDrawCell: (data: any) => {
                         if (data.section === 'head') {
                             if (headerImgCache[data.column.index]) {
-                                data.cell.text = ['']; // prevent garbled header
+                                data.cell.text = [''];
                             }
                         }
                         if (data.section === 'body') {
-                            if (khmerCellMap[data.row.index]?.[data.column.index]) {
-                                data.cell.text = ['']; // prevent garbled body text
+                            const khText = khmerCellMap[data.row.index]?.[data.column.index];
+                            if (khText) {
+                                if (data.column.index === colIdx.location) {
+                                    // Allocate correct row height: one empty line per '\n'-separated segment
+                                    const lineCount = Math.max(1, khText.split('\n').filter(Boolean).length);
+                                    data.cell.text = Array(lineCount).fill('');
+                                } else {
+                                    data.cell.text = [''];
+                                }
                             }
-                            // Status badge — suppress autotable text; we draw it manually
                             if (data.column.index === colIdx.status) {
                                 data.cell.text = [''];
                             }
@@ -521,25 +611,38 @@ const PdfExportModal: React.FC<PdfExportModalProps> = ({ isOpen, onClose, orders
                         const { cell, section, column, row } = data;
                         const order = groupOrders[row.index];
 
-                        // Header Khmer labels → browser-rendered PNG
+                        // Header Khmer labels
                         if (section === 'head') {
                             const img = headerImgCache[column.index];
                             if (img) {
-                                const maxH = Math.min(cell.height - 1.5, 5);
+                                const maxH = Math.min(cell.height - 2, 6);
                                 placeKhmerImg(doc, img, cell.x + 1, cell.y + (cell.height - maxH) / 2, cell.width - 2, maxH, 'center');
                             }
                         }
 
-                        // Body Khmer text → browser-rendered PNG
                         if (section === 'body') {
                             const khText = khmerCellMap[row.index]?.[column.index];
+
                             if (khText) {
-                                const img = khmerBodyCache[khText];
-                                if (img) {
-                                    const padL = (column.index === colIdx.phone || column.index === colIdx.shipping) ? LOGO_PAD : 2;
-                                    const maxH = Math.min(cell.height - 2, 5);
-                                    const maxW = cell.width - padL - 1;
-                                    placeKhmerImg(doc, img, cell.x + padL, cell.y + (cell.height - maxH) / 2, maxW, maxH);
+                                if (column.index === colIdx.location) {
+                                    // ── Multi-line location: render on-the-fly with actual cell width ──
+                                    const padL = 2.5; const padT = 2;
+                                    const maxW = cell.width - padL * 2;
+                                    const img = renderKhmerMultiline(khText, 7.5, '#1E293B', maxW);
+                                    if (img) {
+                                        const drawH = Math.min(cell.height - padT * 2, maxW / img.ar);
+                                        const drawW = Math.min(maxW, drawH * img.ar);
+                                        doc.addImage(img.dataUrl, 'PNG', cell.x + padL, cell.y + padT, drawW, drawH);
+                                    }
+                                } else {
+                                    // ── Single-line Khmer for other columns ──
+                                    const img = khmerBodyCache[khText];
+                                    if (img) {
+                                        const padL = (column.index === colIdx.phone || column.index === colIdx.shipping) ? LOGO_PAD : 2.5;
+                                        const maxH = Math.min(cell.height - 2.5, 5.5);
+                                        const maxW = cell.width - padL - 1.5;
+                                        placeKhmerImg(doc, img, cell.x + padL, cell.y + (cell.height - maxH) / 2, maxW, maxH);
+                                    }
                                 }
                             }
 
@@ -560,7 +663,7 @@ const PdfExportModal: React.FC<PdfExportModalProps> = ({ isOpen, onClose, orders
                                 if (logo) drawCellLogo(doc, logo, cell.x, cell.y, cell.height, LOGO_AREA_W);
                             }
 
-                            // ── Payment Status badge (Paid = green, Unpaid/Pending = red) ──
+                            // ── Payment Status badge ──────────────────────────────
                             if (column.index === colIdx.status) {
                                 const statusText = String((cell as any).raw ?? '').trim();
                                 const lower      = statusText.toLowerCase();
@@ -570,80 +673,79 @@ const PdfExportModal: React.FC<PdfExportModalProps> = ({ isOpen, onClose, orders
                                     const bg     = isPaid ? [220, 252, 231] : [254, 226, 226];
                                     const fg     = isPaid ? [21, 128, 61]   : [185, 28, 28];
                                     const border = isPaid ? [134, 239, 172] : [252, 165, 165];
-                                    const padX = 3; const padY = 1.8;
+                                    const padX = 3; const padY = 2;
                                     const bx = cell.x + padX;
                                     const by = cell.y + padY;
                                     const bw = cell.width  - padX * 2;
                                     const bh = cell.height - padY * 2;
                                     doc.setFillColor(...bg);
-                                    doc.rect(bx, by, bw, bh, 'F');
+                                    doc.roundedRect(bx, by, bw, bh, 1, 1, 'F');
                                     doc.setDrawColor(...border);
                                     doc.setLineWidth(0.25);
-                                    doc.rect(bx, by, bw, bh, 'S');
+                                    doc.roundedRect(bx, by, bw, bh, 1, 1, 'S');
                                     doc.setFont('helvetica', 'bold');
                                     doc.setFontSize(7.5);
                                     doc.setTextColor(...fg);
-                                    doc.text(
-                                        statusText,
-                                        cell.x + cell.width / 2,
-                                        cell.y + cell.height / 2,
-                                        { align: 'center', baseline: 'middle' },
-                                    );
+                                    doc.text(statusText, cell.x + cell.width / 2, cell.y + cell.height / 2,
+                                        { align: 'center', baseline: 'middle' });
                                     doc.setFont('helvetica', 'normal');
-                                    doc.setTextColor(25, 25, 30);
+                                    doc.setTextColor(15, 23, 42);
                                 }
                             }
                         }
                     },
                 });
 
-                finalY = doc.lastAutoTable.finalY + 2;
+                finalY = doc.lastAutoTable.finalY + 3;
 
                 if (grouping !== 'None') {
-                    // Subtotal pill box
-                    const stW = 58; const stH = 7;
+                    // Subtotal pill — indigo-tinted, rounded
+                    const stW = 62; const stH = 8;
                     const stX = pageW - 14 - stW;
-                    doc.setFillColor(239, 246, 255);
-                    doc.rect(stX, finalY, stW, stH, 'F');
-                    doc.setDrawColor(147, 197, 253);
-                    doc.setLineWidth(0.35);
-                    doc.rect(stX, finalY, stW, stH, 'S');
-                    // Left accent on subtotal
-                    doc.setFillColor(59, 130, 246);
-                    doc.rect(stX, finalY, 2.5, stH, 'F');
-                    addDocText(`សរុបក្រុម: $${groupTotal.toFixed(2)}`, pageW - 16, finalY + stH * 0.72, 9, [30, 64, 175], 'right');
-                    finalY += stH + 6;
+                    doc.setFillColor(238, 242, 255);       // indigo-50
+                    doc.roundedRect(stX, finalY, stW, stH, 2, 2, 'F');
+                    doc.setDrawColor(199, 210, 254);       // indigo-200
+                    doc.setLineWidth(0.3);
+                    doc.roundedRect(stX, finalY, stW, stH, 2, 2, 'S');
+                    doc.setFillColor(79, 70, 229);          // indigo-600 accent dot
+                    doc.circle(stX + 5, finalY + stH / 2, 1.5, 'F');
+                    addDocText(`សរុបក្រុម: $${groupTotal.toFixed(2)}`, pageW - 16, finalY + stH * 0.7, 9, [67, 56, 202], 'right');
+                    finalY += stH + 7;
                 } else {
-                    finalY += 4;
+                    finalY += 5;
                 }
             });
 
-            // Grand total dark box
+            // Grand total — vibrant indigo pill
             if (grouping === 'None') {
                 const grand = orders.reduce((s, o) => s + (o['Grand Total'] || 0), 0);
-                const gtW = 70; const gtH = 9;
+                const gtW = 75; const gtH = 10;
                 const gtX = pageW - 14 - gtW;
-                doc.setFillColor(30, 42, 68);
-                doc.rect(gtX, finalY, gtW, gtH, 'F');
-                doc.setFillColor(59, 130, 246);
-                doc.rect(gtX, finalY, 3, gtH, 'F');
+                doc.setFillColor(79, 70, 229);             // indigo-600
+                doc.roundedRect(gtX, finalY, gtW, gtH, 2.5, 2.5, 'F');
+                doc.setFillColor(167, 139, 250);           // violet-400 left accent
+                doc.roundedRect(gtX, finalY, 8, gtH, 2.5, 2.5, 'F');
+                doc.setFillColor(79, 70, 229);
+                doc.rect(gtX + 5, finalY, 3, gtH, 'F');   // square off right side of accent
                 addDocText(`សរុបទឹកប្រាក់: $${grand.toFixed(2)}`, pageW - 16, finalY + gtH * 0.72, 11, [255, 255, 255], 'right', true);
             }
 
-            // Page numbers + footer line + outer page border
+            // Page numbers + footer + outer border
             const pageCount = doc.internal.pages.length - 1;
             const pageH = doc.internal.pageSize.height;
             for (let i = 1; i <= pageCount; i++) {
                 doc.setPage(i);
-                // Outer page border
-                doc.setDrawColor(160, 180, 210);
-                doc.setLineWidth(0.5);
-                doc.rect(5, 5, pageW - 10, pageH - 10, 'S');
-                // Footer separator
-                doc.setDrawColor(200, 210, 230);
+                // Outer page border (indigo-200)
+                doc.setDrawColor(199, 210, 254);
+                doc.setLineWidth(0.4);
+                doc.rect(4, 4, pageW - 8, pageH - 8, 'S');
+                // Bottom footer bar
+                doc.setFillColor(249, 250, 255);
+                doc.rect(4, pageH - 11, pageW - 8, 7, 'F');
+                doc.setDrawColor(199, 210, 254);
                 doc.setLineWidth(0.3);
-                doc.line(14, pageH - 9, pageW - 14, pageH - 9);
-                addDocText(`ទំព័រ ${i} នៃ ${pageCount}`, pageW / 2, pageH - 5, 8, [150, 150, 150], 'center');
+                doc.line(4, pageH - 11, pageW - 4, pageH - 11);
+                addDocText(`ទំព័រ ${i} នៃ ${pageCount}`, pageW / 2, pageH - 6.5, 8, [107, 114, 128], 'center');
             }
 
             doc.save(`Orders_Report_${new Date().toISOString().slice(0, 10)}.pdf`);
