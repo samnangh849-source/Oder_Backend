@@ -468,10 +468,12 @@ const PdfExportModal: React.FC<PdfExportModalProps> = ({ isOpen, onClose, orders
                 }
             });
 
-            // Column widths + logo padding + per-column alignment
-            // LOGO_PAD: total left padding of the cell (logo sits in left LOGO_AREA_W of that space)
+            // ── Center table horizontally: compute equal left/right margins ──────
             const LOGO_PAD      = 11;  // mm — left cell padding for phone/shipping columns
             const LOGO_AREA_W   = 8;   // mm — usable width for the logo image (gap of 3mm before text)
+            const totalColWidth = visibleKeys.reduce((s, k) => s + columns[k].width, 0);
+            const sideMargin    = Math.max(8, Math.floor((pageW - totalColWidth) / 2));
+
             const columnStyles: Record<number, any> = {};
             visibleKeys.forEach((k, i) => { columnStyles[i] = { cellWidth: columns[k].width }; });
             if (colIdx.serialNum !== undefined) columnStyles[colIdx.serialNum] = { ...columnStyles[colIdx.serialNum], halign: 'center', fontStyle: 'bold' };
@@ -494,17 +496,17 @@ const PdfExportModal: React.FC<PdfExportModalProps> = ({ isOpen, onClose, orders
                 if (grouping !== 'None') {
                     // Amber accent stripe
                     doc.setFillColor(245, 158, 11);
-                    doc.rect(14, finalY, 3.5, 10, 'F');
+                    doc.rect(sideMargin, finalY, 3.5, 10, 'F');
                     // Warm amber background
                     doc.setFillColor(255, 251, 235);
-                    doc.rect(17.5, finalY, pageW - 31.5, 10, 'F');
+                    doc.rect(sideMargin + 3.5, finalY, pageW - sideMargin * 2 - 3.5, 10, 'F');
                     // Outer border
                     doc.setDrawColor(253, 224, 71);
                     doc.setLineWidth(0.3);
-                    doc.rect(14, finalY, pageW - 28, 10, 'S');
+                    doc.rect(sideMargin, finalY, pageW - sideMargin * 2, 10, 'S');
                     addDocText(
                         `${groupName}  (${groupOrders.length} orders)`,
-                        24, finalY + 6.8, 10, [120, 53, 15],
+                        sideMargin + 10, finalY + 6.8, 10, [120, 53, 15],
                     );
                     finalY += 13;
                 }
@@ -577,7 +579,7 @@ const PdfExportModal: React.FC<PdfExportModalProps> = ({ isOpen, onClose, orders
                         fillColor: [238, 242, 255],    // indigo-50
                     },
                     columnStyles,
-                    margin: { top: 20, left: 14, right: 14, bottom: 16 },
+                    margin: { top: 20, left: sideMargin, right: sideMargin, bottom: 16 },
 
                     // ── willDrawCell: suppress text that we'll draw ourselves ──
                     willDrawCell: (data: any) => {
@@ -687,7 +689,7 @@ const PdfExportModal: React.FC<PdfExportModalProps> = ({ isOpen, onClose, orders
                 if (grouping !== 'None') {
                     // Subtotal pill — indigo-tinted, rounded
                     const stW = 62; const stH = 8;
-                    const stX = pageW - 14 - stW;
+                    const stX = pageW - sideMargin - stW;
                     doc.setFillColor(238, 242, 255);       // indigo-50
                     doc.roundedRect(stX, finalY, stW, stH, 2, 2, 'F');
                     doc.setDrawColor(199, 210, 254);       // indigo-200
@@ -695,7 +697,7 @@ const PdfExportModal: React.FC<PdfExportModalProps> = ({ isOpen, onClose, orders
                     doc.roundedRect(stX, finalY, stW, stH, 2, 2, 'S');
                     doc.setFillColor(79, 70, 229);          // indigo-600 accent dot
                     doc.circle(stX + 5, finalY + stH / 2, 1.5, 'F');
-                    addDocText(`សរុបក្រុម: $${groupTotal.toFixed(2)}`, pageW - 16, finalY + stH * 0.7, 9, [67, 56, 202], 'right');
+                    addDocText(`សរុបក្រុម: $${groupTotal.toFixed(2)}`, pageW - sideMargin - 2, finalY + stH * 0.7, 9, [67, 56, 202], 'right');
                     finalY += stH + 7;
                 } else {
                     finalY += 5;
@@ -706,7 +708,7 @@ const PdfExportModal: React.FC<PdfExportModalProps> = ({ isOpen, onClose, orders
             if (grouping === 'None') {
                 const grand = orders.reduce((s, o) => s + (o['Grand Total'] || 0), 0);
                 const gtW = 75; const gtH = 10;
-                const gtX = pageW - 14 - gtW;
+                const gtX = pageW - sideMargin - gtW;
                 // 1. Main pill
                 doc.setFillColor(79, 70, 229);
                 doc.roundedRect(gtX, finalY, gtW, gtH, 2.5, 2.5, 'F');
@@ -717,7 +719,7 @@ const PdfExportModal: React.FC<PdfExportModalProps> = ({ isOpen, onClose, orders
                 // 3. Re-draw main fill on the right part so stripe blends cleanly
                 doc.setFillColor(79, 70, 229);
                 doc.rect(gtX + 8.5, finalY, gtW - 8.5, gtH, 'F');
-                addDocText(`សរុបទឹកប្រាក់: $${grand.toFixed(2)}`, pageW - 16, finalY + gtH * 0.72, 11, [255, 255, 255], 'right', true);
+                addDocText(`សរុបទឹកប្រាក់: $${grand.toFixed(2)}`, pageW - sideMargin - 2, finalY + gtH * 0.72, 11, [255, 255, 255], 'right', true);
             }
 
             // Page numbers + footer + outer border
@@ -725,24 +727,12 @@ const PdfExportModal: React.FC<PdfExportModalProps> = ({ isOpen, onClose, orders
             const pageH = doc.internal.pageSize.height;
             for (let i = 1; i <= pageCount; i++) {
                 doc.setPage(i);
-                doc.setDrawColor(199, 210, 254);  // indigo-200
-                doc.setLineWidth(0.4);
-                if (i === 1) {
-                    // Page 1: header fill covers y=0→35, so skip the top border line.
-                    // Draw only left, right, and bottom sides manually.
-                    doc.line(4,          4,          4,          pageH - 4); // left
-                    doc.line(pageW - 4,  4,          pageW - 4,  pageH - 4); // right
-                    doc.line(4,          pageH - 4,  pageW - 4,  pageH - 4); // bottom
-                } else {
-                    // Page 2+: full border on all 4 sides
-                    doc.rect(4, 4, pageW - 8, pageH - 8, 'S');
-                }
-                // Bottom footer bar (all pages)
+                // Bottom footer bar (all pages) — no outer frame
                 doc.setFillColor(249, 250, 255);
-                doc.rect(4, pageH - 12, pageW - 8, 8, 'F');
+                doc.rect(0, pageH - 12, pageW, 8, 'F');
                 doc.setDrawColor(199, 210, 254);
                 doc.setLineWidth(0.3);
-                doc.line(4, pageH - 12, pageW - 4, pageH - 12);
+                doc.line(0, pageH - 12, pageW, pageH - 12);
                 addDocText(`ទំព័រ ${i} នៃ ${pageCount}`, pageW / 2, pageH - 7, 8, [107, 114, 128], 'center');
             }
 
