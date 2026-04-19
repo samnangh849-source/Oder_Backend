@@ -297,6 +297,15 @@ func processPersistentTask(workerID int, task *SyncTask) {
 	}
 
 	if err != nil || resp.Status != "success" {
+		// "locked" means the Apps Script global lock was held by another concurrent request
+		// (e.g. a Drive upload from another packer). This is transient — keep the task as
+		// "pending" without counting it as a real retry so it is picked up again quickly.
+		if resp.Status == "locked" {
+			log.Printf("🔒 SyncManager: Task %d got script lock contention — requeuing as pending", dbID)
+			DB.Model(&record).Update("status", "pending")
+			return
+		}
+
 		newStatus := "failed"
 		if record.RetryCount >= record.MaxRetries {
 			newStatus = "permanent_failure"
@@ -323,8 +332,10 @@ func processPersistentTask(workerID int, task *SyncTask) {
 
 func processStuckTasks(workerID int) {
 	var records []PendingSync
-	// Find pending/failed tasks that haven't been updated in 5 minutes
-	DB.Where("(status = 'pending' OR status = 'failed') AND updated_at < ?", time.Now().Add(-5*time.Minute)).Limit(5).Find(&records)
+	// Retry pending tasks after 30 seconds (previously 5 minutes).
+	// "pending" tasks that were requeued after a script-lock contention get picked up fast.
+	// "failed" tasks (real errors) are also retried on the same cadence; MaxRetries caps abuse.
+	DB.Where("(status = 'pending' OR status = 'failed') AND updated_at < ?", time.Now().Add(-30*time.Second)).Limit(5).Find(&records)
 	for _, r := range records {
 		processPersistentTask(workerID, &SyncTask{RetryCount: int(r.ID)})
 	}
