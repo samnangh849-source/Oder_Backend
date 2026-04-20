@@ -8,9 +8,8 @@ import OrderDetailModal from '../orders/OrderDetailModal';
 import UserSalesPageReport from '../../pages/UserSalesPageReport';
 import ShippingReport from '../reports/ShippingReport';
 import { safeParseDate, getValidDate, getTimestamp } from '../../utils/dateUtils';
-import { FilterPanel } from '../orders/FilterPanel';
 import { FilterState } from '../orders/OrderFilters';
-import { BarChart3, Truck, Filter, Settings, Search, Plus, X, Check, ShieldX } from 'lucide-react';
+import { BarChart3, Truck, Settings, Search, Plus, X, Check, ShieldX } from 'lucide-react';
 import { useOrder } from '../../context/OrderContext';
 
 type DateRangePreset = 'today' | 'yesterday' | 'this_week' | 'this_month' | 'last_month' | 'this_year' | 'last_year' | 'all' | 'custom';
@@ -104,7 +103,6 @@ const UserOrdersView: React.FC<UserOrdersViewProps> = ({ onAdd, onStatsUpdate, s
     };
     
     // Advanced Mobile Filtering
-    const [isFilterPanelOpen, setIsFilterPanelOpen] = useState(false);
     const [advancedFilters, setAdvancedFilters] = useState<FilterState>({
         datePreset: 'this_month', startDate: '', endDate: '', team: '', user: '',
         paymentStatus: '', shippingService: '', driver: '', product: '', bank: '',
@@ -375,10 +373,6 @@ const UserOrdersView: React.FC<UserOrdersViewProps> = ({ onAdd, onStatsUpdate, s
                                 )}
                             </div>
                         )}
-                        <button onClick={() => setIsFilterPanelOpen(true)} className="p-2.5 bg-[var(--cm-input-bg)] text-secondary border border-[var(--cm-border)] rounded-md relative active:scale-95 transition-all hover:border-[var(--cm-accent)] hover:text-[var(--cm-accent)]">
-                            <Filter size={18} />
-                            {Object.values(advancedFilters).some(v => v && v !== 'all' && v !== 'this_month' && v !== 'All') && <span className="absolute -top-1 -right-1 w-2 h-2 bg-[var(--cm-accent)] rounded-full border border-[var(--cm-bg)]"></span>}
-                        </button>
                         
                         {hasPermission('create_order') && (
                             <button onClick={onAdd} className="px-4 py-2.5 bg-[var(--cm-accent)] text-[var(--cm-accent-text)] rounded-md active:scale-95 transition-all flex items-center gap-2 font-bold text-xs shadow-lg shadow-[var(--cm-accent)]/10">
@@ -408,11 +402,6 @@ const UserOrdersView: React.FC<UserOrdersViewProps> = ({ onAdd, onStatsUpdate, s
                 )}
             </div>
 
-            {isFilterPanelOpen && (
-                <FilterPanel isOpen={isFilterPanelOpen} onClose={() => setIsFilterPanelOpen(false)}>
-                    {/* The Filter Engine would need to be adapted or used as is */}
-                </FilterPanel>
-            )}
             {viewingOrder && <OrderDetailModal order={viewingOrder} onClose={() => setViewingOrder(null)} />}
         </div>
     );
