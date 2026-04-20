@@ -11,13 +11,14 @@ interface TopPerformanceUserJourneyProps {
     period: Period;
 }
 
-type Period = 'daily' | 'month' | 'year' | 'custom';
+type Period = 'daily' | 'today' | 'week' | 'month' | 'year' | 'custom';
 
 const TopPerformanceUserJourney: React.FC<TopPerformanceUserJourneyProps> = ({ orders, language, period }) => {
     const t = translations[language];
 
     const periodLabel = useMemo(() => {
         if (period === 'today' || period === 'daily') return language === 'km' ? 'ប្រចាំថ្ងៃ' : 'Daily';
+        if (period === 'week') return language === 'km' ? 'សប្តាហ៍នេះ' : 'This Week';
         if (period === 'month') return language === 'km' ? 'ប្រចាំខែ' : 'Monthly';
         if (period === 'year') return language === 'km' ? 'ប្រចាំឆ្នាំ' : 'Yearly';
         return language === 'km' ? 'កំណត់' : 'Custom';
@@ -34,8 +35,13 @@ const TopPerformanceUserJourney: React.FC<TopPerformanceUserJourneyProps> = ({ o
 
             if (period === 'today' || period === 'daily') {
                 return orderDate >= today && orderDate <= endOfToday;
+            } else if (period === 'week') {
+                const day = now.getDay();
+                const weekStart = new Date(today);
+                weekStart.setDate(today.getDate() - (day === 0 ? 6 : day - 1));
+                return orderDate >= weekStart && orderDate <= endOfToday;
             } else if (period === 'month') {
-                return orderDate.getMonth() === now.getMonth() && 
+                return orderDate.getMonth() === now.getMonth() &&
                        orderDate.getFullYear() === now.getFullYear() &&
                        orderDate <= endOfToday;
             } else if (period === 'year') {

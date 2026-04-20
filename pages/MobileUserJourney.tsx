@@ -28,7 +28,9 @@ const MobileUserJourney: React.FC<MobileUserJourneyProps> = ({ onBackToRoleSelec
     const [localLanguage, setLocalLanguage] = useState<'km' | 'en'>(language);
     const t = translations[localLanguage];
     const [teamStats, setTeamStats] = useState({ revenue: 0, cost: 0, paid: 0, unpaid: 0, count: 0 });
-    const [dateFilter, setDateFilter] = useState<'today' | 'month' | 'year' | 'custom'>('today');
+    const [dateFilter, setDateFilter] = useState<'today' | 'week' | 'month' | 'year' | 'custom'>('today');
+    const [customStart, setCustomStart] = useState(() => new Date().toISOString().split('T')[0]);
+    const [customEnd, setCustomEnd] = useState(() => new Date().toISOString().split('T')[0]);
 
      useEffect(() => {
         if (!selectedTeam) {
@@ -65,12 +67,29 @@ const MobileUserJourney: React.FC<MobileUserJourneyProps> = ({ onBackToRoleSelec
 
     const globalKpiStats = useMemo(() => {
         const now = new Date();
+        const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+        const endOfToday = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 23, 59, 59, 999);
         const filtered = orders.filter(o => {
+            if (!o.Timestamp) return false;
             const date = new Date(o.Timestamp);
-            if (dateFilter === 'today') return date.toDateString() === now.toDateString();
-            if (dateFilter === 'month') return date.getMonth() === now.getMonth() && date.getFullYear() === now.getFullYear();
-            if (dateFilter === 'year') return date.getFullYear() === now.getFullYear();
-            return true; 
+            if (isNaN(date.getTime())) return false;
+            if (dateFilter === 'today') return date >= today && date <= endOfToday;
+            if (dateFilter === 'week') {
+                const day = now.getDay();
+                const weekStart = new Date(today);
+                weekStart.setDate(today.getDate() - (day === 0 ? 6 : day - 1));
+                return date >= weekStart && date <= endOfToday;
+            }
+            if (dateFilter === 'month') return date.getMonth() === now.getMonth() && date.getFullYear() === now.getFullYear() && date <= endOfToday;
+            if (dateFilter === 'year') return date.getFullYear() === now.getFullYear() && date <= endOfToday;
+            if (dateFilter === 'custom') {
+                const start = customStart ? new Date(customStart + 'T00:00:00') : null;
+                const end = customEnd ? new Date(customEnd + 'T23:59:59') : null;
+                if (start && date < start) return false;
+                if (end && date > end) return false;
+                return true;
+            }
+            return true;
         });
 
         const revenue = filtered.reduce((sum, o) => sum + (Number(o['Grand Total']) || 0), 0);
@@ -81,7 +100,7 @@ const MobileUserJourney: React.FC<MobileUserJourneyProps> = ({ onBackToRoleSelec
             total_revenue: revenue,
             active_teams: uniqueTeams.size,
         };
-    }, [orders, dateFilter]);
+    }, [orders, dateFilter, customStart, customEnd]);
     const formatNumber = (n: number) => n.toLocaleString();
 
     return (
@@ -131,23 +150,48 @@ const MobileUserJourney: React.FC<MobileUserJourneyProps> = ({ onBackToRoleSelec
             </header>
 
             {/* Global Date Filter for Mobile - Always Visible */}
-            <div className="flex overflow-x-auto gap-1 px-4 py-2.5 no-scrollbar border-b border-[var(--cm-border)] bg-[var(--cm-card-bg)] flex-shrink-0">
-                    {(['today', 'month', 'year', 'custom'] as const).map((f) => (
-                    <button
-                        key={f}
-                        onClick={() => setDateFilter(f)}
-                        className={`whitespace-nowrap px-4 py-1.5 text-[10px] font-bold uppercase tracking-wider transition-all rounded-full border ${
-                            dateFilter === f 
-                            ? 'bg-[var(--cm-accent)] text-[var(--cm-accent-text)] border-[var(--cm-accent)] shadow-lg' 
-                            : 'text-[var(--cm-text-muted)] border-[var(--cm-border)]'
-                        }`}
-                    >
-                        {f === 'today' ? (language === 'km' ? 'ថ្ងៃនេះ' : 'Today') : 
-                        f === 'month' ? (language === 'km' ? 'ខែនេះ' : 'Month') : 
-                        f === 'year' ? (language === 'km' ? 'ឆ្នាំនេះ' : 'Year') : 
-                        (language === 'km' ? 'កំណត់' : 'Custom')}
-                    </button>
-                ))}
+            <div className="flex-shrink-0 border-b border-[var(--cm-border)] bg-[var(--cm-card-bg)]">
+                <div className="flex overflow-x-auto gap-1 px-4 py-2.5 no-scrollbar">
+                    {(['today', 'week', 'month', 'year', 'custom'] as const).map((f) => (
+                        <button
+                            key={f}
+                            onClick={() => setDateFilter(f)}
+                            className={`whitespace-nowrap px-4 py-1.5 text-[10px] font-bold uppercase tracking-wider transition-all rounded-full border ${
+                                dateFilter === f
+                                ? 'bg-[var(--cm-accent)] text-[var(--cm-accent-text)] border-[var(--cm-accent)] shadow-lg'
+                                : 'text-[var(--cm-text-muted)] border-[var(--cm-border)]'
+                            }`}
+                        >
+                            {f === 'today' ? (language === 'km' ? 'ថ្ងៃនេះ' : 'Today') :
+                            f === 'week' ? (language === 'km' ? 'សប្តាហ៍នេះ' : 'This Week') :
+                            f === 'month' ? (language === 'km' ? 'ខែនេះ' : 'Month') :
+                            f === 'year' ? (language === 'km' ? 'ឆ្នាំនេះ' : 'Year') :
+                            (language === 'km' ? 'កំណត់' : 'Custom')}
+                        </button>
+                    ))}
+                </div>
+                {dateFilter === 'custom' && (
+                    <div className="flex items-center gap-2 px-4 pb-3">
+                        <input
+                            type="date"
+                            value={customStart}
+                            max={customEnd}
+                            onChange={e => setCustomStart(e.target.value)}
+                            className="flex-1 bg-[var(--cm-card-bg2)] border border-[var(--cm-border)] text-[11px] font-semibold text-[var(--cm-text-primary)] rounded-lg px-2 py-1.5 outline-none focus:border-[var(--cm-accent)]"
+                            style={{ colorScheme: 'dark' }}
+                        />
+                        <span className="text-[var(--cm-text-muted)] text-[10px] font-bold flex-shrink-0">→</span>
+                        <input
+                            type="date"
+                            value={customEnd}
+                            min={customStart}
+                            max={new Date().toISOString().split('T')[0]}
+                            onChange={e => setCustomEnd(e.target.value)}
+                            className="flex-1 bg-[var(--cm-card-bg2)] border border-[var(--cm-border)] text-[11px] font-semibold text-[var(--cm-text-primary)] rounded-lg px-2 py-1.5 outline-none focus:border-[var(--cm-accent)]"
+                            style={{ colorScheme: 'dark' }}
+                        />
+                    </div>
+                )}
             </div>
 
             {selectedTeam ? (
@@ -163,11 +207,18 @@ const MobileUserJourney: React.FC<MobileUserJourneyProps> = ({ onBackToRoleSelec
                         </div>
                     </div>
                     <div className="flex-grow overflow-hidden">
-                        <UserOrdersView 
-                            onAdd={handleCreateOrder} 
-                            onStatsUpdate={setTeamStats} 
-                            showColumnSelectorToggle={false} 
-                            dateFilter={dateFilter === 'month' ? 'this_month' : dateFilter === 'year' ? 'this_year' : dateFilter as any}
+                        <UserOrdersView
+                            onAdd={handleCreateOrder}
+                            onStatsUpdate={setTeamStats}
+                            showColumnSelectorToggle={false}
+                            dateFilter={
+                                dateFilter === 'week' ? 'this_week' :
+                                dateFilter === 'month' ? 'this_month' :
+                                dateFilter === 'year' ? 'this_year' :
+                                dateFilter as any
+                            }
+                            customStart={dateFilter === 'custom' ? customStart : undefined}
+                            customEnd={dateFilter === 'custom' ? customEnd : undefined}
                         />
                     </div>
                 </div>
@@ -207,7 +258,7 @@ const MobileUserJourney: React.FC<MobileUserJourneyProps> = ({ onBackToRoleSelec
                     </div>
 
                     <div className="px-4">
-                        <TopPerformanceUserJourney orders={orders} language={localLanguage} period={dateFilter} />
+                        <TopPerformanceUserJourney orders={orders} language={localLanguage} period={dateFilter as any} />
                     </div>
                 </div>
             )}

@@ -25,10 +25,12 @@ interface UserOrdersViewProps {
   onAdd: () => void;
   onStatsUpdate: (stats: { revenue: number; cost: number; paid: number; unpaid: number, count: number }) => void;
   showColumnSelectorToggle?: boolean;
-  dateFilter?: any; 
+  dateFilter?: any;
+  customStart?: string;
+  customEnd?: string;
 }
 
-const UserOrdersView: React.FC<UserOrdersViewProps> = ({ onAdd, onStatsUpdate, showColumnSelectorToggle = true, dateFilter: propDateFilter }) => {
+const UserOrdersView: React.FC<UserOrdersViewProps> = ({ onAdd, onStatsUpdate, showColumnSelectorToggle = true, dateFilter: propDateFilter, customStart: propCustomStart, customEnd: propCustomEnd }) => {
     const { currentUser, language, refreshData, appData, orders, isOrdersLoading, hasPermission, selectedTeam, setAppState } = useContext(AppContext);
     const { ordersFetchError } = useOrder();
     // State declarations
@@ -47,17 +49,19 @@ const UserOrdersView: React.FC<UserOrdersViewProps> = ({ onAdd, onStatsUpdate, s
             let mappedFilter = propDateFilter;
             if (propDateFilter === 'month') mappedFilter = 'this_month';
             if (propDateFilter === 'year') mappedFilter = 'this_year';
-            
+
             const finalRange = mappedFilter as DateRangePreset;
             setDateRange(finalRange);
-            
-            // CRITICAL FIX: Also sync the advanced filters state
+
             setAdvancedFilters(prev => ({
                 ...prev,
-                datePreset: finalRange
+                datePreset: finalRange,
+                // When switching to custom, wire in the parent-supplied dates
+                startDate: finalRange === 'custom' ? (propCustomStart ?? prev.startDate) : prev.startDate,
+                endDate:   finalRange === 'custom' ? (propCustomEnd   ?? prev.endDate)   : prev.endDate,
             }));
         }
-    }, [propDateFilter]);
+    }, [propDateFilter, propCustomStart, propCustomEnd]);
     const [showColumnSelector, setShowColumnSelector] = useState(false);
     const [visibleColumns, setVisibleColumns] = useState<Set<string>>(new Set([
         'index', 'customerName', 'productInfo', 'location', 'total', 'status', 'date', 'actions'
