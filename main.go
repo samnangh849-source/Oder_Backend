@@ -1959,7 +1959,7 @@ func main() {
 	{
 		protected.GET("/users", handleGetUsers)
 		protected.GET("/static-data", handleGetStaticData)
-		protected.POST("/submit-order", handleSubmitOrder)
+		protected.POST("/submit-order", RequirePermission("create_order"), handleSubmitOrder)
 		protected.POST("/upload-image", backend.HandleImageUploadProxy)
 		protected.GET("/proxy-image", backend.HandleProxyImage)
 		protected.GET("/permissions", handleGetUserPermissions)

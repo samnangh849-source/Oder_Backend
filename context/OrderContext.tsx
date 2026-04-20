@@ -181,6 +181,15 @@ export const OrderProvider: React.FC<{ children: React.ReactNode }> = ({ childre
         return staticData;
     }, [fetchData, fetchOrders]);
 
+    // When the current user's identity changes (new login, permission rebuild, etc.),
+    // clear a stale permission_denied error so the next fetchOrders call can succeed.
+    useEffect(() => {
+        if (currentUser && ordersFetchError === 'permission_denied') {
+            setOrdersFetchError(null);
+        }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [currentUser?.Role, currentUser?.Permissions]);
+
     // --- Background Polling (Every 5 minutes) ---
     useEffect(() => {
         if (!currentUser) return;

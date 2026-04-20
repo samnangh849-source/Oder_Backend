@@ -31,7 +31,7 @@ interface UserOrdersViewProps {
 
 const UserOrdersView: React.FC<UserOrdersViewProps> = ({ onAdd, onStatsUpdate, showColumnSelectorToggle = true, dateFilter: propDateFilter, customStart: propCustomStart, customEnd: propCustomEnd }) => {
     const { currentUser, language, refreshData, appData, orders, isOrdersLoading, hasPermission, selectedTeam, setAppState } = useContext(AppContext);
-    const { ordersFetchError } = useOrder();
+    const { ordersFetchError, fetchOrders } = useOrder();
     // State declarations
     const [viewOrders, setViewOrders] = useState<ParsedOrder[]>([]);
     const [editingOrder, setEditingOrder] = useState<ParsedOrder | null>(null);
@@ -282,9 +282,17 @@ const UserOrdersView: React.FC<UserOrdersViewProps> = ({ onAdd, onStatsUpdate, s
     const isFrontendDenied = !hasPermission('view_order_list');
     const isBackendDenied = ordersFetchError === 'permission_denied';
 
+    // Auto-retry: frontend permission is now granted but a previous fetch got 403 (stale state).
+    // This fixes the race where permissions load after the first fetch fires.
+    useEffect(() => {
+        if (isFrontendDenied || !isBackendDenied) return;
+        const timer = setTimeout(() => fetchOrders(), 1500);
+        return () => clearTimeout(timer);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [isFrontendDenied, isBackendDenied]);
+
     if (isFrontendDenied || isBackendDenied) {
         const userRole = currentUser?.Role || '(unknown)';
-        // Log to console so developer can debug in browser DevTools
         console.warn(
             `[UserOrdersView] Access Denied — frontend=${isFrontendDenied}, backend403=${isBackendDenied}\n` +
             `  User role in JWT/session: "${userRole}"\n` +
@@ -304,9 +312,18 @@ const UserOrdersView: React.FC<UserOrdersViewProps> = ({ onAdd, onStatsUpdate, s
                         : `Role "${userRole}" lacks view_order_list permission. Admin must enable it for exactly this role name.`}
                 </p>
                 {isBackendDenied && !isFrontendDenied && (
-                    <p className="text-[11px] mt-1 px-3 py-1.5 rounded" style={{ backgroundColor: '#F6465D15', color: '#F6465D', border: '1px solid #F6465D30' }}>
-                        {language === 'km' ? '⚠ Server បដិសេធ (403) — ឈ្មោះ Role ក្នុង DB មិនត្រូវគ្នា' : '⚠ Server rejected (403) — Role name in DB may differ from your Role'}
-                    </p>
+                    <>
+                        <p className="text-[11px] mt-1 px-3 py-1.5 rounded" style={{ backgroundColor: '#F6465D15', color: '#F6465D', border: '1px solid #F6465D30' }}>
+                            {language === 'km' ? '⚠ Server បដិសេធ (403) — ឈ្មោះ Role ក្នុង DB មិនត្រូវគ្នា' : '⚠ Server rejected (403) — Role name in DB may differ from your Role'}
+                        </p>
+                        <button
+                            onClick={() => fetchOrders()}
+                            className="mt-2 px-4 py-2 text-xs font-bold rounded-md active:scale-95 transition-all"
+                            style={{ backgroundColor: '#F0B90B', color: '#181A20' }}
+                        >
+                            {language === 'km' ? 'ព្យាយាមម្ដងទៀត' : 'Retry'}
+                        </button>
+                    </>
                 )}
             </div>
         );
