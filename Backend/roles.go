@@ -167,14 +167,19 @@ func HandleUpdatePermission(c *gin.Context) {
 			}(req)
 
 		} else if result.Error == nil {
-			if err := DB.Model(&existing).Update("is_enabled", req.IsEnabled).Error; err != nil {
+			// Normalize role/feature to lowercase in case an older row was stored with mixed case.
+			if err := DB.Model(&existing).Updates(map[string]interface{}{
+				"is_enabled": req.IsEnabled,
+				"role":        roleLower,
+				"feature":     featureLower,
+			}).Error; err != nil {
 				log.Printf("❌ Failed to update permission ID %d [%s:%s]: %v", existing.ID, existing.Role, existing.Feature, err)
 				updateErrors = append(updateErrors, fmt.Sprintf("update failed [%s:%s]", existing.Role, existing.Feature))
 				continue
 			}
 			req.ID = existing.ID
-			req.Role = existing.Role
-			req.Feature = existing.Feature
+			req.Role = roleLower
+			req.Feature = featureLower
 
 			go func(r RolePermission) {
 				EnqueueSync("updateSheet", map[string]interface{}{"IsEnabled": r.IsEnabled}, "RolePermissions", map[string]string{
