@@ -842,25 +842,19 @@ func PerformDataMigration() {
 		broadcastFullSyncComplete(false, "Failed to fetch EditLogs: "+err.Error(), time.Since(startTime).Seconds())
 		return
 	}
-	var validEditLogs []EditLog
-	seenEditLogs := make(map[uint]bool)
-	for _, x := range editLogs {
-		if !seenEditLogs[x.ID] {
-			if x.ID != 0 {
-				seenEditLogs[x.ID] = true
-			}
-			validEditLogs = append(validEditLogs, x)
-		}
+	// Reset IDs to 0 to let DB generate them
+	for i := range editLogs {
+		editLogs[i].ID = 0
 	}
-	if len(validEditLogs) > 0 {
-		if err := tx.CreateInBatches(validEditLogs, 100).Error; err != nil {
+	if len(editLogs) > 0 {
+		if err := tx.CreateInBatches(editLogs, 100).Error; err != nil {
 			tx.Rollback()
 			log.Println("❌ Migration failed to save EditLogs:", err)
 			broadcastFullSyncComplete(false, "Failed to save EditLogs: "+err.Error(), time.Since(startTime).Seconds())
 			return
 		}
 	}
-	broadcastFullSyncProgress(19, totalSteps, "កំពុងទាញ UserActivityLogs...", len(validEditLogs), time.Since(startTime).Seconds())
+	broadcastFullSyncProgress(19, totalSteps, "កំពុងទាញ UserActivityLogs...", len(editLogs), time.Since(startTime).Seconds())
 
 	// ── UserActivityLogs ──
 	var actLogs []UserActivityLog
@@ -870,25 +864,19 @@ func PerformDataMigration() {
 		broadcastFullSyncComplete(false, "Failed to fetch UserActivityLogs: "+err.Error(), time.Since(startTime).Seconds())
 		return
 	}
-	var validActLogs []UserActivityLog
-	seenActLogs := make(map[uint]bool)
-	for _, x := range actLogs {
-		if !seenActLogs[x.ID] {
-			if x.ID != 0 {
-				seenActLogs[x.ID] = true
-			}
-			validActLogs = append(validActLogs, x)
-		}
+	// Reset IDs to 0 to let DB generate them
+	for i := range actLogs {
+		actLogs[i].ID = 0
 	}
-	if len(validActLogs) > 0 {
-		if err := tx.CreateInBatches(validActLogs, 100).Error; err != nil {
+	if len(actLogs) > 0 {
+		if err := tx.CreateInBatches(actLogs, 100).Error; err != nil {
 			tx.Rollback()
 			log.Println("❌ Migration failed to save UserActivityLogs:", err)
 			broadcastFullSyncComplete(false, "Failed to save UserActivityLogs: "+err.Error(), time.Since(startTime).Seconds())
 			return
 		}
 	}
-	broadcastFullSyncProgress(20, totalSteps, "កំពុងទាញ DriverRecommendations...", len(validActLogs), time.Since(startTime).Seconds())
+	broadcastFullSyncProgress(20, totalSteps, "កំពុងទាញ DriverRecommendations...", len(actLogs), time.Since(startTime).Seconds())
 
 	// ── DriverRecommendations ──
 	var recs []DriverRecommendation
