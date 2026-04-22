@@ -679,9 +679,9 @@ func PerformDataMigration() {
 	var validTemplates []TelegramTemplate
 	seenTemplates := make(map[string]bool)
 	for _, x := range templates {
-		if !seenTemplates[x.TemplateName] {
-			if x.TemplateName != "" {
-				seenTemplates[x.TemplateName] = true
+		if !seenTemplates[x.ID] {
+			if x.ID != "" {
+				seenTemplates[x.ID] = true
 			}
 			validTemplates = append(validTemplates, x)
 		}
