@@ -1670,6 +1670,8 @@ func handleSheetsWebhook(c *gin.Context) {
 		pkName = "TransferID"
 	} else if req.SheetName == "Returns" {
 		pkName = "ReturnID"
+	} else if req.SheetName == "TelegramTemplates" {
+		pkName = "ID"
 	} else if req.SheetName == "AllOrders" || strings.HasPrefix(req.SheetName, "Orders_") {
 		pkName = "Order ID"
 	} else {
