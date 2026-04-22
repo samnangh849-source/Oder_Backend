@@ -309,7 +309,21 @@ func processPersistentTask(workerID int, task *SyncTask) {
 		newStatus := "failed"
 		if record.RetryCount >= record.MaxRetries {
 			newStatus = "permanent_failure"
-			log.Printf("🔥 SyncManager: Task %d permanent failure", dbID)
+			log.Printf("🔥 SyncManager: Task %d permanent failure (action=%s sheet=%s)", dbID, req.Action, req.SheetName)
+			// Notify all connected clients so admins know the data did NOT reach Google Sheets.
+			if HubGlobal != nil {
+				errPayload, _ := json.Marshal(map[string]interface{}{
+					"type":    "sync_error",
+					"message": fmt.Sprintf("Sheets sync failed permanently: action=%s sheet=%s orderID=%s", req.Action, req.SheetName, req.OrderID),
+					"action":  req.Action,
+					"sheet":   req.SheetName,
+				})
+				select {
+				case HubGlobal.Broadcast <- errPayload:
+				default:
+					log.Printf("⚠️  SyncManager: hub broadcast channel full, dropping sync_error notification")
+				}
+			}
 		}
 		DB.Model(&record).Updates(map[string]interface{}{
 			"status":      newStatus,
