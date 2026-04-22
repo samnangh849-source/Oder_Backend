@@ -118,40 +118,42 @@ type PhoneCarrier struct {
 }
 
 type TelegramTemplate struct {
-	TemplateName string `gorm:"primaryKey;column:template_name" json:"TemplateName"`
-	TriggerEvent string `gorm:"column:trigger_event" json:"TriggerEvent"`
-	Content      string `gorm:"column:content" json:"Content"`
+	ID       string `gorm:"primaryKey;column:id" json:"ID"`
+	Team     string `gorm:"column:team" json:"Team"`
+	Part     string `gorm:"column:part" json:"Part"`
+	Template string `gorm:"column:template" json:"Template"`
 }
 
 type Inventory struct {
-	ID           uint    `gorm:"primaryKey;autoIncrement;column:id" json:"ID"`
-	StoreName    string  `gorm:"index;column:store_name" json:"StoreName"`
-	ProductName  string  `gorm:"index;column:product_name" json:"ProductName"`
-	Barcode      string  `gorm:"index;column:barcode" json:"Barcode"`
-	StockInHand  float64 `gorm:"column:stock_in_hand" json:"StockInHand"`
-	LastUpdated  string  `gorm:"column:last_updated" json:"LastUpdated"`
+	ID          uint    `gorm:"primaryKey;autoIncrement;column:id" json:"ID"`
+	StoreName   string  `gorm:"index;column:store_name" json:"StoreName"`
+	ProductName string  `gorm:"index;column:product_name" json:"ProductName"`
+	Barcode     string  `gorm:"index;column:barcode" json:"Barcode"`
+	Quantity    float64 `gorm:"column:quantity" json:"Quantity"`
+	LastUpdated string  `gorm:"column:last_updated" json:"LastUpdated"`
+	UpdatedBy   string  `gorm:"column:updated_by" json:"UpdatedBy"`
 }
 
 type StockTransfer struct {
-	TransferID   string  `gorm:"primaryKey;column:transfer_id" json:"TransferID"`
-	Timestamp    string  `gorm:"index;column:timestamp" json:"Timestamp"`
-	FromStore    string  `gorm:"column:from_store" json:"FromStore"`
-	ToStore      string  `gorm:"column:to_store" json:"ToStore"`
-	ProductName  string  `gorm:"column:product_name" json:"ProductName"`
-	Quantity     float64 `gorm:"column:quantity" json:"Quantity"`
-	RequestedBy  string  `gorm:"column:requested_by" json:"RequestedBy"`
-	Status       string  `gorm:"column:status" json:"Status"`
+	TransferID  string  `gorm:"primaryKey;column:transfer_id" json:"TransferID"`
+	Timestamp   string  `gorm:"index;column:timestamp" json:"Timestamp"`
+	FromStore   string  `gorm:"column:from_store" json:"FromStore"`
+	ToStore     string  `gorm:"column:to_store" json:"ToStore"`
+	ProductName string  `gorm:"column:product_name" json:"ProductName"`
+	Quantity    float64 `gorm:"column:quantity" json:"Quantity"`
+	RequestedBy string  `gorm:"column:requested_by" json:"RequestedBy"`
+	Status      string  `gorm:"column:status" json:"Status"`
 }
 
 type ReturnItem struct {
-	ID           uint    `gorm:"primaryKey;autoIncrement;column:id" json:"ID"`
-	Timestamp    string  `gorm:"index;column:timestamp" json:"Timestamp"`
-	OrderID      string  `gorm:"index;column:order_id" json:"OrderID"`
-	ProductName  string  `gorm:"column:product_name" json:"ProductName"`
-	Quantity     float64 `gorm:"column:quantity" json:"Quantity"`
-	Reason       string  `gorm:"column:reason" json:"Reason"`
-	HandledBy    string  `gorm:"column:handled_by" json:"HandledBy"`
-	Status       string  `gorm:"column:status" json:"Status"`
+	ID          uint    `gorm:"primaryKey;autoIncrement;column:id" json:"ID"`
+	Timestamp   string  `gorm:"index;column:timestamp" json:"Timestamp"`
+	OrderID     string  `gorm:"index;column:order_id" json:"OrderID"`
+	ProductName string  `gorm:"column:product_name" json:"ProductName"`
+	Quantity    float64 `gorm:"column:quantity" json:"Quantity"`
+	Reason      string  `gorm:"column:reason" json:"Reason"`
+	HandledBy   string  `gorm:"column:handled_by" json:"HandledBy"`
+	Status      string  `gorm:"column:status" json:"Status"`
 }
 
 func (ReturnItem) TableName() string { return "returns" }
@@ -205,6 +207,7 @@ type RevenueEntry struct {
 	Team             string  `gorm:"column:team" json:"Team"`
 	Page             string  `gorm:"column:page" json:"Page"`
 	Revenue          float64 `gorm:"column:revenue" json:"Revenue"`
+	FulfillmentStore string  `gorm:"column:fulfillment_store" json:"FulfillmentStore"`
 }
 
 type ChatMessage struct {
@@ -275,6 +278,7 @@ type IncentiveProject struct {
 
 type IncentiveResult struct {
 	ID              uint    `gorm:"primaryKey;column:id" json:"id"`
+	Timestamp       string  `gorm:"column:timestamp" json:"Timestamp"`
 	ProjectID       uint    `gorm:"index;column:project_id" json:"projectId"`
 	UserName        string  `gorm:"column:user_name" json:"userName"`
 	TotalOrders     int     `gorm:"column:total_orders" json:"totalOrders"`
