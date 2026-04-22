@@ -1253,6 +1253,19 @@ func handleAdminUpdateSheet(c *gin.Context) {
 	eventBytes, _ := json.Marshal(map[string]interface{}{"type": "update_sheet", "sheetName": req.SheetName, "primaryKey": req.PrimaryKey, "newData": req.NewData})
 	hub.Broadcast <- eventBytes
 
+	// When a RolePermissions row is updated via the generic sheet endpoint, also broadcast
+	// the targeted "update_permission" event so connected clients immediately rebuild their
+	// permission state — without waiting for the 5-minute background poll.
+	if req.SheetName == "RolePermissions" {
+		permEvent, _ := json.Marshal(map[string]interface{}{
+			"type":      "update_permission",
+			"role":      req.NewData["Role"],
+			"feature":   req.NewData["Feature"],
+			"isEnabled": req.NewData["IsEnabled"],
+		})
+		hub.Broadcast <- permEvent
+	}
+
 	go func() {
 		sheetPKKey := originalPKKey
 		if req.SheetName == "Roles" && strings.ToLower(originalPKKey) == "id" {
@@ -1305,6 +1318,16 @@ func handleAdminAddRow(c *gin.Context) {
 
 	eventBytes, _ := json.Marshal(map[string]interface{}{"type": "add_row", "sheetName": req.SheetName, "newData": req.NewData})
 	hub.Broadcast <- eventBytes
+
+	if req.SheetName == "RolePermissions" {
+		permEvent, _ := json.Marshal(map[string]interface{}{
+			"type":      "update_permission",
+			"role":      req.NewData["Role"],
+			"feature":   req.NewData["Feature"],
+			"isEnabled": req.NewData["IsEnabled"],
+		})
+		hub.Broadcast <- permEvent
+	}
 
 	go func() {
 		// Sync with Google Sheets via managed queue
@@ -1374,6 +1397,15 @@ func handleAdminDeleteRow(c *gin.Context) {
 	eventBytes, _ := json.Marshal(map[string]interface{}{"type": "delete_row", "sheetName": req.SheetName, "primaryKey": strPrimaryKey})
 	hub.Broadcast <- eventBytes
 
+	if req.SheetName == "RolePermissions" {
+		permEvent, _ := json.Marshal(map[string]interface{}{
+			"type":    "update_permission",
+			"role":    req.PrimaryKey["Role"],
+			"feature": req.PrimaryKey["Feature"],
+		})
+		hub.Broadcast <- permEvent
+	}
+
 	go func() {
 		// Sync with Google Sheets via managed queue
 		enqueueSync("deleteRow", nil, req.SheetName, strPrimaryKey)
@@ -1433,6 +1465,15 @@ func handleUpdateProfile(c *gin.Context) {
 		c.Error(err)
 		return
 	}
+
+	// Broadcast profile change so all connected clients refresh their user list / avatar cache.
+	profileEvent, _ := json.Marshal(map[string]interface{}{
+		"type":       "update_sheet",
+		"sheetName":  "Users",
+		"primaryKey": map[string]string{"UserName": req.UserName},
+		"newData":    req.NewData,
+	})
+	hub.Broadcast <- profileEvent
 
 	go func() {
 		if appsScriptURL != "" {
