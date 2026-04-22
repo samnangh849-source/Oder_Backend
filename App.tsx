@@ -236,6 +236,17 @@ const AppContent: React.FC = () => {
             // Without this, users rely on the 5-minute background poll to see the change.
             console.log("[App] 🔐 Permission updated by admin. Refreshing permissions...");
             fetchData(true);
+        } else if (
+            lastMessage.type === 'update_sheet' ||
+            lastMessage.type === 'add_row' ||
+            lastMessage.type === 'delete_row'
+        ) {
+            // Static reference data was added/updated/deleted by an admin (products, users,
+            // locations, drivers, shipping methods, roles, etc.).  Without this handler these
+            // events were silently ignored, leaving other connected clients with stale appData
+            // for up to 5 minutes (the background polling interval).
+            console.log(`[App] 📋 Static data changed (${lastMessage.type} / ${lastMessage.sheetName}). Refreshing...`);
+            fetchData(true);
         }
     }, [lastMessage, fetchOrders, fetchData, setOrders, showNotification]);
 
