@@ -1670,6 +1670,8 @@ func handleSheetsWebhook(c *gin.Context) {
 		pkName = "TransferID"
 	} else if req.SheetName == "Returns" {
 		pkName = "ReturnID"
+	} else if req.SheetName == "TelegramTemplates" {
+		pkName = "ID"
 	} else if req.SheetName == "AllOrders" || strings.HasPrefix(req.SheetName, "Orders_") {
 		pkName = "Order ID"
 	} else {
@@ -1941,6 +1943,7 @@ func main() {
 
 	r.GET("/", func(c *gin.Context) { c.JSON(200, gin.H{"status": "ok"}) })
 	r.GET("/healthz", func(c *gin.Context) { c.String(200, "OK") })
+	r.GET("/ping", func(c *gin.Context) { c.String(200, "pong") })
 
 	// Apply DBMiddleware to all /api routes except root health checks
 	api := r.Group("/api", DBMiddleware())

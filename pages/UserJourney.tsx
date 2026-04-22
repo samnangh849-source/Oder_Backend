@@ -10,12 +10,15 @@ const UserJourney: React.FC<{ onBackToRoleSelect: () => void }> = ({ onBackToRol
     const { currentUser, language, hasPermission, advancedSettings, setAdvancedSettings } = useContext(AppContext);
     const { fetchOrders, orders, isOrdersLoading } = useOrder();
 
-    // Ensure orders are fetched when UserJourney mounts (handles cases where
-    // the initial fetch in App.tsx failed or hasn't completed yet)
+    // Ensure orders are fetched when UserJourney mounts, but ONLY when the user
+    // already has the view_order_list permission. Calling unconditionally causes
+    // a 403 that sets a persistent ordersFetchError='permission_denied' state,
+    // which then shows "Access Denied" in UserOrdersView even after permissions load.
     useEffect(() => {
-        if (orders.length === 0 && !isOrdersLoading) {
+        if (orders.length === 0 && !isOrdersLoading && hasPermission('view_order_list')) {
             fetchOrders();
         }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
     }, []);
 
     const userTeams = useMemo(() =>

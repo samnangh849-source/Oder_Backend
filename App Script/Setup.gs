@@ -26,7 +26,7 @@ const SYSTEM_STRUCTURE = {
   "TelegramTemplates": ["ID", "Team", "Part", "Template"],
   
   // ប្រព័ន្ធស្តុក
-  "Inventory": ["ID", "StoreName", "Barcode", "Quantity", "LastUpdated", "UpdatedBy"],
+  "Inventory": ["ID", "StoreName", "ProductName", "Barcode", "Quantity", "LastUpdated", "UpdatedBy"],
   "StockTransfers": ["TransferID", "Timestamp", "FromStore", "ToStore", "Barcode", "Quantity", "Status", "RequestedBy", "ApprovedBy", "ReceivedBy"],
   "Returns": ["ReturnID", "Timestamp", "OrderID", "StoreName", "Barcode", "Quantity", "Reason", "IsRestocked", "HandledBy"],
   

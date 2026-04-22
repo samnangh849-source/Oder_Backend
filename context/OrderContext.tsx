@@ -181,11 +181,15 @@ export const OrderProvider: React.FC<{ children: React.ReactNode }> = ({ childre
         return staticData;
     }, [fetchData, fetchOrders]);
 
-    // When the current user's identity changes (new login, permission rebuild, etc.),
-    // clear a stale permission_denied error so the next fetchOrders call can succeed.
+    // When the current user's permissions change (admin granted access, or login completed),
+    // clear any stale permission_denied error AND immediately retry fetching orders.
+    // Without the explicit retry, the App.tsx [currentUser] effect only fires when
+    // currentUser's reference changes — which the JSON-equality guard in the permission
+    // refresh effect may prevent when permissions were already identical.
     useEffect(() => {
         if (currentUser && ordersFetchError === 'permission_denied') {
             setOrdersFetchError(null);
+            fetchOrders();
         }
     // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [currentUser?.Role, currentUser?.Permissions]);

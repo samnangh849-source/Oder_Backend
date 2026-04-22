@@ -291,6 +291,19 @@ const UserOrdersView: React.FC<UserOrdersViewProps> = ({ onAdd, onStatsUpdate, s
     // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [isFrontendDenied, isBackendDenied]);
 
+    // Auto-retry when frontend permission becomes available (transitions true → false).
+    // Handles the case where OrderContext clears the backend error before the retry above
+    // fires, leaving both flags false but orders still empty because no successful fetch ran.
+    const prevFrontendDeniedRef = React.useRef(isFrontendDenied);
+    useEffect(() => {
+        const wasJustUnlocked = prevFrontendDeniedRef.current && !isFrontendDenied;
+        prevFrontendDeniedRef.current = isFrontendDenied;
+        if (wasJustUnlocked && orders.length === 0 && !isOrdersLoading) {
+            fetchOrders();
+        }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [isFrontendDenied]);
+
     if (isFrontendDenied || isBackendDenied) {
         const userRole = currentUser?.Role || '(unknown)';
         console.warn(

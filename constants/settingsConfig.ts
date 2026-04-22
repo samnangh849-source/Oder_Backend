@@ -193,13 +193,14 @@ export const configSections: ConfigSection[] = [
         icon: '📢',
         dataKey: 'telegramTemplates',
         sheetName: 'TelegramTemplates',
-        primaryKeyField: 'TemplateName',
+        primaryKeyField: 'ID',
         fields: [
-            { name: 'TemplateName', label: 'ឈ្មោះ Template', type: 'text' },
-            { name: 'TriggerEvent', label: 'ព្រឹត្តិការណ៍', type: 'text' },
-            { name: 'Content', label: 'ខ្លឹមសារសារ', type: 'text' }
+            { name: 'ID', label: 'ID', type: 'text' },
+            { name: 'Team', label: 'ក្រុម (Team)', type: 'text' },
+            { name: 'Part', label: 'ផ្នែក (Part)', type: 'text' },
+            { name: 'Template', label: 'ខ្លឹមសារសារ', type: 'text' }
         ],
-        displayField: 'TemplateName'
+        displayField: 'ID'
     },
     {
         id: 'systemSettings',
