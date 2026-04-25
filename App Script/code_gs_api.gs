@@ -104,6 +104,9 @@ function doPost(e) {
       case 'updateSheet':
         return handleUpdateSheet(contents);
 
+      case 'clearSheet':
+        return handleClearSheet(contents);
+
       case 'diagnose':
         return handleDiagnose(contents);
 
@@ -287,6 +290,21 @@ function handleAddRow(data) {
 
   appendRowMapped(sheet, data.newData);
   return createJsonResponse({ status: "success" });
+}
+
+// Clears all data rows in a sheet (keeps header row). Used by Reset Permissions.
+function handleClearSheet(data) {
+  if (!data.sheetName) return createJsonResponse({ status: "error", message: "sheetName required" }, 400);
+  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  const sheet = ss.getSheetByName(data.sheetName);
+  if (!sheet) return createJsonResponse({ status: "error", message: "Sheet not found: " + data.sheetName }, 404);
+
+  const lastRow = sheet.getLastRow();
+  const deleted = Math.max(0, lastRow - 1);
+  if (deleted > 0) sheet.deleteRows(2, deleted);
+
+  console.log("🗑️ [clearSheet] Cleared " + deleted + " rows from: " + data.sheetName);
+  return createJsonResponse({ status: "success", rowsDeleted: deleted });
 }
 
 function handleDeleteRow(data) {
