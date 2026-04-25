@@ -279,35 +279,93 @@ func EnsureSeedData() {
 // DefaultPermissions returns the canonical set of permissions seeded on every startup.
 // Used by EnsureSeedData (insert-if-missing) and HandleResetPermissions (full rebuild).
 func DefaultPermissions() []RolePermission {
-	return []RolePermission{
-		// Sale / Sales (both spellings handled)
-		{Role: "sale", Feature: "view_order_list", IsEnabled: true},
-		{Role: "sale", Feature: "create_order", IsEnabled: true},
-		{Role: "sale", Feature: "access_sales_portal", IsEnabled: true},
-		{Role: "sale", Feature: "view_team_leaderboard", IsEnabled: true},
-		{Role: "sales", Feature: "view_order_list", IsEnabled: true},
-		{Role: "sales", Feature: "create_order", IsEnabled: true},
-		{Role: "sales", Feature: "access_sales_portal", IsEnabled: true},
-		{Role: "sales", Feature: "view_team_leaderboard", IsEnabled: true},
-		// Fulfillment
-		{Role: "fulfillment", Feature: "view_order_list", IsEnabled: true},
-		{Role: "fulfillment", Feature: "access_fulfillment", IsEnabled: true},
-		{Role: "fulfillment", Feature: "edit_order", IsEnabled: true},
-		// Manager
-		{Role: "manager", Feature: "view_order_list", IsEnabled: true},
-		{Role: "manager", Feature: "create_order", IsEnabled: true},
-		{Role: "manager", Feature: "edit_order", IsEnabled: true},
-		{Role: "manager", Feature: "view_revenue", IsEnabled: true},
-		{Role: "manager", Feature: "view_admin_dashboard", IsEnabled: true},
-		{Role: "manager", Feature: "view_team_leaderboard", IsEnabled: true},
-		{Role: "manager", Feature: "access_sales_portal", IsEnabled: true},
-		// Packer
-		{Role: "packer", Feature: "view_order_list", IsEnabled: true},
-		{Role: "packer", Feature: "access_fulfillment", IsEnabled: true},
-		// Driver
-		{Role: "driver", Feature: "view_order_list", IsEnabled: true},
-		{Role: "driver", Feature: "access_fulfillment", IsEnabled: true},
+	permissions := []RolePermission{}
+
+	// Features from constants/permissions.ts
+	features := []string{
+		"view_order_list", "edit_order", "delete_order", "verify_order", "create_order",
+		"access_sales_portal", "access_fulfillment", "view_admin_dashboard", "view_entertainment",
+		"manage_roles", "manage_permissions", "view_revenue", "export_data", "migrate_data",
+		"manage_inventory", "stock_transfer", "view_team_leaderboard", "set_targets",
 	}
+
+	// 1. Admin - Everything Enabled
+	for _, f := range features {
+		permissions = append(permissions, RolePermission{Role: "admin", Feature: f, IsEnabled: true})
+	}
+
+	// 2. Manager - Most things enabled except critical system management
+	managerEnabled := map[string]bool{
+		"view_order_list":       true,
+		"edit_order":            true,
+		"delete_order":          true,
+		"verify_order":          true,
+		"create_order":          true,
+		"access_sales_portal":   true,
+		"access_fulfillment":    true,
+		"view_admin_dashboard":  true,
+		"view_entertainment":    true,
+		"view_revenue":          true,
+		"export_data":           true,
+		"manage_inventory":      true,
+		"stock_transfer":        true,
+		"view_team_leaderboard": true,
+		"set_targets":           true,
+	}
+	for _, f := range features {
+		permissions = append(permissions, RolePermission{Role: "manager", Feature: f, IsEnabled: managerEnabled[f]})
+	}
+
+	// 3. Sale - Sales focused
+	saleEnabled := map[string]bool{
+		"view_order_list":       true,
+		"edit_order":            true,
+		"create_order":          true,
+		"access_sales_portal":   true,
+		"view_entertainment":    true,
+		"view_team_leaderboard": true,
+	}
+	for _, f := range features {
+		permissions = append(permissions, RolePermission{Role: "sale", Feature: f, IsEnabled: saleEnabled[f]})
+		// Also add "sales" as alias
+		permissions = append(permissions, RolePermission{Role: "sales", Feature: f, IsEnabled: saleEnabled[f]})
+	}
+
+	// 4. Fulfillment - Fulfillment focused
+	fulfillmentEnabled := map[string]bool{
+		"view_order_list":    true,
+		"edit_order":         true,
+		"verify_order":       true,
+		"access_fulfillment": true,
+		"view_entertainment": true,
+		"manage_inventory":   true,
+		"stock_transfer":     true,
+	}
+	for _, f := range features {
+		permissions = append(permissions, RolePermission{Role: "fulfillment", Feature: f, IsEnabled: fulfillmentEnabled[f]})
+	}
+
+	// 5. Packer - Just Packing
+	packerEnabled := map[string]bool{
+		"view_order_list":    true,
+		"access_fulfillment": true,
+		"view_entertainment": true,
+	}
+	for _, f := range features {
+		permissions = append(permissions, RolePermission{Role: "packer", Feature: f, IsEnabled: packerEnabled[f]})
+	}
+
+	// 6. Driver - Just Delivery
+	driverEnabled := map[string]bool{
+		"view_order_list":    true,
+		"access_fulfillment": true,
+		"view_entertainment": true,
+	}
+	for _, f := range features {
+		permissions = append(permissions, RolePermission{Role: "driver", Feature: f, IsEnabled: driverEnabled[f]})
+	}
+
+	return permissions
 }
 
 // CheckHealth returns true if the database is reachable
