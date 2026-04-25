@@ -218,3 +218,32 @@ func HandleUpdatePermission(c *gin.Context) {
 	}
 	c.JSON(http.StatusOK, gin.H{"status": "success", "message": "បានរក្សាទុកសិទ្ធិដោយជោគជ័យ"})
 }
+
+// SyncAllPermissionsToSheet re-syncs every RolePermission row from DB to Google Sheets,
+// filling any rows that are missing Role/Feature data.
+func SyncAllPermissionsToSheet() {
+	if DB == nil {
+		return
+	}
+	var permissions []RolePermission
+	if err := DB.Find(&permissions).Error; err != nil {
+		log.Printf("❌ SyncAllPermissionsToSheet: %v", err)
+		return
+	}
+	for _, p := range permissions {
+		p := p
+		EnqueueSync("updateSheet", map[string]interface{}{
+			"IsEnabled": p.IsEnabled,
+			"Role":      p.Role,
+			"Feature":   p.Feature,
+		}, "RolePermissions", map[string]string{
+			"ID": fmt.Sprintf("%d", p.ID),
+		})
+	}
+	log.Printf("✅ SyncAllPermissionsToSheet: enqueued %d permission syncs", len(permissions))
+}
+
+func HandleSyncPermissionsToSheet(c *gin.Context) {
+	go SyncAllPermissionsToSheet()
+	c.JSON(http.StatusOK, gin.H{"status": "success", "message": fmt.Sprintf("Syncing permissions to sheet in background")})
+}
