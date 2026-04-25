@@ -121,12 +121,12 @@ func InitDB() {
 	sqlDB, err := db.DB()
 	if err == nil {
 		// 📉 Reduced limits for Aiven/Render free tiers to prevent "Too many connections" error
-		maxIdle := GetEnvInt("DB_MAX_IDLE_CONNS", 2)  // Was 5
-		maxOpen := GetEnvInt("DB_MAX_OPEN_CONNS", 4)  // Was 10
+		maxIdle := GetEnvInt("DB_MAX_IDLE_CONNS", 1)
+		maxOpen := GetEnvInt("DB_MAX_OPEN_CONNS", 2)
 		sqlDB.SetMaxIdleConns(maxIdle)
 		sqlDB.SetMaxOpenConns(maxOpen)
-		sqlDB.SetConnMaxLifetime(30 * time.Minute)
-		sqlDB.SetConnMaxIdleTime(10 * time.Minute)
+		sqlDB.SetConnMaxLifetime(10 * time.Minute)
+		sqlDB.SetConnMaxIdleTime(2 * time.Minute)
 		log.Printf("⚡ Database Pool Optimized: MaxOpen=%d, MaxIdle=%d (Conservative Mode)", maxOpen, maxIdle)
 	}
 
