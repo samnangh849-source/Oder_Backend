@@ -19,7 +19,7 @@ export const EXPIRY_TIMES = {
     APP_DATA: 24 * 60 * 60 * 1000,
     GEOJSON: 90 * 24 * 60 * 60 * 1000,
     CHAT: 7 * 24 * 60 * 60 * 1000,
-    DEFAULT: 30 * 24 * 60 * 60 * 1000 // 1 Month
+    DEFAULT: 30 * 24 * 60 * 60 * 1000 // 30 Days
 };
 
 // Default expiration set to 30 days

@@ -233,9 +233,12 @@ const AppContent: React.FC = () => {
         } else if (lastMessage.type === 'update_permission') {
             // Admin changed a permission — refresh static data so ALL connected users
             // (including non-admin Sales/Staff users) get the updated permission state immediately.
-            // Without this, users rely on the 5-minute background poll to see the change.
             console.log("[App] 🔐 Permission updated by admin. Refreshing permissions...");
-            fetchData(true);
+            fetchData(true).then(() => {
+                // After permissions refresh, retry fetching orders so users who were
+                // previously denied (403) now see their orders without needing to log out.
+                fetchOrders();
+            }).catch(() => {});
         } else if (
             lastMessage.type === 'update_sheet' ||
             lastMessage.type === 'add_row' ||
@@ -300,7 +303,8 @@ const AppContent: React.FC = () => {
         const mergedPermsMap: Record<string, any> = {};
         matchedPerms.forEach(p => {
             const feature = (p.Feature || p.feature || '').toLowerCase();
-            const enabled = p.IsEnabled ?? p.isEnabled ?? p.is_enabled ?? false;
+            const raw = p.IsEnabled ?? p.isEnabled ?? p.is_enabled ?? false;
+            const enabled = raw === true || raw === 1 || raw === 'true' || raw === 'TRUE';
             if (!mergedPermsMap[feature] || enabled) {
                 mergedPermsMap[feature] = p;
             }
@@ -449,8 +453,8 @@ const AppContent: React.FC = () => {
                     const errBody = await response.json().catch(() => ({}));
                     throw new Error(errBody?.message || `Server error: ${response.status}`);
                 }
-                await fetchData(true);
                 showNotification("សិទ្ធិត្រូវបានធ្វើបច្ចុប្បន្នភាព", "success");
+                fetchData(true).catch(e => console.warn("[updatePermission] Background refresh failed:", e));
             } catch (e) {
                 console.error("Permission update failed", e);
                 throw e; // re-throw so PermissionMatrix catch block shows error notification

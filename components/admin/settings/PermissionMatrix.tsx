@@ -4,11 +4,13 @@ import { AppContext } from '../../../context/AppContext';
 import { FEATURES } from '../../../constants/permissions';
 import Spinner from '../../common/Spinner';
 import { getArrayCaseInsensitive, getValueCaseInsensitive } from '../../../constants/settingsConfig';
+import { WEB_APP_URL } from '../../../constants';
 
 const PermissionMatrix: React.FC = () => {
     const { appData, updatePermission, showNotification } = useContext(AppContext);
     const [updating, setUpdating] = useState<string | null>(null);
     const [pendingChanges, setPendingChanges] = useState<Record<string, boolean>>({});
+    const [syncing, setSyncing] = useState(false);
 
     const rolesList = getArrayCaseInsensitive(appData, 'roles');
     const permissions = getArrayCaseInsensitive(appData, 'permissions');
@@ -51,6 +53,27 @@ const PermissionMatrix: React.FC = () => {
         return [...definedRoles, ...orphanRoles];
     }, [rolesList, appData]);
 
+    const handleSyncToSheet = async () => {
+        setSyncing(true);
+        try {
+            const token = localStorage.getItem('token');
+            const res = await fetch(`${WEB_APP_URL}/api/admin/permissions/sync-sheet`, {
+                method: 'POST',
+                headers: { Authorization: `Bearer ${token}` },
+            });
+            const json = await res.json();
+            if (json.status === 'success') {
+                showNotification?.('កំពុង Sync ទិន្នន័យទៅ Sheet...', 'success');
+            } else {
+                showNotification?.(json.message || 'Sync failed', 'error');
+            }
+        } catch {
+            showNotification?.('មិនអាច Sync បាន', 'error');
+        } finally {
+            setSyncing(false);
+        }
+    };
+
     const handleToggle = async (roleName: string, feature: string, currentState: boolean) => {
         if (!roleName) return;
         const lockKey = `${roleName}-${feature}`;
@@ -61,20 +84,23 @@ const PermissionMatrix: React.FC = () => {
 
         try {
             await updatePermission(roleName, feature, newValue);
+            // Keep optimistic state briefly so the UI doesn't flicker while
+            // appData.permissions propagates from the background fetchData.
             setTimeout(() => {
                 setPendingChanges(prev => {
                     const next = { ...prev };
                     delete next[lockKey];
                     return next;
                 });
-            }, 4000);
-        } catch (_) {
+            }, 2000);
+        } catch (err: any) {
             setPendingChanges(prev => {
                 const next = { ...prev };
                 delete next[lockKey];
                 return next;
             });
-            showNotification?.('Failed to update permission', 'error');
+            const msg = err?.message || 'Failed to update permission';
+            showNotification?.(msg, 'error');
         } finally {
             setUpdating(null);
         }
@@ -93,6 +119,20 @@ const PermissionMatrix: React.FC = () => {
 
     return (
         <div className="flex flex-col gap-2">
+            <div className="flex justify-end">
+                <button
+                    onClick={handleSyncToSheet}
+                    disabled={syncing}
+                    className="flex items-center gap-2 px-4 py-2 text-xs font-semibold rounded-sm border border-[#2b3139] bg-[#1e2329] text-[#848e9c] hover:text-[#eaecef] hover:border-[#474d57] transition-colors disabled:opacity-50"
+                >
+                    {syncing ? <Spinner size="xs" /> : (
+                        <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+                        </svg>
+                    )}
+                    Sync to Sheet
+                </button>
+            </div>
             {hasOrphans && (
                 <div className="flex items-start gap-2 px-4 py-3 rounded-sm text-xs" style={{ backgroundColor: '#F0B90B10', border: '1px solid #F0B90B30', color: '#F0B90B' }}>
                     <span className="text-base leading-none mt-0.5">⚠</span>
@@ -151,7 +191,7 @@ const PermissionMatrix: React.FC = () => {
                                         (getValueCaseInsensitive(p, 'Feature') || '').toLowerCase() === feature.toLowerCase()
                                     );
                                     const serverEnabled = matchedPerm
-                                        ? (getValueCaseInsensitive(matchedPerm, 'IsEnabled') === true)
+                                        ? Boolean(getValueCaseInsensitive(matchedPerm, 'IsEnabled'))
                                         : false;
 
                                     const isEnabled = lockKey in pendingChanges

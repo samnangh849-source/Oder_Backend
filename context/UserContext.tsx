@@ -33,8 +33,9 @@ export const UserProvider: React.FC<{ children: React.ReactNode }> = ({ children
         const targetFeature = feature.toLowerCase();
         const result = currentUser.Permissions.some((p: any) => {
             const feat = (p.Feature || p.feature || '').toLowerCase();
-            const enabled = p.IsEnabled ?? p.isEnabled ?? p.is_enabled ?? false;
-            return feat === targetFeature && enabled === true;
+            const raw = p.IsEnabled ?? p.isEnabled ?? p.is_enabled ?? false;
+            const enabled = raw === true || raw === 1 || raw === 'true' || raw === 'TRUE';
+            return feat === targetFeature && enabled;
         });
 
         if (!result) {

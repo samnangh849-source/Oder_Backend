@@ -394,7 +394,19 @@ function handleUpdateSheet(data) {
       }
     }
 
-    if (rowIndex !== -1) {
+    // Row not found — for non-Order sheets, upsert (add new row) instead of failing
+    if (rowIndex === -1) {
+      const isOrderSheet = data.sheetName === 'AllOrders' || String(data.sheetName).indexOf('Orders_') === 0;
+      if (!isOrderSheet) {
+        console.log("⚡ [UpdateSheet] Row not found — upserting as new row for: " + data.sheetName);
+        const upsertData = Object.assign({}, data.primaryKey, data.newData);
+        return handleAddRow({ sheetName: data.sheetName, newData: upsertData });
+      }
+      console.error("❌ [UpdateSheet] Row not found for PK: " + JSON.stringify(data.primaryKey));
+      return createJsonResponse({ status: "error", message: "រកមិនឃើញជួរទិន្នន័យដើម្បីកែប្រែ" }, 404);
+    }
+
+    {
       let updatedCount = 0;
       const rowRange = sheet.getRange(rowIndex, 1, 1, headers.length);
       const rowData = rowRange.getValues()[0];
@@ -448,9 +460,6 @@ function handleUpdateSheet(data) {
       }
       return createJsonResponse({ status: "success", updated: updatedCount, rowIndex: rowIndex });
     }
-    
-    console.error("❌ [UpdateSheet] Row not found for PK: " + JSON.stringify(data.primaryKey));
-    return createJsonResponse({ status: "error", message: "រកមិនឃើញជួរទិន្នន័យដើម្បីកែប្រែ" }, 404);
   } catch (e) {
     console.error("❌ [UpdateSheet] FAILED: " + e.message);
     return createJsonResponse({ status: "error", message: "Update failed: " + e.message }, 500);

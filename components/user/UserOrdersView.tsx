@@ -324,6 +324,16 @@ const UserOrdersView: React.FC<UserOrdersViewProps> = ({ onAdd, onStatsUpdate, s
                         ? `គណនីរបស់អ្នក (Role: "${userRole}") មិនមានសិទ្ធិ view_order_list ។ Admin ត្រូវបើកសិទ្ធិនេះសម្រាប់ Role ត្រឹមត្រូវ។`
                         : `Role "${userRole}" lacks view_order_list permission. Admin must enable it for exactly this role name.`}
                 </p>
+                {hasPermission('create_order') && (
+                    <button
+                        onClick={onAdd}
+                        className="mt-2 flex items-center gap-2 px-5 py-2.5 text-xs font-bold rounded-md active:scale-95 transition-all"
+                        style={{ backgroundColor: '#F0B90B', color: '#181A20' }}
+                    >
+                        <Plus size={14} />
+                        {language === 'km' ? 'បង្កើតការកម្មង់ថ្មី' : 'Create New Order'}
+                    </button>
+                )}
                 {isBackendDenied && !isFrontendDenied && (
                     <>
                         <p className="text-[11px] mt-1 px-3 py-1.5 rounded" style={{ backgroundColor: '#F6465D15', color: '#F6465D', border: '1px solid #F6465D30' }}>

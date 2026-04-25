@@ -55,7 +55,10 @@ export const OrderProvider: React.FC<{ children: React.ReactNode }> = ({ childre
             // Retry on 503 (DB still initializing)
             let response: Response | null = null;
             for (let attempt = 0; attempt < 3; attempt++) {
-                response = await fetch(`${WEB_APP_URL}/api/static-data`, { headers });
+                const url = force
+                    ? `${WEB_APP_URL}/api/static-data?_t=${Date.now()}`
+                    : `${WEB_APP_URL}/api/static-data`;
+                response = await fetch(url, { headers, cache: 'no-store' });
                 if (response.status !== 503) break;
                 await new Promise(r => setTimeout(r, 2000 * (attempt + 1)));
             }
@@ -114,7 +117,7 @@ export const OrderProvider: React.FC<{ children: React.ReactNode }> = ({ childre
             const endpoint = `${WEB_APP_URL}/api/admin/orders`;
 
             const response = await fetch(endpoint, { headers });
-            
+
             // Handle 401 Unauthorized globally
             if (response.status === 401) {
                 console.warn("Session expired during orders fetch. Redirecting...");
@@ -122,11 +125,15 @@ export const OrderProvider: React.FC<{ children: React.ReactNode }> = ({ childre
                 return;
             }
 
-            // Handle 403 Permission Denied — user lacks 'view_order_list' permission in DB
+            // Handle 403 Permission Denied — user lacks 'view_order_list' permission in DB.
+            // Always refresh static data so the frontend permission state syncs with the real DB state.
+            // This resolves the split-brain case where the frontend cache shows permission=enabled
+            // while the DB actually has it disabled (or the row doesn't exist yet).
             if (response.status === 403) {
                 console.warn("[fetchOrders] 403 Forbidden — role missing 'view_order_list' permission in database.");
                 setOrders([]);
                 setOrdersFetchError('permission_denied');
+                fetchData(true); // Resync frontend permissions with DB (non-blocking)
                 return;
             }
 
