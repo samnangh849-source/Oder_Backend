@@ -55,22 +55,28 @@ const PermissionMatrix: React.FC = () => {
         return [...definedRoles, ...orphanRoles];
     }, [rolesList, appData]);
 
+    const adminPost = async (path: string): Promise<{ ok: boolean; status: number; json: any }> => {
+        const token = localStorage.getItem('token');
+        const res = await fetch(`${WEB_APP_URL}${path}`, {
+            method: 'POST',
+            headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' },
+        });
+        let json: any = {};
+        try { json = await res.json(); } catch { /* non-JSON response */ }
+        return { ok: res.ok, status: res.status, json };
+    };
+
     const handleSyncToSheet = async () => {
         setSyncing(true);
         try {
-            const token = localStorage.getItem('token');
-            const res = await fetch(`${WEB_APP_URL}/api/admin/permissions/sync-sheet`, {
-                method: 'POST',
-                headers: { Authorization: `Bearer ${token}` },
-            });
-            const json = await res.json();
-            if (json.status === 'success') {
+            const { ok, status, json } = await adminPost('/api/admin/permissions/sync-sheet');
+            if (ok && json.status === 'success') {
                 showNotification?.('កំពុង Sync ទិន្នន័យទៅ Sheet...', 'success');
             } else {
-                showNotification?.(json.message || 'Sync failed', 'error');
+                showNotification?.(json.message || `Sync failed (${status})`, 'error');
             }
-        } catch {
-            showNotification?.('មិនអាច Sync បាន', 'error');
+        } catch (err: any) {
+            showNotification?.(err?.message || 'មិនអាច Sync បាន', 'error');
         } finally {
             setSyncing(false);
         }
@@ -80,20 +86,15 @@ const PermissionMatrix: React.FC = () => {
         setResetting(true);
         setShowResetConfirm(false);
         try {
-            const token = localStorage.getItem('token');
-            const res = await fetch(`${WEB_APP_URL}/api/admin/permissions/reset`, {
-                method: 'POST',
-                headers: { Authorization: `Bearer ${token}` },
-            });
-            const json = await res.json();
-            if (json.status === 'success') {
+            const { ok, status, json } = await adminPost('/api/admin/permissions/reset');
+            if (ok && json.status === 'success') {
                 showNotification?.(`Reset ជោគជ័យ — ${json.count} permissions ត្រូវបានបង្កើតឡើងវិញ`, 'success');
                 await fetchData?.(true);
             } else {
-                showNotification?.(json.message || 'Reset failed', 'error');
+                showNotification?.(json.message || `Reset failed (${status})`, 'error');
             }
-        } catch {
-            showNotification?.('Reset failed — cannot connect to server', 'error');
+        } catch (err: any) {
+            showNotification?.(err?.message || 'Reset failed — cannot connect to server', 'error');
         } finally {
             setResetting(false);
         }
