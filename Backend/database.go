@@ -2,8 +2,8 @@ package backend
 
 import (
 	"encoding/base64"
+	"errors"
 	"log"
-	"net/url"
 	"os"
 	"strconv"
 	"strings"
@@ -244,6 +244,47 @@ func EnsureSeedData() {
 				} else {
 					log.Printf("⚠️ Failed to create role %s: %v", r.RoleName, createErr)
 				}
+			}
+		}
+	}
+
+	// Default permissions — only insert if row doesn't already exist.
+	// Covers both "sale" and "sales" spellings to handle legacy data.
+	type defPerm struct{ role, feature string; enabled bool }
+	defaultPerms := []defPerm{
+		// Sales / Sale
+		{"sale", "view_order_list", true},
+		{"sale", "create_order", true},
+		{"sale", "access_sales_portal", true},
+		{"sale", "view_team_leaderboard", true},
+		{"sales", "view_order_list", true},
+		{"sales", "create_order", true},
+		{"sales", "access_sales_portal", true},
+		{"sales", "view_team_leaderboard", true},
+		// Fulfillment
+		{"fulfillment", "view_order_list", true},
+		{"fulfillment", "access_fulfillment", true},
+		{"fulfillment", "edit_order", true},
+		// Manager
+		{"manager", "view_order_list", true},
+		{"manager", "create_order", true},
+		{"manager", "edit_order", true},
+		{"manager", "view_revenue", true},
+		{"manager", "view_admin_dashboard", true},
+		{"manager", "view_team_leaderboard", true},
+		{"manager", "access_sales_portal", true},
+		// Packer / Driver
+		{"packer", "view_order_list", true},
+		{"packer", "access_fulfillment", true},
+		{"driver", "view_order_list", true},
+		{"driver", "access_fulfillment", true},
+	}
+	for _, p := range defaultPerms {
+		var existing RolePermission
+		err := DB.Where("LOWER(TRIM(role)) = ? AND LOWER(TRIM(feature)) = ?", p.role, p.feature).First(&existing).Error
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			if createErr := DB.Create(&RolePermission{Role: p.role, Feature: p.feature, IsEnabled: p.enabled}).Error; createErr != nil {
+				log.Printf("⚠️ Failed to seed permission [%s:%s]: %v", p.role, p.feature, createErr)
 			}
 		}
 	}
