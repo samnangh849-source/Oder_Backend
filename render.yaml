@@ -2,7 +2,7 @@ services:
   - type: web
     name: oder-backend-2
     runtime: go
-    buildCommand: go build -o server main.go
+    buildCommand: go build -o server .
     startCommand: ./server
     envVars:
       - key: PORT
