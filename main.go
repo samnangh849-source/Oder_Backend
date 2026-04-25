@@ -332,6 +332,7 @@ var handleCreateRole = backend.HandleCreateRole
 var handleGetAllPermissions = backend.HandleGetAllPermissions
 var handleGetUserPermissions = backend.HandleGetUserPermissions
 var handleUpdatePermission = backend.HandleUpdatePermission
+var handleSyncPermissionsToSheet = backend.HandleSyncPermissionsToSheet
 
 // =========================================================================
 
@@ -1962,6 +1963,8 @@ func main() {
 		initDB()
 		// Start Background Workers ONLY after backend.DB is ready (if they depend on it)
 		startSyncManager(2)
+		// Auto-repair: fill any RolePermissions sheet rows missing Role/Feature data
+		go backend.SyncAllPermissionsToSheet()
 		go startOrderWorker()
 		startScheduler()
 		backend.CreateGoogleAPIClient(context.Background())
@@ -2040,6 +2043,7 @@ func main() {
 				restricted.POST("/delete-order", RequirePermission("delete_order"), handleAdminDeleteOrder)
 				restricted.GET("/permissions", handleGetAllPermissions)
 				restricted.POST("/permissions", handleUpdatePermission)
+				restricted.POST("/permissions/sync-sheet", handleSyncPermissionsToSheet)
 				restricted.POST("/roles", handleCreateRole)
 				restricted.GET("/incentive/calculators", handleGetIncentiveCalculators)
 				restricted.POST("/incentive/calculators", handleCreateIncentiveCalculator)
