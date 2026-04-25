@@ -248,43 +248,12 @@ func EnsureSeedData() {
 		}
 	}
 
-	// Default permissions — only insert if row doesn't already exist.
-	// Covers both "sale" and "sales" spellings to handle legacy data.
-	type defPerm struct{ role, feature string; enabled bool }
-	defaultPerms := []defPerm{
-		// Sales / Sale
-		{"sale", "view_order_list", true},
-		{"sale", "create_order", true},
-		{"sale", "access_sales_portal", true},
-		{"sale", "view_team_leaderboard", true},
-		{"sales", "view_order_list", true},
-		{"sales", "create_order", true},
-		{"sales", "access_sales_portal", true},
-		{"sales", "view_team_leaderboard", true},
-		// Fulfillment
-		{"fulfillment", "view_order_list", true},
-		{"fulfillment", "access_fulfillment", true},
-		{"fulfillment", "edit_order", true},
-		// Manager
-		{"manager", "view_order_list", true},
-		{"manager", "create_order", true},
-		{"manager", "edit_order", true},
-		{"manager", "view_revenue", true},
-		{"manager", "view_admin_dashboard", true},
-		{"manager", "view_team_leaderboard", true},
-		{"manager", "access_sales_portal", true},
-		// Packer / Driver
-		{"packer", "view_order_list", true},
-		{"packer", "access_fulfillment", true},
-		{"driver", "view_order_list", true},
-		{"driver", "access_fulfillment", true},
-	}
-	for _, p := range defaultPerms {
+	// Default permissions — only insert if not already present.
+	for _, p := range DefaultPermissions() {
 		var existing RolePermission
-		err := DB.Where("LOWER(TRIM(role)) = ? AND LOWER(TRIM(feature)) = ?", p.role, p.feature).First(&existing).Error
-		if errors.Is(err, gorm.ErrRecordNotFound) {
-			if createErr := DB.Create(&RolePermission{Role: p.role, Feature: p.feature, IsEnabled: p.enabled}).Error; createErr != nil {
-				log.Printf("⚠️ Failed to seed permission [%s:%s]: %v", p.role, p.feature, createErr)
+		if err := DB.Where("LOWER(TRIM(role)) = ? AND LOWER(TRIM(feature)) = ?", p.Role, p.Feature).First(&existing).Error; errors.Is(err, gorm.ErrRecordNotFound) {
+			if createErr := DB.Create(&p).Error; createErr != nil {
+				log.Printf("⚠️ Failed to seed permission [%s:%s]: %v", p.Role, p.Feature, createErr)
 			}
 		}
 	}
@@ -304,6 +273,40 @@ func EnsureSeedData() {
 		if err := DB.Create(&admin).Error; err == nil {
 			log.Println("✅ Created default admin user: Username=admin, Password=admin123")
 		}
+	}
+}
+
+// DefaultPermissions returns the canonical set of permissions seeded on every startup.
+// Used by EnsureSeedData (insert-if-missing) and HandleResetPermissions (full rebuild).
+func DefaultPermissions() []RolePermission {
+	return []RolePermission{
+		// Sale / Sales (both spellings handled)
+		{Role: "sale", Feature: "view_order_list", IsEnabled: true},
+		{Role: "sale", Feature: "create_order", IsEnabled: true},
+		{Role: "sale", Feature: "access_sales_portal", IsEnabled: true},
+		{Role: "sale", Feature: "view_team_leaderboard", IsEnabled: true},
+		{Role: "sales", Feature: "view_order_list", IsEnabled: true},
+		{Role: "sales", Feature: "create_order", IsEnabled: true},
+		{Role: "sales", Feature: "access_sales_portal", IsEnabled: true},
+		{Role: "sales", Feature: "view_team_leaderboard", IsEnabled: true},
+		// Fulfillment
+		{Role: "fulfillment", Feature: "view_order_list", IsEnabled: true},
+		{Role: "fulfillment", Feature: "access_fulfillment", IsEnabled: true},
+		{Role: "fulfillment", Feature: "edit_order", IsEnabled: true},
+		// Manager
+		{Role: "manager", Feature: "view_order_list", IsEnabled: true},
+		{Role: "manager", Feature: "create_order", IsEnabled: true},
+		{Role: "manager", Feature: "edit_order", IsEnabled: true},
+		{Role: "manager", Feature: "view_revenue", IsEnabled: true},
+		{Role: "manager", Feature: "view_admin_dashboard", IsEnabled: true},
+		{Role: "manager", Feature: "view_team_leaderboard", IsEnabled: true},
+		{Role: "manager", Feature: "access_sales_portal", IsEnabled: true},
+		// Packer
+		{Role: "packer", Feature: "view_order_list", IsEnabled: true},
+		{Role: "packer", Feature: "access_fulfillment", IsEnabled: true},
+		// Driver
+		{Role: "driver", Feature: "view_order_list", IsEnabled: true},
+		{Role: "driver", Feature: "access_fulfillment", IsEnabled: true},
 	}
 }
 
