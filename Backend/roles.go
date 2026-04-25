@@ -183,10 +183,12 @@ func HandleUpdatePermission(c *gin.Context) {
 			req.Feature = featureLower
 
 			go func(r RolePermission) {
-				EnqueueSync("updateSheet", map[string]interface{}{"IsEnabled": r.IsEnabled}, "RolePermissions", map[string]string{
-					"ID":      fmt.Sprintf("%d", r.ID),
-					"Role":    r.Role,
-					"Feature": r.Feature,
+				EnqueueSync("updateSheet", map[string]interface{}{
+					"IsEnabled": r.IsEnabled,
+					"Role":      r.Role,
+					"Feature":   r.Feature,
+				}, "RolePermissions", map[string]string{
+					"ID": fmt.Sprintf("%d", r.ID),
 				})
 			}(req)
 		} else {
