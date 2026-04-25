@@ -333,6 +333,7 @@ var handleGetAllPermissions = backend.HandleGetAllPermissions
 var handleGetUserPermissions = backend.HandleGetUserPermissions
 var handleUpdatePermission = backend.HandleUpdatePermission
 var handleSyncPermissionsToSheet = backend.HandleSyncPermissionsToSheet
+var handleResetPermissions = backend.HandleResetPermissions
 
 // =========================================================================
 
@@ -2044,6 +2045,7 @@ func main() {
 				restricted.GET("/permissions", handleGetAllPermissions)
 				restricted.POST("/permissions", handleUpdatePermission)
 				restricted.POST("/permissions/sync-sheet", handleSyncPermissionsToSheet)
+				restricted.POST("/permissions/reset", handleResetPermissions)
 				restricted.POST("/roles", handleCreateRole)
 				restricted.GET("/incentive/calculators", handleGetIncentiveCalculators)
 				restricted.POST("/incentive/calculators", handleCreateIncentiveCalculator)
