@@ -2,6 +2,7 @@ package backend
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"log"
@@ -18,13 +19,13 @@ func HandleGetRoles(c *gin.Context) {
 		c.JSON(http.StatusInternalServerError, gin.H{"status": "error", "message": err.Error()})
 		return
 	}
-	
+
 	if len(roles) == 0 {
 		// Auto-seed if empty
 		EnsureSeedData()
 		DB.Find(&roles)
 	}
-	
+
 	c.JSON(http.StatusOK, gin.H{"status": "success", "data": roles})
 }
 
@@ -146,7 +147,7 @@ func HandleUpdatePermission(c *gin.Context) {
 		// Use LOWER(TRIM(...)) to be consistent with checkPermission and handle any whitespace from sheet imports
 		result := DB.Where("LOWER(TRIM(role)) = ? AND LOWER(TRIM(feature)) = ?", roleLower, featureLower).First(&existing)
 
-		if result.Error != nil && result.Error == gorm.ErrRecordNotFound {
+		if errors.Is(result.Error, gorm.ErrRecordNotFound) {
 			req.ID = 0
 			req.Role = roleLower
 			req.Feature = featureLower
@@ -170,8 +171,8 @@ func HandleUpdatePermission(c *gin.Context) {
 			// Normalize role/feature to lowercase in case an older row was stored with mixed case.
 			if err := DB.Model(&existing).Updates(map[string]interface{}{
 				"is_enabled": req.IsEnabled,
-				"role":        roleLower,
-				"feature":     featureLower,
+				"role":       roleLower,
+				"feature":    featureLower,
 			}).Error; err != nil {
 				log.Printf("❌ Failed to update permission ID %d [%s:%s]: %v", existing.ID, existing.Role, existing.Feature, err)
 				updateErrors = append(updateErrors, fmt.Sprintf("update failed [%s:%s]", existing.Role, existing.Feature))
