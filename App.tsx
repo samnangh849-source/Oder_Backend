@@ -230,13 +230,10 @@ const AppContent: React.FC = () => {
              } else {
                  fetchData(true);
              }
-        } else if (lastMessage.type === 'update_permission') {
-            // Admin changed a permission — refresh static data so ALL connected users
-            // (including non-admin Sales/Staff users) get the updated permission state immediately.
-            console.log("[App] 🔐 Permission updated by admin. Refreshing permissions...");
+        } else if (lastMessage.type === 'update_permission' || lastMessage.type === 'permissions_reset') {
+            // Admin changed or reset permissions — refresh so all connected users get updated state.
+            console.log(`[App] 🔐 Permissions changed (${lastMessage.type}). Refreshing...`);
             fetchData(true).then(() => {
-                // After permissions refresh, retry fetching orders so users who were
-                // previously denied (403) now see their orders without needing to log out.
                 fetchOrders();
             }).catch(() => {});
         } else if (

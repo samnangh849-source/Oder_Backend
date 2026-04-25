@@ -7,10 +7,12 @@ import { getArrayCaseInsensitive, getValueCaseInsensitive } from '../../../const
 import { WEB_APP_URL } from '../../../constants';
 
 const PermissionMatrix: React.FC = () => {
-    const { appData, updatePermission, showNotification } = useContext(AppContext);
+    const { appData, updatePermission, showNotification, fetchData } = useContext(AppContext);
     const [updating, setUpdating] = useState<string | null>(null);
     const [pendingChanges, setPendingChanges] = useState<Record<string, boolean>>({});
     const [syncing, setSyncing] = useState(false);
+    const [resetting, setResetting] = useState(false);
+    const [showResetConfirm, setShowResetConfirm] = useState(false);
 
     const rolesList = getArrayCaseInsensitive(appData, 'roles');
     const permissions = getArrayCaseInsensitive(appData, 'permissions');
@@ -74,6 +76,29 @@ const PermissionMatrix: React.FC = () => {
         }
     };
 
+    const handleReset = async () => {
+        setResetting(true);
+        setShowResetConfirm(false);
+        try {
+            const token = localStorage.getItem('token');
+            const res = await fetch(`${WEB_APP_URL}/api/admin/permissions/reset`, {
+                method: 'POST',
+                headers: { Authorization: `Bearer ${token}` },
+            });
+            const json = await res.json();
+            if (json.status === 'success') {
+                showNotification?.(`Reset ជោគជ័យ — ${json.count} permissions ត្រូវបានបង្កើតឡើងវិញ`, 'success');
+                await fetchData?.(true);
+            } else {
+                showNotification?.(json.message || 'Reset failed', 'error');
+            }
+        } catch {
+            showNotification?.('Reset failed — cannot connect to server', 'error');
+        } finally {
+            setResetting(false);
+        }
+    };
+
     const handleToggle = async (roleName: string, feature: string, currentState: boolean) => {
         if (!roleName) return;
         const lockKey = `${roleName}-${feature}`;
@@ -119,10 +144,11 @@ const PermissionMatrix: React.FC = () => {
 
     return (
         <div className="flex flex-col gap-2">
-            <div className="flex justify-end">
+            <div className="flex justify-end items-center gap-2">
+                {/* Sync DB → Sheet */}
                 <button
                     onClick={handleSyncToSheet}
-                    disabled={syncing}
+                    disabled={syncing || resetting}
                     className="flex items-center gap-2 px-4 py-2 text-xs font-semibold rounded-sm border border-[#2b3139] bg-[#1e2329] text-[#848e9c] hover:text-[#eaecef] hover:border-[#474d57] transition-colors disabled:opacity-50"
                 >
                     {syncing ? <Spinner size="xs" /> : (
@@ -132,6 +158,38 @@ const PermissionMatrix: React.FC = () => {
                     )}
                     Sync to Sheet
                 </button>
+
+                {/* Reset to Defaults */}
+                {!showResetConfirm ? (
+                    <button
+                        onClick={() => setShowResetConfirm(true)}
+                        disabled={resetting || syncing}
+                        className="flex items-center gap-2 px-4 py-2 text-xs font-semibold rounded-sm border border-[#F6465D30] bg-[#1e2329] text-[#F6465D] hover:bg-[#F6465D15] hover:border-[#F6465D60] transition-colors disabled:opacity-50"
+                    >
+                        {resetting ? <Spinner size="xs" /> : (
+                            <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+                            </svg>
+                        )}
+                        Reset to Defaults
+                    </button>
+                ) : (
+                    <div className="flex items-center gap-2 px-3 py-1.5 rounded-sm border border-[#F6465D50] bg-[#F6465D10]">
+                        <span className="text-xs text-[#F6465D] font-medium">លុប Permission ទាំងអស់ ហើយ Reset?</span>
+                        <button
+                            onClick={handleReset}
+                            className="px-3 py-1 text-xs font-bold rounded bg-[#F6465D] text-white hover:opacity-90 transition-opacity"
+                        >
+                            Confirm
+                        </button>
+                        <button
+                            onClick={() => setShowResetConfirm(false)}
+                            className="px-3 py-1 text-xs font-semibold rounded bg-[#2b3139] text-[#848e9c] hover:text-[#eaecef] transition-colors"
+                        >
+                            Cancel
+                        </button>
+                    </div>
+                )}
             </div>
             {hasOrphans && (
                 <div className="flex items-start gap-2 px-4 py-3 rounded-sm text-xs" style={{ backgroundColor: '#F0B90B10', border: '1px solid #F0B90B30', color: '#F0B90B' }}>
