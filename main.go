@@ -1273,6 +1273,9 @@ func handleAdminUpdateSheet(c *gin.Context) {
 		if req.SheetName == "Roles" && strings.ToLower(originalPKKey) == "id" {
 			sheetPKKey = "ID"
 		}
+		if req.SheetName == "RolePermissions" && strings.ToLower(originalPKKey) == "id" {
+			sheetPKKey = "ID"
+		}
 		// Sync with Google Sheets via managed queue
 		enqueueSync("updateSheet", req.NewData, req.SheetName, map[string]string{sheetPKKey: fmt.Sprintf("%v", pkVal)})
 
