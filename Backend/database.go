@@ -291,7 +291,7 @@ func DefaultPermissions() []RolePermission {
 
 	// 1. Admin - Everything Enabled
 	for _, f := range features {
-		permissions = append(permissions, RolePermission{Role: "admin", Feature: f, IsEnabled: true})
+		permissions = append(permissions, RolePermission{Role: "Admin", Feature: f, IsEnabled: true})
 	}
 
 	// 2. Manager - Most things enabled except critical system management
@@ -313,7 +313,7 @@ func DefaultPermissions() []RolePermission {
 		"set_targets":           true,
 	}
 	for _, f := range features {
-		permissions = append(permissions, RolePermission{Role: "manager", Feature: f, IsEnabled: managerEnabled[f]})
+		permissions = append(permissions, RolePermission{Role: "Manager", Feature: f, IsEnabled: managerEnabled[f]})
 	}
 
 	// 3. Sale - Sales focused
@@ -326,9 +326,9 @@ func DefaultPermissions() []RolePermission {
 		"view_team_leaderboard": true,
 	}
 	for _, f := range features {
-		permissions = append(permissions, RolePermission{Role: "sale", Feature: f, IsEnabled: saleEnabled[f]})
-		// Also add "sales" as alias
-		permissions = append(permissions, RolePermission{Role: "sales", Feature: f, IsEnabled: saleEnabled[f]})
+		permissions = append(permissions, RolePermission{Role: "Sale", Feature: f, IsEnabled: saleEnabled[f]})
+		permissions = append(permissions, RolePermission{Role: "Sales", Feature: f, IsEnabled: saleEnabled[f]})
+		permissions = append(permissions, RolePermission{Role: "Seller", Feature: f, IsEnabled: saleEnabled[f]})
 	}
 
 	// 4. Fulfillment - Fulfillment focused
@@ -342,7 +342,8 @@ func DefaultPermissions() []RolePermission {
 		"stock_transfer":     true,
 	}
 	for _, f := range features {
-		permissions = append(permissions, RolePermission{Role: "fulfillment", Feature: f, IsEnabled: fulfillmentEnabled[f]})
+		permissions = append(permissions, RolePermission{Role: "Fulfillment", Feature: f, IsEnabled: fulfillmentEnabled[f]})
+		permissions = append(permissions, RolePermission{Role: "Dispatcher", Feature: f, IsEnabled: fulfillmentEnabled[f]})
 	}
 
 	// 5. Packer - Just Packing
@@ -352,7 +353,7 @@ func DefaultPermissions() []RolePermission {
 		"view_entertainment": true,
 	}
 	for _, f := range features {
-		permissions = append(permissions, RolePermission{Role: "packer", Feature: f, IsEnabled: packerEnabled[f]})
+		permissions = append(permissions, RolePermission{Role: "Packer", Feature: f, IsEnabled: packerEnabled[f]})
 	}
 
 	// 6. Driver - Just Delivery
@@ -362,7 +363,16 @@ func DefaultPermissions() []RolePermission {
 		"view_entertainment": true,
 	}
 	for _, f := range features {
-		permissions = append(permissions, RolePermission{Role: "driver", Feature: f, IsEnabled: driverEnabled[f]})
+		permissions = append(permissions, RolePermission{Role: "Driver", Feature: f, IsEnabled: driverEnabled[f]})
+	}
+
+	// 7. Viewer - Read Only
+	viewerEnabled := map[string]bool{
+		"view_order_list":    true,
+		"view_entertainment": true,
+	}
+	for _, f := range features {
+		permissions = append(permissions, RolePermission{Role: "Viewer", Feature: f, IsEnabled: viewerEnabled[f]})
 	}
 
 	return permissions
