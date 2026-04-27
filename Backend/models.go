@@ -131,7 +131,10 @@ type TelegramTemplate struct {
 func (t *TelegramTemplate) UnmarshalJSON(data []byte) error {
 	type Alias TelegramTemplate
 	aux := &struct {
-		ID interface{} `json:"ID"`
+		ID       interface{} `json:"ID"`
+		Team     interface{} `json:"Team"`
+		Part     interface{} `json:"Part"`
+		Template interface{} `json:"Template"`
 		*Alias
 	}{
 		Alias: (*Alias)(t),
@@ -141,6 +144,15 @@ func (t *TelegramTemplate) UnmarshalJSON(data []byte) error {
 	}
 	if aux.ID != nil {
 		t.ID = fmt.Sprintf("%v", aux.ID)
+	}
+	if aux.Team != nil {
+		t.Team = fmt.Sprintf("%v", aux.Team)
+	}
+	if aux.Part != nil {
+		t.Part = fmt.Sprintf("%v", aux.Part)
+	}
+	if aux.Template != nil {
+		t.Template = fmt.Sprintf("%v", aux.Template)
 	}
 	return nil
 }
