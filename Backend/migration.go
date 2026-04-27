@@ -385,11 +385,23 @@ func PerformDataMigration() {
 	var validUsers []User
 	seen := make(map[string]bool)
 	for _, x := range users {
+		x.UserName = strings.TrimSpace(x.UserName)
+		x.Password = strings.TrimSpace(x.Password)
+		
 		if x.UserName != "" && !seen[x.UserName] {
 			seen[x.UserName] = true
 			
 			// 🔐 Hash password if it's not already a bcrypt hash
-			if x.Password != "" && !strings.HasPrefix(x.Password, "$2a$") && !strings.HasPrefix(x.Password, "$2b$") {
+			needsHashing := true
+			if x.Password != "" {
+				_, err := bcrypt.Cost([]byte(x.Password))
+				if err == nil {
+					needsHashing = false // Already a valid hash
+				}
+			}
+
+			if needsHashing && x.Password != "" {
+				log.Printf("🔐 Hashing password for user: %s", x.UserName)
 				hashed, err := bcrypt.GenerateFromPassword([]byte(x.Password), bcrypt.DefaultCost)
 				if err == nil {
 					x.Password = string(hashed)
