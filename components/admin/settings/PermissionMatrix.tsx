@@ -12,11 +12,19 @@ const PermissionMatrix: React.FC = () => {
     const [pendingChanges, setPendingChanges] = useState<Record<string, boolean>>({});
     const [syncing, setSyncing] = useState(false);
     const [resetting, setResetting] = useState(false);
+    const [registering, setRegistering] = useState<string | null>(null);
     const [showResetConfirm, setShowResetConfirm] = useState(false);
+    const [featureSearch, setFeatureSearch] = useState('');
 
     const rolesList = getArrayCaseInsensitive(appData, 'roles');
     const permissions = getArrayCaseInsensitive(appData, 'permissions');
     const featureKeys = Object.values(FEATURES);
+
+    const filteredFeatures = useMemo(() => {
+        if (!featureSearch.trim()) return featureKeys;
+        const q = featureSearch.toLowerCase();
+        return featureKeys.filter(f => f.toLowerCase().includes(q) || f.replace(/_/g, ' ').toLowerCase().includes(q));
+    }, [featureKeys, featureSearch]);
 
     // Build the full role list: defined Roles + any role found in Users table
     // that doesn't have a matching entry in the Roles table (case-insensitive).
@@ -100,6 +108,29 @@ const PermissionMatrix: React.FC = () => {
         }
     };
 
+    const handleRegisterRole = async (roleName: string) => {
+        setRegistering(roleName);
+        try {
+            const token = localStorage.getItem('token');
+            const res = await fetch(`${WEB_APP_URL}/api/admin/roles`, {
+                method: 'POST',
+                headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' },
+                body: JSON.stringify({ RoleName: roleName, Description: 'Registered via Permission Matrix' })
+            });
+            const json = await res.json();
+            if (res.ok && json.status === 'success') {
+                showNotification?.(`តួនាទី "${roleName}" ត្រូវបានចុះឈ្មោះជោគជ័យ`, 'success');
+                await fetchData?.(true);
+            } else {
+                showNotification?.(json.message || 'Registration failed', 'error');
+            }
+        } catch (err: any) {
+            showNotification?.(err?.message || 'Connection error', 'error');
+        } finally {
+            setRegistering(null);
+        }
+    };
+
     const handleToggle = async (roleName: string, feature: string, currentState: boolean) => {
         if (!roleName) return;
         const lockKey = `${roleName}-${feature}`;
@@ -144,60 +175,88 @@ const PermissionMatrix: React.FC = () => {
     const hasOrphans = allRoleColumns.some(r => r.isOrphan);
 
     return (
-        <div className="flex flex-col gap-2">
-            <div className="flex justify-end items-center gap-2">
-                {/* Sync DB → Sheet */}
-                <button
-                    onClick={handleSyncToSheet}
-                    disabled={syncing || resetting}
-                    className="flex items-center gap-2 px-4 py-2 text-xs font-semibold rounded-sm border border-[#2b3139] bg-[#1e2329] text-[#848e9c] hover:text-[#eaecef] hover:border-[#474d57] transition-colors disabled:opacity-50"
-                >
-                    {syncing ? <Spinner size="xs" /> : (
-                        <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+        <div className="flex flex-col gap-4">
+            <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+                {/* Feature Search */}
+                <div className="relative w-full md:max-w-xs group">
+                    <div className="absolute left-3 top-1/2 -translate-y-1/2 text-[#848e9c]">
+                        <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
                         </svg>
-                    )}
-                    Sync to Sheet
-                </button>
-
-                {/* Reset to Defaults */}
-                {!showResetConfirm ? (
-                    <button
-                        onClick={() => setShowResetConfirm(true)}
-                        disabled={resetting || syncing}
-                        className="flex items-center gap-2 px-4 py-2 text-xs font-semibold rounded-sm border border-[#F6465D30] bg-[#1e2329] text-[#F6465D] hover:bg-[#F6465D15] hover:border-[#F6465D60] transition-colors disabled:opacity-50"
-                    >
-                        {resetting ? <Spinner size="xs" /> : (
+                    </div>
+                    <input
+                        type="text"
+                        placeholder="ស្វែងរកមុខងារ (Search features...)"
+                        value={featureSearch}
+                        onChange={(e) => setFeatureSearch(e.target.value)}
+                        className="w-full bg-[#1e2329] border border-[#2b3139] rounded-sm py-2 pl-10 pr-4 text-sm text-[#eaecef] placeholder:text-[#5e6673] focus:border-[#fcd535] outline-none transition-colors shadow-lg"
+                    />
+                    {featureSearch && (
+                        <button
+                            onClick={() => setFeatureSearch('')}
+                            className="absolute right-3 top-1/2 -translate-y-1/2 text-[#5e6673] hover:text-[#eaecef]"
+                        >
                             <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                            </svg>
+                        </button>
+                    )}
+                </div>
+
+                <div className="flex items-center gap-2">
+                    {/* Sync DB → Sheet */}
+                    <button
+                        onClick={handleSyncToSheet}
+                        disabled={syncing || resetting}
+                        className="flex items-center gap-2 px-4 py-2 text-xs font-semibold rounded-sm border border-[#2b3139] bg-[#1e2329] text-[#848e9c] hover:text-[#eaecef] hover:border-[#474d57] transition-colors disabled:opacity-50"
+                    >
+                        {syncing ? <Spinner size="xs" /> : (
+                            <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
                             </svg>
                         )}
-                        Reset to Defaults
+                        Sync to Sheet
                     </button>
-                ) : (
-                    <div className="flex items-center gap-2 px-3 py-1.5 rounded-sm border border-[#F6465D50] bg-[#F6465D10]">
-                        <span className="text-xs text-[#F6465D] font-medium">លុប Permission ទាំងអស់ ហើយ Reset?</span>
+
+                    {/* Reset to Defaults */}
+                    {!showResetConfirm ? (
                         <button
-                            onClick={handleReset}
-                            className="px-3 py-1 text-xs font-bold rounded bg-[#F6465D] text-white hover:opacity-90 transition-opacity"
+                            onClick={() => setShowResetConfirm(true)}
+                            disabled={resetting || syncing}
+                            className="flex items-center gap-2 px-4 py-2 text-xs font-semibold rounded-sm border border-[#F6465D30] bg-[#1e2329] text-[#F6465D] hover:bg-[#F6465D15] hover:border-[#F6465D60] transition-colors disabled:opacity-50"
                         >
-                            Confirm
+                            {resetting ? <Spinner size="xs" /> : (
+                                <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+                                </svg>
+                            )}
+                            Reset to Defaults
                         </button>
-                        <button
-                            onClick={() => setShowResetConfirm(false)}
-                            className="px-3 py-1 text-xs font-semibold rounded bg-[#2b3139] text-[#848e9c] hover:text-[#eaecef] transition-colors"
-                        >
-                            Cancel
-                        </button>
-                    </div>
-                )}
+                    ) : (
+                        <div className="flex items-center gap-2 px-3 py-1.5 rounded-sm border border-[#F6465D50] bg-[#F6465D10]">
+                            <span className="text-xs text-[#F6465D] font-medium">លុប Permission ទាំងអស់ ហើយ Reset?</span>
+                            <button
+                                onClick={handleReset}
+                                className="px-3 py-1 text-xs font-bold rounded bg-[#F6465D] text-white hover:opacity-90 transition-opacity"
+                            >
+                                Confirm
+                            </button>
+                            <button
+                                onClick={() => setShowResetConfirm(false)}
+                                className="px-3 py-1 text-xs font-semibold rounded bg-[#2b3139] text-[#848e9c] hover:text-[#eaecef] transition-colors"
+                            >
+                                Cancel
+                            </button>
+                        </div>
+                    )}
+                </div>
             </div>
             {hasOrphans && (
                 <div className="flex items-start gap-2 px-4 py-3 rounded-sm text-xs" style={{ backgroundColor: '#F0B90B10', border: '1px solid #F0B90B30', color: '#F0B90B' }}>
                     <span className="text-base leading-none mt-0.5">⚠</span>
                     <span>
                         <strong>Role ខ្វះ Registration:</strong> columns ដែលមាន "⚠ ពី Users table" = role ដែលប្រើដោយ Users ប៉ុន្តែ មិនទាន់ register ក្នុង Roles table ។
-                        Admin អាច toggle permission ផ្ទាល់ ឬ ទៅ Settings → Roles ដើម្បីបង្កើត Role entry ជាផ្លូវការ ។
+                        Admin អាច toggle permission ផ្ទាល់ ឬ <strong>ចុះឈ្មោះ (Register)</strong> ក្នុង Matrix នេះតែម្ដង ។
                     </span>
                 </div>
             )}
@@ -208,7 +267,7 @@ const PermissionMatrix: React.FC = () => {
                         <tr>
                             <th className="px-6 py-4 text-left font-medium text-[#eaecef] text-sm sticky left-0 z-40 bg-[#1e2329] min-w-[200px] border-r border-[#2b3139]">
                                 <span className="text-xs text-[#848e9c] uppercase block mb-1">Access Matrix</span>
-                                Feature / Role
+                                Feature / Role {featureSearch && <span className="text-[#fcd535] ml-2 text-[10px] normal-case">Filtered: {filteredFeatures.length}</span>}
                             </th>
                             {allRoleColumns.map((role) => (
                                 <th
@@ -223,13 +282,24 @@ const PermissionMatrix: React.FC = () => {
                                     >
                                         {role.description}
                                     </div>
-                                    {role.name}
+                                    <div className="flex flex-col items-center gap-2">
+                                        <span>{role.name}</span>
+                                        {role.isOrphan && (
+                                            <button
+                                                onClick={() => handleRegisterRole(role.name)}
+                                                disabled={registering === role.name}
+                                                className="px-2 py-0.5 text-[9px] font-bold uppercase tracking-tight rounded bg-[#F0B90B] text-[#1e2329] hover:bg-[#fcd535] transition-colors disabled:opacity-50"
+                                            >
+                                                {registering === role.name ? '...' : 'Register'}
+                                            </button>
+                                        )}
+                                    </div>
                                 </th>
                             ))}
                         </tr>
                     </thead>
                     <tbody className="divide-y divide-[#2b3139]">
-                        {featureKeys.map(feature => (
+                        {filteredFeatures.length > 0 ? filteredFeatures.map(feature => (
                             <tr key={feature} className="hover:bg-[#2b3139]/30 transition-colors group">
                                 <td className="px-6 py-4 sticky left-0 z-10 bg-[#1e2329] group-hover:bg-[#20252b] border-r border-[#2b3139] transition-colors">
                                     <div className="flex flex-col">
@@ -289,7 +359,13 @@ const PermissionMatrix: React.FC = () => {
                                     );
                                 })}
                             </tr>
-                        ))}
+                        )) : (
+                            <tr>
+                                <td colSpan={allRoleColumns.length + 1} className="px-6 py-20 text-center">
+                                    <p className="text-sm text-[#848e9c]">រកមិនឃើញមុខងារដែលអ្នកស្វែងរកទេ (No features found)</p>
+                                </td>
+                            </tr>
+                        )}
                     </tbody>
                 </table>
             </div>

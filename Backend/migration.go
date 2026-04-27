@@ -282,8 +282,12 @@ func broadcastFullSyncProgress(step, totalSteps int, stepName string, count int,
 		return
 	}
 	percent := 0
-	if totalSteps > 0 {
-		percent = int(float64(step) / float64(totalSteps) * 100)
+	if totalSteps > 1 {
+		// Adjust so that step 30 of 30 is 100%
+		percent = int(float64(step) / float64(totalSteps-1) * 100)
+		if percent > 100 {
+			percent = 100
+		}
 	}
 	payload, _ := json.Marshal(map[string]interface{}{
 		"type":       "full_sync_progress",
@@ -294,7 +298,8 @@ func broadcastFullSyncProgress(step, totalSteps int, stepName string, count int,
 		"count":      count,
 		"elapsed":    elapsed,
 	})
-	go func() { HubGlobal.Broadcast <- payload }()
+	// Removed 'go' to ensure sequence order in the hub's buffered channel
+	HubGlobal.Broadcast <- payload
 }
 
 // broadcastFullSyncComplete sends the final result of a full sync to all connected clients.
@@ -308,7 +313,7 @@ func broadcastFullSyncComplete(success bool, message string, elapsed float64) {
 		"message": message,
 		"elapsed": elapsed,
 	})
-	go func() { HubGlobal.Broadcast <- payload }()
+	HubGlobal.Broadcast <- payload
 }
 
 func PerformDataMigration() {

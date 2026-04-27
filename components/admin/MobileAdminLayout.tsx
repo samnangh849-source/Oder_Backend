@@ -78,7 +78,7 @@ const MobileAdminLayout: React.FC<MobileAdminLayoutProps> = ({
                         onClick={() => setIsMobileMenuOpen(true)}
                         className="p-2 rounded-xl bg-blue-600/10 text-blue-400 border border-blue-500/20 active:scale-90 transition-all"
                     >
-                        <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M4 6h16M4 12h16M4 18h16" /></svg>
+                        <i className="fa-solid fa-bars text-lg"></i>
                     </button>
                     
                     <div className="flex items-center gap-2.5">

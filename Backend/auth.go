@@ -208,26 +208,32 @@ func checkPermission(role string, isSystemAdmin bool, feature string) bool {
 			return true
 		}
 
-		rLower := strings.ToLower(strings.TrimSpace(r))
-		var perm RolePermission
-		err := DB.Where("LOWER(TRIM(role)) = ? AND LOWER(TRIM(feature)) = ? AND is_enabled = true", rLower, featureLower).First(&perm).Error
-		if err == nil {
-			return true
+		rLower := strings.ToLower(r)
+		
+		// Map common aliases to their canonical versions to be more resilient
+		checkRoles := []string{rLower}
+		if rLower == "seller" {
+			checkRoles = append(checkRoles, "sale", "sales")
+		} else if rLower == "sale" || rLower == "sales" {
+			checkRoles = append(checkRoles, "seller")
+		} else if rLower == "dispatcher" {
+			checkRoles = append(checkRoles, "fulfillment")
+		} else if rLower == "fulfillment" {
+			checkRoles = append(checkRoles, "dispatcher")
 		}
-		// Log exactly what role/feature was checked vs what exists in DB (debug aid)
-		log.Printf("🔍 [checkPermission] No match: JWT_role=%q feature=%q (checked DB: LOWER(role)=%q)", r, featureLower, rLower)
+
+		for _, cr := range checkRoles {
+			var perm RolePermission
+			// We use LOWER(TRIM(role)) for DB compatibility, though we've normalized input cr
+			err := DB.Where("LOWER(TRIM(role)) = ? AND LOWER(TRIM(feature)) = ? AND is_enabled = true", cr, featureLower).First(&perm).Error
+			if err == nil {
+				return true
+			}
+		}
+		
+		log.Printf("🔍 [checkPermission] No match: JWT_role=%q (aliases=%v) feature=%q", r, checkRoles, featureLower)
 	}
 
-	// Log all permission rows for this feature so mismatch is obvious in server logs
-	var allPerms []RolePermission
-	if dbErr := DB.Where("LOWER(TRIM(feature)) = ?", featureLower).Find(&allPerms).Error; dbErr == nil {
-		for _, p := range allPerms {
-			log.Printf("   📋 DB has: role=%q feature=%q is_enabled=%v", p.Role, p.Feature, p.IsEnabled)
-		}
-		if len(allPerms) == 0 {
-			log.Printf("   ⚠️  No rows in role_permissions for feature=%q at all!", featureLower)
-		}
-	}
 	return false
 }
 

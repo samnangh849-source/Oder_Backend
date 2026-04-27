@@ -38,7 +38,7 @@ const DesktopAdminLayout: React.FC<DesktopAdminLayoutProps> = ({
     setEditProfileModalOpen,
     setAdvancedSettingsOpen
 }) => {
-    const { currentUser, language, refreshData, setAppState, logout, originalAdminUser, advancedSettings } = useContext(AppContext);
+    const { currentUser, language, refreshData, setAppState, logout, originalAdminUser, advancedSettings, setIsSidebarCollapsed } = useContext(AppContext);
     const [dropdownOpen, setDropdownOpen] = useState(false);
     const [isRefreshing, setIsRefreshing] = useState(false);
     const dropdownRef = useRef<HTMLDivElement>(null);
@@ -85,6 +85,12 @@ const DesktopAdminLayout: React.FC<DesktopAdminLayoutProps> = ({
                 {uiTheme === 'binance' && (
                     <header className="flex-shrink-0 z-[60] bg-[#0B0E11] border-b border-[#2B3139] px-6 py-2 flex justify-between items-center" style={originalAdminUser ? { top: '40px' } : {}}>
                         <div className="flex items-center gap-3">
+                            <button
+                                onClick={() => setIsSidebarCollapsed(!isSidebarCollapsed)}
+                                className="p-1.5 -ml-1.5 rounded-sm text-[#848E9C] hover:text-[#FCD535] hover:bg-[#2B3139]/50 transition-colors focus:outline-none"
+                            >
+                                <i className="fa-solid fa-bars"></i>
+                            </button>
                             <h1 className="text-sm font-bold text-[#EAECEF] uppercase tracking-tight flex items-center gap-2">
                                 <span>O-System</span>
                                 <span className="text-[10px] bg-[#FCD535] text-[#181A20] px-1.5 py-0.5 font-black uppercase tracking-wider" style={{ borderRadius: '2px' }}>PRO</span>
@@ -110,7 +116,16 @@ const DesktopAdminLayout: React.FC<DesktopAdminLayoutProps> = ({
                 {/* Desktop Header - Matches Template */}
                 {showHeader && (
                     <header className={`h-16 ${isLightMode ? 'bg-white border-slate-200 shadow-sm' : 'bg-[#0d0f15] border-white/[0.06]'} border-b flex items-center justify-between px-6 z-10 relative`} style={originalAdminUser ? { top: '40px' } : {}}>
-                        <h1 className={`text-xl font-semibold ${isLightMode ? 'text-slate-900' : 'text-white'} truncate`}>Admin Dashboard - Order System</h1>
+                        <div className="flex items-center gap-4">
+                            <button
+                                onClick={() => setIsSidebarCollapsed(!isSidebarCollapsed)}
+                                className={`p-2 -ml-2 rounded-md ${isLightMode ? 'text-slate-500 hover:bg-slate-100' : 'text-slate-400 hover:bg-white/[0.05] hover:text-white'} transition-colors focus:outline-none`}
+                                title={isSidebarCollapsed ? t.expand_sidebar || "Expand Sidebar" : t.collapse_sidebar || "Collapse Sidebar"}
+                            >
+                                <i className="fa-solid fa-bars text-lg"></i>
+                            </button>
+                            <h1 className={`text-xl font-semibold ${isLightMode ? 'text-slate-900' : 'text-white'} truncate`}>Admin Dashboard - Order System</h1>
+                        </div>
 
                         <div className="flex items-center space-x-6">
                             {/* Notifications */}

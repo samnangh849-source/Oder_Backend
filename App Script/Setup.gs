@@ -221,7 +221,8 @@ function insertSampleIfEmpty(ss, sheetName, rows) {
 function setupSampleUsers(ss) {
   insertSampleIfEmpty(ss, "Users", [
     ["admin", "admin123", "TeamA", "Admin User", "", "Admin", true, ""],
-    ["seller1", "seller123", "TeamA", "អ្នកលក់ ១", "", "Seller", false, ""],
+    ["manager1", "manager123", "TeamA", "ប្រធានក្រុម ១", "", "Manager", false, ""],
+    ["seller1", "seller123", "TeamA", "អ្នកលក់ ១", "", "Sale", false, ""],
     ["packer1", "packer123", "TeamA", "អ្នកវេចខ្ចប់ ១", "", "Packer", false, ""]
   ]);
 }
@@ -299,28 +300,75 @@ function setupSamplePhoneCarriers(ss) {
 
 function setupSampleRoles(ss) {
   insertSampleIfEmpty(ss, "Roles", [
-    [1, "Admin", "គ្រប់គ្រងប្រព័ន្ធទាំងមូល"],
-    [2, "Seller", "បង្កើតការកម្មង់ និងគ្រប់គ្រងអតិថិជន"],
-    [3, "Packer", "វេចខ្ចប់ និងរៀបចំការកម្មង់"],
-    [4, "Dispatcher", "ផ្ញើការកម្មង់ទៅអ្នកដឹក"],
-    [5, "Viewer", "មើលទិន្នន័យប៉ុណ្ណោះ"]
+    [1, "Admin", "System Administrator - Full Access"],
+    [2, "Manager", "Store/Team Manager"],
+    [3, "Sale", "Sales representative"],
+    [4, "Fulfillment", "Order packing & fulfillment staff"],
+    [5, "Driver", "Delivery driver"],
+    [6, "Packer", "Packaging team member"]
   ]);
 }
 
 function setupSampleRolePermissions(ss) {
-  insertSampleIfEmpty(ss, "RolePermissions", [
-    [1, "Admin", "orders", true],
-    [2, "Admin", "products", true],
-    [3, "Admin", "settings", true],
-    [4, "Admin", "users", true],
-    [5, "Admin", "reports", true],
-    [6, "Seller", "orders", true],
-    [7, "Seller", "products", true],
-    [8, "Seller", "settings", false],
-    [9, "Packer", "orders", true],
-    [10, "Packer", "products", false],
-    [11, "Dispatcher", "orders", true],
-    [12, "Viewer", "orders", true],
-    [13, "Viewer", "reports", true]
-  ]);
+  const features = [
+    "view_order_list", "edit_order", "delete_order", "verify_order", "create_order",
+    "access_sales_portal", "access_fulfillment", "view_admin_dashboard", "view_entertainment",
+    "manage_roles", "manage_permissions", "view_revenue", "export_data", "migrate_data",
+    "manage_inventory", "stock_transfer", "view_team_leaderboard", "set_targets"
+  ];
+
+  const permissions = [];
+  let id = 1;
+
+  // 1. Admin - Everything Enabled
+  features.forEach(f => {
+    permissions.push([id++, "Admin", f, true]);
+  });
+
+  // 2. Manager
+  const managerEnabled = {
+    "view_order_list": true, "edit_order": true, "delete_order": true, "verify_order": true, "create_order": true,
+    "access_sales_portal": true, "access_fulfillment": true, "view_admin_dashboard": true, "view_entertainment": true,
+    "view_revenue": true, "export_data": true, "manage_inventory": true, "stock_transfer": true,
+    "view_team_leaderboard": true, "set_targets": true
+  };
+  features.forEach(f => {
+    permissions.push([id++, "Manager", f, !!managerEnabled[f]]);
+  });
+
+  // 3. Sale
+  const saleEnabled = {
+    "view_order_list": true, "edit_order": true, "create_order": true,
+    "access_sales_portal": true, "view_entertainment": true, "view_team_leaderboard": true
+  };
+  features.forEach(f => {
+    permissions.push([id++, "Sale", f, !!saleEnabled[f]]);
+  });
+
+  // 4. Fulfillment
+  const fulfillmentEnabled = {
+    "view_order_list": true, "edit_order": true, "verify_order": true, "access_fulfillment": true,
+    "view_entertainment": true, "manage_inventory": true, "stock_transfer": true
+  };
+  features.forEach(f => {
+    permissions.push([id++, "Fulfillment", f, !!fulfillmentEnabled[f]]);
+  });
+
+  // 5. Packer
+  const packerEnabled = {
+    "view_order_list": true, "access_fulfillment": true, "view_entertainment": true
+  };
+  features.forEach(f => {
+    permissions.push([id++, "Packer", f, !!packerEnabled[f]]);
+  });
+
+  // 6. Driver
+  const driverEnabled = {
+    "view_order_list": true, "access_fulfillment": true, "view_entertainment": true
+  };
+  features.forEach(f => {
+    permissions.push([id++, "Driver", f, !!driverEnabled[f]]);
+  });
+
+  insertSampleIfEmpty(ss, "RolePermissions", permissions);
 }

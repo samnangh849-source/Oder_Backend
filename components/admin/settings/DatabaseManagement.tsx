@@ -139,18 +139,27 @@ const DatabaseManagement: React.FC = () => {
 
             } else if (data?.type === 'full_sync_complete') {
                 stopElapsedTimer();
-                setIsMigrating(false);
-                setSyncProgress(null);
-
+                
                 if (data.success) {
+                    // Show 100% explicitly before finishing
+                    setSyncProgress(prev => prev ? { ...prev, percent: 100, stepName: 'បូរេពលរួចរាល់!' } : null);
+                    
                     // mark all steps done
-                    setActiveStep(SYNC_STEPS.length); // past the last step
+                    setActiveStep(SYNC_STEPS.length); 
                     setSyncDone('success');
                     const secs = typeof data.elapsed === 'number' ? Math.round(data.elapsed) : 0;
                     setStatus({ type: 'success', message: `${data.message} (រយៈពេល ${secs}s)` });
                     showNotification('Full Sync Complete', 'success');
                     refreshData();
+
+                    // Delay hiding the progress bar so user sees 100%
+                    setTimeout(() => {
+                        setIsMigrating(false);
+                        setSyncProgress(null);
+                    }, 1500);
                 } else {
+                    setIsMigrating(false);
+                    setSyncProgress(null);
                     setSyncDone('error');
                     setErrorStep(activeStepRef.current);
                     setStatus({ type: 'error', message: 'បរាជ័យ: ' + (data.message || 'Unknown error') });

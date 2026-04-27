@@ -98,6 +98,9 @@ function doPost(e) {
       case 'addRow': 
         return handleAddRow(contents);
 
+      case 'batchAddRows':
+        return handleBatchAddRows(contents);
+
       case 'deleteRow': 
         return handleDeleteRow(contents);
 
@@ -290,6 +293,33 @@ function handleAddRow(data) {
 
   appendRowMapped(sheet, data.newData);
   return createJsonResponse({ status: "success" });
+}
+
+function handleBatchAddRows(data) {
+  if (!data.sheetName || !data.rows || !Array.isArray(data.rows)) {
+    return createJsonResponse({ status: "error", message: "sheetName and rows array required" }, 400);
+  }
+  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  const sheet = ss.getSheetByName(data.sheetName);
+  if (!sheet) return createJsonResponse({ status: "error", message: "Sheet not found" }, 404);
+
+  const headers = sheet.getRange(1, 1, 1, sheet.getLastColumn()).getValues()[0];
+  const normalizedHeaders = headers.map(h => normalizeKey(h));
+
+  const rowsToInsert = data.rows.map(row => {
+    const newRow = new Array(headers.length).fill("");
+    for (const [key, val] of Object.entries(row)) {
+      const idx = normalizedHeaders.indexOf(normalizeKey(key));
+      if (idx !== -1) newRow[idx] = val;
+    }
+    return newRow;
+  });
+
+  if (rowsToInsert.length > 0) {
+    sheet.getRange(sheet.getLastRow() + 1, 1, rowsToInsert.length, headers.length).setValues(rowsToInsert);
+  }
+
+  return createJsonResponse({ status: "success", count: rowsToInsert.length });
 }
 
 // Clears all data rows in a sheet (keeps header row). Used by Reset Permissions.

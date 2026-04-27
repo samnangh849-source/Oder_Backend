@@ -768,14 +768,8 @@ func handleGetStaticData(c *gin.Context) {
 	}
 
 	for _, q := range queries {
-		wg.Add(1)
-		go func(f func()) {
-			defer wg.Done()
-			f()
-		}(q)
+		q()
 	}
-
-	wg.Wait()
 
 	c.JSON(http.StatusOK, gin.H{"status": "success", "data": result})
 }
@@ -1271,6 +1265,9 @@ func handleAdminUpdateSheet(c *gin.Context) {
 	go func() {
 		sheetPKKey := originalPKKey
 		if req.SheetName == "Roles" && strings.ToLower(originalPKKey) == "id" {
+			sheetPKKey = "ID"
+		}
+		if req.SheetName == "RolePermissions" && strings.ToLower(originalPKKey) == "id" {
 			sheetPKKey = "ID"
 		}
 		// Sync with Google Sheets via managed queue

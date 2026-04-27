@@ -216,11 +216,10 @@ func HandleUpdatePermission(c *gin.Context) {
 		})
 		return
 	}
-	c.JSON(http.StatusOK, gin.H{"status": "success", "message": "បានរក្សាទុកសិទ្ធិដោយជោគជ័យ"})
+
+	c.JSON(http.StatusOK, gin.H{"status": "success", "message": "សិទ្ធិត្រូវបានធ្វើបច្ចុប្បន្នភាព"})
 }
 
-// SyncAllPermissionsToSheet re-syncs every RolePermission row from DB to Google Sheets,
-// filling any rows that are missing Role/Feature data.
 func SyncAllPermissionsToSheet() {
 	if DB == nil {
 		return
@@ -230,17 +229,28 @@ func SyncAllPermissionsToSheet() {
 		log.Printf("❌ SyncAllPermissionsToSheet: %v", err)
 		return
 	}
-	for _, p := range permissions {
-		p := p
-		EnqueueSync("updateSheet", map[string]interface{}{
-			"IsEnabled": p.IsEnabled,
+
+	if len(permissions) == 0 {
+		return
+	}
+
+	log.Printf("🔄 SyncAllPermissionsToSheet: syncing %d permissions in batch", len(permissions))
+
+	rows := make([]map[string]interface{}, len(permissions))
+	for i, p := range permissions {
+		rows[i] = map[string]interface{}{
+			"ID":        p.ID,
 			"Role":      p.Role,
 			"Feature":   p.Feature,
-		}, "RolePermissions", map[string]string{
-			"ID": fmt.Sprintf("%d", p.ID),
-		})
+			"IsEnabled": p.IsEnabled,
+		}
 	}
-	log.Printf("✅ SyncAllPermissionsToSheet: enqueued %d permission syncs", len(permissions))
+
+	EnqueueSync("batchAddRows", map[string]interface{}{
+		"rows": rows,
+	}, "RolePermissions", nil)
+
+	log.Printf("✅ SyncAllPermissionsToSheet: enqueued batch sync for %d permissions", len(permissions))
 }
 
 func HandleSyncPermissionsToSheet(c *gin.Context) {
@@ -248,25 +258,40 @@ func HandleSyncPermissionsToSheet(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{"status": "success", "message": "Syncing permissions to sheet in background"})
 }
 
-// HandleResetPermissions wipes all RolePermission rows in the DB, re-inserts
-// the canonical defaults, broadcasts the change via WebSocket, then clears the
-// RolePermissions Google Sheet and re-syncs every row so both stores agree.
+// HandleResetPermissions wipes RolePermission rows for canonical/standard roles in the DB, 
+// re-inserts their default states, broadcasts the change via WebSocket, 
+// then clears and re-syncs the RolePermissions Google Sheet.
+// Custom roles not in the DefaultPermissions list are preserved.
 func HandleResetPermissions(c *gin.Context) {
-	// 1. Wipe existing permissions
-	if err := DB.Where("id > 0").Delete(&RolePermission{}).Error; err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"status": "error", "message": "Failed to clear permissions: " + err.Error()})
+	defaults := DefaultPermissions()
+
+	// Collect names of roles that have defaults defined
+	standardRoles := make(map[string]bool)
+	roleNames := []string{}
+	for _, p := range defaults {
+		lowerRole := strings.ToLower(strings.TrimSpace(p.Role))
+		if !standardRoles[lowerRole] {
+			standardRoles[lowerRole] = true
+			roleNames = append(roleNames, lowerRole)
+		}
+	}
+
+	// 1. Wipe existing permissions ONLY for these standard roles
+	if err := DB.Where("LOWER(TRIM(role)) IN ?", roleNames).Delete(&RolePermission{}).Error; err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"status": "error", "message": "Failed to clear standard permissions: " + err.Error()})
 		return
 	}
 
 	// 2. Re-insert defaults
-	defaults := DefaultPermissions()
 	for i := range defaults {
 		defaults[i].ID = 0
+		defaults[i].Role = strings.ToLower(strings.TrimSpace(defaults[i].Role))
+		defaults[i].Feature = strings.ToLower(strings.TrimSpace(defaults[i].Feature))
 		if err := DB.Create(&defaults[i]).Error; err != nil {
 			log.Printf("❌ Reset: failed to create permission [%s:%s]: %v", defaults[i].Role, defaults[i].Feature, err)
 		}
 	}
-	log.Printf("✅ HandleResetPermissions: inserted %d default permissions", len(defaults))
+	log.Printf("✅ HandleResetPermissions: reset %d standard permissions", len(defaults))
 
 	// 3. Notify all connected clients so UI refreshes immediately
 	eventBytes, _ := json.Marshal(map[string]interface{}{"type": "permissions_reset"})
@@ -274,17 +299,17 @@ func HandleResetPermissions(c *gin.Context) {
 		HubGlobal.Broadcast <- eventBytes
 	}
 
-	// 4. Clear the Sheet then re-sync every permission row (background)
+	// 4. Re-sync Google Sheet (Clear + Re-sync All DB rows)
 	go func() {
 		// Clear the RolePermissions sheet first
 		EnqueueSync("clearSheet", map[string]interface{}{}, "RolePermissions", nil)
-		// Re-sync all DB permissions to the now-empty sheet
+		// Re-sync all DB permissions (standard + preserved custom ones) to the now-empty sheet
 		SyncAllPermissionsToSheet()
 	}()
 
 	c.JSON(http.StatusOK, gin.H{
 		"status":  "success",
-		"message": fmt.Sprintf("Reset %d permissions. Syncing to Sheet in background.", len(defaults)),
+		"message": fmt.Sprintf("បាន Reset សិទ្ធិតួនាទីស្តង់ដារចំនួន %d រួចរាល់។ កំពុង Sync ទៅ Sheet...", len(defaults)),
 		"count":   len(defaults),
 	})
 }
