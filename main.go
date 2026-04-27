@@ -1961,10 +1961,12 @@ func main() {
 	backend.HubGlobal = hub
 	go hub.Run()
 
-	// Initialize backend.DB in background to allow fast port binding for Render
+	// Initialize backend.DB
+	initDB()
+
+	// Initialize background processes
 	go func() {
-		initDB()
-		// Start Background Workers ONLY after backend.DB is ready (if they depend on it)
+		// Start Background Workers ONLY after backend.DB is ready
 		startSyncManager(2)
 		// Auto-repair: fill any RolePermissions sheet rows missing Role/Feature data
 		go backend.SyncAllPermissionsToSheet()
