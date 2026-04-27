@@ -1971,11 +1971,17 @@ func main() {
 		go startOrderWorker()
 		startScheduler()
 		backend.CreateGoogleAPIClient(context.Background())
-		if os.Getenv("AUTO_MIGRATE") == "true" {
-			log.Println("🚀 Starting automatic data migration on startup...")
+
+		// Auto-migrate if DB is empty
+		var userCount int64
+		if err := backend.DB.Model(&User{}).Count(&userCount).Error; err == nil && userCount == 0 {
+			log.Println("Empty database detected. Starting automatic data migration...")
+			backend.PerformDataMigration()
+		} else if os.Getenv("AUTO_MIGRATE") == "true" {
+			log.Println("🚀 Starting forced automatic data migration on startup...")
 			backend.PerformDataMigration()
 		} else {
-			log.Println("ℹ️ Automatic migration skipped on startup. Set AUTO_MIGRATE=true if you want to wipe and re-sync backend.DB from Sheets.")
+			log.Println("ℹ️ Automatic migration skipped (DB not empty). Set AUTO_MIGRATE=true if you want to wipe and re-sync.")
 		}
 	}()
 
