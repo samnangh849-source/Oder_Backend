@@ -158,6 +158,18 @@ func runMigrations(db *gorm.DB) {
 	checkLegacy(&Order{}, "orders", "customer_name")
 	checkLegacy(&User{}, "users", "user_name")
 
+	// 🛠️ FIX: Check if telegram_templates has an incompatible 'id' column (bigint instead of text)
+	if db.Migrator().HasTable("telegram_templates") {
+		var dataType string
+		db.Raw("SELECT data_type FROM information_schema.columns WHERE table_name = 'telegram_templates' AND column_name = 'id'").Scan(&dataType)
+		if dataType == "bigint" || dataType == "integer" {
+			log.Println("⚠️  Incompatible 'id' column type (bigint) detected in telegram_templates. Dropping table to fix schema...")
+			if err := db.Migrator().DropTable("telegram_templates"); err != nil {
+				log.Printf("❌ Failed to drop table telegram_templates: %v", err)
+			}
+		}
+	}
+
 	err := db.AutoMigrate(
 		&User{}, &Store{}, &Setting{}, &TeamPage{}, &Product{}, &Location{}, &ShippingMethod{},
 		&Color{}, &Driver{}, &BankAccount{}, &PhoneCarrier{}, &TelegramTemplate{},
