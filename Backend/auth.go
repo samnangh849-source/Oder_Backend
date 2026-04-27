@@ -53,15 +53,18 @@ func HandleLogin(c *gin.Context) {
 	var user User
 	err := DB.Where("user_name = ?", credentials.UserName).First(&user).Error
 	if errors.Is(err, gorm.ErrRecordNotFound) {
+		log.Printf("⚠️ Login failed: User %q not found", credentials.UserName)
 		c.JSON(http.StatusUnauthorized, gin.H{"status": "error", "message": "អ្នកប្រើប្រាស់មិនត្រឹមត្រូវ"})
 		return
 	}
 	if err != nil {
+		log.Printf("❌ Login error for user %q: %v", credentials.UserName, err)
 		c.JSON(http.StatusInternalServerError, gin.H{"status": "error", "message": "ប្រព័ន្ធមានបញ្ហា សូមព្យាយាមម្តងទៀត"})
 		return
 	}
 
 	if err := bcrypt.CompareHashAndPassword([]byte(user.Password), []byte(credentials.Password)); err != nil {
+		log.Printf("⚠️ Login failed: Invalid password for user %q", credentials.UserName)
 		c.JSON(http.StatusUnauthorized, gin.H{"status": "error", "message": "លេខសម្ងាត់មិនត្រឹមត្រូវ"})
 		return
 	}
