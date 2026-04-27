@@ -4,7 +4,11 @@ package backend
 // ម៉ូដែលទិន្នន័យ (GORM Models)
 // =========================================================================
 
-import "time"
+import (
+	"encoding/json"
+	"fmt"
+	"time"
+)
 
 type User struct {
 	UserName          string `gorm:"primaryKey;column:user_name" json:"UserName"`
@@ -122,6 +126,23 @@ type TelegramTemplate struct {
 	Team     string `gorm:"column:team" json:"Team"`
 	Part     string `gorm:"column:part" json:"Part"`
 	Template string `gorm:"column:template" json:"Template"`
+}
+
+func (t *TelegramTemplate) UnmarshalJSON(data []byte) error {
+	type Alias TelegramTemplate
+	aux := &struct {
+		ID interface{} `json:"ID"`
+		*Alias
+	}{
+		Alias: (*Alias)(t),
+	}
+	if err := json.Unmarshal(data, &aux); err != nil {
+		return err
+	}
+	if aux.ID != nil {
+		t.ID = fmt.Sprintf("%v", aux.ID)
+	}
+	return nil
 }
 
 type Inventory struct {
