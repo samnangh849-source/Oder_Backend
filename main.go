@@ -768,8 +768,13 @@ func handleGetStaticData(c *gin.Context) {
 	}
 
 	for _, q := range queries {
-		q()
+		wg.Add(1)
+		go func(f func()) {
+			defer wg.Done()
+			f()
+		}(q)
 	}
+	wg.Wait()
 
 	c.JSON(http.StatusOK, gin.H{"status": "success", "data": result})
 }
