@@ -31,6 +31,7 @@ import (
 	"google.golang.org/api/drive/v3"
 	"google.golang.org/api/option"
 	"google.golang.org/api/sheets/v4"
+	"golang.org/x/crypto/bcrypt"
 	"gorm.io/gorm"
 )
 
@@ -386,6 +387,17 @@ func PerformDataMigration() {
 	for _, x := range users {
 		if x.UserName != "" && !seen[x.UserName] {
 			seen[x.UserName] = true
+			
+			// 🔐 Hash password if it's not already a bcrypt hash
+			if x.Password != "" && !strings.HasPrefix(x.Password, "$2a$") && !strings.HasPrefix(x.Password, "$2b$") {
+				hashed, err := bcrypt.GenerateFromPassword([]byte(x.Password), bcrypt.DefaultCost)
+				if err == nil {
+					x.Password = string(hashed)
+				} else {
+					log.Printf("⚠️ Warning: Failed to hash password for user %s: %v", x.UserName, err)
+				}
+			}
+			
 			validUsers = append(validUsers, x)
 		}
 	}
