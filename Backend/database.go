@@ -172,6 +172,16 @@ func runMigrations(db *gorm.DB) {
 		log.Printf("❌ Migration failed: %v", err)
 	}
 
+	// 🛠️ EXTRA CHECK: Ensure pending_syncs exists (sometimes AutoMigrate skips it if previous errors occurred)
+	if !db.Migrator().HasTable(&PendingSync{}) {
+		log.Println("⚠️ Table 'pending_syncs' missing after AutoMigrate. Attempting explicit creation...")
+		if err := db.Migrator().CreateTable(&PendingSync{}); err != nil {
+			log.Printf("❌ Failed to create table 'pending_syncs' explicitly: %v", err)
+		} else {
+			log.Println("✅ Table 'pending_syncs' created explicitly.")
+		}
+	}
+
 	// Functional index: allow UPPER(TRIM(order_id)) queries to use index instead of full table scan
 	if err := db.Exec(`CREATE INDEX IF NOT EXISTS idx_orders_order_id_upper ON orders (UPPER(TRIM(order_id)))`).Error; err != nil {
 		log.Printf("⚠️ Could not create functional index on order_id: %v", err)
