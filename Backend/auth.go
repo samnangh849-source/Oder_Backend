@@ -50,6 +50,9 @@ func HandleLogin(c *gin.Context) {
 		return
 	}
 
+	credentials.UserName = strings.TrimSpace(credentials.UserName)
+	credentials.Password = strings.TrimSpace(credentials.Password)
+
 	var user User
 	err := DB.Where("user_name = ?", credentials.UserName).First(&user).Error
 	if errors.Is(err, gorm.ErrRecordNotFound) {
