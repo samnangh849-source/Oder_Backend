@@ -22,17 +22,17 @@ type User struct {
 }
 
 type Movie struct {
-	ID          string    `gorm:"primaryKey;column:id" json:"ID"`
-	Title       string    `gorm:"column:title" json:"Title"`
-	Description string    `gorm:"column:description" json:"Description"`
-	Thumbnail   string    `gorm:"column:thumbnail" json:"Thumbnail"`
-	VideoURL    string    `gorm:"column:video_url" json:"VideoURL"`
-	Type        string    `gorm:"column:type" json:"Type"`
-	Language    string    `gorm:"column:language" json:"Language"`
-	Country     string    `gorm:"column:country" json:"Country"`
-	Category    string    `gorm:"column:category" json:"Category"`
-	SeriesKey   string    `gorm:"column:series_key" json:"SeriesKey"`
-	AddedAt     time.Time `gorm:"column:added_at" json:"AddedAt"`
+	ID          string `gorm:"primaryKey;column:id" json:"ID"`
+	Title       string `gorm:"column:title" json:"Title"`
+	Description string `gorm:"column:description" json:"Description"`
+	Thumbnail   string `gorm:"column:thumbnail" json:"Thumbnail"`
+	VideoURL    string `gorm:"column:video_url" json:"VideoURL"`
+	Type        string `gorm:"column:type" json:"Type"`
+	Language    string `gorm:"column:language" json:"Language"`
+	Country     string `gorm:"column:country" json:"Country"`
+	Category    string `gorm:"column:category" json:"Category"`
+	SeriesKey   string `gorm:"column:series_key" json:"SeriesKey"`
+	AddedAt     string `gorm:"column:added_at" json:"AddedAt"`
 }
 
 type Store struct {
@@ -130,18 +130,19 @@ type TelegramTemplate struct {
 
 func (t *TelegramTemplate) UnmarshalJSON(data []byte) error {
 	type Alias TelegramTemplate
-	aux := &struct {
+	var aux struct {
 		ID       interface{} `json:"ID"`
 		Team     interface{} `json:"Team"`
 		Part     interface{} `json:"Part"`
 		Template interface{} `json:"Template"`
-		*Alias
-	}{
-		Alias: (*Alias)(t),
+		Alias
 	}
 	if err := json.Unmarshal(data, &aux); err != nil {
 		return err
 	}
+
+	*t = TelegramTemplate(aux.Alias)
+
 	if aux.ID != nil {
 		t.ID = fmt.Sprintf("%v", aux.ID)
 	}
