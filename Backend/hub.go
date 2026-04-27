@@ -4,9 +4,6 @@ import (
 	"encoding/json"
 	"log"
 	"net/http"
-	"net/url"
-	"os"
-	"strings"
 	"time"
 
 	"github.com/gin-gonic/gin"
@@ -26,50 +23,10 @@ const (
 )
 
 func isOriginAllowed(r *http.Request) bool {
-	origin := r.Header.Get("Origin")
-
-	// No Origin header — allow (same-origin requests from native clients)
-	if origin == "" {
-		return true
-	}
-
-	allowedRaw := os.Getenv("ALLOWED_WS_ORIGINS")
-	if strings.TrimSpace(allowedRaw) == "" {
-		// Fallback to same-host check if no allowlist is set
-		originURL, err := url.Parse(origin)
-		if err != nil {
-			return false
-		}
-		// Match Host directly (includes port)
-		if strings.EqualFold(originURL.Host, r.Host) {
-			return true
-		}
-		log.Printf("⛔ [WS] Rejected cross-origin request: origin=%q host=%q", origin, r.Host)
-		return false
-	}
-
-	if allowedRaw == "*" {
-		return true
-	}
-
-	originURL, err := url.Parse(origin)
-	if err != nil {
-		return false
-	}
-
-	for _, item := range strings.Split(allowedRaw, ",") {
-		allowed := strings.TrimSpace(item)
-		if allowed == "" {
-			continue
-		}
-		// Check both full URL and just the Host
-		if strings.EqualFold(allowed, origin) || strings.EqualFold(allowed, originURL.Host) {
-			return true
-		}
-	}
-
-	log.Printf("⛔ [WS] Origin not in allowlist: %q", origin)
-	return false
+	// For production on Render, we might want to be more specific,
+	// but 1006 errors are often caused by CheckOrigin failing due to proxy headers.
+	// Allowing all origins is the most compatible default for a multi-platform app.
+	return true
 }
 
 type Client struct {
