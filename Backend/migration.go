@@ -1200,8 +1200,8 @@ func HandleMigrateMovies(c *gin.Context) {
 		for _, x := range movies {
 			if x.ID != "" && !seenMovieIDs[x.ID] {
 				seenMovieIDs[x.ID] = true
-				if x.AddedAt.IsZero() {
-					x.AddedAt = time.Now()
+				if x.AddedAt == "" {
+					x.AddedAt = time.Now().Format("2006-01-02 15:04:05")
 				}
 				validMovies = append(validMovies, x)
 			}
