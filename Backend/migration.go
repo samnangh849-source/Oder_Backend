@@ -192,7 +192,7 @@ func convertSheetValuesToMaps(sheetName string, values *sheets.ValueRange) ([]ma
 					}
 
 					if cellStr, ok := cell.(string); ok {
-						if IsNumericHeader(header) {
+						if IsNumericHeader(header) && !(sheetName == "TelegramTemplates" && strings.ToLower(header) == "id") {
 							cleaned := strings.ReplaceAll(strings.ReplaceAll(strings.TrimSpace(cellStr), "$", ""), ",", "")
 							if f, err := strconv.ParseFloat(cleaned, 64); err == nil {
 								rowData[targetHeader] = f
@@ -222,7 +222,7 @@ func convertSheetValuesToMaps(sheetName string, values *sheets.ValueRange) ([]ma
 								} else {
 									rowData[targetHeader] = "FALSE"
 								}
-							} else if f, ok := cell.(float64); ok {
+							} else if f, ok := cell.(float64); ok && !(sheetName == "TelegramTemplates" && strings.ToLower(header) == "id") {
 								rowData[targetHeader] = f
 							} else {
 								rowData[targetHeader] = fmt.Sprintf("%v", cell)
