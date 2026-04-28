@@ -2044,7 +2044,8 @@ func main() {
 			adminGroup.POST("/shifts/open", handleOpenShift)
 			adminGroup.POST("/shifts/close", handleCloseShift)
 
-			// Restricted Admin Actions (Require Admin role)			restricted := adminGroup.Group("/")
+			// Restricted Admin Actions (Require Admin role)
+			restricted := adminGroup.Group("/")
 			restricted.Use(AdminOnlyMiddleware())
 			{
 				// Video/Movie admin routes from backend package
