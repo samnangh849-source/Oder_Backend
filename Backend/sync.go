@@ -39,6 +39,7 @@ type AppsScriptRequest struct {
 	Rows           interface{}            `json:"rows,omitempty"` // Added for batchAddRows
 	PrimaryKey     map[string]string      `json:"primaryKey,omitempty"`
 	NewData        map[string]interface{} `json:"newData,omitempty"`
+	IsAsync        bool                   `json:"isAsync,omitempty"`
 }
 
 type AppsScriptResponse struct {
