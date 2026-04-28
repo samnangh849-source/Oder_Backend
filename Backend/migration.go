@@ -78,6 +78,7 @@ var SheetRanges = map[string]string{
 	"IncentiveCalculators":   "IncentiveCalculators!A:Z",
 	"IncentiveManualData":    "IncentiveManualData!A:Z",
 	"IncentiveCustomPayouts": "IncentiveCustomPayouts!A:Z",
+	"Shifts":                 "Shifts!A:Z",
 }
 
 // ── Google API Client ─────────────────────────────────────────────────────
