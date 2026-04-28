@@ -48,9 +48,9 @@ type AppsScriptResponse struct {
 	FileID     string `json:"fileID,omitempty"`
 	Message    string `json:"message,omitempty"`
 	MessageIds struct {
-		ID1 string `json:"id1"`
-		ID2 string `json:"id2"`
-		ID3 string `json:"id3"`
+		ID1 interface{} `json:"id1"`
+		ID2 interface{} `json:"id2"`
+		ID3 interface{} `json:"id3"`
 	} `json:"messageIds,omitempty"`
 }
 
