@@ -2152,6 +2152,16 @@ func handleOpenShift(c *gin.Context) {
 	// 4. Telegram Notification
 	go sendShiftTelegramNotification(r.StoreName, "Open", user.FullName, photoURL, "")
 
+	// 5. Sync to Google Sheets
+	backend.EnqueueSync("addRow", map[string]interface{}{
+		"ID":        shift.ID,
+		"StoreName": shift.StoreName,
+		"OpenedBy":  shift.OpenedBy,
+		"OpenedAt":  shift.OpenedAt.Format("2006-01-02 15:04:05"),
+		"OpenPhoto": shift.OpenPhoto,
+		"Status":    shift.Status,
+	}, "Shifts", nil)
+
 	c.JSON(http.StatusOK, gin.H{"status": "success", "shift": shift})
 }
 
@@ -2191,6 +2201,14 @@ func handleCloseShift(c *gin.Context) {
 
 	// Telegram Notification
 	go sendShiftTelegramNotification(shift.StoreName, "Close", shift.OpenedBy, "", r.Summary)
+
+	// Sync to Google Sheets (Update the existing row)
+	backend.EnqueueSync("updateSheet", map[string]interface{}{
+		"ClosedBy":    shift.ClosedBy,
+		"ClosedAt":    shift.ClosedAt.Format("2006-01-02 15:04:05"),
+		"Status":      shift.Status,
+		"SummaryJSON": shift.SummaryJSON,
+	}, "Shifts", map[string]string{"ID": fmt.Sprintf("%v", shift.ID)})
 
 	c.JSON(http.StatusOK, gin.H{"status": "success", "shift": shift})
 }
