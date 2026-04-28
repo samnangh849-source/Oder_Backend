@@ -2217,7 +2217,9 @@ func handleCloseShift(c *gin.Context) {
 func convertDriveURLToDirect(url string) string {
 	id := backend.ExtractFileIDFromURL(url)
 	if id != "" {
-		return "https://drive.google.com/uc?export=view&id=" + id
+		// Use thumbnail link with high resolution (sz=w1000)
+		// This is more reliable for Telegram's photo fetcher than the uc?export link
+		return fmt.Sprintf("https://drive.google.com/thumbnail?id=%s&sz=w1000", id)
 	}
 	return url
 }
