@@ -2214,6 +2214,14 @@ func handleCloseShift(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{"status": "success", "shift": shift})
 }
 
+func convertDriveURLToDirect(url string) string {
+	id := backend.ExtractFileIDFromURL(url)
+	if id != "" {
+		return "https://drive.google.com/uc?export=view&id=" + id
+	}
+	return url
+}
+
 func sendShiftTelegramNotification(storeName string, shiftType string, userName string, photoURL string, summary string) {
 	var store Store
 	if err := backend.DB.Where("store_name = ?", storeName).First(&store).Error; err != nil {
@@ -2245,7 +2253,7 @@ func sendShiftTelegramNotification(storeName string, shiftType string, userName 
 
 	if photoURL != "" && shiftType == "Open" {
 		apiURL = fmt.Sprintf("https://api.telegram.org/bot%s/sendPhoto", store.TelegramBotToken)
-		payload["photo"] = backend.ConvertDriveURLToDirect(photoURL)
+		payload["photo"] = convertDriveURLToDirect(photoURL)
 		payload["caption"] = text
 	} else {
 		apiURL = fmt.Sprintf("https://api.telegram.org/bot%s/sendMessage", store.TelegramBotToken)
