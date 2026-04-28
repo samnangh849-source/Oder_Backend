@@ -2151,7 +2151,7 @@ func handleOpenShift(c *gin.Context) {
 	}
 
 	// 4. Telegram Notification
-	go sendShiftTelegramNotification(r.StoreName, "Open", user.FullName, photoURL, "")
+	go sendShiftTelegramNotification(r.StoreName, "Open", user.FullName, photoURL, "", user.TelegramStickerID)
 
 	// 5. Sync to Google Sheets
 	backend.EnqueueSync("addRow", map[string]interface{}{
@@ -2201,7 +2201,7 @@ func handleCloseShift(c *gin.Context) {
 	}
 
 	// Telegram Notification
-	go sendShiftTelegramNotification(shift.StoreName, "Close", shift.OpenedBy, "", r.Summary)
+	go sendShiftTelegramNotification(shift.StoreName, "Close", shift.OpenedBy, "", r.Summary, "")
 
 	// Sync to Google Sheets (Update the existing row)
 	backend.EnqueueSync("updateSheet", map[string]interface{}{
@@ -2224,7 +2224,7 @@ func convertDriveURLToDirect(url string) string {
 	return url
 }
 
-func sendShiftTelegramNotification(storeName string, shiftType string, userName string, photoURL string, summary string) {
+func sendShiftTelegramNotification(storeName string, shiftType string, userName string, photoURL string, summary string, stickerID string) {
 	var store Store
 	if err := backend.DB.Where("store_name = ?", storeName).First(&store).Error; err != nil {
 		log.Printf("❌ [Shift Notification] Store not found: %s", storeName)
@@ -2236,7 +2236,8 @@ func sendShiftTelegramNotification(storeName string, shiftType string, userName 
 		return
 	}
 
-	now := time.Now().Format("03:04 PM")
+	ict := time.FixedZone("ICT", 7*3600)
+	now := time.Now().In(ict).Format("03:04 PM")
 	var text string
 	if shiftType == "Open" {
 		text = fmt.Sprintf("👋 *ជម្រាបសួរ!* ខ្ញុំឈ្មោះ *%s*\n⏰ គិតចាប់ពីម៉ោង *%s* ជា *Store Assistant* សាខា *%s* 🏪", userName, now, storeName)
@@ -2253,6 +2254,21 @@ func sendShiftTelegramNotification(storeName string, shiftType string, userName 
 		payload["message_thread_id"] = store.TelegramTopicID
 	}
 
+	// 1. Send Sticker first if it's an Open Shift and stickerID is provided
+	if shiftType == "Open" && stickerID != "" {
+		stickerURL := fmt.Sprintf("https://api.telegram.org/bot%s/sendSticker", store.TelegramBotToken)
+		stickerPayload := map[string]interface{}{
+			"chat_id": store.TelegramGroupID,
+			"sticker": stickerID,
+		}
+		if store.TelegramTopicID != "" {
+			stickerPayload["message_thread_id"] = store.TelegramTopicID
+		}
+		sData, _ := json.Marshal(stickerPayload)
+		http.Post(stickerURL, "application/json", bytes.NewBuffer(sData))
+	}
+
+	// 2. Send the main notification (Photo or Text)
 	if photoURL != "" && shiftType == "Open" {
 		apiURL = fmt.Sprintf("https://api.telegram.org/bot%s/sendPhoto", store.TelegramBotToken)
 		payload["photo"] = convertDriveURLToDirect(photoURL)
