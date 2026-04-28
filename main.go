@@ -2039,8 +2039,12 @@ func main() {
 			adminGroup.GET("/all-orders", RequirePermission("view_order_list"), handleGetAllOrders)
 			adminGroup.POST("/update-order", RequirePermission("edit_order"), handleAdminUpdateOrder)
 
-			// Restricted Admin Actions (Require Admin role)
-			restricted := adminGroup.Group("/")
+			// ── Shift Management Routes ──
+			adminGroup.GET("/shifts/active/:storeName", handleGetActiveShift)
+			adminGroup.POST("/shifts/open", handleOpenShift)
+			adminGroup.POST("/shifts/close", handleCloseShift)
+
+			// Restricted Admin Actions (Require Admin role)			restricted := adminGroup.Group("/")
 			restricted.Use(AdminOnlyMiddleware())
 			{
 				// Video/Movie admin routes from backend package
@@ -2079,6 +2083,172 @@ func main() {
 	r.Run("0.0.0.0:" + port)
 }
 
+// ── Shift Management Handlers ──────────────────────────────────────────────
+
+func handleGetActiveShift(c *gin.Context) {
+	storeName := c.Param("storeName")
+	var shift Shift
+	if err := backend.DB.Where("store_name = ? AND status = 'Open'", storeName).First(&shift).Error; err != nil {
+		c.JSON(200, gin.H{"status": "none"})
+		return
+	}
+	c.JSON(200, gin.H{"status": "success", "shift": shift})
+}
+
+func handleOpenShift(c *gin.Context) {
+	var r struct {
+		UserName  string `json:"userName"`
+		Password  string `json:"password"`
+		StoreName string `json:"storeName"`
+		Photo     string `json:"photo"` // base64
+	}
+	if err := c.ShouldBindJSON(&r); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"status": "error", "message": "ទិន្នន័យមិនត្រឹមត្រូវ"})
+		return
+	}
+
+	// 1. Verify User
+	var user User
+	if err := backend.DB.Where("user_name = ?", strings.TrimSpace(r.UserName)).First(&user).Error; err != nil {
+		c.JSON(http.StatusUnauthorized, gin.H{"status": "error", "message": "អ្នកប្រើប្រាស់មិនត្រឹមត្រូវ"})
+		return
+	}
+	if err := bcrypt.CompareHashAndPassword([]byte(user.Password), []byte(strings.TrimSpace(r.Password))); err != nil {
+		c.JSON(http.StatusUnauthorized, gin.H{"status": "error", "message": "លេខសម្ងាត់មិនត្រឹមត្រូវ"})
+		return
+	}
+
+	// Check if already has an open shift for this store
+	var existingShift Shift
+	if err := backend.DB.Where("store_name = ? AND status = 'Open'", r.StoreName).First(&existingShift).Error; err == nil {
+		c.JSON(http.StatusBadRequest, gin.H{"status": "error", "message": "ឃ្លាំងនេះត្រូវបានបើកវេនរួចហើយដោយ " + existingShift.OpenedBy})
+		return
+	}
+
+	// 2. Upload Photo
+	photoURL := ""
+	if r.Photo != "" {
+		url, _, err := backend.UploadToGoogleDriveDirectly(r.Photo, "shift_open_"+r.StoreName, "image/jpeg", nil)
+		if err == nil {
+			photoURL = url
+		} else {
+			log.Printf("❌ [handleOpenShift] Photo upload failed: %v", err)
+		}
+	}
+
+	// 3. Save Shift
+	shift := Shift{
+		StoreName: r.StoreName,
+		OpenedBy:  user.FullName,
+		OpenedAt:  time.Now(),
+		OpenPhoto: photoURL,
+		Status:    "Open",
+	}
+	if err := backend.DB.Create(&shift).Error; err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"status": "error", "message": "មិនអាចបើកវេនបានទេ"})
+		return
+	}
+
+	// 4. Telegram Notification
+	go sendShiftTelegramNotification(r.StoreName, "Open", user.FullName, photoURL, "")
+
+	c.JSON(http.StatusOK, gin.H{"status": "success", "shift": shift})
+}
+
+func handleCloseShift(c *gin.Context) {
+	var r struct {
+		ShiftID uint   `json:"shiftId"`
+		Summary string `json:"summary"`
+	}
+	if err := c.ShouldBindJSON(&r); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"status": "error", "message": "ទិន្នន័យមិនត្រឹមត្រូវ"})
+		return
+	}
+
+	var shift Shift
+	if err := backend.DB.First(&shift, r.ShiftID).Error; err != nil {
+		c.JSON(http.StatusNotFound, gin.H{"status": "error", "message": "រកមិនឃើញវេនដែលត្រូវបិទ"})
+		return
+	}
+
+	if shift.Status == "Closed" {
+		c.JSON(http.StatusBadRequest, gin.H{"status": "error", "message": "វេននេះត្រូវបានបិទរួចហើយ"})
+		return
+	}
+
+	now := time.Now()
+	shift.Status = "Closed"
+	shift.ClosedAt = &now
+	shift.ClosedBy = shift.OpenedBy // The one who opened it is the one who closes it usually, or current user?
+	// User specified "គណនីដែលគាត់ជាអ្នកបើកវេនគឺគាត់ នឹងឃើញមានមុខងារ បិទវេន"
+	
+	shift.SummaryJSON = r.Summary
+
+	if err := backend.DB.Save(&shift).Error; err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"status": "error", "message": "មិនអាចបិទវេនបានទេ"})
+		return
+	}
+
+	// Telegram Notification
+	go sendShiftTelegramNotification(shift.StoreName, "Close", shift.OpenedBy, "", r.Summary)
+
+	c.JSON(http.StatusOK, gin.H{"status": "success", "shift": shift})
+}
+
+func sendShiftTelegramNotification(storeName string, shiftType string, userName string, photoURL string, summary string) {
+	var store Store
+	if err := backend.DB.Where("store_name = ?", storeName).First(&store).Error; err != nil {
+		log.Printf("❌ [Shift Notification] Store not found: %s", storeName)
+		return
+	}
+
+	if store.TelegramBotToken == "" || store.TelegramGroupID == "" {
+		log.Printf("⚠️ [Shift Notification] Telegram settings missing for store: %s", storeName)
+		return
+	}
+
+	now := time.Now().Format("15:04")
+	var text string
+	if shiftType == "Open" {
+		text = fmt.Sprintf("ជម្រាបសួរ ខ្ញុំឈ្មោះ %s គិតចាប់ពីម៉ោង %s ជា Store Assistant សាខា %s", userName, now, storeName)
+	} else {
+		text = fmt.Sprintf("ជម្រាបសួរ ខ្ញុំឈ្មោះ %s បិទវេនជា Store Assistant ត្រឹមម៉ោង %s នេះហើយ\n\n%s", userName, now, summary)
+	}
+
+	apiURL := ""
+	payload := map[string]interface{}{
+		"chat_id":    store.TelegramGroupID,
+		"parse_mode": "Markdown",
+	}
+	if store.TelegramTopicID != "" {
+		payload["message_thread_id"] = store.TelegramTopicID
+	}
+
+	if photoURL != "" && shiftType == "Open" {
+		apiURL = fmt.Sprintf("https://api.telegram.org/bot%s/sendPhoto", store.TelegramBotToken)
+		payload["photo"] = photoURL
+		payload["caption"] = text
+	} else {
+		apiURL = fmt.Sprintf("https://api.telegram.org/bot%s/sendMessage", store.TelegramBotToken)
+		payload["text"] = text
+	}
+
+	jsonData, _ := json.Marshal(payload)
+	resp, err := http.Post(apiURL, "application/json", bytes.NewBuffer(jsonData))
+	if err != nil {
+		log.Printf("❌ [Shift Notification] HTTP error: %v", err)
+		return
+	}
+	defer resp.Body.Close()
+	
+	var resData map[string]interface{}
+	json.NewDecoder(resp.Body).Decode(&resData)
+	if ok, _ := resData["ok"].(bool); !ok {
+		log.Printf("❌ [Shift Notification] Telegram API error: %v", resData)
+	} else {
+		log.Printf("✅ [Shift Notification] Sent successfully for %s", storeName)
+	}
+}
 
 // នៅពេលមិនទាន់ capture រូបភាព(AIM and Focus)គឺពេលដែលកំពុងScan រក QR Code គឺប្រព័ន្ធត្រូវ zoom និង tracking គ្រប់កន្លែងដើម្បីស្វែង QR Code ដើម្បីល្បឿនចាប់យក QR Code​លឿនខ្លាំង ទោះបីដាក់នៅឆ្ងាយក៏ប្រព័ន្ធចាប់បាន
 
