@@ -116,9 +116,9 @@ func CreateGoogleAPIClient(ctx context.Context) error {
 func IsNumericHeader(h string) bool {
 	h = strings.ToLower(strings.ReplaceAll(strings.TrimSpace(h), " ", ""))
 	return h == "price" || h == "cost" || h == "grandtotal" || h == "subtotal" ||
-		h == "shippingfeecustomer" || h == "internalcost" ||
-		h == "discount" || h == "deliveryunpaid" || h == "deliverypaid" ||
-		h == "totalproductcost" || h == "revenue" || h == "quantity" ||
+		h == "shippingfeecustomer" || h == "shippingfee(customer)" || h == "internalcost" ||
+		h == "discount" || h == "discount($)" || h == "deliveryunpaid" || h == "deliverypaid" ||
+		h == "totalproductcost" || h == "totalproductcost($)" || h == "revenue" || h == "quantity" ||
 		h == "part" || h == "id" || h == "projectid" ||
 		h == "totalorders" || h == "totalrevenue" || h == "calculatedvalue" ||
 		h == "calculatorid"
