@@ -2234,12 +2234,12 @@ func sendShiftTelegramNotification(storeName string, shiftType string, userName 
 		return
 	}
 
-	now := time.Now().Format("15:04")
+	now := time.Now().Format("03:04 PM")
 	var text string
 	if shiftType == "Open" {
-		text = fmt.Sprintf("ជម្រាបសួរ ខ្ញុំឈ្មោះ %s គិតចាប់ពីម៉ោង %s ជា Store Assistant សាខា %s", userName, now, storeName)
+		text = fmt.Sprintf("👋 *ជម្រាបសួរ!* ខ្ញុំឈ្មោះ *%s*\n⏰ គិតចាប់ពីម៉ោង *%s* ជា *Store Assistant* សាខា *%s* 🏪", userName, now, storeName)
 	} else {
-		text = fmt.Sprintf("ជម្រាបសួរ ខ្ញុំឈ្មោះ %s បិទវេនជា Store Assistant ត្រឹមម៉ោង %s នេះហើយ\n\n%s", userName, now, summary)
+		text = fmt.Sprintf("👋 *ជម្រាបសួរ!* ខ្ញុំឈ្មោះ *%s*\n🔴 *បិទវេន* ជា *Store Assistant* ត្រឹមម៉ោង *%s* នេះហើយ។\n\n📊 *%s*", userName, now, summary)
 	}
 
 	apiURL := ""
