@@ -2245,7 +2245,7 @@ func sendShiftTelegramNotification(storeName string, shiftType string, userName 
 
 	if photoURL != "" && shiftType == "Open" {
 		apiURL = fmt.Sprintf("https://api.telegram.org/bot%s/sendPhoto", store.TelegramBotToken)
-		payload["photo"] = photoURL
+		payload["photo"] = backend.ConvertDriveURLToDirect(photoURL)
 		payload["caption"] = text
 	} else {
 		apiURL = fmt.Sprintf("https://api.telegram.org/bot%s/sendMessage", store.TelegramBotToken)
