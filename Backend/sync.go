@@ -36,6 +36,7 @@ type AppsScriptRequest struct {
 	MovieID        string                 `json:"movieId,omitempty"`
 	TargetColumn   string                 `json:"targetColumn,omitempty"`
 	SheetName      string                 `json:"sheetName,omitempty"`
+	Rows           interface{}            `json:"rows,omitempty"` // Added for batchAddRows
 	PrimaryKey     map[string]string      `json:"primaryKey,omitempty"`
 	NewData        map[string]interface{} `json:"newData,omitempty"`
 }
@@ -202,9 +203,20 @@ func EnqueueSync(action string, data map[string]interface{}, sheetName string, p
 
 	// Handle special fields if present in data
 	if data != nil {
-		if val, ok := data["fileID"].(string); ok { req.FileID = val }
-		if val, ok := data["newName"].(string); ok { req.NewName = val }
-		if val, ok := data["orderId"].(string); ok { req.OrderID = val } else if val, ok := data["OrderID"].(string); ok { req.OrderID = val }
+		if val, ok := data["fileID"].(string); ok {
+			req.FileID = val
+		}
+		if val, ok := data["newName"].(string); ok {
+			req.NewName = val
+		}
+		if val, ok := data["orderId"].(string); ok {
+			req.OrderID = val
+		} else if val, ok := data["OrderID"].(string); ok {
+			req.OrderID = val
+		}
+		if val, ok := data["rows"]; ok {
+			req.Rows = val
+		}
 	}
 
 	if req.OrderID != "" && (req.OrderData == nil || len(req.OrderData.(map[string]interface{})) == 0) {
