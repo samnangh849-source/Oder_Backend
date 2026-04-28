@@ -2088,7 +2088,7 @@ func main() {
 
 func handleGetActiveShift(c *gin.Context) {
 	storeName := c.Param("storeName")
-	var shift Shift
+	var shift backend.Shift
 	if err := backend.DB.Where("store_name = ? AND status = 'Open'", storeName).First(&shift).Error; err != nil {
 		c.JSON(200, gin.H{"status": "none"})
 		return
@@ -2120,7 +2120,7 @@ func handleOpenShift(c *gin.Context) {
 	}
 
 	// Check if already has an open shift for this store
-	var existingShift Shift
+	var existingShift backend.Shift
 	if err := backend.DB.Where("store_name = ? AND status = 'Open'", r.StoreName).First(&existingShift).Error; err == nil {
 		c.JSON(http.StatusBadRequest, gin.H{"status": "error", "message": "ឃ្លាំងនេះត្រូវបានបើកវេនរួចហើយដោយ " + existingShift.OpenedBy})
 		return
@@ -2138,7 +2138,7 @@ func handleOpenShift(c *gin.Context) {
 	}
 
 	// 3. Save Shift
-	shift := Shift{
+	shift := backend.Shift{
 		StoreName: r.StoreName,
 		OpenedBy:  user.FullName,
 		OpenedAt:  time.Now(),
@@ -2176,7 +2176,7 @@ func handleCloseShift(c *gin.Context) {
 		return
 	}
 
-	var shift Shift
+	var shift backend.Shift
 	if err := backend.DB.First(&shift, r.ShiftID).Error; err != nil {
 		c.JSON(http.StatusNotFound, gin.H{"status": "error", "message": "រកមិនឃើញវេនដែលត្រូវបិទ"})
 		return
