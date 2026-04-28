@@ -153,8 +153,7 @@ func convertSheetValuesToMaps(sheetName string, values *sheets.ValueRange) ([]ma
 			if i < len(headers) {
 				header := strings.TrimSpace(fmt.Sprintf("%v", headers[i]))
 				if header != "" {
-					// Normalize header: Remove spaces and handle common variations
-					// Example: "User Name" -> "UserName", "Full Name" -> "FullName"
+					// Normalize header: Remove spaces for standard mapping
 					targetHeader := strings.ReplaceAll(header, " ", "")
 
 					if isIncentiveSheet {
@@ -192,50 +191,59 @@ func convertSheetValuesToMaps(sheetName string, values *sheets.ValueRange) ([]ma
 						}
 					}
 
+					var cellVal interface{}
 					if cellStr, ok := cell.(string); ok {
 						if IsNumericHeader(header) && !(sheetName == "TelegramTemplates" && strings.ToLower(header) == "id") {
 							cleaned := strings.ReplaceAll(strings.ReplaceAll(strings.TrimSpace(cellStr), "$", ""), ",", "")
 							if f, err := strconv.ParseFloat(cleaned, 64); err == nil {
-								rowData[targetHeader] = f
+								cellVal = f
 							} else {
-								rowData[targetHeader] = 0.0
+								cellVal = 0.0
 							}
 						} else if IsBoolHeader(header) {
-							rowData[targetHeader] = strings.ToUpper(strings.TrimSpace(cellStr)) == "TRUE"
+							cellVal = strings.ToUpper(strings.TrimSpace(cellStr)) == "TRUE"
 						} else {
 							if strings.ToLower(header) == "value" && (strings.TrimSpace(cellStr) == "" || strings.TrimSpace(cellStr) == "-") {
-								rowData[targetHeader] = "0"
+								cellVal = "0"
 							} else {
-								rowData[targetHeader] = cellStr
+								cellVal = cellStr
 							}
 						}
 					} else {
 						if IsBoolHeader(header) {
 							if b, ok := cell.(bool); ok {
-								rowData[targetHeader] = b
+								cellVal = b
 							} else {
-								rowData[targetHeader] = false
+								cellVal = false
 							}
 						} else {
 							if b, ok := cell.(bool); ok {
 								if b {
-									rowData[targetHeader] = "TRUE"
+									cellVal = "TRUE"
 								} else {
-									rowData[targetHeader] = "FALSE"
+									cellVal = "FALSE"
 								}
 							} else if f, ok := cell.(float64); ok && !(sheetName == "TelegramTemplates" && strings.ToLower(header) == "id") {
-								rowData[targetHeader] = f
+								cellVal = f
 							} else {
-								rowData[targetHeader] = fmt.Sprintf("%v", cell)
+								cellVal = fmt.Sprintf("%v", cell)
 							}
 						}
 					}
+
 					// Ensure critical IDs are always strings (avoid scientific notation)
 					lowHeader := strings.ToLower(strings.TrimSpace(header))
 					if lowHeader == "telegram message id 1" || lowHeader == "telegram message id 2" || lowHeader == "telegram message id 3" ||
 						lowHeader == "order id" || lowHeader == "customer phone" ||
 						lowHeader == "barcode" || (sheetName == "Movies" && lowHeader == "id") {
-						rowData[targetHeader] = fmt.Sprintf("%v", cell)
+						cellVal = fmt.Sprintf("%v", cell)
+					}
+
+					rowData[targetHeader] = cellVal
+					// Also store with original header if it's different (e.g. contains spaces)
+					// This ensures mapping works for structs using `json:"Order ID"` tags.
+					if targetHeader != header {
+						rowData[header] = cellVal
 					}
 				}
 			}
