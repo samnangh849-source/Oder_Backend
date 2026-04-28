@@ -169,17 +169,54 @@ func HandleImageUploadProxy(c *gin.Context) {
 		data = req.Image
 	}
 	if data == "" {
-		c.Error(fmt.Errorf("មិនមានទិន្នន័យឯកសារ"))
+		c.JSON(400, gin.H{"status": "error", "message": "មិនមានទិន្នន័យឯកសារ"})
 		return
 	}
 
-	// ── Upload to Google Drive synchronously ──────────────────────────────
-	log.Printf("📤 [Upload] Uploading to Drive synchronously for file=%q", req.FileName)
-	driveURL, fileID, err := UploadToGoogleDriveDirectly(data, req.FileName, req.MimeType, &req)
+	// ── Background Processing Logic ──────────────────────────────────────
+	if req.IsAsync {
+		log.Printf("🛰️ [Upload] Starting background processing for file=%q order=%q", req.FileName, req.OrderID)
+		
+		// Return immediate 202 Accepted
+		c.JSON(202, gin.H{
+			"status": "accepted",
+			"message": "កំពុងដំណើរការនៅផ្ទៃខាងក្រោយ (Background Processing)",
+			"orderId": req.OrderID,
+		})
+
+		// Run the actual upload and DB logic in a goroutine
+		go func() {
+			// We don't need c.Copy() here because we are not using the context inside the goroutine anymore
+			// All data needed is already in 'req' and 'data'
+			processImageUploadInternal(req, data)
+		}()
+		return
+	}
+
+	// ── Synchronous Processing (Original Logic) ──────────────────────────
+	driveURL, fileID, err := processImageUploadInternal(req, data)
 	if err != nil {
-		log.Printf("❌ [Upload] Drive upload failed: %v", err)
+		log.Printf("❌ [Upload] Processing failed: %v", err)
 		c.JSON(500, gin.H{"status": "error", "message": fmt.Sprintf("បរាជ័យក្នុងការ Upload: %v", err)})
 		return
+	}
+
+	log.Printf("✅ [Upload] Complete: driveURL=%s fileID=%s", driveURL, fileID)
+	c.JSON(200, gin.H{
+		"status": "success",
+		"url":    driveURL,
+		"fileID": fileID,
+	})
+}
+
+// processImageUploadInternal encapsulates the core logic of uploading and updating DB.
+// Returns driveURL, fileID, and error.
+func processImageUploadInternal(req AppsScriptRequest, data string) (string, string, error) {
+	// ── Upload to Google Drive ──────────────────────────────────────────
+	log.Printf("📤 [Upload Internal] Uploading to Drive for file=%q", req.FileName)
+	driveURL, fileID, err := UploadToGoogleDriveDirectly(data, req.FileName, req.MimeType, &req)
+	if err != nil {
+		return "", "", err
 	}
 
 	// ── 1. Order Update ──────────────────────────────────────────────────
@@ -220,10 +257,9 @@ func HandleImageUploadProxy(c *gin.Context) {
 		}
 
 		if len(dbUpdateMap) > 0 {
-			log.Printf("🛠️ [Upload] Applying DB Update for %s: %v", req.OrderID, dbUpdateMap)
+			log.Printf("🛠️ [Upload Internal] Applying DB Update for %s: %v", req.OrderID, dbUpdateMap)
 
 			// ── Atomic: validate state machine transition + apply update in one transaction ──
-			// This prevents TOCTOU: another request cannot change the status between our check and update.
 			var hasStatus bool
 			var newStatusRaw interface{}
 			if req.NewData != nil {
@@ -267,7 +303,6 @@ func HandleImageUploadProxy(c *gin.Context) {
 							}
 						}
 						if !transitionValid {
-							log.Printf("⛔ [Upload] Invalid transition: %s → %s for order %s", currentStatus, newStatus, req.OrderID)
 							return fmt.Errorf("INVALID_TRANSITION:%s→%s", currentStatus, newStatus)
 						}
 					}
@@ -284,100 +319,61 @@ func HandleImageUploadProxy(c *gin.Context) {
 				return nil
 			})
 
-			if txErr != nil {
-				errStr := txErr.Error()
-				if strings.HasPrefix(errStr, "INVALID_TRANSITION:") {
-					parts := strings.SplitN(strings.TrimPrefix(errStr, "INVALID_TRANSITION:"), "→", 2)
-					from, to := parts[0], parts[1]
-					c.JSON(400, gin.H{"status": "error", "message": fmt.Sprintf("មិនអាចផ្លាស់ប្តូរពី '%s' ទៅ '%s' បានទេ", from, to)})
-				} else if strings.HasPrefix(errStr, "NOT_FOUND:") {
-					log.Printf("⚠️ [Upload] No rows updated for order %s", req.OrderID)
-					c.JSON(404, gin.H{"status": "error", "message": "មិនអាចធ្វើបច្ចុប្បន្នភាពបានទេ៖ រកមិនឃើញការកម្មង់ " + req.OrderID})
-				} else if strings.Contains(errStr, "រកមិនឃើញការកម្មង់") {
-					log.Printf("⚠️ [Upload] Cannot find order %s for validation: %v", req.OrderID, txErr)
-					c.JSON(404, gin.H{"status": "error", "message": txErr.Error()})
-				} else {
-					log.Printf("❌ [Upload] DB transaction failed for order %s: %v", req.OrderID, txErr)
-					c.JSON(500, gin.H{"status": "error", "message": "ការធ្វើបច្ចុប្បន្នភាពមូលដ្ឋានទិន្នន័យបរាជ័យ: " + txErr.Error()})
-				}
-				return
-			}
+			if txErr == nil {
+				log.Printf("✅ [Upload Internal] DB update SUCCESS: orderId=%s rowsAffected=%d", req.OrderID, rowsAffected)
 
-			log.Printf("✅ [Upload] DB update SUCCESS: orderId=%s rowsAffected=%d fields=%v", req.OrderID, rowsAffected, broadcastMap)
-
-			// Sync to Google Sheets & Telegram
-			go func(orderId string, bMap map[string]interface{}) {
-				var order Order
-				if err := DB.Where("UPPER(TRIM(order_id)) = UPPER(TRIM(?))", orderId).First(&order).Error; err == nil {
-					sheetData := make(map[string]interface{})
-					
-					// IMPORTANT: Map database column names back to Spreadsheet Header names
-					for k, v := range bMap {
-						headerName := k 
-						switch k {
-						case "package_photo_url", "Package Photo URL":
-							headerName = "Package Photo"
-						case "delivery_photo_url", "Delivery Photo URL":
-							headerName = "Delivery Photo URL"
-						case "fulfillment_status", "FulfillmentStatus":
-							headerName = "Fulfillment Status"
-						case "packed_by":
-							headerName = "Packed By"
-						case "packed_time":
-							headerName = "Packed Time"
-						case "dispatched_by":
-							headerName = "Dispatched By"
-						case "dispatched_time":
-							headerName = "Dispatched Time"
-						case "delivered_time":
-							headerName = "Delivered Time"
-						case "driver_name":
-							headerName = "Driver Name"
-						case "tracking_number":
-							headerName = "Tracking Number"
+				// Sync to Google Sheets & Telegram
+				go func(orderId string, bMap map[string]interface{}) {
+					var order Order
+					if err := DB.Where("UPPER(TRIM(order_id)) = UPPER(TRIM(?))", orderId).First(&order).Error; err == nil {
+						sheetData := make(map[string]interface{})
+						for k, v := range bMap {
+							headerName := k 
+							switch k {
+							case "package_photo_url", "Package Photo URL": headerName = "Package Photo"
+							case "delivery_photo_url", "Delivery Photo URL": headerName = "Delivery Photo URL"
+							case "fulfillment_status", "FulfillmentStatus": headerName = "Fulfillment Status"
+							case "packed_by": headerName = "Packed By"
+							case "packed_time": headerName = "Packed Time"
+							case "dispatched_by": headerName = "Dispatched By"
+							case "dispatched_time": headerName = "Dispatched Time"
+							case "delivered_time": headerName = "Delivered Time"
+							case "driver_name": headerName = "Driver Name"
+							case "tracking_number": headerName = "Tracking Number"
+							}
+							sheetData[headerName] = v
 						}
-						sheetData[headerName] = v
-					}
-					
-					// Fill in required context for Apps Script
-					if sheetData["Fulfillment Status"] == nil {
-						sheetData["Fulfillment Status"] = order.FulfillmentStatus
-					}
-					if sheetData["Team"] == nil {
-						sheetData["Team"] = order.Team
-					}
+						if sheetData["Fulfillment Status"] == nil { sheetData["Fulfillment Status"] = order.FulfillmentStatus }
+						if sheetData["Team"] == nil { sheetData["Team"] = order.Team }
 
-					// 1.3 Full Update including Sheet Sync & Telegram Notification
-					EnqueueSync("updateOrderTelegram", map[string]interface{}{
-						"orderId":       orderId,
-						"team":          order.Team,
-						"updatedFields": sheetData,
-					}, "", nil)
-				}
-			}(req.OrderID, broadcastMap)
+						EnqueueSync("updateOrderTelegram", map[string]interface{}{
+							"orderId":       orderId,
+							"team":          order.Team,
+							"updatedFields": sheetData,
+						}, "", nil)
+					}
+				}(req.OrderID, broadcastMap)
 
-			// Broadcast to all connected clients
-			event, _ := json.Marshal(map[string]interface{}{
-				"type":    "update_order",
-				"orderId": req.OrderID,
-				"newData": broadcastMap,
-			})
-			HubGlobal.Broadcast <- event
+				// Broadcast to all connected clients
+				event, _ := json.Marshal(map[string]interface{}{
+					"type":    "update_order",
+					"orderId": req.OrderID,
+					"newData": broadcastMap,
+				})
+				HubGlobal.Broadcast <- event
+			} else {
+				log.Printf("❌ [Upload Internal] DB transaction failed: %v", txErr)
+			}
 		}
 	}
 
 	// ── 2. User Profile Update ───────────────────────────────────────────
 	if req.UserName != "" {
 		DB.Model(&User{}).Where("user_name = ?", req.UserName).UpdateColumn("profile_picture_url", driveURL)
-
 		notify, _ := json.Marshal(map[string]interface{}{
-			"type":     "profile_image_ready",
-			"userName": req.UserName,
-			"url":      driveURL,
+			"type": "profile_image_ready", "userName": req.UserName, "url": driveURL,
 		})
 		HubGlobal.Broadcast <- notify
-
-		// Use space-friendly key for Google Sheets sync to match typical headers
 		EnqueueSync("updateSheet", map[string]interface{}{"Profile Picture URL": driveURL}, "Users", map[string]string{"UserName": req.UserName})
 	}
 
@@ -385,26 +381,16 @@ func HandleImageUploadProxy(c *gin.Context) {
 	if req.MovieID != "" && req.TargetColumn != "" {
 		dbCol := UploadMapToDBColumnFunc(req.TargetColumn)
 		DB.Model(&Movie{}).Where("id = ?", req.MovieID).UpdateColumn(dbCol, driveURL)
-
 		EnqueueSync("updateSheet", map[string]interface{}{req.TargetColumn: driveURL}, "Movies", map[string]string{"ID": req.MovieID})
-
-		// Rename file in Drive to match movie title
 		fID := ExtractFileIDFromURL(driveURL)
 		if fID != "" {
 			var mv Movie
 			if err := DB.Where("id = ?", req.MovieID).First(&mv).Error; err == nil && mv.Title != "" {
-				log.Printf("📂 [Upload] Renaming Drive file %s to %q", fID, mv.Title)
-				EnqueueSync("renameFile", map[string]interface{}{
-					"fileID":  fID,
-					"newName": mv.Title,
-				}, "", nil)
+				EnqueueSync("renameFile", map[string]interface{}{ "fileID": fID, "newName": mv.Title }, "", nil)
 			}
 		}
-
 		notify, _ := json.Marshal(map[string]interface{}{
-			"type":    "movie_thumbnail_ready",
-			"movieId": req.MovieID,
-			"url":     driveURL,
+			"type": "movie_thumbnail_ready", "movieId": req.MovieID, "url": driveURL,
 		})
 		HubGlobal.Broadcast <- notify
 	}
@@ -412,28 +398,18 @@ func HandleImageUploadProxy(c *gin.Context) {
 	// ── 4. Generic Table/Sheet Update ────────────────────────────────────
 	if req.SheetName != "" && req.PrimaryKey != nil && req.TargetColumn != "" && req.SheetName != "Movies" {
 		EnqueueSync("updateSheet", map[string]interface{}{req.TargetColumn: driveURL}, req.SheetName, req.PrimaryKey)
-
 		tableName := UploadGetTableNameFunc(req.SheetName)
 		if tableName != "" {
 			dbCol := UploadMapToDBColumnFunc(req.TargetColumn)
 			query := DB.Table(tableName)
-			for k, v := range req.PrimaryKey {
-				query = query.Where(UploadMapToDBColumnFunc(k)+" = ?", v)
-			}
-			res := query.UpdateColumn(dbCol, driveURL)
-			if res.Error != nil {
-				log.Printf("❌ [Upload] DB update failed for %s: %v", tableName, res.Error)
-			}
+			for k, v := range req.PrimaryKey { query = query.Where(UploadMapToDBColumnFunc(k)+" = ?", v) }
+			query.UpdateColumn(dbCol, driveURL)
 		}
 	}
 
-	log.Printf("✅ [Upload] Complete: driveURL=%s fileID=%s", driveURL, fileID)
-	c.JSON(200, gin.H{
-		"status": "success",
-		"url":    driveURL,
-		"fileID": fileID,
-	})
+	return driveURL, fileID, nil
 }
+
 
 func HandleGetAudioProxy(c *gin.Context) {
 	fileID := c.Param("fileID")
