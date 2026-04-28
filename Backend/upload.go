@@ -95,14 +95,6 @@ func ExtractDriveFolderID(idOrURL string) string {
 	return idOrURL
 }
 
-func ConvertDriveURLToDirect(url string) string {
-	id := ExtractFileIDFromURL(url)
-	if id != "" {
-		return "https://drive.google.com/uc?export=view&id=" + id
-	}
-	return url
-}
-
 // ── Core Upload Function ──────────────────────────────────────────────────
 
 // UploadToGoogleDriveDirectly sends base64 data to Google Apps Script which uploads it to Drive.
