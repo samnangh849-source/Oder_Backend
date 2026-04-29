@@ -157,9 +157,11 @@ func mapToDBColumn(key string) string {
 		}
 	}
 
-	// If it's already a DB column (no spaces), return it
-	if !strings.Contains(key, " ") {
-		return strings.ToLower(key)
+	// If it's already snake_case (no spaces and no uppercase), keep as-is (normalized lower).
+	// Otherwise continue with generic converter below so CamelCase like "ProductName"
+	// becomes "product_name" instead of "productname".
+	if !strings.Contains(key, " ") && key == strings.ToLower(key) {
+		return key
 	}
 
 	var res []rune
