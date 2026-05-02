@@ -314,7 +314,6 @@ func EnsureSeedData() {
 func DefaultPermissions() []RolePermission {
 	permissions := []RolePermission{}
 
-	// Features from constants/permissions.ts
 	features := []string{
 		"view_order_list", "edit_order", "delete_order", "verify_order", "create_order",
 		"access_sales_portal", "access_fulfillment", "view_admin_dashboard", "view_entertainment",
@@ -322,90 +321,99 @@ func DefaultPermissions() []RolePermission {
 		"manage_inventory", "stock_transfer", "view_team_leaderboard", "set_targets", "view_global_orders",
 	}
 
-	// 1. Admin - Everything Enabled
-	for _, f := range features {
-		permissions = append(permissions, RolePermission{Role: "Admin", Feature: f, IsEnabled: true})
+	// Define standard templates
+	roleTemplates := map[string]map[string]bool{
+		"Admin": {
+			"all": true,
+		},
+		"Manager": {
+			"view_order_list":       true,
+			"edit_order":            true,
+			"delete_order":          true,
+			"verify_order":          true,
+			"create_order":          true,
+			"access_sales_portal":   true,
+			"access_fulfillment":    true,
+			"view_admin_dashboard":  true,
+			"view_entertainment":    true,
+			"view_revenue":          true,
+			"export_data":           true,
+			"manage_inventory":      true,
+			"stock_transfer":        true,
+			"view_team_leaderboard": true,
+			"set_targets":           true,
+		},
+		"Sale": {
+			"view_order_list":       true,
+			"edit_order":            true,
+			"create_order":          true,
+			"access_sales_portal":   true,
+			"view_entertainment":    true,
+			"view_team_leaderboard": true,
+		},
+		"Fulfillment": {
+			"view_order_list":    true,
+			"edit_order":         true,
+			"verify_order":       true,
+			"access_fulfillment": true,
+			"view_entertainment": true,
+			"manage_inventory":   true,
+			"stock_transfer":     true,
+		},
+		"Packer": {
+			"view_order_list":    true,
+			"access_fulfillment": true,
+			"view_entertainment": true,
+		},
+		"Driver": {
+			"view_order_list":    true,
+			"access_fulfillment": true,
+			"view_entertainment": true,
+		},
+		"Viewer": {
+			"view_order_list":    true,
+			"view_entertainment": true,
+		},
 	}
 
-	// 2. Manager - Most things enabled except critical system management
-	managerEnabled := map[string]bool{
-		"view_order_list":       true,
-		"edit_order":            true,
-		"delete_order":          true,
-		"verify_order":          true,
-		"create_order":          true,
-		"access_sales_portal":   true,
-		"access_fulfillment":    true,
-		"view_admin_dashboard":  true,
-		"view_entertainment":    true,
-		"view_revenue":          true,
-		"export_data":           true,
-		"manage_inventory":      true,
-		"stock_transfer":        true,
-		"view_team_leaderboard": true,
-		"set_targets":           true,
-	}
-	for _, f := range features {
-		permissions = append(permissions, RolePermission{Role: "Manager", Feature: f, IsEnabled: managerEnabled[f]})
+	// Fetch actual roles from DB to only create permissions for roles that EXIST
+	var actualRoles []Role
+	if DB != nil {
+		DB.Find(&actualRoles)
 	}
 
-	// 3. Sale - Sales focused
-	saleEnabled := map[string]bool{
-		"view_order_list":       true,
-		"edit_order":            true,
-		"create_order":          true,
-		"access_sales_portal":   true,
-		"view_entertainment":    true,
-		"view_team_leaderboard": true,
-	}
-	for _, f := range features {
-		permissions = append(permissions, RolePermission{Role: "Sale", Feature: f, IsEnabled: saleEnabled[f]})
-		permissions = append(permissions, RolePermission{Role: "Sales", Feature: f, IsEnabled: saleEnabled[f]})
-		permissions = append(permissions, RolePermission{Role: "Seller", Feature: f, IsEnabled: saleEnabled[f]})
+	// If no roles in DB yet, use standard defaults for seeding
+	if len(actualRoles) == 0 {
+		for rName, perms := range roleTemplates {
+			for _, f := range features {
+				enabled := perms["all"] || perms[f]
+				permissions = append(permissions, RolePermission{Role: rName, Feature: f, IsEnabled: enabled})
+			}
+		}
+		return permissions
 	}
 
-	// 4. Fulfillment - Fulfillment focused
-	fulfillmentEnabled := map[string]bool{
-		"view_order_list":    true,
-		"edit_order":         true,
-		"verify_order":       true,
-		"access_fulfillment": true,
-		"view_entertainment": true,
-		"manage_inventory":   true,
-		"stock_transfer":     true,
-	}
-	for _, f := range features {
-		permissions = append(permissions, RolePermission{Role: "Fulfillment", Feature: f, IsEnabled: fulfillmentEnabled[f]})
-		permissions = append(permissions, RolePermission{Role: "Dispatcher", Feature: f, IsEnabled: fulfillmentEnabled[f]})
-	}
+	// Create permissions based on ACTUAL roles in DB
+	for _, role := range actualRoles {
+		templateName := ""
+		rName := strings.ToLower(role.RoleName)
 
-	// 5. Packer - Just Packing
-	packerEnabled := map[string]bool{
-		"view_order_list":    true,
-		"access_fulfillment": true,
-		"view_entertainment": true,
-	}
-	for _, f := range features {
-		permissions = append(permissions, RolePermission{Role: "Packer", Feature: f, IsEnabled: packerEnabled[f]})
-	}
+		// Map actual role name to a template
+		if strings.Contains(rName, "admin") { templateName = "Admin" }
+		if strings.Contains(rName, "manager") { templateName = "Manager" }
+		if strings.Contains(rName, "sale") || strings.Contains(rName, "sell") { templateName = "Sale" }
+		if strings.Contains(rName, "fulfill") || strings.Contains(rName, "dispatch") { templateName = "Fulfillment" }
+		if strings.Contains(rName, "pack") { templateName = "Packer" }
+		if strings.Contains(rName, "driver") { templateName = "Driver" }
+		if strings.Contains(rName, "view") { templateName = "Viewer" }
 
-	// 6. Driver - Just Delivery
-	driverEnabled := map[string]bool{
-		"view_order_list":    true,
-		"access_fulfillment": true,
-		"view_entertainment": true,
-	}
-	for _, f := range features {
-		permissions = append(permissions, RolePermission{Role: "Driver", Feature: f, IsEnabled: driverEnabled[f]})
-	}
-
-	// 7. Viewer - Read Only
-	viewerEnabled := map[string]bool{
-		"view_order_list":    true,
-		"view_entertainment": true,
-	}
-	for _, f := range features {
-		permissions = append(permissions, RolePermission{Role: "Viewer", Feature: f, IsEnabled: viewerEnabled[f]})
+		if templateName != "" {
+			perms := roleTemplates[templateName]
+			for _, f := range features {
+				enabled := perms["all"] || perms[f]
+				permissions = append(permissions, RolePermission{RoleID: role.ID, Role: role.RoleName, Feature: f, IsEnabled: enabled})
+			}
+		}
 	}
 
 	return permissions
