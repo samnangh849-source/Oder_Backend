@@ -309,7 +309,7 @@ func DefaultPermissions() []RolePermission {
 		"view_order_list", "edit_order", "delete_order", "verify_order", "create_order",
 		"access_sales_portal", "access_fulfillment", "view_admin_dashboard", "view_entertainment",
 		"manage_roles", "manage_permissions", "view_revenue", "export_data", "migrate_data",
-		"manage_inventory", "stock_transfer", "view_team_leaderboard", "set_targets",
+		"manage_inventory", "stock_transfer", "view_team_leaderboard", "set_targets", "view_global_orders",
 	}
 
 	// 1. Admin - Everything Enabled
