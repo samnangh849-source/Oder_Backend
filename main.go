@@ -1970,8 +1970,6 @@ func main() {
 	go func() {
 		// Start Background Workers ONLY after backend.DB is ready
 		startSyncManager(2)
-		// Auto-repair: fill any RolePermissions sheet rows missing Role/Feature data
-		go backend.SyncAllPermissionsToSheet()
 		go startOrderWorker()
 		startScheduler()
 		backend.CreateGoogleAPIClient(context.Background())
@@ -1991,16 +1989,25 @@ func main() {
 
 	r := gin.Default()
 	r.Use(ErrorHandlingMiddleware())
+
+	// Enhanced CORS Configuration
 	r.Use(cors.New(cors.Config{
-		AllowOrigins: []string{"*"},
-		AllowMethods: []string{"GET", "POST", "PUT", "DELETE", "OPTIONS"},
-		AllowHeaders: []string{"Origin", "Content-Type", "Authorization"},
-		MaxAge:       12 * time.Hour,
+		AllowOrigins: []string{
+			"https://dominic0607.github.io",
+			"http://localhost:3000",
+			"http://localhost:5173",
+			"http://localhost:8080",
+		},
+		AllowMethods:     []string{"GET", "POST", "PUT", "DELETE", "OPTIONS", "PATCH"},
+		AllowHeaders:     []string{"Origin", "Content-Type", "Authorization", "X-Requested-With", "Accept"},
+		ExposeHeaders:    []string{"Content-Length"},
+		AllowCredentials: true,
+		MaxAge:           12 * time.Hour,
 	}))
 
-	r.GET("/", func(c *gin.Context) { c.JSON(200, gin.H{"status": "ok"}) })
-	r.GET("/healthz", func(c *gin.Context) { c.String(200, "OK") })
-	r.GET("/ping", func(c *gin.Context) { c.String(200, "pong") })
+	r.GET("/ping", func(c *gin.Context) { 
+		c.JSON(200, gin.H{"status": "ok", "message": "pong"}) 
+	})
 
 	// Apply DBMiddleware to all /api routes except root health checks
 	api := r.Group("/api", DBMiddleware())
