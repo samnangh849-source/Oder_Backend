@@ -234,8 +234,12 @@ func SyncAllPermissionsToSheet() {
 		return
 	}
 
-	log.Printf("🔄 SyncAllPermissionsToSheet: syncing %d permissions in batch", len(permissions))
+	log.Printf("🔄 SyncAllPermissionsToSheet: clearing and syncing %d permissions in batch", len(permissions))
 
+	// 1. Clear the sheet first to prevent duplication
+	EnqueueSync("clearSheet", map[string]interface{}{}, "RolePermissions", nil)
+
+	// 2. Prepare rows for batch insert
 	rows := make([]map[string]interface{}, len(permissions))
 	for i, p := range permissions {
 		rows[i] = map[string]interface{}{
@@ -246,11 +250,13 @@ func SyncAllPermissionsToSheet() {
 		}
 	}
 
+	// 3. Batch add rows. Since EnqueueSync preserves order within its queue, 
+	// the clearSheet will be processed before batchAddRows by the sync manager.
 	EnqueueSync("batchAddRows", map[string]interface{}{
 		"rows": rows,
 	}, "RolePermissions", nil)
 
-	log.Printf("✅ SyncAllPermissionsToSheet: enqueued batch sync for %d permissions", len(permissions))
+	log.Printf("✅ SyncAllPermissionsToSheet: enqueued clear and batch sync for %d permissions", len(permissions))
 }
 
 func HandleSyncPermissionsToSheet(c *gin.Context) {
