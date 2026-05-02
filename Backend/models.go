@@ -7,6 +7,7 @@ package backend
 import (
 	"encoding/json"
 	"fmt"
+	"strconv"
 	"time"
 )
 
@@ -285,6 +286,45 @@ type RolePermission struct {
 	Role      string `gorm:"index;column:role" json:"Role"`
 	Feature   string `gorm:"index;column:feature" json:"Feature"`
 	IsEnabled bool   `gorm:"column:is_enabled" json:"IsEnabled"`
+}
+
+func (p *RolePermission) UnmarshalJSON(data []byte) error {
+	type Alias RolePermission
+	var aux struct {
+		ID     interface{} `json:"ID"`
+		RoleID interface{} `json:"RoleID"`
+		Alias
+	}
+	if err := json.Unmarshal(data, &aux); err != nil {
+		return err
+	}
+
+	*p = RolePermission(aux.Alias)
+
+	// Helper function to convert interface to uint
+	toUint := func(v interface{}) uint {
+		if v == nil {
+			return 0
+		}
+		switch val := v.(type) {
+		case float64:
+			return uint(val)
+		case string:
+			if u, err := strconv.ParseUint(val, 10, 32); err == nil {
+				return uint(u)
+			}
+		}
+		return 0
+	}
+
+	if aux.ID != nil {
+		p.ID = toUint(aux.ID)
+	}
+	if aux.RoleID != nil {
+		p.RoleID = toUint(aux.RoleID)
+	}
+
+	return nil
 }
 
 type IncentiveCalculator struct {
