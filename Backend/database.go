@@ -273,11 +273,21 @@ func EnsureSeedData() {
 
 	// Default permissions — only insert if not already present.
 	for _, p := range DefaultPermissions() {
+		var roleObj Role
+		roleID := uint(0)
+		if err := DB.Where("LOWER(role_name) = LOWER(?)", p.Role).First(&roleObj).Error; err == nil {
+			roleID = roleObj.ID
+		}
+
 		var existing RolePermission
 		if err := DB.Where("LOWER(TRIM(role)) = ? AND LOWER(TRIM(feature)) = ?", p.Role, p.Feature).First(&existing).Error; errors.Is(err, gorm.ErrRecordNotFound) {
+			p.RoleID = roleID
 			if createErr := DB.Create(&p).Error; createErr != nil {
 				log.Printf("⚠️ Failed to seed permission [%s:%s]: %v", p.Role, p.Feature, createErr)
 			}
+		} else if err == nil && (existing.RoleID == 0 && roleID != 0) {
+			// Auto-repair missing RoleIDs for existing records
+			DB.Model(&existing).Update("role_id", roleID)
 		}
 	}
 
