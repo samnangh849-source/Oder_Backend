@@ -244,6 +244,7 @@ func SyncAllPermissionsToSheet() {
 	for i, p := range permissions {
 		rows[i] = map[string]interface{}{
 			"ID":        p.ID,
+			"RoleID":    p.RoleID,
 			"Role":      p.Role,
 			"Feature":   p.Feature,
 			"IsEnabled": p.IsEnabled,
