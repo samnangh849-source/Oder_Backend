@@ -828,7 +828,7 @@ func handleGetAllOrders(c *gin.Context) {
 	}
 
 	// NEW: Check for 'view_global_orders' permission to bypass team filtering
-	hasGlobalView := isAdmin || hasPermissionInternal(c, "view_global_orders")
+	hasGlobalView := isAdmin || hasPermissionInternal(roleString, (isSystemAdmin != nil && isSystemAdmin.(bool)), "view_global_orders")
 
 	if !hasGlobalView && team != nil {
 		teams := strings.Split(fmt.Sprintf("%v", team), ",")
