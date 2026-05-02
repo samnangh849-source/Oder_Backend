@@ -281,6 +281,7 @@ type Role struct {
 
 type RolePermission struct {
 	ID        uint   `gorm:"primaryKey;autoIncrement;column:id" json:"ID"`
+	RoleID    uint   `gorm:"index;column:role_id" json:"RoleID"`
 	Role      string `gorm:"index;column:role" json:"Role"`
 	Feature   string `gorm:"index;column:feature" json:"Feature"`
 	IsEnabled bool   `gorm:"column:is_enabled" json:"IsEnabled"`
