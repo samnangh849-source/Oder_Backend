@@ -294,6 +294,13 @@ func HandleResetPermissions(c *gin.Context) {
 		defaults[i].ID = 0
 		defaults[i].Role = strings.ToLower(strings.TrimSpace(defaults[i].Role))
 		defaults[i].Feature = strings.ToLower(strings.TrimSpace(defaults[i].Feature))
+
+		// Look up RoleID
+		var r Role
+		if err := DB.Where("LOWER(role_name) = ?", defaults[i].Role).First(&r).Error; err == nil {
+			defaults[i].RoleID = r.ID
+		}
+
 		if err := DB.Create(&defaults[i]).Error; err != nil {
 			log.Printf("❌ Reset: failed to create permission [%s:%s]: %v", defaults[i].Role, defaults[i].Feature, err)
 		}
