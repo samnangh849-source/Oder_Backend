@@ -148,7 +148,15 @@ func HandleUpdatePermission(c *gin.Context) {
 		result := DB.Where("LOWER(TRIM(role)) = ? AND LOWER(TRIM(feature)) = ?", roleLower, featureLower).First(&existing)
 
 		if errors.Is(result.Error, gorm.ErrRecordNotFound) {
+			// 🚀 Lookup the correct RoleID from the Roles table
+			var roleObj Role
+			actualRoleID := uint(0)
+			if err := DB.Where("LOWER(TRIM(role_name)) = ?", roleLower).First(&roleObj).Error; err == nil {
+				actualRoleID = roleObj.ID
+			}
+
 			req.ID = 0
+			req.RoleID = actualRoleID
 			req.Role = roleLower
 			req.Feature = featureLower
 
@@ -161,6 +169,7 @@ func HandleUpdatePermission(c *gin.Context) {
 			go func(r RolePermission) {
 				EnqueueSync("addRow", map[string]interface{}{
 					"ID":        r.ID,
+					"RoleID":    r.RoleID,
 					"Role":      r.Role,
 					"Feature":   r.Feature,
 					"IsEnabled": r.IsEnabled,
@@ -169,9 +178,17 @@ func HandleUpdatePermission(c *gin.Context) {
 
 		} else if result.Error == nil {
 			// Normalize role/feature to lowercase in case an older row was stored with mixed case.
+			// 🚀 Also ensure RoleID is updated/repaired if it's currently 0 or mismatched
+			var roleObj Role
+			actualRoleID := uint(0)
+			if err := DB.Where("LOWER(TRIM(role_name)) = ?", roleLower).First(&roleObj).Error; err == nil {
+				actualRoleID = roleObj.ID
+			}
+
 			if err := DB.Model(&existing).Updates(map[string]interface{}{
 				"is_enabled": req.IsEnabled,
 				"role":       roleLower,
+				"role_id":    actualRoleID,
 				"feature":    featureLower,
 			}).Error; err != nil {
 				log.Printf("❌ Failed to update permission ID %d [%s:%s]: %v", existing.ID, existing.Role, existing.Feature, err)
@@ -179,6 +196,7 @@ func HandleUpdatePermission(c *gin.Context) {
 				continue
 			}
 			req.ID = existing.ID
+			req.RoleID = actualRoleID
 			req.Role = roleLower
 			req.Feature = featureLower
 
@@ -186,6 +204,7 @@ func HandleUpdatePermission(c *gin.Context) {
 				EnqueueSync("updateSheet", map[string]interface{}{
 					"IsEnabled": r.IsEnabled,
 					"Role":      r.Role,
+					"RoleID":    r.RoleID,
 					"Feature":   r.Feature,
 				}, "RolePermissions", map[string]string{
 					"ID": fmt.Sprintf("%d", r.ID),
