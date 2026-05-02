@@ -347,12 +347,22 @@ func processPersistentTask(workerID int, task *SyncTask) {
 		DB.Delete(&record) // Remove successful tasks to keep table clean
 
 		// Update local DB with Telegram Message IDs if returned
-		if (resp.MessageIds.ID1 != "" || resp.MessageIds.ID2 != "" || resp.MessageIds.ID3 != "") && req.OrderID != "" {
+		if (resp.MessageIds.ID1 != nil && resp.MessageIds.ID1 != "") || 
+		   (resp.MessageIds.ID2 != nil && resp.MessageIds.ID2 != "") || 
+		   (resp.MessageIds.ID3 != nil && resp.MessageIds.ID3 != "") && req.OrderID != "" {
 			updates := make(map[string]interface{})
-			if resp.MessageIds.ID1 != "" { updates["telegram_message_id1"] = resp.MessageIds.ID1 }
-			if resp.MessageIds.ID2 != "" { updates["telegram_message_id2"] = resp.MessageIds.ID2 }
-			if resp.MessageIds.ID3 != "" { updates["telegram_message_id3"] = resp.MessageIds.ID3 }
-			DB.Table("orders").Where("order_id = ?", req.OrderID).Updates(updates)
+			if resp.MessageIds.ID1 != nil && resp.MessageIds.ID1 != "" { 
+				updates["telegram_message_id1"] = fmt.Sprintf("%v", resp.MessageIds.ID1) 
+			}
+			if resp.MessageIds.ID2 != nil && resp.MessageIds.ID2 != "" { 
+				updates["telegram_message_id2"] = fmt.Sprintf("%v", resp.MessageIds.ID2) 
+			}
+			if resp.MessageIds.ID3 != nil && resp.MessageIds.ID3 != "" { 
+				updates["telegram_message_id3"] = fmt.Sprintf("%v", resp.MessageIds.ID3) 
+			}
+			if len(updates) > 0 {
+				DB.Table("orders").Where("order_id = ?", req.OrderID).Updates(updates)
+			}
 		}
 	}
 }
