@@ -827,7 +827,10 @@ func handleGetAllOrders(c *gin.Context) {
 		}
 	}
 
-	if !isAdmin && team != nil {
+	// NEW: Check for 'view_global_orders' permission to bypass team filtering
+	hasGlobalView := isAdmin || hasPermissionInternal(c, "view_global_orders")
+
+	if !hasGlobalView && team != nil {
 		teams := strings.Split(fmt.Sprintf("%v", team), ",")
 		var teamConditions []string
 		var teamArgs []interface{}
@@ -1251,6 +1254,52 @@ func handleAdminUpdateSheet(c *gin.Context) {
 	if err := backend.DB.Table(tableName).Where(pkCol+" = ?", pkVal).Updates(mappedData).Error; err != nil {
 		c.Error(err)
 		return
+	}
+
+	// 🚀 CASCADE UPDATE: If RoleName is updated, update RolePermissions and Users tables
+	if req.SheetName == "Roles" {
+		newNameRaw, hasNewName := req.NewData["RoleName"]
+		if hasNewName {
+			newName := strings.TrimSpace(fmt.Sprintf("%v", newNameRaw))
+			var oldRole Role
+			if err := backend.DB.Table("roles").Where(pkCol+" = ?", pkVal).First(&oldRole).Error; err == nil {
+				oldName := oldRole.RoleName
+				if oldName != "" && oldName != newName {
+					log.Printf("🔄 Cascading Role Update: %s -> %s", oldName, newName)
+					
+					// 1. Update RolePermissions (by name and ID)
+					backend.DB.Table("role_permissions").Where("LOWER(TRIM(role)) = LOWER(TRIM(?))", oldName).Updates(map[string]interface{}{
+						"role":    newName,
+						"role_id": pkVal,
+					})
+
+					// 2. Update Users table (Handle comma-separated roles)
+					var users []User
+					backend.DB.Table("users").Where("LOWER(role) LIKE LOWER(?)", "%"+oldName+"%").Find(&users)
+					for _, u := range users {
+						roles := strings.Split(u.Role, ",")
+						changed := false
+						for i, r := range roles {
+							if strings.EqualFold(strings.TrimSpace(r), oldName) {
+								roles[i] = newName
+								changed = true
+							}
+						}
+						if changed {
+							newRoleList := strings.Join(roles, ",")
+							backend.DB.Table("users").Where("user_name = ?", u.UserName).Update("role", newRoleList)
+						}
+					}
+					
+					// 3. Trigger full sheet re-sync for these tables to keep Google Sheets in sync
+					go func() {
+						time.Sleep(2 * time.Second) // Wait for DB updates to settle
+						backend.SyncAllPermissionsToSheet()
+						// Optionally sync users too if needed
+					}()
+				}
+			}
+		}
 	}
 
 	eventBytes, _ := json.Marshal(map[string]interface{}{"type": "update_sheet", "sheetName": req.SheetName, "primaryKey": req.PrimaryKey, "newData": req.NewData})
