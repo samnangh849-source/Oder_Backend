@@ -40,6 +40,7 @@ export const useOrderNotifications = () => {
 
                     // 1. Detect New Orders
                     if (!isFirstLoad && !prevStatus && status === 'Pending') {
+                        console.log(`[Notification] 🆕 New order detected: ${id} (Customer: ${order['Customer Name']})`);
                         const title = '🆕 មានកុម្ម៉ង់ថ្មី!';
                         const body = `មានកុម្ម៉ង់ថ្មីពីអតិថិជន ${order['Customer Name']} (ID: #${id.substring(0,8)})`;
                         sendSystemNotification(title, body);
@@ -47,8 +48,10 @@ export const useOrderNotifications = () => {
                         
                         // NEW: Play voice notification after the "Ding" sound
                         // បញ្ជាក់សម្លេងនេះឭតែសម្រាប់ អ្នកបើកវេនប៉ុណ្ណោះ (isShiftOpener)
+                        console.log(`[Notification] 🔊 Shift Opener Status: ${isShiftOpener}`);
                         if (isShiftOpener) {
                             setTimeout(() => {
+                                console.log(`[Notification] 🗣️ Playing voice alert: ${SOUND_URLS.NEW_ORDER_VOICE}`);
                                 playSound(SOUND_URLS.NEW_ORDER_VOICE, 1.5); // Slightly higher volume for voice
                             }, 1000);
                         }
@@ -123,5 +126,5 @@ export const useOrderNotifications = () => {
         const intervalId = setInterval(checkUpdates, 20000);
         return () => clearInterval(intervalId);
 
-    }, [currentUser]);
+    }, [currentUser, isShiftOpener]);
 };
