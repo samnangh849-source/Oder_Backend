@@ -106,17 +106,23 @@ const TabletPackagingHub: React.FC<TabletPackagingHubProps> = ({
     };
 
     const groups = useMemo(() => {
-        const sorted = [...orders].sort((a, b) => getSafeDateObj(b.Timestamp).getTime() - getSafeDateObj(a.Timestamp).getTime());
+        const getEffectiveDate = (order: ParsedOrder) => {
+            if (activeTab === 'Shipped') return order['Dispatched Time'] || order.Timestamp;
+            if (activeTab === 'Ready to Ship') return order['Packed Time'] || order.Timestamp;
+            return order.Timestamp;
+        };
+
+        const sorted = [...orders].sort((a, b) => 
+            getSafeDateObj(getEffectiveDate(b)).getTime() - getSafeDateObj(getEffectiveDate(a)).getTime()
+        );
+
         const result: { [key: string]: ParsedOrder[] } = {};
-        if (activeTab === 'Pending') {
-            sorted.forEach(order => {
-                const date = order.Timestamp ? getSafeDateObj(order.Timestamp).toLocaleDateString('km-KH', { month: 'short', day: 'numeric' }) : 'Recent';
-                if (!result[date]) result[date] = [];
-                result[date].push(order);
-            });
-        } else {
-            result['Order Stream'] = sorted;
-        }
+        sorted.forEach(order => {
+            const dateStr = getEffectiveDate(order);
+            const date = dateStr ? getSafeDateObj(dateStr).toLocaleDateString('km-KH', { month: 'short', day: 'numeric' }) : 'Recent';
+            if (!result[date]) result[date] = [];
+            result[date].push(order);
+        });
         return result;
     }, [orders, activeTab]);
 
@@ -124,7 +130,7 @@ const TabletPackagingHub: React.FC<TabletPackagingHubProps> = ({
         <div className={`flex h-screen ${B_BG_MAIN} font-sans`}>
             {/* Slim Technical Sidebar */}
             <aside className={`w-16 flex flex-col flex-shrink-0 border-r ${B_BORDER} ${B_BG_PANEL}`}>
-                <div className={`h-14 flex items-center justify-center border-b ${B_BORDER} text-[#FCD535] font-bold text-xs`}>
+                <div className={`h-14 flex items-center justify-center border-b ${B_BORDER} text-[#FCD535] font-bold text-sm`}>
                     OP
                 </div>
                 
@@ -193,7 +199,7 @@ const TabletPackagingHub: React.FC<TabletPackagingHubProps> = ({
                                 placeholder="Query..." 
                                 value={searchTerm}
                                 onChange={(e) => setSearchTerm(e.target.value)}
-                                className={`w-full pl-8 pr-3 py-1.5 ${B_BG_MAIN} border ${B_BORDER} rounded-sm text-xs ${B_TEXT_PRIMARY} placeholder:text-[#848E9C] focus:border-[#FCD535] outline-none transition-colors`}
+                                className={`w-full pl-8 pr-3 py-1.5 ${B_BG_MAIN} border ${B_BORDER} rounded-sm text-sm ${B_TEXT_PRIMARY} placeholder:text-[#848E9C] focus:border-[#FCD535] outline-none transition-colors`}
                             />
                             <div className={`absolute inset-y-0 left-0 flex items-center pl-2.5 pointer-events-none ${B_TEXT_SECONDARY}`}>
                                 <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2.5}><path d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" /></svg>
@@ -208,7 +214,7 @@ const TabletPackagingHub: React.FC<TabletPackagingHubProps> = ({
                             <div className="flex items-center gap-2 border-l border-[#2B3139] pl-3 ml-1 overflow-x-auto no-scrollbar py-1">
                                 <button 
                                     onClick={() => setShippingFilter('')}
-                                    className={`px-3 py-1.5 rounded-sm text-[10px] font-bold uppercase tracking-wider transition-all whitespace-nowrap border ${!shippingFilter ? 'bg-[#FCD535] border-[#FCD535] text-black' : 'bg-[#181A20] border-[#2B3139] text-[#848E9C]'}`}
+                                    className={`px-3 py-1.5 rounded-sm text-xs font-bold uppercase tracking-wider transition-all whitespace-nowrap border ${!shippingFilter ? 'bg-[#FCD535] border-[#FCD535] text-black' : 'bg-[#181A20] border-[#2B3139] text-[#848E9C]'}`}
                                 >
                                     ALL
                                 </button>
@@ -216,7 +222,7 @@ const TabletPackagingHub: React.FC<TabletPackagingHubProps> = ({
                                     <button
                                         key={method.MethodName}
                                         onClick={() => setShippingFilter(shippingFilter === method.MethodName ? '' : method.MethodName)}
-                                        className={`px-3 py-1.5 rounded-sm text-[10px] font-bold uppercase tracking-wider transition-all whitespace-nowrap border flex items-center gap-2 ${shippingFilter === method.MethodName ? 'bg-[#FCD535] border-[#FCD535] text-black' : 'bg-[#181A20] border-[#2B3139] text-[#848E9C]'}`}
+                                        className={`px-3 py-1.5 rounded-sm text-xs font-bold uppercase tracking-wider transition-all whitespace-nowrap border flex items-center gap-2 ${shippingFilter === method.MethodName ? 'bg-[#FCD535] border-[#FCD535] text-black' : 'bg-[#181A20] border-[#2B3139] text-[#848E9C]'}`}
                                     >
                                         {method.LogoURL && <img src={convertGoogleDriveUrl(method.LogoURL)} alt="" className="w-4 h-4 object-contain" />}
                                         {method.MethodName}
@@ -229,20 +235,20 @@ const TabletPackagingHub: React.FC<TabletPackagingHubProps> = ({
                                 {orders.length > 0 && (
                                     <button 
                                         onClick={() => onToggleSelectAll(orders)}
-                                        className={`px-3 py-2 border ${orders.every(o => selectedOrderIds.has(o['Order ID'])) ? 'bg-[#FCD535] border-[#FCD535] text-black' : 'border-[#2B3139] text-[#848E9C]'} text-[10px] font-bold rounded-sm uppercase tracking-wider transition-colors whitespace-nowrap`}
+                                        className={`px-3 py-2 border ${orders.every(o => selectedOrderIds.has(o['Order ID'])) ? 'bg-[#FCD535] border-[#FCD535] text-black' : 'border-[#2B3139] text-[#848E9C]'} text-xs font-bold rounded-sm uppercase tracking-wider transition-colors whitespace-nowrap`}
                                     >
                                         {orders.every(o => selectedOrderIds.has(o['Order ID'])) ? 'Deselect All' : 'Select All'}
                                     </button>
                                 )}
                                 <button onClick={onPrintManifest} className={`px-4 py-2 border border-[#FCD535]/50 hover:bg-[#FCD535] group transition-all rounded-sm flex items-center gap-2 whitespace-nowrap`}>
                                     <svg className="w-4 h-4 text-[#FCD535] group-hover:text-[#0B0E11]" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 17h2a2 2 0 002-2v-4a2 2 0 00-2-2H5a2 2 0 00-2 2v4a2 2 0 002 2h2m2 4h6a2 2 0 002-2v-4a2 2 0 00-2-2H9a2 2 0 00-2 2v4a2 2 0 002 2zm8-12V5a2 2 0 00-2-2H9a2 2 0 00-2 2v4h10z" /></svg>
-                                    <span className="text-[#FCD535] group-hover:text-[#0B0E11] text-xs font-bold uppercase tracking-wider">Print Manifest</span>
+                                    <span className="text-[#FCD535] group-hover:text-[#0B0E11] text-sm font-bold uppercase tracking-wider">Print Manifest</span>
                                 </button>
                                 {activeTab === 'Ready to Ship' && selectedOrderIds.size > 0 && (
                                     <button 
                                         onClick={onBulkShip}
                                         disabled={isBulkProcessing}
-                                        className={`px-4 py-2 bg-[#0ECB81] hover:bg-[#0CA66B] text-[#0B0E11] text-xs font-bold rounded-sm flex items-center gap-2 transition-all animate-fade-in-down whitespace-nowrap`}
+                                        className={`px-4 py-2 bg-[#0ECB81] hover:bg-[#0CA66B] text-[#0B0E11] text-sm font-bold rounded-sm flex items-center gap-2 transition-all animate-fade-in-down whitespace-nowrap`}
                                     >
                                         {isBulkProcessing ? <Spinner size="sm" /> : (
                                             <>
@@ -256,7 +262,7 @@ const TabletPackagingHub: React.FC<TabletPackagingHubProps> = ({
                         )}
                     </div>
                     <div className="ml-4 flex flex-col items-end">
-                        <span className={`text-[10px] font-bold ${B_ACCENT} uppercase`}>{selectedStore}</span>
+                        <span className={`text-xs font-bold ${B_ACCENT} uppercase`}>{selectedStore}</span>
                     </div>
                 </header>
 
@@ -264,7 +270,7 @@ const TabletPackagingHub: React.FC<TabletPackagingHubProps> = ({
                     <div className="space-y-6 pb-20">
                         {Object.entries(groups).map(([date, groupOrders]: [string, any]) => (
                             <section key={date} className="space-y-3">
-                                <h3 className={`text-xs font-bold ${B_TEXT_PRIMARY} border-b ${B_BORDER} pb-1 px-1`}>{date}</h3>
+                                <h3 className={`text-sm font-bold ${B_TEXT_PRIMARY} border-b ${B_BORDER} pb-1 px-1`}>{date}</h3>
                                 <div className="grid grid-cols-2 lg:grid-cols-3 gap-3">
                                     {groupOrders.map((order, idx) => (
                                         <div 
@@ -288,10 +294,10 @@ const TabletPackagingHub: React.FC<TabletPackagingHubProps> = ({
                                             
                                             <div className={`p-2 border-b ${B_BORDER} flex justify-between items-center ${activeTab === 'Ready to Ship' ? 'pt-10' : ''}`}>
                                                 <div className="flex items-center gap-2">
-                                                    <span className={`text-[10px] font-mono ${B_TEXT_SECONDARY}`}>{(idx + 1).toString().padStart(2, '0')}</span>
+                                                    <span className={`text-xs font-mono ${B_TEXT_SECONDARY}`}>{(idx + 1).toString().padStart(2, '0')}</span>
                                                     <span 
                                                         onClick={(e) => { e.stopPropagation(); handleCopy(order['Order ID'], 'ID'); }}
-                                                        className={`text-[11px] font-mono font-medium ${B_TEXT_PRIMARY} cursor-pointer hover:text-[#FCD535] transition-colors`}
+                                                        className={`text-xs font-mono font-medium ${B_TEXT_PRIMARY} cursor-pointer hover:text-[#FCD535] transition-colors`}
                                                     >
                                                         {order['Order ID'].substring(0, 10)}
                                                     </span>
@@ -307,7 +313,7 @@ const TabletPackagingHub: React.FC<TabletPackagingHubProps> = ({
                                             <div className="px-2 pb-2">
                                                 <h4 
                                                     onClick={(e) => { e.stopPropagation(); handleCopy(order['Customer Name'], 'Name'); }}
-                                                    className={`text-xs font-bold ${B_TEXT_PRIMARY} truncate uppercase flex items-center gap-2 cursor-pointer hover:text-[#FCD535] transition-colors`}
+                                                    className={`text-sm font-bold ${B_TEXT_PRIMARY} truncate uppercase flex items-center gap-2 cursor-pointer hover:text-[#FCD535] transition-colors`}
                                                 >
                                                     {order['Customer Name']}
                                                     {getOptimisticPackagePhoto(order['Order ID'], order['Package Photo']) && <span title="Photo Verified">📸</span>}
@@ -320,21 +326,21 @@ const TabletPackagingHub: React.FC<TabletPackagingHubProps> = ({
                                                         {getCarrierLogo(order['Customer Phone']) && (
                                                             <img src={getCarrierLogo(order['Customer Phone'])!} className="w-3 h-3 object-contain rounded-full bg-white/10" alt="" />
                                                         )}
-                                                        <p className={`text-[10px] ${B_TEXT_SECONDARY} font-mono group-hover:text-[#FCD535]`}>{formatPhoneNumber(order['Customer Phone'])}</p>
+                                                        <p className={`text-xs ${B_TEXT_SECONDARY} font-mono group-hover:text-[#FCD535]`}>{formatPhoneNumber(order['Customer Phone'])}</p>
                                                     </div>
                                                     {(activeTab === 'Ready to Ship' || activeTab === 'Shipped') && (
                                                         <div className="flex items-center gap-1 truncate">
                                                             {getDriverImage(order['Driver Name']) && (
                                                                 <img src={getDriverImage(order['Driver Name'])!} className="w-3 h-3 object-cover rounded-full" alt="" />
                                                             )}
-                                                            <p className={`text-[9px] ${B_ACCENT} font-bold uppercase truncate max-w-[50px]`}>{order['Driver Name'] || 'TBD'}</p>
+                                                            <p className={`text-[10px] ${B_ACCENT} font-bold uppercase truncate max-w-[50px]`}>{order['Driver Name'] || 'TBD'}</p>
                                                         </div>
                                                     )}
                                                 </div>
                                                 <div className={`flex justify-between items-center mt-2 pt-2 border-t ${B_BORDER}`}>
                                                     <div className="flex flex-col">
                                                         <div className="flex items-center gap-1.5">
-                                                            <span className={`text-[11px] font-mono font-bold text-[#0ECB81]`}>${(Number(order['Grand Total']) || 0).toFixed(2)}</span>
+                                                            <span className={`text-xs font-mono font-bold text-[#0ECB81]`}>${(Number(order['Grand Total']) || 0).toFixed(2)}</span>
                                                             {getBankLogo(order['Payment Info']) && (
                                                                 <img src={getBankLogo(order['Payment Info'])!} className="w-3 h-3 object-contain rounded-sm bg-white" alt="" />
                                                             )}
@@ -342,16 +348,16 @@ const TabletPackagingHub: React.FC<TabletPackagingHubProps> = ({
                                                         <span className={`text-[8px] uppercase ${order['Payment Status']?.toLowerCase() === 'paid' ? 'text-[#0ECB81]' : 'text-[#FCD535]'}`}>{order['Payment Status'] || 'Unpaid'}</span>
                                                     </div>
                                                     <div className="flex gap-1">
-                                                        <button onClick={(e) => { e.stopPropagation(); onView(order); }} className={`px-2 py-1 bg-[#2B3139] text-[#EAECEF] rounded-sm text-[10px]`}>View</button>
-                                                        {activeTab === 'Pending' && <button onClick={(e) => { e.stopPropagation(); onPack(order); }} className={`px-3 py-1 bg-[#FCD535] text-[#0B0E11] rounded-sm text-[10px] font-bold uppercase`}>Pack</button>}
+                                                        <button onClick={(e) => { e.stopPropagation(); onView(order); }} className={`px-2 py-1 bg-[#2B3139] text-[#EAECEF] rounded-sm text-xs`}>View</button>
+                                                        {activeTab === 'Pending' && <button onClick={(e) => { e.stopPropagation(); onPack(order); }} className={`px-3 py-1 bg-[#FCD535] text-[#0B0E11] rounded-sm text-xs font-bold uppercase`}>Pack</button>}
                                                         {activeTab === 'Ready to Ship' && (
                                                             <>
-                                                                <button onClick={(e) => { e.stopPropagation(); onUndo(order); }} className={`px-2 py-1 bg-[#F6465D]/10 text-[#F6465D] rounded-sm text-[10px] font-bold uppercase`}>Undo</button>
-                                                                <button onClick={(e) => { e.stopPropagation(); onShip(order); }} className={`px-3 py-1 bg-[#0ECB81] text-[#0B0E11] rounded-sm text-[10px] font-bold uppercase`}>Ship</button>
+                                                                <button onClick={(e) => { e.stopPropagation(); onUndo(order); }} className={`px-2 py-1 bg-[#F6465D]/10 text-[#F6465D] rounded-sm text-xs font-bold uppercase`}>Undo</button>
+                                                                <button onClick={(e) => { e.stopPropagation(); onShip(order); }} className={`px-3 py-1 bg-[#0ECB81] text-[#0B0E11] rounded-sm text-xs font-bold uppercase`}>Ship</button>
                                                             </>
                                                         )}
                                                         {activeTab === 'Shipped' && (
-                                                            <button onClick={(e) => { e.stopPropagation(); onUndoShipped(order); }} className={`px-2 py-1 bg-[#F6465D]/10 text-[#F6465D] rounded-sm text-[10px] font-bold uppercase`}>Undo</button>
+                                                            <button onClick={(e) => { e.stopPropagation(); onUndoShipped(order); }} className={`px-2 py-1 bg-[#F6465D]/10 text-[#F6465D] rounded-sm text-xs font-bold uppercase`}>Undo</button>
                                                         )}
                                                     </div>
                                                 </div>

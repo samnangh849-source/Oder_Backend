@@ -112,17 +112,23 @@ const MobilePackagingHub: React.FC<MobilePackagingHubProps> = ({
     };
 
     const groups = useMemo(() => {
-        const sorted = [...orders].sort((a, b) => getSafeDateObj(b.Timestamp).getTime() - getSafeDateObj(a.Timestamp).getTime());
+        const getEffectiveDate = (order: ParsedOrder) => {
+            if (activeTab === 'Shipped') return order['Dispatched Time'] || order.Timestamp;
+            if (activeTab === 'Ready to Ship') return order['Packed Time'] || order.Timestamp;
+            return order.Timestamp;
+        };
+
+        const sorted = [...orders].sort((a, b) => 
+            getSafeDateObj(getEffectiveDate(b)).getTime() - getSafeDateObj(getEffectiveDate(a)).getTime()
+        );
+
         const result: { [key: string]: ParsedOrder[] } = {};
-        if (activeTab === 'Pending') {
-            sorted.forEach(order => {
-                const date = order.Timestamp ? getSafeDateObj(order.Timestamp).toLocaleDateString('km-KH', { month: 'short', day: 'numeric' }) : 'Recent';
-                if (!result[date]) result[date] = [];
-                result[date].push(order);
-            });
-        } else {
-            result['Order Stream'] = sorted;
-        }
+        sorted.forEach(order => {
+            const dateStr = getEffectiveDate(order);
+            const date = dateStr ? getSafeDateObj(dateStr).toLocaleDateString('km-KH', { month: 'short', day: 'numeric' }) : 'Recent';
+            if (!result[date]) result[date] = [];
+            result[date].push(order);
+        });
         return result;
     }, [orders, activeTab]);
 
@@ -134,12 +140,12 @@ const MobilePackagingHub: React.FC<MobilePackagingHubProps> = ({
                     <div className="flex items-center gap-3">
                         <div className="flex flex-col">
                             <h2 className={`text-sm font-bold ${B_ACCENT}`}>HUB OPS</h2>
-                            <span className={`text-[10px] font-bold ${B_TEXT_SECONDARY} uppercase`}>{selectedStore}</span>
+                            <span className={`text-xs font-bold ${B_TEXT_SECONDARY} uppercase`}>{selectedStore}</span>
                         </div>
                         {activeShift && (
                              <div className={`px-2 py-0.5 rounded-sm flex items-center gap-1.5 ${isViewOnly ? 'bg-blue-500/10 border border-blue-500/20' : 'bg-green-500/10 border border-green-500/20'}`}>
                                 <div className={`w-1.5 h-1.5 rounded-full ${isViewOnly ? 'bg-blue-400' : 'bg-green-400 animate-pulse'}`}></div>
-                                <span className={`text-[9px] font-bold ${isViewOnly ? 'text-blue-400' : 'text-green-400'}`}>
+                                <span className={`text-[10px] font-bold ${isViewOnly ? 'text-blue-400' : 'text-green-400'}`}>
                                     {isViewOnly ? 'VIEW ONLY' : 'ACTIVE'}
                                 </span>
                              </div>
@@ -154,7 +160,7 @@ const MobilePackagingHub: React.FC<MobilePackagingHubProps> = ({
                                 <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                     <path d="M10 14l2-2m0 0l2-2m-2 2l-2-2m2 2l2 2m7-2a9 9 0 11-18 0 9 9 0 0118 0z" strokeWidth={2.5}/>
                                 </svg>
-                                <span className="text-[11px] font-black uppercase tracking-wider">បិទវេន</span>
+                                <span className="text-xs font-black uppercase tracking-wider">បិទវេន</span>
                             </button>
                         )}
                         <button onClick={onSwitchHub} className={`p-1.5 ${B_BG_MAIN} border ${B_BORDER} rounded-sm text-[#848E9C]`}>
@@ -177,8 +183,8 @@ const MobilePackagingHub: React.FC<MobilePackagingHubProps> = ({
                             onClick={() => setActiveTab(tab.id)}
                             className={`flex flex-col items-center justify-center flex-1 py-1 border-b-2 transition-colors ${activeTab === tab.id ? `border-[#FCD535] text-[#FCD535]` : `border-transparent ${B_TEXT_SECONDARY}`}`}
                         >
-                            <span className="text-[11px] font-bold uppercase">{tab.label}</span>
-                            <span className={`text-[10px] font-mono mt-0.5 ${activeTab === tab.id ? 'text-[#FCD535]' : 'text-[#848E9C]'}`}>
+                            <span className="text-xs font-bold uppercase">{tab.label}</span>
+                            <span className={`text-xs font-mono mt-0.5 ${activeTab === tab.id ? 'text-[#FCD535]' : 'text-[#848E9C]'}`}>
                                 {tab.count}
                             </span>
                         </button>
@@ -195,7 +201,7 @@ const MobilePackagingHub: React.FC<MobilePackagingHubProps> = ({
                             placeholder="Search operations..." 
                             value={searchTerm}
                             onChange={(e) => setSearchTerm(e.target.value)}
-                            className={`w-full pl-8 pr-3 py-2 ${B_BG_PANEL} border ${B_BORDER} rounded-sm text-xs ${B_TEXT_PRIMARY} placeholder:text-[#848E9C] focus:border-[#FCD535] outline-none transition-colors`}
+                            className={`w-full pl-8 pr-3 py-2 ${B_BG_PANEL} border ${B_BORDER} rounded-sm text-sm ${B_TEXT_PRIMARY} placeholder:text-[#848E9C] focus:border-[#FCD535] outline-none transition-colors`}
                         />
                         <div className={`absolute inset-y-0 left-0 flex items-center pl-2.5 pointer-events-none ${B_TEXT_SECONDARY}`}>
                             <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2.5}><path d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" /></svg>
@@ -220,14 +226,14 @@ const MobilePackagingHub: React.FC<MobilePackagingHubProps> = ({
                                 onClick={() => onToggleSelectAll(orders)}
                                 className={`p-2 bg-[#181A20] border ${orders.every(o => selectedOrderIds.has(o['Order ID'])) ? 'border-[#FCD535] text-[#FCD535]' : 'border-[#2B3139] text-[#848E9C]'} rounded-sm flex items-center gap-1 transition-colors`}
                             >
-                                <span className="text-[9px] font-bold uppercase">{orders.every(o => selectedOrderIds.has(o['Order ID'])) ? 'None' : 'All'}</span>
+                                <span className="text-[10px] font-bold uppercase">{orders.every(o => selectedOrderIds.has(o['Order ID'])) ? 'None' : 'All'}</span>
                             </button>
                         )}
                         {selectedOrderIds.size > 0 && (
                             <button 
                                 onClick={onBulkShip}
                                 disabled={isBulkProcessing}
-                                className={`flex-1 py-2 bg-[#0ECB81] hover:bg-[#0CA66B] text-[#0B0E11] text-[10px] font-bold rounded-sm flex items-center justify-center gap-2 transition-all animate-fade-in-down whitespace-nowrap`}
+                                className={`flex-1 py-2 bg-[#0ECB81] hover:bg-[#0CA66B] text-[#0B0E11] text-xs font-bold rounded-sm flex items-center justify-center gap-2 transition-all animate-fade-in-down whitespace-nowrap`}
                             >
                                 {isBulkProcessing ? <Spinner size="sm" /> : (
                                     <>
@@ -246,7 +252,7 @@ const MobilePackagingHub: React.FC<MobilePackagingHubProps> = ({
                 <div className={`flex-shrink-0 px-3 py-2 border-b ${B_BORDER} bg-[#181A20] overflow-x-auto no-scrollbar flex items-center gap-2`}>
                     <button 
                         onClick={() => setShippingFilter('')}
-                        className={`px-3 py-1.5 rounded-sm text-[9px] font-black uppercase tracking-wider transition-all whitespace-nowrap border ${!shippingFilter ? 'bg-[#FCD535] border-[#FCD535] text-black shadow-[0_0_10px_rgba(252,213,53,0.15)]' : 'bg-[#0B0E11] border-[#2B3139] text-[#848E9C]'}`}
+                        className={`px-3 py-1.5 rounded-sm text-[10px] font-black uppercase tracking-wider transition-all whitespace-nowrap border ${!shippingFilter ? 'bg-[#FCD535] border-[#FCD535] text-black shadow-[0_0_10px_rgba(252,213,53,0.15)]' : 'bg-[#0B0E11] border-[#2B3139] text-[#848E9C]'}`}
                     >
                         ALL
                     </button>
@@ -254,7 +260,7 @@ const MobilePackagingHub: React.FC<MobilePackagingHubProps> = ({
                         <button
                             key={method.MethodName}
                             onClick={() => setShippingFilter(shippingFilter === method.MethodName ? '' : method.MethodName)}
-                            className={`px-3 py-1.5 rounded-sm text-[9px] font-black uppercase tracking-wider transition-all whitespace-nowrap border flex items-center gap-2 ${shippingFilter === method.MethodName ? 'bg-[#FCD535] border-[#FCD535] text-black shadow-[0_0_10px_rgba(252,213,53,0.15)]' : 'bg-[#0B0E11] border-[#2B3139] text-[#848E9C]'}`}
+                            className={`px-3 py-1.5 rounded-sm text-[10px] font-black uppercase tracking-wider transition-all whitespace-nowrap border flex items-center gap-2 ${shippingFilter === method.MethodName ? 'bg-[#FCD535] border-[#FCD535] text-black shadow-[0_0_10px_rgba(252,213,53,0.15)]' : 'bg-[#0B0E11] border-[#2B3139] text-[#848E9C]'}`}
                         >
                             {method.LogoURL && <img src={convertGoogleDriveUrl(method.LogoURL)} alt="" className="w-3.5 h-3.5 object-contain" />}
                             {method.MethodName}
@@ -267,7 +273,7 @@ const MobilePackagingHub: React.FC<MobilePackagingHubProps> = ({
             <div className={`flex-1 overflow-y-auto custom-scrollbar p-3 relative z-10 space-y-4 pb-24`}>
                 {Object.entries(groups).map(([date, groupOrders]: [string, any]) => (
                     <div key={date}>
-                        <h3 className={`text-[10px] font-bold ${B_TEXT_SECONDARY} uppercase border-b ${B_BORDER} pb-1 mb-2 px-1`}>{date}</h3>
+                        <h3 className={`text-xs font-bold ${B_TEXT_SECONDARY} uppercase border-b ${B_BORDER} pb-1 mb-2 px-1`}>{date}</h3>
                         <div className="space-y-2">
                             {groupOrders.map((order: ParsedOrder) => (
                                 <div 
@@ -292,7 +298,7 @@ const MobilePackagingHub: React.FC<MobilePackagingHubProps> = ({
                                     <div className={`px-3 py-2 border-b ${B_BORDER} flex justify-between items-center ${activeTab === 'Ready to Ship' ? 'pt-10' : ''}`}>
                                         <span 
                                             onClick={(e) => { e.stopPropagation(); handleCopy(order['Order ID'], 'ID'); }}
-                                            className={`text-xs font-mono font-medium ${B_TEXT_PRIMARY} cursor-pointer hover:text-[#FCD535] transition-colors`}
+                                            className={`text-sm font-mono font-medium ${B_TEXT_PRIMARY} cursor-pointer hover:text-[#FCD535] transition-colors`}
                                         >
                                             {order['Order ID'].substring(0, 10)}
                                         </span>
@@ -300,7 +306,7 @@ const MobilePackagingHub: React.FC<MobilePackagingHubProps> = ({
                                             {getShippingLogo(order['Internal Shipping Method']) && (
                                                 <img src={getShippingLogo(order['Internal Shipping Method'])!} className="w-4 h-4 object-contain" alt="" />
                                             )}
-                                            <span className={`text-[9px] uppercase font-bold px-1.5 py-0.5 rounded-sm border ${B_BORDER} ${B_TEXT_SECONDARY}`}>T-{order.Team}</span>
+                                            <span className={`text-[10px] uppercase font-bold px-1.5 py-0.5 rounded-sm border ${B_BORDER} ${B_TEXT_SECONDARY}`}>T-{order.Team}</span>
                                         </div>
                                     </div>
 
@@ -312,7 +318,7 @@ const MobilePackagingHub: React.FC<MobilePackagingHubProps> = ({
                                                     className={`text-sm font-bold ${B_TEXT_PRIMARY} truncate uppercase flex items-center gap-1 cursor-pointer hover:text-[#FCD535] transition-colors`}
                                                 >
                                                     {order['Customer Name']}
-                                                    {getOptimisticPackagePhoto(order['Order ID'], order['Package Photo']) && <span title="Photo Verified" className="text-[10px]">📸</span>}
+                                                    {getOptimisticPackagePhoto(order['Order ID'], order['Package Photo']) && <span title="Photo Verified" className="text-xs">📸</span>}
                                                 </h4>
                                                 <div className="flex justify-between items-center mt-0.5">
                                                     <div 
@@ -322,18 +328,18 @@ const MobilePackagingHub: React.FC<MobilePackagingHubProps> = ({
                                                         {getCarrierLogo(order['Customer Phone']) && (
                                                             <img src={getCarrierLogo(order['Customer Phone'])!} className="w-3.5 h-3.5 object-contain rounded-full bg-white/10" alt="" />
                                                         )}
-                                                        <p className={`text-[11px] ${B_TEXT_SECONDARY} font-mono group-hover:text-[#FCD535]`}>{formatPhoneNumber(order['Customer Phone'])}</p>
+                                                        <p className={`text-xs ${B_TEXT_SECONDARY} font-mono group-hover:text-[#FCD535]`}>{formatPhoneNumber(order['Customer Phone'])}</p>
                                                     </div>
                                                     {(activeTab === 'Ready to Ship' || activeTab === 'Shipped') && (
                                                         <div className="flex items-center gap-1.5 max-w-[100px]">
                                                             {getDriverImage(order['Driver Name']) && (
                                                                 <img src={getDriverImage(order['Driver Name'])!} className="w-3.5 h-3.5 object-cover rounded-full" alt="" />
                                                             )}
-                                                            <p className={`text-[9px] ${B_ACCENT} font-bold uppercase truncate`}>{order['Driver Name'] || 'TBD'}</p>
+                                                            <p className={`text-[10px] ${B_ACCENT} font-bold uppercase truncate`}>{order['Driver Name'] || 'TBD'}</p>
                                                         </div>
                                                     )}
                                                 </div>
-                                                <p className={`text-[11px] ${B_TEXT_SECONDARY} mt-2 truncate max-w-[150px]`}>{order.Location}</p>
+                                                <p className={`text-xs ${B_TEXT_SECONDARY} mt-2 truncate max-w-[150px]`}>{order.Location}</p>
                                             </div>
                                             <div className="text-right flex flex-col items-end">
                                                 <p className={`text-sm font-mono font-bold ${B_GREEN}`}>${(Number(order['Grand Total']) || 0).toFixed(2)}</p>
@@ -341,7 +347,7 @@ const MobilePackagingHub: React.FC<MobilePackagingHubProps> = ({
                                                     {getBankLogo(order['Payment Info']) && (
                                                         <img src={getBankLogo(order['Payment Info'])!} className="w-3.5 h-3.5 object-contain rounded-sm bg-white" alt="" />
                                                     )}
-                                                    <span className={`text-[9px] font-bold uppercase rounded-sm border ${B_BORDER} px-1 text-center min-w-[50px]
+                                                    <span className={`text-[10px] font-bold uppercase rounded-sm border ${B_BORDER} px-1 text-center min-w-[50px]
                                                         ${order['Payment Status']?.toLowerCase() === 'paid' ? 'text-[#0ECB81]' : 'text-[#FCD535]'}
                                                     `}>
                                                         {order['Payment Status'] || 'Unpaid'}
@@ -352,16 +358,16 @@ const MobilePackagingHub: React.FC<MobilePackagingHubProps> = ({
                                     </div>
 
                                     <div className={`p-2 border-t ${B_BORDER} flex gap-2`}>
-                                        <button onClick={(e) => { e.stopPropagation(); onView(order); }} className={`flex-1 py-1.5 bg-[#2B3139] text-[#EAECEF] rounded-sm text-xs font-medium`}>View Info</button>
-                                        {activeTab === 'Pending' && <button onClick={(e) => { e.stopPropagation(); onPack(order); }} className={`flex-1 py-1.5 bg-[#FCD535] text-[#0B0E11] rounded-sm text-xs font-bold uppercase`}>Pack Order</button>}
+                                        <button onClick={(e) => { e.stopPropagation(); onView(order); }} className={`flex-1 py-1.5 bg-[#2B3139] text-[#EAECEF] rounded-sm text-sm font-medium`}>View Info</button>
+                                        {activeTab === 'Pending' && <button onClick={(e) => { e.stopPropagation(); onPack(order); }} className={`flex-1 py-1.5 bg-[#FCD535] text-[#0B0E11] rounded-sm text-sm font-bold uppercase`}>Pack Order</button>}
                                         {activeTab === 'Ready to Ship' && (
                                             <>
-                                                <button onClick={(e) => { e.stopPropagation(); onUndo(order); }} className={`w-20 py-1.5 bg-[#F6465D]/10 text-[#F6465D] rounded-sm text-[10px] font-bold uppercase`}>Undo</button>
-                                                <button onClick={(e) => { e.stopPropagation(); onShip(order); }} className={`flex-1 py-1.5 bg-[#0ECB81] text-[#0B0E11] rounded-sm text-xs font-bold uppercase`}>Ship Order</button>
+                                                <button onClick={(e) => { e.stopPropagation(); onUndo(order); }} className={`w-20 py-1.5 bg-[#F6465D]/10 text-[#F6465D] rounded-sm text-xs font-bold uppercase`}>Undo</button>
+                                                <button onClick={(e) => { e.stopPropagation(); onShip(order); }} className={`flex-1 py-1.5 bg-[#0ECB81] text-[#0B0E11] rounded-sm text-sm font-bold uppercase`}>Ship Order</button>
                                             </>
                                         )}
                                         {activeTab === 'Shipped' && (
-                                            <button onClick={(e) => { e.stopPropagation(); onUndoShipped(order); }} className={`w-20 py-1.5 bg-[#F6465D]/10 text-[#F6465D] rounded-sm text-[10px] font-bold uppercase`}>Undo</button>
+                                            <button onClick={(e) => { e.stopPropagation(); onUndoShipped(order); }} className={`w-20 py-1.5 bg-[#F6465D]/10 text-[#F6465D] rounded-sm text-xs font-bold uppercase`}>Undo</button>
                                         )}
                                     </div>
                                 </div>
@@ -374,12 +380,12 @@ const MobilePackagingHub: React.FC<MobilePackagingHubProps> = ({
             {/* Sticky Bottom Stats Nav */}
             <div className={`fixed bottom-0 left-0 right-0 h-16 ${B_BG_PANEL} border-t ${B_BORDER} z-40 px-4 flex items-center justify-between`}>
                 <div className="flex flex-col">
-                    <span className={`text-[10px] font-bold ${B_TEXT_SECONDARY} uppercase`}>Packs Authored</span>
+                    <span className={`text-xs font-bold ${B_TEXT_SECONDARY} uppercase`}>Packs Authored</span>
                     <span className={`text-lg font-mono font-bold ${B_GREEN}`}>{progressStats.packedByUserToday}</span>
                 </div>
                 
                 <div className="flex flex-col items-end w-32 border-l border-[#2B3139] pl-3">
-                    <div className="flex justify-between w-full text-[10px] uppercase font-bold mb-1">
+                    <div className="flex justify-between w-full text-xs uppercase font-bold mb-1">
                         <span className={B_TEXT_SECONDARY}>Hub Sync</span>
                         <span className={B_GREEN}>{progressStats.progressPercentage}%</span>
                     </div>

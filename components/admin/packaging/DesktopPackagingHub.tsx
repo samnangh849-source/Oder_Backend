@@ -113,17 +113,23 @@ const DesktopPackagingHub: React.FC<DesktopPackagingHubProps> = ({
     };
 
     const groups = useMemo(() => {
-        const sorted = [...orders].sort((a, b) => getSafeDateObj(b.Timestamp).getTime() - getSafeDateObj(a.Timestamp).getTime());
+        const getEffectiveDate = (order: ParsedOrder) => {
+            if (activeTab === 'Shipped') return order['Dispatched Time'] || order.Timestamp;
+            if (activeTab === 'Ready to Ship') return order['Packed Time'] || order.Timestamp;
+            return order.Timestamp;
+        };
+
+        const sorted = [...orders].sort((a, b) => 
+            getSafeDateObj(getEffectiveDate(b)).getTime() - getSafeDateObj(getEffectiveDate(a)).getTime()
+        );
+
         const result: { [key: string]: ParsedOrder[] } = {};
-        if (activeTab === 'Pending') {
-            sorted.forEach(order => {
-                const date = order.Timestamp ? getSafeDateObj(order.Timestamp).toLocaleDateString('km-KH', { month: 'short', day: 'numeric' }) : 'Recent';
-                if (!result[date]) result[date] = [];
-                result[date].push(order);
-            });
-        } else {
-            result['Order Stream'] = sorted;
-        }
+        sorted.forEach(order => {
+            const dateStr = getEffectiveDate(order);
+            const date = dateStr ? getSafeDateObj(dateStr).toLocaleDateString('km-KH', { month: 'short', day: 'numeric' }) : 'Recent';
+            if (!result[date]) result[date] = [];
+            result[date].push(order);
+        });
         return result;
     }, [orders, activeTab]);
 
@@ -220,13 +226,13 @@ const DesktopPackagingHub: React.FC<DesktopPackagingHubProps> = ({
                                 placeholder="Query ID, Name, Phone..." 
                                 value={searchTerm}
                                 onChange={(e) => setSearchTerm(e.target.value)}
-                                className={`w-full pl-8 pr-4 py-1.5 ${B_BG_MAIN} border ${B_BORDER} text-xs ${B_TEXT_PRIMARY} placeholder:text-[#848E9C] focus:border-[#FCD535] rounded-sm transition-colors outline-none`}
+                                className={`w-full pl-8 pr-4 py-1.5 ${B_BG_MAIN} border ${B_BORDER} text-sm ${B_TEXT_PRIMARY} placeholder:text-[#848E9C] focus:border-[#FCD535] rounded-sm transition-colors outline-none`}
                             />
                             <div className={`absolute inset-y-0 left-0 flex items-center pl-2.5 pointer-events-none ${B_TEXT_SECONDARY}`}>
                                 <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2.5}><path d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" /></svg>
                             </div>
                         </div>
-                        <button onClick={() => setIsFilterModalOpen(true)} className={`px-3 py-1.5 ${B_BG_MAIN} hover:bg-[#2B3139] ${B_TEXT_PRIMARY} text-xs font-medium border ${B_BORDER} rounded-sm flex items-center gap-1.5 whitespace-nowrap`}>
+                        <button onClick={() => setIsFilterModalOpen(true)} className={`px-3 py-1.5 ${B_BG_MAIN} hover:bg-[#2B3139] ${B_TEXT_PRIMARY} text-sm font-medium border ${B_BORDER} rounded-sm flex items-center gap-1.5 whitespace-nowrap`}>
                             <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 4a1 1 0 011-1h16a1 1 0 011 1v2.586a1 1 0 01-.293.707l-6.414 6.414a1 1 0 00-.293.707V17l-4 4v-6.586a1 1 0 00-.293-.707L3.293 7.293A1 1 0 013 6.586V4z" /></svg>
                             Filters
                         </button>
@@ -238,20 +244,20 @@ const DesktopPackagingHub: React.FC<DesktopPackagingHubProps> = ({
                                 {viewMode === 'card' && orders.length > 0 && (
                                     <button 
                                         onClick={() => onToggleSelectAll(orders)}
-                                        className={`px-3 py-2 border ${orders.every(o => selectedOrderIds.has(o['Order ID'])) ? 'bg-[#FCD535] border-[#FCD535] text-black' : 'border-[#2B3139] text-[#848E9C]'} text-[11px] font-bold rounded-sm uppercase tracking-wider transition-colors whitespace-nowrap`}
+                                        className={`px-3 py-2 border ${orders.every(o => selectedOrderIds.has(o['Order ID'])) ? 'bg-[#FCD535] border-[#FCD535] text-black' : 'border-[#2B3139] text-[#848E9C]'} text-[12px] font-bold rounded-sm uppercase tracking-wider transition-colors whitespace-nowrap`}
                                     >
                                         {orders.every(o => selectedOrderIds.has(o['Order ID'])) ? 'Deselect All' : 'Select All'}
                                     </button>
                                 )}
                                 <button onClick={onPrintManifest} className={`px-4 py-2 border border-[#FCD535]/50 hover:bg-[#FCD535] group transition-all rounded-sm flex items-center gap-2 whitespace-nowrap`}>
                                     <svg className="w-4 h-4 text-[#FCD535] group-hover:text-[#0B0E11]" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 17h2a2 2 0 002-2v-4a2 2 0 00-2-2H5a2 2 0 00-2 2v4a2 2 0 002 2h2m2 4h6a2 2 0 002-2v-4a2 2 0 00-2-2H9a2 2 0 00-2 2v4a2 2 0 002 2zm8-12V5a2 2 0 00-2-2H9a2 2 0 00-2 2v4h10z" /></svg>
-                                    <span className="text-[#FCD535] group-hover:text-[#0B0E11] text-xs font-bold uppercase tracking-wider">Print Manifest</span>
+                                    <span className="text-[#FCD535] group-hover:text-[#0B0E11] text-sm font-bold uppercase tracking-wider">Print Manifest</span>
                                 </button>
                                 {selectedOrderIds.size > 0 && (
                                     <button 
                                         onClick={onBulkShip}
                                         disabled={isBulkProcessing}
-                                        className={`px-4 py-2 bg-[#0ECB81] hover:bg-[#0CA66B] text-[#0B0E11] text-xs font-bold rounded-sm flex items-center gap-2 transition-all animate-fade-in-down whitespace-nowrap`}
+                                        className={`px-4 py-2 bg-[#0ECB81] hover:bg-[#0CA66B] text-[#0B0E11] text-sm font-bold rounded-sm flex items-center gap-2 transition-all animate-fade-in-down whitespace-nowrap`}
                                     >
                                         {isBulkProcessing ? <Spinner size="sm" /> : (
                                             <>
@@ -264,8 +270,8 @@ const DesktopPackagingHub: React.FC<DesktopPackagingHubProps> = ({
                             </div>
                         )}
                         <div className="flex bg-[#0B0E11] p-0.5 border border-[#2B3139] rounded-sm">
-                            <button onClick={() => setViewMode('card')} className={`p-1.5 rounded-sm transition-all ${viewMode === 'card' ? 'bg-[#2B3139] text-[#EAECEF]' : 'text-[#848E9C] hover:text-[#EAECEF]'}`}><svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2}><rect x="3" y="3" width="7" height="7" /><rect x="14" y="3" width="7" height="7" /><rect x="14" y="14" width="7" height="7" /><rect x="3" y="14" width="7" height="7" /></svg></button>
-                            <button onClick={() => setViewMode('list')} className={`p-1.5 rounded-sm transition-all ${viewMode === 'list' ? 'bg-[#2B3139] text-[#EAECEF]' : 'text-[#848E9C] hover:text-[#EAECEF]'}`}><svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2}><line x1="3" y1="6" x2="21" y2="6" /><line x1="3" y1="12" x2="21" y2="12" /><line x1="3" y1="18" x2="21" y2="18" /></svg></button>
+                            <button onClick={() => setViewMode('card')} className={`p-2 rounded-sm transition-all ${viewMode === 'card' ? 'bg-[#2B3139] text-[#EAECEF]' : 'text-[#848E9C] hover:text-[#EAECEF]'}`}><svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2}><rect x="3" y="3" width="7" height="7" /><rect x="14" y="3" width="7" height="7" /><rect x="14" y="14" width="7" height="7" /><rect x="3" y="14" width="7" height="7" /></svg></button>
+                            <button onClick={() => setViewMode('list')} className={`p-2 rounded-sm transition-all ${viewMode === 'list' ? 'bg-[#2B3139] text-[#EAECEF]' : 'text-[#848E9C] hover:text-[#EAECEF]'}`}><svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2}><line x1="3" y1="6" x2="21" y2="6" /><line x1="3" y1="12" x2="21" y2="12" /><line x1="3" y1="18" x2="21" y2="18" /></svg></button>
                         </div>
                     </div>
                 </header>
@@ -273,10 +279,10 @@ const DesktopPackagingHub: React.FC<DesktopPackagingHubProps> = ({
                 {/* Shipping Method Shortcuts Bar (Desktop) */}
                 {(activeTab === 'Ready to Ship' || activeTab === 'Shipped') && (
                     <div className={`flex-shrink-0 px-8 py-3 bg-[#181A20] border-b ${B_BORDER} flex items-center gap-3 overflow-x-auto no-scrollbar`}>
-                        <span className={`text-[10px] font-black ${B_TEXT_SECONDARY} uppercase tracking-[0.2em] mr-2`}>Shipping Filter:</span>
+                        <span className={`text-xs font-black ${B_TEXT_SECONDARY} uppercase tracking-[0.2em] mr-2`}>Shipping Filter:</span>
                         <button 
                             onClick={() => setShippingFilter('')}
-                            className={`px-4 py-2 rounded-sm text-[10px] font-black uppercase tracking-wider transition-all whitespace-nowrap border ${!shippingFilter ? 'bg-[#FCD535] border-[#FCD535] text-black shadow-[0_0_15px_rgba(252,213,53,0.2)]' : 'bg-[#0B0E11] border-[#2B3139] text-[#848E9C] hover:border-[#FCD535]/50 hover:text-[#EAECEF]'}`}
+                            className={`px-4 py-2 rounded-sm text-xs font-black uppercase tracking-wider transition-all whitespace-nowrap border ${!shippingFilter ? 'bg-[#FCD535] border-[#FCD535] text-black shadow-[0_0_15px_rgba(252,213,53,0.2)]' : 'bg-[#0B0E11] border-[#2B3139] text-[#848E9C] hover:border-[#FCD535]/50 hover:text-[#EAECEF]'}`}
                         >
                             ALL CARRIERS
                         </button>
@@ -284,7 +290,7 @@ const DesktopPackagingHub: React.FC<DesktopPackagingHubProps> = ({
                             <button
                                 key={method.MethodName}
                                 onClick={() => setShippingFilter(shippingFilter === method.MethodName ? '' : method.MethodName)}
-                                className={`px-4 py-2 rounded-sm text-[10px] font-black uppercase tracking-wider transition-all whitespace-nowrap border flex items-center gap-2.5 ${shippingFilter === method.MethodName ? 'bg-[#FCD535] border-[#FCD535] text-black shadow-[0_0_15px_rgba(252,213,53,0.2)]' : 'bg-[#0B0E11] border-[#2B3139] text-[#848E9C] hover:border-[#FCD535]/50 hover:text-[#EAECEF]'}`}
+                                className={`px-4 py-2 rounded-sm text-xs font-black uppercase tracking-wider transition-all whitespace-nowrap border flex items-center gap-2.5 ${shippingFilter === method.MethodName ? 'bg-[#FCD535] border-[#FCD535] text-black shadow-[0_0_15px_rgba(252,213,53,0.2)]' : 'bg-[#0B0E11] border-[#2B3139] text-[#848E9C] hover:border-[#FCD535]/50 hover:text-[#EAECEF]'}`}
                             >
                                 {method.LogoURL && <img src={convertGoogleDriveUrl(method.LogoURL)} alt="" className="w-5 h-5 object-contain" />}
                                 {method.MethodName}
@@ -295,18 +301,18 @@ const DesktopPackagingHub: React.FC<DesktopPackagingHubProps> = ({
 
                 <div className="flex-1 overflow-y-auto custom-scrollbar p-4 md:p-6 lg:p-8 pt-4">
                     {orders.length === 0 ? (
-                        <div className={`flex flex-col items-center justify-center p-10 ${B_TEXT_SECONDARY} text-xs mt-10`}><span className="text-3xl mb-2 opacity-50">📂</span>No Operations in Queue</div>
+                        <div className={`flex flex-col items-center justify-center p-10 ${B_TEXT_SECONDARY} text-sm mt-10`}><span className="text-3xl mb-2 opacity-50">📂</span>No Operations in Queue</div>
                     ) : (
                         <div className="space-y-8 pb-20">
                             {Object.entries(groups).map(([date, groupOrders]: [string, any]) => (
                                 <section key={date} className="space-y-4">
-                                    <div className={`text-xs font-bold ${B_TEXT_PRIMARY} px-1 pb-1 border-b ${B_BORDER} flex justify-between`}>
+                                    <div className={`text-sm font-bold ${B_TEXT_PRIMARY} px-1 pb-1 border-b ${B_BORDER} flex justify-between`}>
                                         <span>{date}</span>
                                         <span className={B_TEXT_SECONDARY}>{groupOrders.length} records</span>
                                     </div>
 
                                     {viewMode === 'list' && (
-                                        <div className={`grid grid-cols-12 gap-2 px-3 py-1 text-[10px] font-bold ${B_TEXT_SECONDARY} uppercase`}>
+                                        <div className={`grid grid-cols-12 gap-2 px-3 py-1 text-xs font-bold ${B_TEXT_SECONDARY} uppercase`}>
                                             <div className="col-span-1">
                                                 {activeTab === 'Ready to Ship' ? (
                                                     <button 
@@ -318,7 +324,7 @@ const DesktopPackagingHub: React.FC<DesktopPackagingHubProps> = ({
                                                         )}
                                                     </button>
                                                 ) : (
-                                                    <span className={`text-[10px] font-bold ${B_TEXT_SECONDARY} uppercase tracking-widest`}>#</span>
+                                                    <span className={`text-xs font-bold ${B_TEXT_SECONDARY} uppercase tracking-widest`}>#</span>
                                                 )}
                                             </div>
                                             <div className="col-span-4">Asset / Node</div>
@@ -354,10 +360,10 @@ const DesktopPackagingHub: React.FC<DesktopPackagingHubProps> = ({
 
                             <div className={`px-3 py-2 border-b ${B_BORDER} flex justify-between items-center ${activeTab === 'Ready to Ship' ? 'pt-10' : ''}`}>
                                                         <div className="flex items-center gap-2">
-                                                            <span className={`text-[10px] font-mono ${B_TEXT_SECONDARY}`}>{(idx + 1).toString().padStart(2, '0')}</span>
+                                                            <span className={`text-xs font-mono ${B_TEXT_SECONDARY}`}>{(idx + 1).toString().padStart(2, '0')}</span>
                                                             <span 
                                                                 onClick={(e) => { e.stopPropagation(); handleCopy(order['Order ID'], 'ID'); }}
-                                                                className={`text-xs font-mono font-medium ${B_TEXT_PRIMARY} cursor-pointer hover:text-[#FCD535] transition-colors`}
+                                                                className={`text-sm font-mono font-medium ${B_TEXT_PRIMARY} cursor-pointer hover:text-[#FCD535] transition-colors`}
                                                             >
                                                                 {order['Order ID'].substring(0, 10)}
                                                             </span>
@@ -366,16 +372,16 @@ const DesktopPackagingHub: React.FC<DesktopPackagingHubProps> = ({
                                                             {getShippingLogo(order['Internal Shipping Method']) && (
                                                                 <img src={getShippingLogo(order['Internal Shipping Method'])!} className="w-3.5 h-3.5 object-contain" alt="" />
                                                             )}
-                                                            <span className={`text-[9px] uppercase font-bold px-1.5 py-0.5 rounded-sm ${order.Team === 'A' ? 'bg-blue-900/40 text-blue-400' : 'bg-purple-900/40 text-purple-400'}`}>T-{order.Team}</span>
+                                                            <span className={`text-[10px] uppercase font-bold px-1.5 py-0.5 rounded-sm ${order.Team === 'A' ? 'bg-blue-900/40 text-blue-400' : 'bg-purple-900/40 text-purple-400'}`}>T-{order.Team}</span>
                                                         </div>
                                                     </div>
                                                     
                                                     <div className="p-3 flex gap-3 flex-grow">
-                                                        <img src={convertGoogleDriveUrl(order.Products[0]?.image)} className={`w-12 h-12 object-cover ${B_BG_MAIN} border ${B_BORDER} flex-shrink-0 rounded-sm`} alt="" />
+                                                        <img src={convertGoogleDriveUrl(order.Products[0]?.image)} className={`w-14 h-14 object-cover ${B_BG_MAIN} border ${B_BORDER} flex-shrink-0 rounded-sm`} alt="" />
                                                         <div className="flex flex-col flex-grow min-w-0">
                                                             <p 
                                                                 onClick={(e) => { e.stopPropagation(); handleCopy(order['Customer Name'], 'Name'); }}
-                                                                className={`text-xs font-medium ${B_TEXT_PRIMARY} truncate uppercase cursor-pointer hover:text-[#FCD535] transition-colors`}
+                                                                className={`text-sm font-bold ${B_TEXT_PRIMARY} truncate uppercase cursor-pointer hover:text-[#FCD535] transition-colors`}
                                                             >
                                                                 {order['Customer Name']}
                                                             </p>
@@ -384,46 +390,46 @@ const DesktopPackagingHub: React.FC<DesktopPackagingHubProps> = ({
                                                                 className="flex items-center gap-1.5 cursor-pointer hover:text-[#FCD535] transition-colors group"
                                                             >
                                                                 {getCarrierLogo(order['Customer Phone']) && (
-                                                                    <img src={getCarrierLogo(order['Customer Phone'])!} className="w-3 h-3 object-contain rounded-full bg-white/10" alt="" />
+                                                                    <img src={getCarrierLogo(order['Customer Phone'])!} className="w-3.5 h-3.5 object-contain rounded-full bg-white/10" alt="" />
                                                                 )}
-                                                                <p className={`text-[10px] font-mono ${B_TEXT_SECONDARY} group-hover:text-[#FCD535]`}>{formatPhoneNumber(order['Customer Phone'])}</p>
+                                                                <p className={`text-xs font-mono ${B_TEXT_SECONDARY} group-hover:text-[#FCD535]`}>{formatPhoneNumber(order['Customer Phone'])}</p>
                                                             </div>
                                                             <div className="flex justify-between items-end mt-auto pt-1">
                                                                 <div className="flex flex-col">
-                                                                    <span className={`text-[10px] ${B_TEXT_SECONDARY} truncate max-w-[80px]`}>{order.Location}</span>
+                                                                    <span className={`text-xs ${B_TEXT_SECONDARY} truncate max-w-[100px]`}>{order.Location}</span>
                                                                     {(activeTab === 'Ready to Ship' || activeTab === 'Shipped') && (
                                                                         <div className="flex items-center gap-1.5 mt-0.5">
                                                                             {getDriverImage(order['Driver Name']) && (
-                                                                                <img src={getDriverImage(order['Driver Name'])!} className="w-3 h-3 object-cover rounded-full" alt="" />
+                                                                                <img src={getDriverImage(order['Driver Name'])!} className="w-3.5 h-3.5 object-cover rounded-full" alt="" />
                                                                             )}
-                                                                            <span className={`text-[9px] ${B_ACCENT} font-bold`}>D: {order['Driver Name'] || 'TBD'}</span>
+                                                                            <span className={`text-[10px] ${B_ACCENT} font-bold`}>D: {order['Driver Name'] || 'TBD'}</span>
                                                                         </div>
                                                                     )}
                                                                 </div>
                                                                 <div className="flex flex-col items-end">
                                                                     <div className="flex items-center gap-1.5 mb-0.5">
                                                                         {getBankLogo(order['Payment Info']) && (
-                                                                            <img src={getBankLogo(order['Payment Info'])!} className="w-3 h-3 object-contain rounded-sm bg-white" alt="" />
+                                                                            <img src={getBankLogo(order['Payment Info'])!} className="w-3.5 h-3.5 object-contain rounded-sm bg-white" alt="" />
                                                                         )}
-                                                                        <span className={`text-[9px] uppercase ${order['Payment Status']?.toLowerCase() === 'paid' ? 'text-[#0ECB81]' : 'text-[#FCD535]'}`}>{order['Payment Status'] || 'Unpaid'}</span>
+                                                                        <span className={`text-[10px] uppercase ${order['Payment Status']?.toLowerCase() === 'paid' ? 'text-[#0ECB81]' : 'text-[#FCD535]'}`}>{order['Payment Status'] || 'Unpaid'}</span>
                                                                     </div>
-                                                                    <span className={`text-xs font-mono font-bold ${B_GREEN}`}>${(Number(order['Grand Total']) || 0).toFixed(2)}</span>
+                                                                    <span className={`text-sm font-mono font-bold ${B_GREEN}`}>${(Number(order['Grand Total']) || 0).toFixed(2)}</span>
                                                                 </div>
                                                             </div>
                                                         </div>
                                                     </div>
 
                                                     <div className={`p-2 border-t ${B_BORDER} bg-[#0B0E11] grid ${activeTab === 'Pending' ? 'grid-cols-2 gap-2' : activeTab === 'Ready to Ship' ? 'grid-cols-3 gap-2' : 'grid-cols-2 gap-2'}`}>
-                                                        <button onClick={(e) => { e.stopPropagation(); onView(order); }} className={`w-full py-1.5 bg-[#2B3139] hover:bg-[#3B424A] ${B_TEXT_PRIMARY} text-[10px] font-medium transition-colors rounded-sm`}>Details</button>
-                                                        {activeTab === 'Pending' && <button onClick={(e) => { e.stopPropagation(); onPack(order); }} className={`w-full py-1.5 ${B_ACCENT_BG} text-[10px] font-bold uppercase transition-colors rounded-sm`}>Pack</button>}
+                                                        <button onClick={(e) => { e.stopPropagation(); onView(order); }} className={`w-full py-1.5 bg-[#2B3139] hover:bg-[#3B424A] ${B_TEXT_PRIMARY} text-xs font-medium transition-colors rounded-sm`}>Details</button>
+                                                        {activeTab === 'Pending' && <button onClick={(e) => { e.stopPropagation(); onPack(order); }} className={`w-full py-1.5 ${B_ACCENT_BG} text-xs font-bold uppercase transition-colors rounded-sm`}>Pack</button>}
                                                         {activeTab === 'Ready to Ship' && (
                                                             <>
-                                                                <button onClick={(e) => { e.stopPropagation(); onUndo(order); }} className={`w-full py-1.5 bg-[#F6465D]/10 hover:bg-[#F6465D]/20 ${B_RED} text-[10px] font-bold uppercase transition-colors rounded-sm`}>Undo</button>
-                                                                <button onClick={(e) => { e.stopPropagation(); onShip(order); }} className={`w-full py-1.5 ${B_ACCENT_BG} text-[10px] font-bold uppercase transition-colors rounded-sm`}>Ship</button>
+                                                                <button onClick={(e) => { e.stopPropagation(); onUndo(order); }} className={`w-full py-1.5 bg-[#F6465D]/10 hover:bg-[#F6465D]/20 ${B_RED} text-xs font-bold uppercase transition-colors rounded-sm`}>Undo</button>
+                                                                <button onClick={(e) => { e.stopPropagation(); onShip(order); }} className={`w-full py-1.5 ${B_ACCENT_BG} text-xs font-bold uppercase transition-colors rounded-sm`}>Ship</button>
                                                             </>
                                                         )}
                                                         {activeTab === 'Shipped' && (
-                                                            <button onClick={(e) => { e.stopPropagation(); onUndoShipped(order); }} className={`w-full py-1.5 bg-[#F6465D]/10 hover:bg-[#F6465D]/20 ${B_RED} text-[10px] font-bold uppercase transition-colors rounded-sm`}>Undo</button>
+                                                            <button onClick={(e) => { e.stopPropagation(); onUndoShipped(order); }} className={`w-full py-1.5 bg-[#F6465D]/10 hover:bg-[#F6465D]/20 ${B_RED} text-xs font-bold uppercase transition-colors rounded-sm`}>Undo</button>
                                                         )}
                                                     </div>
                                                 </div>
@@ -444,16 +450,16 @@ const DesktopPackagingHub: React.FC<DesktopPackagingHubProps> = ({
                                                             </div>
                                                         )}
                                                         {(!selectedOrderIds.has(order['Order ID']) || activeTab !== 'Ready to Ship') && (
-                                                            <div className="text-[10px] font-mono text-[#848E9C]">{(idx + 1).toString().padStart(2, '0')}</div>
+                                                            <div className="text-xs font-mono text-[#848E9C]">{(idx + 1).toString().padStart(2, '0')}</div>
                                                         )}
                                                     </div>
                                                     <div className="col-span-4 flex items-center gap-3 w-min-0">
-                                                        <img src={convertGoogleDriveUrl(order.Products[0]?.image)} className={`w-8 h-8 object-cover ${B_BG_MAIN} border ${B_BORDER} flex-shrink-0 rounded-sm`} alt="" />
+                                                        <img src={convertGoogleDriveUrl(order.Products[0]?.image)} className={`w-10 h-10 object-cover ${B_BG_MAIN} border ${B_BORDER} flex-shrink-0 rounded-sm`} alt="" />
                                                         <div className="min-w-0">
                                                             <div className="flex items-center gap-2">
                                                                 <p 
                                                                     onClick={(e) => { e.stopPropagation(); handleCopy(order['Customer Name'], 'Name'); }}
-                                                                    className={`text-xs font-medium ${B_TEXT_PRIMARY} truncate uppercase cursor-pointer hover:text-[#FCD535]`}
+                                                                    className={`text-sm font-bold ${B_TEXT_PRIMARY} truncate uppercase cursor-pointer hover:text-[#FCD535]`}
                                                                 >
                                                                     {order['Customer Name']}
                                                                 </p>
@@ -462,58 +468,58 @@ const DesktopPackagingHub: React.FC<DesktopPackagingHubProps> = ({
                                                                     className="flex items-center gap-1 cursor-pointer hover:text-[#FCD535] group"
                                                                 >
                                                                     {getCarrierLogo(order['Customer Phone']) && (
-                                                                        <img src={getCarrierLogo(order['Customer Phone'])!} className="w-2.5 h-2.5 object-contain rounded-full bg-white/10" alt="" />
+                                                                        <img src={getCarrierLogo(order['Customer Phone'])!} className="w-3 h-3 object-contain rounded-full bg-white/10" alt="" />
                                                                     )}
-                                                                    <p className={`text-[10px] font-mono ${B_TEXT_SECONDARY} group-hover:text-[#FCD535]`}>{formatPhoneNumber(order['Customer Phone'])}</p>
+                                                                    <p className={`text-xs font-mono ${B_TEXT_SECONDARY} group-hover:text-[#FCD535]`}>{formatPhoneNumber(order['Customer Phone'])}</p>
                                                                 </div>
                                                             </div>
                                                             <span 
                                                                 onClick={(e) => { e.stopPropagation(); handleCopy(order['Order ID'], 'ID'); }}
-                                                                className={`text-[10px] font-mono ${B_TEXT_SECONDARY} truncate cursor-pointer hover:text-[#FCD535] transition-colors`}
+                                                                className={`text-xs font-mono ${B_TEXT_SECONDARY} truncate cursor-pointer hover:text-[#FCD535] transition-colors`}
                                                             >
                                                                 {order['Order ID'].substring(0,10)}
                                                             </span>
                                                         </div>
                                                     </div>
                                                     <div className="col-span-2 min-w-0">
-                                                        <p className={`text-xs ${B_TEXT_PRIMARY} truncate`}>{order.Location}</p>
+                                                        <p className={`text-sm ${B_TEXT_PRIMARY} truncate`}>{order.Location}</p>
                                                         <div className="flex items-center gap-2">
-                                                            <p className={`text-[9px] ${B_TEXT_SECONDARY} uppercase`}>{order.Team} Team</p>
+                                                            <p className={`text-[10px] ${B_TEXT_SECONDARY} uppercase`}>{order.Team} Team</p>
                                                             {(activeTab === 'Ready to Ship' || activeTab === 'Shipped') && (
                                                                 <div className="flex items-center gap-1 truncate">
                                                                     {getDriverImage(order['Driver Name']) && (
-                                                                        <img src={getDriverImage(order['Driver Name'])!} className="w-2.5 h-2.5 object-cover rounded-full" alt="" />
+                                                                        <img src={getDriverImage(order['Driver Name'])!} className="w-3 h-3 object-cover rounded-full" alt="" />
                                                                     )}
-                                                                    <p className={`text-[9px] ${B_ACCENT} font-bold uppercase truncate`}>{order['Driver Name'] || 'TBD'}</p>
+                                                                    <p className={`text-[10px] ${B_ACCENT} font-bold uppercase truncate`}>{order['Driver Name'] || 'TBD'}</p>
                                                                 </div>
                                                             )}
                                                         </div>
                                                     </div>
                                                     <div className="col-span-2">
                                                         <div className="flex items-center gap-1.5">
-                                                            <p className={`text-xs font-mono font-bold ${B_GREEN}`}>${(Number(order['Grand Total']) || 0).toFixed(2)}</p>
+                                                            <p className={`text-sm font-mono font-bold ${B_GREEN}`}>${(Number(order['Grand Total']) || 0).toFixed(2)}</p>
                                                             {getBankLogo(order['Payment Info']) && (
-                                                                <img src={getBankLogo(order['Payment Info'])!} className="w-3 h-3 object-contain rounded-sm bg-white" alt="" />
+                                                                <img src={getBankLogo(order['Payment Info'])!} className="w-4 h-4 object-contain rounded-sm bg-white" alt="" />
                                                             )}
                                                         </div>
                                                         <div className="flex items-center gap-1.5">
-                                                            <p className={`text-[9px] uppercase ${order['Payment Status']?.toLowerCase() === 'paid' ? 'text-[#0ECB81]' : 'text-[#FCD535]'}`}>{order['Payment Status'] || 'Unpaid'}</p>
+                                                            <p className={`text-[10px] uppercase ${order['Payment Status']?.toLowerCase() === 'paid' ? 'text-[#0ECB81]' : 'text-[#FCD535]'}`}>{order['Payment Status'] || 'Unpaid'}</p>
                                                             {getShippingLogo(order['Internal Shipping Method']) && (
-                                                                <img src={getShippingLogo(order['Internal Shipping Method'])!} className="w-2.5 h-2.5 object-contain" alt="" />
+                                                                <img src={getShippingLogo(order['Internal Shipping Method'])!} className="w-3.5 h-3.5 object-contain" alt="" />
                                                             )}
                                                         </div>
                                                     </div>
                                                     <div className="col-span-3 flex justify-end items-center gap-2">
-                                                        <button onClick={(e) => { e.stopPropagation(); onView(order); }} className={`px-3 py-1 bg-[#2B3139] hover:bg-[#3B424A] ${B_TEXT_PRIMARY} text-[10px] font-medium rounded-sm transition-colors`}>View</button>
-                                                        {activeTab === 'Pending' && <button onClick={(e) => { e.stopPropagation(); onPack(order); }} className={`px-4 py-1 ${B_ACCENT_BG} text-[10px] font-bold uppercase rounded-sm`}>Pack</button>}
+                                                        <button onClick={(e) => { e.stopPropagation(); onView(order); }} className={`px-3 py-1 bg-[#2B3139] hover:bg-[#3B424A] ${B_TEXT_PRIMARY} text-xs font-medium rounded-sm transition-colors`}>View</button>
+                                                        {activeTab === 'Pending' && <button onClick={(e) => { e.stopPropagation(); onPack(order); }} className={`px-4 py-1 ${B_ACCENT_BG} text-xs font-bold uppercase rounded-sm`}>Pack</button>}
                                                         {activeTab === 'Ready to Ship' && (
                                                             <>
-                                                                <button onClick={(e) => { e.stopPropagation(); onUndo(order); }} className={`px-3 py-1 bg-[#F6465D]/10 hover:bg-[#F6465D]/20 ${B_RED} text-[10px] font-bold uppercase rounded-sm transition-colors`}>Undo</button>
-                                                                <button onClick={(e) => { e.stopPropagation(); onShip(order); }} className={`px-4 py-1 ${B_ACCENT_BG} text-[10px] font-bold uppercase rounded-sm`}>Ship</button>
+                                                                <button onClick={(e) => { e.stopPropagation(); onUndo(order); }} className={`px-3 py-1 bg-[#F6465D]/10 hover:bg-[#F6465D]/20 ${B_RED} text-xs font-bold uppercase rounded-sm transition-colors`}>Undo</button>
+                                                                <button onClick={(e) => { e.stopPropagation(); onShip(order); }} className={`px-4 py-1 ${B_ACCENT_BG} text-xs font-bold uppercase rounded-sm`}>Ship</button>
                                                             </>
                                                         )}
                                                         {activeTab === 'Shipped' && (
-                                                            <button onClick={(e) => { e.stopPropagation(); onUndoShipped(order); }} className={`px-3 py-1 bg-[#F6465D]/10 hover:bg-[#F6465D]/20 ${B_RED} text-[10px] font-bold uppercase rounded-sm transition-colors`}>Undo</button>
+                                                            <button onClick={(e) => { e.stopPropagation(); onUndoShipped(order); }} className={`px-3 py-1 bg-[#F6465D]/10 hover:bg-[#F6465D]/20 ${B_RED} text-xs font-bold uppercase rounded-sm transition-colors`}>Undo</button>
                                                         )}
                                                     </div>
                                                 </div>

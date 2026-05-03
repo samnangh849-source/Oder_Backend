@@ -63,12 +63,15 @@ export const useOrderNotifications = () => {
                         if (isShiftOpener) {
                             // Play after 500ms to be closer to the "Ding"
                             setTimeout(() => {
-                                console.log(`[Notification] 🗣️ Attempting to play voice: ${SOUND_URLS.NEW_ORDER_VOICE}`);
-                                const audio = new Audio(SOUND_URLS.NEW_ORDER_VOICE);
+                                const voiceUrl = SOUND_URLS.NEW_ORDER_VOICE;
+                                console.log(`[Notification] 🗣️ Attempting voice alert: ${voiceUrl}`);
+                                const audio = new Audio(voiceUrl);
                                 audio.volume = 1.0;
-                                audio.play().catch(err => {
-                                    console.error("[Notification] ❌ Voice playback failed:", err);
-                                });
+                                audio.play()
+                                    .then(() => console.log("[Notification] ✅ Voice alert played successfully"))
+                                    .catch(err => {
+                                        console.error("[Notification] ❌ Voice play failed:", err.name, err.message);
+                                    });
                             }, 500);
                         }
                     }

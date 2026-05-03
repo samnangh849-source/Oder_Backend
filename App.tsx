@@ -207,10 +207,18 @@ const AppContent: React.FC = () => {
             // Play voice for Shift Opener only
             if (isShiftOpener) {
                 setTimeout(() => {
-                    console.log(`[App] 🗣️ Playing voice alert via WS: ${SOUND_URLS.NEW_ORDER_VOICE}`);
-                    const audio = new Audio(SOUND_URLS.NEW_ORDER_VOICE);
+                    const voiceUrl = SOUND_URLS.NEW_ORDER_VOICE;
+                    console.log(`[App] 🗣️ Attempting voice alert: ${voiceUrl} (Shift Opener: ${isShiftOpener})`);
+                    const audio = new Audio(voiceUrl);
                     audio.volume = 1.0;
-                    audio.play().catch(e => console.error("[App] Voice play failed:", e));
+                    audio.play()
+                        .then(() => console.log("[App] ✅ Voice alert played successfully"))
+                        .catch(e => {
+                            console.error("[App] ❌ Voice play failed:", e.name, e.message);
+                            if (e.name === 'NotAllowedError') {
+                                console.warn("[App] ⚠️ Browser blocked autoplay. Please click anywhere on the page to enable audio.");
+                            }
+                        });
                 }, 800);
             }
         } else if (lastMessage.type === 'update_order') {
@@ -271,7 +279,7 @@ const AppContent: React.FC = () => {
             console.log(`[App] 📋 Static data changed (${lastMessage.type} / ${lastMessage.sheetName}). Refreshing...`);
             fetchData(true);
         }
-    }, [lastMessage, fetchOrders, fetchData, setOrders, showNotification]);
+    }, [lastMessage, fetchOrders, fetchData, setOrders, showNotification, isShiftOpener, language]);
 
     const isMobile = window.innerWidth < 768;
     const isAdmin = useMemo(() => {

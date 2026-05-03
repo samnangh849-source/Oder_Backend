@@ -85,15 +85,15 @@ const OrderSummaryPanel: React.FC<PackingChecklistProps> = ({
                 <div className="flex items-center justify-between">
                     <div className="flex flex-col">
                         <h2 className="text-xl font-bold tracking-tight text-white flex items-center gap-2">
-                            Checklist <span className="text-xs font-normal text-[#848E9C] px-2 py-0.5 bg-[#2B3139] rounded">SPOT</span>
+                            Checklist <span className="text-sm font-normal text-[#848E9C] px-2 py-0.5 bg-[#2B3139] rounded">SPOT</span>
                         </h2>
-                        <span className="text-[11px] font-medium text-[#848E9C] mt-1">Verification Progress</span>
+                        <span className="text-xs font-medium text-[#848E9C] mt-1">Verification Progress</span>
                     </div>
                     <div className="flex flex-col items-end">
                         <span className={`text-3xl font-bold ${progressPercent === 100 ? 'text-[#02C076]' : 'text-[#FCD535]'}`}>
                             {progressPercent}%
                         </span>
-                        <span className="text-[11px] text-[#848E9C]">Finalizing...</span>
+                        <span className="text-xs text-[#848E9C]">Finalizing...</span>
                     </div>
                 </div>
                 
@@ -171,12 +171,12 @@ const OrderSummaryPanel: React.FC<PackingChecklistProps> = ({
                                             )}
                                         </div>
                                         {p.originalPrice > p.finalPrice && (
-                                            <span className="text-[11px] text-[#F6465D] font-bold uppercase mt-0.5">
+                                            <span className="text-xs text-[#F6465D] font-bold uppercase mt-0.5">
                                                 SAVE ${(p.originalPrice - p.finalPrice).toFixed(2)} ({Math.round((1 - p.finalPrice/p.originalPrice) * 100)}%)
                                             </span>
                                         )}
                                     </div>
-                                    <div className={`text-[11px] font-bold px-2 py-0.5 rounded-sm ${isComplete ? 'text-[#02C076] bg-[#02C076]/10' : 'text-[#FCD535] bg-[#FCD535]/10'}`}>
+                                    <div className={`text-xs font-bold px-2 py-0.5 rounded-sm ${isComplete ? 'text-[#02C076] bg-[#02C076]/10' : 'text-[#FCD535] bg-[#FCD535]/10'}`}>
                                         {isComplete ? 'VERIFIED' : 'PENDING'}
                                     </div>
                                 </div>
@@ -204,7 +204,7 @@ const OrderSummaryPanel: React.FC<PackingChecklistProps> = ({
                     </div>
                     <div className="flex justify-between items-center text-sm">
                         <span className="text-[#848E9C]">Total Discounts</span>
-                        <span className="text-[#F6465D] font-bold">-${discountAmount.toFixed(2)} <span className="text-[11px] ml-1">(-{discountPercent.toFixed(1)}%)</span></span>
+                        <span className="text-[#F6465D] font-bold">-${discountAmount.toFixed(2)} <span className="text-xs ml-1">(-{discountPercent.toFixed(1)}%)</span></span>
                     </div>
                 </div>
 
@@ -224,7 +224,7 @@ const OrderSummaryPanel: React.FC<PackingChecklistProps> = ({
                                 <span className={`text-2xl font-black ${hasFee ? 'text-black' : 'text-[#EAECEF]'}`}>
                                     ${shippingFee.toFixed(2)}
                                 </span>
-                                <span className={`text-[11px] font-bold ${hasFee ? 'text-black/60' : 'text-[#848E9C]'}`}>
+                                <span className={`text-xs font-bold ${hasFee ? 'text-black/60' : 'text-[#848E9C]'}`}>
                                     USD
                                 </span>
                             </div>
@@ -241,11 +241,11 @@ const OrderSummaryPanel: React.FC<PackingChecklistProps> = ({
                         </div>
                     </div>
                     <div className="flex flex-col items-end gap-1.5">
-                        <div className="px-2.5 py-1 bg-[#2B3139] rounded text-[11px] font-bold text-[#EAECEF] flex items-center gap-2">
+                        <div className="px-2.5 py-1 bg-[#2B3139] rounded text-xs font-bold text-[#EAECEF] flex items-center gap-2">
                             <div className="w-2 h-2 rounded-full bg-[#02C076]"></div>
                             Fulfillment Ready
                         </div>
-                        <span className="text-[11px] text-[#848E9C] font-mono uppercase tracking-tighter">REF: {order['Order ID']?.substring(0, 12)}</span>
+                        <span className="text-xs text-[#848E9C] font-mono uppercase tracking-tighter">REF: {order['Order ID']?.substring(0, 12)}</span>
                     </div>
                 </div>
             </div>

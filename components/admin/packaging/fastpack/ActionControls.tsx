@@ -36,7 +36,7 @@ const ActionControls: React.FC<ActionControlsProps> = ({
                 <button 
                     onClick={handleBack} 
                     disabled={uploading} 
-                    className="w-full sm:w-auto px-6 py-3 bg-[#2B3139] hover:bg-[#474D57] text-[#EAECEF] rounded font-bold text-xs uppercase tracking-wider transition-all flex items-center justify-center gap-3 active:scale-95 group"
+                    className="w-full sm:w-auto px-6 py-3 bg-[#2B3139] hover:bg-[#474D57] text-[#EAECEF] rounded font-bold text-sm uppercase tracking-wider transition-all flex items-center justify-center gap-3 active:scale-95 group"
                 >
                     <svg className="w-4 h-4 group-hover:-translate-x-1 transition-transform text-[#848E9C]" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2.5}><path strokeLinecap="round" strokeLinejoin="round" d="M6.75 15.75L3 12m0 0l3.75-3.75M3 12h18" /></svg>
                     {step === 'VERIFYING' ? 'Abort Terminal' : step === 'LABELING' ? 'Back' : 'Back'}
