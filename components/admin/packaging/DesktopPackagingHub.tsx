@@ -370,13 +370,13 @@ const DesktopPackagingHub: React.FC<DesktopPackagingHubProps> = ({
                                                         </div>
                                                         <div className="flex items-center gap-2">
                                                             {getShippingLogo(order['Internal Shipping Method']) && (
-                                                                <img src={getShippingLogo(order['Internal Shipping Method'])!} className="w-3.5 h-3.5 object-contain" alt="" />
+                                                                <img src={getShippingLogo(order['Internal Shipping Method'])!} className="w-6 h-6 object-contain p-0.5 bg-white rounded-sm shadow-sm" alt="" />
                                                             )}
                                                             <span className={`text-[10px] uppercase font-bold px-1.5 py-0.5 rounded-sm ${order.Team === 'A' ? 'bg-blue-900/40 text-blue-400' : 'bg-purple-900/40 text-purple-400'}`}>T-{order.Team}</span>
                                                         </div>
-                                                    </div>
-                                                    
-                                                    <div className="p-3 flex gap-3 flex-grow">
+                                                        </div>
+
+                                                        <div className="p-3 flex gap-3 flex-grow">
                                                         <img src={convertGoogleDriveUrl(order.Products[0]?.image)} className={`w-14 h-14 object-cover ${B_BG_MAIN} border ${B_BORDER} flex-shrink-0 rounded-sm`} alt="" />
                                                         <div className="flex flex-col flex-grow min-w-0">
                                                             <p 
@@ -387,27 +387,37 @@ const DesktopPackagingHub: React.FC<DesktopPackagingHubProps> = ({
                                                             </p>
                                                             <div 
                                                                 onClick={(e) => { e.stopPropagation(); handleCopy(formatPhoneNumber(order['Customer Phone']), 'Phone'); }}
-                                                                className="flex items-center gap-1.5 cursor-pointer hover:text-[#FCD535] transition-colors group"
+                                                                className="flex items-center gap-1.5 cursor-pointer hover:text-[#FCD535] transition-colors group mt-0.5"
                                                             >
                                                                 {getCarrierLogo(order['Customer Phone']) && (
-                                                                    <img src={getCarrierLogo(order['Customer Phone'])!} className="w-3.5 h-3.5 object-contain rounded-full bg-white/10" alt="" />
+                                                                    <img src={getCarrierLogo(order['Customer Phone'])!} className="w-4 h-4 object-contain rounded-full bg-white/10" alt="" />
                                                                 )}
-                                                                <p className={`text-xs font-mono ${B_TEXT_SECONDARY} group-hover:text-[#FCD535]`}>{formatPhoneNumber(order['Customer Phone'])}</p>
+                                                                <p className={`text-sm font-mono font-bold ${B_TEXT_PRIMARY} group-hover:text-[#FCD535]`}>{formatPhoneNumber(order['Customer Phone'])}</p>
                                                             </div>
-                                                            <div className="flex justify-between items-end mt-auto pt-1">
-                                                                <div className="flex flex-col">
-                                                                    <span className={`text-xs ${B_TEXT_PRIMARY} truncate max-w-[120px]`}>{order.Location}</span>
-                                                                    <span className={`text-[10px] ${B_TEXT_SECONDARY} truncate max-w-[120px]`} title={order['Address Details']}>{order['Address Details']}</span>
+                                                            <div className="flex justify-between items-end mt-auto pt-2">
+                                                                <div className="flex flex-col gap-0.5">
+                                                                    <span className={`text-sm font-bold ${B_TEXT_PRIMARY} truncate max-w-[150px]`}>{order.Location}</span>
+                                                                    <span className={`text-xs ${B_TEXT_SECONDARY} font-medium truncate max-w-[150px]`} title={order['Address Details']}>{order['Address Details']}</span>
                                                                     {(activeTab === 'Ready to Ship' || activeTab === 'Shipped') && (
-                                                                        <div className="flex items-center gap-1.5 mt-0.5">
-                                                                            {getDriverImage(order['Driver Name']) && (
-                                                                                <img src={getDriverImage(order['Driver Name'])!} className="w-3.5 h-3.5 object-cover rounded-full" alt="" />
-                                                                            )}
-                                                                            <span className={`text-[10px] ${B_ACCENT} font-bold`}>D: {order['Driver Name'] || 'TBD'}</span>
+                                                                        <div className="space-y-1.5 mt-2">
+                                                                            <div className="flex items-center gap-2">
+                                                                                {order['Driver Name'] ? (
+                                                                                    <>
+                                                                                        {getDriverImage(order['Driver Name']) && (
+                                                                                            <img src={getDriverImage(order['Driver Name'])!} className="w-4 h-4 object-cover rounded-full border-2 border-[#2B3139]" alt="" />
+                                                                                        )}
+                                                                                        <span className={`text-xs ${B_ACCENT} font-black uppercase tracking-tight`}>D: {order['Driver Name']}</span>
+                                                                                    </>
+                                                                                ) : order['Internal Shipping Details'] ? (
+                                                                                    <span className={`text-[11px] ${B_TEXT_SECONDARY} font-black italic uppercase tracking-wide`}>ដឹកដោយ: {order['Internal Shipping Details']}</span>
+                                                                                ) : null}
+                                                                            </div>
+                                                                            <div className="flex items-center gap-2 bg-[#FCD535]/5 border border-[#FCD535]/20 px-2.5 py-1 rounded-sm shadow-inner">                                                                                <div className="w-2.5 h-2.5 bg-[#FCD535] rounded-full flex items-center justify-center text-[7px] font-black text-black">P</div>
+                                                                                <span className={`text-[10px] font-bold text-[#FCD535] truncate max-w-[100px] uppercase tracking-wide`}>P: {order['Packed By'] || 'N/A'}</span>
+                                                                            </div>
                                                                         </div>
                                                                     )}
-                                                                </div>
-                                                                <div className="flex flex-col items-end">
+                                                                </div>                                                                <div className="flex flex-col items-end">
                                                                     <div className="flex items-center gap-1.5 mb-0.5">
                                                                         {getBankLogo(order['Payment Info']) && (
                                                                             <img src={getBankLogo(order['Payment Info'])!} className="w-3.5 h-3.5 object-contain rounded-sm bg-white" alt="" />
@@ -466,12 +476,12 @@ const DesktopPackagingHub: React.FC<DesktopPackagingHubProps> = ({
                                                                 </p>
                                                                 <div 
                                                                     onClick={(e) => { e.stopPropagation(); handleCopy(formatPhoneNumber(order['Customer Phone']), 'Phone'); }}
-                                                                    className="flex items-center gap-1 cursor-pointer hover:text-[#FCD535] group"
+                                                                    className="flex items-center gap-1.5 cursor-pointer hover:text-[#FCD535] group"
                                                                 >
                                                                     {getCarrierLogo(order['Customer Phone']) && (
-                                                                        <img src={getCarrierLogo(order['Customer Phone'])!} className="w-3 h-3 object-contain rounded-full bg-white/10" alt="" />
+                                                                        <img src={getCarrierLogo(order['Customer Phone'])!} className="w-4 h-4 object-contain rounded-full bg-white/10" alt="" />
                                                                     )}
-                                                                    <p className={`text-xs font-mono ${B_TEXT_SECONDARY} group-hover:text-[#FCD535]`}>{formatPhoneNumber(order['Customer Phone'])}</p>
+                                                                    <p className={`text-sm font-mono font-bold ${B_TEXT_PRIMARY} group-hover:text-[#FCD535]`}>{formatPhoneNumber(order['Customer Phone'])}</p>
                                                                 </div>
                                                             </div>
                                                             <span 
@@ -483,16 +493,27 @@ const DesktopPackagingHub: React.FC<DesktopPackagingHubProps> = ({
                                                         </div>
                                                     </div>
                                                     <div className="col-span-2 min-w-0">
-                                                        <p className={`text-sm ${B_TEXT_PRIMARY} truncate`}>{order.Location}</p>
-                                                        <p className={`text-[10px] ${B_TEXT_SECONDARY} truncate`} title={order['Address Details']}>{order['Address Details']}</p>
-                                                        <div className="flex items-center gap-2">
-                                                            <p className={`text-[10px] ${B_TEXT_SECONDARY} uppercase`}>{order.Team} Team</p>
+                                                        <p className={`text-sm font-bold ${B_TEXT_PRIMARY} truncate`}>{order.Location}</p>
+                                                        <p className={`text-xs ${B_TEXT_SECONDARY} font-medium truncate`} title={order['Address Details']}>{order['Address Details']}</p>
+                                                        <div className="flex items-center gap-2 mt-1.5">
+                                                            <p className={`text-[10px] ${B_TEXT_SECONDARY} uppercase font-bold`}>{order.Team} Team</p>
                                                             {(activeTab === 'Ready to Ship' || activeTab === 'Shipped') && (
-                                                                <div className="flex items-center gap-1 truncate">
-                                                                    {getDriverImage(order['Driver Name']) && (
-                                                                        <img src={getDriverImage(order['Driver Name'])!} className="w-3 h-3 object-cover rounded-full" alt="" />
-                                                                    )}
-                                                                    <p className={`text-[10px] ${B_ACCENT} font-bold uppercase truncate`}>{order['Driver Name'] || 'TBD'}</p>
+                                                                <div className="flex flex-col gap-1.5">
+                                                                    <div className="flex items-center gap-2 truncate">
+                                                                        {order['Driver Name'] ? (
+                                                                            <>
+                                                                                {getDriverImage(order['Driver Name']) && (
+                                                                                    <img src={getDriverImage(order['Driver Name'])!} className="w-4 h-4 object-cover rounded-full border border-white/10" alt="" />
+                                                                                )}
+                                                                                <p className={`text-xs ${B_ACCENT} font-black uppercase truncate`}>{order['Driver Name']}</p>
+                                                                            </>
+                                                                        ) : order['Internal Shipping Details'] ? (
+                                                                            <p className={`text-[10px] ${B_TEXT_SECONDARY} font-black italic uppercase truncate`}>ដឹកដោយ: {order['Internal Shipping Details']}</p>
+                                                                        ) : null}
+                                                                    </div>
+                                                                    <div className="flex items-center gap-2 bg-[#FCD535]/10 px-2 py-0.5 rounded-sm w-fit max-w-[140px]">
+                                                                        <p className={`text-xs font-black text-[#FCD535] uppercase truncate`}>P: {order['Packed By'] || 'N/A'}</p>
+                                                                    </div>
                                                                 </div>
                                                             )}
                                                         </div>
