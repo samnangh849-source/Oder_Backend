@@ -337,6 +337,10 @@ const TabletPackagingHub: React.FC<TabletPackagingHubProps> = ({
                                                         </div>
                                                     )}
                                                 </div>
+                                                <div className="mt-2 flex flex-col gap-0.5 mb-2">
+                                                    <p className={`text-sm ${B_TEXT_PRIMARY} truncate`}>{order.Location}</p>
+                                                    <p className={`text-[10px] ${B_TEXT_SECONDARY} truncate`} title={order['Address Details']}>{order['Address Details']}</p>
+                                                </div>
                                                 <div className={`flex justify-between items-center mt-2 pt-2 border-t ${B_BORDER}`}>
                                                     <div className="flex flex-col">
                                                         <div className="flex items-center gap-1.5">

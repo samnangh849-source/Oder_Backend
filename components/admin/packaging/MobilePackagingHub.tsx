@@ -339,7 +339,10 @@ const MobilePackagingHub: React.FC<MobilePackagingHubProps> = ({
                                                         </div>
                                                     )}
                                                 </div>
-                                                <p className={`text-xs ${B_TEXT_SECONDARY} mt-2 truncate max-w-[150px]`}>{order.Location}</p>
+                                                <div className="mt-2 flex flex-col gap-0.5">
+                                                    <p className={`text-xs ${B_TEXT_PRIMARY} truncate`}>{order.Location}</p>
+                                                    <p className={`text-[10px] ${B_TEXT_SECONDARY} truncate`}>{order['Address Details']}</p>
+                                                </div>
                                             </div>
                                             <div className="text-right flex flex-col items-end">
                                                 <p className={`text-sm font-mono font-bold ${B_GREEN}`}>${(Number(order['Grand Total']) || 0).toFixed(2)}</p>

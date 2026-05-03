@@ -396,7 +396,8 @@ const DesktopPackagingHub: React.FC<DesktopPackagingHubProps> = ({
                                                             </div>
                                                             <div className="flex justify-between items-end mt-auto pt-1">
                                                                 <div className="flex flex-col">
-                                                                    <span className={`text-xs ${B_TEXT_SECONDARY} truncate max-w-[100px]`}>{order.Location}</span>
+                                                                    <span className={`text-xs ${B_TEXT_PRIMARY} truncate max-w-[120px]`}>{order.Location}</span>
+                                                                    <span className={`text-[10px] ${B_TEXT_SECONDARY} truncate max-w-[120px]`} title={order['Address Details']}>{order['Address Details']}</span>
                                                                     {(activeTab === 'Ready to Ship' || activeTab === 'Shipped') && (
                                                                         <div className="flex items-center gap-1.5 mt-0.5">
                                                                             {getDriverImage(order['Driver Name']) && (
@@ -483,6 +484,7 @@ const DesktopPackagingHub: React.FC<DesktopPackagingHubProps> = ({
                                                     </div>
                                                     <div className="col-span-2 min-w-0">
                                                         <p className={`text-sm ${B_TEXT_PRIMARY} truncate`}>{order.Location}</p>
+                                                        <p className={`text-[10px] ${B_TEXT_SECONDARY} truncate`} title={order['Address Details']}>{order['Address Details']}</p>
                                                         <div className="flex items-center gap-2">
                                                             <p className={`text-[10px] ${B_TEXT_SECONDARY} uppercase`}>{order.Team} Team</p>
                                                             {(activeTab === 'Ready to Ship' || activeTab === 'Shipped') && (
