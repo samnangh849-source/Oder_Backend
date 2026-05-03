@@ -33,6 +33,11 @@ import { OrderProvider, useOrder } from './context/OrderContext';
 import { localDbService } from './services/localDbService';
 import { translations } from './translations';
 
+const OrderNotificationTrigger: React.FC = () => {
+    useOrderNotifications();
+    return null;
+};
+
 const AppContent: React.FC = () => {
     const { 
         notifications, removeNotification, showNotification,
@@ -49,8 +54,6 @@ const AppContent: React.FC = () => {
     const {
         orders, setOrders, appData, isOrdersLoading, isSyncing, refreshTimestamp, fetchData, fetchOrders, refreshData
     } = useOrder();
-
-    useOrderNotifications();
 
     const [appState, setAppState] = useUrlState<'login' | 'user_journey' | 'admin_dashboard' | 'create_order' | 'fulfillment' | 'role_selection' | 'confirm_delivery' | 'entertainment' | 'watch' | 'series_player' | 'long_player' | 'short_player' | 'cambodia_map' | 'print_label' | 'order_metadata'>('view', 'login');
     const [selectedTeam, setSelectedTeam] = useUrlState<string>('team', '');
@@ -193,6 +196,23 @@ const AppContent: React.FC = () => {
         if (lastMessage.type === 'new_order') {
             console.log("[App] 🔔 New order detected. Refreshing data...");
             fetchOrders(true); // Background sync
+            
+            // Trigger sound for all (Ding via notification)
+            showNotification(
+                language === 'km' ? 'មានកុម្ម៉ង់ថ្មី!' : 'New Order Detected!', 
+                'info', 
+                language === 'km' ? '🆕 កុម្ម៉ង់ថ្មី' : '🆕 New Order'
+            );
+
+            // Play voice for Shift Opener only
+            if (isShiftOpener) {
+                setTimeout(() => {
+                    console.log(`[App] 🗣️ Playing voice alert via WS: ${SOUND_URLS.NEW_ORDER_VOICE}`);
+                    const audio = new Audio(SOUND_URLS.NEW_ORDER_VOICE);
+                    audio.volume = 1.0;
+                    audio.play().catch(e => console.error("[App] Voice play failed:", e));
+                }, 800);
+            }
         } else if (lastMessage.type === 'update_order') {
             const { orderId, newData } = lastMessage;
             if (orderId && newData) {
@@ -540,6 +560,7 @@ const AppContent: React.FC = () => {
 
     return (
         <AppContext.Provider value={legacyContextValue as any}>
+            <OrderNotificationTrigger />
             <div className={`theme-wrapper h-screen w-full overflow-hidden flex flex-col ${advancedSettings.uiTheme ? `ui-${advancedSettings.uiTheme}` : ''} ${advancedSettings.themeMode ? `theme-${advancedSettings.themeMode}` : 'theme-dark'}`}>
                 {/* GLOBAL PREMIUM BACKGROUND */}
                 <div className="fixed inset-0 w-screen h-[100dvh] overflow-hidden pointer-events-none z-0" style={{ backgroundColor: 'var(--bg-dark)' }}>

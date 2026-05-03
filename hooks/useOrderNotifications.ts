@@ -16,8 +16,16 @@ export const useOrderNotifications = () => {
 
         const checkUpdates = async () => {
             try {
+                console.log(`[Notification] Checking for updates. isShiftOpener: ${isShiftOpener}`);
+                
+                const token = localStorage.getItem('token');
+                const headers: HeadersInit = { 'Content-Type': 'application/json' };
+                if (token) headers['Authorization'] = `Bearer ${token}`;
+
                 // Fetch recent orders with cache busting
-                const response = await fetch(`${WEB_APP_URL}/api/admin/all-orders?days=2&_t=${Date.now()}`);
+                const response = await fetch(`${WEB_APP_URL}/api/admin/all-orders?days=2&_t=${Date.now()}`, {
+                    headers
+                });
                 if (!response.ok) return;
                 const result = await response.json();
                 if (result.status !== 'success') return;
