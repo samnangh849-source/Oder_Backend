@@ -94,7 +94,7 @@ export const useBarcodeScanner = (
         }
     }, [zoomCapabilities, applyConstraints, elementId, activeVideo]);
 
-    const { isAutoZooming, notifyManualZoom, trackingBox } = useSmartZoom(
+    const { isAutoZooming, notifyManualZoom, trackingBox, handBox, handKeypoints, faceBox, detectedGesture } = useSmartZoom(
         activeVideo,
         activeTrack,
         zoom,
@@ -311,8 +311,8 @@ export const useBarcodeScanner = (
                         setZoomCapabilities(null);
                     }
                     
-                    // 🚀 Apply initial 1x zoom
-                    setSmoothZoom(1);
+                    // 🚀 Apply initial 1.3x zoom to match visual preview and improve distance scanning
+                    setSmoothZoom(1.3);
                 }
 
                 setIsInitializing(false);
@@ -370,6 +370,10 @@ export const useBarcodeScanner = (
         facingMode,
         scanFromImage,
         trackingBox,
+        handBox,
+        handKeypoints,
+        faceBox,
+        detectedGesture,
         activeVideo,
         activeTrack
     };

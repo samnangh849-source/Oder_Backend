@@ -10,6 +10,10 @@ export const useSmartZoom = (
 ) => {
     const [isAutoZooming, setIsAutoZooming] = useState(false);
     const [trackingBox, setTrackingBox] = useState<any>(null);
+    const [handBox, setHandBox] = useState<any>(null);
+    const [handKeypoints, setHandKeypoints] = useState<any[]>([]);
+    const [faceBox, setFaceBox] = useState<any>(null);
+    const [detectedGesture, setDetectedGesture] = useState<'none' | 'five_fingers' | 'thumbs_up' | 'fist'>('none');
     const lastManualZoomTime = useRef(0);
     const isActive = useRef(true);
     const targetZoomRef = useRef(currentZoom);
@@ -40,6 +44,12 @@ export const useSmartZoom = (
             }
 
             const result = await packageDetector.detect(videoElement);
+            
+            // Set detected gesture and hand tracking box
+            setDetectedGesture(result.gesture || 'none');
+            setHandBox(result.isHand ? result.box : null);
+            setHandKeypoints(result.keypoints || []);
+            setFaceBox(result.faceBox || null);
             
             // Priority 1: If Barcode found, calculate optimal zoom to fill ~30% of height
             if (result.barcodeBox) {
@@ -99,7 +109,11 @@ export const useSmartZoom = (
     return { 
         zoom: currentZoom,
         trackingBox, 
+        handBox,
+        handKeypoints,
+        faceBox,
         isAutoZooming, 
-        notifyManualZoom 
+        notifyManualZoom,
+        detectedGesture
     };
 };

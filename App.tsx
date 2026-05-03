@@ -72,7 +72,7 @@ const AppContent: React.FC = () => {
             fontStyle: 'standard',
             orderEditGracePeriod: 15,
             placingOrderGracePeriod: 5,
-            packagingGracePeriod: 5
+            packagingGracePeriod: 2
         };
         if (saved) {
             try { return { ...defaultSettings, ...JSON.parse(saved) }; } catch (e) { return defaultSettings; }

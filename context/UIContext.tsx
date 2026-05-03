@@ -66,7 +66,7 @@ export const UIProvider: React.FC<{ children: React.ReactNode }> = ({ children }
             musicVolume: 0.3,
             orderEditGracePeriod: 43200,
             placingOrderGracePeriod: 5,
-            packagingGracePeriod: 3,
+            packagingGracePeriod: 2,
             uiTheme: 'default',
             themeMode: 'dark'
         };

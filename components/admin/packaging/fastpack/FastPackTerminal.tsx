@@ -14,6 +14,7 @@ import { useBarcodeScanner } from '@/hooks/useBarcodeScanner';
 import { useOrder } from '@/context/OrderContext';
 import { translations } from '@/translations';
 import UserAvatar from '@/components/common/UserAvatar';
+import { useSoundEffects } from '@/hooks/useSoundEffects';
 
 import { Printer, Edit3, MapPin } from 'lucide-react';
 import OrderSummaryPanel from './OrderSummaryPanel'; 
@@ -31,6 +32,7 @@ interface FastPackTerminalProps {
 const FastPackTerminal: React.FC<FastPackTerminalProps> = ({ order, onClose, onSuccess }) => {
     const { currentUser, appData, advancedSettings, language } = useContext(AppContext);
     const { showNotification } = useUI();
+    const { playNotify } = useSoundEffects();
     const t = translations[language as 'km' | 'en'];
     const { setOrders } = useOrder();
     
@@ -64,6 +66,16 @@ const FastPackTerminal: React.FC<FastPackTerminalProps> = ({ order, onClose, onS
         if (!order) return false;
         return order.Products.every(p => (verifiedItems[p.name] || 0) >= p.quantity);
     }, [order, verifiedItems]);
+
+    const isFlexiGear = useMemo(() => {
+        const store = order?.['Fulfillment Store']?.toLowerCase() || '';
+        return store.includes('flexi');
+    }, [order]);
+
+    const isACCStore = useMemo(() => {
+        const store = order?.['Fulfillment Store']?.toLowerCase() || '';
+        return store.includes('acc');
+    }, [order]);
     
     const [uploading, setUploading] = useState(false);
     const [uploadProgress, setUploadProgress] = useState(0);
@@ -85,12 +97,14 @@ const FastPackTerminal: React.FC<FastPackTerminalProps> = ({ order, onClose, onS
 
     const [autoCaptureCountdown, setAutoCaptureCountdown] = useState<number | null>(null);
     const [isCapturing, setIsCapturing] = useState(false);
+    const [palmDetected, setPalmDetected] = useState(false);
     const lastDetectedQR = useRef<string | null>(null);
+    const lastGestureTime = useRef<number>(0);
     const countdownTimerRef = useRef<any>(null);
     
     const [undoTimer, setUndoTimer] = useState<number | null>(null);
     const [isUndoing, setIsUndoing] = useState(false);
-    const maxUndoTimer = advancedSettings.packagingGracePeriod || 5;
+    const maxUndoTimer = advancedSettings.packagingGracePeriod || 2;
     const submitTimeoutRef = useRef<NodeJS.Timeout | null>(null);
     const submitIntervalRef = useRef<NodeJS.Timeout | null>(null);
 
@@ -219,7 +233,7 @@ const FastPackTerminal: React.FC<FastPackTerminalProps> = ({ order, onClose, onS
     const handleSubmit = useCallback(() => {
         if (submitTimeoutRef.current) clearTimeout(submitTimeoutRef.current);
         if (submitIntervalRef.current) clearInterval(submitIntervalRef.current);
-        const gracePeriod = advancedSettings.packagingGracePeriod || 5;
+        const gracePeriod = advancedSettings.packagingGracePeriod || 2;
         setUndoTimer(gracePeriod);
         let secondsLeft = gracePeriod;
         submitIntervalRef.current = setInterval(() => {
@@ -403,12 +417,47 @@ const FastPackTerminal: React.FC<FastPackTerminalProps> = ({ order, onClose, onS
         isTorchSupported, 
         stopScanner, 
         trackingBox,
+        handBox,
+        handKeypoints,
+        faceBox,
+        detectedGesture,
         activeVideo
     } = useBarcodeScanner('fastpack-scanner-container', (decoded) => {
         if (step !== 'PHOTO' || packagePhoto || autoCaptureCountdown !== null || isCapturing) return;
         if (decoded === lastDetectedQR.current) return;
-        lastDetectedQR.current = decoded; setAutoCaptureCountdown(3);
+        lastDetectedQR.current = decoded; setAutoCaptureCountdown(2);
     }, 'single', { disableScanner: step !== 'PHOTO' || (step === 'PHOTO' && !!packagePhoto) });
+
+    useEffect(() => {
+        if (step !== 'PHOTO' || packagePhoto || autoCaptureCountdown !== null || isCapturing) return;
+        
+        const now = Date.now();
+        
+        // 1. Detect Open Palm (Five Fingers)
+        if (detectedGesture === 'five_fingers' && !palmDetected) {
+            if (now - lastGestureTime.current > 2000) {
+                setPalmDetected(true);
+                playNotify(); // Confirmation sound for palm
+                lastGestureTime.current = now;
+            }
+        }
+        
+        // 2. Detect Closed Fist AFTER Palm
+        if (detectedGesture === 'fist' && palmDetected) {
+            if (now - lastGestureTime.current > 500) { // Small buffer
+                setPalmDetected(false);
+                lastGestureTime.current = now;
+                playNotify(); // Sound for countdown start
+                setAutoCaptureCountdown(2);
+            }
+        }
+
+        // 3. Reset palm detection if no action for 5 seconds
+        if (palmDetected && now - lastGestureTime.current > 5000) {
+            setPalmDetected(false);
+        }
+
+    }, [detectedGesture, step, packagePhoto, autoCaptureCountdown, isCapturing, playNotify, palmDetected]);
 
     useEffect(() => {
         if (autoCaptureCountdown === null) return;
@@ -818,10 +867,52 @@ const FastPackTerminal: React.FC<FastPackTerminalProps> = ({ order, onClose, onS
                                 )}
 
                                 {step === 'PHOTO' && (
-                                    <div className="h-full w-full animate-in fade-in zoom-in-95 duration-700 relative overflow-hidden flex flex-col">
-                                        {/* Main Camera/Photo Canvas Area */}
-                                        <div className="flex-grow relative overflow-hidden bg-black">
+                                    <div className="h-full w-full animate-in fade-in zoom-in-95 duration-700 relative overflow-hidden flex flex-col items-center justify-center bg-black">
+                                        {/* Main Camera/Photo Canvas Area - 1:1 Constraint */}
+                                        <div className="relative aspect-square w-full max-h-full flex items-center justify-center overflow-hidden bg-[#08090a] shadow-[0_0_100px_rgba(0,0,0,0.5)]">
                                             <div id="fastpack-scanner-container" className="absolute inset-0 z-0 transition-opacity duration-700"></div>
+
+                                            {/* POSITIONING REMINDER OVERLAY */}
+                                            {!packagePhoto && !isCapturing && (
+                                                <div className="absolute top-6 inset-x-0 z-[60] flex justify-center pointer-events-none px-4">
+                                                    <div className="bg-black/60 backdrop-blur-xl border border-[#FCD535]/30 px-6 py-3 shadow-[0_10px_40px_rgba(0,0,0,0.5)] animate-in slide-in-from-top-4 duration-1000">
+                                                        <div className="flex flex-col items-center gap-1">
+                                                            <span className="text-[#FCD535] text-lg font-black tracking-tight uppercase">
+                                                                សូមដាក់កញ្ចប់ឱ្យចំកណ្ដាល និងកៀកកាមេរ៉ា
+                                                            </span>
+                                                            <div className="flex items-center gap-2">
+                                                                <div className="w-1 h-1 bg-[#FCD535] rounded-full animate-pulse"></div>
+                                                                <span className="text-white/60 text-[10px] font-bold uppercase tracking-[0.2em]">
+                                                                    Center & Proximity Alignment
+                                                                </span>
+                                                                <div className="w-1 h-1 bg-[#FCD535] rounded-full animate-pulse"></div>
+                                                            </div>
+                                                        </div>
+                                                    </div>
+                                                </div>
+                                            )}
+
+                                            {/* LABEL PLACEMENT GUIDE OVERLAY */}
+                                            {!packagePhoto && !isCapturing && (
+                                                <div className="absolute inset-0 z-30 pointer-events-none flex items-center justify-center">
+                                                    {isFlexiGear ? (
+                                                        <div className="w-[60%] h-[80%] border-2 border-dashed border-[#FCD535]/40 bg-[#FCD535]/5 flex items-center justify-center relative">
+                                                            <div className="absolute -top-6 left-0 bg-[#FCD535] text-black text-[10px] font-black px-2 py-0.5 uppercase tracking-widest whitespace-nowrap">
+                                                                Flexi Gear (60x80mm Vertical)
+                                                            </div>
+                                                            <div className="h-[80%] w-px bg-[#FCD535]/20"></div>
+                                                            <div className="w-[80%] h-px bg-[#FCD535]/20 absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 opacity-0"></div>
+                                                        </div>
+                                                    ) : isACCStore ? (
+                                                        <div className="w-[80%] h-[60%] border-2 border-dashed border-[#FCD535]/40 bg-[#FCD535]/5 flex items-center justify-center relative">
+                                                            <div className="absolute -top-6 left-0 bg-[#FCD535] text-black text-[10px] font-black px-2 py-0.5 uppercase tracking-widest whitespace-nowrap">
+                                                                ACC Store (80x60mm Horizontal)
+                                                            </div>
+                                                            <div className="w-[80%] h-px bg-[#FCD535]/20"></div>
+                                                        </div>
+                                                    ) : null}
+                                                </div>
+                                            )}
 
                                             {/* DIGITAL TRACKING OVERLAY */}
                                             {trackingBox && !packagePhoto && (
@@ -844,6 +935,138 @@ const FastPackTerminal: React.FC<FastPackTerminalProps> = ({ order, onClose, onS
                                                     {/* Tracking Label */}
                                                     <div className="absolute -top-8 left-1/2 -translate-x-1/2 bg-[#FCD535] text-black text-[10px] font-black px-2 py-0.5 uppercase tracking-widest whitespace-nowrap">
                                                         Tracking QR
+                                                    </div>
+                                                </div>
+                                            )}
+
+                                            {/* HAND TRACKING OVERLAY */}
+                                            {handBox && !packagePhoto && (
+                                                <div 
+                                                    className="absolute border-2 border-green-500/60 z-30 pointer-events-none transition-all duration-100"
+                                                    style={{
+                                                        left: `${(handBox.x / (activeVideo?.videoWidth || 1)) * 100}%`,
+                                                        top: `${(handBox.y / (activeVideo?.videoHeight || 1)) * 100}%`,
+                                                        width: `${(handBox.w / (activeVideo?.videoWidth || 1)) * 100}%`,
+                                                        height: `${(handBox.h / (activeVideo?.videoHeight || 1)) * 100}%`,
+                                                        boxShadow: `0 0 20px ${detectedGesture === 'five_fingers' ? 'rgba(34, 197, 94, 0.5)' : 'rgba(34, 197, 94, 0.2)'}`
+                                                    }}
+                                                >
+                                                    {/* Corner Accents */}
+                                                    <div className={`absolute -top-1 -left-1 w-3 h-3 border-t-2 border-l-2 ${detectedGesture === 'five_fingers' ? 'border-green-400' : 'border-green-500/40'}`}></div>
+                                                    <div className={`absolute -top-1 -right-1 w-3 h-3 border-t-2 border-r-2 ${detectedGesture === 'five_fingers' ? 'border-green-400' : 'border-green-500/40'}`}></div>
+                                                    <div className={`absolute -bottom-1 -left-1 w-3 h-3 border-b-2 border-l-2 ${detectedGesture === 'five_fingers' ? 'border-green-400' : 'border-green-500/40'}`}></div>
+                                                    <div className={`absolute -bottom-1 -right-1 w-3 h-3 border-b-2 border-r-2 ${detectedGesture === 'five_fingers' ? 'border-green-400' : 'border-green-500/40'}`}></div>
+
+                                                    {/* Status Label */}
+                                                    <div className={`absolute -bottom-8 left-1/2 -translate-x-1/2 ${detectedGesture === 'five_fingers' || palmDetected ? 'bg-green-500' : detectedGesture === 'fist' ? 'bg-[#FCD535] text-black' : 'bg-gray-800/80'} text-white text-[9px] font-black px-2 py-0.5 uppercase tracking-widest whitespace-nowrap transition-colors`}>
+                                                        {palmDetected ? 'Palm Locked: Close Fist to Capture' : detectedGesture === 'five_fingers' ? 'Open Palm Detected' : detectedGesture === 'fist' ? 'Fist Detected' : 'Hand Detected'}
+                                                    </div>
+                                                </div>
+                                            )}
+
+                                            {/* HAND SKELETON (DIGITAL FINGERS) */}
+                                            {handKeypoints && handKeypoints.length > 0 && !packagePhoto && (
+                                                <svg className="absolute inset-0 z-40 pointer-events-none w-full h-full">
+                                                    {(() => {
+                                                        const vw = activeVideo?.videoWidth || 1;
+                                                        const vh = activeVideo?.videoHeight || 1;
+                                                        
+                                                        // Helper to map video coordinates to screen %
+                                                        const mapX = (x: number) => (x / vw) * 100;
+                                                        const mapY = (y: number) => (y / vh) * 100;
+
+                                                        // Hand Connections (Skeleton)
+                                                        const fingerPaths = [
+                                                            [0, 1, 2, 3, 4],    // Thumb
+                                                            [0, 5, 6, 7, 8],    // Index
+                                                            [0, 9, 10, 11, 12], // Middle
+                                                            [0, 13, 14, 15, 16], // Ring
+                                                            [0, 17, 18, 19, 20], // Pinky
+                                                            [5, 9, 13, 17, 0]    // Palm base
+                                                        ];
+
+                                                        const isAction = detectedGesture === 'five_fingers' || detectedGesture === 'fist' || palmDetected;
+
+                                                        return (
+                                                            <>
+                                                                {/* Lines (Bones) */}
+                                                                {fingerPaths.map((path, i) => (
+                                                                    <polyline 
+                                                                        key={`path-${i}`}
+                                                                        points={path.map(idx => `${mapX(handKeypoints[idx].x)}%,${mapY(handKeypoints[idx].y)}%`).join(' ')}
+                                                                        fill="none"
+                                                                        stroke={palmDetected || detectedGesture === 'five_fingers' ? '#4ade80' : detectedGesture === 'fist' ? '#FCD535' : 'rgba(74, 222, 128, 0.6)'}
+                                                                        strokeWidth="6"
+                                                                        strokeLinecap="round"
+                                                                        strokeLinejoin="round"
+                                                                        className="transition-all duration-100 opacity-40"
+                                                                        style={{ filter: 'blur(1px)' }}
+                                                                    />
+                                                                ))}
+                                                                {/* Inner Core Lines */}
+                                                                {fingerPaths.map((path, i) => (
+                                                                    <polyline 
+                                                                        key={`core-path-${i}`}
+                                                                        points={path.map(idx => `${mapX(handKeypoints[idx].x)}%,${mapY(handKeypoints[idx].y)}%`).join(' ')}
+                                                                        fill="none"
+                                                                        stroke={isAction ? '#ffffff' : 'rgba(255, 255, 255, 0.8)'}
+                                                                        strokeWidth="2"
+                                                                        strokeLinecap="round"
+                                                                        strokeLinejoin="round"
+                                                                        className="transition-all duration-100"
+                                                                    />
+                                                                ))}
+                                                                {/* Dots (Joints & Tips) */}
+                                                                {handKeypoints.map((kp, i) => {
+                                                                    const isTip = [4, 8, 12, 16, 20].includes(i);
+                                                                    return (
+                                                                        <circle 
+                                                                            key={`kp-${i}`}
+                                                                            cx={`${mapX(kp.x)}%`}
+                                                                            cy={`${mapY(kp.y)}%`}
+                                                                            r={isTip ? "5" : "3"}
+                                                                            fill={isTip ? (palmDetected || detectedGesture === 'five_fingers' ? '#4ade80' : detectedGesture === 'fist' ? '#FCD535' : 'white') : 'white'}
+                                                                            className="transition-all duration-100"
+                                                                            style={{ 
+                                                                                filter: isTip ? 'drop-shadow(0 0 8px rgba(252, 213, 53, 0.8))' : 'none',
+                                                                                opacity: isTip ? 1 : 0.7
+                                                                            }}
+                                                                        />
+                                                                    );
+                                                                })}
+                                                            </>
+                                                        );
+                                                    })()}
+                                                </svg>
+                                            )}
+
+                                            {/* FACE TRACKING OVAL (PURELY VISUAL) */}
+                                            {faceBox && !packagePhoto && (
+                                                <div 
+                                                    className="absolute z-30 pointer-events-none transition-all duration-200 border-[3px] border-white/40"
+                                                    style={{
+                                                        left: `${(faceBox.x / (activeVideo?.videoWidth || 1)) * 100}%`,
+                                                        top: `${(faceBox.y / (activeVideo?.videoHeight || 1)) * 100}%`,
+                                                        width: `${(faceBox.w / (activeVideo?.videoWidth || 1)) * 100}%`,
+                                                        height: `${(faceBox.h / (activeVideo?.videoHeight || 1)) * 100}%`,
+                                                        borderRadius: '100% 100% 95% 95%', // More defined face oval
+                                                        boxShadow: '0 0 50px rgba(255, 255, 255, 0.1), inset 0 0 30px rgba(255, 255, 255, 0.1)',
+                                                        background: 'radial-gradient(circle at 50% 40%, transparent 60%, rgba(255, 255, 255, 0.05) 100%)'
+                                                    }}
+                                                >
+                                                    {/* Digital Face Accents */}
+                                                    <div className="absolute top-[30%] left-[25%] w-3 h-1.5 bg-white/30 rounded-full blur-[1px] rotate-[-5deg]"></div>
+                                                    <div className="absolute top-[30%] right-[25%] w-3 h-1.5 bg-white/30 rounded-full blur-[1px] rotate-[5deg]"></div>
+                                                    <div className="absolute bottom-[25%] left-1/2 -translate-x-1/2 w-[40%] h-[2px] bg-white/20 rounded-full"></div>
+                                                    
+                                                    {/* Scanning Line Effect */}
+                                                    <div className="absolute inset-x-0 h-[2px] bg-white/10 top-1/2 animate-scan-slow shadow-[0_0_15px_white]"></div>
+
+                                                    {/* Label */}
+                                                    <div className="absolute -top-8 left-1/2 -translate-x-1/2 bg-white/10 backdrop-blur-md px-3 py-0.5 border border-white/20">
+                                                        <span className="text-[8px] font-black text-white uppercase tracking-[0.4em] whitespace-nowrap">
+                                                            Target Lock: Human
+                                                        </span>
                                                     </div>
                                                 </div>
                                             )}
@@ -882,7 +1105,7 @@ const FastPackTerminal: React.FC<FastPackTerminalProps> = ({ order, onClose, onS
 
                                             {/* CAMERA CONTROLS - Perfectly centered relative to the preview panel */}
                                             {!packagePhoto && !isScannerLoading && !isCapturing && (
-                                                <div className="absolute bottom-12 inset-x-0 flex justify-center z-40 pointer-events-none">
+                                                <div className="absolute bottom-12 inset-x-0 flex justify-center z-40 pointer-events-auto">
                                                     <div className="flex items-center gap-12 p-5 bg-black/60 backdrop-blur-3xl border border-white/10 rounded-none shadow-[0_40px_80px_rgba(0,0,0,0.8)] animate-in slide-in-from-bottom-10 duration-700 pointer-events-auto">
                                                         {/* Switch Camera */}
                                                         <button onClick={switchCamera} className="w-14 h-14 rounded-none text-white/40 hover:text-white flex items-center justify-center transition-all hover:bg-white/5 group border border-white/5">
@@ -940,9 +1163,11 @@ const FastPackTerminal: React.FC<FastPackTerminalProps> = ({ order, onClose, onS
                     display: none !important;
                 }
                 #fastpack-scanner-container video {
-                    object-fit: contain !important;
+                    object-fit: cover !important;
                     width: 100% !important;
                     height: 100% !important;
+                    transform: scale(1.3) !important;
+                    transform-origin: center center !important;
                 }
                 
                 @keyframes scan-slow {

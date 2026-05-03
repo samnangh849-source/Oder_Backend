@@ -9,9 +9,10 @@ export interface DetectionResult {
     keypoints?: handPoseDetection.Keypoint[]; 
     stability: number;
     type: 'box' | 'bag' | 'general';
-    gesture?: 'none' | 'five_fingers' | 'thumbs_up';
+    gesture?: 'none' | 'five_fingers' | 'thumbs_up' | 'fist';
     confidence: number;
     isHand: boolean;
+    faceBox?: { x: number, y: number, w: number, h: number } | null;
     barcodeBox?: { x: number, y: number, w: number, h: number } | null;
     barcodeValue?: string;
     barcodeFormat?: string;
@@ -20,10 +21,12 @@ export interface DetectionResult {
 
 export class PackageDetector {
     private detector: handPoseDetection.HandDetector | null = null;
+    private faceDetector: any = null;
     private barcodeDetector: any = null;
     private isInitializing: boolean = false;
     
     private lastBox: { x: number, y: number, w: number, h: number } | null = null;
+    private lastFaceBox: { x: number, y: number, w: number, h: number } | null = null;
     private smoothingFactor = 0.2; 
 
     private scanCanvas: HTMLCanvasElement | null = null;
@@ -69,6 +72,21 @@ export class PackageDetector {
                 modelType: 'lite', 
             };
             this.detector = await handPoseDetection.createDetector(model, detectorConfig);
+
+            console.log("AI: Loading Face Detection model...");
+            try {
+                // @ts-ignore
+                const fd = window.faceDetection;
+                if (fd) {
+                    const faceModel = fd.SupportedModels.MediaPipeFaceDetector;
+                    this.faceDetector = await fd.createDetector(faceModel, {
+                        runtime: 'mediapipe',
+                        solutionPath: `https://cdn.jsdelivr.net/npm/@mediapipe/face_detection`
+                    });
+                    console.log("AI: Face Detector Ready.");
+                }
+            } catch (e) { console.warn("AI: Face detector initialization failed", e); }
+
             console.log("AI: Core Ready.");
         } catch (error) {
             console.error("AI Core Error:", error);
@@ -79,18 +97,20 @@ export class PackageDetector {
 
     isReady() { return !!this.detector; }
 
-    private smoothBox(newBox: { x: number, y: number, w: number, h: number }) {
-        if (!this.lastBox) {
-            this.lastBox = newBox;
+    private smoothBox(newBox: { x: number, y: number, w: number, h: number }, isFace = false) {
+        const last = isFace ? this.lastFaceBox : this.lastBox;
+        if (!last) {
+            if (isFace) this.lastFaceBox = newBox; else this.lastBox = newBox;
             return newBox;
         }
-        this.lastBox = {
-            x: this.lastBox.x + (newBox.x - this.lastBox.x) * this.smoothingFactor,
-            y: this.lastBox.y + (newBox.y - this.lastBox.y) * this.smoothingFactor,
-            w: this.lastBox.w + (newBox.w - this.lastBox.w) * this.smoothingFactor,
-            h: this.lastBox.h + (newBox.h - this.lastBox.h) * this.smoothingFactor,
+        const smoothed = {
+            x: last.x + (newBox.x - last.x) * this.smoothingFactor,
+            y: last.y + (newBox.y - last.y) * this.smoothingFactor,
+            w: last.w + (newBox.w - last.w) * this.smoothingFactor,
+            h: last.h + (newBox.h - last.h) * this.smoothingFactor,
         };
-        return this.lastBox;
+        if (isFace) this.lastFaceBox = smoothed; else this.lastBox = smoothed;
+        return smoothed;
     }
 
     async detect(video: HTMLVideoElement): Promise<DetectionResult> {
@@ -100,6 +120,7 @@ export class PackageDetector {
 
         let gestureDetected: 'none' | 'five_fingers' | 'thumbs_up' = 'none';
         let rawBox: { x: number, y: number, w: number, h: number } | null = null;
+        let faceBox: { x: number, y: number, w: number, h: number } | null = null;
         let keypoints: handPoseDetection.Keypoint[] | undefined = undefined;
         let isHand = false;
         let confidence = 0;
@@ -148,22 +169,28 @@ export class PackageDetector {
         this.lastBarcodeValue = foundValue;
         this.lastBarcodeFormat = foundFormat;
 
+        // --- FACE DETECTION ---
+        if (this.faceDetector && this.frameCount % 3 === 0) {
+            try {
+                const faces = await this.faceDetector.estimateFaces(video);
+                if (faces.length > 0) {
+                    const f = faces[0].box;
+                    faceBox = this.smoothBox({ x: f.xMin, y: f.yMin, w: f.width, h: f.height }, true);
+                }
+            } catch (e) {}
+        }
+
         // --- SMART QR CANDIDATE DETECTION (For Auto-Zoom) ---
         let candidates: { x: number, y: number }[] = [];
         if (!foundBox && this.frameCount % 2 === 0) { // Scan for candidates every other frame
             const { ctx, width, height, scale } = this.getScanContext(video);
             if (ctx) {
                 const data = ctx.getImageData(0, 0, width, height).data;
-                // Look for "finder patterns" heuristic (simplified contrast-based search)
-                // In a real scenario, we might use a lightweight ML model or 
-                // specialized edge detection. For now, we use a simple grid search
-                // for high-variance regions which often indicate barcodes/QR codes.
                 const step = Math.floor(width / 20);
                 for (let y = step; y < height - step; y += step) {
                     for (let x = step; x < width - step; x += step) {
                         const idx = (y * width + x) * 4;
                         const brightness = (data[idx] + data[idx+1] + data[idx+2]) / 3;
-                        // Simplistic "interest point" detection
                         if (brightness < 100) { // Dark pixel (potential QR module)
                             candidates.push({ x: x / scale, y: y / scale });
                             if (candidates.length > 5) break; 
@@ -199,11 +226,14 @@ export class PackageDetector {
 
                     const k = hand.keypoints;
                     const isExtended = (tip: number, mid: number, base: number) => k[tip].y < k[mid].y && k[mid].y < k[base].y;
+                    const isCurled = (tip: number, mid: number, base: number) => k[tip].y > k[mid].y;
                     
                     const openPalm = isExtended(8, 7, 5) && isExtended(12, 11, 9) && isExtended(16, 15, 13) && isExtended(20, 19, 17);
-                    const thumbUp = k[4].y < k[3].y && k[4].y < k[2].y && !openPalm;
+                    const isFist = isCurled(8, 7, 5) && isCurled(12, 11, 9) && isCurled(16, 15, 13) && isCurled(20, 19, 17);
+                    const thumbUp = k[4].y < k[3].y && k[4].y < k[2].y && !openPalm && !isFist;
 
                     if (openPalm) gestureDetected = 'five_fingers';
+                    else if (isFist) gestureDetected = 'fist';
                     else if (thumbUp) gestureDetected = 'thumbs_up';
                 }
             } catch (err) { /* silent fail */ }
@@ -223,6 +253,7 @@ export class PackageDetector {
             stability: isHand ? 0.95 : 0.6,
             gesture: gestureDetected,
             confidence,
+            faceBox: faceBox || this.lastFaceBox,
             barcodeBox: this.lastBarcodeBox,
             barcodeValue: this.lastBarcodeValue,
             barcodeFormat: this.lastBarcodeFormat,
