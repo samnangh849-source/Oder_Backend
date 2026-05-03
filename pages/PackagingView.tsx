@@ -46,10 +46,16 @@ const PackagingView: React.FC<{ orders?: ParsedOrder[] }> = ({ orders: propOrder
     const [isUndoVerifying, setIsUndoVerifying] = useState(false);
 
     useEffect(() => {
-        setIsShiftOpener(!!activeShift && !isViewOnly);
+        const openedBy = (activeShift?.OpenedBy || '').trim().toLowerCase();
+        const me = (currentUser?.FullName || '').trim().toLowerCase();
+        const isOpener = !!activeShift && openedBy === me;
+        
+        console.log(`[Shift] Active: ${!!activeShift}, Opener: ${openedBy}, Me: ${me}, Result: ${isOpener}`);
+        
+        setIsShiftOpener(isOpener);
         // We don't reset on unmount because the user might go to another page 
         // while their shift is still active in the background session.
-    }, [activeShift, isViewOnly, setIsShiftOpener]);
+    }, [activeShift, setIsShiftOpener, currentUser?.FullName]);
 
     const checkActiveShift = async (store: string) => {
         setIsShiftLoading(true);

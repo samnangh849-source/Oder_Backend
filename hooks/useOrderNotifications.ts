@@ -43,17 +43,25 @@ export const useOrderNotifications = () => {
                         console.log(`[Notification] 🆕 New order detected: ${id} (Customer: ${order['Customer Name']})`);
                         const title = '🆕 មានកុម្ម៉ង់ថ្មី!';
                         const body = `មានកុម្ម៉ង់ថ្មីពីអតិថិជន ${order['Customer Name']} (ID: #${id.substring(0,8)})`;
+                        
+                        // Send system notification immediately
                         sendSystemNotification(title, body);
                         showNotification(body, 'info', title);
                         
                         // NEW: Play voice notification after the "Ding" sound
                         // បញ្ជាក់សម្លេងនេះឭតែសម្រាប់ អ្នកបើកវេនប៉ុណ្ណោះ (isShiftOpener)
-                        console.log(`[Notification] 🔊 Shift Opener Status: ${isShiftOpener}`);
+                        console.log(`[Notification] 🔊 Voice Check - isShiftOpener: ${isShiftOpener}`);
+                        
                         if (isShiftOpener) {
+                            // Play after 500ms to be closer to the "Ding"
                             setTimeout(() => {
-                                console.log(`[Notification] 🗣️ Playing voice alert: ${SOUND_URLS.NEW_ORDER_VOICE}`);
-                                playSound(SOUND_URLS.NEW_ORDER_VOICE, 1.5); // Slightly higher volume for voice
-                            }, 1000);
+                                console.log(`[Notification] 🗣️ Attempting to play voice: ${SOUND_URLS.NEW_ORDER_VOICE}`);
+                                const audio = new Audio(SOUND_URLS.NEW_ORDER_VOICE);
+                                audio.volume = 1.0;
+                                audio.play().catch(err => {
+                                    console.error("[Notification] ❌ Voice playback failed:", err);
+                                });
+                            }, 500);
                         }
                     }
 
