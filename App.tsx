@@ -53,6 +53,7 @@ const AppContent: React.FC = () => {
     const [appState, setAppState] = useUrlState<'login' | 'user_journey' | 'admin_dashboard' | 'create_order' | 'fulfillment' | 'role_selection' | 'confirm_delivery' | 'entertainment' | 'watch' | 'series_player' | 'long_player' | 'short_player' | 'cambodia_map' | 'print_label' | 'order_metadata'>('view', 'login');
     const [selectedTeam, setSelectedTeam] = useUrlState<string>('team', '');
     const [selectedMovieId, setSelectedMovieId] = useUrlState<string>('movie', '');
+    const [isShiftOpener, setIsShiftOpener] = useState(false);
     const [mobilePageTitle, setMobilePageTitle] = useState<string | null>(null);
     const [previewImageUrl, setPreviewImageUrl] = useState<string | null>(null);
     const [isGlobalLoading, setIsGlobalLoading] = useState(true);
@@ -521,6 +522,7 @@ const AppContent: React.FC = () => {
         advancedSettings, setAdvancedSettings,
         selectedTeam, setSelectedTeam,
         selectedMovieId, setSelectedMovieId,
+        isShiftOpener, setIsShiftOpener,
         lastMessage, setOrders
     }), [
         currentUser, appData, orders, isOrdersLoading, isSyncing, login, logout, refreshData, refreshTimestamp,
@@ -529,7 +531,7 @@ const AppContent: React.FC = () => {
         isSidebarCollapsed, setIsSidebarCollapsed, setIsChatOpen, isMobileMenuOpen, 
         setIsMobileMenuOpen, language, setLanguage, showNotification, mobilePageTitle, 
         setMobilePageTitle, advancedSettings, setAdvancedSettings, selectedTeam, setSelectedTeam,
-        selectedMovieId, setSelectedMovieId, lastMessage, setOrders
+        selectedMovieId, setSelectedMovieId, isShiftOpener, lastMessage, setOrders
     ]);
 
     if (isGlobalLoading) return <div className="flex h-screen items-center justify-center bg-dark" style={{ backgroundColor: 'var(--bg-dark)' }}><Spinner size="lg" /></div>;

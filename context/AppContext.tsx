@@ -65,6 +65,8 @@ export interface AppContextType {
     setSelectedTeam: (team: string) => void;
     selectedMovieId: string;
     setSelectedMovieId: (id: string) => void;
+    isShiftOpener: boolean;
+    setIsShiftOpener: (val: boolean) => void;
     lastMessage: any;
 }
 

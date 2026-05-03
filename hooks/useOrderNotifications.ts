@@ -1,11 +1,13 @@
 import { useEffect, useRef, useContext } from 'react';
 import { AppContext } from '../context/AppContext';
-import { WEB_APP_URL } from '../constants';
+import { WEB_APP_URL, SOUND_URLS } from '../constants';
 import { sendSystemNotification } from '../utils/notificationUtils';
 import { ParsedOrder } from '../types';
+import { useSoundEffects } from './useSoundEffects';
 
 export const useOrderNotifications = () => {
-    const { currentUser, advancedSettings, showNotification } = useContext(AppContext);
+    const { currentUser, advancedSettings, showNotification, isShiftOpener } = useContext(AppContext);
+    const { playSound } = useSoundEffects();
     const previousOrdersRef = useRef<Record<string, string>>({});
     const notifiedPendingRef = useRef<Set<string>>(new Set());
 
@@ -42,6 +44,14 @@ export const useOrderNotifications = () => {
                         const body = `មានកុម្ម៉ង់ថ្មីពីអតិថិជន ${order['Customer Name']} (ID: #${id.substring(0,8)})`;
                         sendSystemNotification(title, body);
                         showNotification(body, 'info', title);
+                        
+                        // NEW: Play voice notification after the "Ding" sound
+                        // បញ្ជាក់សម្លេងនេះឭតែសម្រាប់ អ្នកបើកវេនប៉ុណ្ណោះ (isShiftOpener)
+                        if (isShiftOpener) {
+                            setTimeout(() => {
+                                playSound(SOUND_URLS.NEW_ORDER_VOICE, 1.5); // Slightly higher volume for voice
+                            }, 1000);
+                        }
                     }
 
                     // 2. Detect Status Changes

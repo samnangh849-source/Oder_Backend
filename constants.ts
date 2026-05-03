@@ -22,6 +22,7 @@ export const APP_LOGO_URL = "https://drive.google.com/file/d/1vb9IG8wn31LDYtUKLu
 
 export const SOUND_URLS = {
     NOTIFICATION: 'https://res.cloudinary.com/dhobzwi7h/video/upload/v1774094352/Apple_Pay_Success_Sound_Effect_ul3ka5.mp3',
+    NEW_ORDER_VOICE: 'https://res.cloudinary.com/dhobzwi7h/video/upload/v1777799090/NEW_ORDER_VOICE_vtzvx7.mp3', // សូមបញ្ចូល URL សម្លេងនិយាយនៅទីនេះ
 };
 
 // Full NOTIFICATION_SOUNDS palette for the settings panel
