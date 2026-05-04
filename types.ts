@@ -33,7 +33,7 @@ export interface Product {
     tags?: string;
 }
 
-export type FulfillmentStatus = 'Pending' | 'Scheduled' | 'Processing' | 'Ready to Ship' | 'Shipped' | 'Delivered' | 'Cancelled';
+export type FulfillmentStatus = 'Pending' | 'Scheduled' | 'Processing' | 'Ready to Ship' | 'Shipped' | 'Delivered' | 'Cancelled' | 'Returned';
 
 // *** CRITICAL: Exact match with Go struct JSON tags ***
 export interface FullOrder {
@@ -77,6 +77,11 @@ export interface FullOrder {
     "Dispatched By": string;
     "Delivered Time": string;
     "Delivery Photo URL": string;
+    "Cancel Reason"?: string;
+    "Return Reason"?: string;
+    "Return Photo"?: string;
+    "Return Received By"?: string;
+    "Return Received Time"?: string;
 }
 
 export interface InventoryItem {

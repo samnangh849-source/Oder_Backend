@@ -3,6 +3,7 @@ import { AppContext } from '@/context/AppContext';
 import { ParsedOrder } from '@/types';
 import Spinner from '@/components/common/Spinner';
 import { convertGoogleDriveUrl, getOptimisticPackagePhoto } from '@/utils/fileUtils';
+import { safeParseDate } from '@/utils/dateUtils';
 
 const B_BG_MAIN = 'bg-[#0B0E11]';
 const B_BG_PANEL = 'bg-[#181A20]';
@@ -99,6 +100,16 @@ const TabletPackagingHub: React.FC<TabletPackagingHubProps> = ({
         return driver?.ImageURL ? convertGoogleDriveUrl(driver.ImageURL) : null;
     };
 
+    const extractTime = (dateStr: string) => {
+        if (!dateStr) return "";
+        const date = safeParseDate(dateStr);
+        if (date) {
+            return date.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', hour12: true });
+        }
+        const match = String(dateStr).match(/(\d{1,2}:\d{2})/);
+        return match ? match[1] : dateStr;
+    };
+
     const getSafeDateObj = (dateStr: string) => {
         if (!dateStr) return new Date();
         const d = new Date(dateStr);
@@ -119,7 +130,7 @@ const TabletPackagingHub: React.FC<TabletPackagingHubProps> = ({
         const result: { [key: string]: ParsedOrder[] } = {};
         sorted.forEach(order => {
             const dateStr = getEffectiveDate(order);
-            const date = dateStr ? getSafeDateObj(dateStr).toLocaleDateString('km-KH', { month: 'short', day: 'numeric' }) : 'Recent';
+            const date = dateStr ? getSafeDateObj(dateStr).toLocaleDateString('km-KH', { year: 'numeric', month: 'short', day: 'numeric' }) : 'Recent';
             if (!result[date]) result[date] = [];
             result[date].push(order);
         });
@@ -305,17 +316,17 @@ const TabletPackagingHub: React.FC<TabletPackagingHubProps> = ({
                                                 <div className="flex items-center gap-2">
                                                     {activeTab === 'Pending' && (
                                                         <div className="flex items-center gap-1 bg-white/5 px-2 py-0.5 rounded-sm border border-white/5">
-                                                            <span className={`text-[8px] font-bold ${B_TEXT_SECONDARY} uppercase tracking-tight`}>Order: {order.Timestamp}</span>
+                                                            <span className={`text-[8px] font-bold ${B_TEXT_SECONDARY} uppercase tracking-tight`}>Order: {extractTime(order.Timestamp)}</span>
                                                         </div>
                                                     )}
                                                     {activeTab === 'Ready to Ship' && order['Packed Time'] && (
                                                         <div className="flex items-center gap-1 bg-[#0ECB81]/5 px-2 py-0.5 rounded-sm border border-[#0ECB81]/10">
-                                                            <span className={`text-[8px] font-black text-[#0ECB81] uppercase tracking-tight`}>Packed: {order['Packed Time']}</span>
+                                                            <span className={`text-[8px] font-black text-[#0ECB81] uppercase tracking-tight`}>Packed: {extractTime(order['Packed Time'])}</span>
                                                         </div>
                                                     )}
                                                     {activeTab === 'Shipped' && order['Dispatched Time'] && (
                                                         <div className="flex items-center gap-1 bg-blue-500/5 px-2 py-0.5 rounded-sm border border-blue-500/10">
-                                                            <span className={`text-[8px] font-black text-blue-400 uppercase tracking-tight`}>Shipped: {order['Dispatched Time']}</span>
+                                                            <span className={`text-[8px] font-black text-blue-400 uppercase tracking-tight`}>Shipped: {extractTime(order['Dispatched Time'])}</span>
                                                         </div>
                                                     )}
                                                     <div className="flex items-center gap-1.5">

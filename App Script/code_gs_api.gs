@@ -830,8 +830,11 @@ function getStoreSettings(storeName) {
 
   if (nameIdx === -1) return {};
 
+  const searchName = String(storeName || "").trim().toLowerCase();
+
   for (let i = 1; i < data.length; i++) {
-    if (String(data[i][nameIdx]).trim() === String(storeName).trim()) {
+    const rowStoreName = String(data[i][nameIdx]).trim().toLowerCase();
+    if (rowStoreName === searchName) {
       return {
         token: data[i][tokenIdx],
         groupID: data[i][groupIdx],
@@ -1324,16 +1327,44 @@ function logUserActivity(user, action, details) {
 }
 
 function deleteOrderTelegramMessages(data) {
-  const orderId = data.orderId;
-  const team = data.team;
-  const messageId1 = data.messageId1;
-  const messageId2 = data.messageId2;
-  const messageId3 = data.messageId3; // Access messageId3 if passed from backend
-  const fulfillmentStore = data.fulfillmentStore;
+  let orderId = data.orderId;
+  let team = data.team;
+  let messageId1 = data.messageId1;
+  let messageId2 = data.messageId2;
+  let messageId3 = data.messageId3; 
+  let fulfillmentStore = data.fulfillmentStore;
 
   console.log("🗑️ [deleteOrderTelegramMessages] Deleting orderId=" + orderId + " team=" + team);
 
-  // 1. Delete from Sheets
+  // Fallback: If metadata is missing, try to fetch it from the sheet before deleting row
+  if (orderId && (!fulfillmentStore || (!messageId1 && !messageId2 && !messageId3))) {
+    console.log("🔍 [deleteOrderTelegramMessages] Missing IDs or Store, attempting to recover from AllOrders...");
+    const existingData = fetchOrderDataFromSheet(orderId, ""); 
+    if (existingData) {
+      if (!team) team = existingData["Team"];
+      if (!fulfillmentStore) fulfillmentStore = existingData["Fulfillment Store"];
+      if (!messageId1) messageId1 = existingData["Telegram Message ID 1"];
+      if (!messageId2) messageId2 = existingData["Telegram Message ID 2"];
+      if (!messageId3) messageId3 = existingData["Telegram Message ID 3"];
+      console.log("✅ [deleteOrderTelegramMessages] Recovered metadata: store=" + fulfillmentStore + " team=" + team);
+    }
+  }
+
+  // 1. Delete from Telegram (IMPORTANT: Do this BEFORE deleting from sheets to ensure we have settings)
+  if (fulfillmentStore && (messageId1 || messageId2 || messageId3)) {
+    const settings = getStoreSettings(fulfillmentStore);
+    if (settings.token && settings.groupID) {
+      if (messageId1) deleteSingleTelegramMsg(settings, messageId1);
+      if (messageId2) deleteSingleTelegramMsg(settings, messageId2);
+      if (messageId3) deleteSingleTelegramMsg(settings, messageId3);
+    } else {
+      console.error("❌ [deleteOrderTelegramMessages] Settings missing for store: " + fulfillmentStore);
+    }
+  } else {
+    console.warn("⚠️ [deleteOrderTelegramMessages] Skipping Telegram deletion: store=" + fulfillmentStore + " IDs=" + (messageId1 || messageId2 || messageId3));
+  }
+
+  // 2. Delete from Sheets
   if (orderId) {
     handleDeleteRow({
       sheetName: CONFIG.ALL_ORDERS_SHEET,
@@ -1345,17 +1376,7 @@ function deleteOrderTelegramMessages(data) {
         primaryKey: { "Order ID": orderId }
       });
     }
-    console.log("✅ [deleteOrderTelegramMessages] Deleted from row for " + orderId);
-  }
-
-  // 2. Delete from Telegram
-  if (fulfillmentStore && (messageId1 || messageId2 || messageId3)) {
-    const settings = getStoreSettings(fulfillmentStore);
-    if (settings.token && settings.groupID) {
-      if (messageId1) deleteSingleTelegramMsg(settings, messageId1);
-      if (messageId2) deleteSingleTelegramMsg(settings, messageId2);
-      if (messageId3) deleteSingleTelegramMsg(settings, messageId3);
-    }
+    console.log("✅ [deleteOrderTelegramMessages] Deleted from Sheets for " + orderId);
   }
 }
 

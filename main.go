@@ -124,6 +124,11 @@ func mapToDBColumn(key string) string {
 		"Delivery Photo URL":        "delivery_photo_url",
 		"deliveryPhoto":             "delivery_photo_url",
 		"DeliveryPhoto":             "delivery_photo_url",
+		"Cancel Reason":             "cancel_reason",
+		"Return Reason":             "return_reason",
+		"Return Photo":              "return_photo_url",
+		"Return Received By":        "return_received_by",
+		"Return Received Time":      "return_received_time",
 		"Driver Name":               "driver_name",
 		"Tracking Number":           "tracking_number",
 		"Dispatched Time":           "dispatched_time",
@@ -274,6 +279,7 @@ func isValidOrderColumn(col string) bool {
 		"fulfillment_store": true, "team": true, "is_verified": true, "fulfillment_status": true,
 		"packed_by": true, "packed_time": true, "package_photo_url": true, "driver_name": true, "tracking_number": true,
 		"dispatched_time": true, "dispatched_by": true, "delivered_time": true, "delivery_photo_url": true,
+		"cancel_reason": true, "return_reason": true, "return_photo_url": true, "return_received_by": true, "return_received_time": true,
 	}
 	return validCols[col]
 }
@@ -1012,8 +1018,9 @@ func handleAdminUpdateOrder(c *gin.Context) {
 			"Pending":       {"Processing", "Ready to Ship", "Cancelled"},
 			"Processing":    {"Ready to Ship", "Pending", "Cancelled"},
 			"Ready to Ship": {"Shipped", "Pending", "Cancelled"},
-			"Shipped":       {"Delivered", "Ready to Ship", "Cancelled"},
-			"Delivered":     {},
+			"Shipped":       {"Delivered", "Ready to Ship", "Returned"},
+			"Delivered":     {"Returned"},
+			"Returned":      {"Delivered", "Pending"},
 			"Cancelled":     {"Pending", "Scheduled"},
 		}
 
@@ -1041,6 +1048,22 @@ func handleAdminUpdateOrder(c *gin.Context) {
 
 		// ✅ Validate required fields for each transition
 		switch newStatus {
+		case "Cancelled":
+			cancelReason, _ := r.NewData["Cancel Reason"]
+			if cancelReason == nil || strings.TrimSpace(fmt.Sprintf("%v", cancelReason)) == "" {
+				if strings.TrimSpace(originalOrder.CancelReason) == "" {
+					c.JSON(http.StatusBadRequest, gin.H{"status": "error", "message": "ត្រូវការមូលហេតុដែល Cancel (Cancel Reason)"})
+					return
+				}
+			}
+		case "Returned":
+			returnReason, _ := r.NewData["Return Reason"]
+			if returnReason == nil || strings.TrimSpace(fmt.Sprintf("%v", returnReason)) == "" {
+				if strings.TrimSpace(originalOrder.ReturnReason) == "" {
+					c.JSON(http.StatusBadRequest, gin.H{"status": "error", "message": "ត្រូវការមូលហេតុដែល Return (Return Reason)"})
+					return
+				}
+			}
 		case "Ready to Ship":
 			packedBy, _ := r.NewData["Packed By"]
 			if packedBy == nil || strings.TrimSpace(fmt.Sprintf("%v", packedBy)) == "" {
@@ -1074,6 +1097,19 @@ func handleAdminUpdateOrder(c *gin.Context) {
 			if _, hasTime := r.NewData["Delivered Time"]; !hasTime {
 				r.NewData["Delivered Time"] = time.Now().Format("2006-01-02 15:04:05")
 			}
+		}
+	}
+
+	// ✅ Validate Return Receipt - If confirming receipt, require photo
+	if _, hasReceivedBy := r.NewData["Return Received By"]; hasReceivedBy {
+		photo, hasPhoto := r.NewData["Return Photo"]
+		if (!hasPhoto || strings.TrimSpace(fmt.Sprintf("%v", photo)) == "") && strings.TrimSpace(originalOrder.ReturnPhotoURL) == "" {
+			c.JSON(http.StatusBadRequest, gin.H{"status": "error", "message": "ត្រូវការរូបភាពកញ្ចប់ឥវ៉ាន់ដែល Return (Return Photo)"})
+			return
+		}
+		// Auto-set received time if not provided
+		if _, hasTime := r.NewData["Return Received Time"]; !hasTime {
+			r.NewData["Return Received Time"] = time.Now().Format("2006-01-02 15:04:05")
 		}
 	}
 
@@ -1169,49 +1205,59 @@ func handleAdminDeleteOrder(c *gin.Context) {
 		return
 	}
 
+	// 1. Try to find the order in the local database to get full metadata
 	var order Order
+	foundLocally := false
 	if err := backend.DB.Where("UPPER(TRIM(order_id)) = UPPER(TRIM(?))", r.OrderID).First(&order).Error; err == nil {
-		// Prepare IDs, falling back to request values if backend.DB is empty
-		m1 := order.TelegramMessageID1
-		if m1 == "" {
-			m1 = r.TelegramMessageID1
-		}
-		m2 := order.TelegramMessageID2
-		if m2 == "" {
-			m2 = r.TelegramMessageID2
-		}
-		m3 := order.TelegramMessageID3
-		if m3 == "" {
-			m3 = r.TelegramMessageID3
-		}
-
-		store := order.FulfillmentStore
-		if store == "" {
-			store = r.FulfillmentStore
-		}
-
-		team := order.Team
-		if team == "" {
-			team = r.Team
-		}
-
-		go func() {
-			// ✅ Sync with Google Sheets & Telegram via managed queue.
-			// deleteOrderTelegram in Apps Script already handles BOTH Google Sheets and Telegram deletion.
-			// This is safer and more efficient than calling deleteRow + deleteOrderTelegram separately.
-			enqueueSync("deleteOrderTelegram", map[string]interface{}{
-				"orderId":          r.OrderID,
-				"team":             team,
-				"messageId1":       m1,
-				"messageId2":       m2,
-				"messageId3":       m3,
-				"fulfillmentStore": store,
-			}, "", nil)
-		}()
-		backend.DB.Delete(&order)
-		eventBytes, _ := json.Marshal(map[string]interface{}{"type": "delete_order", "orderId": r.OrderID})
-		hub.Broadcast <- eventBytes
+		foundLocally = true
 	}
+
+	// 2. Prepare metadata for deletion, prioritizing DB data but falling back to request data
+	m1 := r.TelegramMessageID1
+	if foundLocally && order.TelegramMessageID1 != "" {
+		m1 = order.TelegramMessageID1
+	}
+	m2 := r.TelegramMessageID2
+	if foundLocally && order.TelegramMessageID2 != "" {
+		m2 = order.TelegramMessageID2
+	}
+	m3 := r.TelegramMessageID3
+	if foundLocally && order.TelegramMessageID3 != "" {
+		m3 = order.TelegramMessageID3
+	}
+
+	store := r.FulfillmentStore
+	if foundLocally && order.FulfillmentStore != "" {
+		store = order.FulfillmentStore
+	}
+
+	team := r.Team
+	if foundLocally && order.Team != "" {
+		team = order.Team
+	}
+
+	// 3. Trigger Apps Script deletion (Handles BOTH Sheets and Telegram)
+	go func() {
+		// We always call this even if not found locally, as it might exist in Sheets
+		enqueueSync("deleteOrderTelegram", map[string]interface{}{
+			"orderId":          r.OrderID,
+			"team":             team,
+			"messageId1":       m1,
+			"messageId2":       m2,
+			"messageId3":       m3,
+			"fulfillmentStore": store,
+		}, "", nil)
+	}()
+
+	// 4. Delete from local DB if it exists
+	if foundLocally {
+		backend.DB.Delete(&order)
+	}
+
+	// 5. Broadcast deletion to all connected clients
+	eventBytes, _ := json.Marshal(map[string]interface{}{"type": "delete_order", "orderId": r.OrderID})
+	hub.Broadcast <- eventBytes
+
 	c.JSON(200, gin.H{"status": "success"})
 }
 

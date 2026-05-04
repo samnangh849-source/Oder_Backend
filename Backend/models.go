@@ -235,6 +235,11 @@ type Order struct {
 	DispatchedBy            string  `gorm:"column:dispatched_by" json:"Dispatched By"`
 	DeliveredTime           string  `gorm:"column:delivered_time" json:"Delivered Time"`
 	DeliveryPhotoURL        string  `gorm:"column:delivery_photo_url" json:"Delivery Photo URL"`
+	CancelReason            string  `gorm:"column:cancel_reason" json:"Cancel Reason"`
+	ReturnReason            string  `gorm:"column:return_reason" json:"Return Reason"`
+	ReturnPhotoURL          string  `gorm:"column:return_photo_url" json:"Return Photo"`
+	ReturnReceivedBy        string  `gorm:"column:return_received_by" json:"Return Received By"`
+	ReturnReceivedTime      string  `gorm:"column:return_received_time" json:"Return Received Time"`
 }
 
 type RevenueEntry struct {
