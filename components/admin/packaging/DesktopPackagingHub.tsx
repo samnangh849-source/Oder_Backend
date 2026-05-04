@@ -398,6 +398,14 @@ const DesktopPackagingHub: React.FC<DesktopPackagingHubProps> = ({
                                                                 <div className="flex flex-col gap-0.5">
                                                                     <span className={`text-sm font-bold ${B_TEXT_PRIMARY} truncate max-w-[150px]`}>{order.Location}</span>
                                                                     <span className={`text-xs ${B_TEXT_SECONDARY} font-medium truncate max-w-[150px]`} title={order['Address Details']}>{order['Address Details']}</span>
+                                                                    
+                                                                    {activeTab === 'Pending' && (
+                                                                        <div className="flex items-center gap-1.5 mt-2 bg-white/5 px-2 py-0.5 rounded-sm w-fit border border-white/5">
+                                                                            <svg className="w-2.5 h-2.5 text-[#848E9C]" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
+                                                                            <span className={`text-[9px] font-bold ${B_TEXT_SECONDARY} uppercase tracking-wider`}>កម្មង់: {order.Timestamp}</span>
+                                                                        </div>
+                                                                    )}
+
                                                                     {(activeTab === 'Ready to Ship' || activeTab === 'Shipped') && (
                                                                         <div className="space-y-1.5 mt-2">
                                                                             <div className="flex items-center gap-2">
@@ -412,8 +420,25 @@ const DesktopPackagingHub: React.FC<DesktopPackagingHubProps> = ({
                                                                                     <span className={`text-[11px] ${B_TEXT_SECONDARY} font-black italic uppercase tracking-wide`}>ដឹកដោយ: {order['Internal Shipping Details']}</span>
                                                                                 ) : null}
                                                                             </div>
-                                                                            <div className="flex items-center gap-2 bg-[#FCD535]/5 border border-[#FCD535]/20 px-2.5 py-1 rounded-sm shadow-inner">                                                                                <div className="w-2.5 h-2.5 bg-[#FCD535] rounded-full flex items-center justify-center text-[7px] font-black text-black">P</div>
-                                                                                <span className={`text-[10px] font-bold text-[#FCD535] truncate max-w-[100px] uppercase tracking-wide`}>P: {order['Packed By'] || 'N/A'}</span>
+                                                                            <div className="flex flex-col gap-1">
+                                                                                <div className="flex items-center gap-2 bg-[#FCD535]/5 border border-[#FCD535]/20 px-2.5 py-1 rounded-sm shadow-inner">
+                                                                                    <div className="w-2.5 h-2.5 bg-[#FCD535] rounded-full flex items-center justify-center text-[7px] font-black text-black">P</div>
+                                                                                    <span className={`text-[10px] font-bold text-[#FCD535] truncate max-w-[100px] uppercase tracking-wide`}>P: {order['Packed By'] || 'N/A'}</span>
+                                                                                </div>
+                                                                                
+                                                                                {activeTab === 'Ready to Ship' && order['Packed Time'] && (
+                                                                                    <div className="flex items-center gap-1.5 px-2.5">
+                                                                                        <svg className="w-2.5 h-2.5 text-[#0ECB81]" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
+                                                                                        <span className={`text-[9px] font-black text-[#0ECB81] uppercase tracking-wider`}>{order['Packed Time']}</span>
+                                                                                    </div>
+                                                                                )}
+
+                                                                                {activeTab === 'Shipped' && order['Dispatched Time'] && (
+                                                                                    <div className="flex items-center gap-1.5 px-2.5">
+                                                                                        <svg className="w-2.5 h-2.5 text-blue-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
+                                                                                        <span className={`text-[9px] font-black text-blue-400 uppercase tracking-wider`}>{order['Dispatched Time']}</span>
+                                                                                    </div>
+                                                                                )}
                                                                             </div>
                                                                         </div>
                                                                     )}

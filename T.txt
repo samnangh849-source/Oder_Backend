@@ -1,3 +1,3 @@
 @file:Backend @file:App Script @file:main.go 
 
-  
+  ខ្ញុំចង់បន្ថែមមុខងារ Cancel Order គឺនៅពេលការកម្មង់ណាមួយត្រូវបាន Cancel គឺ Userធម្មតា ឬ Admin អាចចុចButton Cancel ហើយការកម្មង់នោះមិនត្រូវបានលុបចេញទេ គឺគ្រាន់តែ Node ឬ Card នៃ Order នោះបង្ហាញអោយដឹងថា បាន Cancel ឬ មានអក្សរ Watermark (Cancel) ពីលើ Node នោះ។ ហើយ order នោះមិនអាចវេចខ្ចប់បានទេក្នុងផ្ទាំង (Pending Pack)ប្រសិនបើមិនទាន់បានវេចខ្ចប់។  ប្រសិនបើឥវ៉ាន់នោះបានវេចខ្ចប់រួច ត្រូវបង្ហាញបញ្ជាក់ថា Cancel លើ Node ក្នុងផ្ទាំង (Ready for Dispatch) ប្រសិនបើមិនបាន Ship ឬប្រគល់អោយអ្នកដឹក។
