@@ -1169,49 +1169,59 @@ func handleAdminDeleteOrder(c *gin.Context) {
 		return
 	}
 
+	// 1. Try to find the order in the local database to get full metadata
 	var order Order
+	foundLocally := false
 	if err := backend.DB.Where("UPPER(TRIM(order_id)) = UPPER(TRIM(?))", r.OrderID).First(&order).Error; err == nil {
-		// Prepare IDs, falling back to request values if backend.DB is empty
-		m1 := order.TelegramMessageID1
-		if m1 == "" {
-			m1 = r.TelegramMessageID1
-		}
-		m2 := order.TelegramMessageID2
-		if m2 == "" {
-			m2 = r.TelegramMessageID2
-		}
-		m3 := order.TelegramMessageID3
-		if m3 == "" {
-			m3 = r.TelegramMessageID3
-		}
-
-		store := order.FulfillmentStore
-		if store == "" {
-			store = r.FulfillmentStore
-		}
-
-		team := order.Team
-		if team == "" {
-			team = r.Team
-		}
-
-		go func() {
-			// ✅ Sync with Google Sheets & Telegram via managed queue.
-			// deleteOrderTelegram in Apps Script already handles BOTH Google Sheets and Telegram deletion.
-			// This is safer and more efficient than calling deleteRow + deleteOrderTelegram separately.
-			enqueueSync("deleteOrderTelegram", map[string]interface{}{
-				"orderId":          r.OrderID,
-				"team":             team,
-				"messageId1":       m1,
-				"messageId2":       m2,
-				"messageId3":       m3,
-				"fulfillmentStore": store,
-			}, "", nil)
-		}()
-		backend.DB.Delete(&order)
-		eventBytes, _ := json.Marshal(map[string]interface{}{"type": "delete_order", "orderId": r.OrderID})
-		hub.Broadcast <- eventBytes
+		foundLocally = true
 	}
+
+	// 2. Prepare metadata for deletion, prioritizing DB data but falling back to request data
+	m1 := r.TelegramMessageID1
+	if foundLocally && order.TelegramMessageID1 != "" {
+		m1 = order.TelegramMessageID1
+	}
+	m2 := r.TelegramMessageID2
+	if foundLocally && order.TelegramMessageID2 != "" {
+		m2 = order.TelegramMessageID2
+	}
+	m3 := r.TelegramMessageID3
+	if foundLocally && order.TelegramMessageID3 != "" {
+		m3 = order.TelegramMessageID3
+	}
+
+	store := r.FulfillmentStore
+	if foundLocally && order.FulfillmentStore != "" {
+		store = order.FulfillmentStore
+	}
+
+	team := r.Team
+	if foundLocally && order.Team != "" {
+		team = order.Team
+	}
+
+	// 3. Trigger Apps Script deletion (Handles BOTH Sheets and Telegram)
+	go func() {
+		// We always call this even if not found locally, as it might exist in Sheets
+		enqueueSync("deleteOrderTelegram", map[string]interface{}{
+			"orderId":          r.OrderID,
+			"team":             team,
+			"messageId1":       m1,
+			"messageId2":       m2,
+			"messageId3":       m3,
+			"fulfillmentStore": store,
+		}, "", nil)
+	}()
+
+	// 4. Delete from local DB if it exists
+	if foundLocally {
+		backend.DB.Delete(&order)
+	}
+
+	// 5. Broadcast deletion to all connected clients
+	eventBytes, _ := json.Marshal(map[string]interface{}{"type": "delete_order", "orderId": r.OrderID})
+	hub.Broadcast <- eventBytes
+
 	c.JSON(200, gin.H{"status": "success"})
 }
 
