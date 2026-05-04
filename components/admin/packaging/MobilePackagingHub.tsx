@@ -295,7 +295,7 @@ const MobilePackagingHub: React.FC<MobilePackagingHubProps> = ({
                                         </div>
                                     )}
 
-                                    <div className={`px-3 py-2 border-b ${B_BORDER} flex justify-between items-center ${activeTab === 'Ready to Ship' ? 'pt-10' : ''}`}>
+                                    <div className={`px-3 py-1.5 border-b ${B_BORDER} flex justify-between items-center ${activeTab === 'Ready to Ship' ? 'pt-10' : ''}`}>
                                         <span 
                                             onClick={(e) => { e.stopPropagation(); handleCopy(order['Order ID'], 'ID'); }}
                                             className={`text-sm font-mono font-medium ${B_TEXT_PRIMARY} cursor-pointer hover:text-[#FCD535] transition-colors`}
@@ -303,10 +303,27 @@ const MobilePackagingHub: React.FC<MobilePackagingHubProps> = ({
                                             {order['Order ID'].substring(0, 10)}
                                         </span>
                                         <div className="flex items-center gap-2">
-                                            {getShippingLogo(order['Internal Shipping Method']) && (
-                                                <img src={getShippingLogo(order['Internal Shipping Method'])!} className="w-6 h-6 object-contain p-0.5 bg-white rounded-sm shadow-sm" alt="" />
+                                            {activeTab === 'Pending' && (
+                                                <div className="flex items-center gap-1 bg-white/5 px-2 py-0.5 rounded-sm">
+                                                    <span className={`text-[8px] font-bold ${B_TEXT_SECONDARY} uppercase tracking-tight`}>Order: {order.Timestamp}</span>
+                                                </div>
                                             )}
-                                            <span className={`text-[10px] uppercase font-bold px-1.5 py-0.5 rounded-sm border ${B_BORDER} ${B_TEXT_SECONDARY}`}>T-{order.Team}</span>
+                                            {activeTab === 'Ready to Ship' && order['Packed Time'] && (
+                                                <div className="flex items-center gap-1 bg-[#0ECB81]/5 px-2 py-0.5 rounded-sm border border-[#0ECB81]/10">
+                                                    <span className={`text-[8px] font-black text-[#0ECB81] uppercase tracking-tight`}>Packed: {order['Packed Time']}</span>
+                                                </div>
+                                            )}
+                                            {activeTab === 'Shipped' && order['Dispatched Time'] && (
+                                                <div className="flex items-center gap-1 bg-blue-500/5 px-2 py-0.5 rounded-sm border border-blue-500/10">
+                                                    <span className={`text-[8px] font-black text-blue-400 uppercase tracking-tight`}>Shipped: {order['Dispatched Time']}</span>
+                                                </div>
+                                            )}
+                                            <div className="flex items-center gap-1.5">
+                                                {getShippingLogo(order['Internal Shipping Method']) && (
+                                                    <img src={getShippingLogo(order['Internal Shipping Method'])!} className="w-5 h-5 object-contain p-0.5 bg-white rounded-sm shadow-sm" alt="" />
+                                                )}
+                                                <span className={`text-[10px] uppercase font-bold px-1.5 py-0.5 rounded-sm border ${B_BORDER} ${B_TEXT_SECONDARY}`}>T-{order.Team}</span>
+                                            </div>
                                         </div>
                                     </div>
 
@@ -353,27 +370,6 @@ const MobilePackagingHub: React.FC<MobilePackagingHubProps> = ({
                                                 <div className="mt-2.5 flex flex-col gap-1">
                                                     <p className={`text-sm font-bold ${B_TEXT_PRIMARY} truncate`}>{order.Location}</p>
                                                     <p className={`text-xs ${B_TEXT_SECONDARY} font-medium truncate`}>{order['Address Details']}</p>
-                                                    
-                                                    {activeTab === 'Pending' && (
-                                                        <div className="flex items-center gap-1 mt-1 bg-white/5 px-2 py-0.5 rounded-sm w-fit">
-                                                            <svg className="w-2 h-2 text-[#848E9C]" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
-                                                            <span className={`text-[8px] font-bold ${B_TEXT_SECONDARY} uppercase tracking-wider`}>កម្មង់: {order.Timestamp}</span>
-                                                        </div>
-                                                    )}
-                                                    
-                                                    {activeTab === 'Ready to Ship' && order['Packed Time'] && (
-                                                        <div className="flex items-center gap-1 mt-1 bg-[#0ECB81]/5 px-2 py-0.5 rounded-sm w-fit border border-[#0ECB81]/10">
-                                                            <svg className="w-2 h-2 text-[#0ECB81]" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
-                                                            <span className={`text-[8px] font-black text-[#0ECB81] uppercase tracking-wider`}>{order['Packed Time']}</span>
-                                                        </div>
-                                                    )}
-
-                                                    {activeTab === 'Shipped' && order['Dispatched Time'] && (
-                                                        <div className="flex items-center gap-1 mt-1 bg-blue-500/5 px-2 py-0.5 rounded-sm w-fit border border-blue-500/10">
-                                                            <svg className="w-2 h-2 text-blue-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
-                                                            <span className={`text-[8px] font-black text-blue-400 uppercase tracking-wider`}>{order['Dispatched Time']}</span>
-                                                        </div>
-                                                    )}
                                                 </div>
                                             </div>
                                             <div className="text-right flex flex-col items-end">
