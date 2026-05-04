@@ -1185,17 +1185,27 @@ func handleAdminDeleteOrder(c *gin.Context) {
 			m3 = r.TelegramMessageID3
 		}
 
+		store := order.FulfillmentStore
+		if store == "" {
+			store = r.FulfillmentStore
+		}
+
+		team := order.Team
+		if team == "" {
+			team = r.Team
+		}
+
 		go func() {
 			// ✅ Sync with Google Sheets & Telegram via managed queue.
 			// deleteOrderTelegram in Apps Script already handles BOTH Google Sheets and Telegram deletion.
 			// This is safer and more efficient than calling deleteRow + deleteOrderTelegram separately.
 			enqueueSync("deleteOrderTelegram", map[string]interface{}{
 				"orderId":          r.OrderID,
-				"team":             order.Team,
+				"team":             team,
 				"messageId1":       m1,
 				"messageId2":       m2,
 				"messageId3":       m3,
-				"fulfillmentStore": order.FulfillmentStore,
+				"fulfillmentStore": store,
 			}, "", nil)
 		}()
 		backend.DB.Delete(&order)
