@@ -290,6 +290,7 @@ const EditOrderPage: React.FC<EditOrderPageProps> = ({ order, onSaveSuccess, onC
                     orderId: formData['Order ID'], 
                     team: formData.Team, 
                     userName: loggingUser,
+                    fulfillmentStore: formData['Fulfillment Store'],
                     telegramMessageId1: formData['Telegram Message ID 1'],
                     telegramMessageId2: formData['Telegram Message ID 2'],
                     telegramMessageId3: formData['Telegram Message ID 3'],

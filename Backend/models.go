@@ -465,6 +465,7 @@ type DeleteOrderRequest struct {
 	OrderID            string `json:"orderId"`
 	Team               string `json:"team"`
 	UserName           string `json:"userName"`
+	FulfillmentStore   string `json:"fulfillmentStore"`
 	TelegramMessageID1 string `json:"telegramMessageId1"`
 	TelegramMessageID2 string `json:"telegramMessageId2"`
 	TelegramMessageID3 string `json:"telegramMessageId3"`

@@ -306,8 +306,10 @@ const BulkActionManager: React.FC<BulkActionManagerProps> = ({ orders, selectedI
                         orderId: id,
                         team: order?.Team,
                         userName: currentUser?.UserName,
+                        fulfillmentStore: order?.['Fulfillment Store'],
                         telegramMessageId1: order?.['Telegram Message ID 1'],
                         telegramMessageId2: order?.['Telegram Message ID 2'],
+                        telegramMessageId3: order?.['Telegram Message ID 3'],
                         telegramChatId: order?.TelegramValue
                     })
                 });
