@@ -352,13 +352,24 @@ const DesktopPackagingHub: React.FC<DesktopPackagingHubProps> = ({
                                         ? "grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 min-[1900px]:grid-cols-5 gap-3" 
                                         : "flex flex-col gap-1"
                                     }>
-                                        {groupOrders.map((order, idx) => (
+                                        {groupOrders.map((order, idx) => {
+                                            const fs = order.FulfillmentStatus || order['Fulfillment Status'] || 'Pending';
+                                            const isCancelled = fs === 'Cancelled';
+                                            const isReturned = fs === 'Returned';
+                                            return (
                                             viewMode === 'card' ? (
                         <div 
                             key={order['Order ID']} 
-                            className={`${B_BG_PANEL} border ${B_BORDER} hover:border-[#FCD535]/30 group transition-all relative cursor-pointer`}
+                            className={`${B_BG_PANEL} border ${B_BORDER} hover:border-[#FCD535]/30 group transition-all relative cursor-pointer ${isCancelled ? 'bg-red-950/20 border-red-500/30' : isReturned ? 'bg-purple-950/20 border-purple-500/30' : ''}`}
                             onClick={() => onView(order)}
                         >
+                            {/* Watermark Overlay */}
+                            {(isCancelled || isReturned) && (
+                                <div className={`absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 rotate-[-12deg] pointer-events-none z-10 opacity-20 font-black text-2xl tracking-[0.1em] whitespace-nowrap ${isCancelled ? 'text-red-500' : 'text-purple-400'}`}>
+                                    {isCancelled ? 'CANCELLED' : 'RETURNED'}
+                                </div>
+                            )}
+
                             {loadingActionId === order['Order ID'] && (
                                 <div className="absolute inset-0 bg-[#0B0E11]/80 z-50 flex items-center justify-center"><Spinner size="sm" /></div>
                             )}
@@ -472,11 +483,15 @@ const DesktopPackagingHub: React.FC<DesktopPackagingHubProps> = ({
 
                                                     <div className={`p-2 border-t ${B_BORDER} bg-[#0B0E11] grid ${activeTab === 'Pending' ? 'grid-cols-2 gap-2' : activeTab === 'Ready to Ship' ? 'grid-cols-3 gap-2' : activeTab === 'Returned' ? 'grid-cols-2 gap-2' : 'grid-cols-2 gap-2'}`}>
                                                         <button onClick={(e) => { e.stopPropagation(); onView(order); }} className={`w-full py-1.5 bg-[#2B3139] hover:bg-[#3B424A] ${B_TEXT_PRIMARY} text-xs font-medium transition-colors rounded-sm`}>Details</button>
-                                                        {activeTab === 'Pending' && <button onClick={(e) => { e.stopPropagation(); onPack(order); }} className={`w-full py-1.5 ${B_ACCENT_BG} text-xs font-bold uppercase transition-colors rounded-sm`}>Pack</button>}
-                                                        {activeTab === 'Ready to Ship' && (
+                                                        {!isCancelled && (
                                                             <>
-                                                                <button onClick={(e) => { e.stopPropagation(); onUndo(order); }} className={`w-full py-1.5 bg-[#F6465D]/10 hover:bg-[#F6465D]/20 ${B_RED} text-xs font-bold uppercase transition-colors rounded-sm`}>Undo</button>
-                                                                <button onClick={(e) => { e.stopPropagation(); onShip(order); }} className={`w-full py-1.5 ${B_ACCENT_BG} text-xs font-bold uppercase transition-colors rounded-sm`}>Ship</button>
+                                                                {activeTab === 'Pending' && <button onClick={(e) => { e.stopPropagation(); onPack(order); }} className={`w-full py-1.5 ${B_ACCENT_BG} text-xs font-bold uppercase transition-colors rounded-sm`}>Pack</button>}
+                                                                {activeTab === 'Ready to Ship' && (
+                                                                    <>
+                                                                        <button onClick={(e) => { e.stopPropagation(); onUndo(order); }} className={`w-full py-1.5 bg-[#F6465D]/10 hover:bg-[#F6465D]/20 ${B_RED} text-xs font-bold uppercase transition-colors rounded-sm`}>Undo</button>
+                                                                        <button onClick={(e) => { e.stopPropagation(); onShip(order); }} className={`w-full py-1.5 ${B_ACCENT_BG} text-xs font-bold uppercase transition-colors rounded-sm`}>Ship</button>
+                                                                    </>
+                                                                )}
                                                             </>
                                                         )}
                                                         {activeTab === 'Shipped' && (
@@ -494,7 +509,13 @@ const DesktopPackagingHub: React.FC<DesktopPackagingHubProps> = ({
                                                     </div>
                                                 </div>
                                             ) : (
-                                                <div key={order['Order ID']} className={`${B_BG_PANEL} border ${B_BORDER} ${B_BG_HOVER} transition-colors grid grid-cols-12 items-center gap-2 p-2 relative group cursor-pointer`} onClick={() => onView(order)}>
+                                                <div key={order['Order ID']} className={`${B_BG_PANEL} border ${B_BORDER} ${B_BG_HOVER} transition-colors grid grid-cols-12 items-center gap-2 p-2 relative group cursor-pointer ${isCancelled ? 'bg-red-950/20 border-red-500/30' : isReturned ? 'bg-purple-950/20 border-purple-500/30' : ''}`} onClick={() => onView(order)}>
+                                                    {/* Watermark Overlay */}
+                                                    {(isCancelled || isReturned) && (
+                                                        <div className={`absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 rotate-[-12deg] pointer-events-none z-10 opacity-20 font-black text-4xl tracking-[0.2em] whitespace-nowrap ${isCancelled ? 'text-red-500' : 'text-purple-400'}`}>
+                                                            {isCancelled ? 'CANCELLED' : 'RETURNED'}
+                                                        </div>
+                                                    )}
                                                     {loadingActionId === order['Order ID'] && (
                                                         <div className="absolute inset-0 bg-[#0B0E11]/80 z-50 flex items-center justify-center"><Spinner size="sm" /></div>
                                                     )}
@@ -583,11 +604,15 @@ const DesktopPackagingHub: React.FC<DesktopPackagingHubProps> = ({
                                                     </div>
                                                     <div className="col-span-3 flex justify-end items-center gap-2">
                                                         <button onClick={(e) => { e.stopPropagation(); onView(order); }} className={`px-3 py-1 bg-[#2B3139] hover:bg-[#3B424A] ${B_TEXT_PRIMARY} text-xs font-medium rounded-sm transition-colors`}>View</button>
-                                                        {activeTab === 'Pending' && <button onClick={(e) => { e.stopPropagation(); onPack(order); }} className={`px-4 py-1 ${B_ACCENT_BG} text-xs font-bold uppercase rounded-sm`}>Pack</button>}
-                                                        {activeTab === 'Ready to Ship' && (
+                                                        {!isCancelled && (
                                                             <>
-                                                                <button onClick={(e) => { e.stopPropagation(); onUndo(order); }} className={`px-3 py-1 bg-[#F6465D]/10 hover:bg-[#F6465D]/20 ${B_RED} text-xs font-bold uppercase rounded-sm transition-colors`}>Undo</button>
-                                                                <button onClick={(e) => { e.stopPropagation(); onShip(order); }} className={`px-4 py-1 ${B_ACCENT_BG} text-xs font-bold uppercase rounded-sm`}>Ship</button>
+                                                                {activeTab === 'Pending' && <button onClick={(e) => { e.stopPropagation(); onPack(order); }} className={`px-4 py-1 ${B_ACCENT_BG} text-xs font-bold uppercase rounded-sm`}>Pack</button>}
+                                                                {activeTab === 'Ready to Ship' && (
+                                                                    <>
+                                                                        <button onClick={(e) => { e.stopPropagation(); onUndo(order); }} className={`px-3 py-1 bg-[#F6465D]/10 hover:bg-[#F6465D]/20 ${B_RED} text-xs font-bold uppercase rounded-sm transition-colors`}>Undo</button>
+                                                                        <button onClick={(e) => { e.stopPropagation(); onShip(order); }} className={`px-4 py-1 ${B_ACCENT_BG} text-xs font-bold uppercase rounded-sm`}>Ship</button>
+                                                                    </>
+                                                                )}
                                                             </>
                                                         )}
                                                         {activeTab === 'Shipped' && (
@@ -605,7 +630,8 @@ const DesktopPackagingHub: React.FC<DesktopPackagingHubProps> = ({
                                                     </div>
                                                 </div>
                                             )
-                                        ))}
+                                        );
+                                        })}
                                     </div>
                                 </section>
                             ))}

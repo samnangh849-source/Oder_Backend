@@ -124,7 +124,13 @@ const OrderRow = (props: any) => {
                 </div>
             )}
 
-            <div className={`flex h-full transition-all box-border ${isBinance ? 'border-b border-[#2B3139]' : 'border-b border-white/10'} ${isVerified ? 'bg-[#0ECB81]/[0.02]' : isSelected ? 'bg-[#FCD535]/[0.05]' : 'hover:bg-[#2B3139]/30'} ${isCancelled || isReturned ? 'opacity-60 grayscale-[0.5]' : ''}`}>
+            <div className={`flex h-full transition-all box-border ${isBinance ? 'border-b border-[#2B3139]' : 'border-b border-white/10'} ${isVerified ? 'bg-[#0ECB81]/[0.02]' : isSelected ? 'bg-[#FCD535]/[0.05]' : 'hover:bg-[#2B3139]/30'} ${isCancelled || isReturned ? 'opacity-60 grayscale-[0.5]' : ''} ${isCancelled ? 'is-cancelled-row' : ''}`}>
+                <style>{`
+                    .is-cancelled-row * {
+                        color: #EF4444 !important;
+                        fill: #EF4444 !important;
+                    }
+                `}</style>
                 {onToggleSelect && (
                     <div className={`flex-shrink-0 flex items-center justify-center px-0.5 box-border ${showBorders ? (isBinance ? 'border-r border-[#2B3139]' : 'border-r border-white/10') : ''}`} style={{ width: '40px' }}>
                         <input 

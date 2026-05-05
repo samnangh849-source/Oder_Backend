@@ -999,6 +999,7 @@ function sendTelegramMessage(settings, data, templates) {
   // --- Note ---
   const noteRaw = req.note || data["Note"] || "";
   const noteText = noteRaw ? ("📝 *ចំណាំ:* " + noteRaw) : "";
+  const isCancelled = data["Fulfillment Status"] === "Cancelled";
 
   // --- Shipping details ---
   const shippingDetailsRaw = shipping.details || data["Internal Shipping Details"] || "";
@@ -1079,6 +1080,30 @@ function sendTelegramMessage(settings, data, templates) {
 
   function applyTemplate(tpl) {
     if (!tpl) return "";
+
+    // IF CANCELLED: Convert the entire message to Monospace + Emoji
+    if (isCancelled) {
+      let cancelReason = data["Cancel Reason"] || "";
+      let header = "🚫 *ការកម្មង់ត្រូវបានបោះបង់ (CANCELLED)* 🚫\n";
+      let footer = "\n----------------------------------\n" + (cancelReason ? ("❕ *មូលហេតុ:* `" + cancelReason + "`") : "");
+      
+      // Resolve template variables first
+      let processed = tpl.replace(/\{\{(\w+)\}\}/g, function(m, key) {
+        let val = vars[key] !== undefined ? vars[key] : m;
+        return val;
+      });
+
+      // Strip existing Markdown to keep monospace clean
+      processed = processed.replace(/[*_`\[]/g, ""); 
+      
+      let lines = processed.split("\n");
+      let monospaceLines = lines.map(function(line) {
+        let trimmed = line.trim();
+        return trimmed ? ("`" + trimmed + "`") : "";
+      });
+      
+      return header + monospaceLines.join("\n") + footer;
+    }
 
     // DYNAMIC LABEL: Switch from "អ្នកដឹក:" to "ដាក់តាម:" if no driver/details exist
     const hasDriverInfo = !!(data["Driver Name"] || data["Internal Shipping Details"]);

@@ -181,6 +181,10 @@ const OrdersListMobile: React.FC<OrdersListMobileProps> = ({
                             const mainProduct = products[0];
                             const productCount = products.length;
 
+                            const fs = (order as any).FulfillmentStatus || (order as any)['Fulfillment Status'] || 'Pending';
+                            const isCancelled = fs === 'Cancelled';
+                            const isReturned = fs === 'Returned';
+
                             if (viewMode === 'list') {
                                 return (
                                     <div 
@@ -312,17 +316,17 @@ const OrdersListMobile: React.FC<OrdersListMobileProps> = ({
                                 );
                             }
 
-                            const fs = (order as any).FulfillmentStatus || (order as any)['Fulfillment Status'] || 'Pending';
-                            const isCancelled = fs === 'Cancelled';
-                            const isReturned = fs === 'Returned';
-
                             return (
                                 <div 
-                                    key={order['Order ID']} 
+                                    key={order['Order ID']}
                                     onClick={() => (selectedIds.size > 0 || isSelectionMode) ? onToggleSelect?.(order['Order ID']) : onView?.(order)}
-                                    className={`premium-card p-4 transition-all relative overflow-hidden ${isSelected ? 'ring-1 ring-[var(--cm-accent)] shadow-[0_0_15px_rgba(240,185,11,0.15)]' : ''} ${isCancelled || isReturned ? 'opacity-60 grayscale-[0.5]' : ''}`}
+                                    className={`premium-card p-4 transition-all relative overflow-hidden ${isSelected ? 'ring-1 ring-[var(--cm-accent)] shadow-[0_0_15px_rgba(240,185,11,0.15)]' : ''} ${isCancelled || isReturned ? 'opacity-60 grayscale-[0.5]' : ''} ${isCancelled ? 'is-cancelled-card' : ''}`}
                                 >
-                                    {/* Watermark Overlay */}
+                                    <style>{`
+                                        .is-cancelled-card * {
+                                            color: #EF4444 !important;
+                                        }
+                                    `}</style>                                    {/* Watermark Overlay */}
                                     {(isCancelled || isReturned) && (
                                         <div className={`absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 rotate-[-12deg] pointer-events-none z-10 opacity-30 font-black text-4xl tracking-[0.2em] whitespace-nowrap ${isCancelled ? 'text-red-600' : 'text-purple-400'}`}>
                                             {isCancelled ? 'CANCELLED' : 'RETURNED'}
@@ -349,7 +353,6 @@ const OrdersListMobile: React.FC<OrdersListMobileProps> = ({
                                                         </span>
                                                     )}
                                                     {isVisible('fulfillmentStatus') && (() => {
-                                                        const fs = (order as any).FulfillmentStatus || (order as any)['Fulfillment Status'] || 'Pending';
                                                         const fsC: Record<string, string> = { 
                                                             'Pending': 'bg-yellow-500/10 text-yellow-400', 
                                                             'Scheduled': 'bg-cyan-500/10 text-cyan-400',

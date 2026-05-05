@@ -288,12 +288,23 @@ const MobilePackagingHub: React.FC<MobilePackagingHubProps> = ({
                     <div key={date}>
                         <h3 className={`text-xs font-bold ${B_TEXT_SECONDARY} uppercase border-b ${B_BORDER} pb-1 mb-2 px-1`}>{date}</h3>
                         <div className="space-y-2">
-                            {groupOrders.map((order: ParsedOrder) => (
+                            {groupOrders.map((order: ParsedOrder) => {
+                                const fs = order.FulfillmentStatus || order['Fulfillment Status'] || 'Pending';
+                                const isCancelled = fs === 'Cancelled';
+                                const isReturned = fs === 'Returned';
+                                
+                                return (
                                 <div 
                                     key={order['Order ID']} 
-                                    className={`${B_BG_PANEL} border ${B_BORDER} flex flex-col relative transition-all ${selectedOrderIds.has(order['Order ID']) ? 'border-[#FCD535]/50 bg-[#FCD535]/5 shadow-[0_4px_12px_rgba(252,213,53,0.05)]' : ''}`}
+                                    className={`${B_BG_PANEL} border ${B_BORDER} flex flex-col relative transition-all ${selectedOrderIds.has(order['Order ID']) ? 'border-[#FCD535]/50 bg-[#FCD535]/5 shadow-[0_4px_12px_rgba(252,213,53,0.05)]' : ''} ${isCancelled ? 'bg-red-950/20 border-red-500/30' : isReturned ? 'bg-purple-950/20 border-purple-500/30' : ''}`}
                                     onClick={() => onView(order)}
                                 >
+                                    {/* Watermark Overlay */}
+                                    {(isCancelled || isReturned) && (
+                                        <div className={`absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 rotate-[-12deg] pointer-events-none z-10 opacity-20 font-black text-xl tracking-[0.1em] whitespace-nowrap ${isCancelled ? 'text-red-500' : 'text-purple-400'}`}>
+                                            {isCancelled ? 'CANCELLED' : 'RETURNED'}
+                                        </div>
+                                    )}
                                     {loadingActionId === order['Order ID'] && (
                                         <div className={`absolute inset-0 ${B_BG_MAIN}/80 z-50 flex items-center justify-center`}><Spinner size="sm" /></div>
                                     )}
@@ -408,11 +419,15 @@ const MobilePackagingHub: React.FC<MobilePackagingHubProps> = ({
 
                                     <div className={`p-2 border-t ${B_BORDER} flex gap-2`}>
                                         <button onClick={(e) => { e.stopPropagation(); onView(order); }} className={`flex-1 py-1.5 bg-[#2B3139] text-[#EAECEF] rounded-sm text-sm font-medium`}>View Info</button>
-                                        {activeTab === 'Pending' && <button onClick={(e) => { e.stopPropagation(); onPack(order); }} className={`flex-1 py-1.5 bg-[#FCD535] text-[#0B0E11] rounded-sm text-sm font-bold uppercase`}>Pack Order</button>}
-                                        {activeTab === 'Ready to Ship' && (
+                                        {!isCancelled && (
                                             <>
-                                                <button onClick={(e) => { e.stopPropagation(); onUndo(order); }} className={`w-20 py-1.5 bg-[#F6465D]/10 text-[#F6465D] rounded-sm text-xs font-bold uppercase`}>Undo</button>
-                                                <button onClick={(e) => { e.stopPropagation(); onShip(order); }} className={`flex-1 py-1.5 bg-[#0ECB81] text-[#0B0E11] rounded-sm text-sm font-bold uppercase`}>Ship Order</button>
+                                                {activeTab === 'Pending' && <button onClick={(e) => { e.stopPropagation(); onPack(order); }} className={`flex-1 py-1.5 bg-[#FCD535] text-[#0B0E11] rounded-sm text-sm font-bold uppercase`}>Pack Order</button>}
+                                                {activeTab === 'Ready to Ship' && (
+                                                    <>
+                                                        <button onClick={(e) => { e.stopPropagation(); onUndo(order); }} className={`w-20 py-1.5 bg-[#F6465D]/10 text-[#F6465D] rounded-sm text-xs font-bold uppercase`}>Undo</button>
+                                                        <button onClick={(e) => { e.stopPropagation(); onShip(order); }} className={`flex-1 py-1.5 bg-[#0ECB81] text-[#0B0E11] rounded-sm text-sm font-bold uppercase`}>Ship Order</button>
+                                                    </>
+                                                )}
                                             </>
                                         )}
                                         {activeTab === 'Shipped' && (
@@ -429,7 +444,8 @@ const MobilePackagingHub: React.FC<MobilePackagingHubProps> = ({
                                         )}
                                     </div>
                                 </div>
-                            ))}
+                                );
+                            })}
                         </div>
                     </div>
                 ))}

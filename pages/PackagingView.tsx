@@ -331,7 +331,18 @@ const PackagingView: React.FC<{ orders?: ParsedOrder[] }> = ({ orders: propOrder
         return filtered;
     }, [allOrdersMapped, selectedStore, searchTerm, shippingFilter]);
 
-    const filteredOrders = useMemo(() => allFilteredOrders.filter(o => o.FulfillmentStatus === activeTab), [allFilteredOrders, activeTab]);
+    const filteredOrders = useMemo(() => {
+        return allFilteredOrders.filter(o => {
+            if (o.FulfillmentStatus === activeTab) return true;
+            
+            // SPECIAL: Keep Cancelled orders visible in Pending and Ready tabs for awareness
+            if (o.FulfillmentStatus === 'Cancelled' && (activeTab === 'Pending' || activeTab === 'Ready to Ship')) {
+                return true;
+            }
+            
+            return false;
+        });
+    }, [allFilteredOrders, activeTab]);
 
     const tabCounts = useMemo(() => ({
         pending: allFilteredOrders.filter(o => o.FulfillmentStatus === 'Pending').length,

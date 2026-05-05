@@ -169,8 +169,13 @@ const OrdersListTablet: React.FC<OrdersListTabletProps> = ({
                                     <div 
                                         key={order['Order ID']}
                                         onClick={() => onView && onView(order)}
-                                        className={`flex items-center gap-4 p-4 rounded-2xl border transition-all active:scale-[0.99] cursor-pointer relative overflow-hidden ${isSelected ? 'bg-blue-600/20 border-blue-500/50' : isVerified ? 'bg-emerald-500/5 border-emerald-500/10' : 'bg-[#1e293b]/40 border-white/5'} ${isCancelled || isReturned ? 'opacity-60 grayscale-[0.5]' : ''}`}
+                                        className={`flex items-center gap-4 p-4 rounded-2xl border transition-all active:scale-[0.99] cursor-pointer relative overflow-hidden ${isSelected ? 'bg-blue-600/20 border-blue-500/50' : isVerified ? 'bg-emerald-500/5 border-emerald-500/10' : 'bg-[#1e293b]/40 border-white/5'} ${isCancelled || isReturned ? 'opacity-60 grayscale-[0.5]' : ''} ${isCancelled ? 'is-cancelled-node' : ''}`}
                                     >
+                                        <style>{`
+                                            .is-cancelled-node * {
+                                                color: #EF4444 !important;
+                                            }
+                                        `}</style>
                                         {/* Watermark Overlay (List Mode) */}
                                         {(isCancelled || isReturned) && (
                                             <div className={`absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 rotate-[-12deg] pointer-events-none z-10 opacity-20 font-black text-2xl tracking-[0.2em] whitespace-nowrap ${isCancelled ? 'text-red-600' : 'text-purple-400'}`}>
@@ -250,8 +255,14 @@ const OrdersListTablet: React.FC<OrdersListTabletProps> = ({
                                                 : 'bg-[#1e293b]/60 border border-white/5 shadow-black/30 backdrop-blur-md hover:bg-[#1e293b]/80'
                                         }
                                         ${isCancelled || isReturned ? 'opacity-60 grayscale-[0.5]' : ''}
+                                        ${isCancelled ? 'is-cancelled-node' : ''}
                                     `}
                                 >
+                                    <style>{`
+                                        .is-cancelled-node * {
+                                            color: #EF4444 !important;
+                                        }
+                                    `}</style>
                                     {/* Watermark Overlay (Card Mode) */}
                                     {(isCancelled || isReturned) && (
                                         <div className={`absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 rotate-[-12deg] pointer-events-none z-10 opacity-20 font-black text-5xl tracking-[0.2em] whitespace-nowrap ${isCancelled ? 'text-red-600' : 'text-purple-400'}`}>

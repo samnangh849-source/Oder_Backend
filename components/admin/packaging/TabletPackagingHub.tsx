@@ -298,7 +298,7 @@ const TabletPackagingHub: React.FC<TabletPackagingHubProps> = ({
                                         >
                                             {/* Watermark Overlay */}
                                             {(isCancelled || isReturned) && (
-                                                <div className={`absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 rotate-[-12deg] pointer-events-none z-10 opacity-20 font-black text-4xl tracking-[0.2em] whitespace-nowrap ${isCancelled ? 'text-red-500' : 'text-purple-400'}`}>
+                                                <div className={`absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 rotate-[-12deg] pointer-events-none z-10 opacity-20 font-black text-2xl tracking-[0.1em] whitespace-nowrap ${isCancelled ? 'text-red-500' : 'text-purple-400'}`}>
                                                     {isCancelled ? 'CANCELLED' : 'RETURNED'}
                                                 </div>
                                             )}
@@ -411,11 +411,15 @@ const TabletPackagingHub: React.FC<TabletPackagingHubProps> = ({
                                                     </div>
                                                     <div className="flex gap-1">
                                                         <button onClick={(e) => { e.stopPropagation(); onView(order); }} className={`px-2 py-1 bg-[#2B3139] text-[#EAECEF] rounded-sm text-xs`}>View</button>
-                                                        {activeTab === 'Pending' && <button onClick={(e) => { e.stopPropagation(); onPack(order); }} className={`px-3 py-1 bg-[#FCD535] text-[#0B0E11] rounded-sm text-xs font-bold uppercase`}>Pack</button>}
-                                                        {activeTab === 'Ready to Ship' && (
+                                                        {!isCancelled && (
                                                             <>
-                                                                <button onClick={(e) => { e.stopPropagation(); onUndo(order); }} className={`px-2 py-1 bg-[#F6465D]/10 text-[#F6465D] rounded-sm text-xs font-bold uppercase`}>Undo</button>
-                                                                <button onClick={(e) => { e.stopPropagation(); onShip(order); }} className={`px-3 py-1 bg-[#0ECB81] text-[#0B0E11] rounded-sm text-xs font-bold uppercase`}>Ship</button>
+                                                                {activeTab === 'Pending' && <button onClick={(e) => { e.stopPropagation(); onPack(order); }} className={`px-3 py-1 bg-[#FCD535] text-[#0B0E11] rounded-sm text-xs font-bold uppercase`}>Pack</button>}
+                                                                {activeTab === 'Ready to Ship' && (
+                                                                    <>
+                                                                        <button onClick={(e) => { e.stopPropagation(); onUndo(order); }} className={`px-2 py-1 bg-[#F6465D]/10 text-[#F6465D] rounded-sm text-xs font-bold uppercase`}>Undo</button>
+                                                                        <button onClick={(e) => { e.stopPropagation(); onShip(order); }} className={`px-3 py-1 bg-[#0ECB81] text-[#0B0E11] rounded-sm text-xs font-bold uppercase`}>Ship</button>
+                                                                    </>
+                                                                )}
                                                             </>
                                                         )}
                                                         {activeTab === 'Shipped' && (
