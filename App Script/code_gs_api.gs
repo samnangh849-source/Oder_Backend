@@ -467,7 +467,12 @@ function handleUpdateSheet(data) {
         "deliveryphotourl": ["deliveryphoto", "deliveryphotourl", "deliveryphotolink", "proofofdelivery", "deliveryphotoevidence", "delivery photo url"],
         "deliveryphoto": ["deliveryphotourl", "deliveryphoto", "deliveryphotolink", "proofofdelivery", "deliveryphotoevidence", "delivery photo url"],
         "fulfillmentstatus": ["fulfillmentstatus", "status", "orderstatus", "fulfillment status"],
-        "fulfillmentstore": ["fulfillmentstore", "store", "warehouse", "fulfillment store"]
+        "fulfillmentstore": ["fulfillmentstore", "store", "warehouse", "fulfillment store"],
+        "cancelreason": ["cancelreason", "cancel_reason", "reason", "cancel reason"],
+        "returnreason": ["returnreason", "return_reason", "return reason"],
+        "returnphoto": ["returnphoto", "return_photo", "return photo", "returnphotourl"],
+        "returnreceivedby": ["returnreceivedby", "return_received_by", "return received by"],
+        "returnreceivedtime": ["returnreceivedtime", "return_received_time", "return received time"]
       };
 
       for (const [key, val] of Object.entries(data.newData)) {

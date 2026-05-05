@@ -8,6 +8,7 @@ import OrdersListDesktop from './OrdersListDesktop';
 import OrdersListMobile from './OrdersListMobile';
 import OrdersListTablet from './OrdersListTablet'; // Import Tablet Component
 import { printViaIframe } from '../../utils/printUtils';
+import { translations } from '../../translations';
 
 interface OrdersListProps {
     orders: ParsedOrder[];
@@ -32,7 +33,8 @@ const OrdersList: React.FC<OrdersListProps> = ({
     showBorders = false, groupBy = 'none', viewMode = 'card',
     onOptimisticUpdate
 }) => {
-    const { refreshData } = useContext(AppContext);
+    const { refreshData, language } = useContext(AppContext);
+    const t = translations[language];
     const [copiedId, setCopiedId] = useState<string | null>(null);
     const [copiedTemplateId, setCopiedTemplateId] = useState<string | null>(null);
     const [updatingIds, setUpdatingIds] = useState<Set<string>>(new Set());
@@ -79,6 +81,37 @@ const OrdersList: React.FC<OrdersListProps> = ({
             // Revert on error
             setLocalOrders(prev => prev.map(o => o['Order ID'] === orderId ? { ...o, IsVerified: currentStatus } : o));
             alert("រក្សាទុកស្ថានភាពមិនបានសម្រេច!");
+        } finally {
+            setUpdatingIds(prev => { const next = new Set(prev); next.delete(orderId); return next; });
+        }
+    };
+
+    const handleUpdateFulfillmentStatus = async (orderId: string, newStatus: string) => {
+        const confirmMsg = language === 'km'
+            ? (newStatus === 'Cancelled' ? t.confirm_delete : `តើអ្នកចង់ប្តូរស្ថានភាពទៅជា ${newStatus} មែនទេ?`)
+            : (newStatus === 'Cancelled' ? "Are you sure you want to cancel this order?" : `Do you want to change status to ${newStatus}?`);
+            
+        if (!window.confirm(confirmMsg)) return;
+
+        // Optimistic Update
+        setLocalOrders(prev => prev.map(o => o['Order ID'] === orderId ? { ...o, 'Fulfillment Status': newStatus, FulfillmentStatus: newStatus } : o));
+        setUpdatingIds(prev => new Set(prev).add(orderId));
+        
+        try {
+            const response = await fetch(`${WEB_APP_URL}/api/admin/update-sheet`, {
+                method: 'POST',
+                headers: { 
+                    'Content-Type': 'application/json',
+                    'Authorization': `Bearer ${localStorage.getItem('token')}`
+                },
+                body: JSON.stringify({ sheetName: 'AllOrders', primaryKey: { 'Order ID': orderId }, newData: { 'Fulfillment Status': newStatus } })
+            });
+            if (!response.ok) throw new Error("Failed to update status");
+            refreshData();
+        } catch (e) {
+            console.error("Status update failed:", e);
+            refreshData();
+            alert("ការផ្លាស់ប្តូរស្ថានភាពមិនបានសម្រេច!");
         } finally {
             setUpdatingIds(prev => { const next = new Set(prev); next.delete(orderId); return next; });
         }
@@ -237,6 +270,7 @@ ${dateStr}
         copiedId,
         copiedTemplateId,
         toggleOrderVerified,
+        handleUpdateFulfillmentStatus,
         handleSendTelegram,
         updatingIds,
         showBorders,

@@ -31,8 +31,13 @@ const PackagingView: React.FC<{ orders?: ParsedOrder[] }> = ({ orders: propOrder
     const [capturedPhoto, setCapturedPhoto] = useState<string | null>(null);
     const [isShiftLoading, setIsShiftLoading] = useState(false);
 
-    const [activeTab, setActiveTab] = useState<'Pending' | 'Ready to Ship' | 'Shipped'>('Pending');
+    const [activeTab, setActiveTab] = useState<'Pending' | 'Ready to Ship' | 'Shipped' | 'Returned'>('Pending');
     const [packingOrder, setPackingOrder] = useState<ParsedOrder | null>(null);
+    const [returningOrder, setReturningOrder] = useState<ParsedOrder | null>(null);
+    const [isReturnPhotoModalOpen, setIsReturnPhotoModalOpen] = useState(false);
+    const [returnPhoto, setReturnPhoto] = useState<string | null>(null);
+    const [isSubmittingReturn, setIsSubmittingReturn] = useState(false);
+
     const [loadingActionId, setLoadingActionId] = useState<string | null>(null);
     const [viewMode, setViewMode] = useState<'card' | 'list'>('card');
     const [selectedOrderIds, setSelectedOrderIds] = useState<Set<string>>(new Set());
@@ -331,7 +336,8 @@ const PackagingView: React.FC<{ orders?: ParsedOrder[] }> = ({ orders: propOrder
     const tabCounts = useMemo(() => ({
         pending: allFilteredOrders.filter(o => o.FulfillmentStatus === 'Pending').length,
         ready: allFilteredOrders.filter(o => o.FulfillmentStatus === 'Ready to Ship').length,
-        shipped: allFilteredOrders.filter(o => o.FulfillmentStatus === 'Shipped').length
+        shipped: allFilteredOrders.filter(o => o.FulfillmentStatus === 'Shipped').length,
+        returned: allFilteredOrders.filter(o => o.FulfillmentStatus === 'Returned').length
     }), [allFilteredOrders]);
 
     const progressStats = useMemo(() => {
@@ -367,6 +373,44 @@ const PackagingView: React.FC<{ orders?: ParsedOrder[] }> = ({ orders: propOrder
             });
             refreshData();
         } finally { setLoadingActionId(null); }
+    };
+
+    const handleConfirmReturnReceipt = async (photo: string) => {
+        if (!returningOrder) return;
+        setIsSubmittingReturn(true);
+        try {
+            const session = await CacheService.get<{ token: string }>(CACHE_KEYS.SESSION);
+            const token = session?.token || '';
+            
+            const res = await fetch(`${WEB_APP_URL}/api/admin/update-order`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json', ...(token ? { 'Authorization': `Bearer ${token}` } : {}) },
+                body: JSON.stringify({ 
+                    orderId: returningOrder['Order ID'], 
+                    team: returningOrder.Team, 
+                    userName: currentUser?.FullName || 'System', 
+                    newData: { 
+                        'Return Photo': photo,
+                        'Return Received By': currentUser?.FullName || 'Staff',
+                        'Return Received Time': new Date().toLocaleString('km-KH')
+                    } 
+                })
+            });
+            const data = await res.json();
+            if (data.status === 'success') {
+                setIsReturnPhotoModalOpen(false);
+                setReturningOrder(null);
+                setReturnPhoto(null);
+                refreshData();
+                alert("បានបញ្ជាក់ការទទួលឥវ៉ាន់ Return រួចរាល់!");
+            } else {
+                alert(data.message || "មិនអាចបញ្ជាក់បានទេ");
+            }
+        } catch (error) {
+            alert("មានបញ្ហាពេលបញ្ជាក់ការទទួល");
+        } finally {
+            setIsSubmittingReturn(false);
+        }
     };
 
     if (!selectedStore) {
@@ -447,6 +491,11 @@ const PackagingView: React.FC<{ orders?: ParsedOrder[] }> = ({ orders: propOrder
         onUndo: (o: ParsedOrder) => !isViewOnly && setUndoConfirmation({ order: o, type: 'pending', isOpen: true }),
         onUndoShipped: (o: ParsedOrder) => !isViewOnly && setUndoConfirmation({ order: o, type: 'ready', isOpen: true }),
         onView: (order: ParsedOrder) => setViewingOrder(order),
+        onConfirmReturn: (order: ParsedOrder) => {
+            if (isViewOnly) return;
+            setReturningOrder(order);
+            setIsReturnPhotoModalOpen(true);
+        },
         onPrintManifest: () => {
             const printWindow = window.open('', '_blank');
             if (!printWindow) return;
@@ -654,6 +703,72 @@ const PackagingView: React.FC<{ orders?: ParsedOrder[] }> = ({ orders: propOrder
                     order={viewingOrder} 
                     onClose={() => setViewingOrder(null)} 
                 />
+            )}
+
+            {isReturnPhotoModalOpen && returningOrder && (
+                <Modal isOpen={true} onClose={() => { setIsReturnPhotoModalOpen(false); setReturningOrder(null); setReturnPhoto(null); }} maxWidth="max-w-xl">
+                    <div className="bg-[#1E2329] border border-[#2B3139] p-6 space-y-6 rounded-2xl">
+                        <div className="text-center space-y-2">
+                            <h3 className="text-xl font-black text-white uppercase tracking-wider">បញ្ជាក់ការទទួល Return</h3>
+                            <p className="text-gray-400 text-xs">សូមថតរូបកញ្ចប់ឥវ៉ាន់ដែលបាន Return មកវិញ</p>
+                        </div>
+
+                        <div className="aspect-square bg-black rounded-xl overflow-hidden relative border border-white/10">
+                            {returnPhoto ? (
+                                <img src={returnPhoto} className="w-full h-full object-cover" alt="Return Proof" />
+                            ) : (
+                                <div className="absolute inset-0 flex flex-col items-center justify-center space-y-4">
+                                    <div className="w-20 h-20 bg-white/5 rounded-full flex items-center justify-center">
+                                        <svg className="w-10 h-10 text-gray-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 9a2 2 0 012-2h.93a2 2 0 001.664-.89l.812-1.22A2 2 0 0110.07 4h3.86a2 2 0 011.664.89l.812 1.22A2 2 0 0018.07 7H19a2 2 0 012 2v9a2 2 0 01-2 2H5a2 2 0 01-2-2V9z" /><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 13a3 3 0 11-6 0 3 3 0 016 0z" /></svg>
+                                    </div>
+                                    <input 
+                                        type="file" accept="image/*" capture="environment"
+                                        onChange={async (e) => {
+                                            const file = e.target.files?.[0];
+                                            if (file) {
+                                                const compressed = await compressImage(file, 'medium');
+                                                const dataUrl = await fileToDataUrl(compressed);
+                                                setReturnPhoto(dataUrl);
+                                            }
+                                        }}
+                                        className="absolute inset-0 opacity-0 cursor-pointer"
+                                    />
+                                    <p className="text-sm font-bold text-white">ចុចទីនេះដើម្បីថតរូប</p>
+                                </div>
+                            )}
+                            
+                            {returnPhoto && (
+                                <button 
+                                    onClick={() => setReturnPhoto(null)}
+                                    className="absolute top-4 right-4 bg-red-500 text-white p-2 rounded-full shadow-lg"
+                                >
+                                    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" /></svg>
+                                </button>
+                            )}
+                        </div>
+
+                        <div className="flex gap-3 pt-2">
+                            <button 
+                                onClick={() => { setIsReturnPhotoModalOpen(false); setReturningOrder(null); setReturnPhoto(null); }}
+                                className="flex-1 py-4 bg-white/5 text-gray-400 font-bold rounded-xl hover:bg-white/10 transition-all"
+                            >
+                                បោះបង់
+                            </button>
+                            <button
+                                onClick={() => handleConfirmReturnReceipt(returnPhoto || '')}
+                                disabled={!returnPhoto || isSubmittingReturn}
+                                className="flex-[2] py-4 bg-purple-500 text-white font-bold rounded-xl hover:bg-purple-600 transition-all shadow-lg flex items-center justify-center gap-2 disabled:opacity-50"
+                            >
+                                {isSubmittingReturn ? <Spinner size="sm" /> : (
+                                    <>
+                                        <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" /></svg>
+                                        បញ្ជាក់ការទទួល
+                                    </>
+                                )}
+                            </button>
+                        </div>
+                    </div>
+                </Modal>
             )}
         </div>
     );

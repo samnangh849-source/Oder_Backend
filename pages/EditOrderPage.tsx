@@ -308,6 +308,54 @@ const EditOrderPage: React.FC<EditOrderPageProps> = ({ order, onSaveSuccess, onC
         } catch (err: any) { setError(`លុបមិនបានសម្រេច: ${err.message}`); }
     };
 
+    const handleCancelOrder = async () => {
+        const isShipped = formData.FulfillmentStatus === 'Shipped' || formData.FulfillmentStatus === 'Delivered';
+        const actionText = isShipped ? 'Return' : 'Cancel';
+        const reasonPrompt = isShipped ? 'សូមបញ្ចូលមូលហេតុដែល Return (Return Reason):' : 'សូមបញ្ចូលមូលហេតុដែល Cancel (Cancel Reason):';
+        
+        const reason = window.prompt(reasonPrompt);
+        if (reason === null) return; // User cancelled the prompt
+        if (!reason.trim()) {
+            alert(`ត្រូវការមូលហេតុដើម្បី ${actionText} (Reason is required)`);
+            return;
+        }
+
+        setLoading(true);
+        try {
+            const session = await CacheService.get<{ token: string }>(CACHE_KEYS.SESSION);
+            const token = session?.token;
+            const headers: HeadersInit = { 'Content-Type': 'application/json' };
+            if (token) headers['Authorization'] = `Bearer ${token}`;
+
+            const newStatus = isShipped ? 'Returned' : 'Cancelled';
+            const newData: any = { 'Fulfillment Status': newStatus };
+            if (isShipped) newData['Return Reason'] = reason;
+            else newData['Cancel Reason'] = reason;
+
+            const response = await fetch(`${WEB_APP_URL}/api/admin/update-order`, {
+                method: 'POST',
+                headers,
+                body: JSON.stringify({ 
+                    orderId: formData['Order ID'], 
+                    team: formData.Team, 
+                    userName: currentUser?.FullName || 'System',
+                    newData: newData
+                })
+            });
+            const result = await response.json();
+            if (!response.ok || result.status !== 'success') throw new Error(result.message || 'Action failed');
+            
+            await logUserActivity(currentUser?.UserName || 'Unknown', `${actionText.toUpperCase()}_ORDER`, `${actionText}ed Order #${formData['Order ID']} with reason: ${reason}`);
+
+            await refreshData();
+            onSaveSuccess();
+        } catch (err: any) {
+            setError(`${actionText} មិនបានសម្រេច: ${err.message}`);
+        } finally {
+            setLoading(false);
+        }
+    };
+
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
         setLoading(true); setError('');
@@ -568,6 +616,8 @@ const EditOrderPage: React.FC<EditOrderPageProps> = ({ order, onSaveSuccess, onC
                             onShippingFeeChange={handleInputChange}
                             onSave={handleSubmit}
                             onDelete={handleDelete}
+                            onCancelOrder={handleCancelOrder}
+                            fulfillmentStatus={formData.FulfillmentStatus}
                             loading={loading}
                         />
                     </div>

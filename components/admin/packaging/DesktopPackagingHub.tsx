@@ -46,6 +46,7 @@ interface DesktopPackagingHubProps {
     onBulkShip: () => void;
     isBulkProcessing: boolean;
     onToggleSelectAll: (orders: ParsedOrder[]) => void;
+    onConfirmReturn?: (order: ParsedOrder) => void;
     onCloseShift?: () => void;
     isViewOnly?: boolean;
     activeShift?: any;
@@ -58,7 +59,7 @@ const DesktopPackagingHub: React.FC<DesktopPackagingHubProps> = ({
     selectedStore,
     progressStats, viewMode, setViewMode, setIsFilterModalOpen, loadingActionId, tabCounts,
     selectedOrderIds, toggleOrderSelection, clearSelection, onBulkShip, isBulkProcessing,
-    onToggleSelectAll, onCloseShift, isViewOnly, activeShift
+    onToggleSelectAll, onConfirmReturn, onCloseShift, isViewOnly, activeShift
 }) => {
     const { appData, previewImage: showFullImage } = useContext(AppContext);
 
@@ -158,7 +159,8 @@ const DesktopPackagingHub: React.FC<DesktopPackagingHubProps> = ({
                     {[
                         { id: 'Pending', label: 'Pending Pack', count: tabCounts.pending },
                         { id: 'Ready to Ship', label: 'Ready for Dispatch', count: tabCounts.ready },
-                        { id: 'Shipped', label: 'Shipped Log', count: tabCounts.shipped }
+                        { id: 'Shipped', label: 'Shipped Log', count: tabCounts.shipped },
+                        { id: 'Returned', label: 'Return', count: (tabCounts as any).returned || 0 }
                     ].map(tab => (
                         <button 
                             key={tab.id}
@@ -396,6 +398,11 @@ const DesktopPackagingHub: React.FC<DesktopPackagingHubProps> = ({
                                                                     <span className={`text-[9px] font-black text-blue-400 uppercase tracking-tight`}>Shipped: {extractTime(order['Dispatched Time'])}</span>
                                                                 </div>
                                                             )}
+                                                            {activeTab === 'Returned' && (
+                                                                <div className="flex items-center gap-1 bg-purple-500/5 px-2 py-0.5 rounded-sm border border-purple-500/10">
+                                                                    <span className={`text-[9px] font-black text-purple-400 uppercase tracking-tight`}>Returned</span>
+                                                                </div>
+                                                            )}
                                                             <div className="flex items-center gap-1.5">
                                                                 {getShippingLogo(order['Internal Shipping Method']) && (
                                                                     <img src={getShippingLogo(order['Internal Shipping Method'])!} className="w-5 h-5 object-contain p-0.5 bg-white rounded-sm shadow-sm" alt="" />
@@ -463,7 +470,7 @@ const DesktopPackagingHub: React.FC<DesktopPackagingHubProps> = ({
                                                         </div>
                                                     </div>
 
-                                                    <div className={`p-2 border-t ${B_BORDER} bg-[#0B0E11] grid ${activeTab === 'Pending' ? 'grid-cols-2 gap-2' : activeTab === 'Ready to Ship' ? 'grid-cols-3 gap-2' : 'grid-cols-2 gap-2'}`}>
+                                                    <div className={`p-2 border-t ${B_BORDER} bg-[#0B0E11] grid ${activeTab === 'Pending' ? 'grid-cols-2 gap-2' : activeTab === 'Ready to Ship' ? 'grid-cols-3 gap-2' : activeTab === 'Returned' ? 'grid-cols-2 gap-2' : 'grid-cols-2 gap-2'}`}>
                                                         <button onClick={(e) => { e.stopPropagation(); onView(order); }} className={`w-full py-1.5 bg-[#2B3139] hover:bg-[#3B424A] ${B_TEXT_PRIMARY} text-xs font-medium transition-colors rounded-sm`}>Details</button>
                                                         {activeTab === 'Pending' && <button onClick={(e) => { e.stopPropagation(); onPack(order); }} className={`w-full py-1.5 ${B_ACCENT_BG} text-xs font-bold uppercase transition-colors rounded-sm`}>Pack</button>}
                                                         {activeTab === 'Ready to Ship' && (
@@ -474,6 +481,15 @@ const DesktopPackagingHub: React.FC<DesktopPackagingHubProps> = ({
                                                         )}
                                                         {activeTab === 'Shipped' && (
                                                             <button onClick={(e) => { e.stopPropagation(); onUndoShipped(order); }} className={`w-full py-1.5 bg-[#F6465D]/10 hover:bg-[#F6465D]/20 ${B_RED} text-xs font-bold uppercase transition-colors rounded-sm`}>Undo</button>
+                                                        )}
+                                                        {activeTab === 'Returned' && (
+                                                            <button 
+                                                                onClick={(e) => { e.stopPropagation(); onConfirmReturn?.(order); }} 
+                                                                disabled={!!order['Return Received By']}
+                                                                className={`w-full py-1.5 ${order['Return Received By'] ? 'bg-gray-500/20 text-gray-500' : 'bg-purple-500 text-white hover:bg-purple-600'} text-xs font-bold uppercase transition-colors rounded-sm`}
+                                                            >
+                                                                {order['Return Received By'] ? 'Received' : 'Confirm Receipt'}
+                                                            </button>
                                                         )}
                                                     </div>
                                                 </div>
@@ -576,6 +592,15 @@ const DesktopPackagingHub: React.FC<DesktopPackagingHubProps> = ({
                                                         )}
                                                         {activeTab === 'Shipped' && (
                                                             <button onClick={(e) => { e.stopPropagation(); onUndoShipped(order); }} className={`px-3 py-1 bg-[#F6465D]/10 hover:bg-[#F6465D]/20 ${B_RED} text-xs font-bold uppercase rounded-sm transition-colors`}>Undo</button>
+                                                        )}
+                                                        {activeTab === 'Returned' && (
+                                                            <button 
+                                                                onClick={(e) => { e.stopPropagation(); onConfirmReturn?.(order); }} 
+                                                                disabled={!!order['Return Received By']}
+                                                                className={`px-3 py-1 ${order['Return Received By'] ? 'bg-gray-500/20 text-gray-500' : 'bg-purple-500 text-white hover:bg-purple-600'} text-xs font-bold uppercase rounded-sm transition-colors`}
+                                                            >
+                                                                {order['Return Received By'] ? 'Received' : 'Confirm Receipt'}
+                                                            </button>
                                                         )}
                                                     </div>
                                                 </div>

@@ -6,7 +6,7 @@ import { convertGoogleDriveUrl } from '../../utils/fileUtils';
 import Spinner from '../common/Spinner';
 import { DesktopGrandTotalRow } from './OrderGrandTotal';
 import { translations } from '../../translations';
-import { Check } from 'lucide-react';
+import { Check, XCircle, RotateCcw } from 'lucide-react';
 
 interface OrdersListDesktopProps {
     orders: ParsedOrder[];
@@ -23,6 +23,7 @@ interface OrdersListDesktopProps {
     copiedId: string | null;
     copiedTemplateId: string | null;
     toggleOrderVerified: (id: string, currentStatus: any) => void;
+    handleUpdateFulfillmentStatus: (id: string, newStatus: string) => void;
     handleSendTelegram: (id: string) => void;
     updatingIds: Set<string>;
     showBorders?: boolean;
@@ -35,7 +36,7 @@ const OrderRow = (props: any) => {
     const { 
         items, visibleCols, getColWidth, onToggleSelect, selectedIds, 
         onView, onEdit, handleCopyTemplate, handlePrint, handleCopy,
-        toggleOrderVerified, handleSendTelegram, updatingIds, canVerifyOrder, canEditOrder,
+        toggleOrderVerified, handleUpdateFulfillmentStatus, handleSendTelegram, updatingIds, canVerifyOrder, canEditOrder,
         showBorders, copiedTemplateId, appData, t, groupByLabel, isBinance
     } = data;
     
@@ -60,13 +61,17 @@ const OrderRow = (props: any) => {
     const isSelected = selectedIds.has(order['Order ID']);
     const allowEdit = canEditOrder(order);
     
+    const fs = (order as any).FulfillmentStatus || (order as any)['Fulfillment Status'] || 'Pending';
+    const isCancelled = fs === 'Cancelled';
+    const isReturned = fs === 'Returned';
+
     const { 
         displayPhone, carrierLogo, pageLogoUrl, shippingLogo, orderDate,
         productThumbnails
     } = item.enriched;
 
     return (
-        <div style={style} className="group box-border">
+        <div style={style} className="group box-border relative overflow-hidden">
             <style>{`
                 .os-tooltip-trigger { position: relative; }
                 .os-tooltip {
@@ -96,8 +101,30 @@ const OrderRow = (props: any) => {
                     visibility: visible;
                     transform: translateY(0);
                 }
+                .order-watermark {
+                    position: absolute;
+                    top: 50%;
+                    left: 50%;
+                    transform: translate(-50%, -50%) rotate(-10deg);
+                    font-size: 48px;
+                    font-weight: 900;
+                    text-transform: uppercase;
+                    pointer-events: none;
+                    opacity: 0.12;
+                    z-index: 5;
+                    white-space: nowrap;
+                    letter-spacing: 0.2em;
+                }
             `}</style>
-            <div className={`flex h-full transition-all box-border ${isBinance ? 'border-b border-[#2B3139]' : 'border-b border-white/10'} ${isVerified ? 'bg-[#0ECB81]/[0.02]' : isSelected ? 'bg-[#FCD535]/[0.05]' : 'hover:bg-[#2B3139]/30'}`}>
+            
+            {/* Watermark Overlay */}
+            {(isCancelled || isReturned) && (
+                <div className={`order-watermark ${isCancelled ? 'text-[#F6465D]' : 'text-purple-400'}`}>
+                    {isCancelled ? 'CANCELLED' : 'RETURNED'}
+                </div>
+            )}
+
+            <div className={`flex h-full transition-all box-border ${isBinance ? 'border-b border-[#2B3139]' : 'border-b border-white/10'} ${isVerified ? 'bg-[#0ECB81]/[0.02]' : isSelected ? 'bg-[#FCD535]/[0.05]' : 'hover:bg-[#2B3139]/30'} ${isCancelled || isReturned ? 'opacity-60 grayscale-[0.5]' : ''}`}>
                 {onToggleSelect && (
                     <div className={`flex-shrink-0 flex items-center justify-center px-0.5 box-border ${showBorders ? (isBinance ? 'border-r border-[#2B3139]' : 'border-r border-white/10') : ''}`} style={{ width: '40px' }}>
                         <input 
@@ -122,7 +149,25 @@ const OrderRow = (props: any) => {
                                 return (
                                     <div className="flex items-center justify-center gap-2 w-full">
                                         <button onClick={() => onView && onView(order)} className="w-8 h-8 flex items-center justify-center bg-[#2B3139] hover:bg-[#363C44] text-[#848E9C] hover:text-white rounded transition-all" title="View"><svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" /><path d="M2.458 12C3.732 7.943 7.523 5 12 5c3.478 0 6.991 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" strokeWidth={2}/></svg></button>
-                                        {allowEdit && <button onClick={() => onEdit && onEdit(order)} className="w-8 h-8 flex items-center justify-center bg-[#2B3139] hover:bg-[#363C44] text-[#FCD535] rounded transition-all" title="Edit"><svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" strokeWidth={2}/></svg></button>}
+                                        {allowEdit && (
+                                            <>
+                                                <button onClick={() => onEdit && onEdit(order)} className="w-8 h-8 flex items-center justify-center bg-[#2B3139] hover:bg-[#363C44] text-[#FCD535] rounded transition-all" title="Edit"><svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" strokeWidth={2}/></svg></button>
+                                                
+                                                {/* Cancel only if not shipped */}
+                                                {!['Shipped', 'Delivered', 'Cancelled', 'Returned'].includes(fs) && (
+                                                    <button onClick={() => handleUpdateFulfillmentStatus(order['Order ID'], 'Cancelled')} className="w-8 h-8 flex items-center justify-center bg-[#2B3139] hover:bg-[#F6465D] text-[#848E9C] hover:text-white rounded transition-all" title={t.btn_cancel_order} disabled={updatingIds.has(order['Order ID'])}>
+                                                        {updatingIds.has(order['Order ID']) ? <Spinner size="xs" /> : <XCircle className="w-4 h-4" />}
+                                                    </button>
+                                                )}
+
+                                                {/* Return only if shipped */}
+                                                {['Shipped', 'Delivered'].includes(fs) && (
+                                                    <button onClick={() => handleUpdateFulfillmentStatus(order['Order ID'], 'Returned')} className="w-8 h-8 flex items-center justify-center bg-[#2B3139] hover:bg-purple-600 text-[#848E9C] hover:text-white rounded transition-all" title={t.btn_return_order} disabled={updatingIds.has(order['Order ID'])}>
+                                                        {updatingIds.has(order['Order ID']) ? <Spinner size="xs" /> : <RotateCcw className="w-4 h-4" />}
+                                                    </button>
+                                                )}
+                                            </>
+                                        )}
                                     </div>
                                 );
                             case 'customerName':
@@ -220,6 +265,7 @@ const OrderRow = (props: any) => {
                                     'Shipped': 'bg-purple-500/10 text-purple-400',
                                     'Delivered': 'bg-[#0ECB81]/10 text-[#0ECB81]',
                                     'Cancelled': 'bg-[#F6465D]/10 text-[#F6465D]',
+                                    'Returned': 'bg-purple-500/20 text-purple-300',
                                 };
                                 return (
                                     <div className="w-full flex items-center justify-center">
@@ -338,7 +384,7 @@ const OrdersListDesktop: React.FC<OrdersListDesktopProps> = ({
 
         const baseWidths: Record<string, number> = {
             index: 45,
-            actions: 130,
+            actions: 170,
             customerName: isUltraWide ? 220 : (isCompact ? 170 : 190),
             productInfo: isUltraWide ? 300 : (isCompact ? 220 : 260),
             location: isUltraWide ? 200 : (isCompact ? 150 : 170),

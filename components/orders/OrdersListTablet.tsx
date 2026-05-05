@@ -20,6 +20,7 @@ interface OrdersListTabletProps {
     copiedId: string | null;
     copiedTemplateId: string | null;
     toggleOrderVerified: (id: string, currentStatus: boolean) => void;
+    handleUpdateFulfillmentStatus: (id: string, newStatus: string) => void;
     handleSendTelegram: (id: string) => void;
     updatingIds: Set<string>;
     groupBy?: string;
@@ -40,6 +41,7 @@ const OrdersListTablet: React.FC<OrdersListTabletProps> = ({
     copiedId,
     copiedTemplateId,
     toggleOrderVerified,
+    handleUpdateFulfillmentStatus,
     handleSendTelegram,
     updatingIds,
     groupBy = 'none',
@@ -181,10 +183,29 @@ const OrdersListTablet: React.FC<OrdersListTabletProps> = ({
                                                 <span className={`text-[10px] font-black uppercase px-2 py-1 rounded-lg border ${isPaid ? 'bg-emerald-500/10 text-emerald-500 border-emerald-500/20' : 'bg-orange-500/10 text-orange-500 border-orange-500/20'}`}>{order['Payment Status']}</span>
                                             </div>
                                             <div className="col-span-1">
-                                                <p className="text-[11px] font-bold text-gray-400 truncate flex items-center gap-1">
-                                                    <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z" /></svg>
-                                                    {order.Location}
-                                                </p>
+                                                <div className="flex items-center gap-1">
+                                                    {allowEdit && (
+                                                        <>
+                                                            <button onClick={e => { e.stopPropagation(); onEdit?.(order); }} className="w-8 h-8 rounded-lg bg-blue-500/10 text-blue-400 flex items-center justify-center border border-blue-500/20">
+                                                                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" strokeWidth={2}/></svg>
+                                                            </button>
+
+                                                            {/* Cancel only if not shipped */}
+                                                            {!['Shipped', 'Delivered', 'Cancelled', 'Returned'].includes(order.FulfillmentStatus || order['Fulfillment Status'] || 'Pending') && (
+                                                                <button onClick={e => { e.stopPropagation(); handleUpdateFulfillmentStatus(order['Order ID'], 'Cancelled'); }} className="w-8 h-8 rounded-lg bg-red-500/10 text-red-400 flex items-center justify-center border border-red-500/20" title={t.btn_cancel_order}>
+                                                                    {isUpdating ? <Spinner size="xs" /> : <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2}><path d="M6 18L18 6M6 6l12 12" /></svg>}
+                                                                </button>
+                                                            )}
+
+                                                            {/* Return only if shipped */}
+                                                            {['Shipped', 'Delivered'].includes(order.FulfillmentStatus || order['Fulfillment Status'] || 'Pending') && (
+                                                                <button onClick={e => { e.stopPropagation(); handleUpdateFulfillmentStatus(order['Order ID'], 'Returned'); }} className="w-8 h-8 rounded-lg bg-purple-500/10 text-purple-400 flex items-center justify-center border border-purple-500/20" title={t.btn_return_order}>
+                                                                    {isUpdating ? <Spinner size="xs" /> : <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2.5}><path d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" /></svg>}
+                                                                </button>
+                                                            )}
+                                                        </>
+                                                    )}
+                                                </div>
                                             </div>
                                             <div className="col-span-1 text-right">
                                                 <p className="text-sm font-black text-white tracking-tighter italic">${(Number(order['Grand Total']) || 0).toFixed(2)}</p>
@@ -267,7 +288,23 @@ const OrdersListTablet: React.FC<OrdersListTabletProps> = ({
                                             </button>
                                             {onEdit && (
                                                 allowEdit ? (
-                                                    <button onClick={() => onEdit(order)} className="flex-1 py-3 bg-blue-600/10 text-blue-400 hover:bg-blue-600 hover:text-white rounded-2xl border border-blue-500/20 font-black text-[11px] uppercase tracking-widest transition-all active:scale-95">Edit</button>
+                                                    <>
+                                                        <button onClick={() => onEdit(order)} className="flex-1 py-3 bg-blue-600/10 text-blue-400 hover:bg-blue-600 hover:text-white rounded-2xl border border-blue-500/20 font-black text-[11px] uppercase tracking-widest transition-all active:scale-95">Edit</button>
+                                                        
+                                                        {/* Cancel only if not shipped */}
+                                                        {!['Shipped', 'Delivered', 'Cancelled', 'Returned'].includes(order.FulfillmentStatus || order['Fulfillment Status'] || 'Pending') && (
+                                                            <button onClick={() => handleUpdateFulfillmentStatus(order['Order ID'], 'Cancelled')} className="w-12 h-12 flex items-center justify-center bg-[#F6465D]/10 text-[#F6465D] hover:bg-[#F6465D] hover:text-white rounded-2xl border border-[#F6465D]/20 transition-all active:scale-90" title={t.btn_cancel_order}>
+                                                                {isUpdating ? <Spinner size="xs" /> : <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2.5}><path d="M6 18L18 6M6 6l12 12" /></svg>}
+                                                            </button>
+                                                        )}
+
+                                                        {/* Return only if shipped */}
+                                                        {['Shipped', 'Delivered'].includes(order.FulfillmentStatus || order['Fulfillment Status'] || 'Pending') && (
+                                                            <button onClick={() => handleUpdateFulfillmentStatus(order['Order ID'], 'Returned')} className="w-12 h-12 flex items-center justify-center bg-purple-600/10 text-purple-400 hover:bg-purple-600 hover:text-white rounded-2xl border border-purple-500/20 transition-all active:scale-90" title={t.btn_return_order}>
+                                                                {isUpdating ? <Spinner size="xs" /> : <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2.5}><path d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" /></svg>}
+                                                            </button>
+                                                        )}
+                                                    </>
                                                 ) : (
                                                     <button disabled className="flex-1 py-3 bg-gray-800 text-gray-600 rounded-2xl border border-white/5 font-black text-[11px] uppercase tracking-widest cursor-not-allowed">Locked</button>
                                                 )

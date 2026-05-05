@@ -10,13 +10,18 @@ interface EditOrderSummaryProps {
     onShippingFeeChange: (e: React.ChangeEvent<HTMLInputElement>) => void;
     onSave: (e: React.FormEvent) => void;
     onDelete: () => void;
+    onCancelOrder: () => void;
+    fulfillmentStatus: string;
     loading: boolean;
 }
 
 const EditOrderSummary: React.FC<EditOrderSummaryProps> = ({
-    subtotal, grandTotal, shippingFee, onShippingFeeChange, onSave, onDelete, loading
+    subtotal, grandTotal, shippingFee, onShippingFeeChange, onSave, onDelete, onCancelOrder, fulfillmentStatus, loading
 }) => {
     const { hasPermission } = useContext(AppContext);
+
+    const isShipped = fulfillmentStatus === 'Shipped' || fulfillmentStatus === 'Delivered';
+    const isCancelled = fulfillmentStatus === 'Cancelled' || fulfillmentStatus === 'Returned';
 
     return (
         <div className="flex-shrink-0 bg-[#1E2329] border border-[#2B3139] rounded-sm p-4 flex flex-col lg:flex-row gap-4 items-center justify-between shadow-lg">
@@ -56,6 +61,23 @@ const EditOrderSummary: React.FC<EditOrderSummaryProps> = ({
 
             {/* Action Buttons */}
             <div className="flex flex-row gap-2 w-full lg:w-auto items-center">
+                {/* Cancel/Return Button */}
+                {!isCancelled && (
+                    <button 
+                        type="button" 
+                        onClick={onCancelOrder} 
+                        disabled={loading}
+                        className={`flex-1 lg:flex-none px-4 py-2 rounded-sm font-bold uppercase text-[11px] transition-all border active:scale-95 flex items-center justify-center gap-2 ${
+                            isShipped 
+                            ? 'bg-purple-500/10 text-purple-400 border-purple-500/20 hover:bg-purple-500/20' 
+                            : 'bg-red-500/10 text-red-400 border-red-500/20 hover:bg-red-500/20'
+                        }`}
+                    >
+                        <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path d="M6 18L18 6M6 6l12 12" strokeWidth="2.5" strokeLinecap="round" /></svg> 
+                        {isShipped ? 'Return' : 'Cancel'}
+                    </button>
+                )}
+
                 {/* Delete Button - Hidden if no permission */}
                 {hasPermission('delete_order') && (
                     <button 

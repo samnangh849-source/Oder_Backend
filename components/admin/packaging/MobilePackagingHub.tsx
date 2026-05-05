@@ -33,13 +33,14 @@ interface MobilePackagingHubProps {
     progressStats: { packedByUserToday: number, storeTotalToday: number, progressPercentage: number };
     setIsFilterModalOpen: (open: boolean) => void;
     loadingActionId: string | null;
-    tabCounts: { pending: number, ready: number, shipped: number };
+    tabCounts: { pending: number, ready: number, shipped: number, returned: number };
     selectedOrderIds: Set<string>;
     toggleOrderSelection: (id: string) => void;
     clearSelection: () => void;
     onBulkShip: () => void;
     isBulkProcessing: boolean;
     onToggleSelectAll: (orders: ParsedOrder[]) => void;
+    onConfirmReturn?: (order: ParsedOrder) => void;
     onCloseShift?: () => void;
     isViewOnly?: boolean;
     activeShift?: any;
@@ -52,7 +53,7 @@ const MobilePackagingHub: React.FC<MobilePackagingHubProps> = ({
     selectedStore,
     progressStats, setIsFilterModalOpen, loadingActionId, tabCounts,
     selectedOrderIds, toggleOrderSelection, clearSelection, onBulkShip, isBulkProcessing,
-    onToggleSelectAll, onCloseShift, isViewOnly, activeShift
+    onToggleSelectAll, onConfirmReturn, onCloseShift, isViewOnly, activeShift
 }) => {
     const { previewImage: showFullImage, appData } = useContext(AppContext);
 
@@ -187,7 +188,8 @@ const MobilePackagingHub: React.FC<MobilePackagingHubProps> = ({
                     {[
                         { id: 'Pending', label: 'Pending', count: tabCounts.pending },
                         { id: 'Ready to Ship', label: 'Ready', count: tabCounts.ready },
-                        { id: 'Shipped', label: 'Shipped', count: tabCounts.shipped }
+                        { id: 'Shipped', label: 'Shipped', count: tabCounts.shipped },
+                        { id: 'Returned', label: 'Return', count: tabCounts.returned }
                     ].map(tab => (
                         <button 
                             key={tab.id}
@@ -329,6 +331,11 @@ const MobilePackagingHub: React.FC<MobilePackagingHubProps> = ({
                                                     <span className={`text-[8px] font-black text-blue-400 uppercase tracking-tight`}>Shipped: {extractTime(order['Dispatched Time'])}</span>
                                                 </div>
                                             )}
+                                            {activeTab === 'Returned' && (
+                                                <div className="flex items-center gap-1 bg-purple-500/5 px-2 py-0.5 rounded-sm border border-purple-500/10">
+                                                    <span className={`text-[8px] font-black text-purple-400 uppercase tracking-tight`}>Returned</span>
+                                                </div>
+                                            )}
                                             <div className="flex items-center gap-1.5">
                                                 {getShippingLogo(order['Internal Shipping Method']) && (
                                                     <img src={getShippingLogo(order['Internal Shipping Method'])!} className="w-5 h-5 object-contain p-0.5 bg-white rounded-sm shadow-sm" alt="" />
@@ -410,6 +417,15 @@ const MobilePackagingHub: React.FC<MobilePackagingHubProps> = ({
                                         )}
                                         {activeTab === 'Shipped' && (
                                             <button onClick={(e) => { e.stopPropagation(); onUndoShipped(order); }} className={`w-20 py-1.5 bg-[#F6465D]/10 text-[#F6465D] rounded-sm text-xs font-bold uppercase`}>Undo</button>
+                                        )}
+                                        {activeTab === 'Returned' && (
+                                            <button 
+                                                onClick={(e) => { e.stopPropagation(); onConfirmReturn?.(order); }} 
+                                                disabled={!!order['Return Received By']}
+                                                className={`flex-1 py-1.5 ${order['Return Received By'] ? 'bg-gray-500/20 text-gray-500' : 'bg-purple-500 text-white font-bold'} rounded-sm text-sm uppercase`}
+                                            >
+                                                {order['Return Received By'] ? 'Received' : 'Confirm Receipt'}
+                                            </button>
                                         )}
                                     </div>
                                 </div>

@@ -5,7 +5,7 @@ import { translations } from '../../translations';
 import Spinner from '../common/Spinner';
 import { MobileGrandTotalCard } from './OrderGrandTotal';
 import { convertGoogleDriveUrl } from '../../utils/fileUtils';
-import { Edit2, Check, Truck, Warehouse, MapPin, Clock, Globe } from 'lucide-react';
+import { Edit2, Check, Truck, Warehouse, MapPin, Clock, Globe, XCircle, RotateCcw } from 'lucide-react';
 
 interface OrdersListMobileProps {
     orders: ParsedOrder[];
@@ -22,6 +22,7 @@ interface OrdersListMobileProps {
     copiedId: string | null;
     copiedTemplateId: string | null;
     toggleOrderVerified: (id: string, currentStatus: boolean) => void;
+    handleUpdateFulfillmentStatus: (id: string, newStatus: string) => void;
     handleSendTelegram: (id: string) => void;
     updatingIds: Set<string>;
     groupBy?: string;
@@ -30,7 +31,7 @@ interface OrdersListMobileProps {
 
 const OrdersListMobile: React.FC<OrdersListMobileProps> = ({
     orders, totals, visibleColumns, selectedIds, isSelectionMode, onToggleSelect, onEdit, onView,
-    handlePrint, toggleOrderVerified, handleSendTelegram, updatingIds, groupBy = 'none', viewMode = 'card'
+    handlePrint, toggleOrderVerified, handleUpdateFulfillmentStatus, handleSendTelegram, updatingIds, groupBy = 'none', viewMode = 'card'
 }) => {
     const { currentUser, hasPermission, advancedSettings, language } = useContext(AppContext);
     const t = translations[language];
@@ -229,9 +230,35 @@ const OrdersListMobile: React.FC<OrdersListMobileProps> = ({
                                                 </div>
                                             )}
                                             {isVisible('actions') && canEditOrder(order) && (
-                                                <button onClick={e => { e.stopPropagation(); onEdit?.(order); }} className="action-icon-btn">
-                                                    <Edit2 size={14} />
-                                                </button>
+                                                <div className="flex items-center gap-1">
+                                                    <button onClick={e => { e.stopPropagation(); onEdit?.(order); }} className="action-icon-btn">
+                                                        <Edit2 size={14} />
+                                                    </button>
+                                                    
+                                                    {/* Cancel only if not shipped */}
+                                                    {!['Shipped', 'Delivered', 'Cancelled', 'Returned'].includes(fs) && (
+                                                        <button 
+                                                            onClick={e => { e.stopPropagation(); handleUpdateFulfillmentStatus(order['Order ID'], 'Cancelled'); }} 
+                                                            className="action-icon-btn hover:text-[#F6465D] hover:border-[#F6465D]"
+                                                            disabled={updatingIds.has(order['Order ID'])}
+                                                            title={t.btn_cancel_order}
+                                                        >
+                                                            {updatingIds.has(order['Order ID']) ? <Spinner size="xs" /> : <XCircle size={14} />}
+                                                        </button>
+                                                    )}
+
+                                                    {/* Return only if shipped */}
+                                                    {['Shipped', 'Delivered'].includes(fs) && (
+                                                        <button 
+                                                            onClick={e => { e.stopPropagation(); handleUpdateFulfillmentStatus(order['Order ID'], 'Returned'); }} 
+                                                            className="action-icon-btn hover:text-purple-400 hover:border-purple-400"
+                                                            disabled={updatingIds.has(order['Order ID'])}
+                                                            title={t.btn_return_order}
+                                                        >
+                                                            {updatingIds.has(order['Order ID']) ? <Spinner size="xs" /> : <RotateCcw size={14} />}
+                                                        </button>
+                                                    )}
+                                                </div>
                                             )}
                                             {isVisible('telegramStatus') && (
                                                 <div onClick={e => e.stopPropagation()} className="flex items-center">
@@ -273,12 +300,22 @@ const OrdersListMobile: React.FC<OrdersListMobileProps> = ({
                                 );
                             }
 
+                            const fs = (order as any).FulfillmentStatus || (order as any)['Fulfillment Status'] || 'Pending';
+                            const isCancelled = fs === 'Cancelled';
+                            const isReturned = fs === 'Returned';
+
                             return (
                                 <div 
                                     key={order['Order ID']} 
                                     onClick={() => (selectedIds.size > 0 || isSelectionMode) ? onToggleSelect?.(order['Order ID']) : onView?.(order)}
-                                    className={`premium-card p-4 transition-all ${isSelected ? 'ring-1 ring-[var(--cm-accent)] shadow-[0_0_15px_rgba(240,185,11,0.15)]' : ''}`}
+                                    className={`premium-card p-4 transition-all relative overflow-hidden ${isSelected ? 'ring-1 ring-[var(--cm-accent)] shadow-[0_0_15px_rgba(240,185,11,0.15)]' : ''} ${isCancelled || isReturned ? 'opacity-60 grayscale-[0.5]' : ''}`}
                                 >
+                                    {/* Watermark Overlay */}
+                                    {(isCancelled || isReturned) && (
+                                        <div className={`absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 rotate-[-12deg] pointer-events-none z-10 opacity-20 font-black text-4xl tracking-[0.2em] whitespace-nowrap ${isCancelled ? 'text-red-500' : 'text-purple-400'}`}>
+                                            {isCancelled ? 'CANCELLED' : 'RETURNED'}
+                                        </div>
+                                    )}
                                     <div className="status-bar" style={{ backgroundColor: isPaid ? 'var(--cm-green)' : 'var(--cm-red)' }}></div>
                                     
                                     {/* Header Row */}
@@ -307,7 +344,8 @@ const OrdersListMobile: React.FC<OrdersListMobileProps> = ({
                                                             'Ready to Ship': 'bg-blue-500/10 text-blue-400', 
                                                             'Shipped': 'bg-purple-500/10 text-purple-400', 
                                                             'Delivered': 'bg-[var(--cm-green)]/10 text-[var(--cm-green)]', 
-                                                            'Cancelled': 'bg-[var(--cm-red)]/10 text-[var(--cm-red)]' 
+                                                            'Cancelled': 'bg-[var(--cm-red)]/10 text-[var(--cm-red)]',
+                                                            'Returned': 'bg-purple-500/20 text-purple-300'
                                                         };
                                                         return <span className={`status-pill-v4 ${fsC[fs] || 'bg-[var(--cm-border)] text-[var(--cm-text-muted)]'}`}>{fs}</span>;
                                                     })()}
@@ -400,9 +438,35 @@ const OrdersListMobile: React.FC<OrdersListMobileProps> = ({
                                         
                                         <div className="flex items-center gap-2 ml-4" onClick={e => e.stopPropagation()}>
                                             {isVisible('actions') && canEditOrder(order) && (
-                                                <button onClick={() => onEdit?.(order)} className="action-icon-btn w-10 h-10 active:scale-90 transition-transform">
-                                                    <Edit2 size={16} />
-                                                </button>
+                                                <>
+                                                    <button onClick={() => onEdit?.(order)} className="action-icon-btn w-10 h-10 active:scale-90 transition-transform">
+                                                        <Edit2 size={16} />
+                                                    </button>
+                                                    
+                                                    {/* Cancel only if not shipped */}
+                                                    {!['Shipped', 'Delivered', 'Cancelled', 'Returned'].includes(fs) && (
+                                                        <button 
+                                                            onClick={() => handleUpdateFulfillmentStatus(order['Order ID'], 'Cancelled')} 
+                                                            className="action-icon-btn w-10 h-10 active:scale-90 transition-transform hover:text-[#F6465D] hover:border-[#F6465D]"
+                                                            disabled={updatingIds.has(order['Order ID'])}
+                                                            title={t.btn_cancel_order}
+                                                        >
+                                                            {updatingIds.has(order['Order ID']) ? <Spinner size="xs" /> : <XCircle size={16} />}
+                                                        </button>
+                                                    )}
+
+                                                    {/* Return only if shipped */}
+                                                    {['Shipped', 'Delivered'].includes(fs) && (
+                                                        <button 
+                                                            onClick={() => handleUpdateFulfillmentStatus(order['Order ID'], 'Returned')} 
+                                                            className="action-icon-btn w-10 h-10 active:scale-90 transition-transform hover:text-purple-400 hover:border-purple-400"
+                                                            disabled={updatingIds.has(order['Order ID'])}
+                                                            title={t.btn_return_order}
+                                                        >
+                                                            {updatingIds.has(order['Order ID']) ? <Spinner size="xs" /> : <RotateCcw size={16} />}
+                                                        </button>
+                                                    )}
+                                                </>
                                             )}
                                             {isVisible('telegramStatus') && (() => {
                                                 const id1 = order['Telegram Message ID 1'];
