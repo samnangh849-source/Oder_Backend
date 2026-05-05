@@ -239,6 +239,15 @@ const AppContent: React.FC = () => {
                         fetchOrders(true); 
                         return prev;
                     }
+
+                    // Trigger notification for Cancelled/Returned status changes
+                    const newStatus = newData['Fulfillment Status'] || newData['FulfillmentStatus'];
+                    if (newStatus === 'Cancelled' || newStatus === 'Returned') {
+                        const title = newStatus === 'Cancelled' ? '🚫 ការកម្មង់ត្រូវបានបោះបង់' : '🔄 ការកម្មង់ត្រូវបានប្តូរ/សងវិញ';
+                        const body = `ការកម្មង់ #${orderId.substring(0,8)} ត្រូវបានដាក់ជា ${newStatus === 'Cancelled' ? 'បោះបង់' : 'ប្តូរ/សងវិញ'}។`;
+                        showNotification(body, 'error', title);
+                    }
+
                     return prev.map(o => o['Order ID'] === orderId ? { ...o, ...normalizedUpdate } : o);
                 });
             }
@@ -272,12 +281,27 @@ const AppContent: React.FC = () => {
             lastMessage.type === 'add_row' ||
             lastMessage.type === 'delete_row'
         ) {
-            // Static reference data was added/updated/deleted by an admin (products, users,
-            // locations, drivers, shipping methods, roles, etc.).  Without this handler these
-            // events were silently ignored, leaving other connected clients with stale appData
-            // for up to 5 minutes (the background polling interval).
             console.log(`[App] 📋 Static data changed (${lastMessage.type} / ${lastMessage.sheetName}). Refreshing...`);
-            fetchData(true);
+            
+            // SPECIAL CASE: Real-time update for order status changes (Cancel/Return)
+            if (lastMessage.type === 'update_sheet' && lastMessage.sheetName === 'AllOrders') {
+                const { primaryKey, newData } = lastMessage;
+                const orderId = primaryKey?.['Order ID'];
+                if (orderId && newData) {
+                    const newStatus = newData['Fulfillment Status'] || newData['FulfillmentStatus'];
+                    if (newStatus === 'Cancelled' || newStatus === 'Returned') {
+                        const title = newStatus === 'Cancelled' ? '🚫 ការកម្មង់ត្រូវបានបោះបង់' : '🔄 ការកម្មង់ត្រូវបានប្តូរ/សងវិញ';
+                        const body = `ការកម្មង់ #${orderId.substring(0,8)} ត្រូវបានដាក់ជា ${newStatus === 'Cancelled' ? 'បោះបង់' : 'ប្តូរ/សងវិញ'}។`;
+                        showNotification(body, 'error', title);
+                    }
+                    
+                    // Optimistically update local order state for other clients
+                    setOrders(prev => prev.map(o => o['Order ID'] === orderId ? { ...o, ...newData, FulfillmentStatus: newStatus || o.FulfillmentStatus } : o));
+                }
+                fetchOrders(true);
+            } else {
+                fetchData(true);
+            }
         }
     }, [lastMessage, fetchOrders, fetchData, setOrders, showNotification, isShiftOpener, language]);
 

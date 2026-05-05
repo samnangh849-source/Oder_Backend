@@ -33,7 +33,7 @@ const OrdersList: React.FC<OrdersListProps> = ({
     showBorders = false, groupBy = 'none', viewMode = 'card',
     onOptimisticUpdate
 }) => {
-    const { refreshData, language } = useContext(AppContext);
+    const { refreshData, language, currentUser } = useContext(AppContext);
     const t = translations[language];
     const [copiedId, setCopiedId] = useState<string | null>(null);
     const [copiedTemplateId, setCopiedTemplateId] = useState<string | null>(null);
@@ -87,31 +87,61 @@ const OrdersList: React.FC<OrdersListProps> = ({
     };
 
     const handleUpdateFulfillmentStatus = async (orderId: string, newStatus: string) => {
+        const order = localOrders.find(o => o['Order ID'] === orderId);
+        if (!order) return;
+
         const confirmMsg = language === 'km'
-            ? (newStatus === 'Cancelled' ? t.confirm_delete : `តើអ្នកចង់ប្តូរស្ថានភាពទៅជា ${newStatus} មែនទេ?`)
-            : (newStatus === 'Cancelled' ? "Are you sure you want to cancel this order?" : `Do you want to change status to ${newStatus}?`);
+            ? (newStatus === 'Cancelled' ? t.confirm_delete : 
+               newStatus === 'Pending' ? 'តើអ្នកចង់ស្តារការកម្មង់នេះឡើងវិញមែនទេ?' :
+               `តើអ្នកចង់ប្តូរស្ថានភាពទៅជា ${newStatus} មែនទេ?`)
+            : (newStatus === 'Cancelled' ? "Are you sure you want to cancel this order?" : 
+               newStatus === 'Pending' ? "Do you want to restore this order?" :
+               `Do you want to change status to ${newStatus}?`);
             
         if (!window.confirm(confirmMsg)) return;
 
+        let reason = '';
+        if (newStatus === 'Cancelled') {
+            reason = window.prompt(language === 'km' ? 'សូមបញ្ចូលមូលហេតុដែលបោះបង់៖' : 'Please enter cancel reason:') || 'Manually cancelled';
+        } else if (newStatus === 'Returned') {
+            reason = window.prompt(language === 'km' ? 'សូមបញ្ចូលមូលហេតុដែលប្តូរ/សងវិញ៖' : 'Please enter return reason:') || 'Manually returned';
+        }
+
         // Optimistic Update
-        setLocalOrders(prev => prev.map(o => o['Order ID'] === orderId ? { ...o, 'Fulfillment Status': newStatus, FulfillmentStatus: newStatus } : o));
+        const optimisticData: any = { 'Fulfillment Status': newStatus, FulfillmentStatus: newStatus };
+        if (newStatus === 'Cancelled') optimisticData['Cancel Reason'] = reason;
+        if (newStatus === 'Returned') optimisticData['Return Reason'] = reason;
+
+        setLocalOrders(prev => prev.map(o => o['Order ID'] === orderId ? { ...o, ...optimisticData } : o));
         setUpdatingIds(prev => new Set(prev).add(orderId));
         
         try {
-            const response = await fetch(`${WEB_APP_URL}/api/admin/update-sheet`, {
+            const newData: any = { 'Fulfillment Status': newStatus };
+            if (newStatus === 'Cancelled') newData['Cancel Reason'] = reason;
+            if (newStatus === 'Returned') newData['Return Reason'] = reason;
+
+            const response = await fetch(`${WEB_APP_URL}/api/admin/update-order`, {
                 method: 'POST',
                 headers: { 
                     'Content-Type': 'application/json',
                     'Authorization': `Bearer ${localStorage.getItem('token')}`
                 },
-                body: JSON.stringify({ sheetName: 'AllOrders', primaryKey: { 'Order ID': orderId }, newData: { 'Fulfillment Status': newStatus } })
+                body: JSON.stringify({ 
+                    orderId: orderId, 
+                    team: order.Team,
+                    userName: currentUser?.FullName || 'System',
+                    newData: newData
+                })
             });
-            if (!response.ok) throw new Error("Failed to update status");
+            if (!response.ok) {
+                const errorData = await response.json();
+                throw new Error(errorData.message || "Failed to update status");
+            }
             refreshData();
-        } catch (e) {
+        } catch (e: any) {
             console.error("Status update failed:", e);
             refreshData();
-            alert("ការផ្លាស់ប្តូរស្ថានភាពមិនបានសម្រេច!");
+            alert(e.message || "ការផ្លាស់ប្តូរស្ថានភាពមិនបានសម្រេច!");
         } finally {
             setUpdatingIds(prev => { const next = new Set(prev); next.delete(orderId); return next; });
         }

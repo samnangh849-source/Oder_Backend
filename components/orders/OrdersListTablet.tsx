@@ -160,14 +160,23 @@ const OrdersListTablet: React.FC<OrdersListTabletProps> = ({
                             const isThisCopied = copiedId === order['Order ID'];
                             const allowEdit = canEditOrder(order);
                             const isPaid = order['Payment Status'] === 'Paid';
+                            const fs = order.FulfillmentStatus || order['Fulfillment Status'] || 'Pending';
+                            const isCancelled = fs === 'Cancelled';
+                            const isReturned = fs === 'Returned';
 
                             if (viewMode === 'list') {
                                 return (
                                     <div 
                                         key={order['Order ID']}
                                         onClick={() => onView && onView(order)}
-                                        className={`flex items-center gap-4 p-4 rounded-2xl border transition-all active:scale-[0.99] cursor-pointer ${isSelected ? 'bg-blue-600/20 border-blue-500/50' : isVerified ? 'bg-emerald-500/5 border-emerald-500/10' : 'bg-[#1e293b]/40 border-white/5'}`}
+                                        className={`flex items-center gap-4 p-4 rounded-2xl border transition-all active:scale-[0.99] cursor-pointer relative overflow-hidden ${isSelected ? 'bg-blue-600/20 border-blue-500/50' : isVerified ? 'bg-emerald-500/5 border-emerald-500/10' : 'bg-[#1e293b]/40 border-white/5'} ${isCancelled || isReturned ? 'opacity-60 grayscale-[0.5]' : ''}`}
                                     >
+                                        {/* Watermark Overlay (List Mode) */}
+                                        {(isCancelled || isReturned) && (
+                                            <div className={`absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 rotate-[-12deg] pointer-events-none z-10 opacity-20 font-black text-2xl tracking-[0.2em] whitespace-nowrap ${isCancelled ? 'text-red-600' : 'text-purple-400'}`}>
+                                                {isCancelled ? 'CANCELLED' : 'RETURNED'}
+                                            </div>
+                                        )}
                                         <div className="flex-shrink-0" onClick={e => e.stopPropagation()}>
                                             <input type="checkbox" checked={isSelected} onChange={() => onToggleSelect && onToggleSelect(order['Order ID'])} className="h-5 w-5 rounded-lg border-white/10 bg-white/5 text-blue-500 focus:ring-0" />
                                         </div>
@@ -203,6 +212,13 @@ const OrdersListTablet: React.FC<OrdersListTabletProps> = ({
                                                                     {isUpdating ? <Spinner size="xs" /> : <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2.5}><path d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" /></svg>}
                                                                 </button>
                                                             )}
+
+                                                            {/* Restore only if Cancelled or Returned */}
+                                                            {['Cancelled', 'Returned'].includes(order.FulfillmentStatus || order['Fulfillment Status'] || 'Pending') && (
+                                                                <button onClick={e => { e.stopPropagation(); handleUpdateFulfillmentStatus(order['Order ID'], 'Pending'); }} className="w-8 h-8 rounded-lg bg-blue-500/10 text-blue-400 flex items-center justify-center border border-blue-500/20" title={t.btn_restore_order}>
+                                                                    {isUpdating ? <Spinner size="xs" /> : <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2.5}><path d="M9 14L4 9l5-5" /><path d="M4 9h10.5a5.5 5.5 0 015.5 5.5v0a5.5 5.5 0 01-5.5 5.5H11" /></svg>}
+                                                                </button>
+                                                            )}
                                                         </>
                                                     )}
                                                 </div>
@@ -233,8 +249,15 @@ const OrdersListTablet: React.FC<OrdersListTabletProps> = ({
                                                 ? 'bg-emerald-900/10 border border-emerald-500/20 shadow-emerald-900/10' 
                                                 : 'bg-[#1e293b]/60 border border-white/5 shadow-black/30 backdrop-blur-md hover:bg-[#1e293b]/80'
                                         }
+                                        ${isCancelled || isReturned ? 'opacity-60 grayscale-[0.5]' : ''}
                                     `}
                                 >
+                                    {/* Watermark Overlay (Card Mode) */}
+                                    {(isCancelled || isReturned) && (
+                                        <div className={`absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 rotate-[-12deg] pointer-events-none z-10 opacity-20 font-black text-5xl tracking-[0.2em] whitespace-nowrap ${isCancelled ? 'text-red-600' : 'text-purple-400'}`}>
+                                            {isCancelled ? 'CANCELLED' : 'RETURNED'}
+                                        </div>
+                                    )}
                                     <div className="flex justify-between items-start mb-5">
                                         <div className="flex items-center gap-3">
                                             {onToggleSelect && (
@@ -302,6 +325,13 @@ const OrdersListTablet: React.FC<OrdersListTabletProps> = ({
                                                         {['Shipped', 'Delivered'].includes(order.FulfillmentStatus || order['Fulfillment Status'] || 'Pending') && (
                                                             <button onClick={() => handleUpdateFulfillmentStatus(order['Order ID'], 'Returned')} className="w-12 h-12 flex items-center justify-center bg-purple-600/10 text-purple-400 hover:bg-purple-600 hover:text-white rounded-2xl border border-purple-500/20 transition-all active:scale-90" title={t.btn_return_order}>
                                                                 {isUpdating ? <Spinner size="xs" /> : <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2.5}><path d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" /></svg>}
+                                                            </button>
+                                                        )}
+
+                                                        {/* Restore only if Cancelled or Returned */}
+                                                        {['Cancelled', 'Returned'].includes(order.FulfillmentStatus || order['Fulfillment Status'] || 'Pending') && (
+                                                            <button onClick={() => handleUpdateFulfillmentStatus(order['Order ID'], 'Pending')} className="w-12 h-12 flex items-center justify-center bg-blue-600/10 text-blue-400 hover:bg-blue-600 hover:text-white rounded-2xl border border-blue-500/20 transition-all active:scale-90" title={t.btn_restore_order}>
+                                                                {isUpdating ? <Spinner size="xs" /> : <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2.5}><path d="M9 14L4 9l5-5" /><path d="M4 9h10.5a5.5 5.5 0 015.5 5.5v0a5.5 5.5 0 01-5.5 5.5H11" /></svg>}
                                                             </button>
                                                         )}
                                                     </>

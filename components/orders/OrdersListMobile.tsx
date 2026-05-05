@@ -5,7 +5,7 @@ import { translations } from '../../translations';
 import Spinner from '../common/Spinner';
 import { MobileGrandTotalCard } from './OrderGrandTotal';
 import { convertGoogleDriveUrl } from '../../utils/fileUtils';
-import { Edit2, Check, Truck, Warehouse, MapPin, Clock, Globe, XCircle, RotateCcw } from 'lucide-react';
+import { Edit2, Check, Truck, Warehouse, MapPin, Clock, Globe, XCircle, RotateCcw, Undo2 } from 'lucide-react';
 
 interface OrdersListMobileProps {
     orders: ParsedOrder[];
@@ -258,6 +258,18 @@ const OrdersListMobile: React.FC<OrdersListMobileProps> = ({
                                                             {updatingIds.has(order['Order ID']) ? <Spinner size="xs" /> : <RotateCcw size={14} />}
                                                         </button>
                                                     )}
+
+                                                    {/* Restore only if Cancelled or Returned */}
+                                                    {['Cancelled', 'Returned'].includes(fs) && (
+                                                        <button 
+                                                            onClick={e => { e.stopPropagation(); handleUpdateFulfillmentStatus(order['Order ID'], 'Pending'); }} 
+                                                            className="action-icon-btn hover:text-blue-400 hover:border-blue-400"
+                                                            disabled={updatingIds.has(order['Order ID'])}
+                                                            title={t.btn_restore_order}
+                                                        >
+                                                            {updatingIds.has(order['Order ID']) ? <Spinner size="xs" /> : <Undo2 size={14} />}
+                                                        </button>
+                                                    )}
                                                 </div>
                                             )}
                                             {isVisible('telegramStatus') && (
@@ -312,7 +324,7 @@ const OrdersListMobile: React.FC<OrdersListMobileProps> = ({
                                 >
                                     {/* Watermark Overlay */}
                                     {(isCancelled || isReturned) && (
-                                        <div className={`absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 rotate-[-12deg] pointer-events-none z-10 opacity-20 font-black text-4xl tracking-[0.2em] whitespace-nowrap ${isCancelled ? 'text-red-500' : 'text-purple-400'}`}>
+                                        <div className={`absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 rotate-[-12deg] pointer-events-none z-10 opacity-30 font-black text-4xl tracking-[0.2em] whitespace-nowrap ${isCancelled ? 'text-red-600' : 'text-purple-400'}`}>
                                             {isCancelled ? 'CANCELLED' : 'RETURNED'}
                                         </div>
                                     )}
@@ -464,6 +476,18 @@ const OrdersListMobile: React.FC<OrdersListMobileProps> = ({
                                                             title={t.btn_return_order}
                                                         >
                                                             {updatingIds.has(order['Order ID']) ? <Spinner size="xs" /> : <RotateCcw size={16} />}
+                                                        </button>
+                                                    )}
+
+                                                    {/* Restore only if Cancelled or Returned */}
+                                                    {['Cancelled', 'Returned'].includes(fs) && (
+                                                        <button 
+                                                            onClick={() => handleUpdateFulfillmentStatus(order['Order ID'], 'Pending')} 
+                                                            className="action-icon-btn w-10 h-10 active:scale-90 transition-transform hover:text-blue-400 hover:border-blue-400"
+                                                            disabled={updatingIds.has(order['Order ID'])}
+                                                            title={t.btn_restore_order}
+                                                        >
+                                                            {updatingIds.has(order['Order ID']) ? <Spinner size="xs" /> : <Undo2 size={16} />}
                                                         </button>
                                                     )}
                                                 </>

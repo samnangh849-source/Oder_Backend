@@ -6,7 +6,7 @@ import { convertGoogleDriveUrl } from '../../utils/fileUtils';
 import Spinner from '../common/Spinner';
 import { DesktopGrandTotalRow } from './OrderGrandTotal';
 import { translations } from '../../translations';
-import { Check, XCircle, RotateCcw } from 'lucide-react';
+import { Check, XCircle, RotateCcw, Undo2 } from 'lucide-react';
 
 interface OrdersListDesktopProps {
     orders: ParsedOrder[];
@@ -119,7 +119,7 @@ const OrderRow = (props: any) => {
             
             {/* Watermark Overlay */}
             {(isCancelled || isReturned) && (
-                <div className={`order-watermark ${isCancelled ? 'text-[#F6465D]' : 'text-purple-400'}`}>
+                <div className={`order-watermark ${isCancelled ? 'text-red-600' : 'text-purple-400'}`} style={{ opacity: 0.25 }}>
                     {isCancelled ? 'CANCELLED' : 'RETURNED'}
                 </div>
             )}
@@ -164,6 +164,13 @@ const OrderRow = (props: any) => {
                                                 {['Shipped', 'Delivered'].includes(fs) && (
                                                     <button onClick={() => handleUpdateFulfillmentStatus(order['Order ID'], 'Returned')} className="w-8 h-8 flex items-center justify-center bg-[#2B3139] hover:bg-purple-600 text-[#848E9C] hover:text-white rounded transition-all" title={t.btn_return_order} disabled={updatingIds.has(order['Order ID'])}>
                                                         {updatingIds.has(order['Order ID']) ? <Spinner size="xs" /> : <RotateCcw className="w-4 h-4" />}
+                                                    </button>
+                                                )}
+
+                                                {/* Restore only if Cancelled or Returned */}
+                                                {['Cancelled', 'Returned'].includes(fs) && (
+                                                    <button onClick={() => handleUpdateFulfillmentStatus(order['Order ID'], 'Pending')} className="w-8 h-8 flex items-center justify-center bg-[#2B3139] hover:bg-blue-600 text-[#848E9C] hover:text-white rounded transition-all" title={t.btn_restore_order} disabled={updatingIds.has(order['Order ID'])}>
+                                                        {updatingIds.has(order['Order ID']) ? <Spinner size="xs" /> : <Undo2 className="w-4 h-4" />}
                                                     </button>
                                                 )}
                                             </>
@@ -365,7 +372,7 @@ const OrderRow = (props: any) => {
 const OrdersListDesktop: React.FC<OrdersListDesktopProps> = ({
     orders, totals, visibleColumns, selectedIds, onToggleSelect, onToggleSelectAll,
     onEdit, onView, handlePrint, handleCopy, handleCopyTemplate, copiedId, copiedTemplateId,
-    toggleOrderVerified, handleSendTelegram, updatingIds, showBorders = false, groupBy = 'none'
+    toggleOrderVerified, handleUpdateFulfillmentStatus, handleSendTelegram, updatingIds, showBorders = false, groupBy = 'none'
 }) => {
     const { appData, currentUser, hasPermission, language, advancedSettings } = useContext(AppContext);
     const t = translations[language];
@@ -513,6 +520,7 @@ const OrdersListDesktop: React.FC<OrdersListDesktopProps> = ({
         handlePrint,
         handleCopy,
         toggleOrderVerified,
+        handleUpdateFulfillmentStatus,
         handleSendTelegram,
         updatingIds,
         canVerifyOrder,
@@ -526,7 +534,7 @@ const OrdersListDesktop: React.FC<OrdersListDesktopProps> = ({
     }), [
         enrichedItems, visibleCols, getColWidth, onToggleSelect, selectedIds,
         onView, onEdit, handleCopyTemplate, handlePrint, handleCopy,
-        toggleOrderVerified, handleSendTelegram, updatingIds, canVerifyOrder, canEditOrder,
+        toggleOrderVerified, handleUpdateFulfillmentStatus, handleSendTelegram, updatingIds, canVerifyOrder, canEditOrder,
         showBorders, copiedTemplateId, appData, t, groupBy, isBinance
     ]);
 

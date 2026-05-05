@@ -285,13 +285,25 @@ const TabletPackagingHub: React.FC<TabletPackagingHubProps> = ({
                             <section key={date} className="space-y-3">
                                 <h3 className={`text-sm font-bold ${B_TEXT_PRIMARY} border-b ${B_BORDER} pb-1 px-1`}>{date}</h3>
                                 <div className="grid grid-cols-2 lg:grid-cols-3 gap-3">
-                                    {groupOrders.map((order, idx) => (
+                                    {groupOrders.map((order, idx) => {
+                                        const fs = order.FulfillmentStatus || order['Fulfillment Status'] || 'Pending';
+                                        const isCancelled = fs === 'Cancelled';
+                                        const isReturned = fs === 'Returned';
+                                        
+                                        return (
                                         <div 
-                            key={order['Order ID']} 
-                            className={`${B_BG_PANEL} border ${B_BORDER} flex flex-col relative group cursor-pointer ${selectedOrderIds.has(order['Order ID']) ? 'ring-1 ring-[#FCD535]/50' : ''}`}
-                            onClick={() => onView(order)}
-                        >
-                            {activeTab === 'Ready to Ship' && (
+                                            key={order['Order ID']} 
+                                            className={`${B_BG_PANEL} border ${B_BORDER} flex flex-col relative group cursor-pointer ${selectedOrderIds.has(order['Order ID']) ? 'ring-1 ring-[#FCD535]/50' : ''} ${isCancelled ? 'bg-red-950/20 border-red-500/30' : isReturned ? 'bg-purple-950/20 border-purple-500/30' : ''}`}
+                                            onClick={() => onView(order)}
+                                        >
+                                            {/* Watermark Overlay */}
+                                            {(isCancelled || isReturned) && (
+                                                <div className={`absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 rotate-[-12deg] pointer-events-none z-10 opacity-20 font-black text-4xl tracking-[0.2em] whitespace-nowrap ${isCancelled ? 'text-red-500' : 'text-purple-400'}`}>
+                                                    {isCancelled ? 'CANCELLED' : 'RETURNED'}
+                                                </div>
+                                            )}
+
+                                            {activeTab === 'Ready to Ship' && (
                                 <div className="absolute top-4 left-4 z-10" onClick={(e) => { e.stopPropagation(); toggleOrderSelection(order['Order ID']); }}>
                                     <div className={`w-5 h-5 border-2 rounded-sm transition-colors flex items-center justify-center ${selectedOrderIds.has(order['Order ID']) ? 'bg-[#FCD535] border-[#FCD535]' : 'border-gray-600 bg-black/20'}`}>
                                         {selectedOrderIds.has(order['Order ID']) && (
@@ -422,7 +434,7 @@ const TabletPackagingHub: React.FC<TabletPackagingHubProps> = ({
                                                 </div>
                                             </div>
                                         </div>
-                                    ))}
+                                    )})}
                                 </div>
                             </section>
                         ))}
