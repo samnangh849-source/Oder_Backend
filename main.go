@@ -124,6 +124,11 @@ func mapToDBColumn(key string) string {
 		"Delivery Photo URL":        "delivery_photo_url",
 		"deliveryPhoto":             "delivery_photo_url",
 		"DeliveryPhoto":             "delivery_photo_url",
+		"Cancel Reason":             "cancel_reason",
+		"Return Reason":             "return_reason",
+		"Return Photo":              "return_photo_url",
+		"Return Received By":        "return_received_by",
+		"Return Received Time":      "return_received_time",
 		"Driver Name":               "driver_name",
 		"Tracking Number":           "tracking_number",
 		"Dispatched Time":           "dispatched_time",
@@ -274,6 +279,7 @@ func isValidOrderColumn(col string) bool {
 		"fulfillment_store": true, "team": true, "is_verified": true, "fulfillment_status": true,
 		"packed_by": true, "packed_time": true, "package_photo_url": true, "driver_name": true, "tracking_number": true,
 		"dispatched_time": true, "dispatched_by": true, "delivered_time": true, "delivery_photo_url": true,
+		"cancel_reason": true, "return_reason": true, "return_photo_url": true, "return_received_by": true, "return_received_time": true,
 	}
 	return validCols[col]
 }
@@ -1012,8 +1018,9 @@ func handleAdminUpdateOrder(c *gin.Context) {
 			"Pending":       {"Processing", "Ready to Ship", "Cancelled"},
 			"Processing":    {"Ready to Ship", "Pending", "Cancelled"},
 			"Ready to Ship": {"Shipped", "Pending", "Cancelled"},
-			"Shipped":       {"Delivered", "Ready to Ship", "Cancelled"},
-			"Delivered":     {},
+			"Shipped":       {"Delivered", "Ready to Ship", "Returned"},
+			"Delivered":     {"Returned"},
+			"Returned":      {"Delivered", "Pending"},
 			"Cancelled":     {"Pending", "Scheduled"},
 		}
 
@@ -1041,6 +1048,22 @@ func handleAdminUpdateOrder(c *gin.Context) {
 
 		// ✅ Validate required fields for each transition
 		switch newStatus {
+		case "Cancelled":
+			cancelReason, _ := r.NewData["Cancel Reason"]
+			if cancelReason == nil || strings.TrimSpace(fmt.Sprintf("%v", cancelReason)) == "" {
+				if strings.TrimSpace(originalOrder.CancelReason) == "" {
+					c.JSON(http.StatusBadRequest, gin.H{"status": "error", "message": "ត្រូវការមូលហេតុដែល Cancel (Cancel Reason)"})
+					return
+				}
+			}
+		case "Returned":
+			returnReason, _ := r.NewData["Return Reason"]
+			if returnReason == nil || strings.TrimSpace(fmt.Sprintf("%v", returnReason)) == "" {
+				if strings.TrimSpace(originalOrder.ReturnReason) == "" {
+					c.JSON(http.StatusBadRequest, gin.H{"status": "error", "message": "ត្រូវការមូលហេតុដែល Return (Return Reason)"})
+					return
+				}
+			}
 		case "Ready to Ship":
 			packedBy, _ := r.NewData["Packed By"]
 			if packedBy == nil || strings.TrimSpace(fmt.Sprintf("%v", packedBy)) == "" {
@@ -1074,6 +1097,19 @@ func handleAdminUpdateOrder(c *gin.Context) {
 			if _, hasTime := r.NewData["Delivered Time"]; !hasTime {
 				r.NewData["Delivered Time"] = time.Now().Format("2006-01-02 15:04:05")
 			}
+		}
+	}
+
+	// ✅ Validate Return Receipt - If confirming receipt, require photo
+	if _, hasReceivedBy := r.NewData["Return Received By"]; hasReceivedBy {
+		photo, hasPhoto := r.NewData["Return Photo"]
+		if (!hasPhoto || strings.TrimSpace(fmt.Sprintf("%v", photo)) == "") && strings.TrimSpace(originalOrder.ReturnPhotoURL) == "" {
+			c.JSON(http.StatusBadRequest, gin.H{"status": "error", "message": "ត្រូវការរូបភាពកញ្ចប់ឥវ៉ាន់ដែល Return (Return Photo)"})
+			return
+		}
+		// Auto-set received time if not provided
+		if _, hasTime := r.NewData["Return Received Time"]; !hasTime {
+			r.NewData["Return Received Time"] = time.Now().Format("2006-01-02 15:04:05")
 		}
 	}
 
