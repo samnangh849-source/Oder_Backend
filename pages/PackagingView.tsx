@@ -145,7 +145,7 @@ const PackagingView: React.FC<{ orders?: ParsedOrder[] }> = ({ orders: propOrder
             const isToday = (o['Packed Time'] || '').startsWith(todayStr);
             return isMe && isToday && (o.FulfillmentStatus === 'Ready to Ship' || o.FulfillmentStatus === 'Shipped');
         });
-        const summary = `ទិន្នន័យសង្ខេបនៃ ការវេចខ្ចប់: ${shiftOrders.length} កញ្ចប់`;
+        const summary = `វេចខ្ចប់៖ ${shiftOrders.length} កញ្ចប់`;
 
         if (!window.confirm(`តើអ្នកប្រាកដថាចង់បិទវេនមែនទេ?\n\n${summary}`)) return;
 
