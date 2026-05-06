@@ -23,6 +23,7 @@ interface MobilePackagingHubProps {
     onShip: (order: ParsedOrder) => void;
     onUndo: (order: ParsedOrder) => void;
     onUndoShipped: (order: ParsedOrder) => void;
+    onUnpack: (order: ParsedOrder) => void;
     onView: (order: ParsedOrder) => void;
     onPrintManifest: () => void;
     onSwitchHub: () => void;
@@ -33,7 +34,7 @@ interface MobilePackagingHubProps {
     progressStats: { packedByUserToday: number, storeTotalToday: number, progressPercentage: number };
     setIsFilterModalOpen: (open: boolean) => void;
     loadingActionId: string | null;
-    tabCounts: { pending: number, ready: number, shipped: number, returned: number };
+    tabCounts: { pending: number, ready: number, shipped: number, returned: number, cancelled: number };
     selectedOrderIds: Set<string>;
     toggleOrderSelection: (id: string) => void;
     clearSelection: () => void;
@@ -189,15 +190,16 @@ const MobilePackagingHub: React.FC<MobilePackagingHubProps> = ({
                         { id: 'Pending', label: 'Pending', count: tabCounts.pending },
                         { id: 'Ready to Ship', label: 'Ready', count: tabCounts.ready },
                         { id: 'Shipped', label: 'Shipped', count: tabCounts.shipped },
-                        { id: 'Returned', label: 'Return', count: tabCounts.returned }
+                        { id: 'Returned', label: 'Return', count: tabCounts.returned },
+                        { id: 'Cancelled', label: 'Canceled', count: tabCounts.cancelled }
                     ].map(tab => (
                         <button 
                             key={tab.id}
                             onClick={() => setActiveTab(tab.id)}
                             className={`flex flex-col items-center justify-center flex-1 py-1 border-b-2 transition-colors ${activeTab === tab.id ? `border-[#FCD535] text-[#FCD535]` : `border-transparent ${B_TEXT_SECONDARY}`}`}
                         >
-                            <span className="text-xs font-bold uppercase">{tab.label}</span>
-                            <span className={`text-xs font-mono mt-0.5 ${activeTab === tab.id ? 'text-[#FCD535]' : 'text-[#848E9C]'}`}>
+                            <span className="text-[10px] font-bold uppercase">{tab.label}</span>
+                            <span className={`text-[10px] font-mono mt-0.5 ${activeTab === tab.id ? 'text-[#FCD535]' : 'text-[#848E9C]'}`}>
                                 {tab.count}
                             </span>
                         </button>
@@ -301,8 +303,15 @@ const MobilePackagingHub: React.FC<MobilePackagingHubProps> = ({
                                 >
                                     {/* Watermark Overlay */}
                                     {(isCancelled || isReturned) && (
-                                        <div className={`absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 rotate-[-12deg] pointer-events-none z-10 opacity-20 font-black text-xl tracking-[0.1em] whitespace-nowrap ${isCancelled ? 'text-red-500' : 'text-purple-400'}`}>
-                                            {isCancelled ? 'CANCELLED' : 'RETURNED'}
+                                        <div className={`absolute inset-0 flex flex-col items-center justify-center pointer-events-none z-[100] overflow-hidden`}>
+                                            <div className={`rotate-[-12deg] font-black text-2xl tracking-[0.1em] whitespace-nowrap opacity-25 ${isCancelled ? 'text-red-500' : 'text-purple-400'}`}>
+                                                {isCancelled ? 'CANCELLED' : 'RETURNED'}
+                                            </div>
+                                            {isCancelled && order['Cancel Reason'] && (
+                                                <div className="rotate-[-12deg] bg-red-600/10 border border-red-500/20 px-2 py-0.5 rounded-sm mt-1 max-w-[80%]">
+                                                    <p className="text-[10px] font-bold text-red-400 truncate uppercase">Reason: {order['Cancel Reason']}</p>
+                                                </div>
+                                            )}
                                         </div>
                                     )}
                                     {loadingActionId === order['Order ID'] && (
@@ -429,6 +438,14 @@ const MobilePackagingHub: React.FC<MobilePackagingHubProps> = ({
                                                     </>
                                                 )}
                                             </>
+                                        )}
+                                        {isCancelled && activeTab !== 'Cancelled' && (
+                                            <button 
+                                                onClick={(e) => { e.stopPropagation(); onUnpack(order); }} 
+                                                className={`flex-1 py-1.5 bg-red-600 text-white rounded-sm text-sm font-bold uppercase shadow-lg shadow-red-600/20`}
+                                            >
+                                                {!!(order['Packed By'] || order['Packed Time']) ? 'ហែកកញ្ចប់' : 'Confirm Cancel'}
+                                            </button>
                                         )}
                                         {activeTab === 'Shipped' && (
                                             <button onClick={(e) => { e.stopPropagation(); onUndoShipped(order); }} className={`w-20 py-1.5 bg-[#F6465D]/10 text-[#F6465D] rounded-sm text-xs font-bold uppercase`}>Undo</button>

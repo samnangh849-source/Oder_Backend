@@ -33,6 +33,7 @@ const SalesByPageReport: React.FC<SalesByPageReportProps> = ({
 }) => {
     const { appData, previewImage } = useContext(AppContext);
     const [showAllPages, setShowAllPages] = useState(true); 
+    const [onlyTelegram, setOnlyTelegram] = useState(false);
     const [isExporting, setIsExporting] = useState(false);
     // CHANGE: Default sort set to 'teamName' ascending
     const [sortConfig, setSortConfig] = useState<{ key: SortKey, direction: 'asc' | 'desc' }>({ key: 'teamName', direction: 'asc' });
@@ -129,6 +130,10 @@ const SalesByPageReport: React.FC<SalesByPageReportProps> = ({
                 const selectedPages = contextFilters.page.split(',').map(p => p.trim().toLowerCase());
                 if (!selectedPages.includes((pName || '').toLowerCase())) return false;
             }
+            // Shortcut Filter: Telegram
+            if (onlyTelegram) {
+                if (!(pName || '').toLowerCase().startsWith('telegram')) return false;
+            }
             return true;
         };
 
@@ -149,6 +154,9 @@ const SalesByPageReport: React.FC<SalesByPageReportProps> = ({
         }
 
         orders.forEach(o => {
+            const fs = o.FulfillmentStatus || o['Fulfillment Status'] || 'Pending';
+            if (fs === 'Cancelled') return;
+
             const page = o.Page || 'Unknown';
             if (stats[page]) {
                 const rev = Number(o['Grand Total']) || 0;
@@ -177,7 +185,7 @@ const SalesByPageReport: React.FC<SalesByPageReportProps> = ({
             if (typeof valA === 'string') return valA.localeCompare(valB) * mult;
             return (valA - valB) * mult;
         });
-    }, [orders, sortConfig, appData.pages, showAllPages, contextFilters]);
+    }, [orders, sortConfig, appData.pages, showAllPages, contextFilters, onlyTelegram]);
 
     const grandTotals = useMemo(() => {
         const totals: any = { revenue: 0, profit: 0, pagesCount: pageStats.length };
@@ -233,6 +241,8 @@ const SalesByPageReport: React.FC<SalesByPageReportProps> = ({
                 onToggleSort={toggleSort}
                 showAllPages={showAllPages}
                 setShowAllPages={setShowAllPages}
+                onlyTelegram={onlyTelegram}
+                setOnlyTelegram={setOnlyTelegram}
                 onExportPDF={handleExportPDF}
                 isExporting={isExporting}
                 onPreviewImage={previewImage}

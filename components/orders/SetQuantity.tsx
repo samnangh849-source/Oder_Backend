@@ -90,32 +90,32 @@ const SetQuantity: React.FC<SetQuantityProps> = ({
 
     return (
         <div className="space-y-1.5 w-full">
-            <label className="text-[10px] font-black text-gray-500 uppercase tracking-widest ml-1">
+            <label className="text-[10px] font-black text-[#848E9C] uppercase tracking-widest ml-1">
                 {label}
             </label>
             
-            <div className="flex items-center bg-black/40 rounded-2xl border border-gray-700 h-12 w-full overflow-hidden focus-within:border-blue-500/50 transition-all focus-within:shadow-[0_0_20px_rgba(59,130,246,0.15)] ring-1 ring-white/5">
+            <div className="flex items-center bg-[#0B0E11] rounded-none border-2 border-[#2B3139] h-12 w-full overflow-hidden focus-within:border-[#FCD535] transition-all group shadow-inner">
                 {/* Decrement Button */}
                 <button 
                     type="button" 
                     className={`
                         w-12 h-full flex items-center justify-center 
                         ${value <= min 
-                            ? 'text-gray-600 cursor-not-allowed opacity-50' 
-                            : 'text-gray-400 hover:text-white hover:bg-white/5 active:scale-90'
+                            ? 'text-[#2B3139] cursor-not-allowed' 
+                            : 'text-[#848E9C] hover:text-[#FCD535] hover:bg-[#FCD535]/10 active:bg-[#FCD535]/20'
                         }
-                        transition-all border-r border-gray-700/50
+                        transition-all border-r-2 border-[#2B3139]
                     `}
                     onClick={handleDecrement}
                     disabled={value <= min}
                     aria-label="ថយចំនួន"
                 >
                     <svg 
-                        className="w-4 h-4" 
+                        className="w-5 h-5" 
                         fill="none" 
                         stroke="currentColor" 
                         viewBox="0 0 24 24" 
-                        strokeWidth={3}
+                        strokeWidth={4}
                     >
                         <path d="M20 12H4" />
                     </svg>
@@ -134,7 +134,7 @@ const SetQuantity: React.FC<SetQuantityProps> = ({
                     min={min}
                     max={max}
                     step="1"
-                    className="flex-1 h-full bg-transparent text-center text-white font-black text-base outline-none border-none [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
+                    className="flex-1 h-full bg-transparent text-center text-[#EAECEF] font-black text-lg outline-none border-none [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none group-focus-within:text-[#FCD535] transition-colors"
                     placeholder={min.toString()}
                     aria-label="ចំនួន"
                 />
@@ -145,30 +145,30 @@ const SetQuantity: React.FC<SetQuantityProps> = ({
                     className={`
                         w-12 h-full flex items-center justify-center 
                         ${value >= max 
-                            ? 'text-gray-600 cursor-not-allowed opacity-50' 
-                            : 'text-blue-400 hover:text-white hover:bg-blue-600/10 active:scale-90'
+                            ? 'text-[#2B3139] cursor-not-allowed' 
+                            : 'text-[#848E9C] hover:text-[#FCD535] hover:bg-[#FCD535]/10 active:bg-[#FCD535]/20'
                         }
-                        transition-all border-l border-gray-700/50
+                        transition-all border-l-2 border-[#2B3139]
                     `}
                     onClick={handleIncrement}
                     disabled={value >= max}
                     aria-label="បន្ថែមចំនួន"
                 >
                     <svg 
-                        className="w-4 h-4" 
+                        className="w-5 h-5" 
                         fill="none" 
                         stroke="currentColor" 
                         viewBox="0 0 24 24" 
-                        strokeWidth={3}
+                        strokeWidth={4}
                     >
                         <path d="M12 4v16m8-8H4" />
                     </svg>
                 </button>
             </div>
             
-            <div className="text-xs text-gray-500 px-1 flex justify-between">
-                <span>អប្បបរមា: {min}</span>
-                <span>អតិបរមា: {max}</span>
+            <div className="text-[9px] text-[#474D57] px-1 flex justify-between font-black uppercase tracking-widest">
+                <span>Min: {min}</span>
+                <span>Max: {max}</span>
             </div>
         </div>
     );

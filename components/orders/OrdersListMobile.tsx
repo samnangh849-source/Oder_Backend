@@ -238,42 +238,6 @@ const OrdersListMobile: React.FC<OrdersListMobileProps> = ({
                                                     <button onClick={e => { e.stopPropagation(); onEdit?.(order); }} className="action-icon-btn">
                                                         <Edit2 size={14} />
                                                     </button>
-                                                    
-                                                    {/* Cancel only if not shipped */}
-                                                    {!['Shipped', 'Delivered', 'Cancelled', 'Returned'].includes(fs) && (
-                                                        <button 
-                                                            onClick={e => { e.stopPropagation(); handleUpdateFulfillmentStatus(order['Order ID'], 'Cancelled'); }} 
-                                                            className="action-icon-btn hover:text-[#F6465D] hover:border-[#F6465D]"
-                                                            disabled={updatingIds.has(order['Order ID'])}
-                                                            title={t.btn_cancel_order}
-                                                        >
-                                                            {updatingIds.has(order['Order ID']) ? <Spinner size="xs" /> : <XCircle size={14} />}
-                                                        </button>
-                                                    )}
-
-                                                    {/* Return only if shipped */}
-                                                    {['Shipped', 'Delivered'].includes(fs) && (
-                                                        <button 
-                                                            onClick={e => { e.stopPropagation(); handleUpdateFulfillmentStatus(order['Order ID'], 'Returned'); }} 
-                                                            className="action-icon-btn hover:text-purple-400 hover:border-purple-400"
-                                                            disabled={updatingIds.has(order['Order ID'])}
-                                                            title={t.btn_return_order}
-                                                        >
-                                                            {updatingIds.has(order['Order ID']) ? <Spinner size="xs" /> : <RotateCcw size={14} />}
-                                                        </button>
-                                                    )}
-
-                                                    {/* Restore only if Cancelled or Returned */}
-                                                    {['Cancelled', 'Returned'].includes(fs) && (
-                                                        <button 
-                                                            onClick={e => { e.stopPropagation(); handleUpdateFulfillmentStatus(order['Order ID'], 'Pending'); }} 
-                                                            className="action-icon-btn hover:text-blue-400 hover:border-blue-400"
-                                                            disabled={updatingIds.has(order['Order ID'])}
-                                                            title={t.btn_restore_order}
-                                                        >
-                                                            {updatingIds.has(order['Order ID']) ? <Spinner size="xs" /> : <Undo2 size={14} />}
-                                                        </button>
-                                                    )}
                                                 </div>
                                             )}
                                             {isVisible('telegramStatus') && (
@@ -453,47 +417,9 @@ const OrdersListMobile: React.FC<OrdersListMobileProps> = ({
                                         
                                         <div className="flex items-center gap-2 ml-4" onClick={e => e.stopPropagation()}>
                                             {isVisible('actions') && canEditOrder(order) && (
-                                                <>
-                                                    <button onClick={() => onEdit?.(order)} className="action-icon-btn w-10 h-10 active:scale-90 transition-transform">
-                                                        <Edit2 size={16} />
-                                                    </button>
-                                                    
-                                                    {/* Cancel only if not shipped */}
-                                                    {!['Shipped', 'Delivered', 'Cancelled', 'Returned'].includes(fs) && (
-                                                        <button 
-                                                            onClick={() => handleUpdateFulfillmentStatus(order['Order ID'], 'Cancelled')} 
-                                                            className="action-icon-btn w-10 h-10 active:scale-90 transition-transform hover:text-[#F6465D] hover:border-[#F6465D]"
-                                                            disabled={updatingIds.has(order['Order ID'])}
-                                                            title={t.btn_cancel_order}
-                                                        >
-                                                            {updatingIds.has(order['Order ID']) ? <Spinner size="xs" /> : <XCircle size={16} />}
-                                                        </button>
-                                                    )}
-
-                                                    {/* Return only if shipped */}
-                                                    {['Shipped', 'Delivered'].includes(fs) && (
-                                                        <button 
-                                                            onClick={() => handleUpdateFulfillmentStatus(order['Order ID'], 'Returned')} 
-                                                            className="action-icon-btn w-10 h-10 active:scale-90 transition-transform hover:text-purple-400 hover:border-purple-400"
-                                                            disabled={updatingIds.has(order['Order ID'])}
-                                                            title={t.btn_return_order}
-                                                        >
-                                                            {updatingIds.has(order['Order ID']) ? <Spinner size="xs" /> : <RotateCcw size={16} />}
-                                                        </button>
-                                                    )}
-
-                                                    {/* Restore only if Cancelled or Returned */}
-                                                    {['Cancelled', 'Returned'].includes(fs) && (
-                                                        <button 
-                                                            onClick={() => handleUpdateFulfillmentStatus(order['Order ID'], 'Pending')} 
-                                                            className="action-icon-btn w-10 h-10 active:scale-90 transition-transform hover:text-blue-400 hover:border-blue-400"
-                                                            disabled={updatingIds.has(order['Order ID'])}
-                                                            title={t.btn_restore_order}
-                                                        >
-                                                            {updatingIds.has(order['Order ID']) ? <Spinner size="xs" /> : <Undo2 size={16} />}
-                                                        </button>
-                                                    )}
-                                                </>
+                                                <button onClick={() => onEdit?.(order)} className="action-icon-btn w-10 h-10 active:scale-90 transition-transform">
+                                                    <Edit2 size={16} />
+                                                </button>
                                             )}
                                             {isVisible('telegramStatus') && (() => {
                                                 const id1 = order['Telegram Message ID 1'];

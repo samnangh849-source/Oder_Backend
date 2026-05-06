@@ -27,6 +27,7 @@ interface DesktopPackagingHubProps {
     onShip: (order: ParsedOrder) => void;
     onUndo: (order: ParsedOrder) => void;
     onUndoShipped: (order: ParsedOrder) => void;
+    onUnpack: (order: ParsedOrder) => void;
     onView: (order: ParsedOrder) => void;
     onPrintManifest: () => void;
     onSwitchHub: () => void;
@@ -39,7 +40,7 @@ interface DesktopPackagingHubProps {
     setViewMode: (mode: 'card' | 'list') => void;
     setIsFilterModalOpen: (open: boolean) => void;
     loadingActionId: string | null;
-    tabCounts: { pending: number, ready: number, shipped: number };
+    tabCounts: { pending: number, ready: number, shipped: number, returned: number, cancelled: number };
     selectedOrderIds: Set<string>;
     toggleOrderSelection: (id: string) => void;
     clearSelection: () => void;
@@ -160,7 +161,8 @@ const DesktopPackagingHub: React.FC<DesktopPackagingHubProps> = ({
                         { id: 'Pending', label: 'Pending Pack', count: tabCounts.pending },
                         { id: 'Ready to Ship', label: 'Ready for Dispatch', count: tabCounts.ready },
                         { id: 'Shipped', label: 'Shipped Log', count: tabCounts.shipped },
-                        { id: 'Returned', label: 'Return', count: (tabCounts as any).returned || 0 }
+                        { id: 'Returned', label: 'Return', count: tabCounts.returned || 0 },
+                        { id: 'Cancelled', label: 'Canceled', count: tabCounts.cancelled || 0 }
                     ].map(tab => (
                         <button 
                             key={tab.id}
@@ -365,8 +367,15 @@ const DesktopPackagingHub: React.FC<DesktopPackagingHubProps> = ({
                         >
                             {/* Watermark Overlay */}
                             {(isCancelled || isReturned) && (
-                                <div className={`absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 rotate-[-12deg] pointer-events-none z-10 opacity-20 font-black text-2xl tracking-[0.1em] whitespace-nowrap ${isCancelled ? 'text-red-500' : 'text-purple-400'}`}>
-                                    {isCancelled ? 'CANCELLED' : 'RETURNED'}
+                                <div className={`absolute inset-0 flex flex-col items-center justify-center pointer-events-none z-[100] overflow-hidden`}>
+                                    <div className={`rotate-[-12deg] font-black text-3xl tracking-[0.1em] whitespace-nowrap opacity-25 ${isCancelled ? 'text-red-500' : 'text-purple-400'}`}>
+                                        {isCancelled ? 'CANCELLED' : 'RETURNED'}
+                                    </div>
+                                    {isCancelled && order['Cancel Reason'] && (
+                                        <div className="rotate-[-12deg] bg-red-600/10 border border-red-500/20 px-2 py-0.5 rounded-sm mt-1 max-w-[80%]">
+                                            <p className="text-[10px] font-bold text-red-400 truncate uppercase">Reason: {order['Cancel Reason']}</p>
+                                        </div>
+                                    )}
                                 </div>
                             )}
 
@@ -481,7 +490,7 @@ const DesktopPackagingHub: React.FC<DesktopPackagingHubProps> = ({
                                                         </div>
                                                     </div>
 
-                                                    <div className={`p-2 border-t ${B_BORDER} bg-[#0B0E11] grid ${activeTab === 'Pending' ? 'grid-cols-2 gap-2' : activeTab === 'Ready to Ship' ? 'grid-cols-3 gap-2' : activeTab === 'Returned' ? 'grid-cols-2 gap-2' : 'grid-cols-2 gap-2'}`}>
+                                                    <div className={`p-2 border-t ${B_BORDER} bg-[#0B0E11] grid ${activeTab === 'Pending' ? 'grid-cols-2 gap-2' : activeTab === 'Ready to Ship' ? 'grid-cols-3 gap-2' : 'grid-cols-2 gap-2'}`}>
                                                         <button onClick={(e) => { e.stopPropagation(); onView(order); }} className={`w-full py-1.5 bg-[#2B3139] hover:bg-[#3B424A] ${B_TEXT_PRIMARY} text-xs font-medium transition-colors rounded-sm`}>Details</button>
                                                         {!isCancelled && (
                                                             <>
@@ -493,6 +502,14 @@ const DesktopPackagingHub: React.FC<DesktopPackagingHubProps> = ({
                                                                     </>
                                                                 )}
                                                             </>
+                                                        )}
+                                                        {isCancelled && activeTab !== 'Cancelled' && (
+                                                            <button 
+                                                                onClick={(e) => { e.stopPropagation(); onUnpack(order); }} 
+                                                                className={`w-full py-1.5 bg-red-600 hover:bg-red-700 text-white text-xs font-bold uppercase transition-colors rounded-sm shadow-lg shadow-red-600/20`}
+                                                            >
+                                                                {!!(order['Packed By'] || order['Packed Time']) ? 'ហែកកញ្ចប់' : 'Confirm Cancel'}
+                                                            </button>
                                                         )}
                                                         {activeTab === 'Shipped' && (
                                                             <button onClick={(e) => { e.stopPropagation(); onUndoShipped(order); }} className={`w-full py-1.5 bg-[#F6465D]/10 hover:bg-[#F6465D]/20 ${B_RED} text-xs font-bold uppercase transition-colors rounded-sm`}>Undo</button>
@@ -512,8 +529,15 @@ const DesktopPackagingHub: React.FC<DesktopPackagingHubProps> = ({
                                                 <div key={order['Order ID']} className={`${B_BG_PANEL} border ${B_BORDER} ${B_BG_HOVER} transition-colors grid grid-cols-12 items-center gap-2 p-2 relative group cursor-pointer ${isCancelled ? 'bg-red-950/20 border-red-500/30' : isReturned ? 'bg-purple-950/20 border-purple-500/30' : ''}`} onClick={() => onView(order)}>
                                                     {/* Watermark Overlay */}
                                                     {(isCancelled || isReturned) && (
-                                                        <div className={`absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 rotate-[-12deg] pointer-events-none z-10 opacity-20 font-black text-4xl tracking-[0.2em] whitespace-nowrap ${isCancelled ? 'text-red-500' : 'text-purple-400'}`}>
-                                                            {isCancelled ? 'CANCELLED' : 'RETURNED'}
+                                                        <div className={`absolute inset-0 flex flex-col items-center justify-center pointer-events-none z-[100] overflow-hidden`}>
+                                                            <div className={`rotate-[-12deg] font-black text-4xl tracking-[0.2em] whitespace-nowrap opacity-25 ${isCancelled ? 'text-red-500' : 'text-purple-400'}`}>
+                                                                {isCancelled ? 'CANCELLED' : 'RETURNED'}
+                                                            </div>
+                                                            {isCancelled && order['Cancel Reason'] && (
+                                                                <div className="rotate-[-12deg] bg-red-600/10 border border-red-500/20 px-4 py-1 rounded-sm mt-2 max-w-[80%]">
+                                                                    <p className="text-xs font-bold text-red-400 truncate uppercase">Reason: {order['Cancel Reason']}</p>
+                                                                </div>
+                                                            )}
                                                         </div>
                                                     )}
                                                     {loadingActionId === order['Order ID'] && (
@@ -614,6 +638,14 @@ const DesktopPackagingHub: React.FC<DesktopPackagingHubProps> = ({
                                                                     </>
                                                                 )}
                                                             </>
+                                                        )}
+                                                        {isCancelled && activeTab !== 'Cancelled' && (
+                                                            <button 
+                                                                onClick={(e) => { e.stopPropagation(); onUnpack(order); }} 
+                                                                className={`px-3 py-1 bg-red-600 hover:bg-red-700 text-white text-xs font-bold uppercase rounded-sm shadow-lg shadow-red-600/20`}
+                                                            >
+                                                                {!!(order['Packed By'] || order['Packed Time']) ? 'ហែកកញ្ចប់' : 'Confirm Cancel'}
+                                                            </button>
                                                         )}
                                                         {activeTab === 'Shipped' && (
                                                             <button onClick={(e) => { e.stopPropagation(); onUndoShipped(order); }} className={`px-3 py-1 bg-[#F6465D]/10 hover:bg-[#F6465D]/20 ${B_RED} text-xs font-bold uppercase rounded-sm transition-colors`}>Undo</button>

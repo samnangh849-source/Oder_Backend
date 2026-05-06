@@ -23,13 +23,27 @@ const OrderNode: React.FC<{
     onView: (order: ParsedOrder) => void;
 }> = ({ order, isLoading, isSelected, onSelect, onView }) => {
     const status = order.FulfillmentStatus || 'Pending';
-    const statusColor = status === 'Delivered' ? 'text-[#0ECB81]' : status === 'Shipped' ? 'text-[#FCD535]' : 'text-[#848E9C]';
+    const isCancelled = status === 'Cancelled';
+    const statusColor = status === 'Delivered' ? 'text-[#0ECB81]' : status === 'Shipped' ? 'text-[#FCD535]' : isCancelled ? 'text-[#F6465D]' : 'text-[#848E9C]';
 
     return (
         <div 
-            className={`${tClasses.surface} ${tClasses.surfaceHover} p-4 cursor-pointer relative group ${isSelected ? 'border-[#FCD535]/50' : ''}`}
+            className={`${tClasses.surface} ${tClasses.surfaceHover} p-4 cursor-pointer relative group ${isSelected ? 'border-[#FCD535]/50' : ''} ${isCancelled ? 'bg-red-950/10 border-red-500/20' : ''}`}
             onClick={() => onView(order)}
         >
+            {/* Watermark Overlay */}
+            {isCancelled && (
+                <div className={`absolute inset-0 flex flex-col items-center justify-center pointer-events-none z-[100] overflow-hidden`}>
+                    <div className={`rotate-[-12deg] font-black text-2xl tracking-[0.1em] whitespace-nowrap opacity-20 text-red-500`}>
+                        CANCELLED
+                    </div>
+                    {order['Cancel Reason'] && (
+                        <div className="rotate-[-12deg] bg-red-600/10 border border-red-500/20 px-2 py-0.5 rounded-sm mt-1 max-w-[80%]">
+                            <p className="text-[9px] font-bold text-red-400 truncate uppercase">Reason: {order['Cancel Reason']}</p>
+                        </div>
+                    )}
+                </div>
+            )}
             {isLoading && <div className="absolute inset-0 bg-[#0B0E11]/60 flex items-center justify-center z-10"><Spinner size="sm" /></div>}
             <div className="flex justify-between items-start mb-3">
                 <div className="flex items-center gap-2">

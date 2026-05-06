@@ -54,6 +54,9 @@ const ReportsView: React.FC<ReportsViewProps> = ({ orders, reportType, dateFilte
         let dateMap: Record<string, number> = {};
 
         orders.forEach(o => {
+            const fs = o.FulfillmentStatus || o['Fulfillment Status'] || 'Pending';
+            if (fs === 'Cancelled') return;
+
             const rev = Number(o['Grand Total']) || 0;
             const cost = Number(o['Internal Cost']) || 0;
             revenue += rev;
@@ -83,6 +86,11 @@ const ReportsView: React.FC<ReportsViewProps> = ({ orders, reportType, dateFilte
             }
         });
 
+        const activeOrdersCount = orders.filter(o => {
+            const fs = o.FulfillmentStatus || o['Fulfillment Status'] || 'Pending';
+            return fs !== 'Cancelled';
+        }).length;
+
         const teamStats = Object.values(teamMap).sort((a, b) => b.revenue - a.revenue);
         const topUsers = Object.values(userMap).sort((a, b) => b.revenue - a.revenue).slice(0, 5);
         const margin = revenue > 0 ? (totalProfit / revenue) * 100 : 0;
@@ -94,7 +102,7 @@ const ReportsView: React.FC<ReportsViewProps> = ({ orders, reportType, dateFilte
 
         return {
             revenue,
-            totalOrders: orders.length,
+            totalOrders: activeOrdersCount,
             totalProfit,
             margin,
             chartData,

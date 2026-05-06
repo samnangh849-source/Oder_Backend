@@ -7,13 +7,18 @@ import { translations } from '../../translations';
 // --- Hook for Calculation ---
 export const useOrderTotals = (orders: ParsedOrder[]) => {
     return useMemo(() => {
-        return orders.reduce((acc, curr) => ({
-            grandTotal: acc.grandTotal + (Number(curr['Grand Total']) || 0),
-            internalCost: acc.internalCost + (Number(curr['Internal Cost']) || 0),
-            count: acc.count + 1,
-            paidCount: acc.paidCount + (curr['Payment Status'] === 'Paid' ? 1 : 0),
-            unpaidCount: acc.unpaidCount + (curr['Payment Status'] === 'Unpaid' ? 1 : 0)
-        }), { grandTotal: 0, internalCost: 0, count: 0, paidCount: 0, unpaidCount: 0 });
+        return orders.reduce((acc, curr) => {
+            const fs = curr.FulfillmentStatus || curr['Fulfillment Status'] || 'Pending';
+            const isCancelled = fs === 'Cancelled';
+            
+            return {
+                grandTotal: acc.grandTotal + (Number(curr['Grand Total']) || 0),
+                internalCost: acc.internalCost + (isCancelled ? 0 : (Number(curr['Internal Cost']) || 0)),
+                count: acc.count + 1,
+                paidCount: acc.paidCount + (curr['Payment Status'] === 'Paid' ? 1 : 0),
+                unpaidCount: acc.unpaidCount + (curr['Payment Status'] === 'Unpaid' ? 1 : 0)
+            };
+        }, { grandTotal: 0, internalCost: 0, count: 0, paidCount: 0, unpaidCount: 0 });
     }, [orders]);
 };
 

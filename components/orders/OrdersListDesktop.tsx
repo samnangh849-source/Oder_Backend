@@ -156,30 +156,7 @@ const OrderRow = (props: any) => {
                                     <div className="flex items-center justify-center gap-2 w-full">
                                         <button onClick={() => onView && onView(order)} className="w-8 h-8 flex items-center justify-center bg-[#2B3139] hover:bg-[#363C44] text-[#848E9C] hover:text-white rounded transition-all" title="View"><svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" /><path d="M2.458 12C3.732 7.943 7.523 5 12 5c3.478 0 6.991 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" strokeWidth={2}/></svg></button>
                                         {allowEdit && (
-                                            <>
-                                                <button onClick={() => onEdit && onEdit(order)} className="w-8 h-8 flex items-center justify-center bg-[#2B3139] hover:bg-[#363C44] text-[#FCD535] rounded transition-all" title="Edit"><svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" strokeWidth={2}/></svg></button>
-                                                
-                                                {/* Cancel only if not shipped */}
-                                                {!['Shipped', 'Delivered', 'Cancelled', 'Returned'].includes(fs) && (
-                                                    <button onClick={() => handleUpdateFulfillmentStatus(order['Order ID'], 'Cancelled')} className="w-8 h-8 flex items-center justify-center bg-[#2B3139] hover:bg-[#F6465D] text-[#848E9C] hover:text-white rounded transition-all" title={t.btn_cancel_order} disabled={updatingIds.has(order['Order ID'])}>
-                                                        {updatingIds.has(order['Order ID']) ? <Spinner size="xs" /> : <XCircle className="w-4 h-4" />}
-                                                    </button>
-                                                )}
-
-                                                {/* Return only if shipped */}
-                                                {['Shipped', 'Delivered'].includes(fs) && (
-                                                    <button onClick={() => handleUpdateFulfillmentStatus(order['Order ID'], 'Returned')} className="w-8 h-8 flex items-center justify-center bg-[#2B3139] hover:bg-purple-600 text-[#848E9C] hover:text-white rounded transition-all" title={t.btn_return_order} disabled={updatingIds.has(order['Order ID'])}>
-                                                        {updatingIds.has(order['Order ID']) ? <Spinner size="xs" /> : <RotateCcw className="w-4 h-4" />}
-                                                    </button>
-                                                )}
-
-                                                {/* Restore only if Cancelled or Returned */}
-                                                {['Cancelled', 'Returned'].includes(fs) && (
-                                                    <button onClick={() => handleUpdateFulfillmentStatus(order['Order ID'], 'Pending')} className="w-8 h-8 flex items-center justify-center bg-[#2B3139] hover:bg-blue-600 text-[#848E9C] hover:text-white rounded transition-all" title={t.btn_restore_order} disabled={updatingIds.has(order['Order ID'])}>
-                                                        {updatingIds.has(order['Order ID']) ? <Spinner size="xs" /> : <Undo2 className="w-4 h-4" />}
-                                                    </button>
-                                                )}
-                                            </>
+                                            <button onClick={() => onEdit && onEdit(order)} className="w-8 h-8 flex items-center justify-center bg-[#2B3139] hover:bg-[#363C44] text-[#FCD535] rounded transition-all" title="Edit"><svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" strokeWidth={2}/></svg></button>
                                         )}
                                     </div>
                                 );

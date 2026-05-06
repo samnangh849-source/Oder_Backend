@@ -168,65 +168,80 @@ const SearchableProductDropdown: React.FC<SearchableProductDropdownProps> = ({
     };
 
     return (
-        <div className={`transition-all ${isOpen ? 'relative z-[70]' : 'relative z-10'}`} ref={dropdownRef}>
-            <div className="relative group flex items-center gap-2">
-                {selectedProduct && (
-                    <div 
-                        className="w-12 h-12 flex-shrink-0 bg-gray-900 rounded-xl border-2 border-gray-700 overflow-hidden cursor-pointer hover:border-blue-500 transition-all active:scale-95 shadow-lg group-hover:shadow-blue-500/10"
-                        onClick={() => setPreviewProduct(selectedProduct)}
-                        title={selectedProduct.ProductName}
+        <div className={`group/search-unit transition-all ${isOpen ? 'relative z-[70]' : 'relative z-10'}`} ref={dropdownRef}>
+            {/* Unified Clean Input Frame */}
+            <div className={`
+                flex items-stretch bg-[#0B0E11] border rounded-lg transition-all duration-200 overflow-hidden
+                ${isOpen || searchTerm !== selectedProductName ? 'border-[#FCD535] ring-1 ring-[#FCD535]/20' : 'border-[#2B3139] hover:border-[#474D57]'}
+            `}>
+                {/* Left Action: Review Toggle */}
+                <div className="flex-shrink-0 flex items-center bg-[#1E2329] border-r border-[#2B3139] transition-colors">
+                    <button 
+                        type="button"
+                        className={`w-10 h-10 flex items-center justify-center transition-all group/pen ${selectedProduct ? 'text-[#FCD535] hover:bg-[#FCD535]/10' : 'text-[#474D57] cursor-not-allowed opacity-50'}`}
+                        onClick={() => selectedProduct && setPreviewProduct(selectedProduct)}
+                        title="Operational Review"
+                        disabled={!selectedProduct}
                     >
-                        <img 
-                            src={convertGoogleDriveUrl(selectedProduct.ImageURL)} 
-                            className="w-full h-full object-cover" 
-                            alt="" 
-                        />
-                    </div>
-                )}
-                <div className="relative flex-grow">
+                        <svg className="w-4 h-4 transition-transform group-hover/pen:rotate-12" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2.5}><path strokeLinecap="round" strokeLinejoin="round" d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" /></svg>
+                    </button>
+                </div>
+
+                {/* Main Input: Search Field */}
+                <div className="flex-grow relative flex items-center">
                     <input
                         ref={inputRef}
                         type="text"
-                        className="form-input !pr-16 !py-3.5 bg-gray-900/50 border-gray-700 group-hover:border-blue-500/50 transition-all rounded-[1.25rem] font-bold text-gray-200"
-                        placeholder="ស្វែងរកផលិតផល..."
+                        className="w-full bg-transparent pl-3 pr-10 py-2 font-medium text-sm text-[#EAECEF] placeholder-[#474D57] outline-none h-10"
+                        placeholder="Search product or barcode..."
                         value={searchTerm}
                         onChange={e => { setSearchTerm(e.target.value); setIsOpen(true); setActiveIndex(0); }}
                         onFocus={() => setIsOpen(true)}
                         onKeyDown={handleKeyDown}
                     />
-                    <div className="absolute right-0 top-0 bottom-0 pr-4 flex items-center gap-2 pointer-events-none">
+                    
+                    {/* Clear Button */}
+                    <div className="absolute right-0 top-0 bottom-0 pr-2 flex items-center">
                         {searchTerm && (
                             <button 
                                 type="button" 
                                 onClick={handleClear} 
-                                className="text-gray-500 hover:text-white text-xl leading-none p-1 pointer-events-auto transition-colors"
-                                title="Clear search"
+                                className="w-6 h-6 flex items-center justify-center text-[#474D57] hover:text-[#F6465D] hover:bg-[#F6465D]/10 rounded-full transition-colors font-bold text-lg"
                             >
                                 &times;
                             </button>
                         )}
-                        <div className="flex items-center justify-center pointer-events-none">
-                            <svg className="h-5 w-5 text-gray-400" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
-                            </svg>
-                        </div>
                     </div>
                 </div>
             </div>
             
             {isOpen && (
-                <div className="absolute z-[100] w-full mt-2 bg-gray-800 border border-white/10 rounded-[1.5rem] shadow-[0_20px_50px_rgba(0,0,0,0.5)] overflow-hidden animate-fade-in-down max-h-80 overflow-y-auto custom-scrollbar">
-                    <ul className="p-2 space-y-1">
+                <div className="absolute z-[100] w-full mt-2 bg-[#1E2329] border border-[#2B3139] rounded-xl shadow-2xl overflow-hidden animate-fade-in-down max-h-[350px] flex flex-col">
+                    <div className="bg-[#0B0E11]/80 px-4 py-2.5 border-b border-[#2B3139] flex justify-between items-center flex-shrink-0 backdrop-blur-sm">
+                        <span className="text-[10px] font-semibold text-[#848E9C] uppercase tracking-wider">Results ({filteredProducts.length})</span>
+                        <span className="text-[10px] font-semibold text-[#FCD535] uppercase tracking-wider animate-pulse flex items-center gap-1">
+                            <span className="w-1.5 h-1.5 rounded-full bg-[#FCD535]"></span> Active
+                        </span>
+                    </div>
+                    <ul className="p-0 space-y-0 overflow-y-auto custom-scrollbar">
                         {itemsForNavigation.length === 0 ? (
-                            <li className="p-4 text-center text-xs text-gray-500 font-black uppercase tracking-widest">រកមិនឃើញផលិតផលទេ</li>
+                            <li className="p-8 text-center flex flex-col items-center gap-3">
+                                <div className="w-12 h-12 rounded-full bg-[#2B3139]/30 flex items-center justify-center">
+                                    <svg className="w-6 h-6 text-[#474D57]" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M9.172 9.172a4 4 0 015.656 0M9 10h.01M15 10h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
+                                </div>
+                                <span className="text-xs text-[#848E9C] font-medium">No matches found</span>
+                            </li>
                         ) : itemsForNavigation.map((item, index) => {
                             if ('isAddNew' in item && item.isAddNew) {
                                 return (
-                                    <li key="add-new" className={`p-3.5 rounded-2xl cursor-pointer flex items-center gap-4 transition-all ${activeIndex === index ? 'bg-blue-600 text-white' : 'hover:bg-white/5 text-gray-300'}`} onMouseDown={() => handleItemClick(item)}>
-                                        <div className="w-10 h-10 rounded-xl bg-blue-500/20 flex items-center justify-center border border-blue-500/30">
-                                            <svg className="w-6 h-6" fill="currentColor" viewBox="0 0 20 20"><path d="M10 18a8 8 0 100-16 8 8 0 000 16zm1-11a1 1 0 10-2 0v2H7a1 1 0 100 2h2v2a1 1 0 102 0v-2h2a1 1 0 100-2h-2V7z" /></svg>
+                                    <li key="add-new" className={`px-4 py-3 cursor-pointer flex items-center gap-4 transition-all border-b border-[#2B3139]/50 ${activeIndex === index ? 'bg-[#FCD535]/10' : 'hover:bg-[#2B3139]/50'}`} onMouseDown={() => handleItemClick(item)}>
+                                        <div className={`w-10 h-10 rounded-lg flex items-center justify-center transition-all ${activeIndex === index ? 'bg-[#FCD535] text-[#181A20]' : 'bg-[#2B3139] text-[#848E9C]'}`}>
+                                            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M12 4v16m8-8H4" /></svg>
                                         </div>
-                                        <div className="min-w-0"><p className="font-black text-sm leading-tight">បន្ថែមថ្មី៖ <span className="text-yellow-400">"{item.ProductName}"</span></p></div>
+                                        <div className="min-w-0 flex flex-col">
+                                            <p className={`font-semibold text-sm leading-none mb-1 ${activeIndex === index ? 'text-[#FCD535]' : 'text-[#EAECEF]'}`}>Add new product</p>
+                                            <p className="text-xs text-[#848E9C] truncate">"{item.ProductName}"</p>
+                                        </div>
                                     </li>
                                 );
                             }
@@ -237,31 +252,48 @@ const SearchableProductDropdown: React.FC<SearchableProductDropdownProps> = ({
                             return (
                                 <li 
                                     key={product.ProductName} 
-                                    className={`p-2.5 rounded-2xl cursor-pointer flex items-center gap-3 transition-all ${activeIndex === index ? 'bg-blue-600 text-white shadow-lg' : 'hover:bg-white/5 text-gray-300'}`} 
+                                    className={`px-4 py-3 cursor-pointer flex items-center gap-4 transition-all border-b border-[#2B3139]/50 last:border-0 relative ${activeIndex === index ? 'bg-[#2B3139]/40' : 'hover:bg-[#2B3139]/20'}`} 
                                     onMouseEnter={() => handleHoldStart(product, 400)}
                                     onMouseLeave={handleHoldEnd}
-                                    onMouseDown={(e) => {
-                                        if (e.button === 0) { // Left click
-                                            handleHoldStart(product, 400);
-                                        }
-                                    }}
+                                    onMouseDown={(e) => e.button === 0 && handleHoldStart(product, 400)}
                                     onMouseUp={() => handleItemClickFromHandler(product)}
                                     onTouchStart={() => handleHoldStart(product, 400)}
                                     onTouchEnd={() => handleItemClickFromHandler(product)}
                                 >
-                                    <div className="relative">
-                                        <img src={convertGoogleDriveUrl(product.ImageURL)} className={`w-12 h-12 rounded-xl object-cover border border-white/10 ${hasNoImage ? 'opacity-30 grayscale' : ''}`} alt="" />
-                                        {hasNoImage && <div className="absolute inset-0 flex items-center justify-center"><svg className="w-5 h-5 text-red-500/80" fill="currentColor" viewBox="0 0 20 20"><path fillRule="evenodd" d="M4 3a2 2 0 00-2 2v10a2 2 0 002 2h12a2 2 0 002-2V5a2 2 0 00-2-2H4zm12 12H4l4-8 3 6 2-4 3 6z" clipRule="evenodd" /></svg></div>}
+                                    {activeIndex === index && <div className="absolute inset-y-0 left-0 w-1 bg-[#FCD535]"></div>}
+                                    
+                                    {/* Product Visual */}
+                                    <div className="relative flex-shrink-0">
+                                        <div className={`w-12 h-12 rounded-lg overflow-hidden border transition-all ${activeIndex === index ? 'border-[#FCD535]' : 'border-[#2B3139]'}`}>
+                                            <img src={convertGoogleDriveUrl(product.ImageURL)} className={`w-full h-full object-cover ${hasNoImage ? 'opacity-20 grayscale' : ''}`} alt="" />
+                                        </div>
                                     </div>
-                                    <div className="min-w-0 flex-grow">
-                                        <div className="flex items-center gap-2">
-                                            <p className="font-black text-[15px] truncate leading-tight" title={product.ProductName}>{highlightMatch(product.ProductName, searchTerm)}</p>
-                                            {hasNoImage && <span className="flex-shrink-0 w-1.5 h-1.5 rounded-full bg-red-500 animate-pulse"></span>}
+
+                                    {/* Product Meta */}
+                                    <div className="min-w-0 flex-grow py-0.5">
+                                        <p className="font-semibold text-sm truncate text-[#EAECEF]" title={product.ProductName}>
+                                            {highlightMatch(product.ProductName, searchTerm)}
+                                        </p>
+                                        <div className="flex items-center gap-3 mt-1">
+                                            <span className="text-xs font-bold text-[#FCD535]">${product.Price.toFixed(2)}</span>
+                                            <span className="text-[10px] text-[#848E9C] uppercase tracking-wider bg-[#0B0E11] px-1.5 py-0.5 rounded border border-[#2B3139]">
+                                                {product.Barcode || 'N/A'}
+                                            </span>
                                         </div>
-                                        <div className="flex items-center gap-2 mt-0.5">
-                                            <span className="text-[10px] font-black text-blue-400 bg-blue-500/10 px-2 py-0.5 rounded-md border border-blue-500/10">${product.Price.toFixed(2)}</span>
-                                            {hasNoImage && <span className="text-[8px] font-black text-red-400 uppercase tracking-tighter italic opacity-60">No Image</span>}
-                                        </div>
+                                    </div>
+
+                                    {/* Action Hook */}
+                                    <div className="flex-shrink-0 pl-2 hidden sm:block">
+                                        <button 
+                                            type="button"
+                                            className={`w-8 h-8 rounded-full flex items-center justify-center transition-all ${activeIndex === index ? 'bg-[#FCD535] text-[#181A20]' : 'text-[#848E9C] hover:bg-[#2B3139] hover:text-[#EAECEF]'}`}
+                                            onClick={(e) => {
+                                                e.stopPropagation();
+                                                setPreviewProduct(product);
+                                            }}
+                                        >
+                                            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" /></svg>
+                                        </button>
                                     </div>
                                 </li>
                             );
@@ -273,13 +305,13 @@ const SearchableProductDropdown: React.FC<SearchableProductDropdownProps> = ({
             {/* Hold Overlay (Tooltip) */}
             {holdItem && (
                 <div className="fixed inset-0 z-[200] flex items-center justify-center p-6 animate-fade-in pointer-events-none">
-                    <div className="absolute inset-0 bg-black/60"></div>
-                    <div className="bg-gray-900 border border-blue-500/30 p-6 rounded-[2rem] shadow-2xl max-w-xs w-full text-center animate-scale-in">
-                        <div className="w-24 h-24 mx-auto mb-4 rounded-3xl overflow-hidden border-2 border-blue-500/20">
+                    <div className="absolute inset-0 bg-black/80 backdrop-blur-sm"></div>
+                    <div className="bg-[#1E2329] border-2 border-[#FCD535] p-6 rounded-none shadow-2xl max-w-xs w-full text-center animate-scale-in">
+                        <div className="w-24 h-24 mx-auto mb-4 rounded-none overflow-hidden border-2 border-[#FCD535]">
                             <img src={convertGoogleDriveUrl(holdItem.ImageURL)} className="w-full h-full object-cover" />
                         </div>
-                        <h3 className="text-white font-black text-lg leading-tight uppercase tracking-tighter mb-2">{holdItem.ProductName}</h3>
-                        <p className="text-blue-400 font-bold font-mono text-sm">${holdItem.Price.toFixed(2)}</p>
+                        <h3 className="text-[#FCD535] font-black text-lg leading-tight uppercase tracking-tighter mb-2">{holdItem.ProductName}</h3>
+                        <p className="text-[#EAECEF] font-black font-mono text-base tracking-widest">${holdItem.Price.toFixed(2)}</p>
                     </div>
                 </div>
             )}

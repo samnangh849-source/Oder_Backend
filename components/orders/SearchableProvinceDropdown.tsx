@@ -59,19 +59,19 @@ const SearchableProvinceDropdown: React.FC<SearchableProvinceDropdownProps> = ({
             <div className="relative group">
                 <input
                     type="text"
-                    className="form-input !pl-10 !py-3 rounded-xl border-gray-700 bg-gray-900 focus:border-blue-500/50 transition-all font-bold text-gray-200"
+                    className="form-input !pl-10 !py-3 rounded-none border-2 border-[#2B3139] bg-[#0B0E11] focus:border-[#FCD535] transition-all font-bold text-[#EAECEF] placeholder-[#474D57] outline-none"
                     placeholder="ស្វែងរក ខេត្ត/រាជធានី..."
                     value={searchTerm}
                     onChange={(e) => { setSearchTerm(e.target.value); setIsOpen(true); }}
                     onFocus={() => setIsOpen(true)}
                 />
-                <div className="absolute left-3 top-0 bottom-0 flex items-center justify-center text-gray-500 pointer-events-none">
-                    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z" /><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M15 11a3 3 0 11-6 0 3 3 0 016 0z" /></svg>
+                <div className="absolute left-3 top-0 bottom-0 flex items-center justify-center text-[#848E9C] group-focus-within:text-[#FCD535] pointer-events-none transition-colors">
+                    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z" /><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M15 11a3 3 0 11-6 0 3 3 0 016 0z" /></svg>
                 </div>
             </div>
 
             {isOpen && (
-                <div className="absolute z-[100] w-full mt-2 bg-gray-800 border border-white/10 rounded-2xl shadow-2xl overflow-hidden animate-fade-in-down max-h-60 overflow-y-auto custom-scrollbar">
+                <div className="absolute z-[100] w-full mt-1 bg-[#1E2329] border-2 border-[#FCD535] rounded-none shadow-[0_10px_40px_rgba(0,0,0,0.5)] overflow-hidden animate-fade-in-down max-h-60 overflow-y-auto custom-scrollbar">
                     {sortedProvinces.length > 0 ? sortedProvinces.map((p, idx) => (
                         <button
                             key={p}
@@ -81,17 +81,17 @@ const SearchableProvinceDropdown: React.FC<SearchableProvinceDropdownProps> = ({
                                 setSearchTerm(p);
                                 setIsOpen(false);
                             }}
-                            className={`w-full text-left px-4 py-3 text-sm font-bold transition-colors border-b border-white/5 last:border-0 ${selectedProvince === p ? 'bg-blue-600 text-white' : 'text-gray-300 hover:bg-white/5'}`}
+                            className={`w-full text-left px-4 py-3 text-sm font-black transition-all border-b border-[#2B3139] last:border-0 ${selectedProvince === p ? 'bg-[#FCD535] text-[#181A20]' : 'text-[#EAECEF] hover:bg-[#FCD535]/10'}`}
                         >
-                            <div className="flex justify-between items-center">
+                            <div className="flex justify-between items-center uppercase tracking-tighter">
                                 <span>{p}</span>
                                 {idx < 2 && searchTerm === '' && (
-                                    <span className="text-[8px] bg-white/10 px-1.5 py-0.5 rounded uppercase tracking-widest opacity-50">Priority</span>
+                                    <span className={`text-[8px] px-1.5 py-0.5 rounded-none font-black uppercase tracking-widest ${selectedProvince === p ? 'bg-[#181A20]/20 text-[#181A20]' : 'bg-[#FCD535]/20 text-[#FCD535]'}`}>Priority</span>
                                 )}
                             </div>
                         </button>
                     )) : (
-                        <div className="p-4 text-center text-xs text-gray-500">រកមិនឃើញខេត្តនេះទេ</div>
+                        <div className="p-6 text-center text-[10px] text-[#848E9C] font-black uppercase tracking-widest">រកមិនឃើញខេត្តនេះទេ</div>
                     )}
                 </div>
             )}

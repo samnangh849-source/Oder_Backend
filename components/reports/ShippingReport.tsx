@@ -139,15 +139,20 @@ const ShippingReport: React.FC<ShippingReportProps> = ({ orders, appData, dateFi
 
     // 2. Calculate Stats based on Filtered Orders
     const shippingStats = useMemo(() => {
-        const totalInternalCost = filteredOrders.reduce((sum, o) => sum + (Number(o['Internal Cost']) || 0), 0);
-        const totalCustomerFee = filteredOrders.reduce((sum, o) => sum + (Number(o['Shipping Fee (Customer)']) || 0), 0);
+        const activeOrders = filteredOrders.filter(o => {
+            const fs = o.FulfillmentStatus || o['Fulfillment Status'] || 'Pending';
+            return fs !== 'Cancelled';
+        });
+
+        const totalInternalCost = activeOrders.reduce((sum, o) => sum + (Number(o['Internal Cost']) || 0), 0);
+        const totalCustomerFee = activeOrders.reduce((sum, o) => sum + (Number(o['Shipping Fee (Customer)']) || 0), 0);
         const netShipping = totalCustomerFee - totalInternalCost;
         
         const methods: Record<string, { name: string, cost: number, orders: number, logo: string }> = {};
         const drivers: Record<string, { name: string, cost: number, orders: number, photo: string }> = {};
         const stores: Record<string, { name: string, cost: number, orders: number }> = {};
 
-        filteredOrders.forEach(o => {
+        activeOrders.forEach(o => {
             const mName = o['Internal Shipping Method'] || 'Other';
             if (!methods[mName]) {
                 const info = appData.shippingMethods?.find(sm => sm.MethodName === mName);
@@ -178,7 +183,7 @@ const ShippingReport: React.FC<ShippingReportProps> = ({ orders, appData, dateFi
             totalInternalCost,
             totalCustomerFee,
             netShipping,
-            totalOrders: filteredOrders.length,
+            totalOrders: activeOrders.length,
             methods: Object.values(methods).sort((a, b) => b.cost - a.cost),
             drivers: Object.values(drivers).sort((a, b) => b.cost - a.cost),
             stores: Object.values(stores).sort((a, b) => b.cost - a.cost)

@@ -246,13 +246,18 @@ const UserOrdersView: React.FC<UserOrdersViewProps> = ({ onAdd, onStatsUpdate, s
     }, [viewOrders, searchQuery, advancedFilters]);
 
     const filteredMetrics = useMemo(() => {
-        return filteredOrders.reduce((acc, curr) => ({
-            revenue: acc.revenue + (Number(curr['Grand Total']) || 0),
-            cost: acc.cost + (Number(curr['Internal Cost']) || 0),
-            paid: acc.paid + (curr['Payment Status'] === 'Paid' ? 1 : 0),
-            unpaid: acc.unpaid + (curr['Payment Status'] === 'Unpaid' ? 1 : 0),
-            count: acc.count + 1
-        }), { revenue: 0, cost: 0, paid: 0, unpaid: 0, count: 0 });
+        return filteredOrders.reduce((acc, curr) => {
+            const fs = curr.FulfillmentStatus || curr['Fulfillment Status'] || 'Pending';
+            if (fs === 'Cancelled') return acc;
+            
+            return {
+                revenue: acc.revenue + (Number(curr['Grand Total']) || 0),
+                cost: acc.cost + (Number(curr['Internal Cost']) || 0),
+                paid: acc.paid + (curr['Payment Status'] === 'Paid' ? 1 : 0),
+                unpaid: acc.unpaid + (curr['Payment Status'] === 'Unpaid' ? 1 : 0),
+                count: acc.count + 1
+            };
+        }, { revenue: 0, cost: 0, paid: 0, unpaid: 0, count: 0 });
     }, [filteredOrders]);
     
     useEffect(() => {

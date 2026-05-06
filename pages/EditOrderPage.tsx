@@ -12,6 +12,7 @@ import { logUserActivity, logOrderEdit } from '../services/auditService';
 
 // Import New Sub-Components
 import EditCustomerPanel from '../components/orders/edit/EditCustomerPanel';
+import EditLogisticsPanel from '../components/orders/edit/EditLogisticsPanel';
 import EditProductPanel from '../components/orders/edit/EditProductPanel';
 import EditOrderSummary from '../components/orders/edit/EditOrderSummary';
 import BarcodeScannerModal from '../components/orders/BarcodeScannerModal';
@@ -29,9 +30,11 @@ const EditOrderPage: React.FC<EditOrderPageProps> = ({ order, onSaveSuccess, onC
     const originalOrderRef = useRef<ParsedOrder>(order);
 
     const [formData, setFormData] = useState<ParsedOrder>(order);
+    const [orderDiscount, setOrderDiscount] = useState<number>(0);
     const [loading, setLoading] = useState(false);
     const [error, setError] = useState('');
     const [bankLogo, setBankLogo] = useState<string>('');
+    const [copySuccess, setCopySuccess] = useState(false);
 
     // Scanner State
     const [isScannerVisible, setIsScannerVisible] = useState(false);
@@ -44,6 +47,11 @@ const EditOrderPage: React.FC<EditOrderPageProps> = ({ order, onSaveSuccess, onC
     // Audit: Log when user opens the page
     useEffect(() => {
         if (currentUser) {
+            // Initialize orderDiscount by calculating the difference between total discount and product discounts
+            const productDiscounts = order.Products.reduce((sum, p) => sum + ((p.originalPrice - (p.finalPrice || 0)) * (p.quantity || 0)), 0);
+            const initialOrderDiscount = Math.max(0, (Number(order['Discount ($)']) || 0) - productDiscounts);
+            setOrderDiscount(initialOrderDiscount);
+
             // Security Check: Standard User Restrictions
             if (!currentUser.IsSystemAdmin) {
                 // 1. Team Check
@@ -92,6 +100,11 @@ const EditOrderPage: React.FC<EditOrderPageProps> = ({ order, onSaveSuccess, onC
     useEffect(() => {
         setFormData(order);
         originalOrderRef.current = order; // Update ref when prop changes
+        
+        // Also re-initialize orderDiscount when order prop changes
+        const productDiscounts = order.Products.reduce((sum, p) => sum + ((p.originalPrice - (p.finalPrice || 0)) * (p.quantity || 0)), 0);
+        const initialOrderDiscount = Math.max(0, (Number(order['Discount ($)']) || 0) - productDiscounts);
+        setOrderDiscount(initialOrderDiscount);
     }, [order]);
 
     useEffect(() => {
@@ -131,10 +144,37 @@ const EditOrderPage: React.FC<EditOrderPageProps> = ({ order, onSaveSuccess, onC
             };
             const updatedProducts = [...prev.Products, newProduct];
             const currentShipping = parseFloat(String(prev['Shipping Fee (Customer)'])) || 0;
-            const newTotals = recalculateTotals(updatedProducts, currentShipping);
+            const newTotals = recalculateTotals(updatedProducts, currentShipping, orderDiscount);
             
             return { 
                 ...prev, 
+                Products: updatedProducts,
+                ...newTotals
+            };
+        });
+    };
+
+    const handleAddMasterProduct = (master: MasterProduct) => {
+        setFormData(prev => {
+            const newProduct: Product = {
+                id: Date.now() + Math.random(),
+                name: master.ProductName,
+                quantity: 1,
+                originalPrice: master.Price,
+                finalPrice: master.Price,
+                total: master.Price,
+                discountPercent: 0,
+                colorInfo: '',
+                image: master.ImageURL,
+                cost: master.Cost,
+                tags: master.Tags
+            };
+            const updatedProducts = [...prev.Products, newProduct];
+            const currentShipping = parseFloat(String(prev['Shipping Fee (Customer)'])) || 0;
+            const newTotals = recalculateTotals(updatedProducts, currentShipping, orderDiscount);
+            
+            return {
+                ...prev,
                 Products: updatedProducts,
                 ...newTotals
             };
@@ -149,7 +189,7 @@ const EditOrderPage: React.FC<EditOrderPageProps> = ({ order, onSaveSuccess, onC
         setFormData(prev => {
             const newProducts = prev.Products.filter((_, i) => i !== idx);
             const currentShipping = Number(prev['Shipping Fee (Customer)']) || 0;
-            const newTotals = recalculateTotals(newProducts, currentShipping);
+            const newTotals = recalculateTotals(newProducts, currentShipping, orderDiscount);
             return { ...prev, Products: newProducts, ...newTotals };
         });
     };
@@ -189,7 +229,7 @@ const EditOrderPage: React.FC<EditOrderPageProps> = ({ order, onSaveSuccess, onC
                 }
                 
                 const currentShippingFee = parseFloat(String(prev['Shipping Fee (Customer)'])) || 0;
-                const newTotals = recalculateTotals(newProducts, currentShippingFee);
+                const newTotals = recalculateTotals(newProducts, currentShippingFee, orderDiscount);
                 return { ...prev, Products: newProducts, ...newTotals };
             });
             
@@ -213,7 +253,7 @@ const EditOrderPage: React.FC<EditOrderPageProps> = ({ order, onSaveSuccess, onC
 
             if (name === 'Shipping Fee (Customer)') {
                 const numericFee = parseFloat(String(processedValue)) || 0;
-                const newTotals = recalculateTotals(updatedState.Products, numericFee);
+                const newTotals = recalculateTotals(updatedState.Products, numericFee, orderDiscount);
                 return { ...updatedState, ...newTotals };
             }
             if (name === 'Payment Status' && processedValue === 'Unpaid') { 
@@ -221,6 +261,21 @@ const EditOrderPage: React.FC<EditOrderPageProps> = ({ order, onSaveSuccess, onC
                 setBankLogo(''); 
             }
             return updatedState;
+        });
+    };
+
+    const handleOrderDiscountChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+        const value = e.target.value;
+        let numericDiscount = 0;
+        if (value !== '' && !value.endsWith('.')) {
+            numericDiscount = Math.max(0, parseFloat(value) || 0);
+        }
+        
+        setOrderDiscount(numericDiscount);
+        setFormData(prev => {
+            const currentShippingFee = parseFloat(String(prev['Shipping Fee (Customer)'])) || 0;
+            const newTotals = recalculateTotals(prev.Products, currentShippingFee, numericDiscount);
+            return { ...prev, ...newTotals };
         });
     };
 
@@ -266,7 +321,7 @@ const EditOrderPage: React.FC<EditOrderPageProps> = ({ order, onSaveSuccess, onC
             
             newProducts[index] = productToUpdate;
             const currentShippingFee = parseFloat(String(prev['Shipping Fee (Customer)'])) || 0;
-            const newTotals = recalculateTotals(newProducts, currentShippingFee);
+            const newTotals = recalculateTotals(newProducts, currentShippingFee, orderDiscount);
             return { ...prev, Products: newProducts, ...newTotals };
         });
     };
@@ -512,108 +567,194 @@ const EditOrderPage: React.FC<EditOrderPageProps> = ({ order, onSaveSuccess, onC
             )}
 
             {/* Top Bar */}
-            <div className="flex-shrink-0 flex flex-col sm:flex-row justify-between items-start sm:items-center mb-4 gap-4 px-4 pt-4 border-b border-[#2B3139] pb-4 bg-[#0B0E11] z-30">
-                <div className="flex items-center gap-4">
-                    <button onClick={onCancel} className="p-2 hover:bg-[#2B3139] rounded transition-colors text-[#848E9C] hover:text-[#EAECEF]">
-                        <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 19l-7-7m0 0l7-7m-7 7h18" /></svg>
-                    </button>
-                    <div>
-                        <h1 className="text-xl font-bold text-[#EAECEF] flex items-center gap-2">
-                            Edit Order
-                            <span className="text-sm font-medium text-[#848E9C]">#{formData['Order ID'].substring(0, 8)}</span>
-                        </h1>
-                        <div className="flex items-center gap-3 mt-1">
-                            <span className="text-[11px] font-medium text-[#FCD535] bg-[#FCD535]/10 px-1.5 py-0.5 rounded-sm uppercase tracking-tight">{formData.Team}</span>
-                            <div className="flex items-center gap-1.5">
-                                <label htmlFor="order-date" className="text-[11px] font-medium text-[#848E9C] uppercase">Date:</label>
+            <div className="flex-shrink-0 bg-[#1E2329] border-b border-[#2B3139] px-3 sm:px-6 py-3 lg:py-4 flex flex-col lg:flex-row justify-between items-start lg:items-center gap-4 lg:gap-6 z-[60] shadow-xl relative">
+                <div className="flex flex-col items-start gap-3 lg:gap-5 w-full lg:w-auto">
+                    {/* Header Row: Back Button & Title */}
+                    <div className="flex items-center gap-3 w-full">
+                        <button 
+                            onClick={onCancel} 
+                            className="flex-shrink-0 w-10 h-10 rounded-xl bg-[#0B0E11] border border-[#2B3139] flex items-center justify-center hover:bg-[#2B3139] hover:text-[#FCD535] transition-all text-[#848E9C] shadow-inner"
+                            title="Go back"
+                        >
+                            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M10 19l-7-7m0 0l7-7m-7 7h18" /></svg>
+                        </button>
+                        
+                        <div className="flex items-center gap-3 min-w-0">
+                            <h1 className="text-lg lg:text-xl font-black text-[#EAECEF] uppercase tracking-tighter truncate">Edit Order</h1>
+                            <span className="px-2 py-0.5 rounded-lg bg-[#FCD535]/10 border border-[#FCD535]/20 text-[#FCD535] text-[9px] font-black uppercase tracking-widest flex-shrink-0">
+                                {formData.Team}
+                            </span>
+                        </div>
+                    </div>
+                    
+                    {/* Standard Mobile Meta Layout: Grid for UID/Dist, Full-width for Time */}
+                    <div className="flex flex-col lg:flex-row lg:items-center gap-2 lg:gap-3 w-full">
+                        {/* Row 1: UID & Distribution (Balanced Grid on Mobile) */}
+                        <div className="grid grid-cols-2 gap-2 w-full lg:flex lg:w-auto">
+                            {/* Order ID Badge - Click to Copy */}
+                            <div 
+                                onClick={() => {
+                                    navigator.clipboard.writeText(formData['Order ID']);
+                                    setCopySuccess(true);
+                                    setTimeout(() => setCopySuccess(false), 2000);
+                                }}
+                                className="relative flex items-center gap-2.5 px-3 py-1.5 bg-[#0B0E11] border-2 border-[#2B3139] rounded-none shadow-[2px_2px_0px_0px_rgba(0,0,0,0.3)] cursor-pointer hover:border-[#FCD535] group/uid transition-all h-12 lg:h-13 w-full lg:w-auto"
+                                title="Click to copy full ID"
+                            >
+                                <div className="flex-shrink-0 w-7 h-7 rounded-none bg-[#474D57]/10 flex items-center justify-center border border-[#474D57]/20 group-hover/uid:bg-[#FCD535]/10 group-hover/uid:border-[#FCD535]/30 transition-all">
+                                    <svg className="w-3.5 h-3.5 text-[#474D57] group-hover/uid:text-[#FCD535]" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2.5}><path d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" /></svg>
+                                </div>
+                                <div className="flex flex-col leading-none min-w-0">
+                                    <span className="text-[8px] font-black text-[#474D57] group-hover/uid:text-[#FCD535] uppercase tracking-[0.1em] transition-colors">Order UID</span>
+                                    <span className="text-[10px] font-mono font-black text-[#848E9C] group-hover/uid:text-[#EAECEF] transition-colors mt-0.5 truncate">#{formData['Order ID'].substring(0, 8)}</span>
+                                </div>
+                                
+                                {copySuccess && (
+                                    <div className="absolute -top-10 left-1/2 -translate-x-1/2 bg-[#0ECB81] text-[#181A20] text-[10px] font-black py-1 px-2.5 rounded-none shadow-[4px_4px_0px_0px_rgba(14,203,129,0.2)] animate-bounce whitespace-nowrap z-50 flex items-center gap-1.5 border-2 border-[#181A20]">
+                                        <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={4}><path d="M5 13l4 4L19 7" /></svg>
+                                        COPIED
+                                    </div>
+                                )}
+                            </div>
+
+                            {/* Fulfillment Warehouse Chip */}
+                            <div className="flex items-center gap-2.5 px-3 py-1.5 bg-[#0B0E11] border-2 border-[#2B3139] rounded-none shadow-[2px_2px_0px_0px_rgba(0,0,0,0.3)] h-12 lg:h-13 w-full lg:w-auto">
+                                <div className="flex-shrink-0 w-7 h-7 rounded-none bg-[#FCD535]/10 flex items-center justify-center border border-[#FCD535]/20">
+                                    <svg className="w-3.5 h-3.5 text-[#FCD535]" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2.5}><path d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4" /></svg>
+                                </div>
+                                <div className="flex flex-col leading-none min-w-0">
+                                    <span className="text-[8px] font-black text-[#474D57] uppercase tracking-[0.1em]">Distribution</span>
+                                    <span className="text-[10px] font-black text-[#EAECEF] uppercase tracking-tight mt-0.5 truncate">{formData['Fulfillment Store'] || 'N/A'}</span>
+                                </div>
+                            </div>
+                        </div>
+
+                        {/* Row 2: Order Timestamp (Full-width on Mobile) */}
+                        <div className={`flex items-center gap-3 px-3.5 py-1.5 bg-[#0B0E11] border-2 border-[#2B3139] rounded-none shadow-[2px_2px_0px_0px_rgba(0,0,0,0.3)] group ${!currentUser?.IsSystemAdmin ? 'opacity-70' : 'hover:border-[#FCD535]/40'} transition-all h-12 lg:h-13 w-full lg:w-auto`}>
+                            <div className={`flex-shrink-0 w-7 h-7 rounded-none flex items-center justify-center border transition-colors ${!currentUser?.IsSystemAdmin ? 'bg-[#2B3139]/20 border-[#2B3139]' : 'bg-[#848E9C]/10 border-[#848E9C]/20 group-hover:bg-[#FCD535]/10 group-hover:border-[#FCD535]/20'}`}>
+                                <svg className={`w-3.5 h-3.5 transition-colors ${!currentUser?.IsSystemAdmin ? 'text-[#474D57]' : 'text-[#848E9C] group-hover:text-[#FCD535]'}`} fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2.5}><path d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
+                            </div>
+                            <div className="flex flex-col leading-none flex-grow">
+                                <label htmlFor="order-date" className="text-[8px] font-black text-[#474D57] uppercase tracking-[0.1em] cursor-pointer">Log Timestamp</label>
                                 <input 
                                     id="order-date"
                                     type="datetime-local"
                                     value={formatForInput(formData.Timestamp)}
                                     onChange={handleDateChange}
                                     disabled={!currentUser?.IsSystemAdmin}
-                                    className={`bg-transparent border-none text-[11px] font-bold text-[#EAECEF] p-0 focus:ring-0 h-4 ${!currentUser?.IsSystemAdmin ? 'opacity-50 cursor-not-allowed' : 'hover:text-[#FCD535] cursor-pointer'}`}
+                                    className={`bg-transparent border-none text-[10px] font-black text-[#EAECEF] p-0 focus:ring-0 h-5 w-full mt-0.5 ${!currentUser?.IsSystemAdmin ? 'cursor-not-allowed' : 'hover:text-[#FCD535] cursor-pointer'} tabular-nums text-left`}
                                     style={{ colorScheme: 'dark' }}
                                 />
                             </div>
                         </div>
                     </div>
                 </div>
-                <div className="flex gap-2">
-                    <button onClick={onCancel} className="px-4 py-2 bg-[#2B3139] hover:bg-[#363C44] text-[#EAECEF] text-xs font-medium rounded transition-all">Cancel</button>
-                    <button onClick={handleSubmit} disabled={loading} className="px-6 py-2 bg-[#FCD535] hover:bg-[#F0B90B] text-[#181A20] text-xs font-bold rounded shadow-lg shadow-[#FCD535]/10 active:scale-95 transition-all flex items-center gap-2">
-                        {loading ? 'Saving...' : 'Save Changes'}
+                
+                <div className="flex gap-2.5 w-full lg:w-auto mt-2 lg:mt-0">
+                    <button onClick={onCancel} className="flex-1 lg:flex-none px-4 lg:px-6 py-2.5 bg-[#2B3139] hover:bg-[#363C44] text-[#EAECEF] text-xs font-bold rounded-xl transition-all border border-transparent hover:border-[#848E9C] flex items-center justify-center gap-2">
+                        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path d="M6 18L18 6M6 6l12 12" strokeWidth="2.5" strokeLinecap="round" /></svg>
+                        <span className="lg:inline">Discard</span>
+                    </button>
+                    <button onClick={handleSubmit} disabled={loading} className="flex-[2] lg:flex-none px-6 lg:px-10 py-2.5 bg-[#FCD535] hover:bg-[#F0B90B] text-[#181A20] text-xs font-bold rounded-xl shadow-lg shadow-[#FCD535]/10 active:scale-[0.98] transition-all flex items-center justify-center gap-2 uppercase tracking-wider">
+                        {loading ? 'Saving...' : (
+                            <>
+                                <span className="hidden sm:inline">Update Order</span>
+                                <span className="sm:hidden">Save Changes</span>
+                            </>
+                        )}
+                        {!loading && <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={3}><path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" /></svg>}
                     </button>
                 </div>
             </div>
 
             {error && (
-                <div className="flex-shrink-0 mb-4 mx-4 p-3 bg-[#F6465D]/10 border border-[#F6465D]/20 rounded text-[#F6465D] flex items-center gap-3 animate-shake">
-                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" strokeWidth="2"/></svg>
-                    <span className="font-medium text-xs">{error}</span>
+                <div className="flex-shrink-0 mb-2 mx-3 lg:mx-4 mt-2 p-3 bg-[#F6465D]/10 border border-[#F6465D]/20 rounded-lg text-[#F6465D] flex items-center gap-3 animate-shake">
+                    <svg className="w-4 h-4 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" strokeWidth="2"/></svg>
+                    <span className="font-bold text-[11px] lg:text-xs">{error}</span>
                 </div>
             )}
 
-            {/* Split Content Area - Scrollable container */}
+            {/* Main Content Area - 3-Tier Layout */}
             <div className="flex-1 overflow-y-auto custom-scrollbar">
-                <div className="flex flex-col lg:flex-row gap-4 p-4 min-h-full">
+                <div className="p-3 lg:p-4 flex flex-col gap-3 lg:gap-4 min-h-full max-w-[1600px] mx-auto w-full">
                     
-                    {/* Left: Customer & Logistics */}
-                    <div className="w-full lg:w-[360px] xl:w-[400px] flex-shrink-0">
-                        <EditCustomerPanel 
-                            formData={formData}
-                            appData={appData}
-                            onChange={handleInputChange}
-                            onPageSelect={(val) => {
-                                const selectedPage = appData.pages?.find(p => p.PageName === val);
-                                setFormData(prev => ({ 
+                    {/* Tier 1: Customer & Logistics (Side-by-side) */}
+                    <div className="grid grid-cols-1 lg:grid-cols-12 gap-4">
+                        <div className="lg:col-span-7 xl:col-span-8">
+                            <EditCustomerPanel 
+                                formData={formData}
+                                appData={appData}
+                                onChange={handleInputChange}
+                                onPageSelect={(val) => {
+                                    const selectedPage = appData.pages?.find(p => p.PageName === val);
+                                    setFormData(prev => ({ 
+                                        ...prev, 
+                                        Page: val, 
+                                        TelegramValue: selectedPage?.TelegramValue || prev.TelegramValue,
+                                        'Fulfillment Store': selectedPage?.DefaultStore || prev['Fulfillment Store']
+                                    }));
+                                }}
+                                onProvinceSelect={(val) => {
+                                    setFormData(prev => ({ ...prev, Location: val }));
+                                    setSelectedDistrict(''); setSelectedSangkat('');
+                                }}
+                                onDistrictChange={(val) => { setSelectedDistrict(val); setSelectedSangkat(''); }}
+                                onSangkatChange={setSelectedSangkat}
+                                selectedDistrict={selectedDistrict}
+                                selectedSangkat={selectedSangkat}
+                            />
+                        </div>
+                        <div className="lg:col-span-5 xl:col-span-4">
+                            <EditLogisticsPanel 
+                                formData={formData}
+                                appData={appData}
+                                onChange={handleInputChange}
+                                onShippingMethodSelect={(method: ShippingMethod) => setFormData(prev => ({ 
                                     ...prev, 
-                                    Page: val, 
-                                    TelegramValue: selectedPage?.TelegramValue || prev.TelegramValue,
-                                    'Fulfillment Store': selectedPage?.DefaultStore || prev['Fulfillment Store']
-                                }));
-                            }}
-                            onProvinceSelect={(val) => {
-                                setFormData(prev => ({ ...prev, Location: val }));
-                                setSelectedDistrict(''); setSelectedSangkat('');
-                            }}
-                            onDistrictChange={(val) => { setSelectedDistrict(val); setSelectedSangkat(''); }}
-                            onSangkatChange={setSelectedSangkat}
-                            onShippingMethodSelect={(method: ShippingMethod) => setFormData(prev => ({ 
-                                ...prev, 
-                                'Internal Shipping Method': method.MethodName,
-                                'Internal Shipping Details': method.RequireDriverSelection ? '' : ''
-                            }))}
-                            onDriverSelect={(val) => setFormData(prev => ({ ...prev, 'Internal Shipping Details': val }))}
-                            onBankChange={(e) => {
-                                const val = e.target.value;
-                                setFormData(prev => ({ ...prev, 'Payment Info': val }));
-                                const b = appData.bankAccounts?.find((bank: any) => bank.BankName === val);
-                                setBankLogo(b ? convertGoogleDriveUrl(b.LogoURL) : '');
-                            }}
-                            selectedDistrict={selectedDistrict}
-                            selectedSangkat={selectedSangkat}
-                            bankLogo={bankLogo}
-                        />
+                                    'Internal Shipping Method': method.MethodName,
+                                    'Internal Shipping Details': method.RequireDriverSelection ? '' : ''
+                                }))}
+                                onDriverSelect={(val) => setFormData(prev => ({ ...prev, 'Internal Shipping Details': val }))}
+                                onBankChange={(e) => {
+                                    const val = e.target.value;
+                                    setFormData(prev => ({ ...prev, 'Payment Info': val }));
+                                    const b = appData.bankAccounts?.find((bank: any) => bank.BankName === val);
+                                    setBankLogo(b ? convertGoogleDriveUrl(b.LogoURL) : '');
+                                }}
+                                bankLogo={bankLogo}
+                            />
+                        </div>
                     </div>
 
-                    {/* Right: Products & Summary */}
-                    <div className="flex-1 flex flex-col gap-4">
+                    {/* Tier 2: Items List (Full Width) */}
+                    <div className="w-full relative z-10">
                         <EditProductPanel 
                             products={formData.Products}
                             masterProducts={appData.products}
                             onProductChange={handleProductChange}
                             onAddProduct={handleAddProduct}
+                            onAddMasterProduct={handleAddMasterProduct}
                             onRemoveProduct={handleRemoveProduct}
                             onPreviewImage={previewImage}
                             onScanBarcode={() => setIsScannerVisible(true)}
+                            fulfillmentStatus={formData.FulfillmentStatus}
+                            fulfillmentStore={formData['Fulfillment Store']}
+                            packedBy={formData['Packed By']}
+                            packedTime={formData['Packed Time']}
+                            dispatchedBy={formData['Dispatched By']}
+                            dispatchedTime={formData['Dispatched Time']}
                         />
-                        
+                    </div>
+
+                    {/* Tier 3: Summary (Bottom) */}
+                    <div className="sticky bottom-0 z-30 bg-[#0B0E11] pt-2 -mx-3 lg:-mx-4 px-3 lg:px-4">
                         <EditOrderSummary 
                             subtotal={Number(formData.Subtotal) || 0}
                             grandTotal={Number(formData['Grand Total']) || 0}
                             shippingFee={formData['Shipping Fee (Customer)']}
                             onShippingFeeChange={handleInputChange}
+                            orderDiscount={orderDiscount}
+                            onOrderDiscountChange={handleOrderDiscountChange}
                             onSave={handleSubmit}
                             onDelete={handleDelete}
                             onCancelOrder={handleCancelOrder}

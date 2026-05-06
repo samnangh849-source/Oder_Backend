@@ -1,5 +1,6 @@
 
 import React, { useEffect } from 'react';
+import { createPortal } from 'react-dom';
 
 interface ModalProps {
     isOpen: boolean;
@@ -34,7 +35,7 @@ const Modal: React.FC<ModalProps> = ({ isOpen, onClose, children, maxWidth = 'ma
         onClose();
     };
 
-    return (
+    const modalContent = (
         <div 
             className={`fixed inset-0 bg-[#0B0E11]/80 backdrop-blur-sm flex items-center justify-center ${zIndex} transition-opacity duration-300 modal-overlay ${fullScreen ? 'p-0' : 'p-4 sm:p-6'}`}
             onClick={handleOverlayClick}
@@ -56,6 +57,8 @@ const Modal: React.FC<ModalProps> = ({ isOpen, onClose, children, maxWidth = 'ma
             `}</style>
         </div>
     );
+
+    return createPortal(modalContent, document.body);
 };
 
 export default Modal;

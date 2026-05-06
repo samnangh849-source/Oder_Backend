@@ -136,6 +136,9 @@ const UserSalesPageReport: React.FC<UserSalesPageReportProps> = ({
             });
         }
         filteredOrders.forEach(o => {
+            const fs = o.FulfillmentStatus || o['Fulfillment Status'] || 'Pending';
+            if (fs === 'Cancelled') return;
+
             const page = o.Page || 'Unknown';
             if (!stats[page]) {
                 const info = appData.pages?.find(p => p.PageName === page);

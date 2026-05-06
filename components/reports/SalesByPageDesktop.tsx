@@ -10,6 +10,8 @@ interface SalesByPageDesktopProps {
     onToggleSort: (key: any) => void;
     showAllPages: boolean;
     setShowAllPages: (show: boolean) => void;
+    onlyTelegram?: boolean;
+    setOnlyTelegram?: (show: boolean) => void;
     onExportPDF: () => void;
     isExporting: boolean;
     onPreviewImage: (url: string) => void;
@@ -21,7 +23,7 @@ const MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "
 
 const SalesByPageDesktop: React.FC<SalesByPageDesktopProps> = ({ 
     data, grandTotals, sortConfig, onToggleSort,
-    showAllPages, setShowAllPages, onExportPDF, isExporting, onPreviewImage, onNavigate, onMonthClick
+    showAllPages, setShowAllPages, onlyTelegram, setOnlyTelegram, onExportPDF, isExporting, onPreviewImage, onNavigate, onMonthClick
 }) => {
     const [showBorders, setShowBorders] = useState(true);
     const [isFrozen, setIsFrozen] = useState(false);
@@ -73,6 +75,15 @@ const SalesByPageDesktop: React.FC<SalesByPageDesktopProps> = ({
                              <>
                                 <button onClick={() => setShowAllPages(!showAllPages)} className={`btn !py-1 !px-3 text-[10px] font-black border transition-all ${showAllPages ? 'bg-purple-600 border-purple-500 text-white shadow-lg shadow-purple-900/20' : 'bg-gray-800 border-gray-700 text-gray-400'}`}>
                                     {showAllPages ? 'ALL PAGES' : 'ACTIVE ONLY'}
+                                </button>
+                                <button 
+                                    onClick={() => setOnlyTelegram && setOnlyTelegram(!onlyTelegram)} 
+                                    className={`btn !py-1 !px-3 text-[10px] font-black border transition-all flex items-center gap-1.5 ${onlyTelegram ? 'bg-sky-600 border-sky-500 text-white shadow-lg shadow-sky-900/20' : 'bg-gray-800 border-gray-700 text-gray-400'}`}
+                                >
+                                    <svg className="w-3 h-3" viewBox="0 0 24 24" fill="currentColor">
+                                        <path d="M20.665 3.717l-17.73 6.837c-1.21.486-1.203 1.161-.222 1.462l4.552 1.42l10.532-6.645c.498-.303.953-.14.579.192l-8.533 7.701l-.33 4.955c.488 0 .704-.223.977-.485l2.344-2.279l4.875 3.597c.897.494 1.54.24 1.763-.83l3.194-15.048c.326-1.308-.496-1.898-1.352-1.547z"/>
+                                    </svg>
+                                    TELEGRAM
                                 </button>
                                 <button 
                                     onClick={onExportPDF}

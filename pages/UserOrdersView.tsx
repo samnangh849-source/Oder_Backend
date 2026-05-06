@@ -81,7 +81,13 @@ const UserOrdersView: React.FC<{ team: string; onAdd: () => void }> = ({ team, o
         });
     }, [viewOrders, drilldownData, drilldownFilters, searchQuery]);
 
-    const totalFilteredRevenue = useMemo(() => filteredOrders.reduce((sum, o) => sum + (Number(o['Grand Total']) || 0), 0), [filteredOrders]);
+    const totalFilteredRevenue = useMemo(() => {
+        return filteredOrders.reduce((sum, o) => {
+            const fs = o.FulfillmentStatus || o['Fulfillment Status'] || 'Pending';
+            if (fs === 'Cancelled') return sum;
+            return sum + (Number(o['Grand Total']) || 0);
+        }, 0);
+    }, [filteredOrders]);
 
     const topTeams = useMemo(() => {
         const teamStats: Record<string, number> = {};

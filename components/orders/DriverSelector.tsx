@@ -19,30 +19,14 @@ const DriverSelector: React.FC<DriverSelectorProps> = ({ drivers = [], selectedD
     };
 
     return (
-        <div className="w-full py-4">
-            <style>{`
-                @keyframes float-badge {
-                    0%, 100% { transform: translateY(0); }
-                    50% { transform: translateY(-3px); }
-                }
-                .animate-float-badge {
-                    animation: float-badge 3s ease-in-out infinite;
-                }
-                .glass-card-hover {
-                    box-shadow: 0 8px 32px 0 rgba(31, 38, 135, 0.37);
-                    backdrop-filter: blur(4px);
-                    -webkit-backdrop-filter: blur(4px);
-                    border: 1px solid rgba(255, 255, 255, 0.18);
-                }
-            `}</style>
-            
+        <div className="w-full py-2">
             {safeDrivers.length === 0 ? (
-                <div className="flex flex-col items-center justify-center p-8 border border-white/10 rounded-[2rem] bg-white/[0.02] backdrop-blur-xl">
-                    <div className="w-10 h-10 border-2 border-gray-700 border-t-cyan-500 rounded-full animate-spin mb-3"></div>
-                    <p className="text-gray-500 font-black uppercase tracking-[0.2em] text-[10px]">NO DRIVERS DETECTED</p>
+                <div className="flex flex-col items-center justify-center p-8 border-2 border-dashed border-[#2B3139] rounded-none bg-[#0B0E11]/50">
+                    <div className="w-10 h-10 border-4 border-[#2B3139] border-t-[#FCD535] rounded-none animate-spin mb-4"></div>
+                    <p className="text-[#474D57] font-black uppercase tracking-[0.2em] text-[10px] italic">NO DRIVERS DETECTED</p>
                 </div>
             ) : (
-                <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-3 sm:gap-4 p-2">
+                <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-3 p-1">
                     {safeDrivers.map((d) => (
                         <DriverCard 
                             key={d.DriverName}
@@ -68,58 +52,58 @@ const DriverCard: React.FC<DriverCardProps> = ({ driver, isSelected, onSelect })
         <div
             onClick={onSelect}
             className={`
-                relative group cursor-pointer transition-all duration-500 rounded-[2rem] p-1.5 
+                relative group cursor-pointer transition-all duration-200 rounded-none p-1 border-2
                 ${isSelected 
-                    ? 'bg-gradient-to-b from-blue-500 to-indigo-600 shadow-[0_10px_40px_rgba(59,130,246,0.4)] scale-[1.03] sm:scale-105 z-10' 
-                    : 'bg-gray-800/40 hover:bg-gray-700/60 hover:scale-[1.02] hover:shadow-2xl border border-white/5'
+                    ? 'bg-[#FCD535] border-[#FCD535] shadow-[4px_4px_0px_0px_rgba(252,213,53,0.3)] z-10' 
+                    : 'bg-[#0B0E11] border-[#2B3139] hover:border-[#FCD535]/50'
                 }
             `}
         >
             <div className={`
-                relative h-44 sm:h-48 w-full rounded-[1.5rem] overflow-hidden transition-all duration-500
-                ${isSelected ? 'ring-[3px] ring-white/20 shadow-inner' : ''}
+                relative h-44 sm:h-48 w-full rounded-none overflow-hidden transition-all duration-300
+                ${isSelected ? 'border-2 border-[#181A20]/20' : ''}
             `}>
                 {/* Background Image */}
                 <img 
                     src={convertGoogleDriveUrl(driver.ImageURL)} 
-                    className="w-full h-full object-cover object-top transition-transform duration-700 group-hover:scale-110"
+                    className={`w-full h-full object-cover object-top transition-all duration-500 ${isSelected ? 'scale-105 grayscale-0' : 'grayscale group-hover:grayscale-0 group-hover:scale-105'}`}
                     alt={driver.DriverName} 
                 />
                 
                 {/* Gradient Overlays */}
                 <div className={`
-                    absolute inset-0 transition-colors duration-500
+                    absolute inset-0 transition-opacity duration-300
                     ${isSelected 
-                        ? 'bg-gradient-to-t from-indigo-900/90 via-blue-900/30 to-transparent' 
-                        : 'bg-gradient-to-t from-[#0f172a] via-[#0f172a]/40 to-transparent opacity-90 group-hover:opacity-100'
+                        ? 'bg-gradient-to-t from-[#181A20] via-transparent to-transparent opacity-60' 
+                        : 'bg-gradient-to-t from-[#0B0E11] via-transparent to-transparent opacity-80 group-hover:opacity-40'
                     }
                 `}></div>
 
                 {/* Selected Checkmark Badge */}
                 {isSelected && (
-                    <div className="absolute top-3 right-3 bg-white text-blue-600 rounded-full p-1 shadow-[0_0_15px_rgba(255,255,255,0.5)] animate-fade-in-scale">
-                        <CheckCircle2 className="w-5 h-5 sm:w-6 sm:h-6" />
+                    <div className="absolute top-2 right-2 bg-[#181A20] text-[#FCD535] p-1 shadow-lg animate-fade-in-scale">
+                        <CheckCircle2 className="w-5 h-5" strokeWidth={3} />
                     </div>
                 )}
 
                 {/* Status Indicator (Top Left) */}
                 <div className={`
-                    absolute top-3 left-3 flex items-center gap-1.5 px-2.5 py-1 rounded-full border backdrop-blur-md transition-all duration-500
-                    ${isSelected ? 'bg-black/20 border-white/20 animate-float-badge' : 'bg-black/40 border-white/10 opacity-70 group-hover:opacity-100'}
+                    absolute top-2 left-2 flex items-center gap-1.5 px-2 py-0.5 border-2 backdrop-blur-md transition-all duration-200
+                    ${isSelected ? 'bg-[#181A20] border-[#181A20]/10' : 'bg-[#0B0E11]/80 border-[#2B3139] opacity-70 group-hover:opacity-100'}
                 `}>
-                    <div className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse shadow-[0_0_8px_#34d399]"></div>
-                    <span className="text-[7.5px] sm:text-[8px] font-black text-emerald-300 uppercase tracking-widest leading-none">
+                    <div className={`w-2 h-2 rounded-none ${isSelected ? 'bg-[#FCD535]' : 'bg-[#0ECB81]'} animate-pulse shadow-[0_0_8px_currentColor]`}></div>
+                    <span className={`text-[8px] font-black uppercase tracking-widest leading-none ${isSelected ? 'text-[#FCD535]' : 'text-[#0ECB81]'}`}>
                         Ready
                     </span>
                 </div>
 
                 {/* Driver Name (Bottom) */}
-                <div className="absolute bottom-0 left-0 right-0 p-4 sm:p-5 flex flex-col items-center">
+                <div className="absolute bottom-0 left-0 right-0 p-3 flex flex-col items-center">
                     <h3 className={`
-                        text-xs sm:text-sm font-black uppercase tracking-[0.15em] text-center transition-all duration-300
+                        text-[11px] sm:text-xs font-black uppercase tracking-widest text-center transition-all duration-200
                         ${isSelected 
-                            ? 'text-white drop-shadow-[0_2px_10px_rgba(255,255,255,0.4)] transform -translate-y-1' 
-                            : 'text-gray-300 group-hover:text-white group-hover:-translate-y-1'
+                            ? 'text-white drop-shadow-md' 
+                            : 'text-[#848E9C] group-hover:text-[#EAECEF]'
                         }
                     `}>
                         {driver.DriverName}
@@ -127,8 +111,8 @@ const DriverCard: React.FC<DriverCardProps> = ({ driver, isSelected, onSelect })
                     
                     {/* Active Bar indicator underneath name */}
                     <div className={`
-                        w-6 h-1 mt-2 rounded-full transition-all duration-500
-                        ${isSelected ? 'bg-cyan-400 shadow-[0_0_10px_#22d3ee] scale-100' : 'bg-transparent scale-0'}
+                        w-8 h-1 mt-1 rounded-none transition-all duration-300
+                        ${isSelected ? 'bg-[#FCD535] scale-100' : 'bg-transparent scale-0'}
                     `}></div>
                 </div>
             </div>

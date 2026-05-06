@@ -37,6 +37,9 @@ const SalesByTeamPage: React.FC<SalesByTeamPageProps> = ({ orders, onBack }) => 
     const teamStats = useMemo(() => {
         const stats: Record<string, any> = {};
         orders.forEach(order => {
+            const fs = order.FulfillmentStatus || order['Fulfillment Status'] || 'Pending';
+            if (fs === 'Cancelled') return;
+
             let teamName = order.Team || (order.User && appData.users?.find(u => u.UserName === order.User)?.Team?.split(',')[0].trim()) || 'Unassigned';
             if (!stats[teamName]) {
                 stats[teamName] = { name: teamName, revenue: 0, profit: 0, orders: 0, members: new Set() };

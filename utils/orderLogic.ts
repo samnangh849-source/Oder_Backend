@@ -11,12 +11,16 @@ export const formatForInput = (timestamp: string): string => {
     return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
 };
 
-// Recalculate totals based on products and shipping fee
-export const recalculateTotals = (products: Product[], shippingFee: number): Partial<ParsedOrder> => {
+// Recalculate totals based on products, shipping fee, and optional order-level discount
+export const recalculateTotals = (products: Product[], shippingFee: number, orderDiscount: number = 0): Partial<ParsedOrder> => {
     const subtotal = products.reduce((sum, p) => sum + (p.total || 0), 0);
-    const grandTotal = subtotal + shippingFee;
+    // Grand Total is (Subtotal + Shipping Fee) - Order Discount
+    const grandTotal = Math.max(0, subtotal + shippingFee - orderDiscount);
     const totalProductCost = products.reduce((sum, p) => sum + ((p.cost || 0) * (p.quantity || 0)), 0);
-    const totalDiscount = products.reduce((sum, p) => sum + ((p.originalPrice - p.finalPrice) * p.quantity), 0);
+    
+    // Total Discount is the sum of product discounts + the global order discount
+    const productDiscounts = products.reduce((sum, p) => sum + ((p.originalPrice - p.finalPrice) * p.quantity), 0);
+    const totalDiscount = productDiscounts + orderDiscount;
     
     return { 
         Subtotal: subtotal, 
