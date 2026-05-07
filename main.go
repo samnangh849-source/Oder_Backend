@@ -99,60 +99,60 @@ func generateShortID() string {
 
 func mapToDBColumn(key string) string {
 	specialCases := map[string]string{
-		"Order ID":                  "order_id",
-		"Discount ($)":              "discount_usd",
-		"Total Product Cost ($)":    "total_product_cost",
-		"Shipping Fee (Customer)":   "shipping_fee_customer",
-		"Products":                  "products_json",
-		"Products (JSON)":           "products_json",
-		"Telegram Message ID 1":     "telegram_message_id1",
-		"Telegram Message ID 2":     "telegram_message_id2",
-		"Telegram Message ID 3":     "telegram_message_id3",
-		"Customer Name":             "customer_name",
-		"Customer Phone":            "customer_phone",
-		"Location":                  "location",
-		"Address Details":           "address_details",
-		"Fulfillment Status":        "fulfillment_status",
-		"fulfillmentStatus":         "fulfillment_status",
-		"FulfillmentStatus":         "fulfillment_status",
-		"Fulfillment Store":         "fulfillment_store",
-		"fulfillmentStore":          "fulfillment_store",
-		"FulfillmentStore":          "fulfillment_store",
-		"Package Photo":             "package_photo_url",
-		"packagePhoto":              "package_photo_url",
-		"PackagePhoto":              "package_photo_url",
-		"Delivery Photo URL":        "delivery_photo_url",
-		"deliveryPhoto":             "delivery_photo_url",
-		"DeliveryPhoto":             "delivery_photo_url",
-		"Cancel Reason":             "cancel_reason",
-		"Return Reason":             "return_reason",
-		"Return Photo":              "return_photo_url",
-		"Return Received By":        "return_received_by",
-		"Return Received Time":      "return_received_time",
-		"Driver Name":               "driver_name",
-		"Tracking Number":           "tracking_number",
-		"Dispatched Time":           "dispatched_time",
-		"Dispatched By":             "dispatched_by",
-		"Delivered Time":            "delivered_time",
-		"Packed By":                 "packed_by",
-		"Packed Time":               "packed_time",
-		"IsVerified":                "is_verified",
-		"UserName":                  "user_name",
-		"FullName":                  "full_name",
-		"ProfilePictureURL":         "profile_picture_url",
-		"IsSystemAdmin":             "is_system_admin",
-		"TelegramUsername":          "telegram_username",
-		"ImageURL":                  "image_url",
-		"Image URL":                 "image_url",
-		"LogosURL":                  "logo_url",
-		"Logos URL":                 "logo_url",
-		"LogoURL":                   "logo_url",
-		"Thumbnail":                 "thumbnail",
-		"Thumbnail URL":             "thumbnail",
-		"ID":                        "id",
-		"Key":                       "config_key",
-		"Value":                     "config_value",
-		"Description":               "description",
+		"Order ID":                "order_id",
+		"Discount ($)":            "discount_usd",
+		"Total Product Cost ($)":  "total_product_cost",
+		"Shipping Fee (Customer)": "shipping_fee_customer",
+		"Products":                "products_json",
+		"Products (JSON)":         "products_json",
+		"Telegram Message ID 1":   "telegram_message_id1",
+		"Telegram Message ID 2":   "telegram_message_id2",
+		"Telegram Message ID 3":   "telegram_message_id3",
+		"Customer Name":           "customer_name",
+		"Customer Phone":          "customer_phone",
+		"Location":                "location",
+		"Address Details":         "address_details",
+		"Fulfillment Status":      "fulfillment_status",
+		"fulfillmentStatus":       "fulfillment_status",
+		"FulfillmentStatus":       "fulfillment_status",
+		"Fulfillment Store":       "fulfillment_store",
+		"fulfillmentStore":        "fulfillment_store",
+		"FulfillmentStore":        "fulfillment_store",
+		"Package Photo":           "package_photo_url",
+		"packagePhoto":            "package_photo_url",
+		"PackagePhoto":            "package_photo_url",
+		"Delivery Photo URL":      "delivery_photo_url",
+		"deliveryPhoto":           "delivery_photo_url",
+		"DeliveryPhoto":           "delivery_photo_url",
+		"Cancel Reason":           "cancel_reason",
+		"Return Reason":           "return_reason",
+		"Return Photo":            "return_photo_url",
+		"Return Received By":      "return_received_by",
+		"Return Received Time":    "return_received_time",
+		"Driver Name":             "driver_name",
+		"Tracking Number":         "tracking_number",
+		"Dispatched Time":         "dispatched_time",
+		"Dispatched By":           "dispatched_by",
+		"Delivered Time":          "delivered_time",
+		"Packed By":               "packed_by",
+		"Packed Time":             "packed_time",
+		"IsVerified":              "is_verified",
+		"UserName":                "user_name",
+		"FullName":                "full_name",
+		"ProfilePictureURL":       "profile_picture_url",
+		"IsSystemAdmin":           "is_system_admin",
+		"TelegramUsername":        "telegram_username",
+		"ImageURL":                "image_url",
+		"Image URL":               "image_url",
+		"LogosURL":                "logo_url",
+		"Logos URL":               "logo_url",
+		"LogoURL":                 "logo_url",
+		"Thumbnail":               "thumbnail",
+		"Thumbnail URL":           "thumbnail",
+		"ID":                      "id",
+		"Key":                     "config_key",
+		"Value":                   "config_value",
+		"Description":             "description",
 	}
 
 	// Standard mapping logic
@@ -313,6 +313,7 @@ type Claims = backend.Claims
 
 var generateJWT = backend.GenerateJWT
 var handleLogin = backend.HandleLogin
+
 func DBMiddleware() gin.HandlerFunc {
 	return func(c *gin.Context) {
 		if backend.DB == nil {
@@ -326,6 +327,7 @@ func DBMiddleware() gin.HandlerFunc {
 		c.Next()
 	}
 }
+
 var AuthMiddleware = backend.AuthMiddleware
 var AdminOnlyMiddleware = backend.AdminOnlyMiddleware
 var RequirePermission = backend.RequirePermission
@@ -705,22 +707,40 @@ func handleGetStaticData(c *gin.Context) {
 		func() { var d []Store; backend.DB.Find(&d); mu.Lock(); result["stores"] = d; mu.Unlock() },
 		func() { var d []TeamPage; backend.DB.Find(&d); mu.Lock(); result["pages"] = d; mu.Unlock() },
 		func() { var d []Location; backend.DB.Find(&d); mu.Lock(); result["locations"] = d; mu.Unlock() },
-		func() { var d []ShippingMethod; backend.DB.Find(&d); mu.Lock(); result["shippingMethods"] = d; mu.Unlock() },
+		func() {
+			var d []ShippingMethod
+			backend.DB.Find(&d)
+			mu.Lock()
+			result["shippingMethods"] = d
+			mu.Unlock()
+		},
 		func() { var d []Color; backend.DB.Find(&d); mu.Lock(); result["colors"] = d; mu.Unlock() },
 		func() { var d []Driver; backend.DB.Find(&d); mu.Lock(); result["drivers"] = d; mu.Unlock() },
 		func() { var d []BankAccount; backend.DB.Find(&d); mu.Lock(); result["bankAccounts"] = d; mu.Unlock() },
 		func() { var d []PhoneCarrier; backend.DB.Find(&d); mu.Lock(); result["phoneCarriers"] = d; mu.Unlock() },
 		func() { var d []Inventory; backend.DB.Find(&d); mu.Lock(); result["inventory"] = d; mu.Unlock() },
-		func() { var d []StockTransfer; backend.DB.Find(&d); mu.Lock(); result["stockTransfers"] = d; mu.Unlock() },
+		func() {
+			var d []StockTransfer
+			backend.DB.Find(&d)
+			mu.Lock()
+			result["stockTransfers"] = d
+			mu.Unlock()
+		},
 		func() { var d []ReturnItem; backend.DB.Find(&d); mu.Lock(); result["returns"] = d; mu.Unlock() },
 		func() { var d []Role; backend.DB.Find(&d); mu.Lock(); result["roles"] = d; mu.Unlock() },
-		func() { var d []RolePermission; backend.DB.Find(&d); mu.Lock(); result["rolePermissions"] = d; mu.Unlock() },
+		func() {
+			var d []RolePermission
+			backend.DB.Find(&d)
+			mu.Lock()
+			result["rolePermissions"] = d
+			mu.Unlock()
+		},
 		func() {
 			var d []User
 			// Use backend.DB directly and explicit table name to avoid cross-package naming issues
 			if err := backend.DB.Table("users").Find(&d).Error; err != nil {
 				log.Printf("⚠️ Failed to fetch users in StaticData: %v", err)
-				d = []User{} 
+				d = []User{}
 			}
 			log.Printf("📊 StaticData: Fetched %d users from backend.DB", len(d))
 			for i := range d {
@@ -738,8 +758,20 @@ func handleGetStaticData(c *gin.Context) {
 			mu.Unlock()
 		},
 		func() { var d []Movie; backend.DB.Find(&d); mu.Lock(); result["movies"] = d; mu.Unlock() },
-		func() { var d []TelegramTemplate; backend.DB.Find(&d); mu.Lock(); result["telegramTemplates"] = d; mu.Unlock() },
-		func() { var d []RevenueEntry; backend.DB.Find(&d); mu.Lock(); result["revenueEntries"] = d; mu.Unlock() },
+		func() {
+			var d []TelegramTemplate
+			backend.DB.Find(&d)
+			mu.Lock()
+			result["telegramTemplates"] = d
+			mu.Unlock()
+		},
+		func() {
+			var d []RevenueEntry
+			backend.DB.Find(&d)
+			mu.Lock()
+			result["revenueEntries"] = d
+			mu.Unlock()
+		},
 		func() {
 			var d []EditLog
 			backend.DB.Limit(500).Order("timestamp desc").Find(&d)
@@ -1030,9 +1062,9 @@ func handleAdminUpdateOrder(c *gin.Context) {
 			c.JSON(http.StatusBadRequest, gin.H{"status": "error", "message": "ស្ថានភាពបច្ចុប្បន្នមិនត្រឹមត្រូវ"})
 			return
 		}
-		
+
 		// ✅ Support re-packing / self-updates (allow same status transition)
-		transitionValid := (newStatus == currentStatus) 
+		transitionValid := (newStatus == currentStatus)
 		if !transitionValid {
 			for _, s := range allowed {
 				if s == newStatus {
@@ -1198,15 +1230,15 @@ func handleAdminUpdateOrder(c *gin.Context) {
 								if err := backend.DB.Table("returns").Create(&returnItem).Error; err == nil {
 									// Sync with Google Sheets
 									go enqueueSync("addRow", map[string]interface{}{
-										"Timestamp":    returnItem.Timestamp,
-										"OrderID":      returnItem.OrderID,
-										"StoreName":    returnItem.StoreName,
-										"Barcode":      returnItem.Barcode,
-										"ProductName":  returnItem.ProductName,
-										"Quantity":     returnItem.Quantity,
-										"Reason":       returnItem.Reason,
-										"HandledBy":    returnItem.HandledBy,
-										"Status":       returnItem.Status,
+										"Timestamp":   returnItem.Timestamp,
+										"OrderID":     returnItem.OrderID,
+										"StoreName":   returnItem.StoreName,
+										"Barcode":     returnItem.Barcode,
+										"ProductName": returnItem.ProductName,
+										"Quantity":    returnItem.Quantity,
+										"Reason":      returnItem.Reason,
+										"HandledBy":   returnItem.HandledBy,
+										"Status":      returnItem.Status,
 									}, "Returns", nil)
 								}
 							}
@@ -1219,7 +1251,7 @@ func handleAdminUpdateOrder(c *gin.Context) {
 		// ✅ Update ReturnItems status when received
 		if _, hasReceivedBy := r.NewData["Return Received By"]; hasReceivedBy {
 			backend.DB.Table("returns").Where("order_id = ?", r.OrderID).Update("status", "Received")
-			
+
 			// Sync with Google Sheets
 			go enqueueSync("updateSheet", map[string]interface{}{
 				"Status": "Received",
@@ -1238,7 +1270,7 @@ func handleAdminUpdateOrder(c *gin.Context) {
 				sheetData[k] = v
 			}
 		}
-		
+
 		var current Order
 		if err := backend.DB.Where("UPPER(TRIM(order_id)) = UPPER(TRIM(?))", r.OrderID).First(&current).Error; err == nil {
 			// Helper to fill missing fields from DB if not in the request
@@ -1398,7 +1430,7 @@ func handleAdminUpdateSheet(c *gin.Context) {
 				oldName := oldRole.RoleName
 				if oldName != "" && oldName != newName {
 					log.Printf("🔄 Cascading Role Update: %s -> %s", oldName, newName)
-					
+
 					// 1. Update RolePermissions (by name and ID)
 					backend.DB.Table("role_permissions").Where("LOWER(TRIM(role)) = LOWER(TRIM(?))", oldName).Updates(map[string]interface{}{
 						"role":    newName,
@@ -1422,7 +1454,7 @@ func handleAdminUpdateSheet(c *gin.Context) {
 							backend.DB.Table("users").Where("user_name = ?", u.UserName).Update("role", newRoleList)
 						}
 					}
-					
+
 					// 3. Trigger full sheet re-sync for these tables to keep Google Sheets in sync
 					go func() {
 						time.Sleep(2 * time.Second) // Wait for DB updates to settle
@@ -1953,14 +1985,16 @@ func handleSheetsWebhook(c *gin.Context) {
 	if tableName == "orders" {
 		if newStatusRaw, hasNewStatus := mappedData["fulfillment_status"]; hasNewStatus {
 			newStatus := fmt.Sprintf("%v", newStatusRaw)
-			
+
 			var currentOrder Order
 			// Using TRIM and UPPER for robust matching
 			whereClause := fmt.Sprintf("UPPER(TRIM(%s)) = UPPER(TRIM(?))", pkCol)
 			if err := backend.DB.Where(whereClause, pkVal).Select("fulfillment_status").First(&currentOrder).Error; err == nil {
 				cur := strings.TrimSpace(currentOrder.FulfillmentStatus)
-				if cur == "" { cur = "Pending" }
-				
+				if cur == "" {
+					cur = "Pending"
+				}
+
 				statusWeight := map[string]int{
 					"Pending":       1,
 					"Processing":    2,
@@ -1985,8 +2019,8 @@ func handleSheetsWebhook(c *gin.Context) {
 		// --- Fulfillment Data Protection (Crucial for preventing race conditions) ---
 		// We protect these fields from being cleared (made empty) by stale sheet webhooks.
 		protectedFields := []string{
-			"package_photo_url", "delivery_photo_url", 
-			"packed_by", "packed_time", 
+			"package_photo_url", "delivery_photo_url",
+			"packed_by", "packed_time",
 			"driver_name", "tracking_number",
 			"dispatched_by", "dispatched_time",
 			"delivered_time",
@@ -1998,7 +2032,7 @@ func handleSheetsWebhook(c *gin.Context) {
 		for _, field := range protectedFields {
 			if incomingVal, hasVal := mappedData[field]; hasVal {
 				incomingStr := strings.TrimSpace(fmt.Sprintf("%v", incomingVal))
-				
+
 				// If incoming data is empty, check if we already have data in DB
 				if incomingStr == "" || incomingStr == "<nil>" || incomingStr == "undefined" {
 					if !hasFetchedExisting {
@@ -2010,15 +2044,24 @@ func handleSheetsWebhook(c *gin.Context) {
 					// Get existing value for this field
 					existingStr := ""
 					switch field {
-					case "package_photo_url": existingStr = existingOrder.PackagePhotoURL
-					case "delivery_photo_url": existingStr = existingOrder.DeliveryPhotoURL
-					case "packed_by": existingStr = existingOrder.PackedBy
-					case "packed_time": existingStr = existingOrder.PackedTime
-					case "driver_name": existingStr = existingOrder.DriverName
-					case "tracking_number": existingStr = existingOrder.TrackingNumber
-					case "dispatched_by": existingStr = existingOrder.DispatchedBy
-					case "dispatched_time": existingStr = existingOrder.DispatchedTime
-					case "delivered_time": existingStr = existingOrder.DeliveredTime
+					case "package_photo_url":
+						existingStr = existingOrder.PackagePhotoURL
+					case "delivery_photo_url":
+						existingStr = existingOrder.DeliveryPhotoURL
+					case "packed_by":
+						existingStr = existingOrder.PackedBy
+					case "packed_time":
+						existingStr = existingOrder.PackedTime
+					case "driver_name":
+						existingStr = existingOrder.DriverName
+					case "tracking_number":
+						existingStr = existingOrder.TrackingNumber
+					case "dispatched_by":
+						existingStr = existingOrder.DispatchedBy
+					case "dispatched_time":
+						existingStr = existingOrder.DispatchedTime
+					case "delivered_time":
+						existingStr = existingOrder.DeliveredTime
 					}
 
 					if existingStr != "" {
@@ -2090,7 +2133,7 @@ func handleSheetsWebhook(c *gin.Context) {
 
 			if team != "" {
 				log.Printf("📢 [Webhook Sync] Triggering Telegram Edit for Order %v (Team: %s)", orderId, team)
-				
+
 				// Prepare updatedFields from rowData to pass along (Apps Script uses this to UpdateSheets first)
 				updatedFields := make(map[string]interface{})
 				for k, v := range rowData {
@@ -2130,10 +2173,10 @@ func main() {
 	backend.UploadMapToDBColumnFunc = mapToDBColumn
 	backend.UploadGetTableNameFunc = getTableName
 	backend.UploadIsValidOrderColumnFunc = isValidOrderColumn
-	
+
 	// Pre-initialize UploadFolderID from environment for immediate use
 	backend.UploadFolderID = os.Getenv("UPLOAD_FOLDER_ID")
-	
+
 	jwtSecretEnv := os.Getenv("JWT_SECRET")
 	if jwtSecretEnv == "" {
 		jwtSecretEnv = "change-me-in-production"
@@ -2186,8 +2229,8 @@ func main() {
 		MaxAge:           12 * time.Hour,
 	}))
 
-	r.GET("/ping", func(c *gin.Context) { 
-		c.JSON(200, gin.H{"status": "ok", "message": "pong"}) 
+	r.GET("/ping", func(c *gin.Context) {
+		c.JSON(200, gin.H{"status": "ok", "message": "pong"})
 	})
 
 	// Apply DBMiddleware to all /api routes except root health checks
@@ -2212,7 +2255,7 @@ func main() {
 		protected.GET("/proxy-image", backend.HandleProxyImage)
 		protected.GET("/permissions", handleGetUserPermissions)
 		protected.GET("/roles", handleGetRoles)
-		
+
 		protected.GET("/teams/shipping-costs", RequirePermission("view_revenue"), handleGetGlobalShippingCosts)
 
 		chat := protected.Group("/chat")
@@ -2382,7 +2425,7 @@ func handleCloseShift(c *gin.Context) {
 	shift.ClosedAt = &now
 	shift.ClosedBy = shift.OpenedBy // The one who opened it is the one who closes it usually, or current user?
 	// User specified "គណនីដែលគាត់ជាអ្នកបើកវេនគឺគាត់ នឹងឃើញមានមុខងារ បិទវេន"
-	
+
 	shift.SummaryJSON = r.Summary
 
 	if err := backend.DB.Save(&shift).Error; err != nil {
@@ -2430,9 +2473,9 @@ func sendShiftTelegramNotification(storeName string, shiftType string, userName 
 	now := time.Now().In(ict).Format("03:04 PM")
 	var text string
 	if shiftType == "Open" {
-		text = fmt.Sprintf("👋 ជម្រាបសួរ! ខ្ញុំ %s (Store Assistant)\n\n📍 សាខា/ឃ្លាំង: *%s*\n🟢 បើកវេនម៉ោង %s", userName, storeName, now)
+		text = fmt.Sprintf("👋 ជម្រាបសួរ! ខ្ញុំ %s (Store Assistant)\n\n📍 សាខា: *%s*\n🟢 បើកវេនម៉ោង %s", userName, storeName, now)
 	} else {
-		text = fmt.Sprintf("👋 ជម្រាបសួរ! ខ្ញុំ %s (Store Assistant)\n\n📍 សាខា/ឃ្លាំង: *%s*\n🔴 បិទវេនម៉ោង %s\n\n📊 %s", userName, storeName, now, summary)
+		text = fmt.Sprintf("👋 ជម្រាបសួរ! ខ្ញុំ %s (Store Assistant)\n\n📍 សាខា: *%s*\n🔴 បិទវេនម៉ោង %s\n\n📊 %s", userName, storeName, now, summary)
 	}
 
 	apiURL := ""
@@ -2475,7 +2518,7 @@ func sendShiftTelegramNotification(storeName string, shiftType string, userName 
 		return
 	}
 	defer resp.Body.Close()
-	
+
 	var resData map[string]interface{}
 	json.NewDecoder(resp.Body).Decode(&resData)
 	if ok, _ := resData["ok"].(bool); !ok {
@@ -2486,4 +2529,3 @@ func sendShiftTelegramNotification(storeName string, shiftType string, userName 
 }
 
 // នៅពេលមិនទាន់ capture រូបភាព(AIM and Focus)គឺពេលដែលកំពុងScan រក QR Code គឺប្រព័ន្ធត្រូវ zoom និង tracking គ្រប់កន្លែងដើម្បីស្វែង QR Code ដើម្បីល្បឿនចាប់យក QR Code​លឿនខ្លាំង ទោះបីដាក់នៅឆ្ងាយក៏ប្រព័ន្ធចាប់បាន
-
