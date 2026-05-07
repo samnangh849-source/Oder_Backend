@@ -57,3 +57,42 @@ Search Product Section:
 
 
   Please Improve Functions (Cancel & Return) Order and Confirming
+
+
+
+  បានកែសម្រួល Logic រួចរាល់ហើយ ដើម្បីឱ្យ Order ដែលបានបោះបង់ (Cancelled) ផ្លាស់ទីទៅកាន់ផ្ទាំង Canceled ភ្លាមៗបន្ទាប់ពីអ្នកចុចប៊ូតុង "បញ្ជាក់ការបោះបង់" ឬ "ហែកកញ្ចប់"៖
+
+  ការផ្លាស់ប្តូរ៖
+   1. Tab Movement: នៅពេលអ្នកចុចបញ្ជាក់លើការបោះបង់ (ដែលកម្មវិធីសម្គាល់ថាបាន "Unpacked" ឬទុកឥវ៉ាន់ចូលស្តុកវិញរួចរាល់)៖
+       * Order នោះនឹងបាត់ចេញពីផ្ទាំង Pending ឬ Ready to Ship។
+       * វានឹងផ្លាស់ទីទៅបង្ហាញនៅក្នុងផ្ទាំង Canceled (ផ្ទាំងចុងក្រោយគេ) ដោយស្វ័យប្រវត្តិ។
+   2. Visual Feedback: ចំនួនលេខ (Badge count) នៅលើ Tab ក៏នឹងត្រូវបាន Update ភ្លាមៗផងដែរ ដើម្បីឱ្យអ្នកដឹងថា Order ត្រូវបានរៀបចំទុកដាក់រួចរាល់។
+
+  ឥឡូវនេះ ប្រព័ន្ធនឹងជួយឱ្យអ្នកគ្រប់គ្រងការវេចខ្ចប់កាន់តែច្បាស់លាស់ ដោយបែងចែករវាង Order ដែល "កំពុងរង់ចាំហែកកញ្ចប់" និង "Order ដែលបានរៀបចំរួចរាល់"។
+
+
+
+
+  ចំពោះ App Script ក៏ត្រូវបានរៀបចំឱ្យស៊ីគ្នា ១០០% ជាមួយនឹងមុខងារថ្មីនេះផងដែរ។ នៅពេលមានការ Sync ពី Backend ទៅកាន់ Google Sheets៖
+
+  ១. ការរៀបចំរចនាសម្ព័ន្ធ Sheet (Setup.gs)
+  នៅក្នុង SYSTEM_STRUCTURE នៃ Sheet AllOrders គឺមាន Columns សម្រាប់ទទួលទិន្នន័យទាំងនេះរួចជាស្រេច៖
+   * Cancel Reason
+   * Return Reason
+   * Return Photo
+   * Return Received By
+   * Return Received Time
+
+  ២. ការ Update ទិន្នន័យ (code_gs_api.gs)
+  នៅក្នុង File code_gs_api.gs មុខងារ handleUpdateSheet មាន aliasMap ដែលឆ្លាតវៃក្នុងការចាប់យក Key ពី Backend មកដាក់ក្នុង Column ត្រឹមត្រូវ៖
+   * វានឹងស្វែងរក Column Cancel Reason ឬ Return Received By ដោយស្វ័យប្រវត្តិ (មិនថា Backend ផ្ញើមកជាអក្សរតូច ឬធំ ឬមាន Space ក៏ដោយ)។
+   * នៅពេលអ្នកចុច "ហែកកញ្ចប់" Backend នឹងផ្ញើ Action updateOrderTelegram ទៅកាន់ App Script។
+   * App Script នឹងធ្វើការ Update ទាំងក្នុង Sheet AllOrders និង Sheet តាមក្រុមនីមួយៗ (ឧទាហរណ៍៖ Orders_TeamA)។
+
+  ៣. ការ Update ទៅកាន់ Telegram
+  អ្វីដែលពិសេសនោះគឺ នៅក្នុង updateOrderTelegram:
+   * វានឹង Update ព័ត៌មាននៅក្នុង Telegram Group ផងដែរ។
+   * ប្រសិនបើ Order ត្រូវបាន Cancel វានឹងប្តូររូបរាងសារ (Message) ទៅជា Monospace (អក្សររាងដាច់ៗ) និងបន្ថែម Emoji 🚫 ដើម្បីឱ្យក្រុមការងារងាយស្រួលចំណាំថា Order នេះលែងដំណើរការហើយ។
+
+  សង្ខេប៖ អ្នកមិនចាំបាច់កែប្រែ App Script ទៀតទេ ព្រោះរចនាសម្ព័ន្ធដែលមានស្រាប់ក្នុង Setup.gs និង Logic ក្នុង code_gs_api.gs គឺគាំទ្រមុខងារនេះរួចជាស្រេចហើយ។ ប្រសិនបើអ្នកចង់ឱ្យច្បាស់ អ្នកគ្រាន់តែចូលទៅកាន់
+  Menu ⚙️ រៀបចំប្រព័ន្ធ (Admin) រួចចុចលើ 🔍 ពិនិត្យភាពត្រឹមត្រូវនៃ Header ក្នុង Google Sheets ជាការស្រេច។

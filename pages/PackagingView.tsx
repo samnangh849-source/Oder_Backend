@@ -339,7 +339,7 @@ const PackagingView: React.FC<{ orders?: ParsedOrder[] }> = ({ orders: propOrder
         return allFilteredOrders.filter(o => {
             const fs = o.FulfillmentStatus;
             const isPacked = !!(o['Packed By'] || o['Packed Time']);
-            const isUnpacked = !!o.ReturnReceivedBy;
+            const isUnpacked = !!o['Return Received By'];
 
             if (activeTab === 'Cancelled') {
                 return fs === 'Cancelled' && isUnpacked;
@@ -348,8 +348,7 @@ const PackagingView: React.FC<{ orders?: ParsedOrder[] }> = ({ orders: propOrder
             if (fs === activeTab) return true;
             
             // SPECIAL: Keep Cancelled orders visible in Pending and Ready tabs for awareness
-            // BUT: If not yet packed, only show in Pending. If already packed, only show in Ready.
-            // AND: Only if not yet confirmed "unpacked".
+            // BUT: Once confirmed "unpacked", they MUST move to the Cancelled tab (handled above).
             if (fs === 'Cancelled' && !isUnpacked) {
                 if (activeTab === 'Pending' && !isPacked) return true;
                 if (activeTab === 'Ready to Ship' && isPacked) return true;
@@ -364,7 +363,7 @@ const PackagingView: React.FC<{ orders?: ParsedOrder[] }> = ({ orders: propOrder
         allFilteredOrders.forEach(o => {
             const fs = o.FulfillmentStatus;
             const isPacked = !!(o['Packed By'] || o['Packed Time']);
-            const isUnpacked = !!o.ReturnReceivedBy;
+            const isUnpacked = !!o['Return Received By'];
 
             if (fs === 'Pending') counts.pending++;
             else if (fs === 'Ready to Ship') counts.ready++;
@@ -533,12 +532,12 @@ const PackagingView: React.FC<{ orders?: ParsedOrder[] }> = ({ orders: propOrder
         onShip: (order: ParsedOrder) => !isViewOnly && executeAction(order, 'Shipped', { 'Dispatched Time': new Date().toLocaleString('km-KH'), 'Dispatched By': currentUser?.FullName || 'Packer' }),
         onUndo: (o: ParsedOrder) => !isViewOnly && setUndoConfirmation({ order: o, type: 'pending', isOpen: true }),
         onUndoShipped: (o: ParsedOrder) => !isViewOnly && setUndoConfirmation({ order: o, type: 'ready', isOpen: true }),
-        onUnpack: (order: ParsedOrder) => {
+        onUnpack: (order: ParsedOrder, skipConfirm = false) => {
             if (isViewOnly) return;
-            if (window.confirm("តើអ្នកប្រាកដថាបានហែកកញ្ចប់ និងទុកឥវ៉ាន់ចូលស្តុកវិញរួចរាល់ហើយមែនទេ?")) {
+            if (skipConfirm || window.confirm("តើអ្នកប្រាកដថាបានហែកកញ្ចប់ និងទុកឥវ៉ាន់ចូលស្តុកវិញរួចរាល់ហើយមែនទេ?")) {
                 executeAction(order, 'Cancelled', { 
                     'Return Received By': currentUser?.FullName || 'Staff',
-                    'Return Received Time': new Date().toLocaleString('km-KH'),
+                    'Return Received Time': new Date().toISOString().slice(0, 19).replace('T', ' '),
                     'Packed By': '',
                     'Packed Time': '',
                     'Package Photo': ''

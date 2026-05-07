@@ -1,9 +1,10 @@
-import React, { useContext, useMemo } from 'react';
+import React, { useContext, useMemo, useState } from 'react';
 import { AppContext } from '@/context/AppContext';
 import { ParsedOrder } from '@/types';
 import Spinner from '@/components/common/Spinner';
 import { convertGoogleDriveUrl, getOptimisticPackagePhoto } from '@/utils/fileUtils';
 import { safeParseDate } from '@/utils/dateUtils';
+import Modal from '@/components/common/Modal';
 
 // --- Theme Constants ---
 const B_BG_MAIN = 'bg-[#0B0E11]';
@@ -27,7 +28,7 @@ interface DesktopPackagingHubProps {
     onShip: (order: ParsedOrder) => void;
     onUndo: (order: ParsedOrder) => void;
     onUndoShipped: (order: ParsedOrder) => void;
-    onUnpack: (order: ParsedOrder) => void;
+    onUnpack: (order: ParsedOrder, skipConfirm?: boolean) => void;
     onView: (order: ParsedOrder) => void;
     onPrintManifest: () => void;
     onSwitchHub: () => void;
@@ -60,9 +61,10 @@ const DesktopPackagingHub: React.FC<DesktopPackagingHubProps> = ({
     selectedStore,
     progressStats, viewMode, setViewMode, setIsFilterModalOpen, loadingActionId, tabCounts,
     selectedOrderIds, toggleOrderSelection, clearSelection, onBulkShip, isBulkProcessing,
-    onToggleSelectAll, onConfirmReturn, onCloseShift, isViewOnly, activeShift
+    onToggleSelectAll, onConfirmReturn, onCloseShift, isViewOnly, activeShift, onUnpack
 }) => {
     const { appData, previewImage: showFullImage } = useContext(AppContext);
+    const [unpackTarget, setUnpackTarget] = useState<ParsedOrder | null>(null);
 
     const handleCopy = (text: string, label: string) => {
         if (!text) return;
@@ -371,11 +373,6 @@ const DesktopPackagingHub: React.FC<DesktopPackagingHubProps> = ({
                                     <div className={`rotate-[-12deg] font-black text-3xl tracking-[0.1em] whitespace-nowrap opacity-25 ${isCancelled ? 'text-red-500' : 'text-purple-400'}`}>
                                         {isCancelled ? 'CANCELLED' : 'RETURNED'}
                                     </div>
-                                    {isCancelled && order['Cancel Reason'] && (
-                                        <div className="rotate-[-12deg] bg-red-600/10 border border-red-500/20 px-2 py-0.5 rounded-sm mt-1 max-w-[80%]">
-                                            <p className="text-[10px] font-bold text-red-400 truncate uppercase">Reason: {order['Cancel Reason']}</p>
-                                        </div>
-                                    )}
                                 </div>
                             )}
 
@@ -490,8 +487,15 @@ const DesktopPackagingHub: React.FC<DesktopPackagingHubProps> = ({
                                                         </div>
                                                     </div>
 
-                                                    <div className={`p-2 border-t ${B_BORDER} bg-[#0B0E11] grid ${activeTab === 'Pending' ? 'grid-cols-2 gap-2' : activeTab === 'Ready to Ship' ? 'grid-cols-3 gap-2' : 'grid-cols-2 gap-2'}`}>
+                                                    <div className={`p-2 border-t ${B_BORDER} bg-[#0B0E11] grid ${activeTab === 'Pending' ? 'grid-cols-2 gap-2' : activeTab === 'Ready to Ship' ? 'grid-cols-3 gap-2' : activeTab === 'Cancelled' ? 'grid-cols-[80px_1fr] gap-2' : 'grid-cols-2 gap-2'}`}>
                                                         <button onClick={(e) => { e.stopPropagation(); onView(order); }} className={`w-full py-1.5 bg-[#2B3139] hover:bg-[#3B424A] ${B_TEXT_PRIMARY} text-xs font-medium transition-colors rounded-sm`}>Details</button>
+                                                        {activeTab === 'Cancelled' && order['Return Received By'] && (
+                                                            <div className="flex items-center justify-center border border-[#FCD535]/30 bg-[#FCD535]/10 rounded-sm px-2 overflow-hidden shadow-[0_0_10px_rgba(252,213,53,0.05)]">
+                                                                <span className="text-[9px] font-black text-[#FCD535] uppercase truncate" title={order['Return Received By']}>
+                                                                    Confirm by {order['Return Received By']}
+                                                                </span>
+                                                            </div>
+                                                        )}
                                                         {!isCancelled && (
                                                             <>
                                                                 {activeTab === 'Pending' && <button onClick={(e) => { e.stopPropagation(); onPack(order); }} className={`w-full py-1.5 ${B_ACCENT_BG} text-xs font-bold uppercase transition-colors rounded-sm`}>Pack</button>}
@@ -505,10 +509,10 @@ const DesktopPackagingHub: React.FC<DesktopPackagingHubProps> = ({
                                                         )}
                                                         {isCancelled && activeTab !== 'Cancelled' && (
                                                             <button 
-                                                                onClick={(e) => { e.stopPropagation(); onUnpack(order); }} 
+                                                                onClick={(e) => { e.stopPropagation(); setUnpackTarget(order); }} 
                                                                 className={`w-full py-1.5 bg-red-600 hover:bg-red-700 text-white text-xs font-bold uppercase transition-colors rounded-sm shadow-lg shadow-red-600/20`}
                                                             >
-                                                                {!!(order['Packed By'] || order['Packed Time']) ? 'ហែកកញ្ចប់' : 'Confirm Cancel'}
+                                                                {!!(order['Packed By'] || order['Packed Time']) ? 'ហែកកញ្ចប់' : 'បញ្ជាក់ការបោះបង់'}
                                                             </button>
                                                         )}
                                                         {activeTab === 'Shipped' && (
@@ -533,11 +537,6 @@ const DesktopPackagingHub: React.FC<DesktopPackagingHubProps> = ({
                                                             <div className={`rotate-[-12deg] font-black text-4xl tracking-[0.2em] whitespace-nowrap opacity-25 ${isCancelled ? 'text-red-500' : 'text-purple-400'}`}>
                                                                 {isCancelled ? 'CANCELLED' : 'RETURNED'}
                                                             </div>
-                                                            {isCancelled && order['Cancel Reason'] && (
-                                                                <div className="rotate-[-12deg] bg-red-600/10 border border-red-500/20 px-4 py-1 rounded-sm mt-2 max-w-[80%]">
-                                                                    <p className="text-xs font-bold text-red-400 truncate uppercase">Reason: {order['Cancel Reason']}</p>
-                                                                </div>
-                                                            )}
                                                         </div>
                                                     )}
                                                     {loadingActionId === order['Order ID'] && (
@@ -628,6 +627,11 @@ const DesktopPackagingHub: React.FC<DesktopPackagingHubProps> = ({
                                                     </div>
                                                     <div className="col-span-3 flex justify-end items-center gap-2">
                                                         <button onClick={(e) => { e.stopPropagation(); onView(order); }} className={`px-3 py-1 bg-[#2B3139] hover:bg-[#3B424A] ${B_TEXT_PRIMARY} text-xs font-medium rounded-sm transition-colors`}>View</button>
+                                                        {activeTab === 'Cancelled' && order['Return Received By'] && (
+                                                            <span className="text-[9px] font-black text-[#FCD535] uppercase px-2.5 py-1 bg-[#FCD535]/10 border border-[#FCD535]/30 rounded-sm truncate max-w-[150px] shadow-[0_0_10px_rgba(252,213,53,0.05)]" title={order['Return Received By']}>
+                                                                Confirm by {order['Return Received By']}
+                                                            </span>
+                                                        )}
                                                         {!isCancelled && (
                                                             <>
                                                                 {activeTab === 'Pending' && <button onClick={(e) => { e.stopPropagation(); onPack(order); }} className={`px-4 py-1 ${B_ACCENT_BG} text-xs font-bold uppercase rounded-sm`}>Pack</button>}
@@ -641,10 +645,10 @@ const DesktopPackagingHub: React.FC<DesktopPackagingHubProps> = ({
                                                         )}
                                                         {isCancelled && activeTab !== 'Cancelled' && (
                                                             <button 
-                                                                onClick={(e) => { e.stopPropagation(); onUnpack(order); }} 
+                                                                onClick={(e) => { e.stopPropagation(); setUnpackTarget(order); }} 
                                                                 className={`px-3 py-1 bg-red-600 hover:bg-red-700 text-white text-xs font-bold uppercase rounded-sm shadow-lg shadow-red-600/20`}
                                                             >
-                                                                {!!(order['Packed By'] || order['Packed Time']) ? 'ហែកកញ្ចប់' : 'Confirm Cancel'}
+                                                                {!!(order['Packed By'] || order['Packed Time']) ? 'ហែកកញ្ចប់' : 'បញ្ជាក់ការបោះបង់'}
                                                             </button>
                                                         )}
                                                         {activeTab === 'Shipped' && (
@@ -671,6 +675,63 @@ const DesktopPackagingHub: React.FC<DesktopPackagingHubProps> = ({
                     )}
                 </div>
             </main>
+
+            {unpackTarget && (
+                <Modal isOpen={true} onClose={() => setUnpackTarget(null)} maxWidth="max-w-md">
+                    <div className={`${B_BG_PANEL} p-6 space-y-6 rounded-sm border ${B_BORDER} shadow-2xl`}>
+                        <div className="text-center space-y-4">
+                            <div className="w-16 h-16 bg-red-500/10 rounded-full flex items-center justify-center mx-auto border border-red-500/20">
+                                <svg className="w-8 h-8 text-red-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" /></svg>
+                            </div>
+                            <div>
+                                <h3 className="text-xl font-black text-white uppercase tracking-wider">
+                                    {!!(unpackTarget['Packed By'] || unpackTarget['Packed Time']) ? 'បញ្ជាក់ការហែកកញ្ចប់' : 'បញ្ជាក់ការបោះបង់'}
+                                </h3>
+                                <p className="text-[#848E9C] text-sm mt-2">
+                                    {!!(unpackTarget['Packed By'] || unpackTarget['Packed Time']) 
+                                        ? 'តើអ្នកប្រាកដថាបានហែកកញ្ចប់ និងទុកឥវ៉ាន់ចូលស្តុកវិញរួចរាល់ហើយមែនទេ?' 
+                                        : 'តើអ្នកប្រាកដថាចង់បោះបង់ការវេចខ្ចប់លើការកុម្ម៉ង់នេះមែនទេ?'}
+                                </p>
+                            </div>
+                        </div>
+
+                        <div className="bg-[#0B0E11]/50 p-4 rounded-sm border border-[#2B3139] space-y-3">
+                            <div className="flex justify-between items-center">
+                                <span className="text-xs text-[#848E9C] uppercase font-bold">Order ID</span>
+                                <span className="text-xs text-[#EAECEF] font-mono">{unpackTarget['Order ID'].substring(0, 12)}...</span>
+                            </div>
+                            <div className="flex justify-between items-center">
+                                <span className="text-xs text-[#848E9C] uppercase font-bold">Customer</span>
+                                <span className="text-xs text-[#EAECEF] font-bold">{unpackTarget['Customer Name']}</span>
+                            </div>
+                            {unpackTarget['Cancel Reason'] && (
+                                <div className="pt-2 border-t border-[#2B3139]">
+                                    <span className="text-[10px] text-red-400 uppercase font-black block mb-1 text-left">Reason for Cancellation</span>
+                                    <p className="text-sm text-red-400 font-bold text-left">{unpackTarget['Cancel Reason']}</p>
+                                </div>
+                            )}
+                        </div>
+
+                        <div className="flex gap-3 pt-2">
+                            <button 
+                                onClick={() => setUnpackTarget(null)} 
+                                className="flex-1 py-3 bg-[#2B3139] text-[#EAECEF] font-bold rounded-sm hover:bg-[#3B424A] transition-all uppercase text-xs"
+                            >
+                                បោះបង់
+                            </button>
+                            <button
+                                onClick={() => {
+                                    onUnpack(unpackTarget, true);
+                                    setUnpackTarget(null);
+                                }}
+                                className="flex-[1.5] py-3 bg-red-600 text-white font-bold rounded-sm hover:bg-red-700 transition-all shadow-lg shadow-red-600/20 uppercase text-xs"
+                            >
+                                {!!(unpackTarget['Packed By'] || unpackTarget['Packed Time']) ? 'ហែកកញ្ចប់រួចរាល់' : 'បញ្ជាក់ការបោះបង់'}
+                            </button>
+                        </div>
+                    </div>
+                </Modal>
+            )}
         </div>
     );
 };

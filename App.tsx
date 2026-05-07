@@ -189,6 +189,11 @@ const AppContent: React.FC = () => {
     }, [currentUser]);
 
     const tokenRef = useRef<string | null>(null);
+    const ordersRef = useRef<ParsedOrder[]>([]);
+
+    useEffect(() => {
+        ordersRef.current = orders;
+    }, [orders]);
 
     // --- WebSocket Data Sync ---
     useEffect(() => {
@@ -243,13 +248,10 @@ const AppContent: React.FC = () => {
                     normalizedUpdate['Fulfillment Status'] = newData['FulfillmentStatus'];
                 }
 
-                setOrders(prev => {
-                    const exists = prev.some(o => o['Order ID'] === orderId);
-                    if (!exists) {
-                        fetchOrders(true); 
-                        return prev;
-                    }
-
+                const exists = ordersRef.current.some(o => o['Order ID'] === orderId);
+                if (!exists) {
+                    fetchOrders(true);
+                } else {
                     // Trigger notification for Cancelled/Returned status changes
                     const newStatus = newData['Fulfillment Status'] || newData['FulfillmentStatus'];
                     if (newStatus === 'Cancelled' || newStatus === 'Returned') {
@@ -258,8 +260,8 @@ const AppContent: React.FC = () => {
                         showNotification(body, 'error', title);
                     }
 
-                    return prev.map(o => o['Order ID'] === orderId ? { ...o, ...normalizedUpdate } : o);
-                });
+                    setOrders(prev => prev.map(o => o['Order ID'] === orderId ? { ...o, ...normalizedUpdate } : o));
+                }
             }
         } else if (lastMessage.type === 'delete_order') {
             const { orderId } = lastMessage;
