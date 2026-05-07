@@ -985,8 +985,9 @@ func handleSubmitOrder(c *gin.Context) {
 
 func handleAdminUpdateOrder(c *gin.Context) {
 	var r struct {
-		OrderID string                 `json:"orderId"`
-		NewData map[string]interface{} `json:"newData"`
+		OrderID  string                 `json:"orderId"`
+		UserName string                 `json:"userName"`
+		NewData  map[string]interface{} `json:"newData"`
 	}
 	if err := c.ShouldBindJSON(&r); err != nil {
 		c.Error(err)
