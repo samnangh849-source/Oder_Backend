@@ -54,3 +54,6 @@ Search Product Section:
   ប៊ូតុងបើក (Thumbnail Toggle) ត្រូវប្ដូរជា icon ប៊ិច
 
   ប៊ូតុងបើក (Thumbnail Toggle) មិនចាំបាច់ដាក់រូបភាព Product ទេ ដាក់តែ icon pen បានហើយ
+
+
+  Please Improve Functions (Cancel & Return) Order and Confirming

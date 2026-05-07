@@ -1150,6 +1150,72 @@ func handleAdminUpdateOrder(c *gin.Context) {
 			return
 		}
 
+		// ✅ Auto-log ReturnItems when status changes to Returned
+		if newStatusRaw, ok := r.NewData["Fulfillment Status"]; ok {
+			if strings.TrimSpace(fmt.Sprintf("%v", newStatusRaw)) == "Returned" {
+				var products []map[string]interface{}
+				if err := json.Unmarshal([]byte(originalOrder.ProductsJSON), &products); err == nil {
+					for _, p := range products {
+						name, _ := p["name"].(string)
+						qty, _ := p["quantity"].(float64)
+						if name != "" && qty > 0 {
+							reason := ""
+							if r, ok := r.NewData["Return Reason"].(string); ok && r != "" {
+								reason = r
+							} else {
+								reason = originalOrder.ReturnReason
+							}
+
+							barcode := ""
+							if b, ok := p["barcode"].(string); ok {
+								barcode = b
+							}
+
+							returnItem := ReturnItem{
+								Timestamp:   time.Now().Format("2006-01-02 15:04:05"),
+								OrderID:     originalOrder.OrderID,
+								StoreName:   originalOrder.FulfillmentStore,
+								Barcode:     barcode,
+								ProductName: name,
+								Quantity:    qty,
+								Reason:      reason,
+								HandledBy:   r.UserName,
+								Status:      "Pending Receipt",
+							}
+							var count int64
+							backend.DB.Table("returns").Where("order_id = ? AND product_name = ?", originalOrder.OrderID, name).Count(&count)
+							if count == 0 {
+								if err := backend.DB.Table("returns").Create(&returnItem).Error; err == nil {
+									// Sync with Google Sheets
+									go enqueueSync("addRow", map[string]interface{}{
+										"Timestamp":    returnItem.Timestamp,
+										"OrderID":      returnItem.OrderID,
+										"StoreName":    returnItem.StoreName,
+										"Barcode":      returnItem.Barcode,
+										"ProductName":  returnItem.ProductName,
+										"Quantity":     returnItem.Quantity,
+										"Reason":       returnItem.Reason,
+										"HandledBy":    returnItem.HandledBy,
+										"Status":       returnItem.Status,
+									}, "Returns", nil)
+								}
+							}
+						}
+					}
+				}
+			}
+		}
+
+		// ✅ Update ReturnItems status when received
+		if _, hasReceivedBy := r.NewData["Return Received By"]; hasReceivedBy {
+			backend.DB.Table("returns").Where("order_id = ?", r.OrderID).Update("status", "Received")
+			
+			// Sync with Google Sheets
+			go enqueueSync("updateSheet", map[string]interface{}{
+				"Status": "Received",
+			}, "Returns", map[string]string{"OrderID": r.OrderID})
+		}
+
 		eventBytes, _ := json.Marshal(map[string]interface{}{"type": "update_order", "orderId": r.OrderID, "newData": r.NewData})
 		hub.Broadcast <- eventBytes
 	}

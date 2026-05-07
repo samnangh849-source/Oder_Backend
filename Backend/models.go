@@ -185,6 +185,8 @@ type ReturnItem struct {
 	ID          uint    `gorm:"primaryKey;autoIncrement;column:id" json:"ID"`
 	Timestamp   string  `gorm:"index;column:timestamp" json:"Timestamp"`
 	OrderID     string  `gorm:"index;column:order_id" json:"OrderID"`
+	StoreName   string  `gorm:"column:store_name" json:"StoreName"`
+	Barcode     string  `gorm:"column:barcode" json:"Barcode"`
 	ProductName string  `gorm:"column:product_name" json:"ProductName"`
 	Quantity    float64 `gorm:"column:quantity" json:"Quantity"`
 	Reason      string  `gorm:"column:reason" json:"Reason"`

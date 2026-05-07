@@ -16,6 +16,7 @@ import EditLogisticsPanel from '../components/orders/edit/EditLogisticsPanel';
 import EditProductPanel from '../components/orders/edit/EditProductPanel';
 import EditOrderSummary from '../components/orders/edit/EditOrderSummary';
 import BarcodeScannerModal from '../components/orders/BarcodeScannerModal';
+import OrderActionModal from '../components/orders/OrderActionModal';
 
 interface EditOrderPageProps {
     order: ParsedOrder;
@@ -35,6 +36,10 @@ const EditOrderPage: React.FC<EditOrderPageProps> = ({ order, onSaveSuccess, onC
     const [error, setError] = useState('');
     const [bankLogo, setBankLogo] = useState<string>('');
     const [copySuccess, setCopySuccess] = useState(false);
+
+    // Action Modal State
+    const [isActionModalOpen, setIsActionModalOpen] = useState(false);
+    const [actionModalType, setActionModalType] = useState<'cancel' | 'return'>('cancel');
 
     // Scanner State
     const [isScannerVisible, setIsScannerVisible] = useState(false);
@@ -363,18 +368,17 @@ const EditOrderPage: React.FC<EditOrderPageProps> = ({ order, onSaveSuccess, onC
         } catch (err: any) { setError(`លុបមិនបានសម្រេច: ${err.message}`); }
     };
 
-    const handleCancelOrder = async () => {
+    const handleCancelOrderClick = () => {
         const isShipped = formData.FulfillmentStatus === 'Shipped' || formData.FulfillmentStatus === 'Delivered';
-        const actionText = isShipped ? 'Return' : 'Cancel';
-        const reasonPrompt = isShipped ? 'សូមបញ្ចូលមូលហេតុដែល Return (Return Reason):' : 'សូមបញ្ចូលមូលហេតុដែល Cancel (Cancel Reason):';
-        
-        const reason = window.prompt(reasonPrompt);
-        if (reason === null) return; // User cancelled the prompt
-        if (!reason.trim()) {
-            alert(`ត្រូវការមូលហេតុដើម្បី ${actionText} (Reason is required)`);
-            return;
-        }
+        setActionModalType(isShipped ? 'return' : 'cancel');
+        setIsActionModalOpen(true);
+    };
 
+    const handleConfirmAction = async (reason: string) => {
+        setIsActionModalOpen(false);
+        const isShipped = actionModalType === 'return';
+        const actionText = isShipped ? 'Return' : 'Cancel';
+        
         setLoading(true);
         try {
             const session = await CacheService.get<{ token: string }>(CACHE_KEYS.SESSION);
@@ -757,9 +761,21 @@ const EditOrderPage: React.FC<EditOrderPageProps> = ({ order, onSaveSuccess, onC
                             onOrderDiscountChange={handleOrderDiscountChange}
                             onSave={handleSubmit}
                             onDelete={handleDelete}
-                            onCancelOrder={handleCancelOrder}
+                            onCancelOrder={handleCancelOrderClick}
                             fulfillmentStatus={formData.FulfillmentStatus}
                             loading={loading}
+                        />
+
+                        <OrderActionModal
+                            isOpen={isActionModalOpen}
+                            onClose={() => setIsActionModalOpen(false)}
+                            onConfirm={handleConfirmAction}
+                            title={actionModalType === 'cancel' ? 'បោះបង់ការកម្មង់ (Cancel Order)' : 'បង្វិលឥវ៉ាន់ត្រឡប់ (Return Order)'}
+                            actionText={actionModalType === 'cancel' ? 'បោះបង់' : 'បង្វិលត្រឡប់'}
+                            reasons={actionModalType === 'cancel' 
+                                ? ['អតិថិជនបោះបង់', 'ទាក់ទងអតិថិជនមិនបាន', 'ឥវ៉ាន់អស់ពីស្តុក', 'បញ្ហាដឹកជញ្ជូន'] 
+                                : ['អតិថិជនមិនទទួលឥវ៉ាន់', 'ឥវ៉ាន់មានបញ្ហា/ខូចខាត', 'ឥវ៉ាន់មិនត្រឹមត្រូវ', 'ទាក់ទងមិនបានពេលដឹក']
+                            }
                         />
                     </div>
                 </div>

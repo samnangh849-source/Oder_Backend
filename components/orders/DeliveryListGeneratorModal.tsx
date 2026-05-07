@@ -235,14 +235,19 @@ const DeliveryListGeneratorModal: React.FC<DeliveryListGeneratorModalProps> = ({
                 const isVerified = verifiedIds.has(order['Order ID']);
                 const isUnpaid = order['Payment Status'] !== 'Paid';
                 const finalInternalCost = shippingAdjustments[order['Order ID']] !== undefined ? shippingAdjustments[order['Order ID']] : (order['Internal Cost'] || 0);
-                const newData: any = { ...order, 'Internal Cost': finalInternalCost };
+                
+                const updateData: any = { 
+                    'Internal Cost': finalInternalCost,
+                    'Fulfillment Status': isVerified ? 'Delivered' : order['Fulfillment Status']
+                };
                 
                 if (isVerified) { 
+                    updateData['Delivered Time'] = new Date().toISOString().slice(0, 19).replace('T', ' ');
                     if (isUnpaid) {
-                        newData['Payment Status'] = 'Paid'; 
-                        newData['Payment Info'] = selectedBank; 
-                        newData['Delivery Paid'] = order['Grand Total']; 
-                        newData['Delivery Unpaid'] = 0; 
+                        updateData['Payment Status'] = 'Paid'; 
+                        updateData['Payment Info'] = selectedBank; 
+                        updateData['Delivery Paid'] = order['Grand Total']; 
+                        updateData['Delivery Unpaid'] = 0; 
                     }
                     if (order.Timestamp) {
                         const now = new Date();
@@ -252,17 +257,17 @@ const DeliveryListGeneratorModal: React.FC<DeliveryListGeneratorModalProps> = ({
                             const orderDate = `${match[1]}-${match[2].padStart(2,'0')}-${match[3].padStart(2,'0')}`;
                             if (orderDate !== todayStr) {
                                 const noteAdd = `(កាលបរិចេ្ឆទទម្លាក់ការកម្មង់ : ${match[3]}/${match[2]}/${match[1].slice(-2)})`;
-                                if (!(order.Note || '').includes('កាលបរិចេ្ឆទទម្លាក់ការកម្មង់')) newData.Note = order.Note ? `${order.Note}\n${noteAdd}` : noteAdd;
+                                if (!(order.Note || '').includes('កាលបរិចេ្ឆទទម្លាក់ការកម្មង់')) updateData.Note = order.Note ? `${order.Note}\n${noteAdd}` : noteAdd;
                                 let timeStr = '12:00:00';
                                 const timeMatch = order.Timestamp.match(/\s(\d{1,2}:\d{2}(?::\d{2})?)/);
                                 if (timeMatch) timeStr = timeMatch[1].length === 5 ? `${timeMatch[1]}:00` : timeMatch[1];
-                                newData.Timestamp = `${todayStr} ${timeStr}`;
+                                updateData.Timestamp = `${todayStr} ${timeStr}`;
                             }
                         }
                     }
                 }
 
-                const payload = { orderId: order['Order ID'], team: order.Team, userName: currentUser?.UserName, newData: { ...newData, 'Products (JSON)': JSON.stringify(order.Products) } };
+                const payload = { orderId: order['Order ID'], team: order.Team, userName: currentUser?.UserName, newData: updateData };
                 let success = false; let attempts = 0;
                 while (!success && attempts < 3) {
                     attempts++;

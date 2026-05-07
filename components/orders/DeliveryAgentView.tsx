@@ -92,14 +92,19 @@ const DeliveryAgentView: React.FC<DeliveryAgentViewProps> = ({ orderIds, returnO
 
             const processItem = async (o: ParsedOrder) => {
                 const isDelivered = successSet.has(o['Order ID']);
+                const isReturned = returnedSet.has(o['Order ID']);
+                
                 const finalCost = isDelivered ? (costs[o['Order ID']] || 0) : 0;
                 
-                const newData: any = {
-                    ...o,
-                    'Internal Cost': finalCost
+                // Surgical update data
+                const updateData: any = {
+                    'Internal Cost': finalCost,
                 };
 
                 if (isDelivered) {
+                    updateData['Fulfillment Status'] = 'Delivered';
+                    updateData['Delivered Time'] = new Date().toISOString().slice(0, 19).replace('T', ' ');
+                    
                     // --- Past Date Logic ---
                     if (o.Timestamp) {
                         const now = new Date();
@@ -116,28 +121,26 @@ const DeliveryAgentView: React.FC<DeliveryAgentViewProps> = ({ orderIds, returnO
                                 
                                 let newNote = o.Note || '';
                                 if (!newNote.includes('កាលបរិចេ្ឆទទម្លាក់ការកម្មង់')) {
-                                    newData.Note = newNote ? `${newNote}\n${noteAdd}` : noteAdd;
+                                    updateData.Note = newNote ? `${newNote}\n${noteAdd}` : noteAdd;
                                 }
                                 
                                 let timeStr = '12:00:00';
                                 const timeMatch = o.Timestamp.match(/\s(\d{1,2}:\d{2}(?::\d{2})?)/);
                                 if (timeMatch) timeStr = timeMatch[1].length === 5 ? `${timeMatch[1]}:00` : timeMatch[1];
                                 
-                                newData.Timestamp = `${todayStr} ${timeStr}`;
+                                updateData.Timestamp = `${todayStr} ${timeStr}`;
                             }
                         }
                     }
+                } else if (isReturned) {
+                    updateData['Fulfillment Status'] = 'Returned';
                 }
-                
-                // Construct full payload for update-order consistency
+
                 const payload = {
                     orderId: o['Order ID'],
                     team: o.Team,
                     userName: 'Delivery Agent',
-                    newData: {
-                        ...newData,
-                        'Products (JSON)': JSON.stringify(o.Products)
-                    }
+                    newData: updateData
                 };
 
                 let success = false;

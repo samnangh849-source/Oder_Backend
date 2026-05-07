@@ -432,9 +432,10 @@ const PackagingView: React.FC<{ orders?: ParsedOrder[] }> = ({ orders: propOrder
                     team: returningOrder.Team, 
                     userName: currentUser?.FullName || 'System', 
                     newData: { 
+                        'Fulfillment Status': 'Returned',
                         'Return Photo': photo,
                         'Return Received By': currentUser?.FullName || 'Staff',
-                        'Return Received Time': new Date().toLocaleString('km-KH')
+                        'Return Received Time': new Date().toISOString().slice(0, 19).replace('T', ' ')
                     } 
                 })
             });
