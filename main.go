@@ -2219,8 +2219,11 @@ func main() {
 		AllowOrigins: []string{
 			"https://dominic0607.github.io",
 			"http://localhost:3000",
+			"http://127.0.0.1:3000",
 			"http://localhost:5173",
+			"http://127.0.0.1:5173",
 			"http://localhost:8080",
+			"http://127.0.0.1:8080",
 		},
 		AllowMethods:     []string{"GET", "POST", "PUT", "DELETE", "OPTIONS", "PATCH"},
 		AllowHeaders:     []string{"Origin", "Content-Type", "Authorization", "X-Requested-With", "Accept"},
