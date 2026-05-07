@@ -2354,9 +2354,9 @@ func sendShiftTelegramNotification(storeName string, shiftType string, userName 
 	now := time.Now().In(ict).Format("03:04 PM")
 	var text string
 	if shiftType == "Open" {
-		text = fmt.Sprintf("👋 ជម្រាបសួរ! ខ្ញុំ %s (Store Assistant)\n\n🟢 បើកវេនម៉ោង %s", userName, now)
+		text = fmt.Sprintf("👋 ជម្រាបសួរ! ខ្ញុំ %s (Store Assistant)\n\n📍 សាខា/ឃ្លាំង: *%s*\n🟢 បើកវេនម៉ោង %s", userName, storeName, now)
 	} else {
-		text = fmt.Sprintf("👋 ជម្រាបសួរ! ខ្ញុំ %s (Store Assistant)\n\n🔴 បិទវេនម៉ោង %s\n\n📊 %s", userName, now, summary)
+		text = fmt.Sprintf("👋 ជម្រាបសួរ! ខ្ញុំ %s (Store Assistant)\n\n📍 សាខា/ឃ្លាំង: *%s*\n🔴 បិទវេនម៉ោង %s\n\n📊 %s", userName, storeName, now, summary)
 	}
 
 	apiURL := ""

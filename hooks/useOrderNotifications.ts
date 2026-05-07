@@ -6,7 +6,7 @@ import { ParsedOrder } from '../types';
 import { useSoundEffects } from './useSoundEffects';
 
 export const useOrderNotifications = () => {
-    const { currentUser, advancedSettings, showNotification, isShiftOpener } = useContext(AppContext);
+    const { currentUser, advancedSettings, showNotification, isShiftOpener, activeShiftStore } = useContext(AppContext);
     const { playSound } = useSoundEffects();
     const previousOrdersRef = useRef<Record<string, string>>({});
     const notifiedPendingRef = useRef<Set<string>>(new Set());
@@ -16,7 +16,7 @@ export const useOrderNotifications = () => {
 
         const checkUpdates = async () => {
             try {
-                console.log(`[Notification] Checking for updates. isShiftOpener: ${isShiftOpener}`);
+                console.log(`[Notification] Checking for updates. isShiftOpener: ${isShiftOpener}, activeStore: ${activeShiftStore}`);
                 
                 const token = localStorage.getItem('token');
                 const headers: HeadersInit = { 'Content-Type': 'application/json' };
@@ -57,22 +57,29 @@ export const useOrderNotifications = () => {
                         showNotification(body, 'info', title);
                         
                         // NEW: Play voice notification after the "Ding" sound
-                        // បញ្ជាក់សម្លេងនេះឭតែសម្រាប់ អ្នកបើកវេនប៉ុណ្ណោះ (isShiftOpener)
+                        // បញ្ជាក់សម្លេងនេះឭតែសម្រាប់ អ្នកបើកវេនប៉ុណ្ណោះ (isShiftOpener) និងតាមឃ្លាំងជាក់លាក់
                         console.log(`[Notification] 🔊 Voice Check - isShiftOpener: ${isShiftOpener}`);
                         
                         if (isShiftOpener) {
-                            // Play after 500ms to be closer to the "Ding"
-                            setTimeout(() => {
-                                const voiceUrl = SOUND_URLS.NEW_ORDER_VOICE;
-                                console.log(`[Notification] 🗣️ Attempting voice alert: ${voiceUrl}`);
-                                const audio = new Audio(voiceUrl);
-                                audio.volume = 1.0;
-                                audio.play()
-                                    .then(() => console.log("[Notification] ✅ Voice alert played successfully"))
-                                    .catch(err => {
-                                        console.error("[Notification] ❌ Voice play failed:", err.name, err.message);
-                                    });
-                            }, 500);
+                            const orderStore = order['Fulfillment Store'] || order.FulfillmentStore;
+                            const myStore = activeShiftStore;
+
+                            if (orderStore && myStore && orderStore.trim().toLowerCase() === myStore.trim().toLowerCase()) {
+                                // Play after 500ms to be closer to the "Ding"
+                                setTimeout(() => {
+                                    const voiceUrl = SOUND_URLS.NEW_ORDER_VOICE;
+                                    console.log(`[Notification] 🗣️ Attempting voice alert: ${voiceUrl} for ${myStore}`);
+                                    const audio = new Audio(voiceUrl);
+                                    audio.volume = 1.0;
+                                    audio.play()
+                                        .then(() => console.log("[Notification] ✅ Voice alert played successfully"))
+                                        .catch(err => {
+                                            console.error("[Notification] ❌ Voice play failed:", err.name, err.message);
+                                        });
+                                }, 500);
+                            } else {
+                                console.log(`[Notification] 🔇 Voice alert skipped: Warehouse mismatch (Order: ${orderStore}, Me: ${myStore})`);
+                            }
                         }
                     }
 

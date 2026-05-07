@@ -20,8 +20,8 @@ const bClasses = {
 };
 
 const PackagingView: React.FC<{ orders?: ParsedOrder[] }> = ({ orders: propOrders }) => {
-    const { appData, refreshData, currentUser, setMobilePageTitle, appState, setAppState, setIsShiftOpener } = useContext(AppContext);
-    
+    const { appData, refreshData, currentUser, setMobilePageTitle, appState, setAppState, setIsShiftOpener, setActiveShiftStore } = useContext(AppContext);
+
     const [selectedStore, setSelectedStore] = useState<string>('');
     const [activeShift, setActiveShift] = useState<Shift | null>(null);
     const [isViewOnly, setIsViewOnly] = useState(false);
@@ -55,14 +55,18 @@ const PackagingView: React.FC<{ orders?: ParsedOrder[] }> = ({ orders: propOrder
         const openedBy = (activeShift?.OpenedBy || '').trim().toLowerCase();
         const me = (currentUser?.FullName || '').trim().toLowerCase();
         const isOpener = !!activeShift && openedBy === me;
-        
-        console.log(`[Shift] Active: ${!!activeShift}, Opener: ${openedBy}, Me: ${me}, Result: ${isOpener}`);
-        
-        setIsShiftOpener(isOpener);
-        // We don't reset on unmount because the user might go to another page 
-        // while their shift is still active in the background session.
-    }, [activeShift, setIsShiftOpener, currentUser?.FullName]);
 
+        console.log(`[Shift] Active: ${!!activeShift}, Opener: ${openedBy}, Me: ${me}, Result: ${isOpener}`);
+
+        setIsShiftOpener(isOpener);
+        if (isOpener && activeShift?.StoreName) {
+            setActiveShiftStore(activeShift.StoreName);
+        } else if (!isOpener) {
+            setActiveShiftStore('');
+        }
+        // We don't reset on unmount because the user might go to another page
+        // while their shift is still active in the background session.
+    }, [activeShift, setIsShiftOpener, setActiveShiftStore, currentUser?.FullName]);
     const checkActiveShift = async (store: string) => {
         setIsShiftLoading(true);
         try {

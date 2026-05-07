@@ -59,6 +59,7 @@ const AppContent: React.FC = () => {
     const [selectedTeam, setSelectedTeam] = useUrlState<string>('team', '');
     const [selectedMovieId, setSelectedMovieId] = useUrlState<string>('movie', '');
     const [isShiftOpener, setIsShiftOpener] = useState(false);
+    const [activeShiftStore, setActiveShiftStore] = useState('');
     const [mobilePageTitle, setMobilePageTitle] = useState<string | null>(null);
     const [previewImageUrl, setPreviewImageUrl] = useState<string | null>(null);
     const [isGlobalLoading, setIsGlobalLoading] = useState(true);
@@ -204,22 +205,31 @@ const AppContent: React.FC = () => {
                 language === 'km' ? '🆕 កុម្ម៉ង់ថ្មី' : '🆕 New Order'
             );
 
-            // Play voice for Shift Opener only
+            // Play voice for Shift Opener only if it matches the store
             if (isShiftOpener) {
-                setTimeout(() => {
-                    const voiceUrl = SOUND_URLS.NEW_ORDER_VOICE;
-                    console.log(`[App] 🗣️ Attempting voice alert: ${voiceUrl} (Shift Opener: ${isShiftOpener})`);
-                    const audio = new Audio(voiceUrl);
-                    audio.volume = 1.0;
-                    audio.play()
-                        .then(() => console.log("[App] ✅ Voice alert played successfully"))
-                        .catch(e => {
-                            console.error("[App] ❌ Voice play failed:", e.name, e.message);
-                            if (e.name === 'NotAllowedError') {
-                                console.warn("[App] ⚠️ Browser blocked autoplay. Please click anywhere on the page to enable audio.");
-                            }
-                        });
-                }, 800);
+                const orderStore = lastMessage.newData?.['Fulfillment Store'] || lastMessage.newData?.['FulfillmentStore'];
+                const myStore = activeShiftStore;
+
+                console.log(`[App] 🔊 Voice Store Check - Order Store: ${orderStore}, My Shift Store: ${myStore}`);
+
+                if (orderStore && myStore && orderStore.trim().toLowerCase() === myStore.trim().toLowerCase()) {
+                    setTimeout(() => {
+                        const voiceUrl = SOUND_URLS.NEW_ORDER_VOICE;
+                        console.log(`[App] 🗣️ Attempting voice alert: ${voiceUrl} (Shift Opener: ${isShiftOpener} for ${myStore})`);
+                        const audio = new Audio(voiceUrl);
+                        audio.volume = 1.0;
+                        audio.play()
+                            .then(() => console.log("[App] ✅ Voice alert played successfully"))
+                            .catch(e => {
+                                console.error("[App] ❌ Voice play failed:", e.name, e.message);
+                                if (e.name === 'NotAllowedError') {
+                                    console.warn("[App] ⚠️ Browser blocked autoplay. Please click anywhere on the page to enable audio.");
+                                }
+                            });
+                    }, 800);
+                } else {
+                    console.log(`[App] 🔇 Voice alert skipped: Warehouse mismatch or no store info.`);
+                }
             }
         } else if (lastMessage.type === 'update_order') {
             const { orderId, newData } = lastMessage;
@@ -577,6 +587,7 @@ const AppContent: React.FC = () => {
         selectedTeam, setSelectedTeam,
         selectedMovieId, setSelectedMovieId,
         isShiftOpener, setIsShiftOpener,
+        activeShiftStore, setActiveShiftStore,
         lastMessage, setOrders
     }), [
         currentUser, appData, orders, isOrdersLoading, isSyncing, login, logout, refreshData, refreshTimestamp,
@@ -585,7 +596,7 @@ const AppContent: React.FC = () => {
         isSidebarCollapsed, setIsSidebarCollapsed, setIsChatOpen, isMobileMenuOpen, 
         setIsMobileMenuOpen, language, setLanguage, showNotification, mobilePageTitle, 
         setMobilePageTitle, advancedSettings, setAdvancedSettings, selectedTeam, setSelectedTeam,
-        selectedMovieId, setSelectedMovieId, isShiftOpener, lastMessage, setOrders
+        selectedMovieId, setSelectedMovieId, isShiftOpener, activeShiftStore, lastMessage, setOrders
     ]);
 
     if (isGlobalLoading) return <div className="flex h-screen items-center justify-center bg-dark" style={{ backgroundColor: 'var(--bg-dark)' }}><Spinner size="lg" /></div>;

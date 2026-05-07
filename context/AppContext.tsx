@@ -67,6 +67,8 @@ export interface AppContextType {
     setSelectedMovieId: (id: string) => void;
     isShiftOpener: boolean;
     setIsShiftOpener: (val: boolean) => void;
+    activeShiftStore: string;
+    setActiveShiftStore: (val: string) => void;
     lastMessage: any;
 }
 
