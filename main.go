@@ -1101,12 +1101,21 @@ func handleAdminUpdateOrder(c *gin.Context) {
 		}
 	}
 
-	// ✅ Validate Return Receipt - If confirming receipt, require photo
+	// ✅ Validate Return Receipt - If confirming receipt, require photo (unless it's just unpacking a Cancelled order)
 	if _, hasReceivedBy := r.NewData["Return Received By"]; hasReceivedBy {
-		photo, hasPhoto := r.NewData["Return Photo"]
-		if (!hasPhoto || strings.TrimSpace(fmt.Sprintf("%v", photo)) == "") && strings.TrimSpace(originalOrder.ReturnPhotoURL) == "" {
-			c.JSON(http.StatusBadRequest, gin.H{"status": "error", "message": "ត្រូវការរូបភាពកញ្ចប់ឥវ៉ាន់ដែល Return (Return Photo)"})
-			return
+		// Determine the target status
+		targetStatus := originalOrder.FulfillmentStatus
+		if s, ok := r.NewData["Fulfillment Status"]; ok {
+			targetStatus = strings.TrimSpace(fmt.Sprintf("%v", s))
+		}
+
+		// Only require photo if we are NOT in Cancelled status
+		if targetStatus != "Cancelled" {
+			photo, hasPhoto := r.NewData["Return Photo"]
+			if (!hasPhoto || strings.TrimSpace(fmt.Sprintf("%v", photo)) == "") && strings.TrimSpace(originalOrder.ReturnPhotoURL) == "" {
+				c.JSON(http.StatusBadRequest, gin.H{"status": "error", "message": "ត្រូវការរូបភាពកញ្ចប់ឥវ៉ាន់ដែល Return (Return Photo)"})
+				return
+			}
 		}
 		// Auto-set received time if not provided
 		if _, hasTime := r.NewData["Return Received Time"]; !hasTime {
