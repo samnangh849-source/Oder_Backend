@@ -83,7 +83,7 @@ const TabletPackagingHub: React.FC<TabletPackagingHubProps> = ({
         const prefix2 = formatted.substring(1, 3);
         const prefix3 = formatted.substring(1, 4);
         const carrier = appData.phoneCarriers?.find(c => {
-            const prefixes = c.Prefixes.split(',').map(p => p.trim());
+            const prefixes = String(c.Prefixes || '').split(',').map(p => p.trim()).filter(Boolean);
             return prefixes.includes(prefix2) || prefixes.includes(prefix3);
         });
         return carrier?.CarrierLogoURL ? convertGoogleDriveUrl(carrier.CarrierLogoURL) : null;

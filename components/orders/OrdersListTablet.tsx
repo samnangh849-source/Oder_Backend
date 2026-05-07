@@ -92,7 +92,9 @@ const OrdersListTablet: React.FC<OrdersListTabletProps> = ({
         if (!phoneNumber || !appData.phoneCarriers) return null;
         const cleanPhone = phoneNumber.replace(/\s/g, '');
         const prefix = cleanPhone.substring(0, 3);
-        const carrier = appData.phoneCarriers.find(c => c.Prefixes.split(',').map(p => p.trim()).includes(prefix));
+        const carrier = appData.phoneCarriers.find(c =>
+            String(c.Prefixes || '').split(',').map(p => p.trim()).filter(Boolean).includes(prefix)
+        );
         return carrier ? convertGoogleDriveUrl(carrier.CarrierLogoURL) : null;
     };
 

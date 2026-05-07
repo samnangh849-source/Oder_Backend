@@ -448,7 +448,9 @@ const OrdersListDesktop: React.FC<OrdersListDesktopProps> = ({
             const order = item.data;
             const pageInfo = appData.pages?.find((p: any) => p.PageName === order.Page);
             const displayPhone = formatPhone(order['Customer Phone']);
-            const carrier = appData.phoneCarriers?.find(c => c.Prefixes.split(',').map(p => p.trim()).includes(displayPhone.substring(0, 3)));
+            const carrier = appData.phoneCarriers?.find(c =>
+                String(c.Prefixes || '').split(',').map(p => p.trim()).filter(Boolean).includes(displayPhone.substring(0, 3))
+            );
             const shippingMethod = appData.shippingMethods?.find(m => m.MethodName === order['Internal Shipping Method']);
             
             const productThumbnails = order.Products.map((p: any) => {

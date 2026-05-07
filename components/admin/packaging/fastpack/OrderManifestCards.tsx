@@ -62,7 +62,9 @@ const OrderManifestCards: React.FC<OrderManifestCardsProps> = ({ order, appData,
                             <div className="flex items-center gap-3 mt-1">
                                 <span className="text-sm font-mono text-[#FCD535] font-bold tracking-widest">{order['Customer Phone']}</span>
                                 {(() => {
-                                    const carrier = appData.phoneCarriers?.find(c => order['Customer Phone']?.startsWith(c.Prefixes.split(',')[0]));
+                                    const carrier = appData.phoneCarriers?.find(c =>
+                                        String(c.Prefixes || '').split(',').map(p => p.trim()).filter(Boolean).some(prefix => order['Customer Phone']?.startsWith(prefix))
+                                    );
                                     if (!carrier) return null;
                                     return (
                                         <div className="w-5 h-5 flex items-center justify-center">

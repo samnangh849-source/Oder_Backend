@@ -380,7 +380,7 @@ const PdfExportModal: React.FC<PdfExportModalProps> = ({ isOpen, onClose, orders
             const getCarrier = (phone: string) => {
                 const fmt = formatPhone(phone);
                 return appData.phoneCarriers.find(c =>
-                    c.Prefixes.split(',').map(p => p.trim()).some(pfx => fmt.startsWith(pfx))
+                    String(c.Prefixes || '').split(',').map(p => p.trim()).filter(Boolean).some(pfx => fmt.startsWith(pfx))
                 ) ?? null;
             };
 

@@ -669,7 +669,9 @@ const FastPackTerminal: React.FC<FastPackTerminalProps> = ({ order, onClose, onS
                                                                         {formattedPhone}
                                                                     </span>
                                                                     {(() => {
-                                                                        const carrier = appData.phoneCarriers?.find(c => formattedPhone?.startsWith(c.Prefixes.split(',')[0]));
+                                                                        const carrier = appData.phoneCarriers?.find(c =>
+                                                                            String(c.Prefixes || '').split(',').map(p => p.trim()).filter(Boolean).some(prefix => formattedPhone?.startsWith(prefix))
+                                                                        );
                                                                         if (!carrier) return null;
                                                                         return (
                                                                             <div className="w-6 h-6 flex items-center justify-center">
