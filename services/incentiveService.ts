@@ -2,6 +2,12 @@ import { IncentiveProject, IncentiveCalculator, IncentiveResult } from '../types
 import { WEB_APP_URL } from '../constants';
 import { CacheService, CACHE_KEYS } from './cacheService';
 
+type ApiResult<T = any> = {
+    status?: 'success' | 'error';
+    data?: T;
+    message?: string;
+};
+
 const getAuthHeaders = async () => {
     const session = await CacheService.get<{ token: string }>(CACHE_KEYS.SESSION);
     return {
@@ -10,59 +16,75 @@ const getAuthHeaders = async () => {
     };
 };
 
+const readApiResult = async <T = any>(response: Response): Promise<ApiResult<T>> => {
+    let result: ApiResult<T> = {};
+    try {
+        result = await response.json();
+    } catch (error) {
+        throw new Error(response.ok ? 'Invalid JSON response from server' : `Server returned ${response.status}`);
+    }
+
+    if (!response.ok || result.status === 'error') {
+        throw new Error(result.message || `Server returned ${response.status}`);
+    }
+
+    return result;
+};
+
+const inflateCalculatorRules = (calc: any): IncentiveCalculator => {
+    if (calc?.rulesJson) {
+        try {
+            const rules = JSON.parse(calc.rulesJson);
+            return { ...calc, ...rules };
+        } catch (e) {
+            console.warn("Failed to parse rulesJson for calc", calc.id);
+        }
+    }
+    return calc;
+};
+
+const serializeCalculator = (calc: Partial<IncentiveCalculator> & { projectId?: number }) => {
+    const { name, type, value, projectId, rulesJson: _, ...extraFields } = calc as any;
+    return {
+        name,
+        type,
+        value: Number(value) || 0,
+        projectId: Number(projectId) || 0,
+        status: extraFields.status || 'Active',
+        rulesJson: JSON.stringify(extraFields)
+    };
+};
+
 export const getIncentiveCalculators = async (): Promise<IncentiveCalculator[]> => {
     try {
         const headers = await getAuthHeaders();
         const response = await fetch(`${WEB_APP_URL}/api/admin/incentive/calculators`, { headers });
-        const result = await response.json();
+        const result = await readApiResult<any[]>(response);
         if (result.status === 'success' && Array.isArray(result.data)) {
-            return result.data.map((calc: any) => {
-                if (calc.rulesJson) {
-                    try {
-                        const rules = JSON.parse(calc.rulesJson);
-                        return { ...calc, ...rules };
-                    } catch (e) {
-                        console.warn("Failed to parse rulesJson for calc", calc.id);
-                    }
-                }
-                return calc;
-            });
+            return result.data.map(inflateCalculatorRules);
         }
         return [];
     } catch (e) {
         console.error("Error loading incentive calculators", e);
-        return [];
+        throw e;
     }
 };
 
 export const createIncentiveCalculator = async (calc: Omit<IncentiveCalculator, 'id'> & { projectId?: number }): Promise<IncentiveCalculator | null> => {
     try {
         const headers = await getAuthHeaders();
-        
-        // Serialize extra fields into rulesJson for Go backend
-        const { name, type, value, projectId, rulesJson: _, ...extraFields } = calc as any;
-        const serializedCalc = {
-            name,
-            type,
-            value: Number(value) || 0,
-            projectId: Number(projectId) || 0,
-            rulesJson: JSON.stringify(extraFields)
-        };
+        const serializedCalc = serializeCalculator(calc);
 
         const response = await fetch(`${WEB_APP_URL}/api/admin/incentive/calculators`, {
             method: 'POST',
             headers,
             body: JSON.stringify(serializedCalc)
         });
-        const result = await response.json();
-        if (result.status === 'error') {
-            console.error("Server error creating calculator:", result.message);
-            throw new Error(result.message || "Failed to create calculator");
-        }
-        return result.status === 'success' ? result.data : null;
+        const result = await readApiResult<IncentiveCalculator>(response);
+        return result.status === 'success' && result.data ? inflateCalculatorRules(result.data) : null;
     } catch (e) {
         console.error("Error creating incentive calculator", e);
-        return null;
+        throw e;
     }
 };
 
@@ -70,27 +92,17 @@ export const getIncentiveProjects = async (): Promise<IncentiveProject[]> => {
     try {
         const headers = await getAuthHeaders();
         const response = await fetch(`${WEB_APP_URL}/api/admin/incentive/projects`, { headers });
-        const result = await response.json();
+        const result = await readApiResult<any[]>(response);
         if (result.status === 'success' && Array.isArray(result.data)) {
             return result.data.map((p: any) => ({
                 ...p,
-                calculators: (p.calculators || []).map((c: any) => {
-                    if (c.rulesJson) {
-                        try {
-                            const extra = JSON.parse(c.rulesJson);
-                            return { ...c, ...extra };
-                        } catch (e) {
-                            console.error("Error parsing rulesJson", e);
-                        }
-                    }
-                    return c;
-                })
+                calculators: (p.calculators || []).map(inflateCalculatorRules)
             }));
         }
         return [];
     } catch (e) {
         console.error("Error loading incentive projects", e);
-        return [];
+        throw e;
     }
 };
 
@@ -102,11 +114,11 @@ export const createIncentiveProject = async (project: Omit<IncentiveProject, 'id
             headers,
             body: JSON.stringify(project)
         });
-        const result = await response.json();
+        const result = await readApiResult<IncentiveProject>(response);
         return result.status === 'success' ? result.data : null;
     } catch (e) {
         console.error("Error creating incentive project", e);
-        return null;
+        throw e;
     }
 };
 
@@ -117,11 +129,11 @@ export const getIncentiveResults = async (projectId?: number): Promise<Incentive
             ? `${WEB_APP_URL}/api/admin/incentive/results?projectId=${projectId}`
             : `${WEB_APP_URL}/api/admin/incentive/results`;
         const response = await fetch(url, { headers });
-        const result = await response.json();
+        const result = await readApiResult<IncentiveResult[]>(response);
         return result.status === 'success' ? result.data : [];
     } catch (e) {
         console.error("Error loading incentive results", e);
-        return [];
+        throw e;
     }
 };
 
@@ -133,11 +145,11 @@ export const calculateIncentive = async (projectId: number, month: string): Prom
             headers,
             body: JSON.stringify({ projectId, month })
         });
-        const result = await response.json();
+        const result = await readApiResult<IncentiveResult[]>(response);
         return result.status === 'success' ? result.data : [];
     } catch (e) {
         console.error("Error calculating incentive", e);
-        return [];
+        throw e;
     }
 };
 
@@ -145,11 +157,11 @@ export const getIncentiveManualData = async (projectId: number, month: string) =
     try {
         const headers = await getAuthHeaders();
         const response = await fetch(`${WEB_APP_URL}/api/admin/incentive/manual-data?projectId=${projectId}&month=${month}`, { headers });
-        const result = await response.json();
+        const result = await readApiResult(response);
         return result.status === 'success' ? result.data : [];
     } catch (e) {
         console.error("Error loading incentive manual data", e);
-        return [];
+        throw e;
     }
 };
 
@@ -161,7 +173,7 @@ export const saveIncentiveManualData = async (data: Omit<any, 'id'>) => {
             headers,
             body: JSON.stringify(data)
         });
-        const result = await response.json();
+        const result = await readApiResult(response);
         return result.status === 'success';
     } catch (e) {
         console.error("Error saving incentive manual data", e);
@@ -173,11 +185,11 @@ export const getIncentiveCustomPayouts = async (projectId: number, month: string
     try {
         const headers = await getAuthHeaders();
         const response = await fetch(`${WEB_APP_URL}/api/admin/incentive/custom-payout?projectId=${projectId}&month=${month}`, { headers });
-        const result = await response.json();
+        const result = await readApiResult(response);
         return result.status === 'success' ? result.data : [];
     } catch (e) {
         console.error("Error loading incentive custom payouts", e);
-        return [];
+        throw e;
     }
 };
 
@@ -189,7 +201,7 @@ export const saveIncentiveCustomPayout = async (data: Omit<any, 'id'>) => {
             headers,
             body: JSON.stringify(data)
         });
-        const result = await response.json();
+        const result = await readApiResult(response);
         return result.status === 'success';
     } catch (e) {
         console.error("Error saving incentive custom payout", e);
@@ -205,7 +217,7 @@ export const lockIncentivePayout = async (projectId: number, month: string, resu
             headers,
             body: JSON.stringify({ projectId, month, results })
         });
-        const result = await response.json();
+        const result = await readApiResult(response);
         return result.status === 'success';
     } catch (e) {
         console.error("Error locking incentive payout", e);
@@ -233,15 +245,20 @@ export const updateProject = async (id: number, updates: Partial<IncentiveProjec
                 newData: updates
             })
         });
-        const result = await response.json();
-        return result.status === 'success' ? result.data : null;
+        const result = await readApiResult<IncentiveProject>(response);
+        return result.status === 'success' ? result.data || ({ id, ...updates } as IncentiveProject) : null;
     } catch (e) { return null; }
 };
 
 export const deleteProject = async (id: number): Promise<boolean> => {
     try {
+        const source = await getProjectById(id);
+        if (source?.calculators?.length) {
+            await Promise.all(source.calculators.map(calc => calc.id ? deleteCalculator(id, calc.id) : Promise.resolve(true)));
+        }
+
         const headers = await getAuthHeaders();
-        await fetch(`${WEB_APP_URL}/api/admin/delete-row`, {
+        const response = await fetch(`${WEB_APP_URL}/api/admin/delete-row`, {
             method: 'POST',
             headers,
             body: JSON.stringify({
@@ -249,6 +266,7 @@ export const deleteProject = async (id: number): Promise<boolean> => {
                 primaryKey: { id: String(id) }
             })
         });
+        await readApiResult(response);
         return true;
     } catch (e) { return false; }
 };
@@ -268,6 +286,7 @@ export const updateCalculator = async (projectId: number, calculatorId: number, 
         if (name !== undefined) newData.name = name;
         if (type !== undefined) newData.type = type;
         if (value !== undefined) newData.value = Number(value);
+        if (extraFields.status !== undefined) newData.status = extraFields.status;
         
         // Handle extra fields by putting them in rulesJson
         if (Object.keys(extraFields).length > 0) {
@@ -285,15 +304,15 @@ export const updateCalculator = async (projectId: number, calculatorId: number, 
                 newData
             })
         });
-        const result = await response.json();
-        return result.status === 'success' ? result.data : null;
+        const result = await readApiResult<IncentiveCalculator>(response);
+        return result.status === 'success' ? result.data || ({ id: calculatorId, projectId, ...updates } as IncentiveCalculator) : null;
     } catch (e) { return null; }
 };
 
 export const deleteCalculator = async (projectId: number, calculatorId: number): Promise<boolean> => {
     try {
         const headers = await getAuthHeaders();
-        await fetch(`${WEB_APP_URL}/api/admin/delete-row`, {
+        const response = await fetch(`${WEB_APP_URL}/api/admin/delete-row`, {
             method: 'POST',
             headers,
             body: JSON.stringify({
@@ -301,6 +320,7 @@ export const deleteCalculator = async (projectId: number, calculatorId: number):
                 primaryKey: { id: String(calculatorId) }
             })
         });
+        await readApiResult(response);
         return true;
     } catch (e) { return false; }
 };
@@ -308,13 +328,30 @@ export const deleteCalculator = async (projectId: number, calculatorId: number):
 export const duplicateProject = async (id: number): Promise<IncentiveProject | null> => {
     const source = await getProjectById(id);
     if (!source) return null;
-    const { id: _, ...rest } = source;
-    return createIncentiveProject({ ...rest, projectName: `${source.projectName} (Copy)` });
+    const { id: _, calculators, createdAt, ...rest } = source;
+    const copy = await createIncentiveProject({ ...rest, projectName: `${source.projectName} (Copy)`, status: 'Draft' });
+    if (!copy?.id || !calculators?.length) return copy;
+
+    await Promise.all(calculators.map(calc => {
+        const { id: __, projectId: ___, ...calcRest } = calc as any;
+        return createIncentiveCalculator({ ...calcRest, projectId: copy.id });
+    }));
+
+    return getProjectById(copy.id);
 };
 
 export const duplicateCalculator = async (projectId: number, calculatorId: number): Promise<IncentiveCalculator | null> => {
-    // Implementation simplified for now
-    return null;
+    const sourceProject = await getProjectById(projectId);
+    const source = sourceProject?.calculators?.find(calc => calc.id === calculatorId);
+    if (!source) return null;
+
+    const { id: _, projectId: __, ...copy } = source as any;
+    return createIncentiveCalculator({
+        ...copy,
+        projectId,
+        name: `${source.name} (Copy)`,
+        status: 'Draft'
+    });
 };
 
 export const createProject = async (project: Omit<IncentiveProject, 'id' | 'createdAt' | 'calculators'>): Promise<IncentiveProject | null> => {

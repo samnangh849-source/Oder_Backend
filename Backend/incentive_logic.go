@@ -5,9 +5,7 @@ import (
 	"fmt"
 	"log"
 	"sort"
-	"strconv"
 	"strings"
-	"time"
 
 	"gorm.io/gorm"
 )
@@ -123,11 +121,11 @@ func CalculatePayout(calc IncentiveCalculator, val float64, subPeriod string) fl
 		method := rules.CommissionMethod
 		condition := rules.CommissionCondition
 		rate := rules.CommissionRate
-		
+
 		if rules.MinSalesRequired > 0 && val < rules.MinSalesRequired {
 			return 0
 		}
-		
+
 		var payout float64
 		if rules.CommissionType == "Tiered Commission" {
 			for _, t := range rules.CommissionTiers {
@@ -154,7 +152,7 @@ func CalculatePayout(calc IncentiveCalculator, val float64, subPeriod string) fl
 			if method == RewardTypePercentage {
 				payout = val * (rate / 100.0)
 			} else {
-				payout = rate
+				payout = val * rate
 			}
 		} else {
 			// Default: On Total Sales
@@ -164,7 +162,7 @@ func CalculatePayout(calc IncentiveCalculator, val float64, subPeriod string) fl
 				payout = rate
 			}
 		}
-		
+
 		if rules.MaxCommissionCap > 0 && payout > rules.MaxCommissionCap {
 			payout = rules.MaxCommissionCap
 		}
@@ -178,7 +176,7 @@ func (r *IncentiveRules) IsUserEligible(u User) bool {
 	if len(r.ApplyTo) == 0 {
 		return true
 	}
-	
+
 	for _, target := range r.ApplyTo {
 		if strings.HasPrefix(target, "Role:") && u.Role == strings.TrimPrefix(target, "Role:") {
 			return true
@@ -209,19 +207,10 @@ func ProcessIncentiveCalculation(db *gorm.DB, projectID uint, month string) ([]I
 	var allUsers []User
 	db.Find(&allUsers)
 
-	// Fetch orders for the month
+	// Fetch orders for the month. Timestamps in this app are stored as strings and
+	// may be either "YYYY-MM-DD HH:mm:ss" or RFC3339, so filter by the stable month prefix.
 	var orders []Order
-	startDate := month + "-01T00:00:00Z"
-	endDate := month + "-31T23:59:59Z"
-	parts := strings.Split(month, "-")
-	if len(parts) == 2 {
-		year, _ := strconv.Atoi(parts[0])
-		m, _ := strconv.Atoi(parts[1])
-		firstDay := time.Date(year, time.Month(m), 1, 0, 0, 0, 0, time.UTC)
-		lastDay := firstDay.AddDate(0, 1, -1)
-		endDate = lastDay.Format("2006-01-02") + "T23:59:59Z"
-	}
-	db.Where("fulfillment_status = ? AND timestamp >= ? AND timestamp <= ?", "Delivered", startDate, endDate).Find(&orders)
+	db.Where("fulfillment_status = ? AND substr(timestamp, 1, 7) = ?", "Delivered", month).Find(&orders)
 
 	// Fetch Manual Data
 	var manualData []IncentiveManualData
@@ -256,16 +245,20 @@ func ProcessIncentiveCalculation(db *gorm.DB, projectID uint, month string) ([]I
 
 	// Process each active calculator
 	for _, calc := range project.Calculators {
-		if calc.Status == "Disable" {
-			continue
-		}
-
 		var rules IncentiveRules
 		if calc.RulesJSON != "" {
 			if err := json.Unmarshal([]byte(calc.RulesJSON), &rules); err != nil {
 				log.Printf("ProcessIncentiveCalculation: failed to parse RulesJSON for calculator %d: %v", calc.ID, err)
 				continue
 			}
+		}
+
+		status := strings.TrimSpace(calc.Status)
+		if status == "" {
+			status = strings.TrimSpace(rules.Status)
+		}
+		if strings.EqualFold(status, "Disable") || strings.EqualFold(status, "Draft") {
+			continue
 		}
 
 		eligibleUsers := []User{}
@@ -318,16 +311,18 @@ func ProcessIncentiveCalculation(db *gorm.DB, projectID uint, month string) ([]I
 		perfMap := make(map[string]float64)
 		for _, u := range eligibleUsers {
 			var baseVal float64
-			mType := strings.ToLower(strings.TrimSpace(metricType))
-			switch mType {
-			case "sales amount", "revenue":
-				baseVal = userRevenue[u.UserName]
-			case "profit":
-				baseVal = userProfit[u.UserName]
-			case "orders", "order count", "number of orders":
-				baseVal = float64(userOrders[u.UserName])
-			default:
-				baseVal = float64(userOrders[u.UserName])
+			if !strings.EqualFold(project.DataSource, "manual") {
+				mType := strings.ToLower(strings.TrimSpace(metricType))
+				switch mType {
+				case "sales amount", "revenue":
+					baseVal = userRevenue[u.UserName]
+				case "profit":
+					baseVal = userProfit[u.UserName]
+				case "orders", "order count", "number of orders":
+					baseVal = float64(userOrders[u.UserName])
+				default:
+					baseVal = float64(userOrders[u.UserName])
+				}
 			}
 
 			val := baseVal + userManualPerf[u.UserName]
@@ -356,11 +351,6 @@ func ProcessIncentiveCalculation(db *gorm.DB, projectID uint, month string) ([]I
 			for _, v := range perfMap {
 				groupTotalPerf += v
 			}
-			for teamID, teamVal := range teamManualPerf {
-				if teamMemberCount[teamID] > 0 {
-					groupTotalPerf += teamVal
-				}
-			}
 
 			poolReward := CalculatePayout(calc, groupTotalPerf, "")
 
@@ -371,6 +361,7 @@ func ProcessIncentiveCalculation(db *gorm.DB, projectID uint, month string) ([]I
 					userBreakdown[u.UserName] = append(userBreakdown[u.UserName], PayoutResult{
 						CalculatorID:   calc.ID,
 						CalculatorName: calc.Name,
+						MetricType:     metricType,
 						MetricValue:    groupTotalPerf, // Group metric
 						Amount:         share,
 						Description:    fmt.Sprintf("Equal split of group pool (Total Perf: %.2f)", groupTotalPerf),
@@ -385,6 +376,7 @@ func ProcessIncentiveCalculation(db *gorm.DB, projectID uint, month string) ([]I
 							userBreakdown[u.UserName] = append(userBreakdown[u.UserName], PayoutResult{
 								CalculatorID:   calc.ID,
 								CalculatorName: calc.Name,
+								MetricType:     metricType,
 								MetricValue:    groupTotalPerf,
 								Amount:         share,
 								Description:    fmt.Sprintf("%.1f%% allocation of group pool (Total Perf: %.2f)", alloc.Percentage, groupTotalPerf),
@@ -401,6 +393,7 @@ func ProcessIncentiveCalculation(db *gorm.DB, projectID uint, month string) ([]I
 				userBreakdown[u.UserName] = append(userBreakdown[u.UserName], PayoutResult{
 					CalculatorID:   calc.ID,
 					CalculatorName: calc.Name,
+					MetricType:     metricType,
 					MetricValue:    perfMap[u.UserName],
 					Amount:         share,
 					Description:    fmt.Sprintf("Individual performance (Value: %.2f)", perfMap[u.UserName]),
@@ -411,10 +404,18 @@ func ProcessIncentiveCalculation(db *gorm.DB, projectID uint, month string) ([]I
 
 	var results []IncentiveResult
 	uniqueUsers := make(map[string]bool)
-	for u := range userRewards { uniqueUsers[u] = true }
-	for u := range userOrders { uniqueUsers[u] = true }
-	for u := range userRevenue { uniqueUsers[u] = true }
-	for u := range userProfit { uniqueUsers[u] = true }
+	for u := range userRewards {
+		uniqueUsers[u] = true
+	}
+	for u := range userOrders {
+		uniqueUsers[u] = true
+	}
+	for u := range userRevenue {
+		uniqueUsers[u] = true
+	}
+	for u := range userProfit {
+		uniqueUsers[u] = true
+	}
 
 	for user := range uniqueUsers {
 		payout := userRewards[user]

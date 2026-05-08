@@ -12,7 +12,7 @@ import Step4Logic from './builder/Step4Logic';
 import Step5Simulation from './builder/Step5Simulation';
 
 interface CalculatorBuilderProps {
-    projectId: string;
+    projectId: string | number;
     initialData?: IncentiveCalculator;
     type: CalculatorType;
     onClose: () => void;
@@ -25,6 +25,7 @@ const CalculatorBuilder: React.FC<CalculatorBuilderProps> = ({ projectId, initia
 
     const [step, setStep] = useState(1);
     const [previewInput, setPreviewInput] = useState<number>(5000);
+    const [isSaving, setIsSaving] = useState(false);
     
     const [calcData, setCalcData] = useState<Partial<IncentiveCalculator>>(initialData || {
         name: '',
@@ -111,10 +112,20 @@ const CalculatorBuilder: React.FC<CalculatorBuilderProps> = ({ projectId, initia
 
     const handleSave = async () => {
         if (!calcData.name) return alert("Please provide a name.");
-        const finalData = { ...calcData, type: calcData.type || type };
-        if (initialData?.id) await updateCalculator(projectId, initialData.id, finalData);
-        else await addCalculatorToProject(projectId, finalData as Omit<IncentiveCalculator, 'id'>);
-        onSave();
+        if (isSaving) return;
+        setIsSaving(true);
+        try {
+            const finalData = { ...calcData, type: calcData.type || type };
+            const saved = initialData?.id
+                ? await updateCalculator(Number(projectId), initialData.id, finalData)
+                : await addCalculatorToProject(Number(projectId), finalData as Omit<IncentiveCalculator, 'id'>);
+            if (!saved) throw new Error('Calculator save failed.');
+            onSave();
+        } catch (error: any) {
+            alert(error?.message || 'Failed to save calculator.');
+        } finally {
+            setIsSaving(false);
+        }
     };
 
     const steps = [
@@ -126,7 +137,7 @@ const CalculatorBuilder: React.FC<CalculatorBuilderProps> = ({ projectId, initia
     ];
 
     return (
-        <div className="w-full min-h-screen bg-[#050505] text-[#F5F5F7] font-sans">
+        <div className="incentive-surface w-full min-h-screen bg-[#050505] text-[#F5F5F7] font-sans">
             <div className="max-w-5xl mx-auto p-6 sm:p-12 pb-40">
                 {/* Global Command Header */}
                 <div className="flex justify-between items-center mb-12 bg-white/[0.03] p-6 rounded-[32px] border border-white/10 backdrop-blur-xl shadow-2xl">
@@ -208,9 +219,10 @@ const CalculatorBuilder: React.FC<CalculatorBuilderProps> = ({ projectId, initia
                             ) : (
                                 <button 
                                     onClick={handleSave}
-                                    className="h-14 px-12 bg-primary hover:bg-[#FCD535] text-black rounded-2xl font-black uppercase tracking-[0.2em] text-[10px] transition-all flex items-center gap-3 shadow-[0_0_30px_rgba(252,213,53,0.3)] active:scale-95 group"
+                                    disabled={isSaving}
+                                    className="h-14 px-12 bg-primary hover:bg-[#FCD535] disabled:opacity-50 text-black rounded-2xl font-black uppercase tracking-[0.2em] text-[10px] transition-all flex items-center gap-3 shadow-[0_0_30px_rgba(252,213,53,0.3)] active:scale-95 group"
                                 >
-                                    <Save className="w-5 h-5 stroke-[3]" /> Deploy_Protocol
+                                    <Save className="w-5 h-5 stroke-[3]" /> {isSaving ? 'Saving...' : 'Deploy_Protocol'}
                                 </button>
                             )}
                         </div>

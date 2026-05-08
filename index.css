@@ -4,6 +4,33 @@
 @tailwind components;
 @tailwind utilities;
 
+/* Incentive screens are used for finance review, so keep labels and table text readable. */
+.incentive-surface {
+  font-size: 15px;
+}
+
+.incentive-surface .text-xs,
+.incentive-surface [class*="text-[8px]"],
+.incentive-surface [class*="text-[9px]"],
+.incentive-surface [class*="text-[10px]"],
+.incentive-surface [class*="text-[11px]"],
+.incentive-surface [class*="text-[12px]"] {
+  font-size: 0.875rem !important;
+  line-height: 1.35rem !important;
+}
+
+.incentive-surface input,
+.incentive-surface select,
+.incentive-surface textarea,
+.incentive-surface button {
+  font-size: 0.875rem;
+}
+
+.incentive-surface table th,
+.incentive-surface table td {
+  font-size: 0.875rem;
+}
+
 /* iOS Safari Crash Fixes & Performance */
 .fixed, .absolute, .sticky {
   -webkit-transform: translate3d(0, 0, 0); /* Trigger HW Acceleration */
@@ -666,7 +693,6 @@ body {
 .bottom-nav a.active {
     color: var(--primary);
 }
-
 
 
 

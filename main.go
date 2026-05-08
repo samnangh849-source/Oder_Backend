@@ -366,6 +366,9 @@ func handleCreateIncentiveCalculator(c *gin.Context) {
 
 	// Always let backend.DB generate unique IDs to avoid collisions when duplicating calculators.
 	req.ID = 0
+	if strings.TrimSpace(req.Status) == "" {
+		req.Status = "Active"
+	}
 
 	if err := backend.DB.Create(&req).Error; err != nil {
 		c.JSON(500, gin.H{"status": "error", "message": err.Error()})
@@ -391,6 +394,15 @@ func handleCreateIncentiveProject(c *gin.Context) {
 		var maxID uint
 		backend.DB.Model(&IncentiveProject{}).Select("COALESCE(MAX(id), 0)").Row().Scan(&maxID)
 		req.ID = maxID + 1
+	}
+	if strings.TrimSpace(req.Status) == "" {
+		req.Status = "Draft"
+	}
+	if strings.TrimSpace(req.DataSource) == "" {
+		req.DataSource = "system"
+	}
+	if strings.TrimSpace(req.CreatedAt) == "" {
+		req.CreatedAt = time.Now().Format("2006-01-02 15:04:05")
 	}
 
 	if err := backend.DB.Create(&req).Error; err != nil {

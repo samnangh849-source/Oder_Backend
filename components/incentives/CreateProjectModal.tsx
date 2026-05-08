@@ -25,6 +25,7 @@ const CreateProjectModal: React.FC<CreateProjectModalProps> = ({ isOpen, onClose
     const [startDate, setStartDate] = useState('');
     const [endDate, setEndDate] = useState('');
     const [targetTeam, setTargetTeam] = useState('');
+    const [isSaving, setIsSaving] = useState(false);
 
     useEffect(() => {
         if (initialData) {
@@ -50,35 +51,44 @@ const CreateProjectModal: React.FC<CreateProjectModalProps> = ({ isOpen, onClose
 
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
-        if (!projectName.trim()) return;
+        if (!projectName.trim() || isSaving) return;
 
-        if (initialData && initialData.id) {
-            await updateProject(initialData.id, {
-                projectName,
-                colorCode,
-                requirePeriodSelection: requirePeriod,
-                dataSource,
-                status,
-                startDate,
-                endDate,
-                targetTeam
-            });
-        } else {
-            await createProject({
-                projectName,
-                colorCode,
-                requirePeriodSelection: requirePeriod,
-                dataSource,
-                status,
-                startDate,
-                endDate,
-                targetTeam,
-                calculatorId: 0
-            });
+        setIsSaving(true);
+        try {
+            if (initialData && initialData.id) {
+                const updated = await updateProject(initialData.id, {
+                    projectName,
+                    colorCode,
+                    requirePeriodSelection: requirePeriod,
+                    dataSource,
+                    status,
+                    startDate,
+                    endDate,
+                    targetTeam
+                });
+                if (!updated) throw new Error('Project update failed.');
+            } else {
+                const created = await createProject({
+                    projectName,
+                    colorCode,
+                    requirePeriodSelection: requirePeriod,
+                    dataSource,
+                    status,
+                    startDate,
+                    endDate,
+                    targetTeam,
+                    calculatorId: 0
+                });
+                if (!created) throw new Error('Project creation failed.');
+            }
+
+            onSuccess();
+            onClose();
+        } catch (error: any) {
+            alert(error?.message || 'Failed to save incentive project.');
+        } finally {
+            setIsSaving(false);
         }
-
-        onSuccess();
-        onClose();
     };
 
     const handleDelete = async () => {
@@ -101,7 +111,7 @@ const CreateProjectModal: React.FC<CreateProjectModalProps> = ({ isOpen, onClose
 
     return (
         <Modal isOpen={isOpen} onClose={onClose} maxWidth="max-w-lg">
-            <div className="bg-[#121212] border border-[#1A1A1A] shadow-2xl overflow-hidden text-[#EAECEF] font-sans rounded">
+            <div className="incentive-surface bg-[#121212] border border-[#1A1A1A] shadow-2xl overflow-hidden text-[#EAECEF] font-sans rounded">
                 {/* Modal Header */}
                 <div className="flex justify-between items-center px-5 py-4 bg-[#080808] border-b border-[#1A1A1A]">
                     <div className="flex items-center gap-3">
@@ -215,11 +225,11 @@ const CreateProjectModal: React.FC<CreateProjectModalProps> = ({ isOpen, onClose
                     <div className="flex flex-col gap-2 pt-2">
                         <button 
                             type="submit"
-                            disabled={!projectName.trim()}
+                            disabled={!projectName.trim() || isSaving}
                             className="w-full h-11 bg-[#F0B90B] hover:bg-[#D4A50A] disabled:opacity-30 disabled:grayscale text-black font-black rounded text-[10px] uppercase tracking-[0.2em] transition-all flex items-center justify-center gap-3 active:scale-[0.98]"
                         >
                             {initialData ? <Save className="w-4 h-4 stroke-[3]" /> : <Plus className="w-4 h-4 stroke-[3]" />}
-                            {initialData ? "VERIFY_&_DEPLOY" : "INITIALIZE_PROTOCOL"}
+                            {isSaving ? "SAVING..." : initialData ? "VERIFY_&_DEPLOY" : "INITIALIZE_PROTOCOL"}
                         </button>
                         
                         {initialData && (

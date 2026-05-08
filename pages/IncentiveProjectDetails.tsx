@@ -154,7 +154,7 @@ const IncentiveProjectDetails: React.FC<IncentiveProjectDetailsProps> = ({ proje
     }
 
     return (
-        <div className="w-full h-screen bg-[#050505] text-[#EAECEF] font-sans selection:bg-[#F0B90B]/30 flex flex-col overflow-hidden">
+        <div className="incentive-surface w-full h-screen bg-[#050505] text-[#EAECEF] font-sans selection:bg-[#F0B90B]/30 flex flex-col overflow-hidden">
             <header className="bg-[#121212] border-b border-[#1A1A1A] px-4 sm:px-6 py-3 shrink-0">
                 <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4">
                     <div className="flex items-center gap-4 min-w-0">
