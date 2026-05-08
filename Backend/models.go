@@ -118,8 +118,8 @@ type BankAccount struct {
 }
 
 type PhoneCarrier struct {
-	CarrierName   string `gorm:"primaryKey;column:carrier_name" json:"CarrierName"`
-	Prefixes      string `gorm:"column:prefixes" json:"Prefixes"`
+	CarrierName    string `gorm:"primaryKey;column:carrier_name" json:"CarrierName"`
+	Prefixes       string `gorm:"column:prefixes" json:"Prefixes"`
 	CarrierLogoURL string `gorm:"column:carrier_logo_url" json:"CarrierLogoURL"`
 }
 
@@ -375,6 +375,7 @@ type IncentiveResult struct {
 // Additional Structs for Incentive Logic (Defined in incentive_logic.go)
 type IncentiveRules struct {
 	Description         string           `json:"description"`
+	Status              string           `json:"status"`
 	ApplyTo             []string         `json:"applyTo"`
 	MetricType          string           `json:"metricType"`
 	MetricUnit          string           `json:"metricUnit"`
@@ -424,6 +425,7 @@ type CommissionTier struct {
 type PayoutResult struct {
 	CalculatorID   uint    `json:"calculatorId"`
 	CalculatorName string  `json:"name"`
+	MetricType     string  `json:"metricType"`
 	MetricValue    float64 `json:"metricValue"`
 	Amount         float64 `json:"amount"`
 	Description    string  `json:"description"`
@@ -448,7 +450,7 @@ type IncentiveCustomPayout struct {
 
 type PendingSync struct {
 	ID         uint      `gorm:"primaryKey;autoIncrement" json:"id"`
-	Payload    string    `gorm:"type:text" json:"payload"` // JSON of AppsScriptRequest
+	Payload    string    `gorm:"type:text" json:"payload"`              // JSON of AppsScriptRequest
 	Status     string    `gorm:"index;default:'pending'" json:"status"` // pending, processing, failed
 	RetryCount int       `gorm:"default:0" json:"retryCount"`
 	MaxRetries int       `gorm:"default:5" json:"maxRetries"`
@@ -457,15 +459,15 @@ type PendingSync struct {
 }
 
 type Shift struct {
-	ID          uint      `gorm:"primaryKey;autoIncrement;column:id" json:"ID"`
-	StoreName   string    `gorm:"index;column:store_name" json:"StoreName"`
-	OpenedBy    string    `gorm:"column:opened_by" json:"OpenedBy"`
-	OpenedAt    time.Time `gorm:"column:opened_at" json:"OpenedAt"`
-	OpenPhoto   string    `gorm:"column:open_photo" json:"OpenPhoto"`
-	ClosedBy    string    `gorm:"column:closed_by" json:"ClosedBy"`
+	ID          uint       `gorm:"primaryKey;autoIncrement;column:id" json:"ID"`
+	StoreName   string     `gorm:"index;column:store_name" json:"StoreName"`
+	OpenedBy    string     `gorm:"column:opened_by" json:"OpenedBy"`
+	OpenedAt    time.Time  `gorm:"column:opened_at" json:"OpenedAt"`
+	OpenPhoto   string     `gorm:"column:open_photo" json:"OpenPhoto"`
+	ClosedBy    string     `gorm:"column:closed_by" json:"ClosedBy"`
 	ClosedAt    *time.Time `gorm:"column:closed_at" json:"ClosedAt"`
-	Status      string    `gorm:"column:status" json:"Status"` // "Open", "Closed"
-	SummaryJSON string    `gorm:"type:text;column:summary_json" json:"SummaryJSON"`
+	Status      string     `gorm:"column:status" json:"Status"` // "Open", "Closed"
+	SummaryJSON string     `gorm:"type:text;column:summary_json" json:"SummaryJSON"`
 }
 
 type DeleteOrderRequest struct {
