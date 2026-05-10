@@ -24,15 +24,16 @@ const OrderActionModal: React.FC<OrderActionModalProps> = ({
     const [selectedReason, setSelectedReason] = useState<string>('');
     const [customReason, setCustomReason] = useState<string>('');
 
+    // Validation: Must have a reason selected. If 'ផ្សេងៗ' is selected, customReason must not be empty.
+    const isReady = selectedReason && (selectedReason !== 'ផ្សេងៗ' || customReason.trim().length > 0);
+
     const handleConfirm = () => {
-        const finalReason = selectedReason === 'ផ្សេងៗ' || !selectedReason 
-            ? customReason 
-            : selectedReason + (customReason ? ` (${customReason})` : '');
+        if (!isReady) return;
+
+        const finalReason = selectedReason === 'ផ្សេងៗ'
+            ? customReason.trim()
+            : selectedReason + (customReason.trim() ? ` (${customReason.trim()})` : '');
         
-        if (!finalReason.trim()) {
-            alert("សូមជ្រើសរើស ឬបញ្ចូលមូលហេតុឲ្យបានច្បាស់លាស់");
-            return;
-        }
         onConfirm(finalReason);
         setSelectedReason('');
         setCustomReason('');
@@ -56,7 +57,10 @@ const OrderActionModal: React.FC<OrderActionModalProps> = ({
                 
                 <div className="p-6 space-y-6 overflow-y-auto custom-scrollbar max-h-[60vh]">
                     <div className="space-y-3">
-                        <label className="text-[10px] font-black text-[#848E9C] uppercase tracking-[0.2em] px-1">សូមជ្រើសរើសមូលហេតុចម្បង</label>
+                        <div className="flex items-center justify-between px-1">
+                            <label className="text-[10px] font-black text-[#848E9C] uppercase tracking-[0.2em]">សូមជ្រើសរើសមូលហេតុចម្បង <span className="text-red-500">*</span></label>
+                            {!selectedReason && <span className="text-[9px] font-bold text-red-500/60 animate-pulse">Required</span>}
+                        </div>
                         <div className="grid grid-cols-1 gap-2.5">
                             {reasons.map((reason) => (
                                 <button
@@ -97,14 +101,23 @@ const OrderActionModal: React.FC<OrderActionModalProps> = ({
                     {(selectedReason === 'ផ្សេងៗ' || selectedReason) && (
                         <div className="space-y-3 animate-slide-up">
                             <label className="text-[10px] font-black text-[#848E9C] uppercase tracking-[0.2em] px-1">
-                                {selectedReason === 'ផ្សេងៗ' ? 'រៀបរាប់មូលហេតុលម្អិត' : 'កំណត់ចំណាំបន្ថែម (ស្រេចចិត្ត)'}
+                                {selectedReason === 'ផ្សេងៗ' ? (
+                                    <>រៀបរាប់មូលហេតុលម្អិត <span className="text-red-500">*</span></>
+                                ) : (
+                                    'កំណត់ចំណាំបន្ថែម (ស្រេចចិត្ត)'
+                                )}
                             </label>
                             <textarea
                                 value={customReason}
                                 onChange={(e) => setCustomReason(e.target.value)}
                                 placeholder={placeholder}
-                                className="w-full bg-[#0B0E11] border-2 border-[#2B3139] rounded-xl p-4 text-[#EAECEF] text-xs font-medium focus:border-[#FCD535] outline-none transition-all min-h-[100px] resize-none placeholder-[#474D57] shadow-inner"
+                                className={`w-full bg-[#0B0E11] border-2 rounded-xl p-4 text-[#EAECEF] text-xs font-medium focus:border-[#FCD535] outline-none transition-all min-h-[100px] resize-none placeholder-[#474D57] shadow-inner ${
+                                    selectedReason === 'ផ្សេងៗ' && !customReason.trim() ? 'border-red-500/30' : 'border-[#2B3139]'
+                                }`}
                             />
+                            {selectedReason === 'ផ្សេងៗ' && !customReason.trim() && (
+                                <p className="text-[9px] font-bold text-red-500 px-1 uppercase tracking-wider">សូមបញ្ជាក់មូលហេតុលម្អិតរបស់អ្នក</p>
+                            )}
                         </div>
                     )}
                 </div>
@@ -119,12 +132,20 @@ const OrderActionModal: React.FC<OrderActionModalProps> = ({
                     </button>
                     <button 
                         onClick={handleConfirm}
-                        className="flex-[1.5] py-3.5 text-[11px] font-black text-[#181A20] bg-[#FCD535] hover:bg-[#F0B90B] rounded-xl uppercase tracking-widest transition-all shadow-[0_4px_15px_rgba(252,213,53,0.2)] active:scale-[0.98] border-2 border-[#FCD535]"
+                        disabled={!isReady}
+                        className={`flex-[1.5] py-3.5 text-[11px] font-black rounded-xl uppercase tracking-widest transition-all border-2 active:scale-[0.98] ${
+                            isReady 
+                            ? 'text-[#181A20] bg-[#FCD535] border-[#FCD535] shadow-[0_4px_15px_rgba(252,213,53,0.2)] hover:bg-[#F0B90B]' 
+                            : 'text-[#474D57] bg-[#2B3139] border-[#2B3139] cursor-not-allowed opacity-50'
+                        }`}
                     >
                         {actionText}
                     </button>
                 </div>
             </div>
+        </Modal>
+    );
+};
         </Modal>
     );
 };
