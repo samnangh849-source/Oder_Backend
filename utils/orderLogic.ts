@@ -13,13 +13,18 @@ export const formatForInput = (timestamp: string): string => {
 
 // Recalculate totals based on products, shipping fee, and optional order-level discount
 export const recalculateTotals = (products: Product[], shippingFee: number, orderDiscount: number = 0): Partial<ParsedOrder> => {
-    const subtotal = products.reduce((sum, p) => sum + (p.total || 0), 0);
+    const subtotal = products.reduce((sum, p) => sum + (parseFloat(String(p.total)) || 0), 0);
     // Grand Total is (Subtotal + Shipping Fee) - Order Discount
     const grandTotal = Math.max(0, subtotal + shippingFee - orderDiscount);
-    const totalProductCost = products.reduce((sum, p) => sum + ((p.cost || 0) * (p.quantity || 0)), 0);
+    const totalProductCost = products.reduce((sum, p) => sum + ((parseFloat(String(p.cost)) || 0) * (parseFloat(String(p.quantity)) || 0)), 0);
     
     // Total Discount is the sum of product discounts + the global order discount
-    const productDiscounts = products.reduce((sum, p) => sum + ((p.originalPrice - p.finalPrice) * p.quantity), 0);
+    const productDiscounts = products.reduce((sum, p) => {
+        const original = parseFloat(String(p.originalPrice)) || 0;
+        const final = parseFloat(String(p.finalPrice)) || 0;
+        const qty = parseFloat(String(p.quantity)) || 0;
+        return sum + ((original - final) * qty);
+    }, 0);
     const totalDiscount = productDiscounts + orderDiscount;
     
     return { 

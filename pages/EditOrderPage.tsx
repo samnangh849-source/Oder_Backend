@@ -306,13 +306,20 @@ const EditOrderPage: React.FC<EditOrderPageProps> = ({ order, onSaveSuccess, onC
                     productToUpdate.image = '';
                     productToUpdate.tags = '';
                 }
-            } else if (field === 'finalPrice' || field === 'quantity') {
+            } else if (field === 'finalPrice' || field === 'quantity' || field === 'originalPrice') {
                 if (value === '' || String(value).endsWith('.')) {
                     // @ts-ignore
                     productToUpdate[field] = value;
                 } else {
+                    const numericValue = Math.max(field === 'quantity' ? 1 : 0, parseFloat(value) || 0);
                     // @ts-ignore
-                    productToUpdate[field] = Math.max(field === 'quantity' ? 1 : 0, parseFloat(value) || 0);
+                    productToUpdate[field] = numericValue;
+                    
+                    // SYNC Logic: If Base Price changes, we update finalPrice too 
+                    // so that the Subtotal reflects the new price immediately.
+                    if (field === 'originalPrice') {
+                        productToUpdate.finalPrice = numericValue;
+                    }
                 }
             } else {
                 // @ts-ignore
