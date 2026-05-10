@@ -1,5 +1,5 @@
 ផ្នែកItems Listហេតុអ្វីខ្ញុំកែ កន្លែង Base Price ហើយ តែផ្នែក Subtotal ឬ Discount មិន Update?
 
-
+កែអក្សរនៃ Button Cancel អោយជាក្នុងន័យ ស្នើរសុំ Cancel (Ex: Request Cancel តើពាក្យនេះត្រឹមត្រូវទេ ឬអ្នកគិតយ៉ាងដូចម្ដេច?)
 
 MAOXIN - Mini 10,000mAh (CP026) | Sea pink

@@ -777,11 +777,11 @@ const EditOrderPage: React.FC<EditOrderPageProps> = ({ order, onSaveSuccess, onC
                             isOpen={isActionModalOpen}
                             onClose={() => setIsActionModalOpen(false)}
                             onConfirm={handleConfirmAction}
-                            title={actionModalType === 'cancel' ? 'បោះបង់ការកម្មង់ (Cancel Order)' : 'បង្វិលឥវ៉ាន់ត្រឡប់ (Return Order)'}
-                            actionText={actionModalType === 'cancel' ? 'បោះបង់' : 'បង្វិលត្រឡប់'}
+                            title={actionModalType === 'cancel' ? 'សំណើសុំបោះបង់ (Request Cancel)' : 'សំណើសុំបង្វិលឥវ៉ាន់ (Request Return)'}
+                            actionText={actionModalType === 'cancel' ? 'បញ្ជូនសំណើបោះបង់' : 'បញ្ជូនសំណើបង្វិល'}
                             reasons={actionModalType === 'cancel' 
-                                ? ['អតិថិជនបោះបង់', 'ទាក់ទងអតិថិជនមិនបាន', 'ឥវ៉ាន់អស់ពីស្តុក', 'បញ្ហាដឹកជញ្ជូន'] 
-                                : ['អតិថិជនមិនទទួលឥវ៉ាន់', 'ឥវ៉ាន់មានបញ្ហា/ខូចខាត', 'ឥវ៉ាន់មិនត្រឹមត្រូវ', 'ទាក់ទងមិនបានពេលដឹក']
+                                ? ['អតិថិជនសុំបោះបង់', 'ទាក់ទងអតិថិជនមិនបាន', 'ឥវ៉ាន់អស់ពីស្តុក', 'បញ្ចូលព័ត៌មានខុស/ច្រឡំ', 'អតិថិជនប្តូរចិត្ត'] 
+                                : ['អតិថិជនមិនទទួលឥវ៉ាន់', 'ឥវ៉ាន់មានបញ្ហា/ខូចខាត', 'ឥវ៉ាន់មិនត្រឹមត្រូវ/ផ្ញើខុស', 'ទាក់ទងមិនបានពេលដឹក', 'ដឹកយូរពេក អតិថិជនមិនចាំ']
                             }
                         />
                     </div>
