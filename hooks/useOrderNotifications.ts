@@ -67,7 +67,15 @@ export const useOrderNotifications = () => {
                             if (orderStore && myStore && orderStore.trim().toLowerCase() === myStore.trim().toLowerCase()) {
                                 // Play after 500ms to be closer to the "Ding"
                                 setTimeout(() => {
-                                    const voiceUrl = SOUND_URLS.NEW_ORDER_VOICE;
+                                    // Select voice based on store
+                                    let voiceUrl = SOUND_URLS.NEW_ORDER_VOICE;
+                                    const storeLower = orderStore.trim().toLowerCase();
+                                    if (storeLower === 'flexi gear') {
+                                        voiceUrl = SOUND_URLS.NEW_ORDER_VOICE_FLEXI;
+                                    } else if (storeLower === 'acc store') {
+                                        voiceUrl = SOUND_URLS.NEW_ORDER_VOICE_ACC;
+                                    }
+
                                     console.log(`[Notification] 🗣️ Attempting voice alert: ${voiceUrl} for ${myStore}`);
                                     const audio = new Audio(voiceUrl);
                                     audio.volume = 1.0;

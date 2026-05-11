@@ -219,7 +219,15 @@ const AppContent: React.FC = () => {
 
                 if (orderStore && myStore && orderStore.trim().toLowerCase() === myStore.trim().toLowerCase()) {
                     setTimeout(() => {
-                        const voiceUrl = SOUND_URLS.NEW_ORDER_VOICE;
+                        // Select voice based on store
+                        let voiceUrl = SOUND_URLS.NEW_ORDER_VOICE;
+                        const storeLower = orderStore.trim().toLowerCase();
+                        if (storeLower === 'flexi gear') {
+                            voiceUrl = SOUND_URLS.NEW_ORDER_VOICE_FLEXI;
+                        } else if (storeLower === 'acc store') {
+                            voiceUrl = SOUND_URLS.NEW_ORDER_VOICE_ACC;
+                        }
+
                         console.log(`[App] 🗣️ Attempting voice alert: ${voiceUrl} (Shift Opener: ${isShiftOpener} for ${myStore})`);
                         const audio = new Audio(voiceUrl);
                         audio.volume = 1.0;
