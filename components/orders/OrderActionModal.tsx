@@ -146,8 +146,5 @@ const OrderActionModal: React.FC<OrderActionModalProps> = ({
         </Modal>
     );
 };
-        </Modal>
-    );
-};
 
 export default OrderActionModal;
