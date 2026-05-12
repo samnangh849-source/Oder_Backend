@@ -187,7 +187,12 @@ const IncentiveExecutionView: React.FC<IncentiveExecutionViewProps> = ({ project
             const u = appData.users?.find(x => x.UserName === cr.userName);
             let breakdown: any[] = [];
             if (cr.breakdownJson) {
-                try { breakdown = JSON.parse(cr.breakdownJson); }
+                try { 
+                    const parsed = JSON.parse(cr.breakdownJson);
+                    if (Array.isArray(parsed)) {
+                        breakdown = parsed;
+                    }
+                }
                 catch (e) { console.error('Failed to parse breakdownJson', e); }
             }
             const metricType = breakdown[0]?.metricType || (cr.totalRevenue > 0 ? 'Sales Amount' : 'Number of Orders');
