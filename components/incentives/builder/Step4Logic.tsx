@@ -1,6 +1,6 @@
 import React from 'react';
 import { IncentiveCalculator } from '../../../types';
-import { Layers, Plus, Target, Terminal, X, Zap, ArrowRight, ShieldCheck } from 'lucide-react';
+import { Layers, Plus, Target, Terminal, X, Zap, ArrowRight, ShieldCheck, Activity } from 'lucide-react';
 
 interface Step4LogicProps {
     calcData: Partial<IncentiveCalculator>;
