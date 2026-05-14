@@ -431,14 +431,3 @@ func CheckHealth() bool {
 	}
 	return sqlDB.Ping() == nil
 }
-s true if the database is reachable
-func CheckHealth() bool {
-	if DB == nil {
-		return false
-	}
-	sqlDB, err := DB.DB()
-	if err != nil {
-		return false
-	}
-	return sqlDB.Ping() == nil
-}
