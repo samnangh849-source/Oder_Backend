@@ -265,7 +265,7 @@ const MobilePackagingHub: React.FC<MobilePackagingHubProps> = ({
             </div>
 
             {/* Shipping Method Shortcuts Bar (Mobile) - Positioned below Sticky Search */}
-            {(activeTab === 'Ready to Ship' || activeTab === 'Shipped') && (
+            {(activeTab === 'Pending' || activeTab === 'Ready to Ship' || activeTab === 'Shipped') && (
                 <div className={`flex-shrink-0 px-3 py-2 border-b ${B_BORDER} bg-[#181A20] overflow-x-auto no-scrollbar flex items-center gap-2`}>
                     <button 
                         onClick={() => setShippingFilter('')}

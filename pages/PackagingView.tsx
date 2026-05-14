@@ -5,7 +5,8 @@ import Spinner from '@/components/common/Spinner';
 import { ParsedOrder } from '@/types';
 import { CacheService, CACHE_KEYS } from '@/services/cacheService';
 import FastPackTerminal from '@/components/admin/packaging/fastpack/FastPackTerminal';
-import { convertGoogleDriveUrl, getOptimisticPackagePhoto } from '@/utils/fileUtils';
+import { convertGoogleDriveUrl, getOptimisticPackagePhoto, fileToDataUrl } from '@/utils/fileUtils';
+import { compressImage } from '@/utils/imageCompressor';
 import Modal from '@/components/common/Modal';
 import MobilePackagingHub from '@/components/admin/packaging/MobilePackagingHub';
 import TabletPackagingHub from '@/components/admin/packaging/TabletPackagingHub';
@@ -128,6 +129,8 @@ const PackagingView: React.FC<{ orders?: ParsedOrder[] }> = ({ orders: propOrder
                 setIsShiftModalOpen(false);
                 setShiftStep('options');
                 setActiveTab('Pending');
+                setSearchTerm('');
+                setShippingFilter('');
                 alert("បើកវេនជោគជ័យ!");
             } else {
                 alert(data.message || "មិនអាចបើកវេនបានទេ");
@@ -527,7 +530,17 @@ const PackagingView: React.FC<{ orders?: ParsedOrder[] }> = ({ orders: propOrder
     }
 
     const hubProps = {
-        orders: filteredOrders, activeTab, setActiveTab, searchTerm, setSearchTerm,
+        orders: filteredOrders, 
+        activeTab, 
+        setActiveTab: (tab: any) => {
+            setActiveTab(tab);
+            if (tab === 'Pending') {
+                setSearchTerm('');
+                setShippingFilter('');
+            }
+        }, 
+        searchTerm, 
+        setSearchTerm,
         onPack: (order: ParsedOrder) => !isViewOnly && setPackingOrder(order),
         onShip: (order: ParsedOrder) => !isViewOnly && executeAction(order, 'Shipped', { 'Dispatched Time': new Date().toLocaleString('km-KH'), 'Dispatched By': currentUser?.FullName || 'Packer' }),
         onUndo: (o: ParsedOrder) => !isViewOnly && setUndoConfirmation({ order: o, type: 'pending', isOpen: true }),
@@ -780,7 +793,7 @@ const PackagingView: React.FC<{ orders?: ParsedOrder[] }> = ({ orders: propOrder
                                         onChange={async (e) => {
                                             const file = e.target.files?.[0];
                                             if (file) {
-                                                const compressed = await compressImage(file, 'medium');
+                                                const compressed = await compressImage(file, 'balanced');
                                                 const dataUrl = await fileToDataUrl(compressed);
                                                 setReturnPhoto(dataUrl);
                                             }

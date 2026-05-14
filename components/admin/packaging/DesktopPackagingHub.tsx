@@ -295,7 +295,7 @@ const DesktopPackagingHub: React.FC<DesktopPackagingHubProps> = ({
                 </header>
 
                 {/* Shipping Method Shortcuts Bar (Desktop) */}
-                {(activeTab === 'Ready to Ship' || activeTab === 'Shipped') && (
+                {(activeTab === 'Pending' || activeTab === 'Ready to Ship' || activeTab === 'Shipped') && (
                     <div className={`flex-shrink-0 px-8 py-3 bg-[#181A20] border-b ${B_BORDER} flex items-center gap-3 overflow-x-auto no-scrollbar`}>
                         <span className={`text-xs font-black ${B_TEXT_SECONDARY} uppercase tracking-[0.2em] mr-2`}>Shipping Filter:</span>
                         <button 

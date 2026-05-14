@@ -227,7 +227,7 @@ const TabletPackagingHub: React.FC<TabletPackagingHubProps> = ({
                         </button>
 
                         {/* Shipping Method Shortcuts (Tablet) */}
-                        {activeTab === 'Ready to Ship' && (
+                        {(activeTab === 'Pending' || activeTab === 'Ready to Ship' || activeTab === 'Shipped') && (
                             <div className="flex items-center gap-2 border-l border-[#2B3139] pl-3 ml-1 overflow-x-auto no-scrollbar py-1">
                                 <button 
                                     onClick={() => setShippingFilter('')}
