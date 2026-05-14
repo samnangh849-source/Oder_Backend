@@ -35,6 +35,9 @@ interface DesktopPackagingHubProps {
     onExit: () => void;
     shippingFilter: string;
     setShippingFilter: (filter: string) => void;
+    teamFilter: string;
+    setTeamFilter: (filter: string) => void;
+    shippingCounts?: { [key: string]: number };
     selectedStore: string;
     progressStats: { packedByUserToday: number, storeTotalToday: number, progressPercentage: number };
     viewMode: 'card' | 'list';
@@ -57,7 +60,7 @@ interface DesktopPackagingHubProps {
 const DesktopPackagingHub: React.FC<DesktopPackagingHubProps> = ({
     orders, activeTab, setActiveTab, searchTerm, setSearchTerm,
     onPack, onShip, onUndo, onUndoShipped, onView, onPrintManifest, onSwitchHub, onExit,
-    shippingFilter, setShippingFilter,
+    shippingFilter, setShippingFilter, teamFilter, setTeamFilter, shippingCounts,
     selectedStore,
     progressStats, viewMode, setViewMode, setIsFilterModalOpen, loadingActionId, tabCounts,
     selectedOrderIds, toggleOrderSelection, clearSelection, onBulkShip, isBulkProcessing,
@@ -65,6 +68,8 @@ const DesktopPackagingHub: React.FC<DesktopPackagingHubProps> = ({
 }) => {
     const { appData, previewImage: showFullImage } = useContext(AppContext);
     const [unpackTarget, setUnpackTarget] = useState<ParsedOrder | null>(null);
+
+    const activeFilterCount = (shippingFilter ? 1 : 0) + (teamFilter ? 1 : 0);
 
     const handleCopy = (text: string, label: string) => {
         if (!text) return;
@@ -250,9 +255,28 @@ const DesktopPackagingHub: React.FC<DesktopPackagingHubProps> = ({
                                 <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2.5}><path d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" /></svg>
                             </div>
                         </div>
-                        <button onClick={() => setIsFilterModalOpen(true)} className={`px-3 py-1.5 ${B_BG_MAIN} hover:bg-[#2B3139] ${B_TEXT_PRIMARY} text-sm font-medium border ${B_BORDER} rounded-sm flex items-center gap-1.5 whitespace-nowrap`}>
-                            <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 4a1 1 0 011-1h16a1 1 0 011 1v2.586a1 1 0 01-.293.707l-6.414 6.414a1 1 0 00-.293.707V17l-4 4v-6.586a1 1 0 00-.293-.707L3.293 7.293A1 1 0 013 6.586V4z" /></svg>
-                            Filters
+                        <button 
+                            onClick={() => setIsFilterModalOpen(true)} 
+                            className={`px-4 py-1.5 rounded-sm flex items-center gap-2.5 transition-all border text-[11px] font-bold uppercase tracking-wider whitespace-nowrap ${
+                                activeFilterCount > 0 
+                                    ? 'bg-[#FCD535]/10 border-[#FCD535] text-[#FCD535] shadow-[0_0_15px_rgba(252,213,53,0.05)]' 
+                                    : `${B_BG_MAIN} border-[#2B3139] ${B_TEXT_SECONDARY} hover:border-[#FCD535]/50 hover:text-[#EAECEF]`
+                            }`}
+                        >
+                            <div className="relative">
+                                <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M3 4a1 1 0 011-1h16a1 1 0 011 1v2.586a1 1 0 01-.293.707l-6.414 6.414a1 1 0 00-.293.707V17l-4 4v-6.586a1 1 0 00-.293-.707L3.293 7.293A1 1 0 013 6.586V4z" />
+                                </svg>
+                                {activeFilterCount > 0 && (
+                                    <span className="absolute -top-1 -right-1 w-1.5 h-1.5 bg-[#FCD535] rounded-full animate-pulse shadow-[0_0_8px_rgba(252,213,53,0.5)]"></span>
+                                )}
+                            </div>
+                            <span>Filters</span>
+                            {activeFilterCount > 0 && (
+                                <span className="flex items-center justify-center w-4 h-4 bg-[#FCD535] text-[#0B0E11] text-[9px] font-black rounded-full ml-0.5">
+                                    {activeFilterCount}
+                                </span>
+                            )}
                         </button>
                     </div>
 
@@ -300,20 +324,34 @@ const DesktopPackagingHub: React.FC<DesktopPackagingHubProps> = ({
                         <span className={`text-xs font-black ${B_TEXT_SECONDARY} uppercase tracking-[0.2em] mr-2`}>Shipping Filter:</span>
                         <button 
                             onClick={() => setShippingFilter('')}
-                            className={`px-4 py-2 rounded-sm text-xs font-black uppercase tracking-wider transition-all whitespace-nowrap border ${!shippingFilter ? 'bg-[#FCD535] border-[#FCD535] text-black shadow-[0_0_15px_rgba(252,213,53,0.2)]' : 'bg-[#0B0E11] border-[#2B3139] text-[#848E9C] hover:border-[#FCD535]/50 hover:text-[#EAECEF]'}`}
+                            className={`px-4 py-2 rounded-sm text-xs font-black uppercase tracking-wider transition-all whitespace-nowrap border flex items-center gap-2 ${!shippingFilter ? 'bg-[#FCD535] border-[#FCD535] text-black shadow-[0_0_15px_rgba(252,213,53,0.2)]' : 'bg-[#0B0E11] border-[#2B3139] text-[#848E9C] hover:border-[#FCD535]/50 hover:text-[#EAECEF]'}`}
                         >
                             ALL CARRIERS
+                            {shippingCounts && (
+                                <span className={`ml-1 px-1.5 py-0.5 rounded-full text-[10px] font-black ${!shippingFilter ? 'bg-black/10 text-black' : 'bg-[#2B3139] text-[#848E9C]'}`}>
+                                    {shippingCounts['all'] || 0}
+                                </span>
+                            )}
                         </button>
-                        {appData.shippingMethods?.filter((m: any) => m.Status !== 'Inactive').map((method: any) => (
-                            <button
-                                key={method.MethodName}
-                                onClick={() => setShippingFilter(shippingFilter === method.MethodName ? '' : method.MethodName)}
-                                className={`px-4 py-2 rounded-sm text-xs font-black uppercase tracking-wider transition-all whitespace-nowrap border flex items-center gap-2.5 ${shippingFilter === method.MethodName ? 'bg-[#FCD535] border-[#FCD535] text-black shadow-[0_0_15px_rgba(252,213,53,0.2)]' : 'bg-[#0B0E11] border-[#2B3139] text-[#848E9C] hover:border-[#FCD535]/50 hover:text-[#EAECEF]'}`}
-                            >
-                                {method.LogoURL && <img src={convertGoogleDriveUrl(method.LogoURL)} alt="" className="w-5 h-5 object-contain" />}
-                                {method.MethodName}
-                            </button>
-                        ))}
+                        {appData.shippingMethods?.filter((m: any) => m.Status !== 'Inactive').map((method: any) => {
+                            const count = shippingCounts?.[method.MethodName] || 0;
+                            const isActive = shippingFilter === method.MethodName;
+                            return (
+                                <button
+                                    key={method.MethodName}
+                                    onClick={() => setShippingFilter(isActive ? '' : method.MethodName)}
+                                    className={`px-4 py-2 rounded-sm text-xs font-black uppercase tracking-wider transition-all whitespace-nowrap border flex items-center gap-2.5 ${isActive ? 'bg-[#FCD535] border-[#FCD535] text-black shadow-[0_0_15px_rgba(252,213,53,0.2)]' : 'bg-[#0B0E11] border-[#2B3139] text-[#848E9C] hover:border-[#FCD535]/50 hover:text-[#EAECEF]'}`}
+                                >
+                                    {method.LogoURL && <img src={convertGoogleDriveUrl(method.LogoURL)} alt="" className="w-5 h-5 object-contain" />}
+                                    <span>{method.MethodName}</span>
+                                    {count > 0 && (
+                                        <span className={`px-1.5 py-0.5 rounded-full text-[10px] font-black ${isActive ? 'bg-black/10 text-black' : 'bg-[#2B3139] text-[#848E9C]'}`}>
+                                            {count}
+                                        </span>
+                                    )}
+                                </button>
+                            );
+                        })}
                     </div>
                 )}
 

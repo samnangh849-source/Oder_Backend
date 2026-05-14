@@ -21,6 +21,7 @@ const bClasses = {
 };
 
 const PackagingView: React.FC<{ orders?: ParsedOrder[] }> = ({ orders: propOrders }) => {
+    // 1. Context & States
     const { appData, refreshData, currentUser, setMobilePageTitle, appState, setAppState, setIsShiftOpener, setActiveShiftStore } = useContext(AppContext);
 
     const [selectedStore, setSelectedStore] = useState<string>('');
@@ -45,6 +46,7 @@ const PackagingView: React.FC<{ orders?: ParsedOrder[] }> = ({ orders: propOrder
     const [viewingOrder, setViewingOrder] = useState<ParsedOrder | null>(null);
     const [searchTerm, setSearchTerm] = useState('');
     const [shippingFilter, setShippingFilter] = useState<string>('');
+    const [teamFilter, setTeamFilter] = useState<string>('');
     const [deviceType, setDeviceType] = useState<'mobile' | 'tablet' | 'desktop'>('desktop');
     const [isBulkProcessing, setIsBulkProcessing] = useState(false);
     const [isFilterModalOpen, setIsFilterModalOpen] = useState(false);
@@ -52,12 +54,131 @@ const PackagingView: React.FC<{ orders?: ParsedOrder[] }> = ({ orders: propOrder
     const [undoPassword, setUndoPassword] = useState('');
     const [isUndoVerifying, setIsUndoVerifying] = useState(false);
 
+    // 2. Memos
+    const allOrdersMapped = useMemo(() => {
+        const rawData = propOrders || (Array.isArray((appData as any).orders) ? (appData as any).orders : []);
+        return rawData
+            .filter((o: any) => o && o['Order ID'] && o['Order ID'] !== 'Opening_Balance')
+            .map((o: any) => ({ 
+                ...o, 
+                Products: Array.isArray(o.Products) ? o.Products : [], 
+                FulfillmentStatus: (o['Fulfillment Status'] || o.FulfillmentStatus || 'Pending') as any
+            })) as ParsedOrder[];
+    }, [appData.orders, propOrders]);
+
+    const availableStores = useMemo(() => appData.stores ? appData.stores.map((s: any) => s.StoreName) : [], [appData.stores]);
+    
+    const availableTeams = useMemo(() => {
+        const teams = new Set<string>();
+        if (Array.isArray(appData.pages)) {
+            appData.pages.forEach((p: any) => {
+                if (p.Team) teams.add(p.Team);
+            });
+        }
+        // Fallback: also check orders in case pages are not yet loaded or configured
+        allOrdersMapped.forEach(o => {
+            if (o.Team) teams.add(o.Team);
+        });
+        return Array.from(teams).sort();
+    }, [appData.pages, allOrdersMapped]);
+
+    const allFilteredOrdersBase = useMemo(() => {
+        if (!selectedStore) return [];
+        let filtered = allOrdersMapped.filter(o => (o['Fulfillment Store'] || 'Unassigned').trim().toLowerCase() === selectedStore.trim().toLowerCase());
+        
+        if (searchTerm.trim()) {
+            const q = searchTerm.toLowerCase();
+            filtered = filtered.filter(o => 
+                o['Order ID'].toLowerCase().includes(q) || 
+                (o['Customer Name'] || '').toLowerCase().includes(q) ||
+                (o['Internal Shipping Method'] || '').toLowerCase().includes(q)
+            );
+        }
+
+        if (teamFilter) {
+            filtered = filtered.filter(o => o.Team === teamFilter);
+        }
+
+        return filtered;
+    }, [allOrdersMapped, selectedStore, searchTerm, teamFilter]);
+
+    const allFilteredOrders = useMemo(() => {
+        if (!shippingFilter) return allFilteredOrdersBase;
+        return allFilteredOrdersBase.filter(o => o['Internal Shipping Method'] === shippingFilter);
+    }, [allFilteredOrdersBase, shippingFilter]);
+
+    const filteredOrdersForCounts = useMemo(() => {
+        return allFilteredOrdersBase.filter(o => {
+            const fs = o.FulfillmentStatus;
+            const isPacked = !!(o['Packed By'] || o['Packed Time']);
+            const isUnpacked = !!o['Return Received By'];
+            if (activeTab === 'Cancelled') return fs === 'Cancelled' && isUnpacked;
+            if (fs === activeTab) return true;
+            if (fs === 'Cancelled' && !isUnpacked) {
+                if (activeTab === 'Pending' && !isPacked) return true;
+                if (activeTab === 'Ready to Ship' && isPacked) return true;
+            }
+            return false;
+        });
+    }, [allFilteredOrdersBase, activeTab]);
+
+    const filteredOrders = useMemo(() => {
+        if (!shippingFilter) return filteredOrdersForCounts;
+        return filteredOrdersForCounts.filter(o => o['Internal Shipping Method'] === shippingFilter);
+    }, [filteredOrdersForCounts, shippingFilter]);
+
+    const tabCounts = useMemo(() => {
+        const counts = { pending: 0, ready: 0, shipped: 0, returned: 0, cancelled: 0 };
+        allFilteredOrdersBase.forEach(o => {
+            const fs = o.FulfillmentStatus;
+            const isPacked = !!(o['Packed By'] || o['Packed Time']);
+            const isUnpacked = !!o['Return Received By'];
+
+            if (fs === 'Pending') counts.pending++;
+            else if (fs === 'Ready to Ship') counts.ready++;
+            else if (fs === 'Shipped') counts.shipped++;
+            else if (fs === 'Returned') counts.returned++;
+            else if (fs === 'Cancelled') {
+                if (isUnpacked) {
+                    counts.cancelled++;
+                } else {
+                    if (!isPacked) counts.pending++;
+                    else counts.ready++;
+                }
+            }
+        });
+        return counts;
+    }, [allFilteredOrdersBase]);
+
+    const progressStats = useMemo(() => {
+        const todayStr = new Date().toLocaleDateString('km-KH');
+        const packedByUserToday = allFilteredOrdersBase.filter(o => {
+            const isPackedByMe = (o['Packed By'] || '') === (currentUser?.FullName || '');
+            const isToday = (o['Packed Time'] || '').startsWith(todayStr.split(',')[0]);
+            return isPackedByMe && isToday &&
+                (o.FulfillmentStatus === 'Ready to Ship' || o.FulfillmentStatus === 'Shipped');
+        }).length;
+        const storeTotalToday = allFilteredOrdersBase.length;
+        const progressPercentage = storeTotalToday > 0
+            ? Math.round((packedByUserToday / storeTotalToday) * 100)
+            : 0;
+        return { packedByUserToday, storeTotalToday, progressPercentage };
+    }, [allFilteredOrdersBase, currentUser]);
+
+    const shippingCounts = useMemo(() => {
+        const counts: { [key: string]: number } = { 'all': filteredOrdersForCounts.length };
+        filteredOrdersForCounts.forEach(o => {
+            const method = o['Internal Shipping Method'] || 'Unassigned';
+            counts[method] = (counts[method] || 0) + 1;
+        });
+        return counts;
+    }, [filteredOrdersForCounts]);
+
+    // 3. Effects
     useEffect(() => {
         const openedBy = (activeShift?.OpenedBy || '').trim().toLowerCase();
         const me = (currentUser?.FullName || '').trim().toLowerCase();
         const isOpener = !!activeShift && openedBy === me;
-
-        console.log(`[Shift] Active: ${!!activeShift}, Opener: ${openedBy}, Me: ${me}, Result: ${isOpener}`);
 
         setIsShiftOpener(isOpener);
         if (isOpener && activeShift?.StoreName) {
@@ -65,37 +186,36 @@ const PackagingView: React.FC<{ orders?: ParsedOrder[] }> = ({ orders: propOrder
         } else if (!isOpener) {
             setActiveShiftStore('');
         }
-        // We don't reset on unmount because the user might go to another page
-        // while their shift is still active in the background session.
     }, [activeShift, setIsShiftOpener, setActiveShiftStore, currentUser?.FullName]);
-    const checkActiveShift = async (store: string) => {
-        setIsShiftLoading(true);
-        try {
-            const session = await CacheService.get<{ token: string }>(CACHE_KEYS.SESSION);
-            const token = session?.token || '';
-            const res = await fetch(`${WEB_APP_URL}/api/admin/shifts/active/${encodeURIComponent(store)}`, {
-                headers: { ...(token ? { 'Authorization': `Bearer ${token}` } : {}) }
-            });
-            const data = await res.json();
-            if (data.status === 'success') {
-                setActiveShift(data.shift);
-                const openedBy = (data.shift.OpenedBy || '').trim().toLowerCase();
-                const me = (currentUser?.FullName || '').trim().toLowerCase();
-                setIsViewOnly(openedBy !== me);
-            } else {
-                setActiveShift(null);
-                setIsViewOnly(false);
-                setIsShiftModalOpen(true);
-                setShiftStep('options');
-            }
-        } catch (error) {
-            console.error("Failed to check active shift", error);
-        } finally {
-            setIsShiftLoading(false);
-        }
-    };
 
     useEffect(() => {
+        const checkActiveShift = async (store: string) => {
+            setIsShiftLoading(true);
+            try {
+                const session = await CacheService.get<{ token: string }>(CACHE_KEYS.SESSION);
+                const token = session?.token || '';
+                const res = await fetch(`${WEB_APP_URL}/api/admin/shifts/active/${encodeURIComponent(store)}`, {
+                    headers: { ...(token ? { 'Authorization': `Bearer ${token}` } : {}) }
+                });
+                const data = await res.json();
+                if (data.status === 'success') {
+                    setActiveShift(data.shift);
+                    const openedBy = (data.shift.OpenedBy || '').trim().toLowerCase();
+                    const me = (currentUser?.FullName || '').trim().toLowerCase();
+                    setIsViewOnly(openedBy !== me);
+                } else {
+                    setActiveShift(null);
+                    setIsViewOnly(false);
+                    setIsShiftModalOpen(true);
+                    setShiftStep('options');
+                }
+            } catch (error) {
+                console.error("Failed to check active shift", error);
+            } finally {
+                setIsShiftLoading(false);
+            }
+        };
+
         if (selectedStore) {
             checkActiveShift(selectedStore);
         } else {
@@ -103,8 +223,27 @@ const PackagingView: React.FC<{ orders?: ParsedOrder[] }> = ({ orders: propOrder
             setIsViewOnly(false);
             setIsShiftModalOpen(false);
         }
-    }, [selectedStore]);
+    }, [selectedStore, currentUser?.FullName]);
 
+    useEffect(() => {
+        const title = selectedStore ? `PACK: ${selectedStore}` : 'Packaging Hub';
+        setMobilePageTitle(title);
+        return () => setMobilePageTitle(null);
+    }, [setMobilePageTitle, selectedStore]);
+
+    useEffect(() => {
+        const handleResize = () => {
+            const w = window.innerWidth;
+            if (w < 768) setDeviceType('mobile');
+            else if (w < 1024) setDeviceType('tablet');
+            else setDeviceType('desktop');
+        };
+        handleResize();
+        window.addEventListener('resize', handleResize);
+        return () => window.removeEventListener('resize', handleResize);
+    }, []);
+
+    // 4. Helper Functions (Callables)
     const handleOpenShift = async () => {
         setIsShiftLoading(true);
         try {
@@ -122,7 +261,8 @@ const PackagingView: React.FC<{ orders?: ParsedOrder[] }> = ({ orders: propOrder
                     storeName: selectedStore,
                     photo: capturedPhoto || ""
                 })
-            });            const data = await res.json();
+            });
+            const data = await res.json();
             if (data.status === 'success') {
                 setActiveShift(data.shift);
                 setIsViewOnly(false);
@@ -144,16 +284,13 @@ const PackagingView: React.FC<{ orders?: ParsedOrder[] }> = ({ orders: propOrder
 
     const handleCloseShift = async () => {
         if (!activeShift) return;
-        
-        // Calculate summary
         const todayStr = new Date().toLocaleDateString('km-KH').split(',')[0];
-        const shiftOrders = allFilteredOrders.filter(o => {
+        const shiftOrders = allFilteredOrdersBase.filter(o => {
             const isMe = o['Packed By'] === currentUser?.FullName;
             const isToday = (o['Packed Time'] || '').startsWith(todayStr);
             return isMe && isToday && (o.FulfillmentStatus === 'Ready to Ship' || o.FulfillmentStatus === 'Shipped');
         });
         const summary = `វេចខ្ចប់៖ ${shiftOrders.length} កញ្ចប់`;
-
         if (!window.confirm(`តើអ្នកប្រាកដថាចង់បិទវេនមែនទេ?\n\n${summary}`)) return;
 
         setIsShiftLoading(true);
@@ -193,21 +330,16 @@ const PackagingView: React.FC<{ orders?: ParsedOrder[] }> = ({ orders: propOrder
             alert("សូមបញ្ចូលលេខសម្ងាត់");
             return;
         }
-
         setIsUndoVerifying(true);
         try {
-            // Find the actual UserName from the FullName stored in activeShift.OpenedBy
             const shiftOwner = appData.users?.find(u => u.FullName === activeShift.OpenedBy);
             const verifyUsername = shiftOwner?.UserName || activeShift.OpenedBy;
-
-            // Verify password using login endpoint
             const res = await fetch(`${WEB_APP_URL}/api/login`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ userName: verifyUsername, password: undoPassword })
             });
             const data = await res.json();
-            
             if (data.status === 'success') {
                 const { order, type } = undoTarget;
                 if (type === 'pending') {
@@ -244,7 +376,6 @@ const PackagingView: React.FC<{ orders?: ParsedOrder[] }> = ({ orders: propOrder
 
     const onBulkShip = async () => {
         if (selectedOrderIds.size === 0) return;
-        
         const confirmed = window.confirm(`Are you sure you want to ship ${selectedOrderIds.size} orders?`);
         if (!confirmed) return;
 
@@ -253,13 +384,9 @@ const PackagingView: React.FC<{ orders?: ParsedOrder[] }> = ({ orders: propOrder
             const session = await CacheService.get<{ token: string }>(CACHE_KEYS.SESSION);
             const token = session?.token || '';
             const ids = Array.from(selectedOrderIds);
-            
-            // Execute updates in parallel with a small delay to avoid overwhelming the server if needed, 
-            // but for now simple Promise.all or sequential is fine.
             await Promise.all(ids.map(async (id) => {
                 const order = allOrdersMapped.find(o => o['Order ID'] === id);
                 if (!order) return;
-
                 return fetch(`${WEB_APP_URL}/api/admin/update-order`, {
                     method: 'POST',
                     headers: { 
@@ -267,9 +394,7 @@ const PackagingView: React.FC<{ orders?: ParsedOrder[] }> = ({ orders: propOrder
                         ...(token ? { 'Authorization': `Bearer ${token}` } : {}) 
                     },
                     body: JSON.stringify({ 
-                        orderId: id, 
-                        team: order.Team, 
-                        userName: currentUser?.FullName || 'System', 
+                        orderId: id, team: order.Team, userName: currentUser?.FullName || 'System', 
                         newData: { 
                             'Fulfillment Status': 'Shipped', 
                             'Dispatched Time': new Date().toLocaleString('km-KH'), 
@@ -278,7 +403,6 @@ const PackagingView: React.FC<{ orders?: ParsedOrder[] }> = ({ orders: propOrder
                     })
                 });
             }));
-
             setSelectedOrderIds(new Set());
             refreshData();
         } catch (error) {
@@ -289,127 +413,14 @@ const PackagingView: React.FC<{ orders?: ParsedOrder[] }> = ({ orders: propOrder
         }
     };
 
-    useEffect(() => {
-        const handleResize = () => {
-            const w = window.innerWidth;
-            if (w < 768) setDeviceType('mobile');
-            else if (w < 1024) setDeviceType('tablet');
-            else setDeviceType('desktop');
-        };
-        handleResize();
-        window.addEventListener('resize', handleResize);
-        return () => window.removeEventListener('resize', handleResize);
-    }, []);
-
-    const allOrdersMapped = useMemo(() => {
-        const rawData = propOrders || (Array.isArray((appData as any).orders) ? (appData as any).orders : []);
-        return rawData
-            .filter((o: any) => o && o['Order ID'] && o['Order ID'] !== 'Opening_Balance')
-            .map((o: any) => ({ 
-                ...o, 
-                Products: Array.isArray(o.Products) ? o.Products : [], 
-                FulfillmentStatus: (o['Fulfillment Status'] || o.FulfillmentStatus || 'Pending') as any
-            })) as ParsedOrder[];
-    }, [appData.orders, propOrders]);
-
-    useEffect(() => {
-        setMobilePageTitle(selectedStore ? `PACK: ${selectedStore}` : 'Packaging Hub');
-        return () => setMobilePageTitle(null);
-    }, [setMobilePageTitle, selectedStore]);
-
-    const availableStores = useMemo(() => appData.stores ? appData.stores.map((s: any) => s.StoreName) : [], [appData.stores]);
-    
-    const allFilteredOrders = useMemo(() => {
-        if (!selectedStore) return [];
-        let filtered = allOrdersMapped.filter(o => (o['Fulfillment Store'] || 'Unassigned').trim().toLowerCase() === selectedStore.trim().toLowerCase());
-        
-        if (shippingFilter) {
-            filtered = filtered.filter(o => o['Internal Shipping Method'] === shippingFilter);
-        }
-
-        if (searchTerm.trim()) {
-            const q = searchTerm.toLowerCase();
-            filtered = filtered.filter(o => 
-                o['Order ID'].toLowerCase().includes(q) || 
-                (o['Customer Name'] || '').toLowerCase().includes(q) ||
-                (o['Internal Shipping Method'] || '').toLowerCase().includes(q)
-            );
-        }
-        return filtered;
-    }, [allOrdersMapped, selectedStore, searchTerm, shippingFilter]);
-
-    const filteredOrders = useMemo(() => {
-        return allFilteredOrders.filter(o => {
-            const fs = o.FulfillmentStatus;
-            const isPacked = !!(o['Packed By'] || o['Packed Time']);
-            const isUnpacked = !!o['Return Received By'];
-
-            if (activeTab === 'Cancelled') {
-                return fs === 'Cancelled' && isUnpacked;
-            }
-
-            if (fs === activeTab) return true;
-            
-            // SPECIAL: Keep Cancelled orders visible in Pending and Ready tabs for awareness
-            // BUT: Once confirmed "unpacked", they MUST move to the Cancelled tab (handled above).
-            if (fs === 'Cancelled' && !isUnpacked) {
-                if (activeTab === 'Pending' && !isPacked) return true;
-                if (activeTab === 'Ready to Ship' && isPacked) return true;
-            }
-            
-            return false;
-        });
-    }, [allFilteredOrders, activeTab]);
-
-    const tabCounts = useMemo(() => {
-        const counts = { pending: 0, ready: 0, shipped: 0, returned: 0, cancelled: 0 };
-        allFilteredOrders.forEach(o => {
-            const fs = o.FulfillmentStatus;
-            const isPacked = !!(o['Packed By'] || o['Packed Time']);
-            const isUnpacked = !!o['Return Received By'];
-
-            if (fs === 'Pending') counts.pending++;
-            else if (fs === 'Ready to Ship') counts.ready++;
-            else if (fs === 'Shipped') counts.shipped++;
-            else if (fs === 'Returned') counts.returned++;
-            else if (fs === 'Cancelled') {
-                if (isUnpacked) {
-                    counts.cancelled++;
-                } else {
-                    if (!isPacked) counts.pending++;
-                    else counts.ready++;
-                }
-            }
-        });
-        return counts;
-    }, [allFilteredOrders]);
-
-    const progressStats = useMemo(() => {
-        const todayStr = new Date().toLocaleDateString('km-KH');
-        const packedByUserToday = allFilteredOrders.filter(o => {
-            const isPackedByMe = (o['Packed By'] || '') === (currentUser?.FullName || '');
-            const isToday = (o['Packed Time'] || '').startsWith(todayStr.split(',')[0]);
-            return isPackedByMe && isToday &&
-                (o.FulfillmentStatus === 'Ready to Ship' || o.FulfillmentStatus === 'Shipped');
-        }).length;
-        const storeTotalToday = allFilteredOrders.length;
-        const progressPercentage = storeTotalToday > 0
-            ? Math.round((packedByUserToday / storeTotalToday) * 100)
-            : 0;
-        return { packedByUserToday, storeTotalToday, progressPercentage };
-    }, [allFilteredOrders, currentUser]);
-
     const executeAction = async (order: ParsedOrder, newStatus: string, extraData: any = {}) => {
         setLoadingActionId(order['Order ID']);
         try {
             const session = await CacheService.get<{ token: string }>(CACHE_KEYS.SESSION);
             const token = session?.token || '';
-            
-            // Clear local optimistic photo if we are resetting the photo URL
             if (extraData['Package Photo'] === '') {
                 localStorage.removeItem(`package_photo_${order['Order ID']}`);
             }
-
             await fetch(`${WEB_APP_URL}/api/admin/update-order`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json', ...(token ? { 'Authorization': `Bearer ${token}` } : {}) },
@@ -425,17 +436,13 @@ const PackagingView: React.FC<{ orders?: ParsedOrder[] }> = ({ orders: propOrder
         try {
             const session = await CacheService.get<{ token: string }>(CACHE_KEYS.SESSION);
             const token = session?.token || '';
-            
             const res = await fetch(`${WEB_APP_URL}/api/admin/update-order`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json', ...(token ? { 'Authorization': `Bearer ${token}` } : {}) },
                 body: JSON.stringify({ 
-                    orderId: returningOrder['Order ID'], 
-                    team: returningOrder.Team, 
-                    userName: currentUser?.FullName || 'System', 
+                    orderId: returningOrder['Order ID'], team: returningOrder.Team, userName: currentUser?.FullName || 'System', 
                     newData: { 
-                        'Fulfillment Status': 'Returned',
-                        'Return Photo': photo,
+                        'Fulfillment Status': 'Returned', 'Return Photo': photo,
                         'Return Received By': currentUser?.FullName || 'Staff',
                         'Return Received Time': new Date().toISOString().slice(0, 19).replace('T', ' ')
                     } 
@@ -448,20 +455,14 @@ const PackagingView: React.FC<{ orders?: ParsedOrder[] }> = ({ orders: propOrder
                 setReturnPhoto(null);
                 refreshData();
                 alert("បានបញ្ជាក់ការទទួលឥវ៉ាន់ Return រួចរាល់!");
-            } else {
-                alert(data.message || "មិនអាចបញ្ជាក់បានទេ");
-            }
-        } catch (error) {
-            alert("មានបញ្ហាពេលបញ្ជាក់ការទទួល");
-        } finally {
-            setIsSubmittingReturn(false);
-        }
+            } else { alert(data.message || "មិនអាចបញ្ជាក់បានទេ"); }
+        } catch (error) { alert("មានបញ្ហាពេលបញ្ជាក់ការទទួល"); } finally { setIsSubmittingReturn(false); }
     };
 
+    // 5. Early Return for Store Selection
     if (!selectedStore) {
         return (
             <div className="flex flex-col items-center justify-center h-full p-6 bg-[#0B0E11] font-sans relative overflow-hidden">
-                {/* Header Actions */}
                 <div className="absolute top-0 left-0 p-6 z-50">
                     <button 
                         onClick={() => setAppState('role_selection')}
@@ -473,11 +474,8 @@ const PackagingView: React.FC<{ orders?: ParsedOrder[] }> = ({ orders: propOrder
                         <span className="text-sm font-bold uppercase tracking-wider">Back</span>
                     </button>
                 </div>
-
-                {/* Background Decorative Elements */}
                 <div className="absolute top-0 left-0 w-96 h-96 bg-[#FCD535]/5 rounded-full blur-[120px] -translate-x-1/2 -translate-y-1/2"></div>
                 <div className="absolute bottom-0 right-0 w-[500px] h-[500px] bg-[#FCD535]/[0.02] rounded-full blur-[150px] translate-x-1/2 translate-y-1/2"></div>
-                
                 <div className="w-full max-w-md space-y-12 text-center relative z-10 animate-fade-in">
                     <div className="space-y-4">
                         <div className="flex justify-center mb-6">
@@ -492,7 +490,6 @@ const PackagingView: React.FC<{ orders?: ParsedOrder[] }> = ({ orders: propOrder
                             <div className="h-[1px] w-8 bg-white/10"></div>
                         </div>
                     </div>
-
                     <div className="grid grid-cols-1 gap-4">
                         {availableStores.map((store, idx) => (
                             <button 
@@ -508,29 +505,25 @@ const PackagingView: React.FC<{ orders?: ParsedOrder[] }> = ({ orders: propOrder
                                 <div className="relative z-10 w-12 h-12 rounded-xl bg-white/5 group-hover:bg-black/10 flex items-center justify-center transition-colors">
                                     <span className="text-[#FCD535] group-hover:text-black group-hover:translate-x-1 transition-all text-2xl">→</span>
                                 </div>
-                                
-                                {/* Hover Decorative Element */}
                                 <div className="absolute top-0 right-0 w-32 h-full bg-gradient-to-l from-white/5 to-transparent opacity-0 group-hover:opacity-100 transition-opacity"></div>
                             </button>
                         ))}
-                        
                         {availableStores.length === 0 && (
                             <div className="p-12 rounded-2xl border border-dashed border-white/10 text-gray-600">
                                 <p className="text-sm font-bold uppercase tracking-widest">No Active Nodes Found</p>
                             </div>
                         )}
                     </div>
-
-                    <p className="text-[10px] font-black text-gray-600 uppercase tracking-[0.4em] pt-8">
-                        Authorized Access Only
-                    </p>
+                    <p className="text-[10px] font-black text-gray-600 uppercase tracking-[0.4em] pt-8">Authorized Access Only</p>
                 </div>
             </div>
         );
     }
 
+    // 6. Hub Props & Main Render
     const hubProps = {
         orders: filteredOrders, 
+        shippingCounts,
         activeTab, 
         setActiveTab: (tab: any) => {
             setActiveTab(tab);
@@ -551,9 +544,7 @@ const PackagingView: React.FC<{ orders?: ParsedOrder[] }> = ({ orders: propOrder
                 executeAction(order, 'Cancelled', { 
                     'Return Received By': currentUser?.FullName || 'Staff',
                     'Return Received Time': new Date().toISOString().slice(0, 19).replace('T', ' '),
-                    'Packed By': '',
-                    'Packed Time': '',
-                    'Package Photo': ''
+                    'Packed By': '', 'Packed Time': '', 'Package Photo': ''
                 });
             }
         },
@@ -566,75 +557,21 @@ const PackagingView: React.FC<{ orders?: ParsedOrder[] }> = ({ orders: propOrder
         onPrintManifest: () => {
             const printWindow = window.open('', '_blank');
             if (!printWindow) return;
-            
             const manifestOrders = filteredOrders;
-            const html = `
-                <html>
-                    <head>
-                        <title>Dispatch Manifest - ${selectedStore}</title>
-                        <style>
-                            body { font-family: sans-serif; padding: 20px; }
-                            table { width: 100%; border-collapse: collapse; margin-top: 20px; }
-                            th, td { border: 1px solid #ddd; padding: 8px; text-align: left; font-size: 12px; }
-                            th { background-color: #f2f2f2; }
-                            h1 { font-size: 18px; margin-bottom: 5px; }
-                            .header { display: flex; justify-content: space-between; align-items: center; border-bottom: 2px solid #000; padding-bottom: 10px; }
-                        </style>
-                    </head>
-                    <body>
-                        <div class="header">
-                            <h1>Dispatch Manifest: ${selectedStore}</h1>
-                            <p>Date: ${new Date().toLocaleString('km-KH')}</p>
-                        </div>
-                        <table>
-                            <thead>
-                                <tr>
-                                    <th>#</th>
-                                    <th>Order ID</th>
-                                    <th>Customer</th>
-                                    <th>Phone</th>
-                                    <th>Location</th>
-                                    <th>Driver</th>
-                                    <th>Total</th>
-                                </tr>
-                            </thead>
-                            <tbody>
-                                ${manifestOrders.map((o, i) => `
-                                    <tr>
-                                        <td>${i + 1}</td>
-                                        <td>${o['Order ID']}</td>
-                                        <td>${o['Customer Name']}</td>
-                                        <td>${o['Customer Phone']}</td>
-                                        <td>${o.Location}</td>
-                                        <td>${o['Driver Name'] || 'TBD'}</td>
-                                        <td>$${(Number(o['Grand Total']) || 0).toFixed(2)}</td>
-                                    </tr>
-                                `).join('')}
-                            </tbody>
-                        </table>
-                        <script>window.onload = () => { window.print(); window.close(); }</script>
-                    </body>
-                </html>
-            `;
+            const html = `<html><head><title>Dispatch Manifest - ${selectedStore}</title><style>body { font-family: sans-serif; padding: 20px; } table { width: 100%; border-collapse: collapse; margin-top: 20px; } th, td { border: 1px solid #ddd; padding: 8px; text-align: left; font-size: 12px; } th { background-color: #f2f2f2; } h1 { font-size: 18px; margin-bottom: 5px; } .header { display: flex; justify-content: space-between; align-items: center; border-bottom: 2px solid #000; padding-bottom: 10px; }</style></head><body><div class="header"><h1>Dispatch Manifest: ${selectedStore}</h1><p>Date: ${new Date().toLocaleString('km-KH')}</p></div><table><thead><tr><th>#</th><th>Order ID</th><th>Customer</th><th>Phone</th><th>Location</th><th>Driver</th><th>Total</th></tr></thead><tbody>${manifestOrders.map((o, i) => `<tr><td>${i + 1}</td><td>${o['Order ID']}</td><td>${o['Customer Name']}</td><td>${o['Customer Phone']}</td><td>${o.Location}</td><td>${o['Driver Name'] || 'TBD'}</td><td>$${(Number(o['Grand Total']) || 0).toFixed(2)}</td></tr>`).join('')}</tbody></table><script>window.onload = () => { window.print(); window.close(); }</script></body></html>`;
             printWindow.document.write(html);
             printWindow.document.close();
         },
         onSwitchHub: () => setSelectedStore(''),
         onExit: () => setAppState('role_selection'),
         onCloseShift: handleCloseShift,
-        shippingFilter,
-        setShippingFilter,
+        shippingFilter, setShippingFilter, teamFilter, setTeamFilter,
         selectedStore, tabCounts, viewMode, setViewMode, loadingActionId: isShiftLoading ? 'shift-loading' : loadingActionId,
         selectedOrderIds, toggleOrderSelection: (id: string) => !isViewOnly && setSelectedOrderIds(prev => { const n = new Set(prev); n.has(id) ? n.delete(id) : n.add(id); return n; }),
         clearSelection: () => setSelectedOrderIds(new Set()),
         onToggleSelectAll: (orders: ParsedOrder[]) => !isViewOnly && onToggleSelectAll(orders),
         onBulkShip: () => !isViewOnly && onBulkShip(),
-        isBulkProcessing,
-        progressStats,
-        isFilterModalOpen,
-        setIsFilterModalOpen,
-        isViewOnly,
-        activeShift
+        isBulkProcessing, progressStats, isFilterModalOpen, setIsFilterModalOpen, isViewOnly, activeShift
     };
 
     return (
@@ -648,28 +585,15 @@ const PackagingView: React.FC<{ orders?: ParsedOrder[] }> = ({ orders: propOrder
                     <div className="bg-[#1E2329] border border-[#2B3139] p-8 space-y-8 rounded-2xl animate-in fade-in zoom-in duration-300">
                         {shiftStep === 'options' && (
                             <div className="space-y-6 text-center">
-                                <div className="w-20 h-20 bg-[#FCD535]/10 rounded-[2rem] flex items-center justify-center mx-auto mb-6">
-                                    <svg className="w-10 h-10 text-[#FCD535]" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" /></svg>
-                                </div>
+                                <div className="w-20 h-20 bg-[#FCD535]/10 rounded-[2rem] flex items-center justify-center mx-auto mb-6"><svg className="w-10 h-10 text-[#FCD535]" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" /></svg></div>
                                 <h3 className="text-2xl font-black text-white uppercase tracking-wider">{selectedStore}</h3>
                                 <p className="text-gray-400 text-sm">សូមជ្រើសរើសជម្រើសខាងក្រោម៖</p>
                                 <div className="grid grid-cols-1 gap-4 pt-4">
-                                    <button 
-                                        onClick={() => { setIsViewOnly(true); setIsShiftModalOpen(false); }}
-                                        className="w-full py-4 bg-white/5 hover:bg-white/10 text-white font-bold rounded-xl transition-all border border-white/10"
-                                    >
-                                        👀 ចូលមើល (View Only)
-                                    </button>
-                                    <button 
-                                        onClick={() => setShiftStep('login')}
-                                        className="w-full py-4 bg-[#FCD535] hover:bg-[#FCD535]/90 text-black font-bold rounded-xl transition-all shadow-xl shadow-[#FCD535]/10"
-                                    >
-                                        🔑 បើកវេន (Open Shift)
-                                    </button>
+                                    <button onClick={() => { setIsViewOnly(true); setIsShiftModalOpen(false); }} className="w-full py-4 bg-white/5 hover:bg-white/10 text-white font-bold rounded-xl transition-all border border-white/10">👀 ចូលមើល (View Only)</button>
+                                    <button onClick={() => setShiftStep('login')} className="w-full py-4 bg-[#FCD535] hover:bg-[#FCD535]/90 text-black font-bold rounded-xl transition-all shadow-xl shadow-[#FCD535]/10">🔑 បើកវេន (Open Shift)</button>
                                 </div>
                             </div>
                         )}
-
                         {shiftStep === 'login' && (
                             <div className="space-y-6">
                                 <div className="text-center">
@@ -677,81 +601,32 @@ const PackagingView: React.FC<{ orders?: ParsedOrder[] }> = ({ orders: propOrder
                                     <p className="text-gray-400 text-xs mt-2 uppercase tracking-widest">Verify credentials to open shift</p>
                                 </div>
                                 <div className="space-y-4">
-                                    <input 
-                                        type="text" placeholder="Username" 
-                                        value={shiftLogin.username} onChange={e => setShiftLogin({...shiftLogin, username: e.target.value})}
-                                        className="w-full bg-[#0B0E11] border border-[#2B3139] rounded-xl px-5 py-4 text-white focus:border-[#FCD535] outline-none transition-all font-mono"
-                                    />
-                                    <input 
-                                        type="password" placeholder="Password" 
-                                        value={shiftLogin.password} onChange={e => setShiftLogin({...shiftLogin, password: e.target.value})}
-                                        className="w-full bg-[#0B0E11] border border-[#2B3139] rounded-xl px-5 py-4 text-white focus:border-[#FCD535] outline-none transition-all font-mono"
-                                    />
+                                    <input type="text" placeholder="Username" value={shiftLogin.username} onChange={e => setShiftLogin({...shiftLogin, username: e.target.value})} className="w-full bg-[#0B0E11] border border-[#2B3139] rounded-xl px-5 py-4 text-white focus:border-[#FCD535] outline-none transition-all font-mono" />
+                                    <input type="password" placeholder="Password" value={shiftLogin.password} onChange={e => setShiftLogin({...shiftLogin, password: e.target.value})} className="w-full bg-[#0B0E11] border border-[#2B3139] rounded-xl px-5 py-4 text-white focus:border-[#FCD535] outline-none transition-all font-mono" />
                                     <div className="flex gap-3 pt-4">
                                         <button onClick={() => setShiftStep('options')} className="flex-1 py-4 bg-white/5 text-gray-400 font-bold rounded-xl hover:bg-white/10 transition-all">ថយក្រោយ</button>
-                                        <button
-                                            onClick={() => {
-                                                if (shiftLogin.username && shiftLogin.password) handleOpenShift();
-                                                else alert("សូមបញ្ចូល Username និង Password");
-                                            }}
-                                            disabled={isShiftLoading}
-                                            className="flex-grow py-4 bg-[#FCD535] text-black font-bold rounded-xl hover:bg-[#FCD535]/90 transition-all shadow-lg flex items-center justify-center"
-                                        >
-                                            {isShiftLoading ? (
-                                                <div className="flex items-center gap-2">
-                                                    <div className="w-4 h-4 border-2 border-black/20 border-t-black rounded-full animate-spin"></div>
-                                                    <span>កំពុងបើកវេន...</span>
-                                                </div>
-                                            ) : 'បើកវេន'}
-                                        </button>                                    </div>
+                                        <button onClick={() => { if (shiftLogin.username && shiftLogin.password) handleOpenShift(); else alert("សូមបញ្ចូល Username និង Password"); }} disabled={isShiftLoading} className="flex-grow py-4 bg-[#FCD535] text-black font-bold rounded-xl hover:bg-[#FCD535]/90 transition-all shadow-lg flex items-center justify-center">{isShiftLoading ? <div className="flex items-center gap-2"><div className="w-4 h-4 border-2 border-black/20 border-t-black rounded-full animate-spin"></div><span>កំពុងបើកវេន...</span></div> : 'បើកវេន'}</button>
+                                    </div>
                                 </div>
                             </div>
                         )}
+                    </div>
+                </Modal>
+            )}
 
-                        {/* Photo step removed as requested - using stickers automatically */}
-                        </div>
-                        </Modal>
-                        )}
             {undoTarget && undoTarget.isOpen && (
                 <Modal isOpen={true} onClose={() => { setUndoConfirmation(null); setUndoPassword(''); }} maxWidth="max-w-md">
                     <div className="bg-[#1E2329] border border-[#2B3139] p-8 space-y-8 rounded-2xl animate-in fade-in zoom-in duration-300">
                         <div className="text-center space-y-4">
-                            <div className="w-16 h-16 bg-red-500/10 rounded-full flex items-center justify-center mx-auto">
-                                <svg className="w-8 h-8 text-red-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" /></svg>
-                            </div>
+                            <div className="w-16 h-16 bg-red-500/10 rounded-full flex items-center justify-center mx-auto"><svg className="w-8 h-8 text-red-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" /></svg></div>
                             <h3 className="text-xl font-black text-white uppercase tracking-wider">បញ្ជាក់ការ Undo</h3>
                             <p className="text-gray-400 text-sm">សូមបញ្ចូលលេខសម្ងាត់របស់ <span className="text-[#FCD535] font-bold">@{activeShift?.OpenedBy}</span> ដើម្បីបន្ត។</p>
                         </div>
-
                         <div className="space-y-4">
-                            <input 
-                                type="password" 
-                                placeholder="លេខសម្ងាត់ (Shift Password)" 
-                                value={undoPassword} 
-                                onChange={e => setUndoPassword(e.target.value)}
-                                onKeyDown={e => e.key === 'Enter' && handleUndoConfirm()}
-                                className="w-full bg-[#0B0E11] border border-[#2B3139] rounded-xl px-5 py-4 text-white focus:border-[#FCD535] outline-none transition-all font-mono"
-                                autoFocus
-                            />
+                            <input type="password" placeholder="លេខសម្ងាត់ (Shift Password)" value={undoPassword} onChange={e => setUndoPassword(e.target.value)} onKeyDown={e => e.key === 'Enter' && handleUndoConfirm()} className="w-full bg-[#0B0E11] border border-[#2B3139] rounded-xl px-5 py-4 text-white focus:border-[#FCD535] outline-none transition-all font-mono" autoFocus />
                             <div className="flex gap-3 pt-4">
-                                <button 
-                                    onClick={() => { setUndoConfirmation(null); setUndoPassword(''); }} 
-                                    className="flex-1 py-4 bg-white/5 text-gray-400 font-bold rounded-xl hover:bg-white/10 transition-all"
-                                >
-                                    បោះបង់
-                                </button>
-                                <button
-                                    onClick={handleUndoConfirm}
-                                    disabled={isUndoVerifying}
-                                    className="flex-grow py-4 bg-[#FCD535] text-black font-bold rounded-xl hover:bg-[#FCD535]/90 transition-all shadow-lg flex items-center justify-center"
-                                >
-                                    {isUndoVerifying ? (
-                                        <div className="flex items-center gap-2">
-                                            <div className="w-4 h-4 border-2 border-black/20 border-t-black rounded-full animate-spin"></div>
-                                            <span>កំពុងផ្ទៀងផ្ទាត់...</span>
-                                        </div>
-                                    ) : 'បញ្ជាក់ Undo'}
-                                </button>
+                                <button onClick={() => { setUndoConfirmation(null); setUndoPassword(''); }} className="flex-1 py-4 bg-white/5 text-gray-400 font-bold rounded-xl hover:bg-white/10 transition-all">បោះបង់</button>
+                                <button onClick={handleUndoConfirm} disabled={isUndoVerifying} className="flex-grow py-4 bg-[#FCD535] text-black font-bold rounded-xl hover:bg-[#FCD535]/90 transition-all shadow-lg flex items-center justify-center">{isUndoVerifying ? <div className="flex items-center gap-2"><div className="w-4 h-4 border-2 border-black/20 border-t-black rounded-full animate-spin"></div><span>កំពុងផ្ទៀងផ្ទាត់...</span></div> : 'បញ្ជាក់ Undo'}</button>
                             </div>
                         </div>
                     </div>
@@ -765,73 +640,112 @@ const PackagingView: React.FC<{ orders?: ParsedOrder[] }> = ({ orders: propOrder
                 />
             )}
             
-            {viewingOrder && (
-                <OrderDetailModal 
-                    order={viewingOrder} 
-                    onClose={() => setViewingOrder(null)} 
-                />
-            )}
+            {viewingOrder && <OrderDetailModal order={viewingOrder} onClose={() => setViewingOrder(null)} />}
 
             {isReturnPhotoModalOpen && returningOrder && (
                 <Modal isOpen={true} onClose={() => { setIsReturnPhotoModalOpen(false); setReturningOrder(null); setReturnPhoto(null); }} maxWidth="max-w-xl">
                     <div className="bg-[#1E2329] border border-[#2B3139] p-6 space-y-6 rounded-2xl">
-                        <div className="text-center space-y-2">
-                            <h3 className="text-xl font-black text-white uppercase tracking-wider">បញ្ជាក់ការទទួល Return</h3>
-                            <p className="text-gray-400 text-xs">សូមថតរូបកញ្ចប់ឥវ៉ាន់ដែលបាន Return មកវិញ</p>
-                        </div>
-
+                        <div className="text-center space-y-2"><h3 className="text-xl font-black text-white uppercase tracking-wider">បញ្ជាក់ការទទួល Return</h3><p className="text-gray-400 text-xs">សូមថតរូបកញ្ចប់ឥវ៉ាន់ដែលបាន Return មកវិញ</p></div>
                         <div className="aspect-square bg-black rounded-xl overflow-hidden relative border border-white/10">
-                            {returnPhoto ? (
-                                <img src={returnPhoto} className="w-full h-full object-cover" alt="Return Proof" />
-                            ) : (
+                            {returnPhoto ? <img src={returnPhoto} className="w-full h-full object-cover" alt="Return Proof" /> : (
                                 <div className="absolute inset-0 flex flex-col items-center justify-center space-y-4">
-                                    <div className="w-20 h-20 bg-white/5 rounded-full flex items-center justify-center">
-                                        <svg className="w-10 h-10 text-gray-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 9a2 2 0 012-2h.93a2 2 0 001.664-.89l.812-1.22A2 2 0 0110.07 4h3.86a2 2 0 011.664.89l.812 1.22A2 2 0 0018.07 7H19a2 2 0 012 2v9a2 2 0 01-2 2H5a2 2 0 01-2-2V9z" /><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 13a3 3 0 11-6 0 3 3 0 016 0z" /></svg>
-                                    </div>
-                                    <input 
-                                        type="file" accept="image/*" capture="environment"
-                                        onChange={async (e) => {
-                                            const file = e.target.files?.[0];
-                                            if (file) {
-                                                const compressed = await compressImage(file, 'balanced');
-                                                const dataUrl = await fileToDataUrl(compressed);
-                                                setReturnPhoto(dataUrl);
-                                            }
-                                        }}
-                                        className="absolute inset-0 opacity-0 cursor-pointer"
-                                    />
+                                    <div className="w-20 h-20 bg-white/5 rounded-full flex items-center justify-center"><svg className="w-10 h-10 text-gray-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 9a2 2 0 012-2h.93a2 2 0 001.664-.89l.812-1.22A2 2 0 0110.07 4h3.86a2 2 0 011.664.89l.812 1.22A2 2 0 0018.07 7H19a2 2 0 012 2v9a2 2 0 01-2 2H5a2 2 0 01-2-2V9z" /><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 13a3 3 0 11-6 0 3 3 0 016 0z" /></svg></div>
+                                    <input type="file" accept="image/*" capture="environment" onChange={async (e) => { const file = e.target.files?.[0]; if (file) { const compressed = await compressImage(file, 'balanced'); const dataUrl = await fileToDataUrl(compressed); setReturnPhoto(dataUrl); } }} className="absolute inset-0 opacity-0 cursor-pointer" />
                                     <p className="text-sm font-bold text-white">ចុចទីនេះដើម្បីថតរូប</p>
                                 </div>
                             )}
-                            
-                            {returnPhoto && (
-                                <button 
-                                    onClick={() => setReturnPhoto(null)}
-                                    className="absolute top-4 right-4 bg-red-500 text-white p-2 rounded-full shadow-lg"
-                                >
-                                    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" /></svg>
-                                </button>
-                            )}
+                            {returnPhoto && <button onClick={() => setReturnPhoto(null)} className="absolute top-4 right-4 bg-red-500 text-white p-2 rounded-full shadow-lg"><svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" /></svg></button>}
+                        </div>
+                        <div className="flex gap-3 pt-2">
+                            <button onClick={() => { setIsReturnPhotoModalOpen(false); setReturningOrder(null); setReturnPhoto(null); }} className="flex-1 py-4 bg-white/5 text-gray-400 font-bold rounded-xl hover:bg-white/10 transition-all">បោះបង់</button>
+                            <button onClick={() => handleConfirmReturnReceipt(returnPhoto || '')} disabled={!returnPhoto || isSubmittingReturn} className="flex-[2] py-4 bg-purple-500 text-white font-bold rounded-xl hover:bg-purple-600 transition-all shadow-lg flex items-center justify-center gap-2 disabled:opacity-50">{isSubmittingReturn ? <Spinner size="sm" /> : <><svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" /></svg>បញ្ជាក់ការទទួល</>}</button>
+                        </div>
+                    </div>
+                </Modal>
+            )}
+
+            {isFilterModalOpen && (
+                <Modal isOpen={true} onClose={() => setIsFilterModalOpen(false)} maxWidth="max-w-lg">
+                    <div className="bg-[#1E2329] border border-[#2B3139] p-6 space-y-6 rounded-2xl">
+                        <div className="flex justify-between items-center border-b border-[#2B3139] pb-4">
+                            <h3 className="text-xl font-black text-white uppercase tracking-wider flex items-center gap-2">
+                                <svg className="w-5 h-5 text-[#FCD535]" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M3 4a1 1 0 011-1h16a1 1 0 011 1v2.586a1 1 0 01-.293.707l-6.414 6.414a1 1 0 00-.293.707V17l-4 4v-6.586a1 1 0 00-.293-.707L3.293 7.293A1 1 0 013 6.586V4z" /></svg>
+                                OPS FILTERS
+                            </h3>
+                            <button onClick={() => setIsFilterModalOpen(false)} className="text-[#848E9C] hover:text-white transition-colors">
+                                <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" /></svg>
+                            </button>
                         </div>
 
-                        <div className="flex gap-3 pt-2">
+                        <div className="space-y-6">
+                            {/* Team Selection */}
+                            <div className="space-y-3">
+                                <p className="text-[10px] font-black text-[#848E9C] uppercase tracking-[0.2em]">Select Team</p>
+                                <div className="grid grid-cols-2 sm:grid-cols-3 gap-2 max-h-[150px] overflow-y-auto custom-scrollbar pr-1">
+                                    <button 
+                                        onClick={() => setTeamFilter('')}
+                                        className={`py-3 rounded-xl text-xs font-bold uppercase transition-all border ${!teamFilter ? 'bg-[#FCD535] border-[#FCD535] text-black shadow-lg shadow-[#FCD535]/10' : 'bg-[#0B0E11] border-[#2B3139] text-[#848E9C] hover:border-[#FCD535]/50'}`}
+                                    >
+                                        All Teams
+                                    </button>
+                                    {availableTeams.map(team => (
+                                        <button 
+                                            key={team}
+                                            onClick={() => setTeamFilter(team)}
+                                            className={`py-3 rounded-xl text-xs font-bold uppercase transition-all border ${teamFilter === team ? 'bg-[#FCD535] border-[#FCD535] text-black shadow-lg shadow-[#FCD535]/10' : 'bg-[#0B0E11] border-[#2B3139] text-[#848E9C] hover:border-[#FCD535]/50'}`}
+                                        >
+                                            Team {team}
+                                        </button>
+                                    ))}
+                                </div>
+                            </div>
+
+                            {/* Carrier Selection */}
+                            <div className="space-y-3">
+                                <p className="text-[10px] font-black text-[#848E9C] uppercase tracking-[0.2em]">Shipping Carrier</p>
+                                <div className="grid grid-cols-2 gap-2 max-h-[250px] overflow-y-auto custom-scrollbar pr-1">
+                                    <button 
+                                        onClick={() => setShippingFilter('')}
+                                        className={`px-4 py-3 rounded-xl text-xs font-bold uppercase transition-all border ${!shippingFilter ? 'bg-[#FCD535] border-[#FCD535] text-black shadow-lg shadow-[#FCD535]/10' : 'bg-[#0B0E11] border-[#2B3139] text-[#848E9C] hover:border-[#FCD535]/50'}`}
+                                    >
+                                        All Carriers
+                                    </button>
+                                    {appData.shippingMethods?.filter((m: any) => m.Status !== 'Inactive').map((method: any) => (
+                                        <button
+                                            key={method.MethodName}
+                                            onClick={() => setShippingFilter(method.MethodName)}
+                                            className={`px-4 py-3 rounded-xl text-xs font-bold uppercase transition-all border flex items-center gap-2 ${shippingFilter === method.MethodName ? 'bg-[#FCD535] border-[#FCD535] text-black shadow-lg shadow-[#FCD535]/10' : 'bg-[#0B0E11] border-[#2B3139] text-[#848E9C] hover:border-[#FCD535]/50'}`}
+                                        >
+                                            {method.LogoURL && <img src={convertGoogleDriveUrl(method.LogoURL)} alt="" className="w-4 h-4 object-contain" />}
+                                            <span className="truncate">{method.MethodName}</span>
+                                        </button>
+                                    ))}
+                                </div>
+                            </div>
+
+                            {/* Quick Actions */}
+                            <div className="space-y-3">
+                                <p className="text-[10px] font-black text-[#848E9C] uppercase tracking-[0.2em]">Quick Actions</p>
+                                <button 
+                                    onClick={() => {
+                                        setSearchTerm('');
+                                        setShippingFilter('');
+                                        setTeamFilter('');
+                                        setIsFilterModalOpen(false);
+                                    }}
+                                    className="w-full py-4 bg-red-500/10 hover:bg-red-500/20 text-red-500 border border-red-500/20 rounded-xl text-xs font-black uppercase tracking-widest transition-all"
+                                >
+                                    Reset All Filters
+                                </button>
+                            </div>
+                        </div>
+
+                        <div className="pt-4">
                             <button 
-                                onClick={() => { setIsReturnPhotoModalOpen(false); setReturningOrder(null); setReturnPhoto(null); }}
-                                className="flex-1 py-4 bg-white/5 text-gray-400 font-bold rounded-xl hover:bg-white/10 transition-all"
+                                onClick={() => setIsFilterModalOpen(false)}
+                                className="w-full py-4 bg-[#FCD535] hover:bg-[#FCD535]/90 text-black font-black text-xs uppercase tracking-[0.2em] rounded-xl shadow-xl shadow-[#FCD535]/10 transition-all active:scale-[0.98]"
                             >
-                                បោះបង់
-                            </button>
-                            <button
-                                onClick={() => handleConfirmReturnReceipt(returnPhoto || '')}
-                                disabled={!returnPhoto || isSubmittingReturn}
-                                className="flex-[2] py-4 bg-purple-500 text-white font-bold rounded-xl hover:bg-purple-600 transition-all shadow-lg flex items-center justify-center gap-2 disabled:opacity-50"
-                            >
-                                {isSubmittingReturn ? <Spinner size="sm" /> : (
-                                    <>
-                                        <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" /></svg>
-                                        បញ្ជាក់ការទទួល
-                                    </>
-                                )}
+                                Apply Configuration
                             </button>
                         </div>
                     </div>

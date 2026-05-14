@@ -30,8 +30,11 @@ interface TabletPackagingHubProps {
     onExit: () => void;
     shippingFilter: string;
     setShippingFilter: (filter: string) => void;
+    teamFilter: string;
+    setTeamFilter: (filter: string) => void;
     selectedStore: string;
     progressStats: { packedByUserToday: number, storeTotalToday: number, progressPercentage: number };
+    shippingCounts?: { [key: string]: number };
     setIsFilterModalOpen: (open: boolean) => void;
     loadingActionId: string | null;
     tabCounts: { pending: number, ready: number, shipped: number, returned: number, cancelled: number };
@@ -50,7 +53,7 @@ interface TabletPackagingHubProps {
 const TabletPackagingHub: React.FC<TabletPackagingHubProps> = ({
     orders, activeTab, setActiveTab, searchTerm, setSearchTerm,
     onPack, onShip, onUndo, onUndoShipped, onView, onPrintManifest, onSwitchHub, onExit,
-    shippingFilter, setShippingFilter,
+    shippingFilter, setShippingFilter, teamFilter, setTeamFilter,
     selectedStore,
     progressStats, setIsFilterModalOpen, loadingActionId, tabCounts,
     selectedOrderIds, toggleOrderSelection, clearSelection, onBulkShip, isBulkProcessing,
@@ -58,6 +61,8 @@ const TabletPackagingHub: React.FC<TabletPackagingHubProps> = ({
 }) => {
     const { previewImage: showFullImage, appData } = useContext(AppContext);
     const [unpackTarget, setUnpackTarget] = useState<ParsedOrder | null>(null);
+
+    const isAnyFilterActive = !!(shippingFilter || teamFilter);
 
     const handleCopy = (text: string, label: string) => {
         if (!text) return;
@@ -222,8 +227,18 @@ const TabletPackagingHub: React.FC<TabletPackagingHubProps> = ({
                                 <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2.5}><path d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" /></svg>
                             </div>
                         </div>
-                        <button onClick={() => setIsFilterModalOpen(true)} className={`px-2 py-1.5 ${B_BG_MAIN} border ${B_BORDER} rounded-sm text-[#848E9C] hover:text-[#EAECEF] transition-colors`}>
-                            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2}><path d="M3 4a1 1 0 011-1h16a1 1 0 011 1v2.586a1 1 0 01-.293.707l-6.414 6.414a1 1 0 00-.293.707V17l-4 4v-6.586a1 1 0 00-.293-.707L3.293 7.293A1 1 0 013 6.586V4z" /></svg>
+                        <button 
+                            onClick={() => setIsFilterModalOpen(true)} 
+                            className={`px-3 py-1.5 rounded-sm flex items-center justify-center transition-all border relative ${
+                                isAnyFilterActive 
+                                    ? 'bg-[#FCD535]/10 border-[#FCD535] text-[#FCD535] shadow-[0_0_10px_rgba(252,213,53,0.1)]' 
+                                    : `${B_BG_MAIN} border ${B_BORDER} text-[#848E9C] hover:text-[#EAECEF]`
+                            }`}
+                        >
+                            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2.5}><path d="M3 4a1 1 0 011-1h16a1 1 0 011 1v2.586a1 1 0 01-.293.707l-6.414 6.414a1 1 0 00-.293.707V17l-4 4v-6.586a1 1 0 00-.293-.707L3.293 7.293A1 1 0 013 6.586V4z" /></svg>
+                            {isAnyFilterActive && (
+                                <span className="absolute -top-1 -right-1 w-1.5 h-1.5 bg-[#FCD535] rounded-full animate-pulse shadow-[0_0_8px_rgba(252,213,53,0.5)]"></span>
+                            )}
                         </button>
 
                         {/* Shipping Method Shortcuts (Tablet) */}

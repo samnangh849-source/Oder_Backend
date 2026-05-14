@@ -31,6 +31,8 @@ interface MobilePackagingHubProps {
     onExit: () => void;
     shippingFilter: string;
     setShippingFilter: (filter: string) => void;
+    teamFilter: string;
+    setTeamFilter: (filter: string) => void;
     selectedStore: string;
     progressStats: { packedByUserToday: number, storeTotalToday: number, progressPercentage: number };
     setIsFilterModalOpen: (open: boolean) => void;
@@ -51,7 +53,7 @@ interface MobilePackagingHubProps {
 const MobilePackagingHub: React.FC<MobilePackagingHubProps> = ({
     orders, activeTab, setActiveTab, searchTerm, setSearchTerm,
     onPack, onShip, onUndo, onUndoShipped, onView, onPrintManifest, onSwitchHub, onExit,
-    shippingFilter, setShippingFilter,
+    shippingFilter, setShippingFilter, teamFilter, setTeamFilter,
     selectedStore,
     progressStats, setIsFilterModalOpen, loadingActionId, tabCounts,
     selectedOrderIds, toggleOrderSelection, clearSelection, onBulkShip, isBulkProcessing,
@@ -59,6 +61,8 @@ const MobilePackagingHub: React.FC<MobilePackagingHubProps> = ({
 }) => {
     const { previewImage: showFullImage, appData } = useContext(AppContext);
     const [unpackTarget, setUnpackTarget] = useState<ParsedOrder | null>(null);
+
+    const isAnyFilterActive = !!(shippingFilter || teamFilter);
 
     const handleCopy = (text: string, label: string) => {
         if (!text) return;
@@ -224,8 +228,18 @@ const MobilePackagingHub: React.FC<MobilePackagingHubProps> = ({
                             <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2.5}><path d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" /></svg>
                         </div>
                     </div>
-                    <button onClick={() => setIsFilterModalOpen(true)} className={`px-3 py-2 ${B_BG_PANEL} border ${B_BORDER} rounded-sm ${B_TEXT_SECONDARY} flex items-center justify-center`}>
-                        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2}><path d="M3 4a1 1 0 011-1h16a1 1 0 011 1v2.586a1 1 0 01-.293.707l-6.414 6.414a1 1 0 00-.293.707V17l-4 4v-6.586a1 1 0 00-.293-.707L3.293 7.293A1 1 0 013 6.586V4z" /></svg>
+                    <button 
+                        onClick={() => setIsFilterModalOpen(true)} 
+                        className={`px-3 py-2 rounded-sm flex items-center justify-center transition-all border relative ${
+                            isAnyFilterActive 
+                                ? 'bg-[#FCD535]/10 border-[#FCD535] text-[#FCD535] shadow-[0_0_10px_rgba(252,213,53,0.1)]' 
+                                : `${B_BG_PANEL} border ${B_BORDER} ${B_TEXT_SECONDARY}`
+                        }`}
+                    >
+                        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2.5}><path d="M3 4a1 1 0 011-1h16a1 1 0 011 1v2.586a1 1 0 01-.293.707l-6.414 6.414a1 1 0 00-.293.707V17l-4 4v-6.586a1 1 0 00-.293-.707L3.293 7.293A1 1 0 013 6.586V4z" /></svg>
+                        {isAnyFilterActive && (
+                            <span className="absolute -top-1 -right-1 w-2 h-2 bg-[#FCD535] rounded-full animate-pulse shadow-[0_0_8px_rgba(252,213,53,0.5)]"></span>
+                        )}
                     </button>
                     {activeTab === 'Ready to Ship' && (
                         <div className="flex items-center gap-2">
@@ -264,25 +278,39 @@ const MobilePackagingHub: React.FC<MobilePackagingHubProps> = ({
                 )}
             </div>
 
-            {/* Shipping Method Shortcuts Bar (Mobile) - Positioned below Sticky Search */}
+            {/* Modern Shipping Method Shortcuts Bar (Mobile) - Positioned below Sticky Search */}
             {(activeTab === 'Pending' || activeTab === 'Ready to Ship' || activeTab === 'Shipped') && (
                 <div className={`flex-shrink-0 px-3 py-2 border-b ${B_BORDER} bg-[#181A20] overflow-x-auto no-scrollbar flex items-center gap-2`}>
                     <button 
                         onClick={() => setShippingFilter('')}
-                        className={`px-3 py-1.5 rounded-sm text-[10px] font-black uppercase tracking-wider transition-all whitespace-nowrap border ${!shippingFilter ? 'bg-[#FCD535] border-[#FCD535] text-black shadow-[0_0_10px_rgba(252,213,53,0.15)]' : 'bg-[#0B0E11] border-[#2B3139] text-[#848E9C]'}`}
+                        className={`px-4 py-1.5 rounded-lg text-[10px] font-black uppercase tracking-wider transition-all whitespace-nowrap flex items-center gap-2 ${!shippingFilter ? 'bg-[#FCD535] text-black shadow-lg shadow-[#FCD535]/10' : 'bg-[#0B0E11] border border-[#2B3139] text-[#848E9C]'}`}
                     >
-                        ALL
+                        <span>ALL</span>
+                        {shippingCounts && (
+                            <span className={`px-1.5 py-0.5 rounded-full text-[8px] font-bold ${!shippingFilter ? 'bg-black/20 text-black' : 'bg-[#2B3139] text-[#848E9C]'}`}>
+                                {shippingCounts['all']}
+                            </span>
+                        )}
                     </button>
-                    {appData.shippingMethods?.filter((m: any) => m.Status !== 'Inactive').map((method: any) => (
-                        <button
-                            key={method.MethodName}
-                            onClick={() => setShippingFilter(shippingFilter === method.MethodName ? '' : method.MethodName)}
-                            className={`px-3 py-1.5 rounded-sm text-[10px] font-black uppercase tracking-wider transition-all whitespace-nowrap border flex items-center gap-2 ${shippingFilter === method.MethodName ? 'bg-[#FCD535] border-[#FCD535] text-black shadow-[0_0_10px_rgba(252,213,53,0.15)]' : 'bg-[#0B0E11] border-[#2B3139] text-[#848E9C]'}`}
-                        >
-                            {method.LogoURL && <img src={convertGoogleDriveUrl(method.LogoURL)} alt="" className="w-3.5 h-3.5 object-contain" />}
-                            {method.MethodName}
-                        </button>
-                    ))}
+                    {appData.shippingMethods?.filter((m: any) => m.Status !== 'Inactive').map((method: any) => {
+                        const count = shippingCounts?.[method.MethodName] || 0;
+                        const isActive = shippingFilter === method.MethodName;
+                        return (
+                            <button
+                                key={method.MethodName}
+                                onClick={() => setShippingFilter(isActive ? '' : method.MethodName)}
+                                className={`px-4 py-1.5 rounded-lg text-[10px] font-black uppercase tracking-wider transition-all whitespace-nowrap border flex items-center gap-2 ${isActive ? 'bg-[#FCD535]/10 border-[#FCD535]/40 text-[#FCD535]' : 'bg-[#0B0E11] border-[#2B3139] text-[#848E9C]'}`}
+                            >
+                                {method.LogoURL && <img src={convertGoogleDriveUrl(method.LogoURL)} alt="" className={`w-3.5 h-3.5 object-contain ${isActive ? 'filter brightness-110' : 'opacity-50 grayscale'}`} />}
+                                <span>{method.MethodName}</span>
+                                {count > 0 && (
+                                    <span className={`px-1.5 py-0.5 rounded-full text-[8px] font-bold ${isActive ? 'bg-[#FCD535] text-black' : 'bg-[#2B3139] text-[#848E9C]'}`}>
+                                        {count}
+                                    </span>
+                                )}
+                            </button>
+                        );
+                    })}
                 </div>
             )}
 
