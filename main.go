@@ -230,6 +230,8 @@ func getTableName(sheetName string) string {
 		return "incentive_projects"
 	case "Movies":
 		return "movies"
+	case "Promotions":
+		return "promotions"
 	case "RevenueDashboard":
 		return "revenue_entries"
 	case "ChatMessages":
@@ -2271,6 +2273,12 @@ func main() {
 		protected.GET("/permissions", handleGetUserPermissions)
 		protected.GET("/roles", handleGetRoles)
 
+		// Promotions
+		protected.GET("/promotions", handleGetPromotions)
+		protected.POST("/promotions", RequirePermission("manage_promotions"), handleCreatePromotion)
+		protected.PUT("/promotions/:id", RequirePermission("manage_promotions"), handleUpdatePromotion)
+		protected.DELETE("/promotions/:id", RequirePermission("manage_promotions"), handleDeletePromotion)
+
 		protected.GET("/teams/shipping-costs", RequirePermission("view_revenue"), handleGetGlobalShippingCosts)
 
 		chat := protected.Group("/chat")
@@ -2505,6 +2513,45 @@ func sendShiftTelegramNotification(storeName string, shiftType string, userName 
 	// 1. Send Sticker first if it's an Open Shift and stickerID is provided
 	if shiftType == "Open" && stickerID != "" {
 		stickerURL := fmt.Sprintf("https://api.telegram.org/bot%s/sendSticker", store.TelegramBotToken)
+		stickerPayload := map[string]interface{}{
+			"chat_id": store.TelegramGroupID,
+			"sticker": stickerID,
+		}
+		if store.TelegramTopicID != "" {
+			stickerPayload["message_thread_id"] = store.TelegramTopicID
+		}
+		sData, _ := json.Marshal(stickerPayload)
+		http.Post(stickerURL, "application/json", bytes.NewBuffer(sData))
+	}
+
+	// 2. Send the main notification (Photo or Text)
+	if photoURL != "" && shiftType == "Open" {
+		apiURL = fmt.Sprintf("https://api.telegram.org/bot%s/sendPhoto", store.TelegramBotToken)
+		payload["photo"] = convertDriveURLToDirect(photoURL)
+		payload["caption"] = text
+	} else {
+		apiURL = fmt.Sprintf("https://api.telegram.org/bot%s/sendMessage", store.TelegramBotToken)
+		payload["text"] = text
+	}
+
+	jsonData, _ := json.Marshal(payload)
+	resp, err := http.Post(apiURL, "application/json", bytes.NewBuffer(jsonData))
+	if err != nil {
+		log.Printf("❌ [Shift Notification] HTTP error: %v", err)
+		return
+	}
+	defer resp.Body.Close()
+
+	var resData map[string]interface{}
+	json.NewDecoder(resp.Body).Decode(&resData)
+	if ok, _ := resData["ok"].(bool); !ok {
+		log.Printf("❌ [Shift Notification] Telegram API error: %v", resData)
+	} else {
+		log.Printf("✅ [Shift Notification] Sent successfully for %s", storeName)
+	}
+}
+
+// នៅពេលមិនទាន់ capture រូបភាព(AIM and Focus)គឺពេលដែលកំពុងScan រក QR Code គឺប្រព័ន្ធត្រូវ zoom និង tracking គ្រប់កន្លែងដើម្បីស្វែង QR Code ដើម្បីល្បឿនចាប់យក QR Code​លឿនខ្លាំង ទោះបីដាក់នៅឆ្ងាយក៏ប្រព័ន្ធចាប់បាន
 		stickerPayload := map[string]interface{}{
 			"chat_id": store.TelegramGroupID,
 			"sticker": stickerID,
