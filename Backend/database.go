@@ -319,6 +319,7 @@ func DefaultPermissions() []RolePermission {
 		"access_sales_portal", "access_fulfillment", "view_admin_dashboard", "view_entertainment",
 		"manage_roles", "manage_permissions", "view_revenue", "export_data", "migrate_data",
 		"manage_inventory", "stock_transfer", "view_team_leaderboard", "set_targets", "view_global_orders",
+		"view_promotions", "manage_promotions",
 	}
 
 	// Define standard templates
@@ -420,6 +421,17 @@ func DefaultPermissions() []RolePermission {
 }
 
 // CheckHealth returns true if the database is reachable
+func CheckHealth() bool {
+	if DB == nil {
+		return false
+	}
+	sqlDB, err := DB.DB()
+	if err != nil {
+		return false
+	}
+	return sqlDB.Ping() == nil
+}
+s true if the database is reachable
 func CheckHealth() bool {
 	if DB == nil {
 		return false
