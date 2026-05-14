@@ -299,7 +299,7 @@ func broadcastFullSyncProgress(step, totalSteps int, stepName string, count int,
 			percent = 100
 		}
 	}
-	payload, _ := json.Marshal(map[string]interface{}{
+	SafeBroadcastJSON(map[string]interface{}{
 		"type":       "full_sync_progress",
 		"step":       step,
 		"totalSteps": totalSteps,
@@ -308,22 +308,16 @@ func broadcastFullSyncProgress(step, totalSteps int, stepName string, count int,
 		"count":      count,
 		"elapsed":    elapsed,
 	})
-	// Removed 'go' to ensure sequence order in the hub's buffered channel
-	HubGlobal.Broadcast <- payload
 }
 
 // broadcastFullSyncComplete sends the final result of a full sync to all connected clients.
 func broadcastFullSyncComplete(success bool, message string, elapsed float64) {
-	if HubGlobal == nil {
-		return
-	}
-	payload, _ := json.Marshal(map[string]interface{}{
+	SafeBroadcastJSON(map[string]interface{}{
 		"type":    "full_sync_complete",
 		"success": success,
 		"message": message,
 		"elapsed": elapsed,
 	})
-	HubGlobal.Broadcast <- payload
 }
 
 func PerformDataMigration() {
@@ -1174,13 +1168,12 @@ func HandleMigrateMovies(c *gin.Context) {
 			if HubGlobal == nil {
 				return
 			}
-			payload, _ := json.Marshal(map[string]interface{}{
+			SafeBroadcastJSON(map[string]interface{}{
 				"type":    "movie_migration_complete",
 				"success": success,
 				"message": message,
 				"count":   count,
 			})
-			HubGlobal.Broadcast <- payload
 		}
 
 		tx := DB.Begin()
