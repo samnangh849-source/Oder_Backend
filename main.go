@@ -61,6 +61,7 @@ type EditLog = backend.EditLog
 type UserActivityLog = backend.UserActivityLog
 type Role = backend.Role
 type RolePermission = backend.RolePermission
+type Promotion = backend.Promotion
 type IncentiveCalculator = backend.IncentiveCalculator
 type IncentiveProject = backend.IncentiveProject
 type IncentiveResult = backend.IncentiveResult
@@ -95,6 +96,15 @@ func generateShortID() string {
 		b[i] = chars[rand.Intn(len(chars))]
 	}
 	return string(b)
+}
+
+func broadcastToAll(payload interface{}) {
+	if backend.HubGlobal != nil {
+		msgBytes, err := json.Marshal(payload)
+		if err == nil {
+			backend.HubGlobal.Broadcast <- msgBytes
+		}
+	}
 }
 
 func mapToDBColumn(key string) string {
@@ -840,6 +850,82 @@ func handleGetSettings(c *gin.Context) {
 		return
 	}
 	c.JSON(http.StatusOK, gin.H{"status": "success", "data": settings})
+}
+
+// ── Promotion Handlers ──────────────────────────────────────────────────────
+
+func handleGetPromotions(c *gin.Context) {
+	var promotions []Promotion
+	if err := backend.DB.Order("updated_at DESC").Find(&promotions).Error; err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"status": "error", "message": err.Error()})
+		return
+	}
+	c.JSON(http.StatusOK, gin.H{"status": "success", "data": promotions})
+}
+
+func handleCreatePromotion(c *gin.Context) {
+	var p Promotion
+	if err := c.ShouldBindJSON(&p); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"status": "error", "message": "ទិន្នន័យមិនត្រឹមត្រូវ"})
+		return
+	}
+
+	p.UpdatedAt = time.Now().Format("2006-01-02 15:04:05")
+	if u, exists := c.Get("userName"); exists {
+		p.UpdatedBy = u.(string)
+	}
+
+	if err := backend.DB.Create(&p).Error; err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"status": "error", "message": err.Error()})
+		return
+	}
+
+	// Notify via WebSocket
+	broadcastToAll(gin.H{"type": "promotion_updated", "action": "create", "data": p})
+
+	c.JSON(http.StatusOK, gin.H{"status": "success", "message": "បង្កើតប្រូម៉ូសិនជោគជ័យ", "data": p})
+}
+
+func handleUpdatePromotion(c *gin.Context) {
+	id := c.Param("id")
+	var p Promotion
+	if err := backend.DB.First(&p, id).Error; err != nil {
+		c.JSON(http.StatusNotFound, gin.H{"status": "error", "message": "រកមិនឃើញប្រូម៉ូសិន"})
+		return
+	}
+
+	if err := c.ShouldBindJSON(&p); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"status": "error", "message": "ទិន្នន័យមិនត្រឹមត្រូវ"})
+		return
+	}
+
+	p.UpdatedAt = time.Now().Format("2006-01-02 15:04:05")
+	if u, exists := c.Get("userName"); exists {
+		p.UpdatedBy = u.(string)
+	}
+
+	if err := backend.DB.Save(&p).Error; err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"status": "error", "message": err.Error()})
+		return
+	}
+
+	// Notify via WebSocket
+	broadcastToAll(gin.H{"type": "promotion_updated", "action": "update", "data": p})
+
+	c.JSON(http.StatusOK, gin.H{"status": "success", "message": "កែប្រែប្រូម៉ូសិនជោគជ័យ", "data": p})
+}
+
+func handleDeletePromotion(c *gin.Context) {
+	id := c.Param("id")
+	if err := backend.DB.Delete(&Promotion{}, id).Error; err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"status": "error", "message": err.Error()})
+		return
+	}
+
+	// Notify via WebSocket
+	broadcastToAll(gin.H{"type": "promotion_updated", "action": "delete", "id": id})
+
+	c.JSON(http.StatusOK, gin.H{"status": "success", "message": "លុបប្រូម៉ូសិនជោគជ័យ"})
 }
 
 // =========================================================================
@@ -2550,44 +2636,3 @@ func sendShiftTelegramNotification(storeName string, shiftType string, userName 
 		log.Printf("✅ [Shift Notification] Sent successfully for %s", storeName)
 	}
 }
-
-// នៅពេលមិនទាន់ capture រូបភាព(AIM and Focus)គឺពេលដែលកំពុងScan រក QR Code គឺប្រព័ន្ធត្រូវ zoom និង tracking គ្រប់កន្លែងដើម្បីស្វែង QR Code ដើម្បីល្បឿនចាប់យក QR Code​លឿនខ្លាំង ទោះបីដាក់នៅឆ្ងាយក៏ប្រព័ន្ធចាប់បាន
-		stickerPayload := map[string]interface{}{
-			"chat_id": store.TelegramGroupID,
-			"sticker": stickerID,
-		}
-		if store.TelegramTopicID != "" {
-			stickerPayload["message_thread_id"] = store.TelegramTopicID
-		}
-		sData, _ := json.Marshal(stickerPayload)
-		http.Post(stickerURL, "application/json", bytes.NewBuffer(sData))
-	}
-
-	// 2. Send the main notification (Photo or Text)
-	if photoURL != "" && shiftType == "Open" {
-		apiURL = fmt.Sprintf("https://api.telegram.org/bot%s/sendPhoto", store.TelegramBotToken)
-		payload["photo"] = convertDriveURLToDirect(photoURL)
-		payload["caption"] = text
-	} else {
-		apiURL = fmt.Sprintf("https://api.telegram.org/bot%s/sendMessage", store.TelegramBotToken)
-		payload["text"] = text
-	}
-
-	jsonData, _ := json.Marshal(payload)
-	resp, err := http.Post(apiURL, "application/json", bytes.NewBuffer(jsonData))
-	if err != nil {
-		log.Printf("❌ [Shift Notification] HTTP error: %v", err)
-		return
-	}
-	defer resp.Body.Close()
-
-	var resData map[string]interface{}
-	json.NewDecoder(resp.Body).Decode(&resData)
-	if ok, _ := resData["ok"].(bool); !ok {
-		log.Printf("❌ [Shift Notification] Telegram API error: %v", resData)
-	} else {
-		log.Printf("✅ [Shift Notification] Sent successfully for %s", storeName)
-	}
-}
-
-// នៅពេលមិនទាន់ capture រូបភាព(AIM and Focus)គឺពេលដែលកំពុងScan រក QR Code គឺប្រព័ន្ធត្រូវ zoom និង tracking គ្រប់កន្លែងដើម្បីស្វែង QR Code ដើម្បីល្បឿនចាប់យក QR Code​លឿនខ្លាំង ទោះបីដាក់នៅឆ្ងាយក៏ប្រព័ន្ធចាប់បាន
