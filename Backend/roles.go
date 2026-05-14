@@ -63,14 +63,11 @@ func HandleCreateRole(c *gin.Context) {
 		"Description": req.Description,
 	}
 
-	eventBytes, _ := json.Marshal(map[string]interface{}{
+	SafeBroadcastJSON(map[string]interface{}{
 		"type":      "add_row",
 		"sheetName": "Roles",
 		"newData":   req,
 	})
-	if HubGlobal != nil {
-		HubGlobal.Broadcast <- eventBytes
-	}
 
 	go func() {
 		EnqueueSync("addRow", sheetData, "Roles", nil)
@@ -216,15 +213,12 @@ func HandleUpdatePermission(c *gin.Context) {
 			continue
 		}
 
-		eventBytes, _ := json.Marshal(map[string]interface{}{
+		SafeBroadcastJSON(map[string]interface{}{
 			"type":      "update_permission",
 			"role":      req.Role,
 			"feature":   req.Feature,
 			"isEnabled": req.IsEnabled,
 		})
-		if HubGlobal != nil {
-			HubGlobal.Broadcast <- eventBytes
-		}
 	}
 
 	if len(updateErrors) > 0 {
@@ -327,10 +321,7 @@ func HandleResetPermissions(c *gin.Context) {
 	log.Printf("✅ HandleResetPermissions: reset %d standard permissions", len(defaults))
 
 	// 3. Notify all connected clients so UI refreshes immediately
-	eventBytes, _ := json.Marshal(map[string]interface{}{"type": "permissions_reset"})
-	if HubGlobal != nil {
-		HubGlobal.Broadcast <- eventBytes
-	}
+	SafeBroadcastJSON(map[string]interface{}{"type": "permissions_reset"})
 
 	// 4. Re-sync Google Sheet (Clear + Re-sync All DB rows)
 	go func() {
