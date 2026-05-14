@@ -175,7 +175,7 @@ func runMigrations(db *gorm.DB) {
 		&Color{}, &Driver{}, &BankAccount{}, &PhoneCarrier{}, &TelegramTemplate{},
 		&Inventory{}, &StockTransfer{}, &ReturnItem{},
 		&Order{}, &RevenueEntry{}, &ChatMessage{}, &EditLog{}, &UserActivityLog{},
-		&Role{}, &RolePermission{},
+		&Role{}, &RolePermission{}, &Promotion{},
 		&IncentiveProject{}, &IncentiveCalculator{}, &IncentiveResult{},
 		&IncentiveManualData{}, &IncentiveCustomPayout{},
 		&DriverRecommendation{}, &Movie{}, &PendingSync{}, &Shift{},
