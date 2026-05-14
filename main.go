@@ -99,12 +99,7 @@ func generateShortID() string {
 }
 
 func broadcastToAll(payload interface{}) {
-	if backend.HubGlobal != nil {
-		msgBytes, err := json.Marshal(payload)
-		if err == nil {
-			backend.HubGlobal.Broadcast <- msgBytes
-		}
-	}
+	backend.SafeBroadcastJSON(payload)
 }
 
 func mapToDBColumn(key string) string {
@@ -651,10 +646,7 @@ func startOrderWorker() {
 
 			if err != nil {
 				log.Printf("❌ Worker error for %s: %v", job.OrderID, err)
-				if backend.HubGlobal != nil {
-					msgBytes, _ := json.Marshal(map[string]interface{}{"type": "system_notification", "status": "error", "targetUser": job.UserName, "message": "បញ្ជូនទៅ Telegram បរាជ័យ: " + err.Error(), "jobId": job.JobID})
-					backend.HubGlobal.Broadcast <- msgBytes
-				}
+				broadcastToAll(map[string]interface{}{"type": "system_notification", "status": "error", "targetUser": job.UserName, "message": "បញ្ជូនទៅ Telegram បរាជ័យ: " + err.Error(), "jobId": job.JobID})
 			} else {
 				defer resp.Body.Close()
 				var scriptResp AppsScriptResponse
@@ -669,17 +661,14 @@ func startOrderWorker() {
 						telegramSent = true
 					}
 				}
-				if backend.HubGlobal != nil {
-					notifStatus := "success"
-					notifMsg := "បាញ់ទៅ Telegram ជោគជ័យ!"
-					if !telegramSent {
-						notifStatus = "warning"
-						notifMsg = "កម្មង់បានរក្សាទុក ប៉ុន្តែ Telegram មិនបានផ្ញើ (ពិនិត្យ Stores sheet)"
-						log.Printf("⚠️ Worker: Order %s saved but Telegram message was not sent (messageIds empty)", job.OrderID)
-					}
-					msgBytes, _ := json.Marshal(map[string]interface{}{"type": "system_notification", "status": notifStatus, "targetUser": job.UserName, "message": notifMsg, "jobId": job.JobID})
-					backend.HubGlobal.Broadcast <- msgBytes
+				notifStatus := "success"
+				notifMsg := "បាញ់ទៅ Telegram ជោគជ័យ!"
+				if !telegramSent {
+					notifStatus = "warning"
+					notifMsg = "កម្មង់បានរក្សាទុក ប៉ុន្តែ Telegram មិនបានផ្ញើ (ពិនិត្យ Stores sheet)"
+					log.Printf("⚠️ Worker: Order %s saved but Telegram message was not sent (messageIds empty)", job.OrderID)
 				}
+				broadcastToAll(map[string]interface{}{"type": "system_notification", "status": notifStatus, "targetUser": job.UserName, "message": notifMsg, "jobId": job.JobID})
 			}
 		}()
 	}
