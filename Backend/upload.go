@@ -172,6 +172,20 @@ func HandleImageUploadProxy(c *gin.Context) {
 		return
 	}
 
+	// ── Strip Base64 Header ──
+	// If the data is a Data URI (e.g., "data:image/jpeg;base64,..."), strip the prefix.
+	if strings.Contains(data, ",") {
+		parts := strings.Split(data, ",")
+		if len(parts) > 1 {
+			data = parts[1]
+		}
+	}
+	// Clean whitespace/newlines to ensure valid base64 string
+	data = strings.ReplaceAll(data, " ", "+")
+	data = strings.ReplaceAll(data, "\n", "")
+	data = strings.ReplaceAll(data, "\r", "")
+	data = strings.TrimSpace(data)
+
 	// ── Background Processing Logic ──────────────────────────────────────
 	if req.IsAsync {
 		log.Printf("🛰️ [Upload] Starting background processing for file=%q order=%q", req.FileName, req.OrderID)
