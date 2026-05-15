@@ -33,6 +33,8 @@ import { OrderProvider, useOrder } from './context/OrderContext';
 import { localDbService } from './services/localDbService';
 import { translations } from './translations';
 
+import PromotionDashboard from './pages/PromotionDashboard';
+
 const OrderNotificationTrigger: React.FC = () => {
     useOrderNotifications();
     return null;
@@ -657,6 +659,7 @@ const AppContent: React.FC = () => {
                                         {appState === 'user_journey' && <UserJourney onBackToRoleSelect={() => setAppState('role_selection')} />}
                                         {appState === 'create_order' && <CreateOrderPage team={selectedTeam} onSaveSuccess={() => setAppState('user_journey')} onCancel={() => setAppState('user_journey')} />}
                                         {appState === 'fulfillment' && <FulfillmentPage />}
+                                        {appState === 'promotions' && <PromotionDashboard onBack={() => setAppState('role_selection')} />}
                                         {appState === 'entertainment' && <NetflixEntertainment />}
                                         {appState === 'series_player' && <SeriesPlayerPage />}
                                         {appState === 'long_player' && <LongFilmPlayerPage />}

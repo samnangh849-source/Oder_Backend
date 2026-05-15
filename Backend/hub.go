@@ -92,12 +92,21 @@ func (h *Hub) Stop() {
 
 // BroadcastJSON is a helper to broadcast structured data
 func (h *Hub) BroadcastJSON(v interface{}) {
+	if h == nil {
+		return
+	}
 	data, err := json.Marshal(v)
 	if err != nil {
 		log.Printf("❌ Hub: Failed to marshal JSON for broadcast: %v", err)
 		return
 	}
 	h.Broadcast <- data
+}
+
+func SafeBroadcastJSON(v interface{}) {
+	if HubGlobal != nil {
+		HubGlobal.BroadcastJSON(v)
+	}
 }
 
 func (c *Client) WritePump() {

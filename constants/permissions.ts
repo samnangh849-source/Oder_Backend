@@ -31,6 +31,10 @@ export const FEATURES = {
     VIEW_TEAM_LEADERBOARD: "view_team_leaderboard",
     SET_TARGETS: "set_targets",
     
+    // Promotions
+    VIEW_PROMOTIONS: "view_promotions",
+    MANAGE_PROMOTIONS: "manage_promotions",
+    
     // Multi-Team Access
     VIEW_GLOBAL_ORDERS: "view_global_orders"
 };

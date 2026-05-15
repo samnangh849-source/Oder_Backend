@@ -1,0 +1,10 @@
+--- a/pages/PackagingView.tsx
++++ b/pages/PackagingView.tsx
+@@ -314,6 +314,7 @@
+                 setSelectedStore('');
+                 setIsShiftModalOpen(false);
+                 alert("បិទវេនជោគជ័យ!");
++                if (onExit) onExit();
+             } else {
+                 alert(data.message || "មិនអាចបិទវេនបានទេ");
+             }

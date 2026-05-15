@@ -68,7 +68,9 @@ const PermissionMatrix: React.FC = () => {
                 FEATURES.ACCESS_SALES_PORTAL,
                 FEATURES.ACCESS_FULFILLMENT,
                 FEATURES.VIEW_ADMIN_DASHBOARD,
-                FEATURES.VIEW_ENTERTAINMENT
+                FEATURES.VIEW_ENTERTAINMENT,
+                FEATURES.VIEW_PROMOTIONS,
+                FEATURES.MANAGE_PROMOTIONS
             ]
         },
         {

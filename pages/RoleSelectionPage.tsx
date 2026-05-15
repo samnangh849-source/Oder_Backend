@@ -6,7 +6,7 @@ import { APP_LOGO_URL } from '../constants';
 import { translations } from '../translations';
 
 interface RoleSelectionPageProps {
-    onSelect: (role: 'admin_dashboard' | 'user_journey' | 'fulfillment' | 'cambodia_map' | 'entertainment') => void;
+    onSelect: (role: 'admin_dashboard' | 'user_journey' | 'fulfillment' | 'cambodia_map' | 'entertainment' | 'promotions') => void;
 }
 
 const RoleSelectionPage: React.FC<RoleSelectionPageProps> = ({ onSelect }) => {
@@ -28,8 +28,9 @@ const RoleSelectionPage: React.FC<RoleSelectionPageProps> = ({ onSelect }) => {
     const showFulfillment = hasPermission('access_fulfillment');
     const showSales = hasPermission('access_sales_portal');
     const showEntertainment = isInternalAdmin || hasPermission('view_entertainment');
+    const showPromotions = isInternalAdmin || hasPermission('view_promotions');
 
-    const visibleCount = (showAdmin ? 1 : 0) + (showFulfillment ? 1 : 0) + (showSales ? 1 : 0) + (showEntertainment ? 1 : 0) + 1; // +1 for Cambodia Map (always visible)
+    const visibleCount = (showAdmin ? 1 : 0) + (showFulfillment ? 1 : 0) + (showSales ? 1 : 0) + (showEntertainment ? 1 : 0) + (showPromotions ? 1 : 0) + 1; // +1 for Cambodia Map (always visible)
 
     const handleUserPortalClick = () => {
         onSelect('user_journey');
@@ -45,6 +46,10 @@ const RoleSelectionPage: React.FC<RoleSelectionPageProps> = ({ onSelect }) => {
 
     const handleEntertainmentClick = () => {
         onSelect('entertainment' as any);
+    };
+
+    const handlePromotionClick = () => {
+        onSelect('promotions');
     };
 
     return (
@@ -203,6 +208,31 @@ const RoleSelectionPage: React.FC<RoleSelectionPageProps> = ({ onSelect }) => {
                                     <p className="text-[10px] text-white/30 font-bold uppercase tracking-widest truncate">{t.entertainment_desc}</p>
                                 </div>
                                 <div className="w-10 h-10 rounded-xl bg-white/5 flex items-center justify-center group-hover:bg-red-600 transition-all">
+                                    <svg className="w-4 h-4 text-white/20 group-hover:text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={3}><path d="M9 5l7 7-7 7" /></svg>
+                                </div>
+                            </div>
+                        </button>
+                    )}
+
+                    {showPromotions && (
+                        <button 
+                            onClick={handlePromotionClick}
+                            className="selection-btn group p-1 rounded-[2rem] relative overflow-hidden"
+                        >
+                            <div className="shimmer"></div>
+                            <div className="flex items-center gap-4 p-4 sm:p-5 rounded-[1.9rem] bg-[var(--bg-dark)]/40 backdrop-blur-2xl border border-white/5 relative z-10">
+                                <div className="w-14 h-14 shrink-0 rounded-2xl bg-indigo-600/20 flex items-center justify-center border border-white/10 group-hover:bg-indigo-600 transition-all duration-500 shadow-2xl">
+                                    <svg className="w-7 h-7 text-indigo-400 group-hover:text-white transition-colors" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2}><path d="M11 5.882V19.297A1.703 1.703 0 018.919 20.84l-5.066-2.533A1.703 1.703 0 013 16.784V4.703A1.703 1.703 0 015.081 3.16l5.066 2.533A1.703 1.703 0 0111 5.882zM11 5.882c0-.52.27-.999.71-1.272l5.066-3.132A1.703 1.703 0 0119.5 3.033v12.081c0 .52-.27.999-.71 1.272l-5.066 3.132A1.703 1.703 0 0111 18.118V5.882z" /></svg>
+                                </div>
+                                <div className="text-left min-w-0 flex-grow">
+                                    <h3 className="text-base font-black text-white group-hover:text-indigo-400 transition-colors uppercase italic tracking-tight">
+                                        {t.enter_promotions}
+                                    </h3>
+                                    <p className="text-[10px] text-white/30 font-bold uppercase tracking-widest truncate">
+                                        {t.promotions_desc}
+                                    </p>
+                                </div>
+                                <div className="w-10 h-10 rounded-xl bg-white/5 flex items-center justify-center group-hover:bg-indigo-600 transition-all">
                                     <svg className="w-4 h-4 text-white/20 group-hover:text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={3}><path d="M9 5l7 7-7 7" /></svg>
                                 </div>
                             </div>

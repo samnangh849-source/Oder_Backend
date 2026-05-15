@@ -31,6 +31,7 @@ const CONFIG = {
   DRIVER_RECOMMENDATIONS_SHEET: 'DriverRecommendations',
   INCENTIVE_RESULTS_SHEET: 'IncentiveResults',
   MOVIES_SHEET: 'Movies',
+  PROMOTIONS_SHEET: 'Promotions',
   SHIFTS_SHEET: 'Shifts'
 };
 

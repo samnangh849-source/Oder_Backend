@@ -23,6 +23,16 @@ type User struct {
 	TelegramStickerID string `gorm:"column:telegram_sticker_id" json:"TelegramStickerID"`
 }
 
+type Promotion struct {
+	ID          uint   `gorm:"primaryKey;autoIncrement;column:id" json:"ID"`
+	Title       string `gorm:"column:title" json:"Title"`
+	ImageURL    string `gorm:"column:image_url" json:"ImageURL"`
+	Category    string `gorm:"column:category;index" json:"Category"`
+	Description string `gorm:"column:description" json:"Description"`
+	UpdatedAt   string `gorm:"column:updated_at" json:"UpdatedAt"`
+	UpdatedBy   string `gorm:"column:updated_by" json:"UpdatedBy"`
+}
+
 type Movie struct {
 	ID          string `gorm:"primaryKey;column:id" json:"ID"`
 	Title       string `gorm:"column:title" json:"Title"`

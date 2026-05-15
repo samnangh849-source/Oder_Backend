@@ -20,9 +20,9 @@ const bClasses = {
     btnYellow: 'bg-[#FCD535] hover:bg-[#FCD535]/90 text-[#0B0E11] font-bold rounded-[4px] px-4 py-2 transition-all active:scale-[0.98]',
 };
 
-const PackagingView: React.FC<{ orders?: ParsedOrder[] }> = ({ orders: propOrders }) => {
+const PackagingView: React.FC<{ orders?: ParsedOrder[], onExit?: () => void }> = ({ orders: propOrders, onExit }) => {
     // 1. Context & States
-    const { appData, refreshData, currentUser, setMobilePageTitle, appState, setAppState, setIsShiftOpener, setActiveShiftStore } = useContext(AppContext);
+    const { appData, refreshData, currentUser, setMobilePageTitle, appState, setAppState, setIsShiftOpener, setActiveShiftStore, logout } = useContext(AppContext);
 
     const [selectedStore, setSelectedStore] = useState<string>('');
     const [activeShift, setActiveShift] = useState<Shift | null>(null);
@@ -53,6 +53,10 @@ const PackagingView: React.FC<{ orders?: ParsedOrder[] }> = ({ orders: propOrder
     const [undoTarget, setUndoConfirmation] = useState<{ order: ParsedOrder, type: 'pending' | 'ready', isOpen: boolean } | null>(null);
     const [undoPassword, setUndoPassword] = useState('');
     const [isUndoVerifying, setIsUndoVerifying] = useState(false);
+    
+    // Close Shift Modal State
+    const [isCloseShiftConfirmOpen, setIsCloseShiftConfirmOpen] = useState(false);
+    const [closeShiftStats, setCloseShiftStats] = useState<{ packed: number, shipped: number, shippingCounts: Record<string, number>, summaryText: string } | null>(null);
 
     // 2. Memos
     const allOrdersMapped = useMemo(() => {
@@ -285,14 +289,35 @@ const PackagingView: React.FC<{ orders?: ParsedOrder[] }> = ({ orders: propOrder
     const handleCloseShift = async () => {
         if (!activeShift) return;
         const todayStr = new Date().toLocaleDateString('km-KH').split(',')[0];
-        const shiftOrders = allFilteredOrdersBase.filter(o => {
+        
+        const myPackedOrders = allFilteredOrdersBase.filter(o => {
             const isMe = o['Packed By'] === currentUser?.FullName;
             const isToday = (o['Packed Time'] || '').startsWith(todayStr);
             return isMe && isToday && (o.FulfillmentStatus === 'Ready to Ship' || o.FulfillmentStatus === 'Shipped');
         });
-        const summary = `វេចខ្ចប់៖ ${shiftOrders.length} កញ្ចប់`;
-        if (!window.confirm(`តើអ្នកប្រាកដថាចង់បិទវេនមែនទេ?\n\n${summary}`)) return;
 
+        const shippedOrders = myPackedOrders.filter(o => o.FulfillmentStatus === 'Shipped');
+        
+        const shippingCounts: Record<string, number> = {};
+        myPackedOrders.forEach(o => {
+            const method = o['Internal Shipping Method'] || 'ផ្សេងៗ (Other)';
+            shippingCounts[method] = (shippingCounts[method] || 0) + 1;
+        });
+
+        const lines = Object.entries(shippingCounts).map(([method, count]) => `• ${method}: *${count}*`);
+        const summary = `📦 វេចខ្ចប់សរុប៖ *${myPackedOrders.length}* កញ្ចប់\n🚚 បញ្ជូនចេញរួច៖ *${shippedOrders.length}* កញ្ចប់\n\n📋 *តាមក្រុមហ៊ុនដឹកជញ្ជូន៖*\n${lines.join('\n')}`;
+
+        setCloseShiftStats({
+            packed: myPackedOrders.length,
+            shipped: shippedOrders.length,
+            shippingCounts,
+            summaryText: summary
+        });
+        setIsCloseShiftConfirmOpen(true);
+    };
+
+    const confirmCloseShift = async () => {
+        if (!activeShift || !closeShiftStats) return;
         setIsShiftLoading(true);
         try {
             const session = await CacheService.get<{ token: string }>(CACHE_KEYS.SESSION);
@@ -305,7 +330,7 @@ const PackagingView: React.FC<{ orders?: ParsedOrder[] }> = ({ orders: propOrder
                 },
                 body: JSON.stringify({
                     shiftId: activeShift.ID,
-                    summary: summary
+                    summary: closeShiftStats.summaryText
                 })
             });
             const data = await res.json();
@@ -313,7 +338,9 @@ const PackagingView: React.FC<{ orders?: ParsedOrder[] }> = ({ orders: propOrder
                 setActiveShift(null);
                 setSelectedStore('');
                 setIsShiftModalOpen(false);
+                setIsCloseShiftConfirmOpen(false);
                 alert("បិទវេនជោគជ័យ!");
+                logout(); // Immediately trigger a complete logout
             } else {
                 alert(data.message || "មិនអាចបិទវេនបានទេ");
             }
@@ -465,7 +492,10 @@ const PackagingView: React.FC<{ orders?: ParsedOrder[] }> = ({ orders: propOrder
             <div className="flex flex-col items-center justify-center h-full p-6 bg-[#0B0E11] font-sans relative overflow-hidden">
                 <div className="absolute top-0 left-0 p-6 z-50">
                     <button 
-                        onClick={() => setAppState('role_selection')}
+                        onClick={() => {
+                            if (onExit) onExit();
+                            else setAppState('role_selection');
+                        }}
                         className="flex items-center gap-2 px-4 py-2 bg-white/5 hover:bg-white/10 text-white rounded-xl border border-white/10 transition-all active:scale-[0.98] group"
                     >
                         <svg className="w-5 h-5 text-gray-400 group-hover:text-white transition-colors" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -563,7 +593,10 @@ const PackagingView: React.FC<{ orders?: ParsedOrder[] }> = ({ orders: propOrder
             printWindow.document.close();
         },
         onSwitchHub: () => setSelectedStore(''),
-        onExit: () => setAppState('role_selection'),
+        onExit: () => {
+            if (onExit) onExit();
+            else setAppState('role_selection');
+        },
         onCloseShift: handleCloseShift,
         shippingFilter, setShippingFilter, teamFilter, setTeamFilter,
         selectedStore, tabCounts, viewMode, setViewMode, loadingActionId: isShiftLoading ? 'shift-loading' : loadingActionId,
@@ -746,6 +779,90 @@ const PackagingView: React.FC<{ orders?: ParsedOrder[] }> = ({ orders: propOrder
                                 className="w-full py-4 bg-[#FCD535] hover:bg-[#FCD535]/90 text-black font-black text-xs uppercase tracking-[0.2em] rounded-xl shadow-xl shadow-[#FCD535]/10 transition-all active:scale-[0.98]"
                             >
                                 Apply Configuration
+                            </button>
+                        </div>
+                    </div>
+                </Modal>
+            )}
+
+            {/* Close Shift Confirmation Modal */}
+            {isCloseShiftConfirmOpen && closeShiftStats && (
+                <Modal isOpen={true} onClose={() => setIsCloseShiftConfirmOpen(false)} maxWidth="max-w-md">
+                    <div className="bg-[#181A20] rounded-xl border border-[#2B3139] shadow-2xl overflow-hidden flex flex-col max-h-[85vh]">
+                        {/* Header */}
+                        <div className="flex-shrink-0 p-5 border-b border-[#2B3139] bg-[#0B0E11] flex items-center justify-between sticky top-0 z-10">
+                            <div className="flex items-center gap-3">
+                                <div className="w-10 h-10 rounded-full bg-red-500/10 flex items-center justify-center border border-red-500/20">
+                                    <svg className="w-5 h-5 text-red-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M10 14l2-2m0 0l2-2m-2 2l-2-2m2 2l2 2m7-2a9 9 0 11-18 0 9 9 0 0118 0z" />
+                                    </svg>
+                                </div>
+                                <div>
+                                    <h3 className="text-lg font-black text-[#EAECEF] uppercase tracking-wider">បិទវេន (Close Shift)</h3>
+                                    <p className="text-[11px] text-[#848E9C] font-bold mt-0.5">ផ្ទៀងផ្ទាត់ទិន្នន័យវេចខ្ចប់</p>
+                                </div>
+                            </div>
+                            <button onClick={() => setIsCloseShiftConfirmOpen(false)} className="p-2 text-[#848E9C] hover:text-[#EAECEF] bg-[#2B3139]/50 hover:bg-[#2B3139] rounded-lg transition-colors">
+                                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" /></svg>
+                            </button>
+                        </div>
+
+                        {/* Content */}
+                        <div className="flex-1 overflow-y-auto custom-scrollbar p-5 space-y-6 bg-gradient-to-b from-[#0B0E11] to-[#181A20]">
+                            
+                            <div className="grid grid-cols-2 gap-3">
+                                <div className="bg-[#2B3139]/30 border border-[#2B3139] rounded-xl p-4 flex flex-col items-center text-center shadow-inner">
+                                    <span className="text-[10px] font-black text-[#848E9C] uppercase tracking-widest mb-2">វេចខ្ចប់សរុប (Packed)</span>
+                                    <span className="text-4xl font-mono font-black text-[#FCD535]">{closeShiftStats.packed}</span>
+                                </div>
+                                <div className="bg-[#2B3139]/30 border border-[#2B3139] rounded-xl p-4 flex flex-col items-center text-center shadow-inner">
+                                    <span className="text-[10px] font-black text-[#848E9C] uppercase tracking-widest mb-2">បញ្ជូនចេញ (Shipped)</span>
+                                    <span className="text-4xl font-mono font-black text-[#0ECB81]">{closeShiftStats.shipped}</span>
+                                </div>
+                            </div>
+
+                            <div className="space-y-3">
+                                <h4 className="text-xs font-black text-[#EAECEF] uppercase tracking-wider border-b border-[#2B3139] pb-2 flex items-center gap-2">
+                                    <svg className="w-4 h-4 text-[#FCD535]" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 8h14M5 8a2 2 0 110-4h14a2 2 0 110 4M5 8v10a2 2 0 002 2h10a2 2 0 002-2V8m-9 4h4" /></svg>
+                                    តាមក្រុមហ៊ុនដឹកជញ្ជូន (By Carrier)
+                                </h4>
+                                <div className="bg-[#0B0E11] border border-[#2B3139] rounded-xl overflow-hidden shadow-inner">
+                                    {Object.keys(closeShiftStats.shippingCounts).length > 0 ? (
+                                        <div className="divide-y divide-[#2B3139]">
+                                            {Object.entries(closeShiftStats.shippingCounts).map(([method, count]) => (
+                                                <div key={method} className="flex justify-between items-center p-3 hover:bg-[#2B3139]/50 transition-colors">
+                                                    <span className="text-sm font-bold text-[#EAECEF] uppercase">{method}</span>
+                                                    <span className="text-sm font-mono font-black text-[#FCD535] bg-[#FCD535]/10 px-3 py-1 rounded-lg border border-[#FCD535]/20">{count}</span>
+                                                </div>
+                                            ))}
+                                        </div>
+                                    ) : (
+                                        <div className="p-4 text-center text-sm text-[#848E9C] italic">គ្មានទិន្នន័យ (No Data)</div>
+                                    )}
+                                </div>
+                            </div>
+                        </div>
+
+                        {/* Footer */}
+                        <div className="flex-shrink-0 p-5 bg-[#0B0E11] border-t border-[#2B3139] flex gap-3 sticky bottom-0 z-10">
+                            <button 
+                                onClick={() => setIsCloseShiftConfirmOpen(false)}
+                                className="flex-1 py-3.5 bg-[#2B3139] hover:bg-[#3B424A] text-[#EAECEF] font-black text-xs uppercase tracking-widest rounded-xl transition-all"
+                            >
+                                បោះបង់ (Cancel)
+                            </button>
+                            <button 
+                                onClick={confirmCloseShift}
+                                disabled={isShiftLoading}
+                                className="flex-[1.5] py-3.5 bg-red-600 hover:bg-red-700 disabled:bg-red-800 disabled:opacity-70 text-white font-black text-xs uppercase tracking-widest rounded-xl shadow-lg shadow-red-600/20 transition-all flex items-center justify-center gap-2"
+                            >
+                                {isShiftLoading ? (
+                                    <>
+                                        <Spinner size="sm" /> កំពុងដំណើរការ...
+                                    </>
+                                ) : (
+                                    'បញ្ជាក់ការបិទវេន'
+                                )}
                             </button>
                         </div>
                     </div>

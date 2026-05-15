@@ -37,7 +37,7 @@ type AppsScriptRequest struct {
 	TargetColumn   string                 `json:"targetColumn,omitempty"`
 	SheetName      string                 `json:"sheetName,omitempty"`
 	Rows           interface{}            `json:"rows,omitempty"` // Added for batchAddRows
-	PrimaryKey     map[string]string      `json:"primaryKey,omitempty"`
+	PrimaryKey     map[string]interface{} `json:"primaryKey,omitempty"`
 	NewData        map[string]interface{} `json:"newData,omitempty"`
 	IsAsync        bool                   `json:"isAsync,omitempty"`
 }
@@ -183,8 +183,8 @@ func CallAppsScriptPOST(requestData AppsScriptRequest) (AppsScriptResponse, erro
 }
 
 // getDedupeKey generates a unique key for a task to see if it can be merged
-func getDedupeKey(action, sheetName string, pk map[string]string) string {
-	if action != "updateSheet" || sheetName == "" || len(pk) == 0 {
+func getDedupeKey(action, sheetName string, pk interface{}) string {
+	if action != "updateSheet" || sheetName == "" || pk == nil {
 		return ""
 	}
 	// Sort or just concatenate for consistency
@@ -193,11 +193,24 @@ func getDedupeKey(action, sheetName string, pk map[string]string) string {
 }
 
 // EnqueueSync adds a task to the background synchronization queue (now persistent in DB)
-func EnqueueSync(action string, data map[string]interface{}, sheetName string, pk map[string]string) {
+func EnqueueSync(action string, data map[string]interface{}, sheetName string, pk interface{}) {
+	var pkMap map[string]interface{}
+	if pk != nil {
+		switch v := pk.(type) {
+		case map[string]interface{}:
+			pkMap = v
+		case map[string]string:
+			pkMap = make(map[string]interface{})
+			for k2, v2 := range v {
+				pkMap[k2] = v2
+			}
+		}
+	}
+
 	req := AppsScriptRequest{
 		Action:     action,
 		SheetName:  sheetName,
-		PrimaryKey: pk,
+		PrimaryKey: pkMap,
 		NewData:    data,
 		OrderData:  data, // Set OrderData for compatibility
 	}

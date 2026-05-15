@@ -259,6 +259,16 @@ export interface Notification {
     duration?: number;
 }
 
+export interface Promotion {
+    ID: number;
+    Title: string;
+    ImageURL: string;
+    Category: string;
+    Description: string;
+    UpdatedAt: string;
+    UpdatedBy: string;
+}
+
 export interface AppData {
     users: User[];
     products: MasterProduct[];

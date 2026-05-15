@@ -137,7 +137,7 @@ const FulfillmentPage: React.FC = () => {
 
             <main className="flex-1 overflow-hidden flex flex-col">
                 {activeTab === 'hub' && <FulfillmentDashboard orders={orders} onOpenDeliveryList={() => setIsDeliveryModalOpen(true)} />}
-                {activeTab === 'pack' && <PackagingView orders={orders} />}
+                {activeTab === 'pack' && <PackagingView orders={orders} onExit={() => setActiveTab('hub')} />}
                 {activeTab === 'ship' && <DriverDeliveryView onOpenDeliveryList={() => setIsDeliveryModalOpen(true)} />}
                 {activeTab === 'stock' && <InventoryManagement />}
             </main>

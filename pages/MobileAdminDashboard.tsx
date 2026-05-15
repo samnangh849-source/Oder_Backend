@@ -262,7 +262,7 @@ const MobileAdminDashboard: React.FC = () => {
                 return <ReportDashboard activeReport={activeReport} onBack={() => setActiveDashboard('admin')} onNavigate={handleNavigateWithFilters} />;
             case 'settings': return <SettingsDashboard onBack={() => setActiveDashboard('admin')} />;
             case 'fulfillment': return <FulfillmentDashboard orders={orders} />;
-            case 'packaging': return <PackagingView orders={orders} />;
+            case 'packaging': return <PackagingView orders={orders} onExit={() => setActiveDashboard('admin')} />;
             case 'delivery': return <DriverDeliveryView />;
             case 'inventory': return <InventoryManagement />;
             case 'incentives':

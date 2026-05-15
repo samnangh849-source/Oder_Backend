@@ -60,6 +60,9 @@ const SYSTEM_STRUCTURE = {
   // ប្រព័ន្ធកម្សាន្ត (Entertainment)
   "Movies": ["ID", "Title", "Description", "Thumbnail", "VideoURL", "Type", "Language", "Country", "Category", "SeriesKey", "AddedAt"],
 
+  // ប្រព័ន្ធប្រូម៉ូសិន (Promotions)
+  "Promotions": ["ID", "Title", "ImageURL", "Category", "Description", "UpdatedAt", "UpdatedBy"],
+
   // ឯកសារយោង និង Chat
   "ChatMessages": ["ID", "Timestamp", "UserName", "Receiver", "MessageType", "Content", "FileID"],
   "EditLogs": ["ID", "Timestamp", "OrderID", "Requester", "Field Changed", "Old Value", "New Value"],
@@ -317,7 +320,8 @@ function setupSampleRolePermissions(ss) {
     "view_order_list", "edit_order", "delete_order", "verify_order", "create_order",
     "access_sales_portal", "access_fulfillment", "view_admin_dashboard", "view_entertainment",
     "manage_roles", "manage_permissions", "view_revenue", "export_data", "migrate_data",
-    "manage_inventory", "stock_transfer", "view_team_leaderboard", "set_targets"
+    "manage_inventory", "stock_transfer", "view_team_leaderboard", "set_targets",
+    "view_promotions", "manage_promotions"
   ];
 
   const permissions = [];
@@ -333,7 +337,8 @@ function setupSampleRolePermissions(ss) {
     "view_order_list": true, "edit_order": true, "delete_order": true, "verify_order": true, "create_order": true,
     "access_sales_portal": true, "access_fulfillment": true, "view_admin_dashboard": true, "view_entertainment": true,
     "view_revenue": true, "export_data": true, "manage_inventory": true, "stock_transfer": true,
-    "view_team_leaderboard": true, "set_targets": true
+    "view_team_leaderboard": true, "set_targets": true,
+    "view_promotions": true, "manage_promotions": true
   };
   features.forEach(f => {
     permissions.push([id++, "Manager", f, !!managerEnabled[f]]);
@@ -367,7 +372,8 @@ function setupSampleRolePermissions(ss) {
 
   // 6. Driver
   const driverEnabled = {
-    "view_order_list": true, "access_fulfillment": true, "view_entertainment": true
+    "view_order_list": true, "access_fulfillment": true, "view_entertainment": true,
+    "view_promotions": true
   };
   features.forEach(f => {
     permissions.push([id++, "Driver", f, !!driverEnabled[f]]);

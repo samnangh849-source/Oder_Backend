@@ -1,5 +1,5 @@
-import React, { createContext, useState, useContext, useCallback, useEffect, useRef } from 'react';
-import { AppData, ParsedOrder, User } from '../types';
+import React, { createContext, useState, useContext, useCallback, useEffect } from 'react';
+import { AppData, ParsedOrder } from '../types';
 import { WEB_APP_URL } from '../constants';
 import { CacheService, CACHE_KEYS } from '../services/cacheService';
 import { useUser } from './UserContext';
@@ -19,6 +19,7 @@ interface OrderContextType {
     setRefreshTimestamp: React.Dispatch<React.SetStateAction<number>>;
     fetchData: (force?: boolean) => Promise<Record<string, any> | null>;
     fetchOrders: (force?: boolean) => Promise<void>;
+    fetchPromotions: () => Promise<void>;
     refreshData: () => Promise<Record<string, any> | null>;
 }
 
@@ -32,7 +33,7 @@ export const OrderProvider: React.FC<{ children: React.ReactNode }> = ({ childre
         shippingMethods: [], drivers: [], bankAccounts: [],
         phoneCarriers: [], colors: [], stores: [], settings: [], targets: [],
         inventory: [], stockTransfers: [], returns: [],
-        roles: [], permissions: [], orders: []
+        roles: [], permissions: [], orders: [], promotions: []
     });
     const [isOrdersLoading, setIsOrdersLoading] = useState(false);
     const [isSyncing, setIsSyncing] = useState(false);
@@ -73,31 +74,20 @@ export const OrderProvider: React.FC<{ children: React.ReactNode }> = ({ childre
 
             if (response.ok) {
                 const result = await response.json();
-                // Accept both 'success' and 'ok' status from backend
                 const sourceData = result.data || result.Data || result;
                 if (sourceData && typeof sourceData === 'object' && !Array.isArray(sourceData)) {
                     const mappedData: any = { ...sourceData };
-
                     Object.keys(sourceData).forEach(key => {
                         const val = sourceData[key];
                         const lowerKey = key.toLowerCase();
-
-                        // Ensure common keys are available in camelCase/lowercase as expected by frontend
                         if (lowerKey === 'rolepermissions') mappedData.permissions = val;
                         if (lowerKey === 'shippingmethods') mappedData.shippingMethods = val;
                         if (lowerKey === 'teampages') mappedData.pages = val;
-
-                        // Also provide a completely lowercase version for each
                         mappedData[lowerKey] = val;
                     });
-
                     setAppData(prev => ({ ...prev, ...mappedData }));
                     return mappedData;
-                } else {
-                    console.warn("[fetchData] Unexpected response format:", result);
                 }
-            } else {
-                console.error("[fetchData] HTTP error:", response.status, response.statusText);
             }
         } catch (e) {
             console.error("Static data fetch failed", e);
@@ -113,33 +103,23 @@ export const OrderProvider: React.FC<{ children: React.ReactNode }> = ({ childre
             const token = localStorage.getItem('token');
             if (!token) return;
             const headers: HeadersInit = { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` };
-
             const endpoint = `${WEB_APP_URL}/api/admin/orders`;
-
             const response = await fetch(endpoint, { headers });
 
-            // Handle 401 Unauthorized globally
             if (response.status === 401) {
-                console.warn("Session expired during orders fetch. Redirecting...");
                 handleUnauthorized();
                 return;
             }
 
-            // Handle 403 Permission Denied — user lacks 'view_order_list' permission in DB.
-            // Always refresh static data so the frontend permission state syncs with the real DB state.
-            // This resolves the split-brain case where the frontend cache shows permission=enabled
-            // while the DB actually has it disabled (or the row doesn't exist yet).
             if (response.status === 403) {
-                console.warn("[fetchOrders] 403 Forbidden — role missing 'view_order_list' permission in database.");
                 setOrders([]);
                 setOrdersFetchError('permission_denied');
-                fetchData(true); // Resync frontend permissions with DB (non-blocking)
+                fetchData(true);
                 return;
             }
 
             if (response.ok) {
                 const result = await response.json();
-                // Accept both 'success' and 'ok' status from backend
                 const rawList = result.data || result.orders || result.Data || [];
                 if (Array.isArray(rawList)) {
                     const parsedOrders = rawList.map((o: any) => {
@@ -149,13 +129,13 @@ export const OrderProvider: React.FC<{ children: React.ReactNode }> = ({ childre
                             const parsed = typeof rawProducts === 'string' ? JSON.parse(rawProducts) : (rawProducts || []);
                             products = (Array.isArray(parsed) ? parsed : []).map((p: any) => ({
                                 ...p,
-                                name:     p.name     || p.productName || p.ProductName || '',
+                                name: p.name || p.productName || p.ProductName || '',
                                 quantity: Number(p.quantity ?? p.Quantity ?? 1) || 1,
-                                image:    p.image    || p.imageUrl    || p.ImageURL   || '',
-                                cost:     Number(p.cost ?? p.Cost ?? 0),
+                                image: p.image || p.imageUrl || p.ImageURL || '',
+                                cost: Number(p.cost ?? p.Cost ?? 0),
                                 finalPrice: Number(p.finalPrice ?? p.FinalPrice ?? p.price ?? p.Price ?? 0),
                             }));
-                        } catch (e) { console.warn("Failed to parse products for order", o['Order ID']); }
+                        } catch (e) { }
                         return {
                             ...o,
                             Products: products,
@@ -166,33 +146,41 @@ export const OrderProvider: React.FC<{ children: React.ReactNode }> = ({ childre
                     setOrders(parsedOrders);
                     setOrdersFetchError(null);
                     setRefreshTimestamp(Date.now());
-                } else {
-                    console.warn("[fetchOrders] Unexpected response format:", result);
                 }
             } else {
-                console.error("[fetchOrders] HTTP error:", response.status, response.statusText);
                 setOrdersFetchError('network_error');
             }
         } catch (e) {
-            console.error("Orders fetch failed", e);
             setOrdersFetchError('network_error');
         } finally {
             setIsOrdersLoading(false);
             setIsSyncing(false);
             setIsGlobalLoading(false);
         }
-    }, [handleUnauthorized, currentUser]);
+    }, [handleUnauthorized, fetchData]);
+
+    const fetchPromotions = useCallback(async () => {
+        try {
+            const token = localStorage.getItem('token');
+            if (!token) return;
+            const headers: HeadersInit = { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` };
+            const response = await fetch(`${WEB_APP_URL}/api/promotions`, { headers });
+            if (response.ok) {
+                const result = await response.json();
+                if (result.status === 'success') {
+                    setAppData(prev => ({ ...prev, promotions: result.data }));
+                }
+            }
+        } catch (e) {
+            console.error("Promotions fetch failed", e);
+        }
+    }, []);
 
     const refreshData = useCallback(async (): Promise<Record<string, any> | null> => {
-        const [staticData] = await Promise.all([fetchData(true), fetchOrders(true)]);
+        const [staticData] = await Promise.all([fetchData(true), fetchOrders(true), fetchPromotions()]);
         return staticData;
-    }, [fetchData, fetchOrders]);
+    }, [fetchData, fetchOrders, fetchPromotions]);
 
-    // When the current user's permissions change (admin granted access, or login completed),
-    // clear any stale permission_denied error AND immediately retry fetching orders.
-    // Without the explicit retry, the App.tsx [currentUser] effect only fires when
-    // currentUser's reference changes — which the JSON-equality guard in the permission
-    // refresh effect may prevent when permissions were already identical.
     useEffect(() => {
         if (currentUser && ordersFetchError === 'permission_denied') {
             setOrdersFetchError(null);
@@ -201,37 +189,27 @@ export const OrderProvider: React.FC<{ children: React.ReactNode }> = ({ childre
     // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [currentUser?.Role, currentUser?.Permissions]);
 
-    // --- Background Polling (Every 5 minutes) ---
     useEffect(() => {
         if (!currentUser) return;
-        
-        const POLLING_INTERVAL = 5 * 60 * 1000; // 5 minutes
+        const POLLING_INTERVAL = 5 * 60 * 1000;
         const interval = setInterval(() => {
-            console.log("[OrderContext] Background polling triggered...");
             refreshData();
         }, POLLING_INTERVAL);
-
         return () => clearInterval(interval);
     }, [currentUser, refreshData]);
 
-    // --- Midnight Transition Watcher ---
-    // Updates refreshTimestamp when the day changes to force dynamic date filters (like "Today") to recalculate
     useEffect(() => {
         let timeoutId: any;
-        
         const checkMidnight = () => {
             const now = new Date();
             const tomorrow = new Date(now.getFullYear(), now.getMonth(), now.getDate() + 1);
             const timeUntilMidnight = tomorrow.getTime() - now.getTime();
-            
             timeoutId = setTimeout(() => {
-                console.log("[OrderContext] Midnight transition detected. Refreshing data...");
                 setRefreshTimestamp(Date.now());
                 refreshData();
-                checkMidnight(); // Re-schedule for next day
-            }, timeUntilMidnight + 1000); // Buffer of 1s
+                checkMidnight();
+            }, timeUntilMidnight + 1000);
         };
-        
         checkMidnight();
         return () => clearTimeout(timeoutId);
     }, [refreshData]);
@@ -243,7 +221,7 @@ export const OrderProvider: React.FC<{ children: React.ReactNode }> = ({ childre
             isOrdersLoading, isSyncing, setIsOrdersLoading,
             isGlobalLoading, setIsGlobalLoading,
             refreshTimestamp, setRefreshTimestamp,
-            fetchData, fetchOrders, refreshData
+            fetchData, fetchOrders, fetchPromotions, refreshData
         }}>
             {children}
         </OrderContext.Provider>
@@ -251,4 +229,4 @@ export const OrderProvider: React.FC<{ children: React.ReactNode }> = ({ childre
 };
 
 export const useOrder = () => useContext(OrderContext);
-export const useOrders = useOrder; // Alias for compatibility
+export const useOrders = useOrder;

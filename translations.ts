@@ -113,6 +113,8 @@ export const translations = {
     admin_desc: "គ្រប់គ្រងប្រព័ន្ធទាំងមូល មើលរបាយការណ៍ និងការកំណត់ផ្សេងៗ។",
     enter_user: "(បង្កើតការកម្មង់)",
     user_desc: "បង្កើតការកម្មង់ថ្មី ពិនិត្យមើលប្រវត្តិការលក់ និងការងារប្រចាំថ្ងៃ។",
+    enter_promotions: "ព័ត៌មានប្រម៉ូសិន",
+    promotions_desc: "មើល និងទាញយក Poster បញ្ចុះតម្លៃនៃផលិតផលនីមួយៗ។",
 
     // Admin Dashboard
     admin_panel: "ផ្ទាំងគ្រប់គ្រង Admin",
@@ -605,6 +607,8 @@ export const translations = {
     admin_desc: "Full system management, reports, and configurations.",
     enter_user: "(Create Order)",
     user_desc: "Create new orders, check sales history, and daily tasks.",
+    enter_promotions: "Promotion Info",
+    promotions_desc: "View and download discount posters for each product.",
 
     // Admin Dashboard
     admin_panel: "Admin Panel",

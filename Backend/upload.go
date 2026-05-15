@@ -10,7 +10,6 @@ package backend
 
 import (
 	"encoding/base64"
-	"encoding/json"
 	"fmt"
 	"io"
 	"log"
@@ -355,12 +354,11 @@ func processImageUploadInternal(req AppsScriptRequest, data string) (string, str
 				}(req.OrderID, broadcastMap)
 
 				// Broadcast to all connected clients
-				event, _ := json.Marshal(map[string]interface{}{
+				SafeBroadcastJSON(map[string]interface{}{
 					"type":    "update_order",
 					"orderId": req.OrderID,
 					"newData": broadcastMap,
 				})
-				HubGlobal.Broadcast <- event
 			} else {
 				log.Printf("❌ [Upload Internal] DB transaction failed: %v", txErr)
 			}
@@ -368,12 +366,12 @@ func processImageUploadInternal(req AppsScriptRequest, data string) (string, str
 	}
 
 	// ── 2. User Profile Update ───────────────────────────────────────────
-	if req.UserName != "" {
+	// Only update profile if explicitly requested (no SheetName or SheetName is "Users")
+	if req.UserName != "" && (req.SheetName == "" || req.SheetName == "Users") {
 		DB.Model(&User{}).Where("user_name = ?", req.UserName).UpdateColumn("profile_picture_url", driveURL)
-		notify, _ := json.Marshal(map[string]interface{}{
+		SafeBroadcastJSON(map[string]interface{}{
 			"type": "profile_image_ready", "userName": req.UserName, "url": driveURL,
 		})
-		HubGlobal.Broadcast <- notify
 		EnqueueSync("updateSheet", map[string]interface{}{"Profile Picture URL": driveURL}, "Users", map[string]string{"UserName": req.UserName})
 	}
 
@@ -389,10 +387,9 @@ func processImageUploadInternal(req AppsScriptRequest, data string) (string, str
 				EnqueueSync("renameFile", map[string]interface{}{ "fileID": fID, "newName": mv.Title }, "", nil)
 			}
 		}
-		notify, _ := json.Marshal(map[string]interface{}{
+		SafeBroadcastJSON(map[string]interface{}{
 			"type": "movie_thumbnail_ready", "movieId": req.MovieID, "url": driveURL,
 		})
-		HubGlobal.Broadcast <- notify
 	}
 
 	// ── 4. Generic Table/Sheet Update ────────────────────────────────────

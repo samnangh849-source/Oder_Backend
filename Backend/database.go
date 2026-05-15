@@ -175,7 +175,7 @@ func runMigrations(db *gorm.DB) {
 		&Color{}, &Driver{}, &BankAccount{}, &PhoneCarrier{}, &TelegramTemplate{},
 		&Inventory{}, &StockTransfer{}, &ReturnItem{},
 		&Order{}, &RevenueEntry{}, &ChatMessage{}, &EditLog{}, &UserActivityLog{},
-		&Role{}, &RolePermission{},
+		&Role{}, &RolePermission{}, &Promotion{},
 		&IncentiveProject{}, &IncentiveCalculator{}, &IncentiveResult{},
 		&IncentiveManualData{}, &IncentiveCustomPayout{},
 		&DriverRecommendation{}, &Movie{}, &PendingSync{}, &Shift{},
@@ -319,6 +319,7 @@ func DefaultPermissions() []RolePermission {
 		"access_sales_portal", "access_fulfillment", "view_admin_dashboard", "view_entertainment",
 		"manage_roles", "manage_permissions", "view_revenue", "export_data", "migrate_data",
 		"manage_inventory", "stock_transfer", "view_team_leaderboard", "set_targets", "view_global_orders",
+		"view_promotions", "manage_promotions",
 	}
 
 	// Define standard templates
