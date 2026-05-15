@@ -33,6 +33,7 @@ interface MobilePackagingHubProps {
     setShippingFilter: (filter: string) => void;
     teamFilter: string;
     setTeamFilter: (filter: string) => void;
+    shippingCounts?: { [key: string]: number };
     selectedStore: string;
     progressStats: { packedByUserToday: number, storeTotalToday: number, progressPercentage: number };
     setIsFilterModalOpen: (open: boolean) => void;
@@ -54,6 +55,7 @@ const MobilePackagingHub: React.FC<MobilePackagingHubProps> = ({
     orders, activeTab, setActiveTab, searchTerm, setSearchTerm,
     onPack, onShip, onUndo, onUndoShipped, onView, onPrintManifest, onSwitchHub, onExit,
     shippingFilter, setShippingFilter, teamFilter, setTeamFilter,
+    shippingCounts,
     selectedStore,
     progressStats, setIsFilterModalOpen, loadingActionId, tabCounts,
     selectedOrderIds, toggleOrderSelection, clearSelection, onBulkShip, isBulkProcessing,

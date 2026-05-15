@@ -54,6 +54,7 @@ const TabletPackagingHub: React.FC<TabletPackagingHubProps> = ({
     orders, activeTab, setActiveTab, searchTerm, setSearchTerm,
     onPack, onShip, onUndo, onUndoShipped, onView, onPrintManifest, onSwitchHub, onExit,
     shippingFilter, setShippingFilter, teamFilter, setTeamFilter,
+    shippingCounts,
     selectedStore,
     progressStats, setIsFilterModalOpen, loadingActionId, tabCounts,
     selectedOrderIds, toggleOrderSelection, clearSelection, onBulkShip, isBulkProcessing,
