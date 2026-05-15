@@ -5,6 +5,7 @@ import { translations } from '../../translations';
 import { convertGoogleDriveUrl } from '../../utils/fileUtils';
 import Spinner from '../common/Spinner';
 import { MobileGrandTotalCard } from './OrderGrandTotal';
+import { Package } from 'lucide-react';
 
 interface OrdersListTabletProps {
     orders: ParsedOrder[];
@@ -89,7 +90,7 @@ const OrdersListTablet: React.FC<OrdersListTabletProps> = ({
     };
 
     const getCarrierLogo = (phoneNumber: string) => {
-        if (!phoneNumber || !appData.phoneCarriers) return null;
+        if (!phoneNumber || !appData?.phoneCarriers) return null;
         const cleanPhone = phoneNumber.replace(/\s/g, '');
         const prefix = cleanPhone.substring(0, 3);
         const carrier = appData.phoneCarriers.find(c =>
@@ -99,7 +100,7 @@ const OrdersListTablet: React.FC<OrdersListTabletProps> = ({
     };
 
     const getShippingLogo = (methodName: string) => {
-        if (!methodName || !appData.shippingMethods) return null;
+        if (!methodName || !appData?.shippingMethods) return null;
         const method = appData.shippingMethods.find(m => m.MethodName === methodName);
         return method ? convertGoogleDriveUrl(method.LogoURL) : null;
     };
@@ -152,19 +153,21 @@ const OrdersListTablet: React.FC<OrdersListTabletProps> = ({
                     
                     <div className={viewMode === 'list' ? 'flex flex-col gap-2' : 'grid grid-cols-2 gap-5'}>
                         {group.orders.map((order) => {
-                            const pageInfo = appData.pages?.find((p: any) => p.PageName === order.Page);
+                            const pageInfo = appData?.pages?.find((p: any) => p.PageName === order.Page);
                             const logoUrl = pageInfo ? convertGoogleDriveUrl(pageInfo.PageLogoURL) : '';
                             const displayPhone = formatPhone(order['Customer Phone']);
                             const isVerified = order.IsVerified === true || String(order.IsVerified).toUpperCase() === 'TRUE' || order.IsVerified === 'A';
                             const isUpdating = updatingIds.has(order['Order ID']);
                             const isSelected = selectedIds.has(order['Order ID']);
                             const shippingLogo = getShippingLogo(order['Internal Shipping Method']);
+                            const carrierLogo = getCarrierLogo(displayPhone);
                             const isThisCopied = copiedId === order['Order ID'];
                             const allowEdit = canEditOrder(order);
                             const isPaid = order['Payment Status'] === 'Paid';
                             const fs = order.FulfillmentStatus || order['Fulfillment Status'] || 'Pending';
                             const isCancelled = fs === 'Cancelled';
                             const isReturned = fs === 'Returned';
+                            const packagePhoto = order['Package Photo'];
 
                             if (viewMode === 'list') {
                                 return (
@@ -190,18 +193,30 @@ const OrdersListTablet: React.FC<OrdersListTabletProps> = ({
                                         <div className="w-10 h-10 rounded-lg bg-black/40 border border-white/5 p-0.5 flex-shrink-0">
                                             {logoUrl ? <img src={logoUrl} className="w-full h-full object-cover rounded-md" alt="" /> : <div className="w-full h-full flex items-center justify-center text-[8px] text-gray-600">N/A</div>}
                                         </div>
+                                        {packagePhoto && (
+                                            <div className="w-10 h-10 rounded-lg bg-black/20 border border-blue-500/30 overflow-hidden shrink-0 relative hidden sm:block">
+                                                <img src={convertGoogleDriveUrl(packagePhoto)} className="w-full h-full object-cover" alt="PKG" />
+                                            </div>
+                                        )}
                                         <div className="flex-grow min-w-0 grid grid-cols-4 gap-4 items-center">
                                             <div className="col-span-1 min-w-0">
                                                 <h4 className="text-[13px] font-black text-white truncate">{order['Customer Name']}</h4>
-                                                <p className="text-[11px] font-bold text-blue-400 font-mono">{displayPhone}</p>
+                                                <div className="flex items-center gap-1 mt-0.5">
+                                                    {carrierLogo && <img src={carrierLogo} className="w-3 h-3 object-contain" alt="" />}
+                                                    <p className="text-[11px] font-bold text-blue-400 font-mono">{displayPhone}</p>
+                                                </div>
                                             </div>
-                                            <div className="col-span-1">
+                                            <div className="col-span-1 flex flex-col gap-1 items-start">
                                                 <span className={`text-[10px] font-black uppercase px-2 py-1 rounded-lg border ${isPaid ? 'bg-emerald-500/10 text-emerald-500 border-emerald-500/20' : 'bg-orange-500/10 text-orange-500 border-orange-500/20'}`}>{order['Payment Status']}</span>
+                                                <div className="flex items-center gap-1">
+                                                    {shippingLogo && <img src={shippingLogo} className="w-3 h-3 object-contain opacity-80" alt="" />}
+                                                    <span className="text-[9px] text-gray-400 font-bold uppercase truncate">{order['Internal Shipping Method']}</span>
+                                                </div>
                                             </div>
                                             <div className="col-span-1">
                                                 <div className="flex items-center gap-1">
                                                     {allowEdit && (
-                                                        <button onClick={e => { e.stopPropagation(); onEdit?.(order); }} className="w-8 h-8 rounded-lg bg-blue-500/10 text-blue-400 flex items-center justify-center border border-blue-500/20">
+                                                        <button onClick={e => { e.stopPropagation(); onEdit?.(order); }} className="w-8 h-8 rounded-lg bg-blue-500/10 text-blue-400 flex items-center justify-center border border-blue-500/20 hover:bg-blue-500 hover:text-white transition-colors">
                                                             <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" strokeWidth={2}/></svg>
                                                         </button>
                                                     )}
@@ -267,18 +282,29 @@ const OrdersListTablet: React.FC<OrdersListTabletProps> = ({
                                         </span>
                                     </div>
 
-                                    <div className="flex items-start gap-5 mb-6">
+                                    <div className="flex items-start gap-5 mb-6 relative">
                                         <div className="relative w-14 h-14 rounded-2xl bg-black/40 border border-white/10 p-0.5 flex-shrink-0">
                                             {logoUrl ? <img src={logoUrl} className="w-full h-full object-cover rounded-xl" alt="" /> : <div className="w-full h-full flex items-center justify-center text-[10px] text-gray-600">N/A</div>}
                                         </div>
-                                        <div className="min-w-0">
+                                        <div className="min-w-0 flex-1">
                                             <h3 className="text-white font-black text-base truncate">{order['Customer Name']}</h3>
-                                            <p className="text-blue-400 font-mono font-bold text-sm">{displayPhone}</p>
+                                            <div className="flex items-center gap-1.5">
+                                                {carrierLogo && <img src={carrierLogo} className="w-3.5 h-3.5 object-contain" alt="" />}
+                                                <p className="text-blue-400 font-mono font-bold text-sm">{displayPhone}</p>
+                                            </div>
                                             <div className="text-[11px] text-gray-500 font-bold truncate flex items-center gap-1 mt-1">
                                                 <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z" /><path d="M15 11a3 3 0 11-6 0 3 3 0 016 0z" /></svg>
                                                 {order.Location}
                                             </div>
                                         </div>
+                                        {packagePhoto && (
+                                            <div className="w-14 h-14 rounded-2xl bg-black/40 border border-blue-500/30 overflow-hidden flex-shrink-0 relative hidden sm:block">
+                                                <img src={convertGoogleDriveUrl(packagePhoto)} className="w-full h-full object-cover" alt="PKG" />
+                                                <div className="absolute bottom-0 right-0 bg-blue-500 text-white text-[8px] font-black px-1 rounded-tl-md">
+                                                    PKG
+                                                </div>
+                                            </div>
+                                        )}
                                     </div>
 
                                     <div className="mt-auto">
@@ -288,8 +314,8 @@ const OrdersListTablet: React.FC<OrdersListTabletProps> = ({
                                             </div>
 
                                             <div className="text-right">
-                                                <div className="flex items-center justify-end gap-2">
-                                                    {shippingLogo && <img src={shippingLogo} className="w-4 h-4 object-contain" alt="" />}
+                                                <div className="flex items-center justify-end gap-1.5">
+                                                    {shippingLogo && <img src={shippingLogo} className="w-4 h-4 object-contain opacity-80" alt="" />}
                                                     <span className="text-[11px] font-black text-orange-400 uppercase tracking-wide">{order['Internal Shipping Method']}</span>
                                                 </div>
                                             </div>

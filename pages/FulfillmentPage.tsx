@@ -25,7 +25,7 @@ const themeVars: React.CSSProperties = {
 } as React.CSSProperties;
 
 const FulfillmentPage: React.FC = () => {
-    const { orders, isOrdersLoading, appData } = useContext(AppContext);
+    const { orders, isOrdersLoading, appData, setAppState } = useContext(AppContext);
     const [activeTab, setActiveTab] = useState<'hub' | 'pack' | 'ship' | 'stock'>('pack');
     const [isDeliveryModalOpen, setIsDeliveryModalOpen] = useState(false);
 
@@ -136,8 +136,14 @@ const FulfillmentPage: React.FC = () => {
             </div>
 
             <main className="flex-1 overflow-hidden flex flex-col">
-                {activeTab === 'hub' && <FulfillmentDashboard orders={orders} onOpenDeliveryList={() => setIsDeliveryModalOpen(true)} />}
-                {activeTab === 'pack' && <PackagingView orders={orders} onExit={() => setActiveTab('hub')} />}
+                {activeTab === 'hub' && (
+                    <FulfillmentDashboard
+                        orders={orders}
+                        onOpenDeliveryList={() => setIsDeliveryModalOpen(true)}
+                        onExit={() => setAppState('role_selection')}
+                    />
+                )}
+                {activeTab === 'pack' && <PackagingView orders={orders} onExit={() => setAppState('role_selection')} />}
                 {activeTab === 'ship' && <DriverDeliveryView onOpenDeliveryList={() => setIsDeliveryModalOpen(true)} />}
                 {activeTab === 'stock' && <InventoryManagement />}
             </main>

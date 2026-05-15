@@ -6,7 +6,7 @@ import { convertGoogleDriveUrl } from '../../utils/fileUtils';
 import Spinner from '../common/Spinner';
 import { DesktopGrandTotalRow } from './OrderGrandTotal';
 import { translations } from '../../translations';
-import { Check, XCircle, RotateCcw, Undo2 } from 'lucide-react';
+import { Check, XCircle, RotateCcw, Undo2, Package } from 'lucide-react';
 
 interface OrdersListDesktopProps {
     orders: ParsedOrder[];
@@ -176,8 +176,8 @@ const OrderRow = (props: any) => {
                                         <div className="flex items-center gap-3 w-full">
                                             <div className="flex -space-x-2 items-center shrink-0">
                                                 {productThumbnails.slice(0, 3).map((p: any, i: number) => (
-                                                    <div key={i} className="relative">
-                                                        <div className="w-10 h-10 rounded bg-[#2B3139] border border-[#363C44] overflow-hidden">
+                                                    <div key={i} className="relative z-10 hover:z-20">
+                                                        <div className="w-10 h-10 rounded bg-[#2B3139] border border-[#363C44] overflow-hidden shadow-sm">
                                                             {p.img ? <img src={p.img} className="w-full h-full object-cover" alt="" /> : <div className="w-full h-full flex items-center justify-center text-[8px] text-[#848E9C]">No Pic</div>}
                                                         </div>
                                                         <div className="absolute -top-1 -right-1 bg-[#FCD535] text-[#181A20] text-[9px] font-bold px-1 rounded-sm border border-[#181A20]">
@@ -185,6 +185,16 @@ const OrderRow = (props: any) => {
                                                         </div>
                                                     </div>
                                                 ))}
+                                                {order['Package Photo'] && (
+                                                    <div className="relative z-0 ml-1 hover:z-20">
+                                                        <div className="w-10 h-10 rounded-lg bg-black/20 border border-blue-500/40 overflow-hidden shadow-sm">
+                                                            <img src={convertGoogleDriveUrl(order['Package Photo'])} className="w-full h-full object-cover" alt="PKG" />
+                                                        </div>
+                                                        <div className="absolute -bottom-1 -right-1 bg-blue-500 text-white text-[8px] font-black px-1 rounded-sm border border-[#181A20]">
+                                                            PKG
+                                                        </div>
+                                                    </div>
+                                                )}
                                             </div>
                                             <div className="flex-1 min-w-0 flex flex-col justify-center">
                                                 <div className="flex items-center gap-1.5">

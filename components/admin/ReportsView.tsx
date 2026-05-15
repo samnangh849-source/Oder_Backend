@@ -170,26 +170,26 @@ const ReportsView: React.FC<ReportsViewProps> = ({ orders, reportType, dateFilte
     const styles = getThemeStyles();
 
     return (
-        <div className="space-y-8 animate-fade-in pb-12 select-none">
+        <div className="space-y-6 sm:space-y-8 animate-fade-in pb-12 select-none px-1">
             {/* Top Stat Row */}
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-                <StatCard label="ចំណូលសរុប" value={`$${stats.revenue.toLocaleString(undefined, {minimumFractionDigits: 2})}`} icon="💰" colorClass={uiTheme === 'binance' ? "from-[#FCD535] to-[#f0c51d] !text-[#1E2329]" : "from-blue-600 to-blue-400"} />
+            <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
+                <StatCard label="ចំណូលសរុប" value={`$${stats.revenue.toLocaleString(undefined, {minimumFractionDigits: 0})}`} icon="💰" colorClass={uiTheme === 'binance' ? "from-[#FCD535] to-[#f0c51d] !text-[#1E2329]" : "from-blue-600 to-blue-400"} />
                 <StatCard label="ការកម្មង់" value={stats.totalOrders} icon="📦" colorClass={uiTheme === 'binance' ? "from-[#2B3139] to-[#1E2329]" : "from-indigo-600 to-indigo-400"} />
-                <StatCard label="ប្រាក់ចំណេញ" value={`$${stats.totalProfit.toLocaleString(undefined, {minimumFractionDigits: 2})}`} icon="📈" colorClass={uiTheme === 'binance' ? "from-[#0ECB81] to-[#059669]" : "from-emerald-600 to-emerald-400"} />
-                <StatCard label="Margin (%)" value={`${stats.margin.toFixed(1)}%`} icon="⚖️" colorClass={uiTheme === 'binance' ? "from-[#FCD535] to-[#f0c51d] !text-[#1E2329]" : "from-amber-500 to-orange-400"} />
+                <StatCard label="ប្រាក់ចំណេញ" value={`$${stats.totalProfit.toLocaleString(undefined, {minimumFractionDigits: 0})}`} icon="📈" colorClass={uiTheme === 'binance' ? "from-[#0ECB81] to-[#059669]" : "from-emerald-600 to-emerald-400"} />
+                <StatCard label="Margin (%)" value={`${stats.margin.toFixed(0)}%`} icon="⚖️" colorClass={uiTheme === 'binance' ? "from-[#FCD535] to-[#f0c51d] !text-[#1E2329]" : "from-amber-500 to-orange-400"} />
             </div>
 
             <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 lg:gap-8">
                 {/* Main Revenue Chart */}
                 <div className="lg:col-span-8 space-y-6 lg:space-y-8">
-                    <div className={`page-card p-4 sm:!p-8 ${styles.chartBg} h-full min-h-[300px] sm:min-h-[400px] flex flex-col justify-center rounded-md border`}>
+                    <div className={`page-card p-4 sm:!p-8 ${styles.chartBg} h-full min-h-[300px] sm:min-h-[400px] flex flex-col justify-center rounded-xl border`}>
                         <SimpleLineChart data={stats.chartData} title="និន្នាការចំណូល (Revenue Trends)" color={styles.accent} />
                     </div>
 
                     {/* Breakdown Sections */}
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-6 lg:gap-8">
                         {/* Team Performance */}
-                        <div className={`page-card !p-6 ${styles.cardBg} rounded-md border`}>
+                        <div className={`page-card !p-5 sm:!p-6 ${styles.cardBg} rounded-xl border`}>
                             <h3 className={`text-[10px] font-black ${styles.secondaryText} uppercase tracking-[0.2em] mb-6 flex items-center gap-2`}>
                                 <div className={`w-1 h-4 ${styles.activeBar} rounded-full`}></div>
                                 Performance by Team
@@ -198,8 +198,8 @@ const ReportsView: React.FC<ReportsViewProps> = ({ orders, reportType, dateFilte
                                 {stats.teamStats.map(team => (
                                     <div key={team.name} className="flex flex-col gap-2">
                                         <div className="flex justify-between items-end">
-                                            <span className={`text-[11px] font-black ${styles.primaryText} uppercase tracking-wider`}>{team.name}</span>
-                                            <span className={`text-[11px] font-black ${styles.accentText} tabular-nums`}>${team.revenue.toLocaleString()}</span>
+                                            <span className={`text-[10px] sm:text-[11px] font-black ${styles.primaryText} uppercase tracking-wider`}>{team.name}</span>
+                                            <span className={`text-[10px] sm:text-[11px] font-black ${styles.accentText} tabular-nums`}>${team.revenue.toLocaleString()}</span>
                                         </div>
                                         <div className={`w-full h-1.5 ${styles.barBg} rounded-full overflow-hidden`}>
                                             <div 
@@ -207,7 +207,7 @@ const ReportsView: React.FC<ReportsViewProps> = ({ orders, reportType, dateFilte
                                                 style={{ width: `${(team.revenue / stats.revenue) * 100}%` }}
                                             ></div>
                                         </div>
-                                        <div className={`flex justify-between text-[9px] font-bold ${styles.secondaryText} uppercase tracking-widest`}>
+                                        <div className={`flex justify-between text-[8px] font-bold ${styles.secondaryText} uppercase tracking-widest`}>
                                             <span>{team.orders} Executions</span>
                                             <span>{((team.revenue / stats.revenue) * 100).toFixed(1)}% weight</span>
                                         </div>
@@ -217,21 +217,21 @@ const ReportsView: React.FC<ReportsViewProps> = ({ orders, reportType, dateFilte
                         </div>
 
                         {/* Order Status Breakdown */}
-                        <div className={`page-card !p-6 ${styles.cardBg} rounded-md border flex flex-col`}>
+                        <div className={`page-card !p-5 sm:!p-6 ${styles.cardBg} rounded-xl border flex flex-col`}>
                             <h3 className={`text-[10px] font-black ${styles.secondaryText} uppercase tracking-[0.2em] mb-6 flex items-center gap-2`}>
                                 <div className="w-1 h-4 bg-[#0ECB81] rounded-full"></div>
                                 Settlement Status
                             </h3>
-                            <div className="flex-grow flex flex-col justify-center gap-8">
+                            <div className="flex-grow flex flex-col justify-center gap-6 sm:gap-8">
                                 <div className="flex justify-around items-center">
                                     <div className="text-center">
-                                        <div className="text-3xl font-black text-[#0ECB81] tabular-nums">{stats.paymentMap.Paid || 0}</div>
-                                        <div className={`text-[9px] font-black ${styles.secondaryText} uppercase tracking-widest mt-2`}>Finalized</div>
+                                        <div className="text-2xl sm:text-3xl font-black text-[#0ECB81] tabular-nums">{stats.paymentMap.Paid || 0}</div>
+                                        <div className={`text-[8px] sm:text-[9px] font-black ${styles.secondaryText} uppercase tracking-widest mt-2`}>Finalized</div>
                                     </div>
                                     <div className={`h-10 w-px ${styles.barBg}`}></div>
                                     <div className="text-center">
-                                        <div className="text-3xl font-black text-[#F6465D] tabular-nums">{stats.paymentMap.Unpaid || 0}</div>
-                                        <div className={`text-[9px] font-black ${styles.secondaryText} uppercase tracking-widest mt-2`}>Outstanding</div>
+                                        <div className="text-2xl sm:text-3xl font-black text-[#F6465D] tabular-nums">{stats.paymentMap.Unpaid || 0}</div>
+                                        <div className={`text-[8px] sm:text-[9px] font-black ${styles.secondaryText} uppercase tracking-widest mt-2`}>Outstanding</div>
                                     </div>
                                 </div>
                                 
@@ -240,7 +240,7 @@ const ReportsView: React.FC<ReportsViewProps> = ({ orders, reportType, dateFilte
                                         <div className="bg-[#0ECB81]" style={{ width: `${(stats.paymentMap.Paid / stats.totalOrders) * 100}%` }}></div>
                                         <div className="bg-[#F6465D]" style={{ width: `${(stats.paymentMap.Unpaid / stats.totalOrders) * 100}%` }}></div>
                                     </div>
-                                    <div className="flex justify-between text-[8px] font-black uppercase tracking-widest">
+                                    <div className="flex justify-between text-[7px] sm:text-[8px] font-black uppercase tracking-widest">
                                         <span className="text-[#0ECB81]">Ratio: {((stats.paymentMap.Paid / stats.totalOrders) * 100 || 0).toFixed(1)}%</span>
                                         <span className="text-[#F6465D]">Ratio: {((stats.paymentMap.Unpaid / stats.totalOrders) * 100 || 0).toFixed(1)}%</span>
                                     </div>
@@ -253,10 +253,10 @@ const ReportsView: React.FC<ReportsViewProps> = ({ orders, reportType, dateFilte
                 {/* Right Sidebar: AI & Top Performers */}
                 <div className="lg:col-span-4 space-y-6 lg:space-y-8">
                     {/* Top Performers (Users) */}
-                    <div className={`page-card !p-6 ${styles.cardBg} rounded-md border`}>
+                    <div className={`page-card !p-5 sm:!p-6 ${styles.cardBg} rounded-xl border`}>
                         <h3 className={`text-[10px] font-black ${styles.secondaryText} uppercase tracking-[0.2em] mb-6 flex items-center gap-2`}>
                             <div className={`w-1 h-4 ${styles.activeBar} rounded-full`}></div>
-                            Top Nodes
+                            Top Performers
                         </h3>
                         <div className="space-y-5">
                             {stats.topUsers.map((user, idx) => (
@@ -275,8 +275,8 @@ const ReportsView: React.FC<ReportsViewProps> = ({ orders, reportType, dateFilte
                                     </div>
                                     <div className="flex-grow min-w-0">
                                         <div className="flex justify-between items-start">
-                                            <h4 className={`text-[11px] font-black ${styles.primaryText} truncate uppercase tracking-wider group-hover:text-[#FCD535] transition-colors`}>{user.name}</h4>
-                                            <span className={`text-[11px] font-black ${styles.accentText} tabular-nums`}>${user.revenue.toLocaleString()}</span>
+                                            <h4 className={`text-[10px] sm:text-[11px] font-black ${styles.primaryText} truncate uppercase tracking-wider group-hover:text-[#FCD535] transition-colors`}>{user.name}</h4>
+                                            <span className={`text-[10px] sm:text-[11px] font-black ${styles.accentText} tabular-nums`}>${user.revenue.toLocaleString()}</span>
                                         </div>
                                         <p className={`text-[8px] font-bold ${styles.secondaryText} uppercase tracking-widest mt-1`}>{user.orders} Executions</p>
                                     </div>
@@ -286,14 +286,18 @@ const ReportsView: React.FC<ReportsViewProps> = ({ orders, reportType, dateFilte
                     </div>
 
                     {/* AI Insights */}
-                    <div className={`page-card !p-6 ${styles.cardBg} rounded-md border flex flex-col min-h-[350px]`}>
+                    <div className={`page-card !p-5 sm:!p-6 ${styles.cardBg} rounded-xl border flex flex-col min-h-[300px] sm:min-h-[350px]`}>
                         <div className="flex justify-between items-center mb-6">
-                            <h3 className={`text-[10px] font-black ${styles.secondaryText} uppercase tracking-[0.2em]`}>Machine Intelligence</h3>
+                            <h3 className={`text-[10px] font-black ${styles.secondaryText} uppercase tracking-[0.2em]`}>AI Analysis</h3>
                             <GeminiButton onClick={handleAnalyze} isLoading={loadingAnalysis} variant={uiTheme === 'binance' ? 'primary' : 'default'}>Compute</GeminiButton>
                         </div>
-                        <div className={`flex-grow ${styles.innerBg} rounded-xl p-5 border ${styles.barBg} overflow-y-auto custom-scrollbar`}>
+                        <div className={`flex-grow ${styles.innerBg} rounded-xl p-4 sm:p-5 border ${styles.barBg} overflow-y-auto custom-scrollbar`}>
                             {analysis ? (
-                                <div className={`text-[11px] ${styles.secondaryText} leading-relaxed font-bold uppercase tracking-wide`}>{analysis}</div>
+                                <div className={`text-[11px] ${styles.secondaryText} leading-relaxed font-bold uppercase tracking-wide space-y-2`}>
+                                    {analysis.split('\n').map((line, i) => (
+                                        <p key={i}>{line}</p>
+                                    ))}
+                                </div>
                             ) : (
                                 <div className="h-full flex flex-col items-center justify-center opacity-20">
                                     <svg className="w-10 h-10 mb-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z" /></svg>
@@ -306,6 +310,7 @@ const ReportsView: React.FC<ReportsViewProps> = ({ orders, reportType, dateFilte
             </div>
         </div>
     );
+
 };
 
 export default ReportsView;
