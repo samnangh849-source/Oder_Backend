@@ -53,29 +53,29 @@ const RoleSelectionPage: React.FC<RoleSelectionPageProps> = ({ onSelect }) => {
     };
 
     return (
-        <div className="min-h-full w-full flex flex-col items-center justify-start md:justify-center relative font-['Kantumruy_Pro'] py-8 sm:py-12 md:py-16 lg:py-20 2xl:py-24 overflow-x-hidden">
-            {/* Background Aesthetic Elements - Enhanced for Ultra-Widescreen */}
+        <div className="h-screen w-full flex flex-col items-center justify-center relative font-['Kantumruy_Pro'] overflow-hidden p-4 sm:p-6 lg:p-8">
+            {/* Background Aesthetic Elements */}
             <div className="absolute top-0 left-0 w-full h-full overflow-hidden pointer-events-none">
-                <div className="absolute top-[-10%] left-[-10%] w-[50%] h-[50%] bg-blue-600/10 rounded-full blur-[120px] lg:blur-[150px] 2xl:blur-[200px] animate-pulse"></div>
-                <div className="absolute bottom-[-10%] right-[-10%] w-[50%] h-[50%] bg-emerald-600/10 rounded-full blur-[120px] lg:blur-[150px] 2xl:blur-[200px] animate-pulse" style={{ animationDelay: '1s' }}></div>
-                <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-full h-full bg-[radial-gradient(circle_at_center,rgba(255,255,255,0.02)_0%,transparent_70%)] 2xl:bg-[radial-gradient(circle_at_center,rgba(255,255,255,0.04)_0%,transparent_60%)]"></div>
+                <div className="absolute top-[-10%] left-[-10%] w-[50%] h-[50%] bg-blue-600/10 rounded-full blur-[100px] lg:blur-[140px] animate-pulse"></div>
+                <div className="absolute bottom-[-10%] right-[-10%] w-[50%] h-[50%] bg-emerald-600/10 rounded-full blur-[100px] lg:blur-[140px] animate-pulse" style={{ animationDelay: '1s' }}></div>
+                <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-full h-full bg-[radial-gradient(circle_at_center,rgba(255,255,255,0.02)_0%,transparent_70%)] lg:bg-[radial-gradient(circle_at_center,rgba(255,255,255,0.03)_0%,transparent_60%)]"></div>
             </div>
 
             <style>{`
                 .selection-btn {
                     background: rgba(255, 255, 255, 0.05);
-                    border: 1px solid rgba(255, 255, 255, 0.1);
+                    border: 1px solid rgba(255, 255, 255, 0.12);
                     backdrop-filter: blur(15px);
-                    transition: all 0.5s cubic-bezier(0.23, 1, 0.32, 1);
+                    transition: all 0.4s cubic-bezier(0.23, 1, 0.32, 1);
                 }
                 .selection-btn:hover {
                     background: rgba(255, 255, 255, 0.12);
                     border-color: rgba(255, 255, 255, 0.3);
-                    transform: translateY(-6px) scale(1.03);
-                    box-shadow: 0 30px 60px rgba(0,0,0,0.4);
+                    transform: translateY(-4px) scale(1.02);
+                    box-shadow: 0 20px 40px rgba(0,0,0,0.3);
                 }
                 .selection-btn:active { 
-                    transform: scale(0.96) translateY(0);
+                    transform: scale(0.98) translateY(0);
                     background: rgba(255, 255, 255, 0.18);
                 }
                 
@@ -86,51 +86,57 @@ const RoleSelectionPage: React.FC<RoleSelectionPageProps> = ({ onSelect }) => {
                     background: linear-gradient(90deg, transparent, rgba(255,255,255,0.06), transparent);
                     transition: 0.5s;
                 }
-                .selection-btn:hover .shimmer { left: 100%; transition: 1s; }
+                .selection-btn:hover .shimmer { left: 100%; transition: 0.8s; }
 
                 @keyframes fadeInUp {
-                    from { opacity: 0; transform: translateY(40px); filter: blur(12px); }
+                    from { opacity: 0; transform: translateY(20px); filter: blur(8px); }
                     to { opacity: 1; transform: translateY(0); filter: blur(0); }
                 }
-                .animate-reveal { animation: fadeInUp 1s cubic-bezier(0.23, 1, 0.32, 1) forwards; }
+                .animate-reveal { animation: fadeInUp 0.8s cubic-bezier(0.23, 1, 0.32, 1) forwards; }
 
                 .glass-avatar-premium {
-                    padding: 6px;
+                    padding: 4px;
                     background: rgba(255, 255, 255, 0.03);
-                    backdrop-filter: blur(25px);
+                    backdrop-filter: blur(20px);
                     border-radius: 50%;
                     border: 1px solid rgba(255, 255, 255, 0.15);
-                    box-shadow: 0 20px 50px rgba(0,0,0,0.6);
+                    box-shadow: 0 15px 35px rgba(0,0,0,0.4);
                 }
 
                 .logout-btn {
-                    background: rgba(255, 255, 255, 0.05);
-                    border: 1px solid rgba(255, 255, 255, 0.1);
+                    background: rgba(255, 255, 255, 0.04);
+                    border: 1px solid rgba(255, 255, 255, 0.08);
                     backdrop-filter: blur(12px);
-                    transition: all 0.4s ease;
+                    transition: all 0.3s ease;
                 }
-                .logout-btn:hover { background: rgba(239, 68, 68, 0.2); border-color: rgba(239, 68, 68, 0.4); color: #fca5a5; transform: translateY(-2px); }
+                .logout-btn:hover { 
+                    background: rgba(239, 68, 68, 0.15); 
+                    border-color: rgba(239, 68, 68, 0.3); 
+                    color: #fca5a5; 
+                    transform: translateY(-2px); 
+                    box-shadow: 0 10px 20px rgba(239, 68, 68, 0.1);
+                }
                 .logout-btn:active { transform: scale(0.95); }
             `}</style>
 
-            {/* Top Bar - Quick Actions */}
-            <div className="absolute top-4 right-4 sm:top-6 sm:right-8 md:top-8 md:right-10 lg:top-10 lg:right-12 2xl:top-14 2xl:right-16 z-50 animate-reveal" style={{ animationDelay: '0.1s' }}>
+            {/* Top Bar - Fixed Navigation */}
+            <div className="absolute top-4 right-4 lg:top-8 lg:right-10 z-50 animate-reveal" style={{ animationDelay: '0.1s' }}>
                 <button 
                     onClick={logout}
-                    className="logout-btn flex items-center gap-2 px-5 py-2.5 lg:px-6 lg:py-3 2xl:px-8 2xl:py-4 rounded-full text-white/80 text-[10px] md:text-[11px] lg:text-[12px] 2xl:text-[14px] font-black uppercase tracking-widest"
+                    className="logout-btn flex items-center gap-2 px-4 py-2 lg:px-6 lg:py-2.5 rounded-full text-white/80 text-[10px] lg:text-[11px] 2xl:text-[12px] font-black uppercase tracking-[0.2em]"
                 >
-                    <svg className="w-4 h-4 lg:w-5 lg:h-5 2xl:w-6 2xl:h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" /></svg>
-                    <span>{t.logout}</span>
+                    <svg className="w-4 h-4 lg:w-4 lg:h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" /></svg>
+                    <span className="hidden sm:inline">{t.logout}</span>
                 </button>
             </div>
 
-            <div className="w-full max-w-2xl md:max-w-5xl lg:max-w-[85rem] xl:max-w-7xl 2xl:max-w-[100rem] z-10 flex flex-col items-center px-4 sm:px-6 md:px-12 lg:px-16 2xl:px-24 gap-10 md:gap-14 lg:gap-16 2xl:gap-24 my-auto py-6 md:py-12 lg:py-16 2xl:py-20">
+            <div className="w-full max-w-6xl 2xl:max-w-7xl z-10 flex flex-col items-center gap-5 lg:gap-8 max-h-full">
                 
                 {/* Profile Header Section */}
-                <div className="flex flex-col items-center animate-reveal" style={{ animationDelay: '0.15s' }}>
-                    <div className="relative mb-6 lg:mb-8 2xl:mb-12 group">
+                <div className="flex flex-col items-center animate-reveal shrink-0" style={{ animationDelay: '0.15s' }}>
+                    <div className="relative mb-3 lg:mb-5 group">
                         <div className="glass-avatar-premium transition-transform duration-700 group-hover:scale-105">
-                            <div className="w-20 h-20 sm:w-24 sm:h-24 md:w-28 md:h-28 lg:w-32 lg:h-32 2xl:w-40 2xl:h-40 rounded-full overflow-hidden border border-white/10 shadow-2xl relative z-10">
+                            <div className="w-16 h-16 sm:w-20 sm:h-20 lg:w-24 lg:h-24 2xl:w-28 2xl:h-28 rounded-full overflow-hidden border border-white/10 shadow-xl relative z-10">
                                 <UserAvatar 
                                     avatarUrl={currentUser.ProfilePictureURL} 
                                     name={currentUser.FullName} 
@@ -138,14 +144,14 @@ const RoleSelectionPage: React.FC<RoleSelectionPageProps> = ({ onSelect }) => {
                                 />
                             </div>
                         </div>
-                        <div className="absolute bottom-1 right-1 lg:bottom-2 lg:right-2 2xl:bottom-4 2xl:right-4 w-5 h-5 md:w-6 md:h-6 lg:w-7 lg:h-7 2xl:w-10 2xl:h-10 bg-emerald-500 border-4 2xl:border-[6px] border-[#0a0a0a] rounded-full shadow-lg z-20"></div>
+                        <div className="absolute bottom-1 right-1 lg:bottom-1 lg:right-1 w-4 h-4 lg:w-5 lg:h-5 2xl:w-6 2xl:h-6 bg-emerald-500 border-[3px] lg:border-4 border-[#0a0a0a] rounded-full shadow-lg z-20 animate-pulse"></div>
                     </div>
                     <div className="text-center">
-                        <h1 className="text-2xl sm:text-3xl md:text-4xl lg:text-5xl 2xl:text-7xl font-black text-white tracking-tighter mb-1 lg:mb-2 2xl:mb-4 uppercase italic">
+                        <h1 className="text-xl sm:text-2xl lg:text-4xl 2xl:text-5xl font-black text-white tracking-tighter mb-1 lg:mb-2 uppercase italic">
                             {currentUser.FullName}
                         </h1>
-                        <div className="inline-flex items-center gap-2 px-4 py-1 lg:px-5 lg:py-1.5 2xl:px-8 2xl:py-2.5 rounded-full bg-white/5 border border-white/10">
-                            <span className="text-[10px] md:text-[11px] lg:text-[12px] 2xl:text-[16px] font-black text-blue-400 uppercase tracking-[0.25em] 2xl:tracking-[0.4em]">
+                        <div className="inline-flex items-center gap-2 px-3 py-1 lg:px-4 lg:py-1.5 rounded-full bg-white/5 border border-white/10 backdrop-blur-md">
+                            <span className="text-[9px] lg:text-[10px] 2xl:text-[11px] font-black text-blue-400 uppercase tracking-[0.2em] lg:tracking-[0.3em]">
                                 {currentUser.Role || (language === 'km' ? 'អ្នកប្រើប្រាស់' : 'System User')}
                             </span>
                         </div>
@@ -153,31 +159,31 @@ const RoleSelectionPage: React.FC<RoleSelectionPageProps> = ({ onSelect }) => {
                 </div>
 
                 {/* Subtitle Section */}
-                <div className="text-center animate-reveal" style={{ animationDelay: '0.25s' }}>
-                    <h2 className="text-3xl sm:text-4xl md:text-5xl lg:text-6xl 2xl:text-8xl font-black text-white mb-2 lg:mb-4 2xl:mb-8 tracking-tighter leading-none italic uppercase">
+                <div className="text-center animate-reveal shrink-0" style={{ animationDelay: '0.25s' }}>
+                    <h2 className="text-2xl sm:text-3xl lg:text-4xl 2xl:text-5xl font-black text-white mb-1 lg:mb-2 tracking-tighter leading-none italic uppercase">
                         Select <span className="text-blue-500">Access</span>
                     </h2>
-                    <p className="text-white/30 text-[10px] md:text-[12px] lg:text-[14px] 2xl:text-[18px] font-bold uppercase tracking-[0.3em] 2xl:tracking-[0.5em]">{t.role_subtext}</p>
+                    <p className="text-white/30 text-[9px] lg:text-[10px] 2xl:text-[12px] font-bold uppercase tracking-[0.3em] lg:tracking-[0.4em]">{t.role_subtext}</p>
                 </div>
 
-                {/* Grid Layout - Perfectly optimized for all screen sizes */}
-                <div className="w-full grid grid-cols-2 sm:grid-cols-2 md:grid-cols-2 lg:grid-cols-3 gap-4 md:gap-6 lg:gap-8 2xl:gap-12 animate-reveal" style={{ animationDelay: '0.35s' }}>
+                {/* Grid Layout - Scaled down vertically to prevent scrolling on 1080p */}
+                <div className="w-full grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 lg:gap-5 animate-reveal" style={{ animationDelay: '0.35s' }}>
                     {showAdmin && (
                         <button 
                             onClick={handleAdminClick}
-                            className="selection-btn group p-0.5 rounded-2xl sm:rounded-[2rem] lg:rounded-[2.2rem] 2xl:rounded-[3rem] relative overflow-hidden"
+                            className="selection-btn group p-0.5 rounded-2xl lg:rounded-[2rem] relative overflow-hidden"
                         >
                             <div className="shimmer"></div>
-                            <div className="flex flex-col md:flex-row items-center gap-3 sm:gap-4 md:gap-6 2xl:gap-10 p-4 sm:p-5 md:p-6 lg:p-7 2xl:p-10 rounded-[1.1rem] sm:rounded-[1.9rem] lg:rounded-[2.1rem] 2xl:rounded-[2.9rem] bg-[var(--bg-dark)]/40 relative z-10">
-                                <div className="w-14 h-14 md:w-16 md:h-16 lg:w-20 lg:h-20 2xl:w-28 2xl:h-28 shrink-0 rounded-xl sm:rounded-2xl lg:rounded-3xl 2xl:rounded-[2.5rem] bg-blue-600/20 flex items-center justify-center border border-white/10 group-hover:bg-blue-600 transition-all duration-700 shadow-2xl">
-                                    <svg className="w-7 h-7 md:w-8 md:h-8 lg:w-10 lg:h-10 2xl:w-14 2xl:h-14 text-blue-400 group-hover:text-white transition-colors" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2}><path d="M11 3.055A9.001 9.001 0 1020.945 13H11V3.055z" /><path d="M20.488 9H15V3.512A9.025 9.025 0 0120.488 9z" /></svg>
+                            <div className="flex items-center gap-4 lg:gap-5 p-3 sm:p-4 lg:p-5 rounded-[1.4rem] lg:rounded-[1.9rem] bg-[var(--bg-dark)]/40 relative z-10">
+                                <div className="w-12 h-12 lg:w-14 lg:h-14 2xl:w-16 2xl:h-16 shrink-0 rounded-xl lg:rounded-2xl bg-blue-600/20 flex items-center justify-center border border-white/10 group-hover:bg-blue-600 transition-all duration-500 shadow-xl">
+                                    <svg className="w-6 h-6 lg:w-7 lg:h-7 2xl:w-8 2xl:h-8 text-blue-400 group-hover:text-white transition-colors" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2}><path d="M11 3.055A9.001 9.001 0 1020.945 13H11V3.055z" /><path d="M20.488 9H15V3.512A9.025 9.025 0 0120.488 9z" /></svg>
                                 </div>
-                                <div className="text-center md:text-left min-w-0 flex-grow">
-                                    <h3 className="text-xs sm:text-sm md:text-lg lg:text-xl 2xl:text-3xl font-black text-white group-hover:text-blue-400 transition-colors uppercase italic tracking-tight">{t.enter_admin}</h3>
-                                    <p className="hidden md:block text-[10px] lg:text-[11px] xl:text-[12px] 2xl:text-[15px] text-white/30 font-bold uppercase tracking-widest truncate">{t.admin_desc}</p>
+                                <div className="text-left min-w-0 flex-grow">
+                                    <h3 className="text-sm lg:text-base 2xl:text-xl font-black text-white group-hover:text-blue-400 transition-colors uppercase italic tracking-tight leading-tight">{t.enter_admin}</h3>
+                                    <p className="hidden lg:block text-[9px] 2xl:text-[10px] text-white/30 font-bold uppercase tracking-widest truncate mt-0.5">{t.admin_desc}</p>
                                 </div>
-                                <div className="hidden md:flex w-10 h-10 lg:w-12 lg:h-12 xl:w-14 xl:h-14 2xl:w-16 2xl:h-16 shrink-0 rounded-xl lg:rounded-2xl 2xl:rounded-3xl bg-white/5 items-center justify-center group-hover:bg-blue-600 transition-all">
-                                    <svg className="w-4 h-4 lg:w-5 lg:h-5 xl:w-6 xl:h-6 2xl:w-8 2xl:h-8 text-white/20 group-hover:text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={3}><path d="M9 5l7 7-7 7" /></svg>
+                                <div className="hidden xl:flex w-8 h-8 2xl:w-10 2xl:h-10 shrink-0 rounded-lg bg-white/5 items-center justify-center group-hover:bg-blue-600 transition-all">
+                                    <svg className="w-3 h-3 2xl:w-4 2xl:h-4 text-white/20 group-hover:text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={3}><path d="M9 5l7 7-7 7" /></svg>
                                 </div>
                             </div>
                         </button>
@@ -186,19 +192,19 @@ const RoleSelectionPage: React.FC<RoleSelectionPageProps> = ({ onSelect }) => {
                     {showFulfillment && (
                         <button 
                             onClick={handleFulfillmentClick}
-                            className="selection-btn group p-0.5 rounded-2xl sm:rounded-[2rem] lg:rounded-[2.2rem] 2xl:rounded-[3rem] relative overflow-hidden"
+                            className="selection-btn group p-0.5 rounded-2xl lg:rounded-[2rem] relative overflow-hidden"
                         >
                             <div className="shimmer"></div>
-                            <div className="flex flex-col md:flex-row items-center gap-3 sm:gap-4 md:gap-6 2xl:gap-10 p-4 sm:p-5 md:p-6 lg:p-7 2xl:p-10 rounded-[1.1rem] sm:rounded-[1.9rem] lg:rounded-[2.1rem] 2xl:rounded-[2.9rem] bg-[var(--bg-dark)]/40 relative z-10">
-                                <div className="w-14 h-14 md:w-16 md:h-16 lg:w-20 lg:h-20 2xl:w-28 2xl:h-28 shrink-0 rounded-xl sm:rounded-2xl lg:rounded-3xl 2xl:rounded-[2.5rem] bg-amber-600/20 flex items-center justify-center border border-white/10 group-hover:bg-amber-600 transition-all duration-700 shadow-2xl">
-                                    <svg className="w-7 h-7 md:w-8 md:h-8 lg:w-10 lg:h-10 2xl:w-14 2xl:h-14 text-amber-400 group-hover:text-white transition-colors" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2}><path d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4" /></svg>
+                            <div className="flex items-center gap-4 lg:gap-5 p-3 sm:p-4 lg:p-5 rounded-[1.4rem] lg:rounded-[1.9rem] bg-[var(--bg-dark)]/40 relative z-10">
+                                <div className="w-12 h-12 lg:w-14 lg:h-14 2xl:w-16 2xl:h-16 shrink-0 rounded-xl lg:rounded-2xl bg-amber-600/20 flex items-center justify-center border border-white/10 group-hover:bg-amber-600 transition-all duration-500 shadow-xl">
+                                    <svg className="w-6 h-6 lg:w-7 lg:h-7 2xl:w-8 2xl:h-8 text-amber-400 group-hover:text-white transition-colors" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2}><path d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4" /></svg>
                                 </div>
-                                <div className="text-center md:text-left min-w-0 flex-grow">
-                                    <h3 className="text-xs sm:text-sm md:text-lg lg:text-xl 2xl:text-3xl font-black text-white group-hover:text-amber-400 transition-colors uppercase italic tracking-tight">{language === 'km' ? 'វេចខ្ចប់' : 'Fulfillment'}</h3>
-                                    <p className="hidden md:block text-[10px] lg:text-[11px] xl:text-[12px] 2xl:text-[15px] text-white/30 font-bold uppercase tracking-widest truncate">{language === 'km' ? 'រៀបចំទំនិញ និងបញ្ជូនឥវ៉ាន់' : 'Warehouse & Logistics'}</p>
+                                <div className="text-left min-w-0 flex-grow">
+                                    <h3 className="text-sm lg:text-base 2xl:text-xl font-black text-white group-hover:text-amber-400 transition-colors uppercase italic tracking-tight leading-tight">{language === 'km' ? 'វេចខ្ចប់' : 'Fulfillment'}</h3>
+                                    <p className="hidden lg:block text-[9px] 2xl:text-[10px] text-white/30 font-bold uppercase tracking-widest truncate mt-0.5">{language === 'km' ? 'រៀបចំទំនិញ និងបញ្ជូនឥវ៉ាន់' : 'Warehouse & Logistics'}</p>
                                 </div>
-                                <div className="hidden md:flex w-10 h-10 lg:w-12 lg:h-12 xl:w-14 xl:h-14 2xl:w-16 2xl:h-16 shrink-0 rounded-xl lg:rounded-2xl 2xl:rounded-3xl bg-white/5 items-center justify-center group-hover:bg-amber-600 transition-all">
-                                    <svg className="w-4 h-4 lg:w-5 lg:h-5 xl:w-6 xl:h-6 2xl:w-8 2xl:h-8 text-white/20 group-hover:text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={3}><path d="M9 5l7 7-7 7" /></svg>
+                                <div className="hidden xl:flex w-8 h-8 2xl:w-10 2xl:h-10 shrink-0 rounded-lg bg-white/5 items-center justify-center group-hover:bg-amber-600 transition-all">
+                                    <svg className="w-3 h-3 2xl:w-4 2xl:h-4 text-white/20 group-hover:text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={3}><path d="M9 5l7 7-7 7" /></svg>
                                 </div>
                             </div>
                         </button>
@@ -207,19 +213,19 @@ const RoleSelectionPage: React.FC<RoleSelectionPageProps> = ({ onSelect }) => {
                     {showSales && (
                         <button 
                             onClick={handleUserPortalClick}
-                            className="selection-btn group p-0.5 rounded-2xl sm:rounded-[2rem] lg:rounded-[2.2rem] 2xl:rounded-[3rem] relative overflow-hidden"
+                            className="selection-btn group p-0.5 rounded-2xl lg:rounded-[2rem] relative overflow-hidden"
                         >
                             <div className="shimmer"></div>
-                            <div className="flex flex-col md:flex-row items-center gap-3 sm:gap-4 md:gap-6 2xl:gap-10 p-4 sm:p-5 md:p-6 lg:p-7 2xl:p-10 rounded-[1.1rem] sm:rounded-[1.9rem] lg:rounded-[2.1rem] 2xl:rounded-[2.9rem] bg-[var(--bg-dark)]/40 relative z-10">
-                                <div className="w-14 h-14 md:w-16 md:h-16 lg:w-20 lg:h-20 2xl:w-28 2xl:h-28 shrink-0 rounded-xl sm:rounded-2xl lg:rounded-3xl 2xl:rounded-[2.5rem] bg-emerald-600/20 flex items-center justify-center border border-white/10 group-hover:bg-emerald-600 transition-all duration-700 shadow-2xl">
-                                    <svg className="w-7 h-7 md:w-8 md:h-8 lg:w-10 lg:h-10 2xl:w-14 2xl:h-14 text-emerald-400 group-hover:text-white transition-colors" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2}><path d="M16 11V7a4 4 0 00-8 0v4M5 9h14l1 12H4L5 9z" /></svg>
+                            <div className="flex items-center gap-4 lg:gap-5 p-3 sm:p-4 lg:p-5 rounded-[1.4rem] lg:rounded-[1.9rem] bg-[var(--bg-dark)]/40 relative z-10">
+                                <div className="w-12 h-12 lg:w-14 lg:h-14 2xl:w-16 2xl:h-16 shrink-0 rounded-xl lg:rounded-2xl bg-emerald-600/20 flex items-center justify-center border border-white/10 group-hover:bg-emerald-600 transition-all duration-500 shadow-xl">
+                                    <svg className="w-6 h-6 lg:w-7 lg:h-7 2xl:w-8 2xl:h-8 text-emerald-400 group-hover:text-white transition-colors" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2}><path d="M16 11V7a4 4 0 00-8 0v4M5 9h14l1 12H4L5 9z" /></svg>
                                 </div>
-                                <div className="text-center md:text-left min-w-0 flex-grow">
-                                    <h3 className="text-xs sm:text-sm md:text-lg lg:text-xl 2xl:text-3xl font-black text-white group-hover:text-emerald-400 transition-colors uppercase italic tracking-tight">{t.enter_user}</h3>
-                                    <p className="hidden md:block text-[10px] lg:text-[11px] xl:text-[12px] 2xl:text-[15px] text-white/30 font-bold uppercase tracking-widest truncate">{t.user_desc}</p>
+                                <div className="text-left min-w-0 flex-grow">
+                                    <h3 className="text-sm lg:text-base 2xl:text-xl font-black text-white group-hover:text-emerald-400 transition-colors uppercase italic tracking-tight leading-tight">{t.enter_user}</h3>
+                                    <p className="hidden lg:block text-[9px] 2xl:text-[10px] text-white/30 font-bold uppercase tracking-widest truncate mt-0.5">{t.user_desc}</p>
                                 </div>
-                                <div className="hidden md:flex w-10 h-10 lg:w-12 lg:h-12 xl:w-14 xl:h-14 2xl:w-16 2xl:h-16 shrink-0 rounded-xl lg:rounded-2xl 2xl:rounded-3xl bg-white/5 items-center justify-center group-hover:bg-emerald-600 transition-all">
-                                    <svg className="w-4 h-4 lg:w-5 lg:h-5 xl:w-6 xl:h-6 2xl:w-8 2xl:h-8 text-white/20 group-hover:text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={3}><path d="M9 5l7 7-7 7" /></svg>
+                                <div className="hidden xl:flex w-8 h-8 2xl:w-10 2xl:h-10 shrink-0 rounded-lg bg-white/5 items-center justify-center group-hover:bg-emerald-600 transition-all">
+                                    <svg className="w-3 h-3 2xl:w-4 2xl:h-4 text-white/20 group-hover:text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={3}><path d="M9 5l7 7-7 7" /></svg>
                                 </div>
                             </div>
                         </button>
@@ -228,19 +234,19 @@ const RoleSelectionPage: React.FC<RoleSelectionPageProps> = ({ onSelect }) => {
                     {showEntertainment && (
                         <button 
                             onClick={handleEntertainmentClick}
-                            className="selection-btn group p-0.5 rounded-2xl sm:rounded-[2rem] lg:rounded-[2.2rem] 2xl:rounded-[3rem] relative overflow-hidden"
+                            className="selection-btn group p-0.5 rounded-2xl lg:rounded-[2rem] relative overflow-hidden"
                         >
                             <div className="shimmer"></div>
-                            <div className="flex flex-col md:flex-row items-center gap-3 sm:gap-4 md:gap-6 2xl:gap-10 p-4 sm:p-5 md:p-6 lg:p-7 2xl:p-10 rounded-[1.1rem] sm:rounded-[1.9rem] lg:rounded-[2.1rem] 2xl:rounded-[2.9rem] bg-[var(--bg-dark)]/40 relative z-10">
-                                <div className="w-14 h-14 md:w-16 md:h-16 lg:w-20 lg:h-20 2xl:w-28 2xl:h-28 shrink-0 rounded-xl sm:rounded-2xl lg:rounded-3xl 2xl:rounded-[2.5rem] bg-red-600/20 flex items-center justify-center border border-white/10 group-hover:bg-red-600 transition-all duration-700 shadow-2xl">
-                                    <svg className="w-7 h-7 md:w-8 md:h-8 lg:w-10 lg:h-10 2xl:w-14 2xl:h-14 text-red-400 group-hover:text-white transition-colors" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2}><path d="M7 4v16M17 4v16M3 8h4m10 0h4M3 12h18M3 16h4m10 0h4M4 20h16a2 2 0 002-2V6a2 2 0 00-2-2H4a2 2 0 00-2 2v12a2 2 0 002 2z" /></svg>
+                            <div className="flex items-center gap-4 lg:gap-5 p-3 sm:p-4 lg:p-5 rounded-[1.4rem] lg:rounded-[1.9rem] bg-[var(--bg-dark)]/40 relative z-10">
+                                <div className="w-12 h-12 lg:w-14 lg:h-14 2xl:w-16 2xl:h-16 shrink-0 rounded-xl lg:rounded-2xl bg-red-600/20 flex items-center justify-center border border-white/10 group-hover:bg-red-600 transition-all duration-500 shadow-xl">
+                                    <svg className="w-6 h-6 lg:w-7 lg:h-7 2xl:w-8 2xl:h-8 text-red-400 group-hover:text-white transition-colors" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2}><path d="M7 4v16M17 4v16M3 8h4m10 0h4M3 12h18M3 16h4m10 0h4M4 20h16a2 2 0 002-2V6a2 2 0 00-2-2H4a2 2 0 00-2 2v12a2 2 0 002 2z" /></svg>
                                 </div>
-                                <div className="text-center md:text-left min-w-0 flex-grow">
-                                    <h3 className="text-xs sm:text-sm md:text-lg lg:text-xl 2xl:text-3xl font-black text-white group-hover:text-red-400 transition-colors uppercase italic tracking-tight">{language === 'km' ? 'កម្សាន្ត' : 'Entertainment'}</h3>
-                                    <p className="hidden md:block text-[10px] lg:text-[11px] xl:text-[12px] 2xl:text-[15px] text-white/30 font-bold uppercase tracking-widest truncate">{t.entertainment_desc}</p>
+                                <div className="text-left min-w-0 flex-grow">
+                                    <h3 className="text-sm lg:text-base 2xl:text-xl font-black text-white group-hover:text-red-400 transition-colors uppercase italic tracking-tight leading-tight">{language === 'km' ? 'កម្សាន្ត' : 'Entertainment'}</h3>
+                                    <p className="hidden lg:block text-[9px] 2xl:text-[10px] text-white/30 font-bold uppercase tracking-widest truncate mt-0.5">{t.entertainment_desc}</p>
                                 </div>
-                                <div className="hidden md:flex w-10 h-10 lg:w-12 lg:h-12 xl:w-14 xl:h-14 2xl:w-16 2xl:h-16 shrink-0 rounded-xl lg:rounded-2xl 2xl:rounded-3xl bg-white/5 items-center justify-center group-hover:bg-red-600 transition-all">
-                                    <svg className="w-4 h-4 lg:w-5 lg:h-5 xl:w-6 xl:h-6 2xl:w-8 2xl:h-8 text-white/20 group-hover:text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={3}><path d="M9 5l7 7-7 7" /></svg>
+                                <div className="hidden xl:flex w-8 h-8 2xl:w-10 2xl:h-10 shrink-0 rounded-lg bg-white/5 items-center justify-center group-hover:bg-red-600 transition-all">
+                                    <svg className="w-3 h-3 2xl:w-4 2xl:h-4 text-white/20 group-hover:text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={3}><path d="M9 5l7 7-7 7" /></svg>
                                 </div>
                             </div>
                         </button>
@@ -249,19 +255,19 @@ const RoleSelectionPage: React.FC<RoleSelectionPageProps> = ({ onSelect }) => {
                     {showPromotions && (
                         <button 
                             onClick={handlePromotionClick}
-                            className="selection-btn group p-0.5 rounded-2xl sm:rounded-[2rem] lg:rounded-[2.2rem] 2xl:rounded-[3rem] relative overflow-hidden"
+                            className="selection-btn group p-0.5 rounded-2xl lg:rounded-[2rem] relative overflow-hidden"
                         >
                             <div className="shimmer"></div>
-                            <div className="flex flex-col md:flex-row items-center gap-3 sm:gap-4 md:gap-6 2xl:gap-10 p-4 sm:p-5 md:p-6 lg:p-7 2xl:p-10 rounded-[1.1rem] sm:rounded-[1.9rem] lg:rounded-[2.1rem] 2xl:rounded-[2.9rem] bg-[var(--bg-dark)]/40 relative z-10">
-                                <div className="w-14 h-14 md:w-16 md:h-16 lg:w-20 lg:h-20 2xl:w-28 2xl:h-28 shrink-0 rounded-xl sm:rounded-2xl lg:rounded-3xl 2xl:rounded-[2.5rem] bg-indigo-600/20 flex items-center justify-center border border-white/10 group-hover:bg-indigo-600 transition-all duration-700 shadow-2xl">
-                                    <svg className="w-7 h-7 md:w-8 md:h-8 lg:w-10 lg:h-10 2xl:w-14 2xl:h-14 text-indigo-400 group-hover:text-white transition-colors" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2}><path d="M11 5.882V19.297A1.703 1.703 0 018.919 20.84l-5.066-2.533A1.703 1.703 0 013 16.784V4.703A1.703 1.703 0 015.081 3.16l5.066 2.533A1.703 1.703 0 0111 5.882zM11 5.882c0-.52.27-.999.71-1.272l5.066-3.132A1.703 1.703 0 0119.5 3.033v12.081c0 .52-.27.999-.71 1.272l-5.066 3.132A1.703 1.703 0 0111 18.118V5.882z" /></svg>
+                            <div className="flex items-center gap-4 lg:gap-5 p-3 sm:p-4 lg:p-5 rounded-[1.4rem] lg:rounded-[1.9rem] bg-[var(--bg-dark)]/40 relative z-10">
+                                <div className="w-12 h-12 lg:w-14 lg:h-14 2xl:w-16 2xl:h-16 shrink-0 rounded-xl lg:rounded-2xl bg-indigo-600/20 flex items-center justify-center border border-white/10 group-hover:bg-indigo-600 transition-all duration-500 shadow-xl">
+                                    <svg className="w-6 h-6 lg:w-7 lg:h-7 2xl:w-8 2xl:h-8 text-indigo-400 group-hover:text-white transition-colors" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2}><path d="M11 5.882V19.297A1.703 1.703 0 018.919 20.84l-5.066-2.533A1.703 1.703 0 013 16.784V4.703A1.703 1.703 0 015.081 3.16l5.066 2.533A1.703 1.703 0 0111 5.882zM11 5.882c0-.52.27-.999.71-1.272l5.066-3.132A1.703 1.703 0 0119.5 3.033v12.081c0 .52-.27.999-.71 1.272l-5.066 3.132A1.703 1.703 0 0111 18.118V5.882z" /></svg>
                                 </div>
-                                <div className="text-center md:text-left min-w-0 flex-grow">
-                                    <h3 className="text-xs sm:text-sm md:text-lg lg:text-xl 2xl:text-3xl font-black text-white group-hover:text-indigo-400 transition-colors uppercase italic tracking-tight">{language === 'km' ? 'ប្រម៉ូសិន' : 'Promotions'}</h3>
-                                    <p className="hidden md:block text-[10px] lg:text-[11px] xl:text-[12px] 2xl:text-[15px] text-white/30 font-bold uppercase tracking-widest truncate">{t.promotions_desc}</p>
+                                <div className="text-left min-w-0 flex-grow">
+                                    <h3 className="text-sm lg:text-base 2xl:text-xl font-black text-white group-hover:text-indigo-400 transition-colors uppercase italic tracking-tight leading-tight">{language === 'km' ? 'ប្រម៉ូសិន' : 'Promotions'}</h3>
+                                    <p className="hidden lg:block text-[9px] 2xl:text-[10px] text-white/30 font-bold uppercase tracking-widest truncate mt-0.5">{t.promotions_desc}</p>
                                 </div>
-                                <div className="hidden md:flex w-10 h-10 lg:w-12 lg:h-12 xl:w-14 xl:h-14 2xl:w-16 2xl:h-16 shrink-0 rounded-xl lg:rounded-2xl 2xl:rounded-3xl bg-white/5 items-center justify-center group-hover:bg-indigo-600 transition-all">
-                                    <svg className="w-4 h-4 lg:w-5 lg:h-5 xl:w-6 xl:h-6 2xl:w-8 2xl:h-8 text-white/20 group-hover:text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={3}><path d="M9 5l7 7-7 7" /></svg>
+                                <div className="hidden xl:flex w-8 h-8 2xl:w-10 2xl:h-10 shrink-0 rounded-lg bg-white/5 items-center justify-center group-hover:bg-indigo-600 transition-all">
+                                    <svg className="w-3 h-3 2xl:w-4 2xl:h-4 text-white/20 group-hover:text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={3}><path d="M9 5l7 7-7 7" /></svg>
                                 </div>
                             </div>
                         </button>
@@ -269,35 +275,35 @@ const RoleSelectionPage: React.FC<RoleSelectionPageProps> = ({ onSelect }) => {
 
                     <button
                         onClick={() => onSelect('cambodia_map')}
-                        className="selection-btn group p-0.5 rounded-2xl sm:rounded-[2rem] lg:rounded-[2.2rem] 2xl:rounded-[3rem] relative overflow-hidden"
+                        className="selection-btn group p-0.5 rounded-2xl lg:rounded-[2rem] relative overflow-hidden"
                     >
                         <div className="shimmer"></div>
-                        <div className="flex flex-col md:flex-row items-center gap-3 sm:gap-4 md:gap-6 2xl:gap-10 p-4 sm:p-5 md:p-6 lg:p-7 2xl:p-10 rounded-[1.1rem] sm:rounded-[1.9rem] lg:rounded-[2.1rem] 2xl:rounded-[2.9rem] bg-[var(--bg-dark)]/40 relative z-10">
-                            <div className="w-14 h-14 md:w-16 md:h-16 lg:w-20 lg:h-20 2xl:w-28 2xl:h-28 shrink-0 rounded-xl sm:rounded-2xl lg:rounded-3xl 2xl:rounded-[2.5rem] bg-yellow-600/20 flex items-center justify-center border border-white/10 group-hover:bg-yellow-500 transition-all duration-700 shadow-2xl">
-                                <svg className="w-7 h-7 md:w-8 md:h-8 lg:w-10 lg:h-10 2xl:w-14 2xl:h-14 text-yellow-400 group-hover:text-white transition-colors" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2}><path d="M9 20l-5.447-2.724A1 1 0 013 16.382V5.618a1 1 0 011.447-.894L9 7m0 13l6-3m-6 3V7m6 10l5.447 2.724A1 1 0 0021 18.382V7.618a1 1 0 00-.553-.894L15 4m0 13V4m0 0L9 7" /></svg>
+                        <div className="flex items-center gap-4 lg:gap-5 p-3 sm:p-4 lg:p-5 rounded-[1.4rem] lg:rounded-[1.9rem] bg-[var(--bg-dark)]/40 relative z-10">
+                            <div className="w-12 h-12 lg:w-14 lg:h-14 2xl:w-16 2xl:h-16 shrink-0 rounded-xl lg:rounded-2xl bg-yellow-600/20 flex items-center justify-center border border-white/10 group-hover:bg-yellow-500 transition-all duration-500 shadow-xl">
+                                <svg className="w-6 h-6 lg:w-7 lg:h-7 2xl:w-8 2xl:h-8 text-yellow-400 group-hover:text-white transition-colors" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2}><path d="M9 20l-5.447-2.724A1 1 0 013 16.382V5.618a1 1 0 011.447-.894L9 7m0 13l6-3m-6 3V7m6 10l5.447 2.724A1 1 0 0021 18.382V7.618a1 1 0 00-.553-.894L15 4m0 13V4m0 0L9 7" /></svg>
                             </div>
-                            <div className="text-center md:text-left min-w-0 flex-grow">
-                                <h3 className="text-xs sm:text-sm md:text-lg lg:text-xl 2xl:text-3xl font-black text-white group-hover:text-yellow-400 transition-colors uppercase italic tracking-tight">{language === 'km' ? 'ផែនទី' : 'Map'}</h3>
-                                <p className="hidden md:block text-[10px] lg:text-[11px] xl:text-[12px] 2xl:text-[15px] text-white/30 font-bold uppercase tracking-widest truncate">{language === 'km' ? 'ផែនទីខេត្ត និងទិន្នន័យ' : 'Provinces & Data'}</p>
+                            <div className="text-left min-w-0 flex-grow">
+                                <h3 className="text-sm lg:text-base 2xl:text-xl font-black text-white group-hover:text-yellow-400 transition-colors uppercase italic tracking-tight leading-tight">{language === 'km' ? 'ផែនទី' : 'Map'}</h3>
+                                <p className="hidden lg:block text-[9px] 2xl:text-[10px] text-white/30 font-bold uppercase tracking-widest truncate mt-0.5">{language === 'km' ? 'ផែនទីខេត្ត និងទិន្នន័យ' : 'Provinces & Data'}</p>
                             </div>
-                            <div className="hidden md:flex w-10 h-10 lg:w-12 lg:h-12 xl:w-14 xl:h-14 2xl:w-16 2xl:h-16 shrink-0 rounded-xl lg:rounded-2xl 2xl:rounded-3xl bg-white/5 items-center justify-center group-hover:bg-yellow-500 transition-all">
-                                <svg className="w-4 h-4 lg:w-5 lg:h-5 xl:w-6 xl:h-6 2xl:w-8 2xl:h-8 text-white/20 group-hover:text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={3}><path d="M9 5l7 7-7 7" /></svg>
+                            <div className="hidden xl:flex w-8 h-8 2xl:w-10 2xl:h-10 shrink-0 rounded-lg bg-white/5 items-center justify-center group-hover:bg-yellow-500 transition-all">
+                                <svg className="w-3 h-3 2xl:w-4 2xl:h-4 text-white/20 group-hover:text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={3}><path d="M9 5l7 7-7 7" /></svg>
                             </div>
                         </div>
                     </button>
                 </div>
 
                 {/* Secure Footer */}
-                <div className="animate-reveal opacity-20 hover:opacity-100 transition-opacity flex flex-col items-center gap-3 mt-8 lg:mt-12 2xl:mt-20" style={{ animationDelay: '0.6s' }}>
+                <div className="animate-reveal opacity-20 hover:opacity-100 transition-opacity flex flex-col items-center gap-2 mt-4 shrink-0" style={{ animationDelay: '0.6s' }}>
                     {!visibleCount && (
-                        <p className="text-red-400 text-[10px] md:text-[11px] lg:text-[12px] 2xl:text-[16px] font-black uppercase tracking-widest bg-red-500/10 px-6 py-2 lg:px-8 lg:py-3 2xl:px-12 2xl:py-4 rounded-full mb-2">
+                        <p className="text-red-400 text-[10px] md:text-[11px] lg:text-[12px] font-black uppercase tracking-widest bg-red-500/10 px-5 py-2 lg:px-6 lg:py-2.5 rounded-full mb-1">
                             {t.no_data}
                         </p>
                     )}
-                    <div className="h-px w-32 lg:w-48 2xl:w-64 bg-gradient-to-r from-transparent via-white/20 to-transparent"></div>
-                    <div className="inline-flex items-center gap-2 lg:gap-3 2xl:gap-5">
-                        <img src={convertGoogleDriveUrl(APP_LOGO_URL)} alt="Logo" className="w-4 h-4 lg:w-5 lg:h-5 2xl:w-8 2xl:h-8 grayscale invert" />
-                        <span className="text-[9px] lg:text-[10px] 2xl:text-[14px] text-white font-black uppercase tracking-[0.5em]">O-System Core v2.6.04-LTS</span>
+                    <div className="h-px w-24 sm:w-32 lg:w-40 bg-gradient-to-r from-transparent via-white/20 to-transparent"></div>
+                    <div className="inline-flex items-center gap-2 lg:gap-3">
+                        <img src={convertGoogleDriveUrl(APP_LOGO_URL)} alt="Logo" className="w-3 h-3 lg:w-4 lg:h-4 grayscale invert" />
+                        <span className="text-[8px] lg:text-[9px] 2xl:text-[10px] text-white font-black uppercase tracking-[0.4em] lg:tracking-[0.5em]">O-System Core v2.6.04-LTS</span>
                     </div>
                 </div>
             </div>
