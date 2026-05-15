@@ -172,19 +172,14 @@ func HandleImageUploadProxy(c *gin.Context) {
 		return
 	}
 
-	// ── Strip Base64 Header ──
-	// If the data is a Data URI (e.g., "data:image/jpeg;base64,..."), strip the prefix.
-	if strings.Contains(data, ",") {
-		parts := strings.Split(data, ",")
-		if len(parts) > 1 {
-			data = parts[1]
-		}
+	// ── Parse and Re-encode Base64 for maximum compatibility ──
+	decoded, err := ParseBase64(data)
+	if err != nil {
+		log.Printf("❌ [Upload] Base64 parse failed: %v", err)
+		c.JSON(400, gin.H{"status": "error", "message": "ទិន្នន័យរូបភាពមិនត្រឹមត្រូវ (Invalid Base64)"})
+		return
 	}
-	// Clean whitespace/newlines to ensure valid base64 string
-	data = strings.ReplaceAll(data, " ", "+")
-	data = strings.ReplaceAll(data, "\n", "")
-	data = strings.ReplaceAll(data, "\r", "")
-	data = strings.TrimSpace(data)
+	data = base64.StdEncoding.EncodeToString(decoded)
 
 	// ── Background Processing Logic ──────────────────────────────────────
 	if req.IsAsync {
