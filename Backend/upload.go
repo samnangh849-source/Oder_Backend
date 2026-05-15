@@ -172,6 +172,15 @@ func HandleImageUploadProxy(c *gin.Context) {
 		return
 	}
 
+	// ── Parse and Re-encode Base64 for maximum compatibility ──
+	decoded, err := ParseBase64(data)
+	if err != nil {
+		log.Printf("❌ [Upload] Base64 parse failed: %v", err)
+		c.JSON(400, gin.H{"status": "error", "message": "ទិន្នន័យរូបភាពមិនត្រឹមត្រូវ (Invalid Base64)"})
+		return
+	}
+	data = base64.StdEncoding.EncodeToString(decoded)
+
 	// ── Background Processing Logic ──────────────────────────────────────
 	if req.IsAsync {
 		log.Printf("🛰️ [Upload] Starting background processing for file=%q order=%q", req.FileName, req.OrderID)

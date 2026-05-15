@@ -4,7 +4,8 @@ import { useOrder } from '../context/OrderContext';
 import { Promotion } from '../types';
 import { WEB_APP_URL } from '../constants';
 import Spinner from '../components/common/Spinner';
-import { convertGoogleDriveUrl } from '../utils/fileUtils';
+import { convertGoogleDriveUrl, fileToDataUrl } from '../utils/fileUtils';
+import { compressImage } from '../utils/imageCompressor';
 import Modal from '../components/common/Modal';
 
 interface PromotionDashboardProps {
@@ -175,43 +176,44 @@ const PromotionDashboard: React.FC<PromotionDashboardProps> = ({ onBack }) => {
         const file = e.target.files?.[0];
         if (!file) return;
 
-        const reader = new FileReader();
-        reader.onloadend = async () => {
-            const base64Data = reader.result as string;
-            setIsSubmitting(true);
-            try {
-                const token = localStorage.getItem('token');
-                const response = await fetch(`${WEB_APP_URL}/api/upload-image`, {
-                    method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json',
-                        'Authorization': `Bearer ${token}`
-                    },
-                    body: JSON.stringify({
-                        Action: 'uploadImage',
-                        FileData: base64Data,
-                        FileName: file.name,
-                        MimeType: file.type,
-                        SheetName: 'Promotions',
-                        TargetColumn: 'ImageURL',
-                        UserName: currentUser?.UserName
-                    })
-                });
+        setIsSubmitting(true);
+        try {
+            // 1. Compress image for better performance
+            const compressedBlob = await compressImage(file, 'high-detail');
+            const base64Data = await fileToDataUrl(compressedBlob);
 
-                if (response.ok) {
-                    const result = await response.json();
-                    setImageUrl(result.url);
-                    showNotification('Upload រូបភាពរួចរាល់', 'success');
-                } else {
-                    showNotification('Upload រូបភាពបរាជ័យ', 'error');
-                }
-            } catch (error) {
-                showNotification('Error uploading image', 'error');
-            } finally {
-                setIsSubmitting(false);
+            // 2. Upload to server
+            const token = localStorage.getItem('token');
+            const response = await fetch(`${WEB_APP_URL}/api/upload-image`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Authorization': `Bearer ${token}`
+                },
+                body: JSON.stringify({
+                    Action: 'uploadImage',
+                    FileData: base64Data,
+                    FileName: file.name,
+                    MimeType: 'image/jpeg', // compressImage returns jpeg
+                    SheetName: 'Promotions',
+                    TargetColumn: 'ImageURL',
+                    UserName: currentUser?.UserName
+                })
+            });
+
+            if (response.ok) {
+                const result = await response.json();
+                setImageUrl(result.url);
+                showNotification('Upload រូបភាពរួចរាល់', 'success');
+            } else {
+                showNotification('Upload រូបភាពបរាជ័យ', 'error');
             }
-        };
-        reader.readAsDataURL(file);
+        } catch (error) {
+            console.error('Upload error:', error);
+            showNotification('Error uploading image', 'error');
+        } finally {
+            setIsSubmitting(false);
+        }
     };
 
     return (
