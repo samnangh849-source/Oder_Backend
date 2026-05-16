@@ -1270,6 +1270,50 @@ func handleAdminUpdateOrder(c *gin.Context) {
 		}
 	}
 
+	// ─── Generate EditLogs ───
+	var origMap map[string]interface{}
+	origJSON, _ := json.Marshal(originalOrder)
+	json.Unmarshal(origJSON, &origMap)
+
+	var editLogs []EditLog
+	currentTime := time.Now().Format("2006-01-02 15:04:05")
+
+	for k, v := range r.NewData {
+		if k == "Force Sync" || v == nil {
+			continue
+		}
+
+		oldValRaw, exists := origMap[k]
+		if !exists {
+			continue
+		}
+
+		oldValStr := strings.TrimSpace(fmt.Sprintf("%v", oldValRaw))
+		newValStr := strings.TrimSpace(fmt.Sprintf("%v", v))
+
+		// Normalizing float formatting if possible (e.g. 10 == 10.0)
+		if fNew, ok := v.(float64); ok {
+			if fOld, okOld := oldValRaw.(float64); okOld {
+				if fNew == fOld {
+					continue
+				}
+			}
+			newValStr = strings.TrimSpace(fmt.Sprintf("%v", fNew))
+		}
+
+		if oldValStr != newValStr {
+			editLogs = append(editLogs, EditLog{
+				Timestamp:    currentTime,
+				OrderID:      r.OrderID,
+				Requester:    r.UserName,
+				FieldChanged: k,
+				OldValue:     oldValStr,
+				NewValue:     newValStr,
+			})
+		}
+	}
+	// ─────────────────────────
+
 	if len(mappedData) == 0 && !forceSync {
 		c.JSON(200, gin.H{"status": "success", "message": "No changes to update"})
 		return
@@ -1279,6 +1323,24 @@ func handleAdminUpdateOrder(c *gin.Context) {
 		if err := backend.DB.Model(&Order{}).Where("UPPER(TRIM(order_id)) = UPPER(TRIM(?))", r.OrderID).Updates(mappedData).Error; err != nil {
 			c.Error(err)
 			return
+		}
+
+		// Save EditLogs to DB and Sync
+		if len(editLogs) > 0 {
+			if err := backend.DB.Create(&editLogs).Error; err != nil {
+				log.Println("Error saving edit logs:", err)
+			} else {
+				for _, el := range editLogs {
+					go enqueueSync("addRow", map[string]interface{}{
+						"Timestamp":     el.Timestamp,
+						"OrderID":       el.OrderID,
+						"Requester":     el.Requester,
+						"Field Changed": el.FieldChanged,
+						"Old Value":     el.OldValue,
+						"New Value":     el.NewValue,
+					}, "EditLogs", nil)
+				}
+			}
 		}
 
 		// ✅ Auto-log ReturnItems when status changes to Returned
