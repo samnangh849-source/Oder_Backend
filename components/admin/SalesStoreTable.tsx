@@ -46,12 +46,12 @@ const SalesStoreTable: React.FC<SalesStoreTableProps> = ({ stats, onStatClick })
     const isBinance = uiTheme === 'binance';
 
     return (
-        <div className="space-y-3">
+        <div className="space-y-3 h-full min-w-0">
             <h3 className={`text-sm font-bold ${isLightMode ? 'text-slate-400' : 'text-slate-500'} flex items-center px-1 uppercase tracking-wider`}>
                 <i className="fa-solid fa-tag mr-2 text-indigo-500 opacity-70"></i>
                 ឈ្មោះហាង (Brand)
             </h3>
-            <div className={`${isLightMode ? 'bg-white border-slate-200' : 'bg-[#1a1d27] border-white/[0.06]'} border rounded-xl overflow-hidden shadow-sm transition-all duration-300`}>
+            <div className={`${isLightMode ? 'bg-white/90 border-slate-200 shadow-sm' : 'bg-[#151923]/92 border-white/[0.08] shadow-[0_18px_44px_rgba(0,0,0,0.24)]'} border rounded-lg overflow-hidden transition-all duration-300 backdrop-blur-xl`}>
                 <div className="overflow-x-auto">
                     <table className="w-full text-sm text-left border-collapse">
                         <thead className={`text-[11px] ${isLightMode ? 'bg-slate-700 text-slate-300' : 'bg-[#141720] text-[#6b7280]'} font-bold uppercase tracking-[0.05em]`}>

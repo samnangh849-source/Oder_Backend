@@ -28,9 +28,10 @@ interface DesktopGrandTotalRowProps {
     isVisible: (key: string) => boolean;
     showSelection: boolean;
     getColWidth: (key: string) => number;
+    showBorders?: boolean;
 }
 
-export const DesktopGrandTotalRow: React.FC<DesktopGrandTotalRowProps> = ({ totals, isVisible, showSelection, getColWidth }) => {
+export const DesktopGrandTotalRow: React.FC<DesktopGrandTotalRowProps> = ({ totals, isVisible, showSelection, getColWidth, showBorders = false }) => {
     const { language, advancedSettings } = useContext(AppContext);
     const t = translations[language];
     const isBinance = advancedSettings?.uiTheme === 'binance';
@@ -46,13 +47,14 @@ export const DesktopGrandTotalRow: React.FC<DesktopGrandTotalRowProps> = ({ tota
     
     const greenText = isBinance ? 'text-[#0ECB81]' : 'text-emerald-400';
     const redText = isBinance ? 'text-[#F6465D]' : 'text-red-400';
+    const isNumericColumn = (key: string) => ['total', 'shippingCost'].includes(key);
 
     const renderCell = (key: string, content: React.ReactNode, extraClasses = "") => {
         if (!check(key)) return null;
         return (
             <div 
                 style={{ width: `${getColWidth(key)}px` }} 
-                className={`flex-shrink-0 flex items-center px-4 py-3 ${extraClasses}`}
+                className={`order-column-cell ${isNumericColumn(key) ? 'is-numeric' : ''} flex-shrink-0 flex items-center px-4 py-3 ${extraClasses} ${showBorders ? (isBinance ? 'border-r border-[#2B3139]' : 'border-r border-white/10') : ''}`}
             >
                 {content}
             </div>
@@ -60,7 +62,7 @@ export const DesktopGrandTotalRow: React.FC<DesktopGrandTotalRowProps> = ({ tota
     };
 
     return (
-        <div className={`flex w-full ${rowBg} transition-all duration-300 group z-10 relative overflow-hidden`}>
+        <div className={`flex w-full ${rowBg} transition-all duration-300 group z-10 relative overflow-hidden ${isBinance ? 'border-b border-[#2B3139]' : 'border-b border-white/10'}`}>
             {/* Animated Ambient Light (Default Theme Only) */}
             {!isBinance && (
                 <div className="absolute inset-0 pointer-events-none overflow-hidden opacity-20">
@@ -69,7 +71,9 @@ export const DesktopGrandTotalRow: React.FC<DesktopGrandTotalRowProps> = ({ tota
                 </div>
             )}
 
-            {showSelection && <div className="flex-shrink-0 flex items-center justify-center px-0.5" style={{ width: '40px' }}></div>}
+            {showSelection && (
+                <div className={`order-column-cell flex-shrink-0 flex items-center justify-center px-0.5 ${showBorders ? (isBinance ? 'border-r border-[#2B3139]' : 'border-r border-white/10') : ''}`} style={{ width: '40px' }}></div>
+            )}
             
             {renderCell('index', (
                 <div className="flex flex-col items-center justify-center w-full transition-transform group-hover:scale-105">
@@ -168,6 +172,7 @@ export const DesktopGrandTotalRow: React.FC<DesktopGrandTotalRowProps> = ({ tota
             {renderCell('print', null)}
             {renderCell('check', null)}
             {renderCell('orderId', null)}
+            {renderCell('telegramStatus', null)}
         </div>
     );
 };
@@ -323,4 +328,3 @@ export const MobileGrandTotalCard: React.FC<MobileGrandTotalCardProps> = ({ tota
         </div>
     );
 };
-

@@ -118,7 +118,7 @@ export const translations = {
 
     // Admin Dashboard
     admin_panel: "ផ្ទាំងគ្រប់គ្រង Admin",
-    dashboard: "ទ្និន្នន័យសង្ខេប",
+    dashboard: "ទិន្នន័យសង្ខេប",
     orders: "ប្រតិបត្តិការណ៍",
     reports: "របាយការណ៍",
     performance: "សមិទ្ធផល",

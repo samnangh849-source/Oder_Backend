@@ -1,12 +1,61 @@
-import React, { useContext, useRef, useMemo, useCallback, useState } from 'react';
+import React, { useContext, useMemo, useCallback, memo } from 'react';
 import { List } from 'react-window';
-import { ParsedOrder } from '../../types';
+import { ParsedOrder, AppData, User } from '../../types';
 import { AppContext } from '../../context/AppContext';
 import { convertGoogleDriveUrl } from '../../utils/fileUtils';
 import Spinner from '../common/Spinner';
 import { DesktopGrandTotalRow } from './OrderGrandTotal';
 import { translations } from '../../translations';
-import { Check, XCircle, RotateCcw, Undo2, Package } from 'lucide-react';
+import { Check } from 'lucide-react';
+
+// --- Types & Interfaces ---
+
+interface EnrichedOrderItem {
+    type: 'order';
+    data: ParsedOrder;
+    originalIndex: number;
+    enriched: {
+        displayPhone: string;
+        carrierLogo: string;
+        pageLogoUrl: string;
+        shippingLogo: string;
+        orderDate: Date;
+        productThumbnails: Array<{ img: string; quantity: number }>;
+    };
+}
+
+interface GroupHeaderItem {
+    type: 'header';
+    label: string;
+}
+
+type ListItem = EnrichedOrderItem | GroupHeaderItem;
+
+interface RowData {
+    items: ListItem[];
+    visibleCols: string[];
+    getColWidth: (key: string) => number;
+    totalTableWidth: number;
+    onToggleSelect?: (id: string) => void;
+    selectedIds: Set<string>;
+    onView?: (order: ParsedOrder) => void;
+    onEdit?: (order: ParsedOrder) => void;
+    handleCopyTemplate: (order: ParsedOrder) => void;
+    handlePrint: (order: ParsedOrder) => void;
+    handleCopy: (id: string) => void;
+    toggleOrderVerified: (id: string, currentStatus: any) => void;
+    handleUpdateFulfillmentStatus: (id: string, newStatus: string) => void;
+    handleSendTelegram: (id: string) => void;
+    updatingIds: Set<string>;
+    canVerifyOrder: () => boolean;
+    canEditOrder: (order: ParsedOrder) => boolean;
+    showBorders: boolean;
+    copiedTemplateId: string | null;
+    appData: AppData;
+    t: any;
+    groupByLabel: string;
+    isBinance: boolean;
+}
 
 interface OrdersListDesktopProps {
     orders: ParsedOrder[];
@@ -30,22 +79,433 @@ interface OrdersListDesktopProps {
     groupBy?: string;
 }
 
+// --- Constants & Styles ---
+
+const ORDER_LIST_STYLES = `
+    .os-tooltip-trigger { position: relative; }
+    .os-tooltip {
+        position: absolute;
+        bottom: calc(100% + 5px);
+        left: 20px;
+        padding: 8px 12px;
+        background: #1E2329;
+        border: 1px solid #2B3139;
+        border-radius: 4px;
+        color: white;
+        font-size: 11px;
+        font-weight: 600;
+        white-space: pre-wrap;
+        width: max-content;
+        max-width: 260px;
+        z-index: 1000;
+        opacity: 0;
+        visibility: hidden;
+        transform: translateY(5px);
+        transition: all 0.2s ease;
+        box-shadow: 0 4px 12px rgba(0,0,0,0.4);
+        pointer-events: none;
+    }
+    .os-tooltip-trigger:hover .os-tooltip {
+        opacity: 1;
+        visibility: visible;
+        transform: translateY(0);
+    }
+    .order-watermark {
+        position: absolute;
+        top: 50%;
+        left: 50%;
+        transform: translate(-50%, -50%) rotate(-10deg);
+        font-size: 48px;
+        font-weight: 900;
+        text-transform: uppercase;
+        pointer-events: none;
+        opacity: 0.12;
+        z-index: 5;
+        white-space: nowrap;
+        letter-spacing: 0.2em;
+    }
+    .is-cancelled-row * {
+        color: #EF4444 !important;
+        fill: #EF4444 !important;
+    }
+    
+    /* Improved Table Borders */
+    .table-border-b {
+        border-bottom-width: 1px;
+        border-bottom-style: solid;
+    }
+    .table-border-r {
+        border-right-width: 1px;
+        border-right-style: solid;
+    }
+    .theme-binance .table-border-b { border-bottom-color: #2B3139; }
+    .theme-binance .table-border-r { border-right-color: #2B3139; }
+    .theme-default .table-border-b { border-bottom-color: rgba(255, 255, 255, 0.08); }
+    .theme-default .table-border-r { border-right-color: rgba(255, 255, 255, 0.08); }
+    .order-column-cell,
+    .order-column-header {
+        position: relative;
+    }
+    .order-column-cell::after,
+    .order-column-header::after {
+        content: "";
+        position: absolute;
+        top: 10px;
+        right: 0;
+        bottom: 10px;
+        width: 1px;
+        background: linear-gradient(to bottom, transparent, rgba(132, 142, 156, 0.24), transparent);
+        pointer-events: none;
+    }
+    .theme-default .order-column-cell::after,
+    .theme-default .order-column-header::after {
+        background: linear-gradient(to bottom, transparent, rgba(148, 163, 184, 0.18), transparent);
+    }
+    .order-column-cell:last-child::after,
+    .order-column-header:last-child::after {
+        display: none;
+    }
+    .order-column-header {
+        min-width: 0;
+        min-height: 44px;
+        background: linear-gradient(to bottom, rgba(255, 255, 255, 0.035), rgba(255, 255, 255, 0));
+    }
+    .order-column-header::before {
+        content: "";
+        position: absolute;
+        left: 10px;
+        right: 10px;
+        bottom: 0;
+        height: 2px;
+        background: transparent;
+        transition: background 0.18s ease;
+    }
+    .order-column-header:hover::before {
+        background: #FCD535;
+    }
+    .theme-default .order-column-header:hover::before {
+        background: #3B82F6;
+    }
+    .order-column-label {
+        display: block;
+        min-width: 0;
+        max-width: 100%;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+    }
+    .order-column-header.is-numeric,
+    .order-column-cell.is-numeric {
+        justify-content: flex-end;
+        text-align: right;
+    }
+    .order-column-header.is-compact,
+    .order-column-cell.is-compact {
+        justify-content: center;
+        text-align: center;
+    }
+    .order-table-row {
+        position: relative;
+        isolation: isolate;
+        box-shadow: inset 0 -1px 0 rgba(43, 49, 57, 0.95);
+    }
+    .theme-default .order-table-row {
+        box-shadow: inset 0 -1px 0 rgba(255, 255, 255, 0.08);
+    }
+    .order-table-row::before {
+        content: "";
+        position: absolute;
+        inset: 0 auto 0 0;
+        width: 3px;
+        background: transparent;
+        z-index: 1;
+        transition: background 0.18s ease, opacity 0.18s ease;
+    }
+    .order-table-row:hover {
+        box-shadow: inset 0 -1px 0 rgba(252, 213, 53, 0.28), inset 0 1px 0 rgba(252, 213, 53, 0.12);
+    }
+    .theme-default .order-table-row:hover {
+        box-shadow: inset 0 -1px 0 rgba(59, 130, 246, 0.3), inset 0 1px 0 rgba(59, 130, 246, 0.14);
+    }
+    .order-table-row.is-selected::before { background: #FCD535; }
+    .order-table-row.is-verified::before { background: #0ECB81; }
+    .order-table-row.is-cancelled::before { background: #F6465D; }
+    .order-table-row.is-returned::before { background: #A78BFA; }
+    .order-table-row.is-selected {
+        outline: 1px solid rgba(252, 213, 53, 0.22);
+        outline-offset: -1px;
+    }
+    .order-table-cell {
+        min-width: 0;
+        border-left: 1px solid transparent;
+    }
+    .order-table-row .order-table-cell:first-of-type {
+        border-left-color: transparent;
+    }
+    .order-table-row:hover .order-table-cell {
+        border-left-color: rgba(252, 213, 53, 0.06);
+    }
+`;
+
+// --- Helper Functions ---
+
+const checkIsVerified = (isVerified: string | undefined): boolean => {
+    if (!isVerified) return false;
+    const v = String(isVerified).toUpperCase();
+    return v === 'TRUE' || v === 'A';
+};
+
+const getFulfillmentStatus = (order: ParsedOrder): string => {
+    return (order as any).FulfillmentStatus || (order as any)['Fulfillment Status'] || 'Pending';
+};
+
+const isCompactColumn = (key: string) => [
+    'index',
+    'actions',
+    'status',
+    'fulfillmentStatus',
+    'print',
+    'check',
+    'orderId',
+    'telegramStatus',
+].includes(key);
+
+const isNumericColumn = (key: string) => ['total', 'shippingCost'].includes(key);
+
+// --- Sub-components ---
+
+const ColumnContent = ({ col, order, data, item, enriched }: { col: string, order: ParsedOrder, data: RowData, item: ListItem, enriched: any }) => {
+    const { 
+        getColWidth, onView, onEdit, handleCopyTemplate, handlePrint, handleCopy,
+        toggleOrderVerified, handleSendTelegram, updatingIds, canVerifyOrder, canEditOrder,
+        showBorders, copiedTemplateId, appData, t, isBinance 
+    } = data;
+
+    const { 
+        displayPhone, carrierLogo, pageLogoUrl, shippingLogo, orderDate,
+        productThumbnails
+    } = enriched;
+
+    const isVerified = checkIsVerified(order.IsVerified);
+    const allowEdit = canEditOrder(order);
+    const fs = getFulfillmentStatus(order);
+
+    switch (col) {
+        case 'index':
+            return <div className="font-bold text-[#848E9C] text-xs text-center w-full">{item.type === 'order' ? item.originalIndex + 1 : ''}</div>;
+        case 'actions':
+            return (
+                <div className="flex items-center justify-center gap-2 w-full">
+                    <button onClick={() => onView && onView(order)} className="w-8 h-8 flex items-center justify-center bg-[#2B3139] hover:bg-[#363C44] text-[#848E9C] hover:text-white rounded transition-all" title="View" aria-label="View Order"><svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" /><path d="M2.458 12C3.732 7.943 7.523 5 12 5c3.478 0 6.991 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" strokeWidth={2}/></svg></button>
+                    {allowEdit && (
+                        <button onClick={() => onEdit && onEdit(order)} className="w-8 h-8 flex items-center justify-center bg-[#2B3139] hover:bg-[#363C44] text-[#FCD535] rounded transition-all" title="Edit" aria-label="Edit Order"><svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" strokeWidth={2}/></svg></button>
+                    )}
+                </div>
+            );
+        case 'customerName':
+            return (
+                <div className="w-full overflow-hidden">
+                    <div className="font-bold text-[#EAECEF] truncate mb-0.5 text-[14px]">{order['Customer Name']}</div>
+                    <div className="flex items-center gap-2">
+                        {carrierLogo && <img src={convertGoogleDriveUrl(carrierLogo)} className="w-3.5 h-3.5 object-contain" alt="Carrier" />}
+                        <div className="text-[#848E9C] font-bold text-[11px] tracking-tight">{displayPhone}</div>
+                    </div>
+                </div>
+            );
+        case 'productInfo':
+            return (
+                <div className="w-full overflow-hidden flex items-center">
+                    <div className="flex items-center gap-3 w-full">
+                        <div className="flex -space-x-2 items-center shrink-0">
+                            {productThumbnails.slice(0, 3).map((p: any, i: number) => (
+                                <div key={i} className="relative z-10 hover:z-20">
+                                    <div className="w-10 h-10 rounded bg-[#2B3139] border border-[#363C44] overflow-hidden shadow-sm">
+                                        {p.img ? <img src={p.img} className="w-full h-full object-cover" alt="Product" /> : <div className="w-full h-full flex items-center justify-center text-[8px] text-[#848E9C]">No Pic</div>}
+                                    </div>
+                                    <div className="absolute -top-1 -right-1 bg-[#FCD535] text-[#181A20] text-[9px] font-bold px-1 rounded-sm border border-[#181A20]">
+                                        {p.quantity}
+                                    </div>
+                                </div>
+                            ))}
+                            {order['Package Photo'] && (
+                                <div className="relative z-0 ml-1 hover:z-20">
+                                    <div className="w-10 h-10 rounded-lg bg-black/20 border border-blue-500/40 overflow-hidden shadow-sm">
+                                        <img src={convertGoogleDriveUrl(order['Package Photo'])} className="w-full h-full object-cover" alt="PKG" />
+                                    </div>
+                                    <div className="absolute -bottom-1 -right-1 bg-blue-500 text-white text-[8px] font-black px-1 rounded-sm border border-[#181A20]">
+                                        PKG
+                                    </div>
+                                </div>
+                            )}
+                        </div>
+                        <div className="flex-1 min-w-0 flex flex-col justify-center">
+                            <div className="flex items-center gap-1.5">
+                                <span className="text-[12px] font-bold text-[#EAECEF] truncate uppercase tracking-tight leading-none">{order.Products[0]?.name}</span>
+                            </div>
+                            <div className="flex items-center gap-2 mt-1">
+                                <span className="text-[10px] font-medium text-[#848E9C] uppercase tracking-wider leading-none">{order.Products.length} Items</span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            );
+        case 'location':
+            return (
+                <div className="w-full overflow-hidden">
+                    <div className="font-bold text-[#EAECEF] text-[12px] truncate leading-tight uppercase tracking-tight">{order.Location}</div>
+                    <div className="text-[10px] text-[#848E9C] font-medium truncate mt-0.5">{order['Address Details']}</div>
+                </div>
+            );
+        case 'pageInfo':
+            return (
+                <div className={`w-full flex items-center gap-2.5 os-tooltip-trigger`}>
+                    <div className="os-tooltip">{order.Page}</div>
+                    {pageLogoUrl && <img src={pageLogoUrl} className="w-8 h-8 rounded border border-[#2B3139] object-cover" alt="Page Logo" />}
+                    <span className="font-bold text-[#848E9C] text-[11px] uppercase truncate tracking-tight">{order.Page}</span>
+                </div>
+            );
+        case 'brandSales':
+        case 'fulfillment':
+            return (
+                <div className="w-full flex items-center overflow-hidden">
+                    <span className="px-2 py-1 rounded bg-[#2B3139] text-[#EAECEF] font-bold text-[10px] uppercase tracking-tight truncate block text-center w-full">
+                        {order['Fulfillment Store']}
+                    </span>
+                </div>
+            );
+        case 'total':
+            return (
+                <div className="w-full flex items-center justify-end">
+                    <div className="font-bold text-[#EAECEF] text-[16px] tracking-tight tabular-nums text-right">
+                        <span className="text-[11px] mr-0.5">$</span>
+                        {(Number(order['Grand Total']) || 0).toFixed(2)}
+                    </div>
+                </div>
+            );
+        case 'shippingService':
+            return (
+                <div className={`w-full flex items-center os-tooltip-trigger`}>
+                    <div className="os-tooltip">{order['Internal Shipping Method']}</div>
+                    <div className="flex items-center gap-2 bg-[#2B3139]/50 p-1.5 rounded border border-[#2B3139] overflow-hidden w-full">
+                        <div className="w-6 h-6 bg-[#2B3139] rounded flex items-center justify-center flex-shrink-0">
+                            {shippingLogo ? <img src={convertGoogleDriveUrl(shippingLogo)} className="w-4 h-4 object-contain" alt="Shipping" /> : <span className="text-[8px] text-[#848E9C]">N/A</span>}
+                        </div>
+                        <span className="text-[10px] font-bold text-[#848E9C] uppercase truncate tracking-tight">{order['Internal Shipping Method'] || 'N/A'}</span>
+                    </div>
+                </div>
+            );
+        case 'driver':
+            return <div className="w-full font-bold text-[#848E9C] text-[11px] uppercase truncate tracking-tight flex items-center">{order['Driver Name'] || order['Internal Shipping Details'] || 'Unassigned'}</div>;
+        case 'shippingCost':
+            return <div className="w-full font-bold text-[#848E9C] text-[12px] flex items-center justify-end tabular-nums text-right">${(Number(order['Internal Cost']) || 0).toFixed(2)}</div>;
+        case 'fulfillmentStatus': {
+            const fsColors: Record<string, string> = {
+                'Pending': 'bg-yellow-500/10 text-yellow-400',
+                'Scheduled': 'bg-cyan-500/10 text-cyan-400',
+                'Ready to Ship': 'bg-blue-500/10 text-blue-400',
+                'Shipped': 'bg-purple-500/10 text-purple-400',
+                'Delivered': 'bg-[#0ECB81]/10 text-[#0ECB81]',
+                'Cancelled': 'bg-[#F6465D]/10 text-[#F6465D]',
+                'Returned': 'bg-purple-500/20 text-purple-300',
+            };
+            return (
+                <div className="w-full flex items-center justify-center">
+                    <span className={`px-2.5 py-1 rounded text-[9px] font-bold uppercase tracking-wider ${fsColors[fs] || 'bg-[#2B3139] text-[#848E9C]'}`}>
+                        {fs}
+                    </span>
+                </div>
+            );
+        }
+        case 'status':
+            return (
+                <div className="w-full flex items-center justify-center">
+                    <span className={`px-3 py-1 rounded text-[10px] font-bold uppercase tracking-wider ${order['Payment Status'] === 'Paid' ? 'bg-[#0ECB81]/10 text-[#0ECB81]' : 'bg-[#F6465D]/10 text-[#F6465D]'}`}>
+                        {order['Payment Status']}
+                    </span>
+                </div>
+            );
+        case 'date':
+            return (
+                <div className="w-full flex flex-col justify-center leading-tight">
+                    <span className="font-bold text-[#EAECEF] text-[11px] tracking-tight">{orderDate.toLocaleDateString('km-KH')}</span>
+                    <span className="text-[#848E9C] font-medium text-[10px] uppercase tracking-wider">{orderDate.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' })}</span>
+                </div>
+            );
+        case 'note':
+            return (
+                <div className="w-full text-[11px] text-[#848E9C] font-medium truncate flex items-center italic">
+                    {order.Note || '---'}
+                </div>
+            );
+        case 'print':
+            return (
+                <div className="w-full flex items-center justify-center gap-2">
+                    <button onClick={() => handleCopyTemplate(order)} className={`w-8 h-8 flex items-center justify-center rounded transition-all border ${copiedTemplateId === order['Order ID'] ? 'bg-[#FCD535] border-[#FCD535] text-[#181A20]' : 'bg-[#2B3139] text-[#848E9C] hover:text-white border-[#363C44]'}`} title="Copy Template" aria-label="Copy Template"><svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path d="M8 5H6a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2v-1M8 5a2 2 0 002 2h2a2 2 0 002-2M8 5a2 2 0 012-2h2a2 2 0 012 2m0 0h2a2 2 0 012 2v3m2 4H10m0 0l3-3m-3 3l3 3" /></svg></button>
+                    <button onClick={() => handlePrint(order)} className="w-8 h-8 flex items-center justify-center bg-[#2B3139] hover:bg-[#0ECB81] text-[#848E9C] hover:text-white rounded transition-all border border-[#363C44]" title="Print Label" aria-label="Print Label"><svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path d="M6 9V2h12v7M6 18H4a2 2 0 01-2-2v-5a2 2 0 012-2h16a2 2 0 012 2v5a2 2 0 01-2 2h-2m-2 4H8v-4h8v4z" /></svg></button>
+                </div>
+            );
+        case 'check':
+            return (
+                <div className="w-full flex items-center justify-center">
+                    <div className={`h-6 w-6 rounded border flex items-center justify-center transition-all ${isVerified ? 'bg-[#0ECB81] border-[#0ECB81]' : 'border-[#474D57] hover:border-[#FCD535]'} ${canVerifyOrder() ? 'cursor-pointer' : 'cursor-not-allowed'}`} onClick={() => canVerifyOrder() && !updatingIds.has(order['Order ID']) && toggleOrderVerified(order['Order ID'], order.IsVerified)}>
+                        {updatingIds.has(order['Order ID']) ? <Spinner size="xs" /> : isVerified && <svg className="w-3.5 h-3.5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={4}><path d="M5 13l4 4L19 7" /></svg>}
+                    </div>
+                </div>
+            );
+        case 'orderId':
+            return <div className="text-center flex items-center justify-center w-full"><button onClick={() => handleCopy(order['Order ID'])} className="text-[10px] font-bold font-mono text-[#848E9C] hover:text-[#FCD535] transition-colors uppercase tracking-tight">{order['Order ID'].substring(0, 6)}</button></div>;
+        case 'telegramStatus': {
+            const id1 = order['Telegram Message ID 1'];
+            const id2 = order['Telegram Message ID 2'];
+            const isChecking = id1 === 'CHECKING';
+            const isSent = (id1 && id2) && !isChecking;
+            return (
+                <div className="w-full flex flex-col items-center justify-center gap-1">
+                    {isSent ? (
+                        <span className="text-[10px] font-bold text-[#0ECB81] uppercase tracking-tight flex items-center gap-1">
+                            <Check className="w-3 h-3" /> {t.msg_sent}
+                        </span>
+                    ) : isChecking ? (
+                        <div className="flex flex-col items-center gap-1">
+                            <Spinner size="xs" />
+                            <span className="text-[9px] font-bold text-blue-400 animate-pulse uppercase">កំពុងឆែក...</span>
+                        </div>
+                    ) : (
+                        <>
+                            <span className="text-[9px] font-bold text-[#F6465D] uppercase tracking-tighter text-center leading-tight">
+                                {t.msg_not_sent}
+                            </span>
+                            <button 
+                                onClick={(e) => { e.stopPropagation(); handleSendTelegram(order['Order ID']); }} 
+                                className={`mt-1 px-2 py-1 text-[9px] font-black uppercase tracking-widest rounded-sm transition-all flex items-center gap-1 ${isBinance ? 'bg-[#FCD535] text-[#181A20] hover:bg-[#f0c51d]' : 'bg-blue-600 text-white hover:bg-blue-500 shadow-lg shadow-blue-900/20'}`}
+                                disabled={updatingIds.has(order['Order ID'])}
+                            >
+                                {updatingIds.has(order['Order ID']) ? <Spinner size="xs" /> : t.btn_send_telegram}
+                            </button>
+                        </>
+                    )}
+                </div>
+            );
+        }
+        default:
+            return null;
+    }
+};
+
 // Row component compatible with react-window 2.x
-const OrderRow = (props: any) => {
+const OrderRow = memo((props: any) => {
     const { index, style, ...data } = props;
     const { 
-        items, visibleCols, getColWidth, onToggleSelect, selectedIds, 
-        onView, onEdit, handleCopyTemplate, handlePrint, handleCopy,
-        toggleOrderVerified, handleUpdateFulfillmentStatus, handleSendTelegram, updatingIds, canVerifyOrder, canEditOrder,
-        showBorders, copiedTemplateId, appData, t, groupByLabel, isBinance
-    } = data;
+        items, visibleCols, getColWidth, totalTableWidth, onToggleSelect, selectedIds, 
+        isBinance, showBorders, groupByLabel
+    } = data as RowData;
     
     const item = items[index];
     if (!item) return null;
 
     if (item.type === 'header') {
         return (
-            <div style={style} className={`${isBinance ? 'bg-[#1E2329] border-y border-[#2B3139]' : 'bg-white/[0.03] backdrop-blur-md border-y border-white/5'} flex items-center px-6 z-10`}>
+            <div style={{ ...style, width: `${totalTableWidth}px` }} className={`${isBinance ? 'bg-[#1E2329] border-y border-[#2B3139]' : 'bg-white/[0.03] backdrop-blur-md border-y border-white/5'} flex items-center px-6 z-10`}>
                 <div className="flex items-center gap-3">
                     <div className={`w-1.5 h-5 ${isBinance ? 'bg-[#FCD535]' : 'bg-blue-500 rounded-full'}`} style={isBinance ? { borderRadius: '1px' } : undefined}></div>
                     <span className={`text-xs font-bold ${isBinance ? 'text-[#EAECEF]' : 'text-white italic'} uppercase tracking-wider`}>
@@ -57,66 +517,25 @@ const OrderRow = (props: any) => {
     }
 
     const order = item.data;
-    const isVerified = String(order.IsVerified).toUpperCase() === 'TRUE' || order.IsVerified === 'A';
+    const isVerified = checkIsVerified(order.IsVerified);
     const isSelected = selectedIds.has(order['Order ID']);
-    const allowEdit = canEditOrder(order);
     
-    const fs = (order as any).FulfillmentStatus || (order as any)['Fulfillment Status'] || 'Pending';
+    const fs = getFulfillmentStatus(order);
     const isCancelled = fs === 'Cancelled';
     const isReturned = fs === 'Returned';
-
-    const { 
-        displayPhone, carrierLogo, pageLogoUrl, shippingLogo, orderDate,
-        productThumbnails
-    } = item.enriched;
+    const rowTone = index % 2 === 0
+        ? (isBinance ? 'bg-[#0B0E11]' : 'bg-[#020617]')
+        : (isBinance ? 'bg-[#101418]' : 'bg-[#07111f]');
+    const rowStateClass = [
+        'order-table-row',
+        isSelected ? 'is-selected' : '',
+        isVerified ? 'is-verified' : '',
+        isCancelled ? 'is-cancelled' : '',
+        isReturned ? 'is-returned' : '',
+    ].filter(Boolean).join(' ');
 
     return (
-        <div style={style} className="group box-border relative overflow-hidden">
-            <style>{`
-                .os-tooltip-trigger { position: relative; }
-                .os-tooltip {
-                    position: absolute;
-                    bottom: calc(100% + 5px);
-                    left: 20px;
-                    padding: 8px 12px;
-                    background: #1E2329;
-                    border: 1px solid #2B3139;
-                    border-radius: 4px;
-                    color: white;
-                    font-size: 11px;
-                    font-weight: 600;
-                    white-space: pre-wrap;
-                    width: max-content;
-                    max-width: 260px;
-                    z-index: 1000;
-                    opacity: 0;
-                    visibility: hidden;
-                    transform: translateY(5px);
-                    transition: all 0.2s ease;
-                    box-shadow: 0 4px 12px rgba(0,0,0,0.4);
-                    pointer-events: none;
-                }
-                .os-tooltip-trigger:hover .os-tooltip {
-                    opacity: 1;
-                    visibility: visible;
-                    transform: translateY(0);
-                }
-                .order-watermark {
-                    position: absolute;
-                    top: 50%;
-                    left: 50%;
-                    transform: translate(-50%, -50%) rotate(-10deg);
-                    font-size: 48px;
-                    font-weight: 900;
-                    text-transform: uppercase;
-                    pointer-events: none;
-                    opacity: 0.12;
-                    z-index: 5;
-                    white-space: nowrap;
-                    letter-spacing: 0.2em;
-                }
-            `}</style>
-            
+        <div style={{ ...style, width: `${totalTableWidth}px` }} className="group box-border relative overflow-hidden">
             {/* Watermark Overlay */}
             {(isCancelled || isReturned) && (
                 <div className={`order-watermark ${isCancelled ? 'text-red-600' : 'text-purple-400'}`} style={{ opacity: 0.25 }}>
@@ -124,15 +543,9 @@ const OrderRow = (props: any) => {
                 </div>
             )}
 
-            <div className={`flex h-full transition-all box-border ${isBinance ? 'border-b border-[#2B3139]' : 'border-b border-white/10'} ${isVerified ? 'bg-[#0ECB81]/[0.02]' : isSelected ? 'bg-[#FCD535]/[0.05]' : 'hover:bg-[#2B3139]/30'} ${isCancelled || isReturned ? 'opacity-60 grayscale-[0.5]' : ''} ${isCancelled ? 'is-cancelled-row' : ''}`}>
-                <style>{`
-                    .is-cancelled-row * {
-                        color: #EF4444 !important;
-                        fill: #EF4444 !important;
-                    }
-                `}</style>
+            <div className={`${rowStateClass} flex h-full transition-all box-border table-border-b ${isVerified ? 'bg-[#0ECB81]/[0.035]' : isSelected ? 'bg-[#FCD535]/[0.08]' : `${rowTone} hover:bg-[#2B3139]/40`} ${isCancelled || isReturned ? 'opacity-60 grayscale-[0.5]' : ''} ${isCancelled ? 'is-cancelled-row' : ''}`}>
                 {onToggleSelect && (
-                    <div className={`flex-shrink-0 flex items-center justify-center px-0.5 box-border ${showBorders ? (isBinance ? 'border-r border-[#2B3139]' : 'border-r border-white/10') : ''}`} style={{ width: '40px' }}>
+                    <div className={`order-table-cell flex-shrink-0 flex items-center justify-center px-0.5 box-border ${showBorders ? 'table-border-r' : ''}`} style={{ width: '40px' }}>
                         <input 
                             type="checkbox" 
                             className={`h-4 w-4 rounded border-[#474D57] bg-transparent text-[#FCD535] cursor-pointer focus:ring-0 focus:ring-offset-0 ${isBinance ? 'border-[#474D57]' : 'border-white/20 bg-black/40 text-blue-500'}`} 
@@ -144,223 +557,19 @@ const OrderRow = (props: any) => {
 
                 {visibleCols.map((k: string) => {
                     const width = getColWidth(k);
-                    const isTopRow = index < 5;
-                    const tooltipTriggerClass = `os-tooltip-trigger ${isTopRow ? 'is-top' : ''}`;
-
-                    const content = (() => {
-                        switch (k) {
-                            case 'index':
-                                return <div className="font-bold text-[#848E9C] text-xs text-center w-full">{item.originalIndex + 1}</div>;
-                            case 'actions':
-                                return (
-                                    <div className="flex items-center justify-center gap-2 w-full">
-                                        <button onClick={() => onView && onView(order)} className="w-8 h-8 flex items-center justify-center bg-[#2B3139] hover:bg-[#363C44] text-[#848E9C] hover:text-white rounded transition-all" title="View"><svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" /><path d="M2.458 12C3.732 7.943 7.523 5 12 5c3.478 0 6.991 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" strokeWidth={2}/></svg></button>
-                                        {allowEdit && (
-                                            <button onClick={() => onEdit && onEdit(order)} className="w-8 h-8 flex items-center justify-center bg-[#2B3139] hover:bg-[#363C44] text-[#FCD535] rounded transition-all" title="Edit"><svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" strokeWidth={2}/></svg></button>
-                                        )}
-                                    </div>
-                                );
-                            case 'customerName':
-                                return (
-                                    <div className="w-full overflow-hidden">
-                                        <div className="font-bold text-[#EAECEF] truncate mb-0.5 text-[14px]">{order['Customer Name']}</div>
-                                        <div className="flex items-center gap-2">
-                                            {carrierLogo && <img src={convertGoogleDriveUrl(carrierLogo)} className="w-3.5 h-3.5 object-contain" alt="" />}
-                                            <div className="text-[#848E9C] font-bold text-[11px] tracking-tight">{displayPhone}</div>
-                                        </div>
-                                    </div>
-                                );
-                            case 'productInfo':
-                                return (
-                                    <div className="w-full overflow-hidden flex items-center">
-                                        <div className="flex items-center gap-3 w-full">
-                                            <div className="flex -space-x-2 items-center shrink-0">
-                                                {productThumbnails.slice(0, 3).map((p: any, i: number) => (
-                                                    <div key={i} className="relative z-10 hover:z-20">
-                                                        <div className="w-10 h-10 rounded bg-[#2B3139] border border-[#363C44] overflow-hidden shadow-sm">
-                                                            {p.img ? <img src={p.img} className="w-full h-full object-cover" alt="" /> : <div className="w-full h-full flex items-center justify-center text-[8px] text-[#848E9C]">No Pic</div>}
-                                                        </div>
-                                                        <div className="absolute -top-1 -right-1 bg-[#FCD535] text-[#181A20] text-[9px] font-bold px-1 rounded-sm border border-[#181A20]">
-                                                            {p.quantity}
-                                                        </div>
-                                                    </div>
-                                                ))}
-                                                {order['Package Photo'] && (
-                                                    <div className="relative z-0 ml-1 hover:z-20">
-                                                        <div className="w-10 h-10 rounded-lg bg-black/20 border border-blue-500/40 overflow-hidden shadow-sm">
-                                                            <img src={convertGoogleDriveUrl(order['Package Photo'])} className="w-full h-full object-cover" alt="PKG" />
-                                                        </div>
-                                                        <div className="absolute -bottom-1 -right-1 bg-blue-500 text-white text-[8px] font-black px-1 rounded-sm border border-[#181A20]">
-                                                            PKG
-                                                        </div>
-                                                    </div>
-                                                )}
-                                            </div>
-                                            <div className="flex-1 min-w-0 flex flex-col justify-center">
-                                                <div className="flex items-center gap-1.5">
-                                                    <span className="text-[12px] font-bold text-[#EAECEF] truncate uppercase tracking-tight leading-none">{order.Products[0]?.name}</span>
-                                                </div>
-                                                <div className="flex items-center gap-2 mt-1">
-                                                    <span className="text-[10px] font-medium text-[#848E9C] uppercase tracking-wider leading-none">{order.Products.length} Items</span>
-                                                </div>
-                                            </div>
-                                        </div>
-                                    </div>
-                                );
-                            case 'location':
-                                return (
-                                    <div className="w-full overflow-hidden">
-                                        <div className="font-bold text-[#EAECEF] text-[12px] truncate leading-tight uppercase tracking-tight">{order.Location}</div>
-                                        <div className="text-[10px] text-[#848E9C] font-medium truncate mt-0.5">{order['Address Details']}</div>
-                                    </div>
-                                );
-                            case 'pageInfo':
-                                return (
-                                    <div className={`w-full flex items-center gap-2.5 ${tooltipTriggerClass}`}>
-                                        <div className="os-tooltip">{order.Page}</div>
-                                        {pageLogoUrl && <img src={pageLogoUrl} className="w-8 h-8 rounded border border-[#2B3139] object-cover" alt="" />}
-                                        <span className="font-bold text-[#848E9C] text-[11px] uppercase truncate tracking-tight">{order.Page}</span>
-                                    </div>
-                                );
-                            case 'brandSales':
-                            case 'fulfillment':
-                                return (
-                                    <div className="w-full flex items-center overflow-hidden">
-                                        <span className="px-2 py-1 rounded bg-[#2B3139] text-[#EAECEF] font-bold text-[10px] uppercase tracking-tight truncate block text-center w-full">
-                                            {order['Fulfillment Store']}
-                                        </span>
-                                    </div>
-                                );
-                            case 'total':
-                                return (
-                                    <div className="w-full flex items-center">
-                                        <div className="font-bold text-[#EAECEF] text-[16px] tracking-tight">
-                                            <span className="text-[11px] mr-0.5">$</span>
-                                            {(Number(order['Grand Total']) || 0).toFixed(2)}
-                                        </div>
-                                    </div>
-                                );
-                            case 'shippingService':
-                                return (
-                                    <div className={`w-full flex items-center ${tooltipTriggerClass}`}>
-                                        <div className="os-tooltip">{order['Internal Shipping Method']}</div>
-                                        <div className="flex items-center gap-2 bg-[#2B3139]/50 p-1.5 rounded border border-[#2B3139] overflow-hidden w-full">
-                                            <div className="w-6 h-6 bg-[#2B3139] rounded flex items-center justify-center flex-shrink-0">
-                                                {shippingLogo ? <img src={convertGoogleDriveUrl(shippingLogo)} className="w-4 h-4 object-contain" alt="" /> : <span className="text-[8px] text-[#848E9C]">N/A</span>}
-                                            </div>
-                                            <span className="text-[10px] font-bold text-[#848E9C] uppercase truncate tracking-tight">{order['Internal Shipping Method'] || 'N/A'}</span>
-                                        </div>
-                                    </div>
-                                );
-                            case 'driver':
-                                return <div className="w-full font-bold text-[#848E9C] text-[11px] uppercase truncate tracking-tight flex items-center">{order['Driver Name'] || order['Internal Shipping Details'] || 'Unassigned'}</div>;
-                            case 'shippingCost':
-                                return <div className="w-full font-bold text-[#848E9C] text-[12px] flex items-center">${(Number(order['Internal Cost']) || 0).toFixed(2)}</div>;
-                            case 'fulfillmentStatus': {
-                                const fs = (order as any).FulfillmentStatus || (order as any)['Fulfillment Status'] || 'Pending';
-                                const fsColors: Record<string, string> = {
-                                    'Pending': 'bg-yellow-500/10 text-yellow-400',
-                                    'Scheduled': 'bg-cyan-500/10 text-cyan-400',
-                                    'Ready to Ship': 'bg-blue-500/10 text-blue-400',
-                                    'Shipped': 'bg-purple-500/10 text-purple-400',
-                                    'Delivered': 'bg-[#0ECB81]/10 text-[#0ECB81]',
-                                    'Cancelled': 'bg-[#F6465D]/10 text-[#F6465D]',
-                                    'Returned': 'bg-purple-500/20 text-purple-300',
-                                };
-                                return (
-                                    <div className="w-full flex items-center justify-center">
-                                        <span className={`px-2.5 py-1 rounded text-[9px] font-bold uppercase tracking-wider ${fsColors[fs] || 'bg-[#2B3139] text-[#848E9C]'}`}>
-                                            {fs}
-                                        </span>
-                                    </div>
-                                );
-                            }
-                            case 'status':
-                                return (
-                                    <div className="w-full flex items-center justify-center">
-                                        <span className={`px-3 py-1 rounded text-[10px] font-bold uppercase tracking-wider ${order['Payment Status'] === 'Paid' ? 'bg-[#0ECB81]/10 text-[#0ECB81]' : 'bg-[#F6465D]/10 text-[#F6465D]'}`}>
-                                            {order['Payment Status']}
-                                        </span>
-                                    </div>
-                                );
-                            case 'date':
-                                return (
-                                    <div className="w-full flex flex-col justify-center leading-tight">
-                                        <span className="font-bold text-[#EAECEF] text-[11px] tracking-tight">{orderDate.toLocaleDateString('km-KH')}</span>
-                                        <span className="text-[#848E9C] font-medium text-[10px] uppercase tracking-wider">{orderDate.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' })}</span>
-                                    </div>
-                                );
-                            case 'note':
-                                return (
-                                    <div className="w-full text-[11px] text-[#848E9C] font-medium truncate flex items-center italic">
-                                        {order.Note || '---'}
-                                    </div>
-                                );
-                            case 'print':
-                                return (
-                                    <div className="w-full flex items-center justify-center gap-2">
-                                        <button onClick={() => handleCopyTemplate(order)} className={`w-8 h-8 flex items-center justify-center rounded transition-all border ${copiedTemplateId === order['Order ID'] ? 'bg-[#FCD535] border-[#FCD535] text-[#181A20]' : 'bg-[#2B3139] text-[#848E9C] hover:text-white border-[#363C44]'}`} title="Copy Template"><svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path d="M8 5H6a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2v-1M8 5a2 2 0 002 2h2a2 2 0 002-2M8 5a2 2 0 012-2h2a2 2 0 012 2m0 0h2a2 2 0 012 2v3m2 4H10m0 0l3-3m-3 3l3 3" /></svg></button>
-                                        <button onClick={() => handlePrint(order)} className="w-8 h-8 flex items-center justify-center bg-[#2B3139] hover:bg-[#0ECB81] text-[#848E9C] hover:text-white rounded transition-all border border-[#363C44]" title="Print Label"><svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path d="M6 9V2h12v7M6 18H4a2 2 0 01-2-2v-5a2 2 0 012-2h16a2 2 0 012 2v5a2 2 0 01-2 2h-2m-2 4H8v-4h8v4z" /></svg></button>
-                                    </div>
-                                );
-                            case 'check':
-                                return (
-                                    <div className="w-full flex items-center justify-center">
-                                        <div className={`h-6 w-6 rounded border flex items-center justify-center transition-all ${isVerified ? 'bg-[#0ECB81] border-[#0ECB81]' : 'border-[#474D57] hover:border-[#FCD535]'} ${canVerifyOrder() ? 'cursor-pointer' : 'cursor-not-allowed'}`} onClick={() => canVerifyOrder() && !updatingIds.has(order['Order ID']) && toggleOrderVerified(order['Order ID'], order.IsVerified)}>
-                                            {updatingIds.has(order['Order ID']) ? <Spinner size="xs" /> : isVerified && <svg className="w-3.5 h-3.5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={4}><path d="M5 13l4 4L19 7" /></svg>}
-                                        </div>
-                                    </div>
-                                );
-                            case 'orderId':
-                                return <div className="text-center flex items-center justify-center w-full"><button onClick={() => handleCopy(order['Order ID'])} className="text-[10px] font-bold font-mono text-[#848E9C] hover:text-[#FCD535] transition-colors uppercase tracking-tight">{order['Order ID'].substring(0, 6)}</button></div>;
-                            case 'telegramStatus': {
-                                const id1 = order['Telegram Message ID 1'];
-                                const id2 = order['Telegram Message ID 2'];
-                                const isChecking = id1 === 'CHECKING';
-                                const isSent = (id1 && id2) && !isChecking;
-                                return (
-                                    <div className="w-full flex flex-col items-center justify-center gap-1">
-                                        {isSent ? (
-                                            <span className="text-[10px] font-bold text-[#0ECB81] uppercase tracking-tight flex items-center gap-1">
-                                                <Check className="w-3 h-3" /> {t.msg_sent}
-                                            </span>
-                                        ) : isChecking ? (
-                                            <div className="flex flex-col items-center gap-1">
-                                                <Spinner size="xs" />
-                                                <span className="text-[9px] font-bold text-blue-400 animate-pulse uppercase">កំពុងឆែក...</span>
-                                            </div>
-                                        ) : (
-                                            <>
-                                                <span className="text-[9px] font-bold text-[#F6465D] uppercase tracking-tighter text-center leading-tight">
-                                                    {t.msg_not_sent}
-                                                </span>
-                                                <button 
-                                                    onClick={(e) => { e.stopPropagation(); handleSendTelegram(order['Order ID']); }} 
-                                                    className={`mt-1 px-2 py-1 text-[9px] font-black uppercase tracking-widest rounded-sm transition-all flex items-center gap-1 ${isBinance ? 'bg-[#FCD535] text-[#181A20] hover:bg-[#f0c51d]' : 'bg-blue-600 text-white hover:bg-blue-500 shadow-lg shadow-blue-900/20'}`}
-                                                    disabled={updatingIds.has(order['Order ID'])}
-                                                >
-                                                    {updatingIds.has(order['Order ID']) ? <Spinner size="xs" /> : t.btn_send_telegram}
-                                                </button>
-                                            </>
-                                        )}
-                                    </div>
-                                );
-                            }
-                            default:
-                                return null;
-                        }
-                    })();
-
+                    const columnRoleClass = isCompactColumn(k) ? 'is-compact' : isNumericColumn(k) ? 'is-numeric' : '';
                     return (
-                        <div key={k} style={{ width: `${width}px` }} className={`flex-shrink-0 flex items-center px-4 box-border ${showBorders ? (isBinance ? 'border-r border-[#2B3139]' : 'border-r border-white/10') : ''}`}>
-                            {content}
+                        <div key={k} style={{ width: `${width}px` }} className={`order-table-cell order-column-cell ${columnRoleClass} flex-shrink-0 flex items-center px-4 box-border ${showBorders ? 'table-border-r' : ''}`}>
+                            <ColumnContent col={k} order={order} data={data as RowData} item={item} enriched={item.enriched} />
                         </div>
                     );
                 })}
             </div>
         </div>
     );
-};
+});
+
+// --- Main Component ---
 
 const OrdersListDesktop: React.FC<OrdersListDesktopProps> = ({
     orders, totals, visibleColumns, selectedIds, onToggleSelect, onToggleSelectAll,
@@ -414,12 +623,13 @@ const OrdersListDesktop: React.FC<OrdersListDesktopProps> = ({
     ], []);
 
     const visibleCols = useMemo(() => columnKeys.filter(checkColumnVisible), [columnKeys, checkColumnVisible]);
+    const hasSelectionColumn = !!onToggleSelect;
     
     const totalTableWidth = useMemo(() => {
-        let width = onToggleSelectAll ? 40 : 0;
+        let width = hasSelectionColumn ? 40 : 0;
         visibleCols.forEach(k => { width += getColWidth(k); });
         return width;
-    }, [visibleCols, onToggleSelectAll, getColWidth]);
+    }, [visibleCols, hasSelectionColumn, getColWidth]);
 
     const getSafeDateObj = useCallback((dateStr: string) => {
         if (!dateStr) return new Date();
@@ -435,7 +645,7 @@ const OrdersListDesktop: React.FC<OrdersListDesktopProps> = ({
         return phone;
     }, []);
 
-    const enrichedItems = useMemo(() => {
+    const enrichedItems = useMemo((): ListItem[] => {
         let rawItems: any[] = [];
         if (groupBy === 'none') {
             rawItems = orders.map((o, idx) => ({ type: 'order' as const, data: o, originalIndex: idx }));
@@ -491,8 +701,7 @@ const OrdersListDesktop: React.FC<OrdersListDesktopProps> = ({
 
     const canEditOrder = useCallback((order: ParsedOrder) => {
         if (!currentUser) return false;
-        const isVerified = String(order.IsVerified).toUpperCase() === 'TRUE' || order.IsVerified === 'A';
-        if (isVerified) return currentUser.IsSystemAdmin || currentUser.Role === 'Admin';
+        if (checkIsVerified(order.IsVerified)) return currentUser.IsSystemAdmin || currentUser.Role === 'Admin';
         if (currentUser.IsSystemAdmin) return true;
         if (!hasPermission('edit_order')) return false;
         const userTeams = (currentUser.Team || '').split(',').map(t => t.trim());
@@ -503,10 +712,11 @@ const OrdersListDesktop: React.FC<OrdersListDesktopProps> = ({
 
     const canVerifyOrder = useCallback(() => currentUser?.IsSystemAdmin || hasPermission('verify_order'), [currentUser, hasPermission]);
 
-    const rowProps = useMemo(() => ({
+    const rowData: RowData = useMemo(() => ({
         items: enrichedItems,
         visibleCols,
         getColWidth,
+        totalTableWidth,
         onToggleSelect,
         selectedIds,
         onView,
@@ -527,14 +737,15 @@ const OrdersListDesktop: React.FC<OrdersListDesktopProps> = ({
         groupByLabel: groupBy,
         isBinance
     }), [
-        enrichedItems, visibleCols, getColWidth, onToggleSelect, selectedIds,
+        enrichedItems, visibleCols, getColWidth, totalTableWidth, onToggleSelect, selectedIds,
         onView, onEdit, handleCopyTemplate, handlePrint, handleCopy,
         toggleOrderVerified, handleUpdateFulfillmentStatus, handleSendTelegram, updatingIds, canVerifyOrder, canEditOrder,
         showBorders, copiedTemplateId, appData, t, groupBy, isBinance
     ]);
 
     return (
-        <div className={`${isBinance ? 'bg-[#0B0E11] border-[#2B3139]' : 'bg-[#020617] border-white/5 shadow-2xl'} rounded-none border flex flex-col h-full min-h-[400px] overflow-hidden relative`}>
+        <div className={`${isBinance ? 'bg-[#0B0E11] border-[#2B3139] theme-binance' : 'bg-[#020617] border-white/5 shadow-2xl theme-default'} rounded-none border flex flex-col h-full min-h-[400px] overflow-hidden relative`}>
+            <style>{ORDER_LIST_STYLES}</style>
             <div className="flex-grow overflow-auto custom-scrollbar overscroll-contain">
                 <div style={{ minWidth: `${totalTableWidth}px`, height: '100%', display: 'flex', flexDirection: 'column' }}>
                     {/* Sticky Table Header & Total Row */}
@@ -544,33 +755,39 @@ const OrdersListDesktop: React.FC<OrdersListDesktopProps> = ({
                             <DesktopGrandTotalRow 
                                 totals={totals} 
                                 isVisible={checkColumnVisible} 
-                                showSelection={!!onToggleSelectAll} 
+                                showSelection={hasSelectionColumn} 
                                 getColWidth={getColWidth}
+                                showBorders={showBorders}
                             />
                         </div>
 
                         {/* Table Column Headers (Now below Grand Total) */}
-                        <div className={`${isBinance ? 'bg-[#1E2329] border-b border-[#2B3139]' : 'bg-[#0f172a]/98 backdrop-blur-3xl border-b border-white/10'}`}>
+                        <div className={`${isBinance ? 'bg-[#1E2329]' : 'bg-[#0f172a]/98 backdrop-blur-3xl'} table-border-b`}>
                             <div className="flex w-full box-border">
-                                {onToggleSelectAll && (
-                                    <div className={`flex-shrink-0 flex items-center justify-center py-4 px-0.5 box-border ${showBorders ? (isBinance ? 'border-r border-[#2B3139]' : 'border-r border-white/10') : ''}`} style={{ width: '40px' }}>
-                                        <input 
-                                            type="checkbox" 
-                                            className={`h-4 w-4 rounded border-[#474D57] bg-transparent text-[#FCD535] cursor-pointer focus:ring-0 focus:ring-offset-0 ${isBinance ? 'border-[#474D57]' : 'border-white/20 bg-black/40 text-blue-500'}`} 
-                                            checked={isAllSelected} 
-                                            onChange={() => onToggleSelectAll(orders.map(o => o['Order ID']))} 
-                                        />
+                                {hasSelectionColumn && (
+                                    <div className={`flex-shrink-0 flex items-center justify-center py-4 px-0.5 box-border ${showBorders ? 'table-border-r' : ''}`} style={{ width: '40px' }}>
+                                        {onToggleSelectAll && (
+                                            <input 
+                                                type="checkbox" 
+                                                className={`h-4 w-4 rounded border-[#474D57] bg-transparent text-[#FCD535] cursor-pointer focus:ring-0 focus:ring-offset-0 ${isBinance ? 'border-[#474D57]' : 'border-white/20 bg-black/40 text-blue-500'}`} 
+                                                checked={isAllSelected} 
+                                                onChange={() => onToggleSelectAll(orders.map(o => o['Order ID']))} 
+                                            />
+                                        )}
                                     </div>
                                 )}
-                                {visibleCols.map(k => (
-                                    <div 
-                                        key={k} 
-                                        style={{ width: `${getColWidth(k)}px` }} 
-                                        className={`px-4 py-4 box-border ${isBinance ? 'font-black tracking-normal text-[#848E9C]' : 'font-black tracking-[0.1em] text-gray-400'} uppercase text-[10px] flex items-center ${k === 'index' || k === 'actions' || k === 'status' || k === 'fulfillmentStatus' || k === 'print' || k === 'check' || k === 'orderId' || k === 'telegramStatus' ? 'justify-center text-center' : 'justify-start text-left'} ${showBorders ? (isBinance ? 'border-r border-[#2B3139]' : 'border-r border-white/10') : ''}`}
-                                    >
-                                        {(t as any)[`col_${k}`] || (t as any)[k] || k}
-                                    </div>
-                                ))}
+                                {visibleCols.map(k => {
+                                    const columnRoleClass = isCompactColumn(k) ? 'is-compact' : isNumericColumn(k) ? 'is-numeric' : '';
+                                    return (
+                                        <div 
+                                            key={k} 
+                                            style={{ width: `${getColWidth(k)}px` }} 
+                                            className={`order-column-header ${columnRoleClass} flex-shrink-0 px-4 py-3 box-border ${isBinance ? 'font-black tracking-normal text-[#848E9C]' : 'font-black tracking-[0.1em] text-gray-400'} uppercase text-[10px] flex items-center ${showBorders ? 'table-border-r' : ''}`}
+                                        >
+                                            <span className="order-column-label">{(t as any)[`col_${k}`] || (t as any)[k] || k}</span>
+                                        </div>
+                                    );
+                                })}
                             </div>
                         </div>
                     </div>
@@ -581,7 +798,7 @@ const OrdersListDesktop: React.FC<OrdersListDesktopProps> = ({
                             rowCount={enrichedItems.length}
                             rowHeight={getItemSize}
                             rowComponent={OrderRow}
-                            rowProps={rowProps}
+                            rowProps={rowData}
                             className="custom-scrollbar"
                             style={{ height: '800px' }}
                         />

@@ -1,6 +1,7 @@
 import React, { useContext, useState } from 'react';
 import { AppContext } from '../../context/AppContext';
 import { ParsedOrder } from '../../types';
+import { safeParseDate } from '../../utils/dateUtils';
 import { convertGoogleDriveUrl, getOptimisticPackagePhoto } from '../../utils/fileUtils';
 import Modal from '../common/Modal';
 import { 
@@ -54,6 +55,72 @@ const OrderDetailModal: React.FC<OrderDetailModalProps> = ({ order, onClose }) =
         'Delivered': 'bg-[#0ECB81]/20 text-[#0ECB81] border-[#0ECB81]/30',
         'Cancelled': 'bg-[#F6465D]/20 text-[#F6465D] border-[#F6465D]/30',
     };
+
+    const formatLifecycleDateTime = (value?: string) => {
+        const rawValue = String(value || '').trim();
+        if (!rawValue) return null;
+
+        const parsed = safeParseDate(rawValue);
+        if (!parsed) {
+            const [datePart, timePart] = rawValue.split(/\s+/, 2);
+            return {
+                date: datePart || rawValue,
+                time: timePart || 'TIME N/A',
+            };
+        }
+
+        return {
+            date: parsed.toLocaleDateString('km-KH', {
+                day: '2-digit',
+                month: 'short',
+                year: 'numeric',
+            }),
+            time: parsed.toLocaleTimeString('km-KH', {
+                hour: '2-digit',
+                minute: '2-digit',
+                hour12: false,
+            }),
+        };
+    };
+
+    const lifecycleEvents = [
+        {
+            key: 'dropped',
+            label: 'Dropped Order',
+            labelKm: 'ទម្លាក់ការកម្មង់',
+            value: order.Timestamp,
+            icon: Package,
+            color: 'text-[#FCD535]',
+            dot: 'bg-[#FCD535]',
+        },
+        {
+            key: 'packed',
+            label: 'Packed',
+            labelKm: 'វេចខ្ចប់',
+            value: order['Packed Time'],
+            icon: Box,
+            color: 'text-[#0ECB81]',
+            dot: 'bg-[#0ECB81]',
+        },
+        {
+            key: 'shipped',
+            label: 'Shipped',
+            labelKm: 'បានដឹកចេញ',
+            value: order['Dispatched Time'],
+            icon: Truck,
+            color: 'text-blue-400',
+            dot: 'bg-blue-400',
+        },
+        {
+            key: 'delivered',
+            label: 'Delivered',
+            labelKm: 'បានដល់អតិថិជន',
+            value: order['Delivered Time'],
+            icon: ShieldCheck,
+            color: 'text-[#0ECB81]',
+            dot: 'bg-[#0ECB81]',
+        },
+    ];
 
     return (
         <Modal isOpen={true} onClose={onClose} maxWidth="max-w-6xl">
@@ -279,6 +346,48 @@ const OrderDetailModal: React.FC<OrderDetailModalProps> = ({ order, onClose }) =
                                         <div className="bg-[#0B0E11] border border-[#2B3139] p-3 sm:p-4 rounded-xl flex items-center gap-3">
                                             <Clock size={12} className="text-[#848E9C] shrink-0" />
                                             <p className="text-[10px] sm:text-[11px] font-mono font-black text-[#848E9C] tracking-[0.1em] uppercase truncate">{order['Packed Time'] || 'UNRECORDED'}</p>
+                                        </div>
+                                    </div>
+                                    <div className="space-y-3">
+                                        <label className="text-[8px] sm:text-[9px] font-black text-[#848E9C] uppercase tracking-[0.2em] sm:tracking-[0.25em] ml-1 flex items-center gap-2">
+                                            <Clock size={10} /> Lifecycle Timeline (កាលបរិច្ឆេទ / ពេលវេលា)
+                                        </label>
+                                        <div className="bg-[#0B0E11] border border-[#2B3139] rounded-xl overflow-hidden">
+                                            {lifecycleEvents.map((event, index) => {
+                                                const dateTime = formatLifecycleDateTime(event.value);
+                                                const Icon = event.icon;
+
+                                                return (
+                                                    <div key={event.key} className={`p-3 sm:p-4 flex items-start gap-3 ${index > 0 ? 'border-t border-[#2B3139]' : ''}`}>
+                                                        <div className={`mt-0.5 w-7 h-7 sm:w-8 sm:h-8 rounded-lg border flex items-center justify-center shrink-0 ${dateTime ? 'bg-[#1E2329] border-[#2B3139]' : 'bg-[#1E2329]/40 border-[#2B3139]/70'}`}>
+                                                            <Icon size={13} className={dateTime ? event.color : 'text-[#5E6673]'} />
+                                                        </div>
+                                                        <div className="min-w-0 flex-1">
+                                                            <div className="flex items-center justify-between gap-2">
+                                                                <div className="min-w-0">
+                                                                    <p className={`text-[9px] sm:text-[10px] font-black uppercase tracking-wider truncate ${dateTime ? 'text-[#EAECEF]' : 'text-[#5E6673]'}`}>{event.label}</p>
+                                                                    <p className="text-[8px] sm:text-[9px] font-bold text-[#848E9C] truncate">{event.labelKm}</p>
+                                                                </div>
+                                                                <div className={`w-1.5 h-1.5 rounded-full shrink-0 ${dateTime ? event.dot : 'bg-[#474D57]'}`}></div>
+                                                            </div>
+                                                            {dateTime ? (
+                                                                <div className="mt-2 grid grid-cols-2 gap-2">
+                                                                    <div className="min-w-0">
+                                                                        <p className="text-[7px] sm:text-[8px] font-black text-[#5E6673] uppercase tracking-widest">Date</p>
+                                                                        <p className="text-[9px] sm:text-[10px] font-mono font-black text-[#EAECEF] truncate">{dateTime.date}</p>
+                                                                    </div>
+                                                                    <div className="min-w-0">
+                                                                        <p className="text-[7px] sm:text-[8px] font-black text-[#5E6673] uppercase tracking-widest">Time</p>
+                                                                        <p className={`text-[9px] sm:text-[10px] font-mono font-black truncate ${event.color}`}>{dateTime.time}</p>
+                                                                    </div>
+                                                                </div>
+                                                            ) : (
+                                                                <p className="mt-2 text-[9px] sm:text-[10px] font-mono font-black text-[#5E6673] uppercase tracking-wider">UNRECORDED</p>
+                                                            )}
+                                                        </div>
+                                                    </div>
+                                                );
+                                            })}
                                         </div>
                                     </div>
                                     {order['Driver Name'] && (

@@ -298,11 +298,35 @@ const DashboardOverview: React.FC<DashboardOverviewProps> = ({
         );
     }
 
+    const defaultSurface = isLightMode
+        ? 'bg-white border-slate-200 shadow-sm hover:shadow-md transition-shadow'
+        : 'bg-[#0f172a]/95 border-white/10 shadow-[0_8px_30px_rgb(0,0,0,0.12)] backdrop-blur-2xl';
+    const defaultHeaderSurface = isLightMode
+        ? 'bg-white border-slate-200'
+        : 'bg-[#0f172a]/98 border-white/10';
+
     return (
-        <div className="py-6 px-6 max-w-7xl mx-auto space-y-6 animate-fade-in pb-10">
-            <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 mb-2">
-                <h2 className={`text-2xl font-semibold ${isLightMode ? 'text-slate-800' : 'text-white'}`}>Dashboard</h2>
-                <div className="w-full sm:w-auto">
+        <div className="w-full max-w-[1600px] mx-auto py-6 px-4 sm:px-6 space-y-8 animate-fade-in pb-12">
+            {/* Header Section */}
+            <div className={`${defaultHeaderSurface} border rounded-2xl p-6 sm:p-8 flex flex-col xl:flex-row xl:items-center justify-between gap-6 shadow-sm`}>
+                <div className="min-w-0">
+                    <div className="flex items-center gap-3 mb-2">
+                        <span className="relative flex h-3 w-3">
+                            {isSyncing && <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-blue-400 opacity-75"></span>}
+                            <span className={`relative inline-flex rounded-full h-3 w-3 ${isSyncing ? 'bg-blue-500' : 'bg-emerald-500'}`}></span>
+                        </span>
+                        <span className={`text-[10px] font-black uppercase tracking-widest ${isLightMode ? 'text-slate-500' : 'text-slate-400'}`}>
+                            {isSyncing ? (language === 'km' ? 'កំពុងធ្វើបច្ចុប្បន្នភាព' : 'Syncing Data...') : (language === 'km' ? 'ទិន្នន័យបច្ចុប្បន្ន' : 'Live Operations')}
+                        </span>
+                    </div>
+                    <h2 className={`text-3xl font-black ${isLightMode ? 'text-slate-900' : 'text-white'} tracking-tight`}>
+                        Admin Dashboard
+                    </h2>
+                    <p className={`text-sm font-medium ${isLightMode ? 'text-slate-500' : 'text-slate-400'} mt-1`}>
+                        {language === 'km' ? 'សង្ខេបប្រតិបត្តិការ ការលក់ និងតំបន់ចែកចាយប្រចាំថ្ងៃ' : 'Comprehensive overview of sales, orders, and regional performance'}
+                    </p>
+                </div>
+                <div className="w-full xl:w-auto bg-black/5 p-2 rounded-xl dark:bg-white/5 border border-transparent dark:border-white/5">
                     <DateRangeFilter
                         dateRange={dateFilter.preset as DateRangePreset}
                         onRangeChange={(r) => setDateFilter({ ...dateFilter, preset: r })}
@@ -315,126 +339,159 @@ const DashboardOverview: React.FC<DashboardOverviewProps> = ({
             </div>
 
             {/* BEGIN: Stats Cards */}
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6 mb-6">
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
                 {/* Card 1: Revenue */}
-                <div className={`${isLightMode ? 'bg-white border-slate-200 shadow-sm' : 'bg-[#1a1d27] border-white/[0.06] shadow-[0_4px_24px_rgba(0,0,0,0.3)]'} rounded-xl border p-5 flex items-center space-x-5 transition-all duration-300 hover:-translate-y-0.5`}>
-                    <div className={`h-14 w-14 rounded-full ${isLightMode ? 'bg-blue-50' : 'bg-blue-500/[0.2]'} flex items-center justify-center flex-shrink-0 border ${isLightMode ? 'border-blue-100' : 'border-blue-400/40'}`}>
-                        <svg className={`w-7 h-7 ${isLightMode ? 'text-blue-500' : 'text-blue-400'}`} fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={1.8}><path strokeLinecap="round" strokeLinejoin="round" d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
-                    </div>
-                    <div className="flex-1 min-w-0">
-                        <div className="flex justify-between items-baseline">
-                            <p className={`text-xs font-normal ${isLightMode ? 'text-slate-400' : 'text-[#8b8fa3]'} truncate uppercase tracking-wider`}>
-                                {language === 'km' ? 'ចំណូលសរុប' : 'Total Revenue'}
-                            </p>
-                            <span className={`text-[10px] font-semibold ${isLightMode ? 'text-green-500 bg-green-500/10' : 'text-[#22c55e] bg-[rgba(34,197,94,0.15)] border border-[rgba(34,197,94,0.3)]'} px-2 py-0.5 rounded-full`}>+5.2%</span>
+                <div className={`${defaultSurface} rounded-2xl border p-6 flex flex-col justify-between group overflow-hidden relative`}>
+                    {/* Subtle Background Glow */}
+                    <div className="absolute -top-10 -right-10 w-32 h-32 bg-blue-500/10 rounded-full blur-3xl pointer-events-none group-hover:bg-blue-500/20 transition-all"></div>
+                    
+                    <div className="flex justify-between items-start mb-4">
+                        <div className={`h-12 w-12 rounded-xl ${isLightMode ? 'bg-blue-50 text-blue-600' : 'bg-blue-500/20 text-blue-400'} flex items-center justify-center border ${isLightMode ? 'border-blue-100' : 'border-blue-500/30'} shadow-sm`}>
+                            <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
                         </div>
-                        <p className={`text-[28px] font-bold ${isLightMode ? 'text-slate-900' : 'text-white'} mt-1 tabular-nums tracking-tight`}>
-                            ${metrics.revenue.toLocaleString()}
+                        <span className={`text-[10px] font-black uppercase tracking-wider ${isLightMode ? 'text-green-600 bg-green-100' : 'text-emerald-400 bg-emerald-400/10'} px-2.5 py-1 rounded-lg`}>Trending</span>
+                    </div>
+                    <div>
+                        <p className={`text-[11px] font-black uppercase tracking-widest mb-1 ${isLightMode ? 'text-slate-500' : 'text-slate-400'}`}>
+                            {language === 'km' ? 'ចំណូលសរុប' : 'Total Revenue'}
                         </p>
+                        <div className="flex items-baseline gap-1">
+                            <span className={`text-xl font-bold ${isLightMode ? 'text-blue-600' : 'text-blue-400'}`}>$</span>
+                            <p className={`text-4xl font-black ${isLightMode ? 'text-slate-900' : 'text-white'} tabular-nums tracking-tighter`}>
+                                {metrics.revenue.toLocaleString(undefined, { minimumFractionDigits: 0, maximumFractionDigits: 0 })}
+                            </p>
+                        </div>
                     </div>
                 </div>
 
                 {/* Card 2: Orders */}
-                <div className={`${isLightMode ? 'bg-white border-slate-200 shadow-sm' : 'bg-[#1a1d27] border-white/[0.06] shadow-[0_4px_24px_rgba(0,0,0,0.3)]'} rounded-xl border p-5 flex items-center space-x-5 transition-all duration-300 hover:-translate-y-0.5`}>
-                    <div className={`h-14 w-14 rounded-full ${isLightMode ? 'bg-emerald-50' : 'bg-emerald-500/[0.2]'} flex items-center justify-center flex-shrink-0 border ${isLightMode ? 'border-emerald-100' : 'border-emerald-400/40'}`}>
-                        <svg className={`w-7 h-7 ${isLightMode ? 'text-emerald-500' : 'text-emerald-400'}`} fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={1.8}><path strokeLinecap="round" strokeLinejoin="round" d="M3 3h2l.4 2M7 13h10l4-8H5.4M7 13L5.4 5M7 13l-2.293 2.293c-.63.63-.184 1.707.707 1.707H17m0 0a2 2 0 100 4 2 2 0 000-4zm-8 2a2 2 0 11-4 0 2 2 0 014 0z" /></svg>
-                    </div>
-                    <div className="flex-1 min-w-0">
-                        <div className="flex justify-between items-baseline">
-                            <p className={`text-xs font-normal ${isLightMode ? 'text-slate-400' : 'text-[#8b8fa3]'} truncate uppercase tracking-wider`}>
-                                {language === 'km' ? 'ចំនួនការកម្មង់' : 'Total Orders'}
-                            </p>
-                            <span className={`text-[10px] font-semibold ${isLightMode ? 'text-emerald-500 bg-emerald-500/10' : 'text-[#22c55e] bg-[rgba(34,197,94,0.15)] border border-[rgba(34,197,94,0.3)]'} px-2 py-0.5 rounded-full`}>+3.1%</span>
+                <div className={`${defaultSurface} rounded-2xl border p-6 flex flex-col justify-between group overflow-hidden relative`}>
+                    <div className="absolute -top-10 -right-10 w-32 h-32 bg-emerald-500/10 rounded-full blur-3xl pointer-events-none group-hover:bg-emerald-500/20 transition-all"></div>
+                    
+                    <div className="flex justify-between items-start mb-4">
+                        <div className={`h-12 w-12 rounded-xl ${isLightMode ? 'bg-emerald-50 text-emerald-600' : 'bg-emerald-500/20 text-emerald-400'} flex items-center justify-center border ${isLightMode ? 'border-emerald-100' : 'border-emerald-500/30'} shadow-sm`}>
+                            <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M3 3h2l.4 2M7 13h10l4-8H5.4M7 13L5.4 5M7 13l-2.293 2.293c-.63.63-.184 1.707.707 1.707H17m0 0a2 2 0 100 4 2 2 0 000-4zm-8 2a2 2 0 11-4 0 2 2 0 014 0z" /></svg>
                         </div>
-                        <p className={`text-[28px] font-bold ${isLightMode ? 'text-slate-900' : 'text-white'} mt-1 tabular-nums tracking-tight`}>
+                        <span className={`text-[10px] font-black uppercase tracking-wider ${isLightMode ? 'text-blue-600 bg-blue-100' : 'text-blue-400 bg-blue-400/10'} px-2.5 py-1 rounded-lg`}>Active</span>
+                    </div>
+                    <div>
+                        <p className={`text-[11px] font-black uppercase tracking-widest mb-1 ${isLightMode ? 'text-slate-500' : 'text-slate-400'}`}>
+                            {language === 'km' ? 'ការកម្មង់សរុប' : 'Total Orders'}
+                        </p>
+                        <p className={`text-4xl font-black ${isLightMode ? 'text-slate-900' : 'text-white'} tabular-nums tracking-tighter`}>
                             {metrics.orders.toLocaleString()}
                         </p>
                     </div>
                 </div>
 
                 {/* Card 3: Unpaid */}
-                <div className={`${isLightMode ? 'bg-white border-slate-200 shadow-sm' : 'bg-[#1a1d27] border-white/[0.06] shadow-[0_4px_24px_rgba(0,0,0,0.3)]'} rounded-xl border p-5 flex items-center space-x-5 transition-all duration-300 hover:-translate-y-0.5`}>
-                    <div className={`h-14 w-14 rounded-full ${isLightMode ? 'bg-orange-50' : 'bg-orange-500/[0.2]'} flex items-center justify-center flex-shrink-0 border ${isLightMode ? 'border-orange-100' : 'border-orange-400/40'}`}>
-                        <svg className={`w-7 h-7 ${isLightMode ? 'text-orange-500' : 'text-orange-400'}`} fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={1.8}><path strokeLinecap="round" strokeLinejoin="round" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
-                    </div>
-                    <div className="flex-1 min-w-0">
-                        <div className="flex justify-between items-baseline">
-                            <p className={`text-xs font-normal ${isLightMode ? 'text-slate-400' : 'text-[#8b8fa3]'} truncate uppercase tracking-wider`}>
-                                {language === 'km' ? 'មិនទាន់ទូទាត់' : 'Pending Payment'}
-                            </p>
-                            <span className={`text-[10px] font-semibold ${isLightMode ? 'text-orange-500 bg-orange-500/10' : 'text-[#fbbf24] bg-[rgba(251,191,36,0.15)] border border-[rgba(251,191,36,0.3)]'} px-2 py-0.5 rounded-full animate-pulse`}>Active</span>
+                <div className={`${defaultSurface} rounded-2xl border p-6 flex flex-col justify-between group overflow-hidden relative`}>
+                    <div className="absolute -top-10 -right-10 w-32 h-32 bg-orange-500/10 rounded-full blur-3xl pointer-events-none group-hover:bg-orange-500/20 transition-all"></div>
+                    
+                    <div className="flex justify-between items-start mb-4">
+                        <div className={`h-12 w-12 rounded-xl ${isLightMode ? 'bg-orange-50 text-orange-600' : 'bg-orange-500/20 text-orange-400'} flex items-center justify-center border ${isLightMode ? 'border-orange-100' : 'border-orange-500/30'} shadow-sm`}>
+                            <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
                         </div>
-                        <p className={`text-[28px] font-bold ${isLightMode ? 'text-slate-900' : 'text-white'} mt-1 tabular-nums tracking-tight`}>
+                        {metrics.unpaid > 0 && <span className="flex h-2.5 w-2.5 relative mt-2 mr-1"><span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-orange-400 opacity-75"></span><span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-orange-500"></span></span>}
+                    </div>
+                    <div>
+                        <p className={`text-[11px] font-black uppercase tracking-widest mb-1 ${isLightMode ? 'text-slate-500' : 'text-slate-400'}`}>
+                            {language === 'km' ? 'មិនទាន់ទូទាត់' : 'Pending Payment'}
+                        </p>
+                        <p className={`text-4xl font-black ${metrics.unpaid > 0 ? (isLightMode ? 'text-orange-600' : 'text-orange-400') : (isLightMode ? 'text-slate-900' : 'text-white')} tabular-nums tracking-tighter`}>
                             {metrics.unpaid.toLocaleString()}
                         </p>
                     </div>
                 </div>
 
-                {/* Card 4: Sync Status */}
-                <div className={`${isLightMode ? 'bg-white border-slate-200 shadow-sm' : 'bg-[#1a1d27] border-white/[0.06] shadow-[0_4px_24px_rgba(0,0,0,0.3)]'} rounded-xl border p-5 flex items-center space-x-5 transition-all duration-300 hover:-translate-y-0.5`}>
-                    <div className={`h-14 w-14 rounded-full ${isLightMode ? 'bg-slate-50' : 'bg-slate-500/[0.2]'} flex items-center justify-center flex-shrink-0 border ${isLightMode ? 'border-slate-100' : 'border-slate-400/40'}`}>
-                        <svg className={`w-7 h-7 ${isLightMode ? 'text-slate-500' : 'text-slate-300'} ${isSyncing ? 'animate-spin' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={1.8}><path strokeLinecap="round" strokeLinejoin="round" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" /></svg>
-                    </div>
-                    <div className="flex-1 min-w-0">
-                        <div className="flex justify-between items-baseline">
-                            <p className={`text-xs font-normal ${isLightMode ? 'text-slate-400' : 'text-[#8b8fa3]'} truncate uppercase tracking-wider`}>
-                                {language === 'km' ? 'ស្ថានភាពសម័យកាល' : 'Sync Status'}
-                            </p>
+                {/* Card 4: System */}
+                <div className={`${defaultSurface} rounded-2xl border p-6 flex flex-col justify-between group overflow-hidden relative`}>
+                    <div className="absolute -top-10 -right-10 w-32 h-32 bg-purple-500/10 rounded-full blur-3xl pointer-events-none group-hover:bg-purple-500/20 transition-all"></div>
+                    
+                    <div className="flex justify-between items-start mb-4">
+                        <div className={`h-12 w-12 rounded-xl ${isLightMode ? 'bg-purple-50 text-purple-600' : 'bg-purple-500/20 text-purple-400'} flex items-center justify-center border ${isLightMode ? 'border-purple-100' : 'border-purple-500/30'} shadow-sm`}>
+                            <svg className={`w-6 h-6 ${isSyncing ? 'animate-spin' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" /></svg>
                         </div>
-                        <p className={`text-xl font-bold ${isLightMode ? 'text-slate-700' : 'text-slate-300'} mt-1 uppercase tracking-tighter`}>
-                            {isSyncing ? (language === 'km' ? 'កំពុងធ្វើបច្ចុប្បន្នភាព...' : 'Syncing...') : (language === 'km' ? 'Up to date' : 'Up to date')}
+                        <span className={`text-[10px] font-black uppercase tracking-wider ${isSyncing ? (isLightMode ? 'text-blue-600 bg-blue-100' : 'text-blue-400 bg-blue-400/10') : (isLightMode ? 'text-slate-500 bg-slate-100' : 'text-slate-400 bg-white/5')} px-2.5 py-1 rounded-lg`}>System</span>
+                    </div>
+                    <div>
+                        <p className={`text-[11px] font-black uppercase tracking-widest mb-1 ${isLightMode ? 'text-slate-500' : 'text-slate-400'}`}>
+                            {language === 'km' ? 'ស្ថានភាពសម័យកាល' : 'Sync Status'}
+                        </p>
+                        <p className={`text-2xl font-black ${isLightMode ? 'text-slate-900' : 'text-white'} tabular-nums tracking-tight`}>
+                            {isSyncing ? (language === 'km' ? 'កំពុងអាប់ដេត...' : 'Syncing...') : (language === 'km' ? 'ចុងក្រោយបំផុត' : 'Up to date')}
                         </p>
                     </div>
                 </div>
             </div>
 
-            {/* Recent Orders Table & Breakdown Row */}
-            <div className="flex flex-col lg:flex-row gap-6">
-                <div className={`flex-1 ${isLightMode ? 'bg-white border-slate-200' : 'bg-[#1a1d27] border-white/[0.06]'} border rounded-xl overflow-hidden`}>
-                    <div className={`px-6 py-5 border-b ${isLightMode ? 'border-slate-200' : 'border-white/[0.06]'} flex justify-between items-center`}>
-                        <h3 className={`text-lg leading-6 font-semibold ${isLightMode ? 'text-slate-900' : 'text-white'}`}>{language === 'km' ? 'ការកម្មង់ចុងក្រោយ' : 'Recent Orders'}</h3>
-                        <button onClick={() => onTeamClick('')} className={`text-sm font-medium ${isLightMode ? 'text-blue-500 hover:underline' : 'text-[#60a5fa] flex items-center gap-1.5 border border-white/[0.1] px-3 py-1.5 rounded-md hover:border-white/20 hover:bg-white/[0.05] transition-all'}`}>
-                            View All {!isLightMode && <span className="text-xs">→</span>}
+            {/* Layout Row 2: Recent Orders & Team Stats */}
+            <div className="grid grid-cols-1 xl:grid-cols-12 gap-6 items-start">
+                {/* Recent Orders Table */}
+                <div className={`xl:col-span-8 ${defaultSurface} rounded-2xl border overflow-hidden`}>
+                    <div className={`px-6 py-5 flex justify-between items-center border-b ${isLightMode ? 'border-slate-200 bg-slate-50/50' : 'border-white/10 bg-white/[0.02]'}`}>
+                        <div className="flex items-center gap-3">
+                            <div className="w-1 h-6 bg-blue-500 rounded-full"></div>
+                            <h3 className={`text-lg font-black ${isLightMode ? 'text-slate-900' : 'text-white'} uppercase tracking-tight`}>
+                                {language === 'km' ? 'ការកម្មង់ចុងក្រោយ' : 'Recent Orders'}
+                            </h3>
+                        </div>
+                        <button onClick={() => onTeamClick('')} className={`text-xs font-black uppercase tracking-widest flex items-center gap-2 px-4 py-2 rounded-xl transition-all ${isLightMode ? 'bg-white border border-slate-200 text-slate-700 hover:bg-slate-50 shadow-sm' : 'bg-white/5 border border-white/10 text-white hover:bg-white/10'}`}>
+                            View All <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M17 8l4 4m0 0l-4 4m4-4H3" /></svg>
                         </button>
                     </div>
                     <div className="overflow-x-auto">
-                        <table className={`min-w-full divide-y ${isLightMode ? 'divide-slate-200' : 'divide-white/[0.04]'}`}>
-                            <thead className={isLightMode ? 'bg-slate-50' : 'bg-[#141720]'}>
+                        <table className={`min-w-full divide-y ${isLightMode ? 'divide-slate-200' : 'divide-white/10'}`}>
+                            <thead className={isLightMode ? 'bg-slate-50/50' : 'bg-white/[0.02]'}>
                                 <tr>
-                                    <th className={`px-6 py-3 text-left text-xs font-medium ${isLightMode ? 'text-slate-500' : 'text-[#6b7280]'} uppercase tracking-[0.05em]`}>Order ID</th>
-                                    <th className={`px-6 py-3 text-left text-xs font-medium ${isLightMode ? 'text-slate-500' : 'text-[#6b7280]'} uppercase tracking-[0.05em]`}>Customer</th>
-                                    <th className={`px-6 py-3 text-left text-xs font-medium ${isLightMode ? 'text-slate-500' : 'text-[#6b7280]'} uppercase tracking-[0.05em]`}>Status</th>
-                                    <th className={`px-6 py-3 text-left text-xs font-medium ${isLightMode ? 'text-slate-500' : 'text-[#6b7280]'} uppercase tracking-[0.05em]`}>Date</th>
-                                    <th className={`px-6 py-3 text-left text-xs font-medium ${isLightMode ? 'text-slate-500' : 'text-[#6b7280]'} uppercase tracking-[0.05em]`}>Amount</th>
+                                    {['Order ID', 'Customer', 'Status', 'Date', 'Amount'].map(header => (
+                                        <th key={header} className={`px-6 py-4 text-left text-[10px] font-black ${isLightMode ? 'text-slate-500' : 'text-slate-400'} uppercase tracking-[0.2em]`}>
+                                            {header}
+                                        </th>
+                                    ))}
                                 </tr>
                             </thead>
-                            <tbody className={`${isLightMode ? 'bg-white divide-slate-200' : 'bg-transparent divide-white/[0.04]'} divide-y`}>
+                            <tbody className={`divide-y ${isLightMode ? 'divide-slate-100 bg-white' : 'divide-white/5 bg-transparent'}`}>
                                 {filteredMetricsOrders.slice(0, 5).map((order, idx) => (
-                                    <tr key={idx} className={`${isLightMode ? 'hover:bg-slate-50' : 'even:bg-white/[0.02] hover:bg-white/[0.05]'} transition-colors`}>
-                                        <td className={`px-6 py-4 whitespace-nowrap text-sm font-medium ${isLightMode ? 'text-blue-500' : 'text-[#60a5fa]'}`}>#{order['Order ID'] || idx}</td>
-                                        <td className={`px-6 py-4 whitespace-nowrap text-sm ${isLightMode ? 'text-slate-700' : 'text-[#d1d5db]'}`}>{order['Customer Name'] || 'N/A'}</td>
-                                        <td className="px-6 py-4 whitespace-nowrap text-sm">
-                                            <span className={`px-2 py-1 rounded-full text-xs font-medium border ${
+                                    <tr key={idx} className={`${isLightMode ? 'hover:bg-slate-50/80' : 'hover:bg-white/[0.02]'} transition-colors group cursor-default`}>
+                                        <td className="px-6 py-4 whitespace-nowrap">
+                                            <span className={`text-xs font-black font-mono tracking-wider ${isLightMode ? 'text-blue-600 bg-blue-50' : 'text-blue-400 bg-blue-400/10'} px-2 py-1 rounded-md`}>
+                                                #{String(order['Order ID']).substring(0, 8)}
+                                            </span>
+                                        </td>
+                                        <td className="px-6 py-4 whitespace-nowrap">
+                                            <div className="flex flex-col">
+                                                <span className={`text-sm font-bold ${isLightMode ? 'text-slate-900' : 'text-slate-200'}`}>{order['Customer Name'] || 'N/A'}</span>
+                                                <span className={`text-xs font-medium ${isLightMode ? 'text-slate-500' : 'text-slate-500'}`}>{order['Customer Phone'] || ''}</span>
+                                            </div>
+                                        </td>
+                                        <td className="px-6 py-4 whitespace-nowrap">
+                                            <span className={`px-3 py-1 rounded-lg text-[10px] font-black uppercase tracking-widest border ${
                                                 order['Payment Status'] === 'Paid'
-                                                    ? (isLightMode ? 'bg-green-500/20 text-green-600 border-green-500/30' : 'bg-[rgba(34,197,94,0.15)] text-[#4ade80] border-[rgba(34,197,94,0.2)]')
+                                                    ? (isLightMode ? 'bg-green-50 text-green-700 border-green-200' : 'bg-emerald-400/10 text-emerald-400 border-emerald-400/20')
                                                     : order['Payment Status'] === 'Unpaid'
-                                                    ? (isLightMode ? 'bg-red-500/15 text-red-500 border-red-500/20' : 'bg-[rgba(239,68,68,0.15)] text-[#f87171] border-[rgba(239,68,68,0.3)]')
-                                                    : (isLightMode ? 'bg-slate-100 text-slate-700 border-slate-200' : 'bg-[rgba(251,191,36,0.15)] text-[#fbbf24] border-[rgba(251,191,36,0.2)]')
+                                                    ? (isLightMode ? 'bg-red-50 text-red-700 border-red-200' : 'bg-red-400/10 text-red-400 border-red-400/20')
+                                                    : (isLightMode ? 'bg-slate-100 text-slate-700 border-slate-200' : 'bg-orange-400/10 text-orange-400 border-orange-400/20')
                                             }`}>
                                                 {order['Payment Status'] || 'Pending'}
                                             </span>
                                         </td>
-                                        <td className={`px-6 py-4 whitespace-nowrap text-sm ${isLightMode ? 'text-slate-500' : 'text-[#6b7280]'}`}>
-                                            {order.Timestamp ? new Date(order.Timestamp).toLocaleDateString() : 'N/A'}
+                                        <td className={`px-6 py-4 whitespace-nowrap text-sm font-medium ${isLightMode ? 'text-slate-600' : 'text-slate-400'}`}>
+                                            {order.Timestamp ? new Date(order.Timestamp).toLocaleDateString('en-GB') : 'N/A'}
                                         </td>
-                                        <td className={`px-6 py-4 whitespace-nowrap text-sm font-bold ${isLightMode ? 'text-slate-900' : 'text-white'}`}>
-                                            ${(Number(order['Grand Total']) || 0).toLocaleString()}
+                                        <td className={`px-6 py-4 whitespace-nowrap text-sm font-black ${isLightMode ? 'text-slate-900' : 'text-white'}`}>
+                                            ${(Number(order['Grand Total']) || 0).toLocaleString(undefined, { minimumFractionDigits: 2 })}
                                         </td>
                                     </tr>
                                 ))}
                                 {filteredMetricsOrders.length === 0 && (
                                     <tr>
-                                        <td colSpan={5} className={`px-6 py-10 text-center ${isLightMode ? 'text-slate-400' : 'text-[#6b7280]'}`}>No recent orders found</td>
+                                        <td colSpan={5} className="px-6 py-12 text-center">
+                                            <div className="flex flex-col items-center justify-center opacity-50">
+                                                <span className="text-4xl mb-3">📦</span>
+                                                <p className={`text-sm font-bold ${isLightMode ? 'text-slate-500' : 'text-slate-400'} uppercase tracking-widest`}>No recent orders</p>
+                                            </div>
+                                        </td>
                                     </tr>
                                 )}
                             </tbody>
@@ -442,30 +499,65 @@ const DashboardOverview: React.FC<DashboardOverviewProps> = ({
                     </div>
                 </div>
 
-                <div className="w-full lg:w-80 space-y-6">
-                    <TeamRevenueTable stats={teamRevenueStats} onStatClick={onTeamClick} />
+                <div className={`xl:col-span-4 ${defaultSurface} rounded-2xl border overflow-hidden`}>
+                    <div className={`px-6 py-5 border-b ${isLightMode ? 'border-slate-200 bg-slate-50/50' : 'border-white/10 bg-white/[0.02]'}`}>
+                        <div className="flex items-center gap-3">
+                            <div className="w-1 h-6 bg-purple-500 rounded-full"></div>
+                            <h3 className={`text-lg font-black ${isLightMode ? 'text-slate-900' : 'text-white'} uppercase tracking-tight`}>Team Performance</h3>
+                        </div>
+                    </div>
+                    <div className="p-2">
+                        <TeamRevenueTable stats={teamRevenueStats} onStatClick={onTeamClick} />
+                    </div>
                 </div>
             </div>
 
-            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 lg:gap-8">
-                <SalesStoreTable stats={brandStats} onStatClick={onBrandClick} />
-                <FulfillmentStoreTable stats={storeStats} onStatClick={onStoreClick} />
+            {/* Layout Row 3: Stores */}
+            <div className="grid grid-cols-1 xl:grid-cols-2 gap-6">
+                <div className={`${defaultSurface} rounded-2xl border overflow-hidden`}>
+                    <div className={`px-6 py-5 border-b ${isLightMode ? 'border-slate-200 bg-slate-50/50' : 'border-white/10 bg-white/[0.02]'}`}>
+                        <div className="flex items-center gap-3">
+                            <div className="w-1 h-6 bg-emerald-500 rounded-full"></div>
+                            <h3 className={`text-lg font-black ${isLightMode ? 'text-slate-900' : 'text-white'} uppercase tracking-tight`}>Brand Sales</h3>
+                        </div>
+                    </div>
+                    <div className="p-2">
+                        <SalesStoreTable stats={brandStats} onStatClick={onBrandClick} />
+                    </div>
+                </div>
+                <div className={`${defaultSurface} rounded-2xl border overflow-hidden`}>
+                    <div className={`px-6 py-5 border-b ${isLightMode ? 'border-slate-200 bg-slate-50/50' : 'border-white/10 bg-white/[0.02]'}`}>
+                        <div className="flex items-center gap-3">
+                            <div className="w-1 h-6 bg-orange-500 rounded-full"></div>
+                            <h3 className={`text-lg font-black ${isLightMode ? 'text-slate-900' : 'text-white'} uppercase tracking-tight`}>Fulfillment Operations</h3>
+                        </div>
+                    </div>
+                    <div className="p-2">
+                        <FulfillmentStoreTable stats={storeStats} onStatClick={onStoreClick} />
+                    </div>
+                </div>
             </div>
 
-            <div className="grid grid-cols-1 xl:grid-cols-12 gap-6 lg:gap-8">
-                <div className={`xl:col-span-8 ${isLightMode ? 'bg-white border-slate-200' : 'bg-[#1a1d27] border-white/[0.06]'} border rounded-xl overflow-hidden`}>
-                    <div className={`px-6 py-4 border-b ${isLightMode ? 'border-slate-200 bg-slate-50' : 'border-white/[0.06] bg-white/[0.03]'}`}>
-                        <h3 className={`font-semibold ${isLightMode ? 'text-slate-800' : 'text-white'}`}>Regional Distribution</h3>
+            {/* Layout Row 4: Map */}
+            <div className={`grid grid-cols-1 xl:grid-cols-12 gap-0 ${defaultSurface} rounded-2xl border overflow-hidden`}>
+                <div className={`xl:col-span-8 border-b xl:border-b-0 xl:border-r ${isLightMode ? 'border-slate-200' : 'border-white/10'}`}>
+                    <div className={`px-6 py-5 border-b ${isLightMode ? 'border-slate-200 bg-slate-50/50' : 'border-white/10 bg-white/[0.02]'}`}>
+                        <div className="flex items-center gap-3">
+                            <div className="w-1 h-6 bg-cyan-500 rounded-full"></div>
+                            <h3 className={`text-lg font-black ${isLightMode ? 'text-slate-900' : 'text-white'} uppercase tracking-tight`}>Regional Heatmap</h3>
+                        </div>
                     </div>
-                    <div className="p-4">
+                    <div className="p-6">
                         <ProvincialMap data={provinceStats} onProvinceClick={onProvinceClick} />
                     </div>
                 </div>
-                <div className={`xl:col-span-4 ${isLightMode ? 'bg-white border-slate-200' : 'bg-[#1a1d27] border-white/[0.06]'} border rounded-xl overflow-hidden`}>
-                    <div className={`px-6 py-4 border-b ${isLightMode ? 'border-slate-200 bg-slate-50' : 'border-white/[0.06] bg-white/[0.03]'}`}>
-                        <h3 className={`font-semibold ${isLightMode ? 'text-slate-800' : 'text-white'}`}>Provincial Summary</h3>
+                <div className="xl:col-span-4 bg-black/5 dark:bg-white/[0.02]">
+                    <div className={`px-6 py-5 border-b ${isLightMode ? 'border-slate-200' : 'border-white/10'}`}>
+                        <h3 className={`font-black ${isLightMode ? 'text-slate-900' : 'text-white'} uppercase tracking-tight`}>Provincial Summary</h3>
                     </div>
-                    <ProvincialSummaryList stats={provinceStats} onProvinceClick={onProvinceClick} />
+                    <div className="p-2">
+                        <ProvincialSummaryList stats={provinceStats} onProvinceClick={onProvinceClick} />
+                    </div>
                 </div>
             </div>
         </div>
