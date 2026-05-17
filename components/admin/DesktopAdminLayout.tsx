@@ -68,7 +68,8 @@ const DesktopAdminLayout: React.FC<DesktopAdminLayoutProps> = ({
 
     // Sidebar widths based on theme and state
     const getSidebarWidth = () => {
-        if (uiTheme === 'binance') return isSidebarCollapsed ? '64px' : '260px';
+        if (uiTheme === 'binance') return isSidebarCollapsed ? '64px' : '240px';
+        if (uiTheme === 'neumorphism') return isSidebarCollapsed ? '96px' : '288px';
         return isSidebarCollapsed ? '80px' : '256px';
     };
 
@@ -76,6 +77,8 @@ const DesktopAdminLayout: React.FC<DesktopAdminLayoutProps> = ({
     const getPageBg = () => {
         if (uiTheme === 'binance') return 'bg-[#090B0F]';
         if (uiTheme === 'netflix') return 'bg-[#141414]';
+        if (uiTheme === 'neumorphism') return 'bg-[#e0e5ec]';
+        if (uiTheme === 'finance') return 'bg-[#0b0e14]';
         return isLightMode ? 'bg-slate-50' : 'bg-[#080b12]';
     };
 

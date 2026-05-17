@@ -689,8 +689,8 @@ const FastPackTerminal: React.FC<FastPackTerminalProps> = ({ order, onClose, onS
                                                         </div>
 
                                                         {/* Operational Source integrated on the right */}
-                                                        <div className="flex items-center gap-3 lg:border-l lg:border-white/10 lg:pl-6">
-                                                            <div className="w-10 h-10 shrink-0 flex items-center justify-center">
+                                                        <div className="flex items-center gap-5 lg:border-l lg:border-white/10 lg:pl-6 h-full">
+                                                            <div className="w-12 h-12 shrink-0 flex items-center justify-center bg-white/5 rounded-none border border-white/10 p-1.5 shadow-inner">
                                                                 <img 
                                                                     src={convertGoogleDriveUrl(appData.pages?.find(p => p.PageName === order.Page)?.PageLogoURL || '')} 
                                                                     className="w-full h-full object-contain" 
@@ -698,11 +698,55 @@ const FastPackTerminal: React.FC<FastPackTerminalProps> = ({ order, onClose, onS
                                                                     onError={(e) => (e.currentTarget.src = 'https://ui-avatars.com/api/?name=' + encodeURIComponent(order.Page || 'P'))}
                                                                 />
                                                             </div>
+                                                            <div className="flex flex-col justify-center">
+                                                                <span className="text-[9px] font-black text-[#848E9C] uppercase tracking-[0.3em] mb-1 leading-none">Source & Dispatch Team</span>
+                                                                <div className="flex items-center gap-4">
+                                                                    <h4 className="text-xl font-black text-white truncate uppercase tracking-tighter leading-none">{order.Page || 'Direct'}</h4>
+                                                                    <span className="px-5 py-2 bg-[#FCD535] text-black text-lg font-black uppercase rounded shadow-[0_0_20px_rgba(252,213,53,0.2)] border-2 border-black/5 flex items-center justify-center">
+                                                                        <span className="leading-none pt-0.5">TEAM-{order.Team || 'GENERAL'}</span>
+                                                                    </span>
+                                                                </div>
+                                                            </div>
+                                                        </div>
+                                                    </div>
+                                                </div>
+
+                                                {/* 2.5 LOCATION & ADDRESS ROW */}
+                                                <div className="flex items-center gap-4 px-4 py-5 hover:bg-[#1E2329] transition-colors border-b border-white/5">
+                                                    <div className="w-12 h-12 shrink-0 bg-[#2B3139] rounded-full flex items-center justify-center border border-[#363C44]">
+                                                        <MapPin className="w-6 h-6 text-white/60" />
+                                                    </div>
+                                                    <div className="flex-grow min-w-0 flex flex-col lg:flex-row lg:items-center justify-between gap-4">
+                                                        <div>
+                                                            <span className="text-[10px] font-black text-[#848E9C] uppercase tracking-[0.2em]">Delivery Address | អាសយដ្ឋានដឹកជញ្ជូន</span>
+                                                            <div className="flex flex-col sm:flex-row sm:items-center gap-2 sm:gap-6 mt-1">
+                                                                <h4 
+                                                                    onClick={() => handleCopy(order.Location, 'Location')}
+                                                                    className="text-lg font-black text-white truncate leading-tight cursor-pointer hover:text-[#FCD535] transition-colors"
+                                                                >
+                                                                    {order.Location || 'N/A'}
+                                                                </h4>
+                                                                <div className="h-4 w-px bg-white/10 hidden sm:block"></div>
+                                                                <div className="flex items-center gap-3">
+                                                                    <span 
+                                                                        onClick={() => handleCopy(order['Address Details'], 'Address Details')}
+                                                                        className="text-sm font-medium text-[#848E9C] cursor-pointer hover:text-white transition-colors"
+                                                                    >
+                                                                        {order['Address Details'] || 'No specific address details'}
+                                                                    </span>
+                                                                </div>
+                                                            </div>
+                                                        </div>
+
+                                                        {/* User integrated on the right */}
+                                                        <div className="flex items-center gap-3 lg:border-l lg:border-white/10 lg:pl-6">
+                                                            <div className="w-10 h-10 shrink-0 bg-[#2B3139] rounded-full flex items-center justify-center border border-[#363C44] overflow-hidden">
+                                                                <UserAvatar avatarUrl="" name={order.User || 'U'} size="sm" className="w-full h-full !rounded-none" />
+                                                            </div>
                                                             <div className="flex flex-col">
-                                                                <span className="text-[10px] font-black text-[#848E9C] uppercase tracking-[0.2em]">Operational Source</span>
+                                                                <span className="text-[10px] font-black text-[#848E9C] uppercase tracking-[0.2em]">Order Submitter</span>
                                                                 <div className="flex items-center gap-2 mt-0.5">
-                                                                    <h4 className="text-sm font-black text-white truncate uppercase">{order.Page || 'Direct'}</h4>
-                                                                    <span className="px-2.5 py-1 bg-[#FCD535]/10 border border-[#FCD535]/20 text-[#FCD535] text-[11px] font-black uppercase rounded">TEAM-{order.Team || 'GENERAL'}</span>
+                                                                    <h4 className="text-sm font-black text-white truncate uppercase">{order.User || 'System'}</h4>
                                                                 </div>
                                                             </div>
                                                         </div>
