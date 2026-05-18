@@ -10,6 +10,7 @@ interface NetflixLayoutProps {
     children: React.ReactNode;
     activeDashboard: string;
     currentAdminView: string;
+    activeReport?: string;
     isSidebarCollapsed: boolean;
     onNavChange: (id: string) => void;
     onReportSubNav: (id: any) => void;
@@ -25,6 +26,7 @@ const NetflixLayout: React.FC<NetflixLayoutProps> = ({
     children, 
     activeDashboard, 
     currentAdminView, 
+    activeReport,
     isSidebarCollapsed,
     onNavChange,
     onReportSubNav,
@@ -59,6 +61,7 @@ const NetflixLayout: React.FC<NetflixLayoutProps> = ({
             <Sidebar 
                 activeDashboard={activeDashboard}
                 currentAdminView={currentAdminView}
+                activeReport={activeReport}
                 isReportSubMenuOpen={isReportSubMenuOpen}
                 isProfileSubMenuOpen={isProfileSubMenuOpen}
                 onNavChange={onNavChange}

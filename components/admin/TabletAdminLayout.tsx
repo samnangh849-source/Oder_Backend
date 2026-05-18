@@ -13,6 +13,7 @@ interface TabletAdminLayoutProps {
     children: React.ReactNode;
     activeDashboard: string;
     currentAdminView: string;
+    activeReport?: string;
     onNavChange: (id: string) => void;
     onReportSubNav: (id: any) => void;
     isReportSubMenuOpen: boolean;
@@ -27,6 +28,7 @@ const TabletAdminLayout: React.FC<TabletAdminLayoutProps> = ({
     children, 
     activeDashboard, 
     currentAdminView,
+    activeReport,
     onNavChange,
     onReportSubNav,
     isReportSubMenuOpen,
@@ -162,6 +164,7 @@ const TabletAdminLayout: React.FC<TabletAdminLayoutProps> = ({
             <SidebarDrawer 
                 activeDashboard={activeDashboard}
                 currentAdminView={currentAdminView}
+                activeReport={activeReport}
                 onNavChange={onNavChange}
                 onReportSubNav={onReportSubNav}
                 isReportSubMenuOpen={isReportSubMenuOpen}

@@ -17,6 +17,7 @@ interface MobileAdminLayoutProps {
     children: React.ReactNode;
     activeDashboard: string;
     currentAdminView: string;
+    activeReport?: string;
     onNavChange: (id: string) => void;
     onReportSubNav: (id: any) => void;
     isReportSubMenuOpen: boolean;
@@ -31,6 +32,7 @@ const MobileAdminLayout: React.FC<MobileAdminLayoutProps> = ({
     children, 
     activeDashboard, 
     currentAdminView,
+    activeReport,
     onNavChange,
     onReportSubNav,
     isReportSubMenuOpen,
@@ -166,6 +168,7 @@ const MobileAdminLayout: React.FC<MobileAdminLayoutProps> = ({
             <SidebarDrawer 
                 activeDashboard={activeDashboard}
                 currentAdminView={currentAdminView}
+                activeReport={activeReport}
                 onNavChange={onNavChange}
                 onReportSubNav={onReportSubNav}
                 isReportSubMenuOpen={isReportSubMenuOpen}

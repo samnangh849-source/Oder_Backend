@@ -152,8 +152,13 @@ const DesktopAdminDashboard: React.FC<{ isTablet?: boolean }> = ({ isTablet }) =
 
     // --- Navigation Handlers ---
     const handleNavChange = (id: string) => {
-        if (id === 'reports') setIsReportSubMenuOpen(!isReportSubMenuOpen);
-        else {
+        if (id === 'reports') {
+            setIsReportSubMenuOpen(!isReportSubMenuOpen);
+            // If not already in reports, switch to the reports dashboard
+            if (activeDashboard !== 'reports') {
+                setActiveDashboard('reports');
+            }
+        } else {
             if (['dashboard', 'performance'].includes(id)) {
                 setActiveDashboard('admin');
                 setCurrentAdminView(id as AdminView);
@@ -271,6 +276,7 @@ const DesktopAdminDashboard: React.FC<{ isTablet?: boolean }> = ({ isTablet }) =
     const layoutProps = {
         activeDashboard,
         currentAdminView,
+        activeReport,
         isReportSubMenuOpen,
         setIsReportSubMenuOpen,
         isProfileSubMenuOpen,

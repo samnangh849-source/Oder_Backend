@@ -13,6 +13,7 @@ interface DesktopAdminLayoutProps {
     children: React.ReactNode;
     activeDashboard: string;
     currentAdminView: string;
+    activeReport?: string;
     isSidebarCollapsed: boolean;
     onNavChange: (id: string) => void;
     onReportSubNav: (id: any) => void;
@@ -28,6 +29,7 @@ const DesktopAdminLayout: React.FC<DesktopAdminLayoutProps> = ({
     children, 
     activeDashboard, 
     currentAdminView, 
+    activeReport,
     isSidebarCollapsed,
     onNavChange,
     onReportSubNav,
@@ -106,6 +108,7 @@ const DesktopAdminLayout: React.FC<DesktopAdminLayoutProps> = ({
             <Sidebar 
                 activeDashboard={activeDashboard}
                 currentAdminView={currentAdminView}
+                activeReport={activeReport}
                 isReportSubMenuOpen={isReportSubMenuOpen}
                 isProfileSubMenuOpen={isProfileSubMenuOpen}
                 onNavChange={onNavChange}

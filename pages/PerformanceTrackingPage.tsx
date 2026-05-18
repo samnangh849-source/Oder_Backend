@@ -109,54 +109,59 @@ const PerformanceTrackingPage: React.FC<PerformanceTrackingPageProps> = ({ order
     );
 
     return (
-        <div className="space-y-6 animate-fade-in px-2 sm:px-0 pb-12">
-            <style>{`
-                @keyframes bounce-slow { 0%, 100% { transform: translateY(-5%); } 50% { transform: translateY(0); } }
-                .animate-bounce-slow { animation: bounce-slow 3s infinite ease-in-out; }
-                .glass-card { background: ${isLightMode ? 'rgba(255, 255, 255, 0.8)' : 'rgba(31, 41, 55, 0.4)'}; backdrop-filter: blur(12px); border: 1px solid ${isLightMode ? 'rgba(229, 231, 235, 0.5)' : 'rgba(75, 85, 99, 0.3)'}; }
-                .progress-glow { filter: drop-shadow(0 0 4px currentColor); }
-            `}</style>
-
+        <div className="space-y-6 lg:space-y-8 animate-fade-in px-2 sm:px-0 pb-12">
             {/* Header Controls */}
             <div className="flex flex-col lg:flex-row justify-between items-start lg:items-center gap-4">
-                <div className={`flex ${isLightMode ? 'bg-white border-gray-200' : 'bg-gray-800/80 border-gray-700'} p-1.5 rounded-2xl border backdrop-blur-md shadow-inner`}>
+                {/* Tabs */}
+                <div className={`flex p-1.5 rounded-2xl border transition-all duration-500
+                    ${isLightMode ? 'bg-slate-100 border-slate-200 shadow-inner' : 'bg-black/40 border-white/5'}
+                `}>
                     {(['overview', 'leaderboard', 'targets'] as PerformanceTab[]).map(tab => (
                         <button 
                             key={tab} 
                             onClick={() => setActiveTab(tab)} 
-                            className={`px-5 py-2.5 text-xs font-black rounded-xl transition-all duration-300 ${activeTab === tab ? 'bg-blue-600 text-white shadow-lg' : isLightMode ? 'text-gray-500 hover:text-blue-600 hover:bg-gray-50' : 'text-gray-400 hover:text-white'}`}
+                            className={`
+                                flex items-center justify-center gap-2 px-5 py-2.5 text-xs font-black rounded-xl transition-all duration-300 tracking-widest uppercase
+                                ${activeTab === tab 
+                                    ? (isLightMode ? 'bg-white text-blue-600 shadow-md' : 'bg-white/10 text-white shadow-xl') 
+                                    : (isLightMode ? 'text-slate-500 hover:text-slate-800' : 'text-slate-500 hover:text-slate-300')}
+                            `}
                         >
-                            {tab === 'overview' ? 'ទិន្នន័យសង្ខេប' : tab === 'leaderboard' ? 'ចំណាត់ថ្នាក់' : 'គោលដៅ'}
+                            <i className={`fa-solid ${tab === 'overview' ? 'fa-chart-pie' : tab === 'leaderboard' ? 'fa-trophy' : 'fa-bullseye'} ${activeTab === tab ? '' : 'opacity-60'}`}></i>
+                            {tab === 'overview' ? 'Overview' : tab === 'leaderboard' ? 'Leaderboard' : 'Targets'}
                         </button>
                     ))}
                 </div>
 
                 <div className="flex flex-wrap items-center gap-2 w-full lg:w-auto">
                     {/* Date Preset */}
-                    <div className={`flex items-center ${isLightMode ? 'bg-white border-gray-200 shadow-sm' : 'bg-gray-800/50 border-gray-700'} rounded-xl px-3 py-1.5 border flex-1 sm:flex-none`}>
-                        <span className="text-[10px] text-gray-500 font-bold uppercase mr-2">កាលបរិច្ឆេទ:</span>
-                        <select className={`bg-transparent border-none focus:ring-0 text-xs font-bold ${isLightMode ? 'text-blue-600' : 'text-blue-400'} cursor-pointer w-full sm:w-auto`} value={filters.datePreset} onChange={e => setFilters({...filters, datePreset: e.target.value as DateRangePreset})}>
-                            <option value="this_month">ខែនេះ</option>
-                            <option value="last_month">ខែមុន</option>
-                            <option value="quarter">ត្រីមាសនេះ</option>
-                            <option value="year">ឆ្នាំនេះ</option>
-                            <option value="all">ទាំងអស់</option>
+                    <div className={`flex items-center rounded-xl px-3.5 py-2.5 border transition-all duration-300 ${isLightMode ? 'bg-white border-slate-200 shadow-sm hover:border-blue-200' : 'bg-white/5 border-white/10 hover:border-white/20 hover:bg-white/10'} flex-1 sm:flex-none cursor-pointer group`}>
+                        <i className={`fa-regular fa-calendar text-[10px] ${isLightMode ? 'text-slate-400' : 'text-slate-500'} mr-2 group-hover:text-blue-500 transition-colors`}></i>
+                        <span className={`text-[9px] ${isLightMode ? 'text-slate-400' : 'text-slate-500'} font-black uppercase mr-2 tracking-widest`}>Period:</span>
+                        <select className={`bg-transparent border-none focus:ring-0 text-[11px] font-black ${isLightMode ? 'text-blue-600' : 'text-blue-400'} cursor-pointer w-full sm:w-auto uppercase tracking-wide`} value={filters.datePreset} onChange={e => setFilters({...filters, datePreset: e.target.value as DateRangePreset})}>
+                            <option value="this_month">This Month</option>
+                            <option value="last_month">Last Month</option>
+                            <option value="quarter">This Quarter</option>
+                            <option value="year">This Year</option>
+                            <option value="all">All Time</option>
                         </select>
                     </div>
 
                     {/* Store Filter */}
-                    <div className={`flex items-center ${isLightMode ? 'bg-white border-gray-200 shadow-sm' : 'bg-gray-800/50 border-gray-700'} rounded-xl px-3 py-1.5 border flex-1 sm:flex-none`}>
-                        <span className="text-[10px] text-gray-500 font-bold uppercase mr-2">Store:</span>
-                        <select className={`bg-transparent border-none focus:ring-0 text-xs font-bold ${isLightMode ? 'text-emerald-600' : 'text-emerald-400'} cursor-pointer w-full sm:w-auto`} value={filters.store} onChange={e => setFilters({...filters, store: e.target.value})}>
+                    <div className={`flex items-center rounded-xl px-3.5 py-2.5 border transition-all duration-300 ${isLightMode ? 'bg-white border-slate-200 shadow-sm hover:border-emerald-200' : 'bg-white/5 border-white/10 hover:border-white/20 hover:bg-white/10'} flex-1 sm:flex-none cursor-pointer group`}>
+                        <i className={`fa-solid fa-store text-[10px] ${isLightMode ? 'text-slate-400' : 'text-slate-500'} mr-2 group-hover:text-emerald-500 transition-colors`}></i>
+                        <span className={`text-[9px] ${isLightMode ? 'text-slate-400' : 'text-slate-500'} font-black uppercase mr-2 tracking-widest`}>Store:</span>
+                        <select className={`bg-transparent border-none focus:ring-0 text-[11px] font-black ${isLightMode ? 'text-emerald-600' : 'text-emerald-400'} cursor-pointer w-full sm:w-auto uppercase tracking-wide`} value={filters.store} onChange={e => setFilters({...filters, store: e.target.value})}>
                             <option value="">All Stores</option>
                             {stores.map(s => <option key={s} value={s}>{s}</option>)}
                         </select>
                     </div>
 
                     {/* Team Filter */}
-                    <div className={`flex items-center ${isLightMode ? 'bg-white border-gray-200 shadow-sm' : 'bg-gray-800/50 border-gray-700'} rounded-xl px-3 py-1.5 border flex-1 sm:flex-none`}>
-                        <span className="text-[10px] text-gray-500 font-bold uppercase mr-2">Team:</span>
-                        <select className={`bg-transparent border-none focus:ring-0 text-xs font-bold ${isLightMode ? 'text-purple-600' : 'text-purple-400'} cursor-pointer w-full sm:w-auto`} value={filters.team} onChange={e => setFilters({...filters, team: e.target.value})}>
+                    <div className={`flex items-center rounded-xl px-3.5 py-2.5 border transition-all duration-300 ${isLightMode ? 'bg-white border-slate-200 shadow-sm hover:border-purple-200' : 'bg-white/5 border-white/10 hover:border-white/20 hover:bg-white/10'} flex-1 sm:flex-none cursor-pointer group`}>
+                        <i className={`fa-solid fa-users text-[10px] ${isLightMode ? 'text-slate-400' : 'text-slate-500'} mr-2 group-hover:text-purple-500 transition-colors`}></i>
+                        <span className={`text-[9px] ${isLightMode ? 'text-slate-400' : 'text-slate-500'} font-black uppercase mr-2 tracking-widest`}>Team:</span>
+                        <select className={`bg-transparent border-none focus:ring-0 text-[11px] font-black ${isLightMode ? 'text-purple-600' : 'text-purple-400'} cursor-pointer w-full sm:w-auto uppercase tracking-wide`} value={filters.team} onChange={e => setFilters({...filters, team: e.target.value})}>
                             <option value="">All Teams</option>
                             {teams.map(t => <option key={t} value={t}>{t}</option>)}
                         </select>

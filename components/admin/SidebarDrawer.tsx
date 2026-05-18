@@ -8,6 +8,7 @@ import { convertGoogleDriveUrl } from '../../utils/fileUtils';
 interface SidebarDrawerProps {
     activeDashboard: string;
     currentAdminView: string;
+    activeReport?: string;
     isReportSubMenuOpen: boolean;
     isProfileSubMenuOpen: boolean;
     onNavChange: (id: string) => void;
@@ -21,6 +22,7 @@ interface SidebarDrawerProps {
 const SidebarDrawer: React.FC<SidebarDrawerProps> = ({ 
     activeDashboard, 
     currentAdminView,
+    activeReport,
     onNavChange,
     onReportSubNav,
     isReportSubMenuOpen,
@@ -93,6 +95,7 @@ const SidebarDrawer: React.FC<SidebarDrawerProps> = ({
                         isMobile={true}
                         activeDashboard={activeDashboard}
                         currentAdminView={currentAdminView}
+                        activeReport={activeReport}
                         isReportSubMenuOpen={isReportSubMenuOpen}
                         isProfileSubMenuOpen={isProfileSubMenuOpen}
                         onNavChange={(id) => {

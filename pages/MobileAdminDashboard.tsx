@@ -295,6 +295,7 @@ const MobileAdminDashboard: React.FC = () => {
             <MobileAdminLayout
                 activeDashboard={activeDashboard}
                 currentAdminView={currentAdminView}
+                activeReport={activeReport}
                 isReportSubMenuOpen={isReportSubMenuOpen}
                 setIsReportSubMenuOpen={setIsReportSubMenuOpen}
                 isProfileSubMenuOpen={isProfileSubMenuOpen}

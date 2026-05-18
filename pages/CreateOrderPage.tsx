@@ -113,8 +113,20 @@ const CreateOrderPage: React.FC<CreateOrderPageProps> = ({ team, onSaveSuccess, 
     const [mapSearchUrl, setMapSearchUrl] = useState('');
     const [scanMode, setScanMode] = useState<'single' | 'increment'>('increment');
     const [recommendationMessage, setRecommendationMessage] = useState<string>('');
+    const [recentNotes, setRecentNotes] = useState<string[]>([]);
 
     const DRAFT_KEY = useMemo(() => `createOrderDraft_${currentUser?.UserName}_${team}`, [currentUser, team]);
+
+    useEffect(() => {
+        if (currentUser?.UserName) {
+            try {
+                const notes = JSON.parse(localStorage.getItem(`recent_notes_${currentUser.UserName}`) || '[]');
+                setRecentNotes(notes);
+            } catch (e) {
+                console.error("Failed to load recent notes");
+            }
+        }
+    }, [currentUser]);
 
     useEffect(() => {
         if (order.fulfillmentStore && order.customer.province && appData.driverRecommendations) {
@@ -607,6 +619,22 @@ const CreateOrderPage: React.FC<CreateOrderPageProps> = ({ team, onSaveSuccess, 
                 `Created Order ID: ${result.orderId} for ${order.customer.name}`
             );
 
+            // Save recent note
+            if (order.note && order.note.trim()) {
+                const noteKey = `recent_notes_${currentUser?.UserName}`;
+                try {
+                    let rNotes = JSON.parse(localStorage.getItem(noteKey) || '[]');
+                    const cleanNote = order.note.trim();
+                    rNotes = rNotes.filter((n: string) => n !== cleanNote);
+                    rNotes.unshift(cleanNote);
+                    if (rNotes.length > 5) rNotes = rNotes.slice(0, 5);
+                    localStorage.setItem(noteKey, JSON.stringify(rNotes));
+                    setRecentNotes(rNotes);
+                } catch (e) {
+                    console.error("Failed to save recent note", e);
+                }
+            }
+
             localStorage.removeItem(DRAFT_KEY);
             setSubmissionStatus({ type: 'success', message: `ជោគជ័យ! Order ID: ${result.orderId}` });
             setTimeout(onSaveSuccess, 3000);
@@ -984,7 +1012,28 @@ const CreateOrderPage: React.FC<CreateOrderPageProps> = ({ team, onSaveSuccess, 
                             onChange={(data) => setOrder({ ...order, telegram: data })}
                         />
 
-                        <div className="space-y-2 sm:space-y-3 pt-4"><label className="text-[10px] font-black text-gray-500 uppercase tracking-widest ml-1">ចំណាំ & Link Google Map</label><textarea placeholder="ចំណាំបន្ថែម..." value={order.note} rows={4} onChange={(e) => setOrder({...order, note: e.target.value})} className="form-textarea bg-gray-900/60 !rounded-[1.5rem] sm:!rounded-[2rem] border-white/5 focus:border-blue-500/50 text-sm"></textarea></div>
+                        <div className="space-y-2 sm:space-y-3 pt-4">
+                            <label className="text-[10px] font-black text-gray-500 uppercase tracking-widest ml-1">ចំណាំ & Link Google Map</label>
+                            
+                            {/* Recently Used Notes Chips */}
+                            {recentNotes.length > 0 && (
+                                <div className="flex flex-wrap gap-2 px-1">
+                                    {recentNotes.map((rNote, idx) => (
+                                        <button 
+                                            key={idx}
+                                            type="button"
+                                            onClick={() => setOrder({...order, note: order.note ? `${order.note} | ${rNote}` : rNote})}
+                                            className="px-3 py-1.5 bg-blue-600/10 border border-blue-500/20 text-blue-400 rounded-xl text-[10px] font-bold hover:bg-blue-600 hover:text-white transition-colors truncate max-w-[200px]"
+                                            title={rNote}
+                                        >
+                                            {rNote.length > 20 ? rNote.substring(0, 20) + '...' : rNote}
+                                        </button>
+                                    ))}
+                                </div>
+                            )}
+
+                            <textarea placeholder="ចំណាំបន្ថែម..." value={order.note} rows={4} onChange={(e) => setOrder({...order, note: e.target.value})} className="form-textarea bg-gray-900/60 !rounded-[1.5rem] sm:!rounded-[2rem] border-white/5 focus:border-blue-500/50 text-sm"></textarea>
+                        </div>
                     </div>
                 );
             default: return null;
