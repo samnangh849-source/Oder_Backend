@@ -1,23 +1,35 @@
-
 {
   "short_name": "O-System",
   "name": "Order Management System",
+  "description": "Premium Order Management System with Real-time Sync",
   "icons": [
     {
       "src": "https://lh3.googleusercontent.com/d/1vb9IG8wn31LDYtUKLurm6cMow0MI4Tee",
       "type": "image/png",
-      "sizes": "192x192"
+      "sizes": "192x192",
+      "purpose": "any maskable"
     },
     {
       "src": "https://lh3.googleusercontent.com/d/1vb9IG8wn31LDYtUKLurm6cMow0MI4Tee",
       "type": "image/png",
-      "sizes": "512x512"
+      "sizes": "512x512",
+      "purpose": "any maskable"
+    },
+    {
+      "src": "https://lh3.googleusercontent.com/d/1vb9IG8wn31LDYtUKLurm6cMow0MI4Tee",
+      "type": "image/png",
+      "sizes": "180x180"
+    },
+    {
+      "src": "https://lh3.googleusercontent.com/d/1vb9IG8wn31LDYtUKLurm6cMow0MI4Tee",
+      "type": "image/png",
+      "sizes": "128x128"
     }
   ],
-  "start_url": "./",
+  "start_url": "/Order_System/",
   "display": "standalone",
   "theme_color": "#020617",
   "background_color": "#020617",
   "orientation": "portrait",
-  "scope": "./"
+  "scope": "/Order_System/"
 }

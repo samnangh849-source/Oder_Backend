@@ -7,18 +7,24 @@
     <title>កម្មវិធីទម្លាក់ការកម្មង់</title>
     
     <!-- PWA Manifest -->
-    <link rel="manifest" href="./manifest.json">
+    <link rel="manifest" href="/Order_System/manifest.json">
     
     <!-- iOS Support for Standalone Mode -->
-    <meta name="mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
     <meta name="apple-mobile-web-app-title" content="O-System">
+    
+    <!-- Apple Touch Icons -->
+    <link rel="apple-touch-icon" href="https://lh3.googleusercontent.com/d/1vb9IG8wn31LDYtUKLurm6cMow0MI4Tee">
+    <link rel="apple-touch-icon" sizes="152x152" href="https://lh3.googleusercontent.com/d/1vb9IG8wn31LDYtUKLurm6cMow0MI4Tee">
+    <link rel="apple-touch-icon" sizes="180x180" href="https://lh3.googleusercontent.com/d/1vb9IG8wn31LDYtUKLurm6cMow0MI4Tee">
+    <link rel="apple-touch-icon" sizes="167x167" href="https://lh3.googleusercontent.com/d/1vb9IG8wn31LDYtUKLurm6cMow0MI4Tee">
     
     <script>
       // Service Worker Registration
       if ('serviceWorker' in navigator) {
         window.addEventListener('load', () => {
-          const basePath = window.location.pathname.includes('/Order_System') ? '/Order_System/' : '/';
+          const basePath = '/Order_System/';
           navigator.serviceWorker.register(basePath + 'sw.js')
             .then(reg => console.log('SW Registered', reg.scope))
             .catch(err => console.error('SW Registration Failed:', err));
@@ -31,7 +37,6 @@
 
     <!-- Icons Configuration for iOS & Android -->
     <link rel="icon" type="image/png" href="https://lh3.googleusercontent.com/d/1vb9IG8wn31LDYtUKLurm6cMow0MI4Tee">
-    <link rel="apple-touch-icon" sizes="180x180" href="https://lh3.googleusercontent.com/d/1vb9IG8wn31LDYtUKLurm6cMow0MI4Tee">
 
     <!-- MapLibre GL CSS & JS -->
     <link href="https://unpkg.com/maplibre-gl@4.7.1/dist/maplibre-gl.css" rel="stylesheet" />

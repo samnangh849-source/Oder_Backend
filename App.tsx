@@ -26,6 +26,7 @@ import DeliveryAgentView from './components/orders/DeliveryAgentView';
 import NotificationStack from './components/common/NotificationStack';
 
 import ImpersonationBanner from './components/common/ImpersonationBanner';
+import PWAInstallPrompt from './components/common/PWAInstallPrompt';
 import { AppContext, AdvancedSettings } from './context/AppContext';
 import { UIProvider, useUI } from './context/UIContext';
 import { UserProvider, useUser } from './context/UserContext';
@@ -682,6 +683,8 @@ const AppContent: React.FC = () => {
                     {advancedSettings.enableFloatingAlerts && (
                         <NotificationStack notifications={notifications} onRemove={removeNotification} />
                     )}
+
+                    <PWAInstallPrompt />
 
                     {previewImageUrl && (
                         <Modal isOpen={true} onClose={() => setPreviewImageUrl(null)} maxWidth="max-w-5xl" zIndex="z-[300]">
