@@ -10,6 +10,7 @@ import { CacheService, CACHE_KEYS } from '../../../services/cacheService';
 import { compressImage } from '../../../utils/imageCompressor';
 import { translations } from '../../../translations';
 import SelectFilter from '../../orders/filters/SelectFilter';
+import { removeBackground } from '@imgly/background-removal';
 
 interface ConfigEditModalProps {
     section: ConfigSection;
@@ -27,6 +28,14 @@ const ConfigEditModal: React.FC<ConfigEditModalProps> = ({ section, item, onClos
     const [error, setError] = useState('');
     const fileInputRefs = useRef<Record<string, HTMLInputElement | null>>({});
     const [passwordVisibility, setPasswordVisibility] = useState<Record<string, boolean>>({});
+
+    // Cropping State
+    const [cropModal, setCropModal] = useState<{ isOpen: boolean; fieldName: string; src: string | null; fileName: string }>({
+        isOpen: false,
+        fieldName: '',
+        src: null,
+        fileName: ''
+    });
 
     useEffect(() => {
         if (item) {
@@ -84,10 +93,32 @@ const ConfigEditModal: React.FC<ConfigEditModalProps> = ({ section, item, onClos
 
     const handleImageUpload = async (fieldName: string, file: File) => {
         if (!file) return;
+        
+        // Validate file type
+        const validTypes = ['image/jpeg', 'image/png', 'image/webp'];
+        if (!validTypes.includes(file.type)) {
+            setError('សូមជ្រើសរើសប្រភេទរូបភាព PNG, JPG ឬ Webp');
+            return;
+        }
+
+        const reader = new FileReader();
+        reader.onload = () => {
+            setCropModal({
+                isOpen: true,
+                fieldName,
+                src: reader.result as string,
+                fileName: file.name
+            });
+        };
+        reader.readAsDataURL(file);
+    };
+
+    const handleCroppedImage = async (fieldName: string, croppedBlob: Blob, fileName: string) => {
         setUploadingFields(prev => ({ ...prev, [fieldName]: true }));
+        setCropModal({ isOpen: false, fieldName: '', src: null, fileName: '' });
+        
         try {
-            const compressedBlob = await compressImage(file, 'balanced');
-            const base64Data = await fileToBase64(compressedBlob);
+            const base64Data = await fileToBase64(croppedBlob);
             const token = localStorage.getItem('token');
             
             const response = await fetch(`${WEB_APP_URL}/api/upload-image`, {
@@ -98,8 +129,8 @@ const ConfigEditModal: React.FC<ConfigEditModalProps> = ({ section, item, onClos
                 },
                 body: JSON.stringify({ 
                     fileData: base64Data, 
-                    fileName: file.name, 
-                    mimeType: compressedBlob.type,
+                    fileName: fileName, 
+                    mimeType: croppedBlob.type,
                     sheetName: section.sheetName,
                     primaryKey: item ? { [section.primaryKeyField]: item[section.primaryKeyField] } : undefined,
                     targetColumn: fieldName
@@ -110,7 +141,11 @@ const ConfigEditModal: React.FC<ConfigEditModalProps> = ({ section, item, onClos
             
             const finalUrl = result.url;
             setFormData((prev: any) => ({ ...prev, [fieldName]: finalUrl }));
-        } catch (err: any) { setError(err.message); } finally { setUploadingFields(prev => ({ ...prev, [fieldName]: false })); }
+        } catch (err: any) { 
+            setError(err.message); 
+        } finally { 
+            setUploadingFields(prev => ({ ...prev, [fieldName]: false })); 
+        }
     };
     
     // Fields that are always optional (never block save)
@@ -188,15 +223,63 @@ const ConfigEditModal: React.FC<ConfigEditModalProps> = ({ section, item, onClos
             </button>
         );
         if (field.type === 'image_url') return (
-            <div className="space-y-2">
-                <div className="flex items-center gap-2">
-                    <input type="text" name={field.name} value={formData[field.name] || ''} onChange={handleChange} placeholder={field.placeholder || "Link ឬ Upload រូបភាព"} className="form-input flex-grow !py-3 !px-4 text-sm" />
-                    <input type="file" accept="image/*" ref={el => { fileInputRefs.current[field.name] = el; }} onChange={(e) => e.target.files && handleImageUpload(field.name, e.target.files[0])} className="hidden" />
-                    <button type="button" onClick={() => fileInputRefs.current[field.name]?.click()} className="w-10 h-10 bg-[#2b3139] text-[#848e9c] rounded-xl border border-[#3d4451] hover:border-[#fcd535]/40 hover:text-[#fcd535] transition-all flex-shrink-0 flex items-center justify-center" disabled={uploadingFields[field.name]}>
-                        {uploadingFields[field.name] ? <Spinner size="sm" /> : <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h14a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" /></svg>}
+            <div className="space-y-4">
+                <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-4">
+                    <div className="relative flex-grow group">
+                        <div className="absolute inset-y-0 left-4 flex items-center pointer-events-none text-gray-500 group-focus-within:text-[#fcd535] transition-colors">
+                            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13.828 10.172a4 4 0 00-5.656 0l-4 4a4 4 0 105.656 5.656l1.102-1.101m-.758-4.826L10.242 9.172a4 4 0 015.656 0l4 4a4 4 0 01-5.656 5.656l-1.102 1.101m-.758-4.826l1.281 1.281" /></svg>
+                        </div>
+                        <input 
+                            type="text" 
+                            name={field.name} 
+                            value={formData[field.name] || ''} 
+                            onChange={handleChange} 
+                            placeholder={field.placeholder || "Paste image URL or Upload"} 
+                            className="form-input !py-3.5 !pl-11 !pr-4 text-sm w-full bg-[#0B0E11] border-[#2B3139] hover:border-[#3D4451] focus:border-[#fcd535]/50 transition-all rounded-sm" 
+                        />
+                    </div>
+                    
+                    <input 
+                        type="file" 
+                        accept="image/png, image/jpeg, image/webp" 
+                        ref={el => { fileInputRefs.current[field.name] = el; }} 
+                        onChange={(e) => e.target.files && handleImageUpload(field.name, e.target.files[0])} 
+                        className="hidden" 
+                    />
+                    
+                    <button 
+                        type="button" 
+                        onClick={() => fileInputRefs.current[field.name]?.click()} 
+                        className="h-12 px-6 bg-[#2b3139] text-[#848e9c] rounded-sm border border-[#3d4451] hover:border-[#fcd535]/40 hover:text-[#fcd535] transition-all flex items-center justify-center gap-2 font-black text-[10px] uppercase tracking-widest whitespace-nowrap" 
+                        disabled={uploadingFields[field.name]}
+                    >
+                        {uploadingFields[field.name] ? <Spinner size="sm" /> : (
+                            <>
+                                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h14a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" /></svg>
+                                Upload Image
+                            </>
+                        )}
                     </button>
                 </div>
-                {formData[field.name] && <img src={convertGoogleDriveUrl(formData[field.name])} className="w-16 h-16 rounded-xl object-cover bg-[#1e2329] border border-[#2b3139]" alt="preview" />}
+
+                {formData[field.name] && (
+                    <div className="relative group w-40 h-40">
+                        <img 
+                            src={convertGoogleDriveUrl(formData[field.name])} 
+                            className="w-full h-full rounded-sm object-cover bg-[#0B0E11] border border-[#2b3139] shadow-2xl" 
+                            alt="preview" 
+                        />
+                        <div className="absolute inset-0 bg-black/60 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center rounded-sm backdrop-blur-[2px]">
+                            <button 
+                                type="button"
+                                onClick={() => setFormData((prev: any) => ({ ...prev, [field.name]: '' }))}
+                                className="p-2 bg-red-500/20 text-red-500 rounded-sm hover:bg-red-500 hover:text-white transition-all"
+                            >
+                                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg>
+                            </button>
+                        </div>
+                    </div>
+                )}
             </div>
         );
         if (field.type === 'password') return (
@@ -388,27 +471,306 @@ const ConfigEditModal: React.FC<ConfigEditModalProps> = ({ section, item, onClos
     }
 
     // ─── GENERIC form (all other sections) ─────────────────────────────────
+    const isProductSection = section.id === 'products';
+
     return (
-        <Modal isOpen={true} onClose={onClose} maxWidth="max-w-2xl">
-            <div className="p-8 flex flex-col h-full">
-                <div className="flex justify-between items-center mb-8 relative z-10">
-                    <div className="flex items-center gap-4">
-                        <div className="w-1.5 h-8 bg-blue-600 rounded-full shadow-[0_0_15px_rgba(37,99,235,0.4)]"></div>
-                        <h2 className="text-2xl font-black text-white uppercase tracking-tighter italic">{(item ? 'កែសម្រួល' : 'បន្ថែម')} {section.title}</h2>
-                    </div>
-                    <button onClick={onClose} className="w-10 h-10 bg-white/5 rounded-xl flex items-center justify-center text-gray-500 hover:text-white transition-all active:scale-90 border border-white/5 hover:bg-white/10 shadow-lg">
-                        <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M6 18L18 6M6 6l12 12" /></svg>
-                    </button>
-                </div>
-                <div className="space-y-6 max-h-[60vh] overflow-y-auto pr-4 custom-scrollbar flex-grow">
-                    {section.fields.map(field => (
-                        <div key={field.name} className="space-y-2">
-                            <label className="block text-[10px] font-black text-gray-500 uppercase tracking-[0.2em] ml-2">{t[`field_${field.name}`] || field.label}</label>
-                            {renderField(field)}
+        <Modal isOpen={true} onClose={onClose} maxWidth={isProductSection ? "" : "max-w-2xl"} fullScreen={isProductSection}>
+            <div className={`flex flex-col h-full ${isProductSection ? 'bg-[#0B0E11]' : 'p-8'}`}>
+                {isProductSection ? (
+                    // ── Full Screen Header for Products ──
+                    <div className="flex-shrink-0 flex items-center justify-between px-6 py-4 border-b border-[#2b3139] bg-[#181A20]">
+                        <div className="flex items-center gap-3">
+                            <div className="w-1.5 h-6 bg-[#fcd535] rounded-full" />
+                            <div>
+                                <h2 className="text-xl font-black text-white uppercase tracking-wider">
+                                    {item ? 'កែសម្រួល' : 'បន្ថែម'} {section.title}
+                                </h2>
+                                <p className="text-[11px] text-[#5e6673] font-bold mt-0.5 uppercase tracking-widest">Product Management Matrix</p>
+                            </div>
                         </div>
-                    ))}
+                        <div className="flex items-center gap-4">
+                            <button onClick={onClose} className="px-6 py-2.5 text-[#848e9c] hover:text-white font-black text-xs uppercase tracking-widest transition-colors">បោះបង់</button>
+                            <button onClick={handleSave} disabled={isLoading} className="px-8 py-2.5 bg-[#fcd535] text-black rounded-sm font-black text-xs uppercase tracking-widest hover:bg-[#f0c832] transition-all active:scale-95 disabled:opacity-60 flex items-center gap-2">
+                                {isLoading ? <Spinner size="sm" /> : null} រក្សាទុក
+                            </button>
+                        </div>
+                    </div>
+                ) : (
+                    <div className="flex justify-between items-center mb-8 relative z-10">
+                        <div className="flex items-center gap-4">
+                            <div className="w-1.5 h-8 bg-blue-600 rounded-full shadow-[0_0_15px_rgba(37,99,235,0.4)]"></div>
+                            <h2 className="text-2xl font-black text-white uppercase tracking-tighter italic">{(item ? 'កែសម្រួល' : 'បន្ថែម')} {section.title}</h2>
+                        </div>
+                        <button onClick={onClose} className="w-10 h-10 bg-white/5 rounded-xl flex items-center justify-center text-gray-500 hover:text-white transition-all active:scale-90 border border-white/5 hover:bg-white/10 shadow-lg">
+                            <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M6 18L18 6M6 6l12 12" /></svg>
+                        </button>
+                    </div>
+                )}
+
+                <div className={`flex-grow overflow-y-auto no-scrollbar ${isProductSection ? 'p-6 bg-[#0B0E11]' : 'pr-4 custom-scrollbar'}`}>
+                    <div className={isProductSection ? "grid grid-cols-1 md:grid-cols-2 gap-8 max-w-6xl mx-auto" : "space-y-6"}>
+                        {section.fields.map(field => (
+                            <div key={field.name} className={`space-y-2 ${isProductSection && field.type === 'image_url' ? 'md:col-span-2 bg-[#181A20] p-6 rounded-sm border border-[#2b3139]' : ''}`}>
+                                <label className="block text-[10px] font-black text-gray-500 uppercase tracking-[0.2em] ml-2">
+                                    {t[`field_${field.name}`] || field.label}
+                                </label>
+                                {renderField(field)}
+                            </div>
+                        ))}
+                    </div>
                 </div>
-                {renderFooter()}
+                
+                {!isProductSection && renderFooter()}
+            </div>
+            {cropModal.isOpen && cropModal.src && (
+                <ImageCropperModal 
+                    isOpen={cropModal.isOpen}
+                    src={cropModal.src}
+                    onClose={() => setCropModal({ isOpen: false, fieldName: '', src: null, fileName: '' })}
+                    onCrop={(blob) => handleCroppedImage(cropModal.fieldName, blob, cropModal.fileName)}
+                />
+            )}
+        </Modal>
+    );
+};
+
+// ─── Internal Image Cropper Component ──────────────────────────────────
+const ImageCropperModal: React.FC<{
+    isOpen: boolean;
+    src: string;
+    onClose: () => void;
+    onCrop: (blob: Blob) => void;
+}> = ({ isOpen, src: initialSrc, onClose, onCrop }) => {
+    const canvasRef = useRef<HTMLCanvasElement>(null);
+    const imgRef = useRef<HTMLImageElement>(null);
+    const [isProcessing, setIsProcessing] = useState(false);
+    const [currentSrc, setCurrentSrc] = useState(initialSrc);
+    const [isRemovingBg, setIsRemovingBg] = useState(false);
+    
+    // Crop state in percent (%) for responsiveness
+    const [crop, setCrop] = useState({ x: 10, y: 10, width: 80, height: 80 }); 
+    const [isDragging, setIsDragging] = useState(false);
+    const [isResizing, setIsResizing] = useState(false);
+    const [resizeCorner, setResizeCorner] = useState<string | null>(null);
+    const [dragStart, setDragStart] = useState({ x: 0, y: 0 });
+
+    // Initialize crop to 1:1 square in center
+    useEffect(() => {
+        if (!isOpen) return;
+        const img = new Image();
+        img.src = currentSrc;
+        img.onload = () => {
+            const aspect = img.width / img.height;
+            if (aspect > 1) {
+                const w = (1 / aspect) * 80;
+                setCrop({ x: (100 - w) / 2, y: 10, width: w, height: 80 });
+            } else {
+                const h = aspect * 80;
+                setCrop({ x: 10, y: (100 - h) / 2, width: 80, height: h });
+            }
+        };
+    }, [isOpen, currentSrc]);
+
+    const handleMouseMove = (e: React.MouseEvent) => {
+        if (!isDragging && !isResizing) return;
+        if (!imgRef.current) return;
+
+        const img = imgRef.current;
+        const dx = ((e.clientX - dragStart.x) / img.clientWidth) * 100;
+        const dy = ((e.clientY - dragStart.y) / img.clientHeight) * 100;
+
+        if (isDragging) {
+            setCrop(prev => ({
+                ...prev,
+                x: Math.max(0, Math.min(100 - prev.width, prev.x + dx)),
+                y: Math.max(0, Math.min(100 - prev.height, prev.y + dy))
+            }));
+        } else if (isResizing && resizeCorner) {
+            // Use larger delta for 1:1 scaling
+            let delta = Math.abs(dx) > Math.abs(dy) ? dx : dy;
+            
+            setCrop(prev => {
+                let newWidth = prev.width;
+                let newX = prev.x;
+                let newY = prev.y;
+
+                if (resizeCorner === 'se') {
+                    newWidth = Math.max(10, Math.min(100 - prev.x, 100 - prev.y, prev.width + delta));
+                } else if (resizeCorner === 'nw') {
+                    const change = Math.max(-prev.x, -prev.y, Math.min(prev.width - 10, delta));
+                    newWidth = prev.width - change;
+                    newX = prev.x + change;
+                    newY = prev.y + change;
+                } else if (resizeCorner === 'ne') {
+                    const change = Math.max(-(100 - (prev.x + prev.width)), -prev.y, Math.min(prev.width - 10, -delta));
+                    newWidth = prev.width + change;
+                    newY = prev.y - change;
+                } else if (resizeCorner === 'sw') {
+                    const change = Math.max(-prev.x, -(100 - (prev.y + prev.width)), Math.min(prev.width - 10, delta));
+                    newWidth = prev.width - change;
+                    newX = prev.x + change;
+                }
+
+                return { ...prev, x: newX, y: newY, width: newWidth, height: newWidth };
+            });
+        }
+        setDragStart({ x: e.clientX, y: e.clientY });
+    };
+
+    const handleCrop = () => {
+        if (!canvasRef.current || !imgRef.current) return;
+        setIsProcessing(true);
+        const canvas = canvasRef.current;
+        const ctx = canvas.getContext('2d');
+        if (!ctx) return;
+
+        const img = imgRef.current;
+        const x = (crop.x / 100) * img.naturalWidth;
+        const y = (crop.y / 100) * img.naturalHeight;
+        const w = (crop.width / 100) * img.naturalWidth;
+        const h = (crop.height / 100) * img.naturalHeight;
+        
+        canvas.width = 1024;
+        canvas.height = 1024;
+        
+        ctx.imageSmoothingEnabled = true;
+        ctx.imageSmoothingQuality = 'high';
+        ctx.drawImage(img, x, y, w, h, 0, 0, 1024, 1024);
+        
+        canvas.toBlob((blob) => {
+            if (blob) onCrop(blob);
+            setIsProcessing(false);
+        }, 'image/webp', 0.85);
+    };
+
+    const handleRemoveBackground = async () => {
+        if (isRemovingBg) return;
+        setIsRemovingBg(true);
+        try {
+            const resultBlob = await removeBackground(currentSrc);
+            const reader = new FileReader();
+            reader.onloadend = () => {
+                setCurrentSrc(reader.result as string);
+                setIsRemovingBg(false);
+            };
+            reader.readAsDataURL(resultBlob);
+        } catch (error) {
+            console.error("Failed to remove background:", error);
+            alert("មិនអាចលុបផ្ទៃខាងក្រោយបានទេ សូមព្យាយាមម្តងទៀត។");
+            setIsRemovingBg(false);
+        }
+    };
+
+    if (!isOpen) return null;
+
+    return (
+        <Modal isOpen={isOpen} onClose={onClose} maxWidth="max-w-3xl" zIndex="z-[200]">
+            <div className="flex flex-col h-full bg-[#0B0E11]">
+                <div className="flex-shrink-0 flex items-center justify-between px-6 py-4 border-b border-[#2b3139] bg-[#181A20]">
+                    <div className="flex items-center gap-3">
+                        <div className="w-1.5 h-6 bg-[#fcd535] rounded-full" />
+                        <h3 className="text-sm font-black text-white uppercase tracking-widest">កែសម្រួលរូបភាព (1:1 Aspect Ratio)</h3>
+                    </div>
+                    <button onClick={onClose} className="p-2 text-gray-500 hover:text-white transition-colors"><svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" /></svg></button>
+                </div>
+
+                <div 
+                    className="flex-grow flex items-center justify-center p-8 bg-black/40 relative overflow-hidden"
+                    onMouseMove={handleMouseMove}
+                    onMouseUp={() => { setIsDragging(false); setIsResizing(false); setResizeCorner(null); }}
+                    onMouseLeave={() => { setIsDragging(false); setIsResizing(false); setResizeCorner(null); }}
+                >
+                    <div className="relative inline-block max-w-full max-h-full shadow-2xl">
+                        <img 
+                            ref={imgRef}
+                            src={currentSrc} 
+                            className="max-w-full max-h-[65vh] block select-none pointer-events-none" 
+                            alt="To crop"
+                        />
+                        {/* Crop Overlay */}
+                        <div 
+                            className="absolute border-2 border-[#fcd535] shadow-[0_0_0_9999px_rgba(0,0,0,0.6)] cursor-move"
+                            style={{
+                                left: `${crop.x}%`,
+                                top: `${crop.y}%`,
+                                width: `${crop.width}%`,
+                                height: `${crop.height}%`
+                            }}
+                            onMouseDown={(e) => {
+                                if ((e.target as HTMLElement).hasAttribute('data-handle')) return;
+                                setIsDragging(true);
+                                setDragStart({ x: e.clientX, y: e.clientY });
+                            }}
+                        >
+                            {/* Visual Guides */}
+                            <div className="absolute inset-0 grid grid-cols-3 grid-rows-3 opacity-20 pointer-events-none">
+                                <div className="border-r border-b border-white"></div>
+                                <div className="border-r border-b border-white"></div>
+                                <div className="border-b border-white"></div>
+                                <div className="border-r border-b border-white"></div>
+                                <div className="border-r border-b border-white"></div>
+                                <div className="border-b border-white"></div>
+                                <div className="border-r border-white"></div>
+                                <div className="border-r border-white"></div>
+                                <div></div>
+                            </div>
+                            
+                            {/* Resize Handles (Corners) */}
+                            <div 
+                                data-handle="nw"
+                                className="absolute -top-2 -left-2 w-4 h-4 bg-[#fcd535] rounded-full cursor-nw-resize z-10 border-2 border-black"
+                                onMouseDown={(e) => { e.stopPropagation(); setIsResizing(true); setResizeCorner('nw'); setDragStart({ x: e.clientX, y: e.clientY }); }}
+                            ></div>
+                            <div 
+                                data-handle="ne"
+                                className="absolute -top-2 -right-2 w-4 h-4 bg-[#fcd535] rounded-full cursor-ne-resize z-10 border-2 border-black"
+                                onMouseDown={(e) => { e.stopPropagation(); setIsResizing(true); setResizeCorner('ne'); setDragStart({ x: e.clientX, y: e.clientY }); }}
+                            ></div>
+                            <div 
+                                data-handle="sw"
+                                className="absolute -bottom-2 -left-2 w-4 h-4 bg-[#fcd535] rounded-full cursor-sw-resize z-10 border-2 border-black"
+                                onMouseDown={(e) => { e.stopPropagation(); setIsResizing(true); setResizeCorner('sw'); setDragStart({ x: e.clientX, y: e.clientY }); }}
+                            ></div>
+                            <div 
+                                data-handle="se"
+                                className="absolute -bottom-2 -right-2 w-4 h-4 bg-[#fcd535] rounded-full cursor-se-resize z-10 border-2 border-black"
+                                onMouseDown={(e) => { e.stopPropagation(); setIsResizing(true); setResizeCorner('se'); setDragStart({ x: e.clientX, y: e.clientY }); }}
+                            ></div>
+                        </div>
+                    </div>
+                    
+                    {/* Event Overlay for dragging/resizing state */}
+                    {(isDragging || isResizing) && <div className="fixed inset-0 z-[300] cursor-move"></div>}
+                </div>
+
+                <div className="flex-shrink-0 p-6 bg-[#181A20] border-t border-[#2b3139] flex flex-col sm:flex-row gap-4">
+                    <div className="flex-grow">
+                        <p className="text-[10px] font-bold text-gray-500 uppercase tracking-widest mb-1">Instruction</p>
+                        <p className="text-xs text-gray-400">អូសប្រអប់ពណ៌លឿងដើម្បីរំកិល និងអូសជ្រុងទាំង៤ ដើម្បីពង្រីក/ពង្រួមទំហំ។</p>
+                    </div>
+                    <div className="flex gap-3">
+                        <button 
+                            onClick={handleRemoveBackground} 
+                            disabled={isRemovingBg || isProcessing}
+                            className="px-4 py-2.5 bg-purple-600/20 text-purple-400 border border-purple-600/30 rounded-sm font-black text-[10px] uppercase tracking-widest hover:bg-purple-600 hover:text-white transition-all flex items-center gap-2"
+                        >
+                            {isRemovingBg ? <Spinner size="sm" /> : (
+                                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 11l-8.485 8.485a2 2 0 01-2.828 0l-4.243-4.243a2 2 0 010-2.828L11.929 3.93a2 2 0 012.828 0l4.243 4.243a2 2 0 010 2.828z" /><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 3L3 13" /></svg>
+                            )}
+                            លុប Background
+                        </button>
+                        <button onClick={onClose} className="px-6 py-2.5 text-[#848e9c] hover:text-white font-black text-xs uppercase tracking-widest transition-colors">បោះបង់</button>
+                        <button 
+                            onClick={handleCrop} 
+                            disabled={isProcessing || isRemovingBg}
+                            className="px-10 py-2.5 bg-[#fcd535] text-black rounded-sm font-black text-xs uppercase tracking-widest hover:bg-[#f0c832] transition-all active:scale-95 disabled:opacity-50 flex items-center gap-2"
+                        >
+                            {isProcessing ? <Spinner size="sm" /> : null}
+                            យល់ព្រម (Crop & Upload)
+                        </button>
+                    </div>
+                </div>
+                <canvas ref={canvasRef} className="hidden" />
             </div>
         </Modal>
     );
