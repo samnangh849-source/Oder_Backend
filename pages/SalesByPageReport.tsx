@@ -155,7 +155,7 @@ const SalesByPageReport: React.FC<SalesByPageReportProps> = ({
 
         orders.forEach(o => {
             const fs = o.FulfillmentStatus || o['Fulfillment Status'] || 'Pending';
-            if (fs === 'Cancelled') return;
+            if (fs === 'Cancelled' || fs === 'Returned') return;
 
             const page = o.Page || 'Unknown';
             if (stats[page]) {

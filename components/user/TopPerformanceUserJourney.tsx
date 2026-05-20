@@ -68,6 +68,9 @@ const TopPerformanceUserJourney: React.FC<TopPerformanceUserJourneyProps> = ({ o
     const topDrivers = useMemo(() => {
         const driverStats: Record<string, number> = {};
         filteredOrders.forEach(o => {
+            const fs = o.FulfillmentStatus || o['Fulfillment Status'] || 'Pending';
+            if (fs === 'Cancelled' || fs === 'Returned') return;
+
             // Priority: 'Driver Name' > 'Internal Shipping Details'
             const dName = o['Driver Name'] || o['Internal Shipping Details'] || o.InternalShippingDetails || o['Internal Shipping Method'] || '';
             
