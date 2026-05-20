@@ -47,32 +47,39 @@ const DashboardOverview: React.FC<DashboardOverviewProps> = ({
 
     const getOrderDate = (o: ParsedOrder) => new Date(o.Timestamp);
     
-    const filteredMetricsOrders = parsedOrders.filter(o => {
-        if (!o.Timestamp) return false;
-        const d = getOrderDate(o);
-        const now = new Date();
-        const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
-        
-        if (dateFilter.preset === 'today') {
-            return d.toDateString() === now.toDateString();
-        } else if (dateFilter.preset === 'this_week') {
-            const day = now.getDay();
-            const start = new Date(today);
-            start.setDate(today.getDate() - (day === 0 ? 6 : day - 1));
-            const end = new Date(start);
-            end.setDate(start.getDate() + 6);
-            end.setHours(23, 59, 59);
-            return d >= start && d <= end;
-        } else if (dateFilter.preset === 'this_month') {
-            return d.getMonth() === now.getMonth() && d.getFullYear() === now.getFullYear();
-        } else if (dateFilter.preset === 'custom') {
-            const start = dateFilter.start ? new Date(dateFilter.start + 'T00:00:00') : null;
-            const end = dateFilter.end ? new Date(dateFilter.end + 'T23:59:59') : null;
-            if (start && d < start) return false;
-            if (end && d > end) return false;
-            return true;
-        }
-        return true; // Fallback
+    const filteredMetricsOrders = useMemo(() => {
+        return parsedOrders.filter(o => {
+            if (!o.Timestamp) return false;
+
+            // Exclude Cancelled and Returned orders from dashboard metrics
+            const fs = o.FulfillmentStatus || (o as any)['Fulfillment Status'] || 'Pending';
+            if (fs === 'Cancelled' || fs === 'Returned') return false;
+
+            const d = getOrderDate(o);
+            const now = new Date();
+            const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+            
+            if (dateFilter.preset === 'today') {
+                return d.toDateString() === now.toDateString();
+            } else if (dateFilter.preset === 'this_week') {
+                const day = now.getDay();
+                const start = new Date(today);
+                start.setDate(today.getDate() - (day === 0 ? 6 : day - 1));
+                const end = new Date(start);
+                end.setDate(start.getDate() + 6);
+                end.setHours(23, 59, 59);
+                return d >= start && d <= end;
+            } else if (dateFilter.preset === 'this_month') {
+                return d.getMonth() === now.getMonth() && d.getFullYear() === now.getFullYear();
+            } else if (dateFilter.preset === 'custom') {
+                const start = dateFilter.start ? new Date(dateFilter.start + 'T00:00:00') : null;
+                const end = dateFilter.end ? new Date(dateFilter.end + 'T23:59:59') : null;
+                if (start && d < start) return false;
+                if (end && d > end) return false;
+                return true;
+            }
+            return true; // Fallback
+        });
     }, [parsedOrders, dateFilter, refreshTimestamp]);
 
     const metrics = {

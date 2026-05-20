@@ -10,10 +10,12 @@ export const useOrderTotals = (orders: ParsedOrder[]) => {
         return orders.reduce((acc, curr) => {
             const fs = curr.FulfillmentStatus || curr['Fulfillment Status'] || 'Pending';
             const isCancelled = fs === 'Cancelled';
+            const isReturned = fs === 'Returned';
+            const isExcluded = isCancelled || isReturned;
             
             return {
-                grandTotal: acc.grandTotal + (Number(curr['Grand Total']) || 0),
-                internalCost: acc.internalCost + (isCancelled ? 0 : (Number(curr['Internal Cost']) || 0)),
+                grandTotal: acc.grandTotal + (isExcluded ? 0 : (Number(curr['Grand Total']) || 0)),
+                internalCost: acc.internalCost + (isExcluded ? 0 : (Number(curr['Internal Cost']) || 0)),
                 count: acc.count + 1,
                 paidCount: acc.paidCount + (curr['Payment Status'] === 'Paid' ? 1 : 0),
                 unpaidCount: acc.unpaidCount + (curr['Payment Status'] === 'Unpaid' ? 1 : 0)

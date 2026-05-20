@@ -248,7 +248,7 @@ const UserOrdersView: React.FC<UserOrdersViewProps> = ({ onAdd, onStatsUpdate, s
     const filteredMetrics = useMemo(() => {
         return filteredOrders.reduce((acc, curr) => {
             const fs = curr.FulfillmentStatus || curr['Fulfillment Status'] || 'Pending';
-            if (fs === 'Cancelled') return acc;
+            if (fs === 'Cancelled' || fs === 'Returned') return acc;
             
             return {
                 revenue: acc.revenue + (Number(curr['Grand Total']) || 0),

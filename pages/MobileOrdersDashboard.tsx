@@ -85,6 +85,7 @@ const MobileOrdersDashboard: React.FC<MobileOrdersDashboardProps> = ({ onBack, i
             bank: initialFilters?.bank || searchParams.get('bankFilter') || '',
             product: initialFilters?.product || searchParams.get('productFilter') || '',
             customerSearch: initialFilters?.customerSearch || searchParams.get('customerFilter') || '',
+            fulfillmentStatus: initialFilters?.fulfillmentStatus || searchParams.get('fulfillmentFilter') || '',
             isVerified: 'All',
             telegramStatus: ''
         };
@@ -169,6 +170,7 @@ const MobileOrdersDashboard: React.FC<MobileOrdersDashboardProps> = ({ onBack, i
             if (!isMatch(filters.shippingService, order['Internal Shipping Method'])) return false;
             if (!isMatch(filters.driver, order['Internal Shipping Details'])) return false;
             if (!isMatch(filters.bank, order['Payment Info'])) return false;
+            if (!isMatch(filters.fulfillmentStatus, order.FulfillmentStatus)) return false;
 
             if (filters.telegramStatus) {
                 const id1 = order['Telegram Message ID 1'];

@@ -82,6 +82,11 @@ const MobileAdminDashboard: React.FC = () => {
         const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
         return orders.filter(order => {
             if (!order.Timestamp) return false;
+
+            // Exclude Cancelled and Returned orders from stats
+            const fs = order.FulfillmentStatus || (order as any)['Fulfillment Status'] || 'Pending';
+            if (fs === 'Cancelled' || fs === 'Returned') return false;
+
             const d = new Date(order.Timestamp);
             if (dateFilter.preset === 'today') return d.toDateString() === now.toDateString();
             if (dateFilter.preset === 'this_week') {

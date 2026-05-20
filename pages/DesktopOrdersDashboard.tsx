@@ -80,6 +80,7 @@ const DesktopOrdersDashboard: React.FC<DesktopOrdersDashboardProps> = ({ onBack,
             bank: initialFilters?.bank || searchParams.get('bankFilter') || '',
             product: initialFilters?.product || searchParams.get('productFilter') || '',
             customerSearch: initialFilters?.customerSearch || searchParams.get('customerFilter') || '',
+            fulfillmentStatus: initialFilters?.fulfillmentStatus || searchParams.get('fulfillmentFilter') || '',
             isVerified: 'All',
             telegramStatus: ''
         };
@@ -155,6 +156,7 @@ const DesktopOrdersDashboard: React.FC<DesktopOrdersDashboardProps> = ({ onBack,
             if (!isMatch(filters.page, order.Page)) return false;
             if (!isMatch(filters.location, order.Location, true)) return false;
             if (!isMatch(filters.internalCost, String(order['Internal Cost']))) return false;
+            if (!isMatch(filters.fulfillmentStatus, order.FulfillmentStatus)) return false;
             if (filters.customerSearch) {
                 const q = filters.customerSearch.toLowerCase();
                 if (!(order['Customer Name'] || '').toLowerCase().includes(q) && !(order['Customer Phone'] || '').includes(q)) return false;

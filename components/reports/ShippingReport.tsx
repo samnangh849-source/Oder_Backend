@@ -141,7 +141,7 @@ const ShippingReport: React.FC<ShippingReportProps> = ({ orders, appData, dateFi
     const shippingStats = useMemo(() => {
         const activeOrders = filteredOrders.filter(o => {
             const fs = o.FulfillmentStatus || o['Fulfillment Status'] || 'Pending';
-            return fs !== 'Cancelled';
+            return fs !== 'Cancelled' && fs !== 'Returned';
         });
 
         const totalInternalCost = activeOrders.reduce((sum, o) => sum + (Number(o['Internal Cost']) || 0), 0);

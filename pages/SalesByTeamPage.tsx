@@ -38,7 +38,7 @@ const SalesByTeamPage: React.FC<SalesByTeamPageProps> = ({ orders, onBack }) => 
         const stats: Record<string, any> = {};
         orders.forEach(order => {
             const fs = order.FulfillmentStatus || order['Fulfillment Status'] || 'Pending';
-            if (fs === 'Cancelled') return;
+            if (fs === 'Cancelled' || fs === 'Returned') return;
 
             let teamName = order.Team || (order.User && appData.users?.find(u => u.UserName === order.User)?.Team?.split(',')[0].trim()) || 'Unassigned';
             if (!stats[teamName]) {

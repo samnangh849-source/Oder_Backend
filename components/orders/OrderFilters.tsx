@@ -25,6 +25,7 @@ export interface FilterState {
     internalCost: string;
     customerName: string; // New Field
     telegramStatus: string; // Added field
+    fulfillmentStatus: string; // Added field
 }
 
 interface OrderFiltersProps {
@@ -101,7 +102,7 @@ const OrderFilters: React.FC<OrderFiltersProps> = ({
             datePreset: 'this_month', startDate: '', endDate: '', team: '', user: '',
             paymentStatus: '', shippingService: '', driver: '', product: '', bank: '',
             fulfillmentStore: '', store: '', page: '', location: '', internalCost: '',
-            customerName: '', telegramStatus: ''
+            customerName: '', telegramStatus: '', fulfillmentStatus: ''
         });
     };
 
@@ -132,6 +133,24 @@ const OrderFilters: React.FC<OrderFiltersProps> = ({
                     placeholder="Search by Name or Phone..."
                     multiple={true}
                     searchable={true}
+                />
+
+                <SelectFilter 
+                    label="Fulfillment Status (ស្ថានភាពបញ្ជាទិញ)" 
+                    value={filters.fulfillmentStatus} 
+                    onChange={(v) => updateFilter('fulfillmentStatus', v)}
+                    options={[
+                        { label: 'Pending (រង់ចាំ)', value: 'Pending' },
+                        { label: 'Scheduled (បានកំណត់ពេល)', value: 'Scheduled' },
+                        { label: 'Processing (កំពុងរៀបចំ)', value: 'Processing' },
+                        { label: 'Ready to Ship (រួចរាល់សម្រាប់ផ្ញើ)', value: 'Ready to Ship' },
+                        { label: 'Shipped (បានផ្ញើចេញ)', value: 'Shipped' },
+                        { label: 'Delivered (បានប្រគល់)', value: 'Delivered' },
+                        { label: 'Cancelled (បានបោះបង់)', value: 'Cancelled' },
+                        { label: 'Returned (បានបង្វិលវិញ)', value: 'Returned' }
+                    ]}
+                    placeholder="All Fulfillment Status"
+                    multiple={true}
                 />
 
                 <SelectFilter 

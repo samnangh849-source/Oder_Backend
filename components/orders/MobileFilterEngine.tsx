@@ -63,7 +63,7 @@ const MobileFilterEngine: React.FC<MobileFilterEngineProps> = ({
             datePreset: 'this_month', startDate: '', endDate: '', team: '', user: '',
             paymentStatus: '', shippingService: '', driver: '', product: '', bank: '',
             fulfillmentStore: '', store: '', page: '', location: '', internalCost: '',
-            customerName: '', isVerified: 'All'
+            customerName: '', telegramStatus: '', fulfillmentStatus: '', isVerified: 'All'
         } as any);
     };
 
@@ -80,6 +80,7 @@ const MobileFilterEngine: React.FC<MobileFilterEngineProps> = ({
             title: language === 'km' ? 'ប្រតិបត្តិការ និងក្រុម' : 'Operations & Teams',
             items: [
                 { id: 'team', label: language === 'km' ? 'ក្រុម និងអ្នកប្រើប្រាស់' : 'Team & User', icon: <Users size={18} />, value: filters.team || filters.user ? 'Configured' : '' },
+                { id: 'fulfillment', label: language === 'km' ? 'ស្ថានភាពបញ្ជាទិញ' : 'Fulfillment Status', icon: <Check size={18} />, value: filters.fulfillmentStatus },
                 { id: 'telegram', label: language === 'km' ? 'ស្ថានភាព Telegram' : 'Telegram Status', icon: <Package size={18} />, value: filters.telegramStatus },
                 { id: 'payment', label: language === 'km' ? 'ស្ថានភាពបង់ប្រាក់' : 'Payment Status', icon: <CreditCard size={18} />, value: filters.paymentStatus }
             ]
@@ -106,6 +107,7 @@ const MobileFilterEngine: React.FC<MobileFilterEngineProps> = ({
             case 'customer': return filters.customerName ? filters.customerName.split(',').length : 0;
             case 'payment': return filters.paymentStatus ? filters.paymentStatus.split(',').length : 0;
             case 'telegram': return filters.telegramStatus ? filters.telegramStatus.split(',').length : 0;
+            case 'fulfillment': return filters.fulfillmentStatus ? filters.fulfillmentStatus.split(',').length : 0;
             case 'team': return (filters.team ? filters.team.split(',').length : 0) + (filters.user ? filters.user.split(',').length : 0);
             case 'inventory': return filters.fulfillmentStore ? filters.fulfillmentStore.split(',').length : 0;
             case 'location': return filters.location ? filters.location.split(',').length : 0;
@@ -214,6 +216,25 @@ const MobileFilterEngine: React.FC<MobileFilterEngineProps> = ({
                                                 )}
                                                 {cat.id === 'customer' && (
                                                     <SelectFilter label={language === 'km' ? 'ស្វែងរកអតិថិជន' : 'Customer Search'} value={filters.customerName} onChange={v => updateFilter('customerName', v)} options={uniqueValues.customerOptions} multiple={true} isInline={true} />
+                                                )}
+                                                {cat.id === 'fulfillment' && (
+                                                    <SelectFilter 
+                                                        label={language === 'km' ? 'ស្ថានភាពបញ្ជាទិញ' : 'Fulfillment Status'} 
+                                                        value={filters.fulfillmentStatus} 
+                                                        onChange={v => updateFilter('fulfillmentStatus', v)} 
+                                                        options={[
+                                                            { label: 'Pending (រង់ចាំ)', value: 'Pending' },
+                                                            { label: 'Scheduled (បានកំណត់ពេល)', value: 'Scheduled' },
+                                                            { label: 'Processing (កំពុងរៀបចំ)', value: 'Processing' },
+                                                            { label: 'Ready to Ship (រួចរាល់សម្រាប់ផ្ញើ)', value: 'Ready to Ship' },
+                                                            { label: 'Shipped (បានផ្ញើចេញ)', value: 'Shipped' },
+                                                            { label: 'Delivered (បានប្រគល់)', value: 'Delivered' },
+                                                            { label: 'Cancelled (បានបោះបង់)', value: 'Cancelled' },
+                                                            { label: 'Returned (បានបង្វិលវិញ)', value: 'Returned' }
+                                                        ]} 
+                                                        multiple={true} 
+                                                        isInline={true} 
+                                                    />
                                                 )}
                                                 {cat.id === 'telegram' && (
                                                     <SelectFilter 

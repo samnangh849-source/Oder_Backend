@@ -70,6 +70,11 @@ const PerformanceTrackingPage: React.FC<PerformanceTrackingPageProps> = ({ order
 
         return orders.filter(order => {
             if (!order.Timestamp) return false;
+
+            // Exclude Cancelled and Returned orders from performance tracking
+            const fs = order.FulfillmentStatus || (order as any)['Fulfillment Status'] || 'Pending';
+            if (fs === 'Cancelled' || fs === 'Returned') return false;
+
             const orderDate = new Date(order.Timestamp);
             const dateMatch = (!startDate || orderDate >= startDate) && (!endDate || orderDate <= endDate);
             const teamMatch = !filters.team || order.Team === filters.team;

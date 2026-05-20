@@ -56,7 +56,7 @@ const ReportsView: React.FC<ReportsViewProps> = ({ orders, reportType, dateFilte
 
         orders.forEach(o => {
             const fs = o.FulfillmentStatus || o['Fulfillment Status'] || 'Pending';
-            if (fs === 'Cancelled') return;
+            if (fs === 'Cancelled' || fs === 'Returned') return;
 
             const rev = Number(o['Grand Total']) || 0;
             const cost = Number(o['Internal Cost']) || 0;
@@ -89,7 +89,7 @@ const ReportsView: React.FC<ReportsViewProps> = ({ orders, reportType, dateFilte
 
         const activeOrdersCount = orders.filter(o => {
             const fs = o.FulfillmentStatus || o['Fulfillment Status'] || 'Pending';
-            return fs !== 'Cancelled';
+            return fs !== 'Cancelled' && fs !== 'Returned';
         }).length;
 
         const teamStats = Object.values(teamMap).sort((a, b) => b.revenue - a.revenue);
