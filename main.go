@@ -2716,16 +2716,12 @@ func handleSendDeliveryTelegram(c *gin.Context) {
 	}
 
 	// Prepare message
-	text := fmt.Sprintf("📦 *រូបភាពកញ្ចប់បញ្ញើ #%d*\n🏷️ លេខកូដ: `%s`\n🏠 ហាង: *%s*\n🧑‍🔧 អ្នកវេចខ្ចប់: *%s*",
-		dailySeq, order.OrderID, order.FulfillmentStore, order.PackedBy)
+	text := fmt.Sprintf("📦 *រូបភាពកញ្ចប់បញ្ញើ #%d*\n🏷️ លេខកូដ: `%s`",
+		dailySeq, order.OrderID)
 
 	text += fmt.Sprintf("\n\n📱 លេខទូរស័ព្ទ: `%s`", phoneNumber)
 	text += fmt.Sprintf("\n📍 ទីតាំង: *%s*", location)
 	text += fmt.Sprintf("\n🏠 អាស័យដ្ឋាន: _%s_", address)
-
-	if order.InternalShippingMethod != "" {
-		text += fmt.Sprintf("\n\n🚚 ដឹកដោយ: *%s*", order.InternalShippingMethod)
-	}
 
 	apiURL := fmt.Sprintf("https://api.telegram.org/bot%s/sendPhoto", store.TelegramBotToken)
 	payload := map[string]interface{}{
@@ -3010,16 +3006,12 @@ func AddWatermarkAndEditTelegramMedia(order Order, newStatus string) {
 		address = "N/A"
 	}
 
-	caption := fmt.Sprintf("%s\n\n📦 *រូបភាពកញ្ចប់បញ្ញើ #%d*\n🏷️ លេខកូដ: `%s`\n🏠 ហាង: *%s*\n🧑‍🔧 អ្នកវេចខ្ចប់: *%s*",
-		statusIndicator, order.DeliveryDailySequence, order.OrderID, order.FulfillmentStore, order.PackedBy)
+	caption := fmt.Sprintf("%s\n\n📦 *រូបភាពកញ្ចប់បញ្ញើ #%d*\n🏷️ លេខកូដ: `%s`",
+		statusIndicator, order.DeliveryDailySequence, order.OrderID)
 
 	caption += fmt.Sprintf("\n\n📱 លេខទូរស័ព្ទ: `%s`", phoneNumber)
 	caption += fmt.Sprintf("\n📍 ទីតាំង: *%s*", location)
 	caption += fmt.Sprintf("\n🏠 អាស័យដ្ឋាន: _%s_", address)
-
-	if order.InternalShippingMethod != "" {
-		caption += fmt.Sprintf("\n\n🚚 ដឹកដោយ: *%s*", order.InternalShippingMethod)
-	}
 
 	apiURL := fmt.Sprintf("https://api.telegram.org/bot%s/editMessageMedia", store.TelegramBotToken)
 
@@ -3103,19 +3095,15 @@ func AddWatermarkAndEditTelegramMedia(order Order, newStatus string) {
 		address = "N/A"
 	}
 
-	text := fmt.Sprintf("%s📦 *រូបភាពកញ្ចប់បញ្ញើ #%d*\n🏷️ លេខកូដ: `%s`\n🏠 ហាង: *%s*\n🧑‍🔧 អ្នកវេចខ្ចប់: *%s*",
-		statusIndicator, sequence, order.OrderID, order.FulfillmentStore, order.PackedBy)
+	text := fmt.Sprintf("%s📦 *រូបភាពកញ្ចប់បញ្ញើ #%d*\n🏷️ លេខកូដ: `%s`",
+		statusIndicator, sequence, order.OrderID)
 
 	text += fmt.Sprintf("\n\n📱 លេខទូរស័ព្ទ: `%s`", phoneNumber)
 	text += fmt.Sprintf("\n📍 ទីតាំង: *%s*", location)
 	text += fmt.Sprintf("\n🏠 អាស័យដ្ឋាន: _%s_", address)
 
-	if order.InternalShippingMethod != "" {
-		text += fmt.Sprintf("\n\n🚚 ដឹកដោយ: *%s*", order.InternalShippingMethod)
-	}
 	return text
 	}
-
 	func handleDeleteDeliveryTelegram(c *gin.Context) {
 	var r struct {
 		OrderID string `json:"orderId"`
