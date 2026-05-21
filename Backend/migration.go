@@ -445,6 +445,12 @@ func PerformDataMigration() {
 	for _, x := range stores {
 		if x.StoreName != "" && !seenStores[x.StoreName] {
 			seenStores[x.StoreName] = true
+			// Sanitize Telegram settings
+			x.TelegramBotToken = strings.TrimSpace(x.TelegramBotToken)
+			x.TelegramGroupID = strings.TrimSpace(x.TelegramGroupID)
+			x.TelegramTopicID = strings.TrimSpace(x.TelegramTopicID)
+			x.CODAlertGroupID = strings.TrimSpace(x.CODAlertGroupID)
+			
 			validStores = append(validStores, x)
 		}
 	}
@@ -606,8 +612,16 @@ func PerformDataMigration() {
 		broadcastFullSyncComplete(false, "Failed to fetch DeliveryGroups: "+err.Error(), time.Since(startTime).Seconds())
 		return
 	}
-	if len(delGroups) > 0 {
-		if err := tx.CreateInBatches(delGroups, 100).Error; err != nil {
+	var validDelGroups []DeliveryGroup
+	for _, dg := range delGroups {
+		// Sanitize Telegram settings
+		dg.TelegramGroupID = strings.TrimSpace(dg.TelegramGroupID)
+		dg.TelegramTopicID = strings.TrimSpace(dg.TelegramTopicID)
+		validDelGroups = append(validDelGroups, dg)
+	}
+
+	if len(validDelGroups) > 0 {
+		if err := tx.CreateInBatches(validDelGroups, 100).Error; err != nil {
 			tx.Rollback()
 			log.Println("❌ Migration failed to save DeliveryGroups:", err)
 			broadcastFullSyncComplete(false, "Failed to save DeliveryGroups: "+err.Error(), time.Since(startTime).Seconds())
