@@ -144,6 +144,7 @@ func mapToDBColumn(key string) string {
 		"Delivery Photo Sent Count": "delivery_photo_sent_count",
 		"Delivery Telegram Message ID": "delivery_telegram_message_id",
 		"Delivery Daily Sequence":   "delivery_daily_sequence",
+		"Delivery Telegram Date":     "delivery_telegram_date",
 		"Driver Name":             "driver_name",
 		"Tracking Number":         "tracking_number",
 		"Dispatched Time":         "dispatched_time",
@@ -2687,16 +2688,16 @@ func handleSendDeliveryTelegram(c *gin.Context) {
 	todayStr := time.Now().In(ict).Format("2006-01-02")
 	var dailySeq int
 
-	if order.DeliveryDailySequence > 0 && strings.HasPrefix(order.Timestamp, todayStr) {
+	if order.DeliveryDailySequence > 0 && order.DeliveryTelegramDate == todayStr {
 		// If already has a sequence for today, use it (case for resending)
 		dailySeq = order.DeliveryDailySequence
 	} else {
 		// Count orders shipped today with this method to get next sequence
 		var count int64
-		// We count orders that have a package photo and the same shipping method and are from today
+		// We count orders that were sent TODAY for this shipping method
 		backend.DB.Model(&Order{}).
-			Where("internal_shipping_method = ? AND timestamp LIKE ? AND delivery_daily_sequence > 0",
-				order.InternalShippingMethod, todayStr+"%").
+			Where("internal_shipping_method = ? AND delivery_telegram_date = ? AND delivery_daily_sequence > 0",
+				order.InternalShippingMethod, todayStr).
 			Count(&count)
 		dailySeq = int(count) + 1
 	}
@@ -2777,6 +2778,7 @@ func handleSendDeliveryTelegram(c *gin.Context) {
 		"delivery_photo_sent_count":    newCount,
 		"delivery_telegram_message_id": messageID,
 		"delivery_daily_sequence":      dailySeq,
+		"delivery_telegram_date":       todayStr,
 	}).Error; err != nil {
 		log.Printf("❌ [Telegram Delivery] DB Update Error: %v", err)
 	}
@@ -2786,6 +2788,7 @@ func handleSendDeliveryTelegram(c *gin.Context) {
 		"Delivery Photo Sent Count":    newCount,
 		"Delivery Telegram Message ID": messageID,
 		"Delivery Daily Sequence":      dailySeq,
+		"Delivery Telegram Date":       todayStr,
 	}, "AllOrders", map[string]string{"Order ID": order.OrderID})
 
 	// Trigger WebSocket Broadcast - Use the standard structure
@@ -2796,6 +2799,7 @@ func handleSendDeliveryTelegram(c *gin.Context) {
 			"Delivery Photo Sent Count":    newCount,
 			"Delivery Telegram Message ID": messageID,
 			"Delivery Daily Sequence":      dailySeq,
+			"Delivery Telegram Date":       todayStr,
 		},
 	})
 	hub.Broadcast <- eventBytes
@@ -3164,8 +3168,6 @@ func AddWatermarkAndEditTelegramMedia(order Order, newStatus string) {
 
 	// 2. Clean up current order
 	deletedSeq := order.DeliveryDailySequence
-	ict := time.FixedZone("ICT", 7*3600)
-	todayStr := time.Now().In(ict).Format("2006-01-02")
 
 	backend.DB.Model(&order).Updates(map[string]interface{}{
 		"delivery_telegram_message_id": "",
@@ -3190,10 +3192,10 @@ func AddWatermarkAndEditTelegramMedia(order Order, newStatus string) {
 	hub.Broadcast <- eventBytes
 
 	// 3. Re-sequence subsequent orders
-	if deletedSeq > 0 && strings.HasPrefix(order.Timestamp, todayStr) {
+	if deletedSeq > 0 && order.DeliveryTelegramDate != "" {
 		var subsequentOrders []Order
-		backend.DB.Where("internal_shipping_method = ? AND timestamp LIKE ? AND delivery_daily_sequence > ?",
-			order.InternalShippingMethod, todayStr+"%", deletedSeq).
+		backend.DB.Where("internal_shipping_method = ? AND delivery_telegram_date = ? AND delivery_daily_sequence > ?",
+			order.InternalShippingMethod, order.DeliveryTelegramDate, deletedSeq).
 			Order("delivery_daily_sequence ASC").
 			Find(&subsequentOrders)
 
