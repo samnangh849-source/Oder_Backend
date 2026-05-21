@@ -51,11 +51,13 @@ type Store struct {
 	StoreName        string `gorm:"primaryKey;column:store_name" json:"StoreName"`
 	StoreType        string `gorm:"column:store_type" json:"StoreType"`
 	Address          string `gorm:"column:address" json:"Address"`
-	TelegramBotToken string `gorm:"column:telegram_bot_token" json:"TelegramBotToken"`
-	TelegramGroupID  string `gorm:"column:telegram_group_id" json:"TelegramGroupID"`
-	TelegramTopicID  string `gorm:"column:telegram_topic_id" json:"TelegramTopicID"`
-	LabelPrinterURL  string `gorm:"column:label_printer_url" json:"LabelPrinterURL"`
-	CODAlertGroupID  string `gorm:"column:cod_alert_group_id" json:"CODAlertGroupID"`
+	TelegramBotToken        string `gorm:"column:telegram_bot_token" json:"TelegramBotToken"`
+	TelegramGroupID         string `gorm:"column:telegram_group_id" json:"TelegramGroupID"`
+	TelegramTopicID         string `gorm:"column:telegram_topic_id" json:"TelegramTopicID"`
+	LabelPrinterURL         string `gorm:"column:label_printer_url" json:"LabelPrinterURL"`
+	CODAlertGroupID         string `gorm:"column:cod_alert_group_id" json:"CODAlertGroupID"`
+	DeliveryTelegramGroupID string `gorm:"column:delivery_telegram_group_id" json:"DeliveryTelegramGroupID"`
+	DeliveryTelegramTopicID string `gorm:"column:delivery_telegram_topic_id" json:"DeliveryTelegramTopicID"`
 }
 
 type Setting struct {
@@ -252,6 +254,8 @@ type Order struct {
 	ReturnPhotoURL          string  `gorm:"column:return_photo_url" json:"Return Photo"`
 	ReturnReceivedBy        string  `gorm:"column:return_received_by" json:"Return Received By"`
 	ReturnReceivedTime      string  `gorm:"column:return_received_time" json:"Return Received Time"`
+	DeliveryPhotoSentCount  int     `gorm:"column:delivery_photo_sent_count" json:"Delivery Photo Sent Count"`
+	DeliveryTelegramMessageID string  `gorm:"column:delivery_telegram_message_id" json:"Delivery Telegram Message ID"`
 }
 
 type RevenueEntry struct {
