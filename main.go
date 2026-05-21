@@ -143,6 +143,7 @@ func mapToDBColumn(key string) string {
 		"Return Received Time":    "return_received_time",
 		"Delivery Photo Sent Count": "delivery_photo_sent_count",
 		"Delivery Telegram Message ID": "delivery_telegram_message_id",
+		"Delivery Daily Sequence":   "delivery_daily_sequence",
 		"Driver Name":             "driver_name",
 		"Tracking Number":         "tracking_number",
 		"Dispatched Time":         "dispatched_time",
@@ -2447,6 +2448,7 @@ func main() {
 			adminGroup.GET("/all-orders", RequirePermission("view_order_list"), handleGetAllOrders)
 			adminGroup.POST("/update-order", RequirePermission("edit_order"), handleAdminUpdateOrder)
 			adminGroup.POST("/send-delivery-telegram", RequirePermission("edit_order"), handleSendDeliveryTelegram)
+			adminGroup.POST("/delete-delivery-telegram", RequirePermission("edit_order"), handleDeleteDeliveryTelegram)
 
 			// ── Shift Management Routes ──
 			adminGroup.GET("/shifts/active/:storeName", handleGetActiveShift)
@@ -2680,10 +2682,49 @@ func handleSendDeliveryTelegram(c *gin.Context) {
 		return
 	}
 
+	// 1. Determine daily sequence number
+	ict := time.FixedZone("ICT", 7*3600)
+	todayStr := time.Now().In(ict).Format("2006-01-02")
+	var dailySeq int
+
+	if order.DeliveryDailySequence > 0 && strings.HasPrefix(order.Timestamp, todayStr) {
+		// If already has a sequence for today, use it (case for resending)
+		dailySeq = order.DeliveryDailySequence
+	} else {
+		// Count orders shipped today with this method to get next sequence
+		var count int64
+		// We count orders that have a package photo and the same shipping method and are from today
+		backend.DB.Model(&Order{}).
+			Where("internal_shipping_method = ? AND timestamp LIKE ? AND delivery_daily_sequence > 0",
+				order.InternalShippingMethod, todayStr+"%").
+			Count(&count)
+		dailySeq = int(count) + 1
+	}
+
+	// Prepare message details
+	phoneNumber := order.CustomerPhone
+	if phoneNumber == "" {
+		phoneNumber = "N/A"
+	}
+	location := order.Location
+	if location == "" {
+		location = "N/A"
+	}
+	address := order.AddressDetails
+	if address == "" {
+		address = "N/A"
+	}
+
 	// Prepare message
-	text := fmt.Sprintf("📦 *រូបភាពកញ្ចប់បញ្ញើ*\n🏷️ លេខកូដ: `%s`\n🏠 ហាង: *%s*\n🧑‍🔧 អ្នកវេចខ្ចប់: *%s*", order.OrderID, order.FulfillmentStore, order.PackedBy)
+	text := fmt.Sprintf("📦 *រូបភាពកញ្ចប់បញ្ញើ #%d*\n🏷️ លេខកូដ: `%s`\n🏠 ហាង: *%s*\n🧑‍🔧 អ្នកវេចខ្ចប់: *%s*",
+		dailySeq, order.OrderID, order.FulfillmentStore, order.PackedBy)
+
+	text += fmt.Sprintf("\n\n📱 លេខទូរស័ព្ទ: `%s`", phoneNumber)
+	text += fmt.Sprintf("\n📍 ទីតាំង: *%s*", location)
+	text += fmt.Sprintf("\n🏠 អាស័យដ្ឋាន: _%s_", address)
+
 	if order.InternalShippingMethod != "" {
-		text += fmt.Sprintf("\n🚚 ដឹកដោយ: *%s*", order.InternalShippingMethod)
+		text += fmt.Sprintf("\n\n🚚 ដឹកដោយ: *%s*", order.InternalShippingMethod)
 	}
 
 	apiURL := fmt.Sprintf("https://api.telegram.org/bot%s/sendPhoto", store.TelegramBotToken)
@@ -2732,21 +2773,23 @@ func handleSendDeliveryTelegram(c *gin.Context) {
 		}
 	}
 
-	log.Printf("✅ [Telegram Delivery] Photo sent for order %s, Message ID: %s", order.OrderID, messageID)
+	log.Printf("✅ [Telegram Delivery] Photo sent for order %s, Message ID: %s, Daily Seq: %d", order.OrderID, messageID, dailySeq)
 
 	// Update counter and message ID in database
 	newCount := order.DeliveryPhotoSentCount + 1
 	if err := backend.DB.Model(&order).Updates(map[string]interface{}{
 		"delivery_photo_sent_count":    newCount,
 		"delivery_telegram_message_id": messageID,
+		"delivery_daily_sequence":      dailySeq,
 	}).Error; err != nil {
 		log.Printf("❌ [Telegram Delivery] DB Update Error: %v", err)
 	}
 
 	// Trigger Sheet Sync
 	backend.EnqueueSync("updateSheet", map[string]interface{}{
-		"Delivery Photo Sent Count": newCount,
+		"Delivery Photo Sent Count":    newCount,
 		"Delivery Telegram Message ID": messageID,
+		"Delivery Daily Sequence":      dailySeq,
 	}, "AllOrders", map[string]string{"Order ID": order.OrderID})
 
 	// Trigger WebSocket Broadcast - Use the standard structure
@@ -2754,8 +2797,9 @@ func handleSendDeliveryTelegram(c *gin.Context) {
 		"type": "update_order",
 		"orderId": order.OrderID,
 		"newData": map[string]interface{}{
-			"Delivery Photo Sent Count": newCount,
+			"Delivery Photo Sent Count":    newCount,
 			"Delivery Telegram Message ID": messageID,
+			"Delivery Daily Sequence":      dailySeq,
 		},
 	})
 	hub.Broadcast <- eventBytes
@@ -2952,9 +2996,29 @@ func AddWatermarkAndEditTelegramMedia(order Order, newStatus string) {
 	}
 
 	// 3. Upload new photo via editMessageMedia
-	caption := fmt.Sprintf("%s\n\n📦 *រូបភាពកញ្ចប់បញ្ញើ*\n🏷️ លេខកូដ: `%s`\n🏠 ហាង: *%s*\n🧑‍🔧 អ្នកវេចខ្ចប់: *%s*", statusIndicator, order.OrderID, order.FulfillmentStore, order.PackedBy)
+	// Prepare message details
+	phoneNumber := order.CustomerPhone
+	if phoneNumber == "" {
+		phoneNumber = "N/A"
+	}
+	location := order.Location
+	if location == "" {
+		location = "N/A"
+	}
+	address := order.AddressDetails
+	if address == "" {
+		address = "N/A"
+	}
+
+	caption := fmt.Sprintf("%s\n\n📦 *រូបភាពកញ្ចប់បញ្ញើ #%d*\n🏷️ លេខកូដ: `%s`\n🏠 ហាង: *%s*\n🧑‍🔧 អ្នកវេចខ្ចប់: *%s*",
+		statusIndicator, order.DeliveryDailySequence, order.OrderID, order.FulfillmentStore, order.PackedBy)
+
+	caption += fmt.Sprintf("\n\n📱 លេខទូរស័ព្ទ: `%s`", phoneNumber)
+	caption += fmt.Sprintf("\n📍 ទីតាំង: *%s*", location)
+	caption += fmt.Sprintf("\n🏠 អាស័យដ្ឋាន: _%s_", address)
+
 	if order.InternalShippingMethod != "" {
-		caption += fmt.Sprintf("\n🚚 ដឹកដោយ: *%s*", order.InternalShippingMethod)
+		caption += fmt.Sprintf("\n\n🚚 ដឹកដោយ: *%s*", order.InternalShippingMethod)
 	}
 
 	apiURL := fmt.Sprintf("https://api.telegram.org/bot%s/editMessageMedia", store.TelegramBotToken)
@@ -3016,4 +3080,179 @@ func AddWatermarkAndEditTelegramMedia(order Order, newStatus string) {
 	} else {
 		log.Printf("✅ Successfully updated delivery telegram photo for %s with %s", order.OrderID, newStatus)
 	}
-}
+	}
+
+	func getDeliveryTelegramCaption(order Order, sequence int, statusOverride string) string {
+	statusIndicator := ""
+	if statusOverride == "Cancelled" {
+		statusIndicator = "❌ *ការកម្មង់ត្រូវបានលុបចោល (CANCELLED)* ❌\n\n"
+	} else if statusOverride == "Returned" {
+		statusIndicator = "🔄 *ការកម្មង់ត្រូវបានបញ្ជូនត្រលប់ (RETURNED)* 🔄\n\n"
+	}
+
+	phoneNumber := order.CustomerPhone
+	if phoneNumber == "" {
+		phoneNumber = "N/A"
+	}
+	location := order.Location
+	if location == "" {
+		location = "N/A"
+	}
+	address := order.AddressDetails
+	if address == "" {
+		address = "N/A"
+	}
+
+	text := fmt.Sprintf("%s📦 *រូបភាពកញ្ចប់បញ្ញើ #%d*\n🏷️ លេខកូដ: `%s`\n🏠 ហាង: *%s*\n🧑‍🔧 អ្នកវេចខ្ចប់: *%s*",
+		statusIndicator, sequence, order.OrderID, order.FulfillmentStore, order.PackedBy)
+
+	text += fmt.Sprintf("\n\n📱 លេខទូរស័ព្ទ: `%s`", phoneNumber)
+	text += fmt.Sprintf("\n📍 ទីតាំង: *%s*", location)
+	text += fmt.Sprintf("\n🏠 អាស័យដ្ឋាន: _%s_", address)
+
+	if order.InternalShippingMethod != "" {
+		text += fmt.Sprintf("\n\n🚚 ដឹកដោយ: *%s*", order.InternalShippingMethod)
+	}
+	return text
+	}
+
+	func handleDeleteDeliveryTelegram(c *gin.Context) {
+	var r struct {
+		OrderID string `json:"orderId"`
+	}
+	if err := c.ShouldBindJSON(&r); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"status": "error", "message": err.Error()})
+		return
+	}
+
+	var order Order
+	if err := backend.DB.Where("order_id = ?", r.OrderID).First(&order).Error; err != nil {
+		c.JSON(http.StatusNotFound, gin.H{"status": "error", "message": "Order not found"})
+		return
+	}
+
+	if order.DeliveryTelegramMessageID == "" {
+		c.JSON(http.StatusBadRequest, gin.H{"status": "error", "message": "No telegram message linked to this order"})
+		return
+	}
+
+	var store Store
+	if err := backend.DB.Where("store_name = ?", order.FulfillmentStore).First(&store).Error; err != nil {
+		c.JSON(http.StatusNotFound, gin.H{"status": "error", "message": "Store not found"})
+		return
+	}
+
+	var shipMethod ShippingMethod
+	if err := backend.DB.Where("method_name = ?", order.InternalShippingMethod).First(&shipMethod).Error; err != nil {
+		c.JSON(http.StatusNotFound, gin.H{"status": "error", "message": "Shipping method not found"})
+		return
+	}
+
+	if store.TelegramBotToken == "" || shipMethod.DeliveryTelegramGroupID == "" {
+		c.JSON(http.StatusBadRequest, gin.H{"status": "error", "message": "Telegram settings missing"})
+		return
+	}
+
+	// 1. Delete the message from Telegram
+	apiURL := fmt.Sprintf("https://api.telegram.org/bot%s/deleteMessage", store.TelegramBotToken)
+	payload := map[string]interface{}{
+		"chat_id":    shipMethod.DeliveryTelegramGroupID,
+		"message_id": order.DeliveryTelegramMessageID,
+	}
+	jsonData, _ := json.Marshal(payload)
+	resp, err := http.Post(apiURL, "application/json", bytes.NewBuffer(jsonData))
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"status": "error", "message": "Failed to call Telegram API: " + err.Error()})
+		return
+	}
+	defer resp.Body.Close()
+
+	var resData map[string]interface{}
+	json.NewDecoder(resp.Body).Decode(&resData)
+	if ok, _ := resData["ok"].(bool); !ok {
+		// If message is already deleted or too old, we still want to clean up our DB
+		log.Printf("⚠️ Telegram Delete API error: %v", resData)
+	}
+
+	// 2. Clean up current order
+	deletedSeq := order.DeliveryDailySequence
+	ict := time.FixedZone("ICT", 7*3600)
+	todayStr := time.Now().In(ict).Format("2006-01-02")
+
+	backend.DB.Model(&order).Updates(map[string]interface{}{
+		"delivery_telegram_message_id": "",
+		"delivery_daily_sequence":      0,
+	})
+
+	// Trigger Sheet Sync for current order
+	backend.EnqueueSync("updateSheet", map[string]interface{}{
+		"Delivery Telegram Message ID": "",
+		"Delivery Daily Sequence":      0,
+	}, "AllOrders", map[string]string{"Order ID": order.OrderID})
+
+	// Broadcast update
+	eventBytes, _ := json.Marshal(map[string]interface{}{
+		"type": "update_order",
+		"orderId": order.OrderID,
+		"newData": map[string]interface{}{
+			"Delivery Telegram Message ID": "",
+			"Delivery Daily Sequence":      0,
+		},
+	})
+	hub.Broadcast <- eventBytes
+
+	// 3. Re-sequence subsequent orders
+	if deletedSeq > 0 && strings.HasPrefix(order.Timestamp, todayStr) {
+		var subsequentOrders []Order
+		backend.DB.Where("internal_shipping_method = ? AND timestamp LIKE ? AND delivery_daily_sequence > ?",
+			order.InternalShippingMethod, todayStr+"%", deletedSeq).
+			Order("delivery_daily_sequence ASC").
+			Find(&subsequentOrders)
+
+		for _, subOrder := range subsequentOrders {
+			newSeq := subOrder.DeliveryDailySequence - 1
+
+			// Update DB
+			backend.DB.Model(&subOrder).Update("delivery_daily_sequence", newSeq)
+
+			// Update Telegram Caption
+			if subOrder.DeliveryTelegramMessageID != "" {
+				editCaptionURL := fmt.Sprintf("https://api.telegram.org/bot%s/editMessageCaption", store.TelegramBotToken)
+
+				statusOverride := ""
+				if strings.TrimSpace(subOrder.FulfillmentStatus) == "Cancelled" {
+					statusOverride = "Cancelled"
+				} else if strings.TrimSpace(subOrder.FulfillmentStatus) == "Returned" {
+					statusOverride = "Returned"
+				}
+
+				newCaption := getDeliveryTelegramCaption(subOrder, newSeq, statusOverride)
+				editPayload := map[string]interface{}{
+					"chat_id":    shipMethod.DeliveryTelegramGroupID,
+					"message_id": subOrder.DeliveryTelegramMessageID,
+					"caption":    newCaption,
+					"parse_mode": "Markdown",
+				}
+				eJson, _ := json.Marshal(editPayload)
+				http.Post(editCaptionURL, "application/json", bytes.NewBuffer(eJson))
+			}
+
+			// Sync to Sheet
+			backend.EnqueueSync("updateSheet", map[string]interface{}{
+				"Delivery Daily Sequence": newSeq,
+			}, "AllOrders", map[string]string{"Order ID": subOrder.OrderID})
+
+			// Broadcast
+			subEvent, _ := json.Marshal(map[string]interface{}{
+				"type": "update_order",
+				"orderId": subOrder.OrderID,
+				"newData": map[string]interface{}{
+					"Delivery Daily Sequence": newSeq,
+				},
+			})
+			hub.Broadcast <- subEvent
+		}
+	}
+
+	c.JSON(http.StatusOK, gin.H{"status": "success", "message": "លុបចេញពី Telegram និងតម្រៀបលេខរៀងឡើងវិញជោគជ័យ!"})
+	}
