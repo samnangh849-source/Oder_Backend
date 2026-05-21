@@ -98,8 +98,14 @@ type ShippingMethod struct {
 	InternalCost               float64 `gorm:"column:internal_cost" json:"InternalCost"`
 	CostShortcuts              string  `gorm:"column:cost_shortcuts" json:"CostShortcuts"`
 	EnableDriverRecommendation bool    `gorm:"column:enable_driver_recommendation" json:"EnableDriverRecommendation"`
-	DeliveryTelegramGroupID    string  `gorm:"column:delivery_telegram_group_id" json:"DeliveryTelegramGroupID"`
-	DeliveryTelegramTopicID    string  `gorm:"column:delivery_telegram_topic_id" json:"DeliveryTelegramTopicID"`
+}
+
+type DeliveryGroup struct {
+	ID              uint   `gorm:"primaryKey;autoIncrement;column:id" json:"ID"`
+	StoreName       string `gorm:"column:store_name;index" json:"StoreName"`
+	ShippingMethod  string `gorm:"column:shipping_method;index" json:"ShippingMethod"`
+	TelegramGroupID string `gorm:"column:telegram_group_id" json:"TelegramGroupID"`
+	TelegramTopicID string `gorm:"column:telegram_topic_id" json:"TelegramTopicID"`
 }
 
 type DriverRecommendation struct {
