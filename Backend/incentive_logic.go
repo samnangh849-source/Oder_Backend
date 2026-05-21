@@ -97,6 +97,39 @@ func CalculatePayout(calc IncentiveCalculator, val float64, subPeriod string) fl
 
 	if calc.Type == IncentiveTypeAchievement {
 		tiers := rules.AchievementTiers
+
+		// Marathon logic: Sum highest reward achieved in EACH unique sub-period
+		if rules.IsMarathon && subPeriod == "" {
+			subPeriodRewards := make(map[string]float64)
+			// Track tiers with no sub-period as a default group
+			const defaultSubGroup = "_default_"
+
+			for _, t := range tiers {
+				if val >= t.Target {
+					reward := t.RewardAmount
+					if t.RewardType == RewardTypePercentage {
+						reward = val * (t.RewardAmount / 100.0)
+					}
+
+					spKey := t.SubPeriod
+					if spKey == "" {
+						spKey = defaultSubGroup
+					}
+
+					if reward > subPeriodRewards[spKey] {
+						subPeriodRewards[spKey] = reward
+					}
+				}
+			}
+
+			var total float64
+			for _, r := range subPeriodRewards {
+				total += r
+			}
+			return total
+		}
+
+		// Normal logic or specific sub-period calculation
 		var activeTiers []IncentiveTier
 		for _, t := range tiers {
 			if subPeriod == "" || t.SubPeriod == "" || t.SubPeriod == subPeriod {
