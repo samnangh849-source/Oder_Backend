@@ -2684,7 +2684,9 @@ func handleSendDeliveryTelegram(c *gin.Context) {
 	}
 
 	if store.DeliveryTelegramTopicID != "" {
-		payload["message_thread_id"] = store.DeliveryTelegramTopicID
+		if threadID, err := strconv.Atoi(strings.TrimSpace(store.DeliveryTelegramTopicID)); err == nil && threadID != 0 {
+			payload["message_thread_id"] = threadID
+		}
 	}
 
 	jsonData, _ := json.Marshal(payload)
