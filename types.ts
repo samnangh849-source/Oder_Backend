@@ -153,8 +153,14 @@ export interface ShippingMethod {
   InternalCost: number;
   CostShortcuts: string;
   EnableDriverRecommendation?: boolean;
-  DeliveryTelegramGroupID?: string;
-  DeliveryTelegramTopicID?: string;
+}
+
+export interface DeliveryGroup {
+  ID: number;
+  StoreName: string;
+  ShippingMethod: string;
+  TelegramGroupID: string;
+  TelegramTopicID?: string;
 }
 
 export interface DriverRecommendation {

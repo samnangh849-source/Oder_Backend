@@ -56,6 +56,7 @@ var SheetRanges = map[string]string{
 	"Products":               "Products!A:Z",
 	"Locations":              "Locations!A:Z",
 	"ShippingMethods":        "ShippingMethods!A:Z",
+	"DeliveryGroups":         "DeliveryGroups!A:Z",
 	"Colors":                 "Colors!A:Z",
 	"Drivers":                "Drivers!A:Z",
 	"BankAccounts":           "BankAccounts!A:Z",
@@ -322,7 +323,7 @@ func broadcastFullSyncComplete(success bool, message string, elapsed float64) {
 
 func PerformDataMigration() {
 	startTime := time.Now()
-	const totalSteps = 31
+	const totalSteps = 32
 
 	ctx := context.Background()
 	if SheetsService == nil {
@@ -350,6 +351,7 @@ func PerformDataMigration() {
 	tx.Session(&gorm.Session{AllowGlobalUpdate: true}).Delete(&Product{})
 	tx.Session(&gorm.Session{AllowGlobalUpdate: true}).Delete(&Location{})
 	tx.Session(&gorm.Session{AllowGlobalUpdate: true}).Delete(&ShippingMethod{})
+	tx.Session(&gorm.Session{AllowGlobalUpdate: true}).Delete(&DeliveryGroup{})
 	tx.Session(&gorm.Session{AllowGlobalUpdate: true}).Delete(&Color{})
 	tx.Session(&gorm.Session{AllowGlobalUpdate: true}).Delete(&Driver{})
 	tx.Session(&gorm.Session{AllowGlobalUpdate: true}).Delete(&BankAccount{})
@@ -594,7 +596,26 @@ func PerformDataMigration() {
 			return
 		}
 	}
-	broadcastFullSyncProgress(8, totalSteps, "កំពុងទាញ Colors...", len(validShipping), time.Since(startTime).Seconds())
+	broadcastFullSyncProgress(8, totalSteps, "កំពុងទាញ DeliveryGroups...", len(validShipping), time.Since(startTime).Seconds())
+
+	// ── DeliveryGroups ──
+	var delGroups []DeliveryGroup
+	if err := FetchSheetDataToStruct("DeliveryGroups", &delGroups); err != nil {
+		tx.Rollback()
+		log.Println("❌ Migration failed for DeliveryGroups:", err)
+		broadcastFullSyncComplete(false, "Failed to fetch DeliveryGroups: "+err.Error(), time.Since(startTime).Seconds())
+		return
+	}
+	if len(delGroups) > 0 {
+		if err := tx.CreateInBatches(delGroups, 100).Error; err != nil {
+			tx.Rollback()
+			log.Println("❌ Migration failed to save DeliveryGroups:", err)
+			broadcastFullSyncComplete(false, "Failed to save DeliveryGroups: "+err.Error(), time.Since(startTime).Seconds())
+			return
+		}
+	}
+
+	broadcastFullSyncProgress(9, totalSteps, "កំពុងទាញ Colors...", len(delGroups), time.Since(startTime).Seconds())
 
 	// ── Colors ──
 	var colors []Color
