@@ -51,13 +51,11 @@ type Store struct {
 	StoreName        string `gorm:"primaryKey;column:store_name" json:"StoreName"`
 	StoreType        string `gorm:"column:store_type" json:"StoreType"`
 	Address          string `gorm:"column:address" json:"Address"`
-	TelegramBotToken        string `gorm:"column:telegram_bot_token" json:"TelegramBotToken"`
-	TelegramGroupID         string `gorm:"column:telegram_group_id" json:"TelegramGroupID"`
-	TelegramTopicID         string `gorm:"column:telegram_topic_id" json:"TelegramTopicID"`
-	LabelPrinterURL         string `gorm:"column:label_printer_url" json:"LabelPrinterURL"`
-	CODAlertGroupID         string `gorm:"column:cod_alert_group_id" json:"CODAlertGroupID"`
-	DeliveryTelegramGroupID string `gorm:"column:delivery_telegram_group_id" json:"DeliveryTelegramGroupID"`
-	DeliveryTelegramTopicID string `gorm:"column:delivery_telegram_topic_id" json:"DeliveryTelegramTopicID"`
+	TelegramBotToken string `gorm:"column:telegram_bot_token" json:"TelegramBotToken"`
+	TelegramGroupID  string `gorm:"column:telegram_group_id" json:"TelegramGroupID"`
+	TelegramTopicID  string `gorm:"column:telegram_topic_id" json:"TelegramTopicID"`
+	LabelPrinterURL  string `gorm:"column:label_printer_url" json:"LabelPrinterURL"`
+	CODAlertGroupID  string `gorm:"column:cod_alert_group_id" json:"CODAlertGroupID"`
 }
 
 type Setting struct {
@@ -100,6 +98,8 @@ type ShippingMethod struct {
 	InternalCost               float64 `gorm:"column:internal_cost" json:"InternalCost"`
 	CostShortcuts              string  `gorm:"column:cost_shortcuts" json:"CostShortcuts"`
 	EnableDriverRecommendation bool    `gorm:"column:enable_driver_recommendation" json:"EnableDriverRecommendation"`
+	DeliveryTelegramGroupID    string  `gorm:"column:delivery_telegram_group_id" json:"DeliveryTelegramGroupID"`
+	DeliveryTelegramTopicID    string  `gorm:"column:delivery_telegram_topic_id" json:"DeliveryTelegramTopicID"`
 }
 
 type DriverRecommendation struct {
