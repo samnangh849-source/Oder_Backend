@@ -257,6 +257,7 @@ type Order struct {
 	DeliveryPhotoSentCount    int     `gorm:"column:delivery_photo_sent_count" json:"Delivery Photo Sent Count"`
 	DeliveryTelegramMessageID string  `gorm:"column:delivery_telegram_message_id" json:"Delivery Telegram Message ID"`
 	DeliveryDailySequence     int     `gorm:"column:delivery_daily_sequence" json:"Delivery Daily Sequence"`
+	DeliveryTelegramDate      string  `gorm:"column:delivery_telegram_date" json:"Delivery Telegram Date"`
 }
 
 type RevenueEntry struct {

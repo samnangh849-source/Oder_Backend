@@ -46,7 +46,7 @@ const SYSTEM_STRUCTURE = {
     "Total Product Cost ($)", "Telegram Message ID 1", "Telegram Message ID 2", "Telegram Message ID 3", "Scheduled Time", 
     "Fulfillment Store", "Team", "IsVerified", "Fulfillment Status", "Packed By", "Packed Time", 
     "Package Photo", "Driver Name", "Tracking Number", "Dispatched Time", "Dispatched By", "Delivered Time", "Delivery Photo URL",
-    "Cancel Reason", "Return Reason", "Return Photo", "Return Received By", "Return Received Time", "Delivery Photo Sent Count", "Delivery Telegram Message ID", "Delivery Daily Sequence"
+    "Cancel Reason", "Return Reason", "Return Photo", "Return Received By", "Return Received Time", "Delivery Photo Sent Count", "Delivery Telegram Message ID", "Delivery Daily Sequence", "Delivery Telegram Date"
   ],
   "RevenueDashboard": ["ID", "Timestamp", "Team", "Page", "Revenue", "FulfillmentStore"],
   

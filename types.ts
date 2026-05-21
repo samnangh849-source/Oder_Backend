@@ -85,6 +85,7 @@ export interface FullOrder {
     "Delivery Photo Sent Count"?: number;
     "Delivery Telegram Message ID"?: string;
     "Delivery Daily Sequence"?: number;
+    "Delivery Telegram Date"?: string;
     }
 export interface InventoryItem {
     id?: number; // Added for GORM
