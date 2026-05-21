@@ -122,7 +122,7 @@ func IsNumericHeader(h string) bool {
 		h == "totalproductcost" || h == "totalproductcost($)" || h == "revenue" || h == "quantity" ||
 		h == "part" || h == "id" || h == "projectid" ||
 		h == "totalorders" || h == "totalrevenue" || h == "calculatedvalue" ||
-		h == "calculatorid"
+		h == "calculatorid" || h == "deliveryphotosentcount" || h == "deliverydailysequence"
 }
 
 // isBoolHeader returns true if the column header should be parsed as bool.
