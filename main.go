@@ -52,6 +52,7 @@ type TeamPage = backend.TeamPage
 type Product = backend.Product
 type Location = backend.Location
 type ShippingMethod = backend.ShippingMethod
+type DeliveryGroup = backend.DeliveryGroup
 type DriverRecommendation = backend.DriverRecommendation
 type Color = backend.Color
 type Driver = backend.Driver
@@ -2667,14 +2668,14 @@ func handleSendDeliveryTelegram(c *gin.Context) {
 		return
 	}
 
-	var shipMethod ShippingMethod
-	if err := backend.DB.Where("method_name = ?", order.InternalShippingMethod).First(&shipMethod).Error; err != nil {
-		c.JSON(http.StatusNotFound, gin.H{"status": "error", "message": "Shipping method not found"})
+	var delGroup DeliveryGroup
+	if err := backend.DB.Where("store_name = ? AND shipping_method = ?", order.FulfillmentStore, order.InternalShippingMethod).First(&delGroup).Error; err != nil {
+		c.JSON(http.StatusNotFound, gin.H{"status": "error", "message": "Telegram group not defined for this branch and shipping method"})
 		return
 	}
 
-	if store.TelegramBotToken == "" || shipMethod.DeliveryTelegramGroupID == "" {
-		c.JSON(http.StatusBadRequest, gin.H{"status": "error", "message": "Telegram settings for delivery driver missing for this shipping method"})
+	if store.TelegramBotToken == "" || delGroup.TelegramGroupID == "" {
+		c.JSON(http.StatusBadRequest, gin.H{"status": "error", "message": "Telegram settings missing for this branch and shipping method"})
 		return
 	}
 
@@ -2692,12 +2693,11 @@ func handleSendDeliveryTelegram(c *gin.Context) {
 		// If already has a sequence for today, use it (case for resending)
 		dailySeq = order.DeliveryDailySequence
 	} else {
-		// Count orders shipped today with this method to get next sequence
+		// Count orders shipped today with this method AND this store to get next sequence
 		var count int64
-		// We count orders that were sent TODAY for this shipping method
 		backend.DB.Model(&Order{}).
-			Where("internal_shipping_method = ? AND delivery_telegram_date = ? AND delivery_daily_sequence > 0",
-				order.InternalShippingMethod, todayStr).
+			Where("fulfillment_store = ? AND internal_shipping_method = ? AND delivery_telegram_date = ? AND delivery_daily_sequence > 0",
+				order.FulfillmentStore, order.InternalShippingMethod, todayStr).
 			Count(&count)
 		dailySeq = int(count) + 1
 	}
@@ -2726,14 +2726,14 @@ func handleSendDeliveryTelegram(c *gin.Context) {
 
 	apiURL := fmt.Sprintf("https://api.telegram.org/bot%s/sendPhoto", store.TelegramBotToken)
 	payload := map[string]interface{}{
-		"chat_id":    shipMethod.DeliveryTelegramGroupID,
+		"chat_id":    delGroup.TelegramGroupID,
 		"parse_mode": "Markdown",
 		"photo":      convertDriveURLToDirect(order.PackagePhotoURL),
 		"caption":    text,
 	}
 
-	if shipMethod.DeliveryTelegramTopicID != "" {
-		if threadID, err := strconv.Atoi(strings.TrimSpace(shipMethod.DeliveryTelegramTopicID)); err == nil && threadID != 0 {
+	if delGroup.TelegramTopicID != "" {
+		if threadID, err := strconv.Atoi(strings.TrimSpace(delGroup.TelegramTopicID)); err == nil && threadID != 0 {
 			payload["message_thread_id"] = threadID
 		}
 	}
@@ -2897,12 +2897,12 @@ func AddWatermarkAndEditTelegramMedia(order Order, newStatus string) {
 		return
 	}
 
-	var shipMethod ShippingMethod
-	if err := backend.DB.Where("method_name = ?", order.InternalShippingMethod).First(&shipMethod).Error; err != nil {
+	var delGroup DeliveryGroup
+	if err := backend.DB.Where("store_name = ? AND shipping_method = ?", order.FulfillmentStore, order.InternalShippingMethod).First(&delGroup).Error; err != nil {
 		return
 	}
 
-	if store.TelegramBotToken == "" || shipMethod.DeliveryTelegramGroupID == "" {
+	if store.TelegramBotToken == "" || delGroup.TelegramGroupID == "" {
 		return
 	}
 
@@ -3049,7 +3049,7 @@ func AddWatermarkAndEditTelegramMedia(order Order, newStatus string) {
 	}
 	io.Copy(photoPart, buf)
 
-	w.WriteField("chat_id", shipMethod.DeliveryTelegramGroupID)
+	w.WriteField("chat_id", delGroup.TelegramGroupID)
 	w.WriteField("message_id", order.DeliveryTelegramMessageID)
 
 	w.Close()
@@ -3134,13 +3134,13 @@ func AddWatermarkAndEditTelegramMedia(order Order, newStatus string) {
 		return
 	}
 
-	var shipMethod ShippingMethod
-	if err := backend.DB.Where("method_name = ?", order.InternalShippingMethod).First(&shipMethod).Error; err != nil {
-		c.JSON(http.StatusNotFound, gin.H{"status": "error", "message": "Shipping method not found"})
+	var delGroup DeliveryGroup
+	if err := backend.DB.Where("store_name = ? AND shipping_method = ?", order.FulfillmentStore, order.InternalShippingMethod).First(&delGroup).Error; err != nil {
+		c.JSON(http.StatusNotFound, gin.H{"status": "error", "message": "Telegram group not defined for this branch and shipping method"})
 		return
 	}
 
-	if store.TelegramBotToken == "" || shipMethod.DeliveryTelegramGroupID == "" {
+	if store.TelegramBotToken == "" || delGroup.TelegramGroupID == "" {
 		c.JSON(http.StatusBadRequest, gin.H{"status": "error", "message": "Telegram settings missing"})
 		return
 	}
@@ -3148,7 +3148,7 @@ func AddWatermarkAndEditTelegramMedia(order Order, newStatus string) {
 	// 1. Delete the message from Telegram
 	apiURL := fmt.Sprintf("https://api.telegram.org/bot%s/deleteMessage", store.TelegramBotToken)
 	payload := map[string]interface{}{
-		"chat_id":    shipMethod.DeliveryTelegramGroupID,
+		"chat_id":    delGroup.TelegramGroupID,
 		"message_id": order.DeliveryTelegramMessageID,
 	}
 	jsonData, _ := json.Marshal(payload)
@@ -3218,10 +3218,15 @@ func AddWatermarkAndEditTelegramMedia(order Order, newStatus string) {
 
 				newCaption := getDeliveryTelegramCaption(subOrder, newSeq, statusOverride)
 				editPayload := map[string]interface{}{
-					"chat_id":    shipMethod.DeliveryTelegramGroupID,
+					"chat_id":    delGroup.TelegramGroupID,
 					"message_id": subOrder.DeliveryTelegramMessageID,
 					"caption":    newCaption,
 					"parse_mode": "Markdown",
+				}
+				if delGroup.TelegramTopicID != "" {
+					if threadID, err := strconv.Atoi(strings.TrimSpace(delGroup.TelegramTopicID)); err == nil && threadID != 0 {
+						editPayload["message_thread_id"] = threadID
+					}
 				}
 				eJson, _ := json.Marshal(editPayload)
 				http.Post(editCaptionURL, "application/json", bytes.NewBuffer(eJson))
