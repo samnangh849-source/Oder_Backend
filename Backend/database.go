@@ -171,14 +171,14 @@ func runMigrations(db *gorm.DB) {
 	}
 
 	err := db.AutoMigrate(
-		&User{}, &Store{}, &Setting{}, &TeamPage{}, &Product{}, &Location{}, &ShippingMethod{},
+		&User{}, &Store{}, &Setting{}, &TeamPage{}, &Product{}, &Location{}, &ShippingMethod{}, &DeliveryGroup{},
 		&Color{}, &Driver{}, &BankAccount{}, &PhoneCarrier{}, &TelegramTemplate{},
 		&Inventory{}, &StockTransfer{}, &ReturnItem{},
 		&Order{}, &RevenueEntry{}, &ChatMessage{}, &EditLog{}, &UserActivityLog{},
 		&Role{}, &RolePermission{}, &Promotion{},
 		&IncentiveProject{}, &IncentiveCalculator{}, &IncentiveResult{},
 		&IncentiveManualData{}, &IncentiveCustomPayout{},
-		&DriverRecommendation{}, &Movie{}, &PendingSync{}, &Shift{},
+		&DriverRecommendation{}, &Movie{}, &Shift{},
 	)
 	if err != nil {
 		log.Printf("❌ Migration failed: %v", err)
