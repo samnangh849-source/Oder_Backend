@@ -254,8 +254,9 @@ type Order struct {
 	ReturnPhotoURL          string  `gorm:"column:return_photo_url" json:"Return Photo"`
 	ReturnReceivedBy        string  `gorm:"column:return_received_by" json:"Return Received By"`
 	ReturnReceivedTime      string  `gorm:"column:return_received_time" json:"Return Received Time"`
-	DeliveryPhotoSentCount  int     `gorm:"column:delivery_photo_sent_count" json:"Delivery Photo Sent Count"`
+	DeliveryPhotoSentCount    int     `gorm:"column:delivery_photo_sent_count" json:"Delivery Photo Sent Count"`
 	DeliveryTelegramMessageID string  `gorm:"column:delivery_telegram_message_id" json:"Delivery Telegram Message ID"`
+	DeliveryDailySequence     int     `gorm:"column:delivery_daily_sequence" json:"Delivery Daily Sequence"`
 }
 
 type RevenueEntry struct {
