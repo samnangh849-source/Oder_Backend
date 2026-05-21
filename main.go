@@ -2659,8 +2659,19 @@ func handleSendDeliveryTelegram(c *gin.Context) {
 		return
 	}
 
-	if store.TelegramBotToken == "" || store.DeliveryTelegramGroupID == "" {
-		c.JSON(http.StatusBadRequest, gin.H{"status": "error", "message": "Telegram settings for delivery driver missing for this store"})
+	if order.InternalShippingMethod == "" {
+		c.JSON(http.StatusBadRequest, gin.H{"status": "error", "message": "Order has no shipping method assigned"})
+		return
+	}
+
+	var shipMethod ShippingMethod
+	if err := backend.DB.Where("method_name = ?", order.InternalShippingMethod).First(&shipMethod).Error; err != nil {
+		c.JSON(http.StatusNotFound, gin.H{"status": "error", "message": "Shipping method not found"})
+		return
+	}
+
+	if store.TelegramBotToken == "" || shipMethod.DeliveryTelegramGroupID == "" {
+		c.JSON(http.StatusBadRequest, gin.H{"status": "error", "message": "Telegram settings for delivery driver missing for this shipping method"})
 		return
 	}
 
@@ -2677,14 +2688,14 @@ func handleSendDeliveryTelegram(c *gin.Context) {
 
 	apiURL := fmt.Sprintf("https://api.telegram.org/bot%s/sendPhoto", store.TelegramBotToken)
 	payload := map[string]interface{}{
-		"chat_id":    store.DeliveryTelegramGroupID,
+		"chat_id":    shipMethod.DeliveryTelegramGroupID,
 		"parse_mode": "Markdown",
 		"photo":      convertDriveURLToDirect(order.PackagePhotoURL),
 		"caption":    text,
 	}
 
-	if store.DeliveryTelegramTopicID != "" {
-		if threadID, err := strconv.Atoi(strings.TrimSpace(store.DeliveryTelegramTopicID)); err == nil && threadID != 0 {
+	if shipMethod.DeliveryTelegramTopicID != "" {
+		if threadID, err := strconv.Atoi(strings.TrimSpace(shipMethod.DeliveryTelegramTopicID)); err == nil && threadID != 0 {
 			payload["message_thread_id"] = threadID
 		}
 	}
@@ -2838,7 +2849,16 @@ func AddWatermarkAndEditTelegramMedia(order Order, newStatus string) {
 		return
 	}
 
-	if store.TelegramBotToken == "" || store.DeliveryTelegramGroupID == "" {
+	if order.InternalShippingMethod == "" {
+		return
+	}
+
+	var shipMethod ShippingMethod
+	if err := backend.DB.Where("method_name = ?", order.InternalShippingMethod).First(&shipMethod).Error; err != nil {
+		return
+	}
+
+	if store.TelegramBotToken == "" || shipMethod.DeliveryTelegramGroupID == "" {
 		return
 	}
 
@@ -2969,7 +2989,7 @@ func AddWatermarkAndEditTelegramMedia(order Order, newStatus string) {
 	}
 	io.Copy(photoPart, buf)
 
-	w.WriteField("chat_id", store.DeliveryTelegramGroupID)
+	w.WriteField("chat_id", shipMethod.DeliveryTelegramGroupID)
 	w.WriteField("message_id", order.DeliveryTelegramMessageID)
 
 	w.Close()
