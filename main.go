@@ -2613,8 +2613,28 @@ func handleCloseShift(c *gin.Context) {
 		return
 	}
 
+	// Query orders that are 'Packed' but not yet 'Dispatched' for this store
+	var pendingOrders []Order
+	backend.DB.Where("fulfillment_store = ? AND fulfillment_status = ?", shift.StoreName, "Packed").
+		Order("timestamp ASC").Find(&pendingOrders)
+
+	pendingSummary := ""
+	if len(pendingOrders) > 0 {
+		pendingSummary = "\n\n⚠️ *បញ្ជីអីវ៉ាន់មិនទាន់បញ្ជូនចេញ (Packed but not Dispatched):*"
+		for i, o := range pendingOrders {
+			phone := o.CustomerPhone
+			if phone == "" { phone = "N/A" }
+			if !strings.HasPrefix(phone, "0") && phone != "N/A" && len(phone) >= 8 {
+				phone = "0" + phone
+			}
+			
+			pendingSummary += fmt.Sprintf("\n%d. 📱 %s | 🆔 `%s` | 📍 %s | 👥 %s", 
+				i+1, phone, o.OrderID, o.Location, o.Team)
+		}
+	}
+
 	// Telegram Notification
-	go sendShiftTelegramNotification(shift.StoreName, "Close", shift.OpenedBy, "", r.Summary, "")
+	go sendShiftTelegramNotification(shift.StoreName, "Close", shift.OpenedBy, "", r.Summary+pendingSummary, "")
 
 	// Sync to Google Sheets (Update the existing row)
 	backend.EnqueueSync("updateSheet", map[string]interface{}{
@@ -2703,9 +2723,11 @@ func handleSendDeliveryTelegram(c *gin.Context) {
 	}
 
 	// Prepare message details
-	phoneNumber := order.CustomerPhone
+	phoneNumber := strings.TrimSpace(order.CustomerPhone)
 	if phoneNumber == "" {
 		phoneNumber = "N/A"
+	} else if !strings.HasPrefix(phoneNumber, "0") && len(phoneNumber) >= 8 {
+		phoneNumber = "0" + phoneNumber
 	}
 	location := order.Location
 	if location == "" {
@@ -3003,9 +3025,11 @@ func AddWatermarkAndEditTelegramMedia(order Order, newStatus string) {
 
 	// 3. Upload new photo via editMessageMedia
 	// Prepare message details
-	phoneNumber := order.CustomerPhone
+	phoneNumber := strings.TrimSpace(order.CustomerPhone)
 	if phoneNumber == "" {
 		phoneNumber = "N/A"
+	} else if !strings.HasPrefix(phoneNumber, "0") && len(phoneNumber) >= 8 {
+		phoneNumber = "0" + phoneNumber
 	}
 	location := order.Location
 	if location == "" {
@@ -3093,9 +3117,11 @@ func AddWatermarkAndEditTelegramMedia(order Order, newStatus string) {
 		statusIndicator = "🔄 *ការកម្មង់ត្រូវបានបញ្ជូនត្រលប់ (RETURNED)* 🔄\n\n"
 	}
 
-	phoneNumber := order.CustomerPhone
+	phoneNumber := strings.TrimSpace(order.CustomerPhone)
 	if phoneNumber == "" {
 		phoneNumber = "N/A"
+	} else if !strings.HasPrefix(phoneNumber, "0") && len(phoneNumber) >= 8 {
+		phoneNumber = "0" + phoneNumber
 	}
 	location := order.Location
 	if location == "" {
