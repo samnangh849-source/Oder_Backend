@@ -2613,8 +2613,28 @@ func handleCloseShift(c *gin.Context) {
 		return
 	}
 
+	// Query orders that are 'Packed' but not yet 'Dispatched' for this store
+	var pendingOrders []Order
+	backend.DB.Where("fulfillment_store = ? AND fulfillment_status = ?", shift.StoreName, "Packed").
+		Order("timestamp ASC").Find(&pendingOrders)
+
+	pendingSummary := ""
+	if len(pendingOrders) > 0 {
+		pendingSummary = "\n\n⚠️ *បញ្ជីអីវ៉ាន់មិនទាន់បញ្ជូនចេញ (Packed but not Dispatched):*"
+		for i, o := range pendingOrders {
+			phone := o.CustomerPhone
+			if phone == "" { phone = "N/A" }
+			if !strings.HasPrefix(phone, "0") && phone != "N/A" && len(phone) >= 8 {
+				phone = "0" + phone
+			}
+			
+			pendingSummary += fmt.Sprintf("\n%d. 📱 %s | 🆔 `%s` | 📍 %s | 👥 %s", 
+				i+1, phone, o.OrderID, o.Location, o.Team)
+		}
+	}
+
 	// Telegram Notification
-	go sendShiftTelegramNotification(shift.StoreName, "Close", shift.OpenedBy, "", r.Summary, "")
+	go sendShiftTelegramNotification(shift.StoreName, "Close", shift.OpenedBy, "", r.Summary+pendingSummary, "")
 
 	// Sync to Google Sheets (Update the existing row)
 	backend.EnqueueSync("updateSheet", map[string]interface{}{
@@ -2703,9 +2723,11 @@ func handleSendDeliveryTelegram(c *gin.Context) {
 	}
 
 	// Prepare message details
-	phoneNumber := order.CustomerPhone
+	phoneNumber := strings.TrimSpace(order.CustomerPhone)
 	if phoneNumber == "" {
 		phoneNumber = "N/A"
+	} else if !strings.HasPrefix(phoneNumber, "0") && len(phoneNumber) >= 8 {
+		phoneNumber = "0" + phoneNumber
 	}
 	location := order.Location
 	if location == "" {
@@ -2725,25 +2747,27 @@ func handleSendDeliveryTelegram(c *gin.Context) {
 	text += fmt.Sprintf("\n🏠 អាស័យដ្ឋាន: _%s_", address)
 
 	apiURL := fmt.Sprintf("https://api.telegram.org/bot%s/sendPhoto", store.TelegramBotToken)
+	chatID := strings.TrimSpace(delGroup.TelegramGroupID)
 	payload := map[string]interface{}{
-		"chat_id":    delGroup.TelegramGroupID,
+		"chat_id":    chatID,
 		"parse_mode": "Markdown",
 		"photo":      convertDriveURLToDirect(order.PackagePhotoURL),
 		"caption":    text,
 	}
 
 	if delGroup.TelegramTopicID != "" {
-		if threadID, err := strconv.Atoi(strings.TrimSpace(delGroup.TelegramTopicID)); err == nil && threadID != 0 {
+		topicID := strings.TrimSpace(delGroup.TelegramTopicID)
+		if threadID, err := strconv.Atoi(topicID); err == nil && threadID != 0 {
 			payload["message_thread_id"] = threadID
 		}
 	}
 
 	jsonData, _ := json.Marshal(payload)
-	log.Printf("📤 [Telegram Delivery] Sending photo for order %s to chat %v", order.OrderID, payload["chat_id"])
+	log.Printf("📤 [Telegram Delivery] Sending photo for order %s to chat %v (thread: %v)", order.OrderID, payload["chat_id"], payload["message_thread_id"])
 	
 	resp, err := http.Post(apiURL, "application/json", bytes.NewBuffer(jsonData))
 	if err != nil {
-		log.Printf("❌ [Telegram Delivery] HTTP Error: %v", err)
+		log.Printf("❌ [Telegram Delivery] HTTP Error for order %s, chat %v: %v", order.OrderID, chatID, err)
 		c.JSON(http.StatusInternalServerError, gin.H{"status": "error", "message": "Failed to call Telegram API: " + err.Error()})
 		return
 	}
@@ -2751,13 +2775,13 @@ func handleSendDeliveryTelegram(c *gin.Context) {
 
 	var resData map[string]interface{}
 	if err := json.NewDecoder(resp.Body).Decode(&resData); err != nil {
-		log.Printf("❌ [Telegram Delivery] Decode Error: %v", err)
+		log.Printf("❌ [Telegram Delivery] Decode Error for order %s: %v", order.OrderID, err)
 		c.JSON(http.StatusInternalServerError, gin.H{"status": "error", "message": "Failed to decode Telegram response"})
 		return
 	}
 
 	if ok, _ := resData["ok"].(bool); !ok {
-		log.Printf("❌ [Telegram Delivery] API Error: %v", resData)
+		log.Printf("❌ [Telegram Delivery] API Error for order %s, chat %v: %v", order.OrderID, chatID, resData)
 		c.JSON(http.StatusInternalServerError, gin.H{"status": "error", "message": "Telegram API error", "details": resData})
 		return
 	}
@@ -2829,23 +2853,27 @@ func sendShiftTelegramNotification(storeName string, shiftType string, userName 
 	}
 
 	apiURL := ""
+	chatID := strings.TrimSpace(store.TelegramGroupID)
 	payload := map[string]interface{}{
-		"chat_id":    store.TelegramGroupID,
+		"chat_id":    chatID,
 		"parse_mode": "Markdown",
 	}
 	if store.TelegramTopicID != "" {
-		payload["message_thread_id"] = store.TelegramTopicID
+		topicID := strings.TrimSpace(store.TelegramTopicID)
+		if threadID, err := strconv.Atoi(topicID); err == nil && threadID != 0 {
+			payload["message_thread_id"] = threadID
+		}
 	}
 
 	// 1. Send Sticker first if it's an Open Shift and stickerID is provided
 	if shiftType == "Open" && stickerID != "" {
 		stickerURL := fmt.Sprintf("https://api.telegram.org/bot%s/sendSticker", store.TelegramBotToken)
 		stickerPayload := map[string]interface{}{
-			"chat_id": store.TelegramGroupID,
+			"chat_id": chatID,
 			"sticker": stickerID,
 		}
-		if store.TelegramTopicID != "" {
-			stickerPayload["message_thread_id"] = store.TelegramTopicID
+		if payload["message_thread_id"] != nil {
+			stickerPayload["message_thread_id"] = payload["message_thread_id"]
 		}
 		sData, _ := json.Marshal(stickerPayload)
 		http.Post(stickerURL, "application/json", bytes.NewBuffer(sData))
@@ -2864,7 +2892,7 @@ func sendShiftTelegramNotification(storeName string, shiftType string, userName 
 	jsonData, _ := json.Marshal(payload)
 	resp, err := http.Post(apiURL, "application/json", bytes.NewBuffer(jsonData))
 	if err != nil {
-		log.Printf("❌ [Shift Notification] HTTP error: %v", err)
+		log.Printf("❌ [Shift Notification] HTTP error for %s, chat %v: %v", storeName, chatID, err)
 		return
 	}
 	defer resp.Body.Close()
@@ -2872,9 +2900,9 @@ func sendShiftTelegramNotification(storeName string, shiftType string, userName 
 	var resData map[string]interface{}
 	json.NewDecoder(resp.Body).Decode(&resData)
 	if ok, _ := resData["ok"].(bool); !ok {
-		log.Printf("❌ [Shift Notification] Telegram API error: %v", resData)
+		log.Printf("❌ [Shift Notification] Telegram API error for %s, chat %v: %v", storeName, chatID, resData)
 	} else {
-		log.Printf("✅ [Shift Notification] Sent successfully for %s", storeName)
+		log.Printf("✅ [Shift Notification] Sent successfully for %s to chat %v", storeName, chatID)
 	}
 }
 
@@ -2997,9 +3025,11 @@ func AddWatermarkAndEditTelegramMedia(order Order, newStatus string) {
 
 	// 3. Upload new photo via editMessageMedia
 	// Prepare message details
-	phoneNumber := order.CustomerPhone
+	phoneNumber := strings.TrimSpace(order.CustomerPhone)
 	if phoneNumber == "" {
 		phoneNumber = "N/A"
+	} else if !strings.HasPrefix(phoneNumber, "0") && len(phoneNumber) >= 8 {
+		phoneNumber = "0" + phoneNumber
 	}
 	location := order.Location
 	if location == "" {
@@ -3049,14 +3079,15 @@ func AddWatermarkAndEditTelegramMedia(order Order, newStatus string) {
 	}
 	io.Copy(photoPart, buf)
 
-	w.WriteField("chat_id", delGroup.TelegramGroupID)
+	chatID := strings.TrimSpace(delGroup.TelegramGroupID)
+	w.WriteField("chat_id", chatID)
 	w.WriteField("message_id", order.DeliveryTelegramMessageID)
 
 	w.Close()
 
 	req, err := http.NewRequest("POST", apiURL, &b)
 	if err != nil {
-		log.Printf("❌ HTTP request creation error: %v", err)
+		log.Printf("❌ HTTP request creation error for order %s: %v", order.OrderID, err)
 		return
 	}
 	req.Header.Set("Content-Type", w.FormDataContentType())
@@ -3064,7 +3095,7 @@ func AddWatermarkAndEditTelegramMedia(order Order, newStatus string) {
 	client := &http.Client{}
 	apiResp, err := client.Do(req)
 	if err != nil {
-		log.Printf("❌ Failed to update delivery telegram media: %v", err)
+		log.Printf("❌ Failed to update delivery telegram media for order %s, chat %v: %v", order.OrderID, chatID, err)
 		return
 	}
 	defer apiResp.Body.Close()
@@ -3072,9 +3103,9 @@ func AddWatermarkAndEditTelegramMedia(order Order, newStatus string) {
 	var apiResData map[string]interface{}
 	json.NewDecoder(apiResp.Body).Decode(&apiResData)
 	if ok, _ := apiResData["ok"].(bool); !ok {
-		log.Printf("⚠️ Telegram API error updating delivery media: %v", apiResData)
+		log.Printf("⚠️ Telegram API error updating delivery media for order %s, chat %v: %v", order.OrderID, chatID, apiResData)
 	} else {
-		log.Printf("✅ Successfully updated delivery telegram photo for %s with %s", order.OrderID, newStatus)
+		log.Printf("✅ Successfully updated delivery telegram photo for %s with %s in chat %v", order.OrderID, newStatus, chatID)
 	}
 	}
 
@@ -3086,9 +3117,11 @@ func AddWatermarkAndEditTelegramMedia(order Order, newStatus string) {
 		statusIndicator = "🔄 *ការកម្មង់ត្រូវបានបញ្ជូនត្រលប់ (RETURNED)* 🔄\n\n"
 	}
 
-	phoneNumber := order.CustomerPhone
+	phoneNumber := strings.TrimSpace(order.CustomerPhone)
 	if phoneNumber == "" {
 		phoneNumber = "N/A"
+	} else if !strings.HasPrefix(phoneNumber, "0") && len(phoneNumber) >= 8 {
+		phoneNumber = "0" + phoneNumber
 	}
 	location := order.Location
 	if location == "" {
@@ -3147,13 +3180,15 @@ func AddWatermarkAndEditTelegramMedia(order Order, newStatus string) {
 
 	// 1. Delete the message from Telegram
 	apiURL := fmt.Sprintf("https://api.telegram.org/bot%s/deleteMessage", store.TelegramBotToken)
+	chatID := strings.TrimSpace(delGroup.TelegramGroupID)
 	payload := map[string]interface{}{
-		"chat_id":    delGroup.TelegramGroupID,
+		"chat_id":    chatID,
 		"message_id": order.DeliveryTelegramMessageID,
 	}
 	jsonData, _ := json.Marshal(payload)
 	resp, err := http.Post(apiURL, "application/json", bytes.NewBuffer(jsonData))
 	if err != nil {
+		log.Printf("❌ [Delete Delivery] HTTP error for order %s, chat %v: %v", order.OrderID, chatID, err)
 		c.JSON(http.StatusInternalServerError, gin.H{"status": "error", "message": "Failed to call Telegram API: " + err.Error()})
 		return
 	}
@@ -3163,7 +3198,9 @@ func AddWatermarkAndEditTelegramMedia(order Order, newStatus string) {
 	json.NewDecoder(resp.Body).Decode(&resData)
 	if ok, _ := resData["ok"].(bool); !ok {
 		// If message is already deleted or too old, we still want to clean up our DB
-		log.Printf("⚠️ Telegram Delete API error: %v", resData)
+		log.Printf("⚠️ Telegram Delete API error for order %s, chat %v: %v", order.OrderID, chatID, resData)
+	} else {
+		log.Printf("✅ Successfully deleted telegram message for order %s from chat %v", order.OrderID, chatID)
 	}
 
 	// 2. Clean up current order
@@ -3217,14 +3254,16 @@ func AddWatermarkAndEditTelegramMedia(order Order, newStatus string) {
 				}
 
 				newCaption := getDeliveryTelegramCaption(subOrder, newSeq, statusOverride)
+				chatID := strings.TrimSpace(delGroup.TelegramGroupID)
 				editPayload := map[string]interface{}{
-					"chat_id":    delGroup.TelegramGroupID,
+					"chat_id":    chatID,
 					"message_id": subOrder.DeliveryTelegramMessageID,
 					"caption":    newCaption,
 					"parse_mode": "Markdown",
 				}
 				if delGroup.TelegramTopicID != "" {
-					if threadID, err := strconv.Atoi(strings.TrimSpace(delGroup.TelegramTopicID)); err == nil && threadID != 0 {
+					topicID := strings.TrimSpace(delGroup.TelegramTopicID)
+					if threadID, err := strconv.Atoi(topicID); err == nil && threadID != 0 {
 						editPayload["message_thread_id"] = threadID
 					}
 				}

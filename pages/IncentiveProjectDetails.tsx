@@ -362,10 +362,13 @@ const IncentiveProjectDetails: React.FC<IncentiveProjectDetailsProps> = ({ proje
                                                 <div className="flex items-center gap-2">
                                                     {[...calc.achievementTiers].sort((a,b) => a.target - b.target).map((tier, i) => (
                                                         <div key={tier.id} className="flex items-center gap-2 shrink-0">
-                                                            <div className="px-2 py-1 bg-[#121212] border border-[#1A1A1A] rounded flex items-center gap-2">
-                                                                <span className="text-[10px] font-mono text-[#F0B90B] font-bold">${tier.target.toLocaleString()}</span>
-                                                                <ArrowRight className="w-2 h-2 text-[#707A8A]" />
-                                                                <span className="text-[10px] font-mono text-[#0ECB81] font-bold">{tier.rewardType === 'Percentage' ? `${tier.rewardAmount}%` : `$${tier.rewardAmount}`}</span>
+                                                            <div className="px-2 py-1 bg-[#121212] border border-[#1A1A1A] rounded flex flex-col items-center">
+                                                                {tier.subPeriod && <span className="text-[7px] font-black text-[#F0B90B] uppercase tracking-tighter mb-0.5">{tier.subPeriod}</span>}
+                                                                <div className="flex items-center gap-2">
+                                                                    <span className="text-[10px] font-mono text-[#F0B90B] font-bold">${tier.target.toLocaleString()}</span>
+                                                                    <ArrowRight className="w-2 h-2 text-[#707A8A]" />
+                                                                    <span className="text-[10px] font-mono text-[#0ECB81] font-bold">{tier.rewardType === 'Percentage' ? `${tier.rewardAmount}%` : `$${tier.rewardAmount}`}</span>
+                                                                </div>
                                                             </div>
                                                             {i < calc.achievementTiers!.length - 1 && <div className="w-2 h-px bg-[#1A1A1A]"></div>}
                                                         </div>

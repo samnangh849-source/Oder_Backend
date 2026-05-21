@@ -69,7 +69,23 @@ const CalculatorBuilder: React.FC<CalculatorBuilderProps> = ({ projectId, initia
 
     const applyTemplate = (templateId: string) => {
         const updates: Partial<IncentiveCalculator> = {};
-        if (templateId === 'tiered_sales') {
+        if (templateId === 'marathon_sale') {
+            updates.name = 'Marathon Sale Incentives for Team';
+            updates.type = 'Achievement';
+            updates.calculationPeriod = 'Monthly';
+            updates.isMarathon = true;
+            updates.achievementTiers = [
+                { id: 'w1_t1', target: 1200, rewardAmount: 30, rewardType: 'Fixed Cash', subPeriod: 'W1', name: 'សប្តាហ៍ទី ១ - គោលដៅ ១' },
+                { id: 'w1_t2', target: 1400, rewardAmount: 60, rewardType: 'Fixed Cash', subPeriod: 'W1', name: 'សប្តាហ៍ទី ១ - គោលដៅ ២' },
+                { id: 'w2_t1', target: 2400, rewardAmount: 30, rewardType: 'Fixed Cash', subPeriod: 'W2', name: 'សប្តាហ៍ទី ២ - គោលដៅ ១' },
+                { id: 'w2_t2', target: 2800, rewardAmount: 60, rewardType: 'Fixed Cash', subPeriod: 'W2', name: 'សប្តាហ៍ទី ២ - គោលដៅ ២' },
+                { id: 'w3_t1', target: 3600, rewardAmount: 30, rewardType: 'Fixed Cash', subPeriod: 'W3', name: 'សប្តាហ៍ទី ៣ - គោលដៅ ១' },
+                { id: 'w3_t2', target: 4200, rewardAmount: 60, rewardType: 'Fixed Cash', subPeriod: 'W3', name: 'សប្តាហ៍ទី ៣ - គោលដៅ ២' },
+                { id: 'w4_t1', target: 4800, rewardAmount: 30, rewardType: 'Fixed Cash', subPeriod: 'W4', name: 'សប្តាហ៍ទី ៤ - គោលដៅ ១' },
+                { id: 'w4_t2', target: 5600, rewardAmount: 60, rewardType: 'Fixed Cash', subPeriod: 'W4', name: 'សប្តាហ៍ទី ៤ - គោលដៅ ២' }
+            ];
+        }
+ else if (templateId === 'tiered_sales') {
             updates.name = 'Tiered Sales Bonus';
             updates.type = 'Achievement';
             updates.calculationPeriod = 'Monthly';
@@ -78,17 +94,14 @@ const CalculatorBuilder: React.FC<CalculatorBuilderProps> = ({ projectId, initia
                 { id: 't2', target: 6000, rewardAmount: 50, rewardType: 'Fixed Cash', name: 'Silver' },
                 { id: 't3', target: 10000, rewardAmount: 100, rewardType: 'Fixed Cash', name: 'Gold' }
             ];
-        } else if (templateId === 'weekly_progressive') {
-            updates.name = 'Weekly Sprint Incentive';
-            updates.type = 'Achievement';
-            updates.calculationPeriod = 'Weekly';
-            updates.isMarathon = true;
-            updates.achievementTiers = [
-                { id: 'w1', target: 1500, rewardAmount: 10, rewardType: 'Fixed Cash', subPeriod: 'W1', name: 'Week 1 Goal' },
-                { id: 'w2', target: 3000, rewardAmount: 15, rewardType: 'Fixed Cash', subPeriod: 'W2', name: 'Week 2 Goal' },
-                { id: 'w3', target: 4500, rewardAmount: 20, rewardType: 'Fixed Cash', subPeriod: 'W3', name: 'Week 3 Goal' },
-                { id: 'w4', target: 6000, rewardAmount: 30, rewardType: 'Fixed Cash', subPeriod: 'W4', name: 'Week 4 Goal' }
-            ];
+        } else if (templateId === 'above_4000_commission') {
+            updates.name = '5% Commission (> $4000)';
+            updates.type = 'Commission';
+            updates.commissionType = 'Above Target Commission';
+            updates.commissionCondition = 'Above Target';
+            updates.targetAmount = 4000;
+            updates.commissionRate = 5;
+            updates.commissionMethod = 'Percentage';
         } else if (templateId === 'flat_commission') {
             updates.name = 'Standard 1% Commission';
             updates.type = 'Commission';

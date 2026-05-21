@@ -1,6 +1,8 @@
 import React from 'react';
 import { IncentiveCalculator } from '../../../types';
 import { Layers, Plus, Target, Terminal, X, Zap, ArrowRight, ShieldCheck, Activity } from 'lucide-react';
+import { AppContext } from '../../../context/AppContext';
+import { translations } from '../../../translations';
 
 interface Step4LogicProps {
     calcData: Partial<IncentiveCalculator>;
@@ -8,86 +10,164 @@ interface Step4LogicProps {
 }
 
 const Step4Logic: React.FC<Step4LogicProps> = ({ calcData, updateField }) => {
+    const { language } = React.useContext(AppContext);
+    const t = translations[language];
+
     if (calcData.type === 'Achievement') {
-        const sortedTiers = [...(calcData.achievementTiers || [])].sort((a, b) => a.target - b.target);
+        const tiers = calcData.achievementTiers || [];
+        
+        // Group tiers by subPeriod
+        const groups: Record<string, typeof tiers> = {};
+        tiers.forEach(tier => {
+            const key = tier.subPeriod || 'Default';
+            if (!groups[key]) groups[key] = [];
+            groups[key].push(tier);
+        });
+
+        // Sort subPeriods (W1, W2, etc.)
+        const sortedGroupKeys = Object.keys(groups).sort((a, b) => {
+            if (a === 'Default') return 1;
+            if (b === 'Default') return -1;
+            return a.localeCompare(b, undefined, { numeric: true, sensitivity: 'base' });
+        });
+
+        const handleAddTier = (period?: string) => {
+            const nt = [...tiers];
+            const lastTarget = nt.length > 0 ? Math.max(...nt.map(t => t.target)) : 0;
+            nt.push({ 
+                id: `t${Date.now()}`, 
+                target: lastTarget + 1000, 
+                rewardAmount: 0, 
+                rewardType: 'Fixed Cash', 
+                name: `LVL_${nt.length + 1}`,
+                subPeriod: period || ''
+            });
+            updateField('achievementTiers', nt);
+        };
+
+        const updateTier = (id: string, field: string, value: any) => {
+            const nt = [...tiers];
+            const i = nt.findIndex(t => t.id === id);
+            (nt[i] as any)[field] = value;
+            updateField('achievementTiers', nt);
+        };
+
+        const removeTier = (id: string) => {
+            updateField('achievementTiers', tiers.filter(t => t.id !== id));
+        };
+
         return (
-            <div className="space-y-10">
-                <div className="flex justify-between items-center border-b border-[#1A1A1A] pb-6">
-                    <div className="flex items-center gap-4">
-                        <div className="w-10 h-10 rounded bg-[#050505] border border-[#1A1A1A] flex items-center justify-center">
-                            <Target className="w-5 h-5 text-[#F0B90B]" />
+            <div className="space-y-12">
+                <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-6 border-b border-white/5 pb-8">
+                    <div className="flex items-center gap-6">
+                        <div className="w-14 h-14 rounded-2xl bg-black border border-primary/20 flex items-center justify-center shadow-[0_0_20px_rgba(252,213,53,0.1)]">
+                            <Target className="w-7 h-7 text-primary" />
                         </div>
                         <div>
-                            <h3 className="text-lg font-black text-[#EAECEF] uppercase tracking-[0.2em]">Milestone_Architecture</h3>
-                            <p className="text-[9px] font-mono text-[#707A8A] uppercase tracking-widest mt-0.5">Define progressive reward tiers and yield lock points</p>
+                            <h3 className="text-xl font-black text-white uppercase tracking-[0.2em]">{t.milestone_architecture || 'Milestone_Architecture'}</h3>
+                            <p className="text-[10px] font-black text-white/30 uppercase tracking-[0.3em] mt-1">{t.milestone_setup || 'Define progressive reward tiers and yield lock points'}</p>
                         </div>
                     </div>
-                    <button onClick={() => {
-                        const nt = [...(calcData.achievementTiers || [])];
-                        const lastTarget = nt.length > 0 ? Math.max(...nt.map(t => t.target)) : 0;
-                        nt.push({ id: `t${Date.now()}`, target: lastTarget + 1000, rewardAmount: 0, rewardType: 'Fixed Cash', name: `LVL_${nt.length + 1}` });
-                        updateField('achievementTiers', nt);
-                    }} className="h-9 px-4 bg-[#F0B90B] hover:bg-[#D4A50A] text-black rounded text-[10px] font-black uppercase tracking-widest transition-all flex items-center gap-2 active:scale-95 shadow-lg shadow-[#F0B90B]/10">+ ADD_TIER</button>
+                    <button 
+                        onClick={() => handleAddTier()}
+                        className="h-12 px-8 bg-primary hover:bg-[#FCD535] text-black rounded-2xl text-[10px] font-black uppercase tracking-[0.2em] transition-all flex items-center gap-3 active:scale-95 shadow-[0_10px_30px_rgba(252,213,53,0.2)]"
+                    >
+                        <Plus className="w-4 h-4 stroke-[3]" /> {t.add_tier || 'ADD_TIER'}
+                    </button>
                 </div>
 
-                <div className="grid grid-cols-1 gap-3">
-                    {sortedTiers.map((tier, idx) => (
-                        <div key={tier.id} className="flex items-center gap-4 bg-[#080808] p-4 rounded border border-[#1A1A1A] group hover:border-[#F0B90B]/30 transition-all">
-                            <div className="w-10 h-10 shrink-0 rounded bg-[#050505] border border-[#1A1A1A] flex items-center justify-center text-xs font-black text-[#F0B90B] font-mono shadow-inner group-hover:bg-[#F0B90B]/5 transition-colors">{(idx + 1).toString().padStart(2, '0')}</div>
-                            
-                            <div className="w-32">
-                                <label className="text-[8px] font-black text-[#707A8A] uppercase tracking-widest mb-1 block">Identity</label>
-                                <input type="text" value={tier.name || ''} placeholder="ID_KEY" onChange={e => {
-                                    const nt = [...(calcData.achievementTiers||[])];
-                                    const i = nt.findIndex(t => t.id === tier.id);
-                                    nt[i].name = e.target.value;
-                                    updateField('achievementTiers', nt);
-                                }} className="bg-[#050505] border border-[#1A1A1A] rounded h-9 px-3 text-[10px] font-bold text-[#EAECEF] focus:border-[#F0B90B]/50 focus:ring-0 w-full uppercase tracking-widest outline-none transition-all" />
+                <div className="space-y-12">
+                    {sortedGroupKeys.map((groupKey) => (
+                        <div key={groupKey} className="space-y-6">
+                            <div className="flex items-center gap-4">
+                                <div className="h-px flex-1 bg-gradient-to-r from-transparent to-white/5"></div>
+                                <span className="text-[10px] font-black text-primary uppercase tracking-[0.4em] bg-primary/5 px-4 py-1.5 rounded-full border border-primary/20 shadow-[0_0_15px_rgba(252,213,53,0.05)]">
+                                    {groupKey === 'Default' ? 'GLOBAL_TARGETS' : groupKey}
+                                </span>
+                                <div className="h-px flex-1 bg-gradient-to-l from-transparent to-white/5"></div>
                             </div>
 
-                            <div className="flex-1 grid grid-cols-2 gap-4">
-                                <div>
-                                    <label className="text-[8px] font-black text-[#707A8A] uppercase tracking-widest mb-1 block">Target_Threshold</label>
-                                    <div className="relative">
-                                        <input type="number" value={tier.target} onChange={e => {
-                                             const nt = [...(calcData.achievementTiers||[])];
-                                             const i = nt.findIndex(t => t.id === tier.id);
-                                             nt[i].target = Number(e.target.value);
-                                             updateField('achievementTiers', nt);
-                                        }} className="w-full bg-[#050505] border border-[#1A1A1A] rounded h-9 px-3 text-[11px] font-mono font-bold text-[#EAECEF] outline-none focus:border-[#F0B90B]/50 transition-all" />
+                            <div className="grid grid-cols-1 gap-4">
+                                {groups[groupKey].sort((a,b) => a.target - b.target).map((tier) => (
+                                    <div key={tier.id} className="group relative bg-white/[0.02] hover:bg-white/[0.04] border border-white/5 hover:border-primary/30 rounded-[32px] p-6 transition-all duration-500">
+                                        <div className="grid grid-cols-1 lg:grid-cols-[1fr_1.5fr_1.5fr_auto] gap-8 items-center">
+                                            {/* Tier Identity */}
+                                            <div className="space-y-3">
+                                                <div className="flex items-center gap-2">
+                                                    <Terminal className="w-3 h-3 text-white/20" />
+                                                    <label className="text-[9px] font-black text-white/30 uppercase tracking-[0.2em]">{t.field_id}</label>
+                                                </div>
+                                                <input 
+                                                    type="text" value={tier.name || ''} placeholder="ID_KEY"
+                                                    onChange={e => updateTier(tier.id, 'name', e.target.value)}
+                                                    className="w-full bg-black border border-white/5 rounded-xl h-12 px-4 text-[11px] font-black text-white focus:border-primary/50 outline-none transition-all uppercase tracking-widest"
+                                                />
+                                            </div>
+
+                                            {/* Target Threshold */}
+                                            <div className="space-y-3">
+                                                <div className="flex items-center gap-2">
+                                                    <Target className="w-3 h-3 text-white/20" />
+                                                    <label className="text-[9px] font-black text-white/30 uppercase tracking-[0.2em]">{t.target_threshold}</label>
+                                                </div>
+                                                <div className="relative">
+                                                    <div className="absolute left-4 top-1/2 -translate-y-1/2 text-white/20 font-black text-[10px]">$</div>
+                                                    <input 
+                                                        type="number" value={tier.target}
+                                                        onChange={e => updateTier(tier.id, 'target', Number(e.target.value))}
+                                                        className="w-full bg-black border border-white/5 rounded-xl h-12 pl-8 pr-4 text-[13px] font-mono font-black text-white focus:border-primary/50 outline-none transition-all"
+                                                    />
+                                                </div>
+                                            </div>
+
+                                            {/* Payout Logic */}
+                                            <div className="space-y-3">
+                                                <div className="flex items-center gap-2">
+                                                    <Zap className="w-3 h-3 text-white/20" />
+                                                    <label className="text-[9px] font-black text-white/30 uppercase tracking-[0.2em]">{t.yield_payout}</label>
+                                                </div>
+                                                <div className="flex bg-black border border-white/5 rounded-xl overflow-hidden focus-within:border-emerald-500/50 transition-all">
+                                                    <input 
+                                                        type="number" value={tier.rewardAmount}
+                                                        onChange={e => updateTier(tier.id, 'rewardAmount', Number(e.target.value))}
+                                                        className="flex-1 bg-transparent border-none h-12 px-4 text-[13px] font-mono font-black text-emerald-400 outline-none"
+                                                    />
+                                                    <select 
+                                                        value={tier.rewardType}
+                                                        onChange={e => updateTier(tier.id, 'rewardType', e.target.value)}
+                                                        className="bg-white/5 border-none px-4 text-[10px] font-black text-white/40 outline-none cursor-pointer uppercase tracking-widest hover:text-white transition-colors"
+                                                    >
+                                                        <option value="Fixed Cash">USD</option>
+                                                        <option value="Percentage">PCT</option>
+                                                    </select>
+                                                </div>
+                                            </div>
+
+                                            {/* Delete Action */}
+                                            <button 
+                                                onClick={() => removeTier(tier.id)}
+                                                className="w-12 h-12 flex items-center justify-center bg-black hover:bg-red-500/10 text-white/20 hover:text-red-500 rounded-2xl border border-white/5 transition-all group/del"
+                                            >
+                                                <X className="w-5 h-5 group-hover/del:rotate-90 transition-transform duration-300" />
+                                            </button>
+                                        </div>
                                     </div>
-                                </div>
-                                <div>
-                                    <label className="text-[8px] font-black text-[#707A8A] uppercase tracking-widest mb-1 block">Yield_Payout</label>
-                                    <div className="flex bg-[#050505] border border-[#1A1A1A] rounded overflow-hidden focus-within:border-[#F0B90B]/50 transition-all">
-                                        <input type="number" value={tier.rewardAmount} onChange={e => {
-                                             const nt = [...(calcData.achievementTiers||[])];
-                                             const i = nt.findIndex(t => t.id === tier.id);
-                                             nt[i].rewardAmount = Number(e.target.value);
-                                             updateField('achievementTiers', nt);
-                                        }} className="w-full bg-transparent border-none h-9 px-3 text-[11px] font-mono font-bold text-[#0ECB81] focus:ring-0 outline-none" />
-                                        <select value={tier.rewardType} onChange={e => {
-                                             const nt = [...(calcData.achievementTiers||[])];
-                                             const i = nt.findIndex(t => t.id === tier.id);
-                                             nt[i].rewardType = e.target.value as any;
-                                             updateField('achievementTiers', nt);
-                                        }} className="bg-[#1A1A1A] border-none px-2 text-[9px] font-bold text-[#707A8A] outline-none cursor-pointer uppercase">
-                                            <option value="Fixed Cash">USD</option>
-                                            <option value="Percentage">PCT</option>
-                                        </select>
-                                    </div>
-                                </div>
+                                ))}
+                                <button 
+                                    onClick={() => handleAddTier(groupKey === 'Default' ? '' : groupKey)}
+                                    className="h-14 border border-white/5 border-dashed rounded-[24px] flex items-center justify-center gap-3 text-white/20 hover:text-primary hover:border-primary/30 hover:bg-primary/5 transition-all text-[10px] font-black uppercase tracking-[0.3em] group/add"
+                                >
+                                    <Plus className="w-4 h-4 group-hover/add:scale-125 transition-transform" /> 
+                                    Insert_Tier_into_{groupKey}
+                                </button>
                             </div>
-                            
-                            <button onClick={() => updateField('achievementTiers', (calcData.achievementTiers||[]).filter(t => t.id !== tier.id))} className="w-8 h-8 flex items-center justify-center text-[#707A8A] hover:text-[#F6465D] hover:bg-[#F6465D]/10 rounded transition-all">
-                                <X className="w-4 h-4" />
-                            </button>
                         </div>
                     ))}
-                    {sortedTiers.length === 0 && (
-                        <div className="h-32 border border-[#1A1A1A] border-dashed rounded flex flex-col items-center justify-center text-[#707A8A] uppercase tracking-[0.2em] text-[10px] font-bold">
-                            <Terminal className="w-6 h-6 mb-2 opacity-20" />
-                            No_Milestones_Defined
+
+                    {tiers.length === 0 && (
+                        <div className="h-64 border border-white/5 border-dashed rounded-[48px] flex flex-col items-center justify-center text-white/10 group">
+                            <Terminal className="w-12 h-12 mb-4 opacity-10 group-hover:opacity-20 transition-opacity" />
+                            <p className="text-[10px] font-black uppercase tracking-[0.4em]">{t.no_calculators}</p>
                         </div>
                     )}
                 </div>
@@ -102,8 +182,8 @@ const Step4Logic: React.FC<Step4LogicProps> = ({ calcData, updateField }) => {
                     <Layers className="w-5 h-5 text-[#0ECB81]" />
                 </div>
                 <div>
-                    <h3 className="text-lg font-black text-[#EAECEF] uppercase tracking-[0.2em]">Commission_Logic_Studio</h3>
-                    <p className="text-[9px] font-mono text-[#707A8A] uppercase tracking-widest mt-0.5">Configure transaction-based payout rules and conditions</p>
+                    <h3 className="text-lg font-black text-[#EAECEF] uppercase tracking-[0.2em]">{t.commission_rule || 'Commission_Logic_Studio'}</h3>
+                    <p className="text-[9px] font-mono text-[#707A8A] uppercase tracking-widest mt-0.5">{t.calculators_engine_desc}</p>
                 </div>
             </div>
 
@@ -112,7 +192,7 @@ const Step4Logic: React.FC<Step4LogicProps> = ({ calcData, updateField }) => {
                     <div className="space-y-3">
                         <div className="flex items-center gap-2">
                             <Terminal className="w-3.5 h-3.5 text-[#707A8A]" />
-                            <label className="text-[9px] font-black text-[#707A8A] uppercase tracking-[0.2em]">Calculation_Method</label>
+                            <label className="text-[9px] font-black text-[#707A8A] uppercase tracking-[0.2em]">{t.reward_method || 'Calculation_Method'}</label>
                         </div>
                         <div className="flex p-1 bg-[#050505] rounded border border-[#1A1A1A]">
                             {['Percentage', 'Fixed Amount'].map(m => (
@@ -142,7 +222,7 @@ const Step4Logic: React.FC<Step4LogicProps> = ({ calcData, updateField }) => {
                         <div className="space-y-3 p-5 bg-[#080808] border border-[#1A1A1A] rounded animate-in zoom-in-95 duration-300">
                             <div className="flex items-center gap-2">
                                 <ArrowRight className="w-3.5 h-3.5 text-[#F0B90B]" />
-                                <label className="text-[9px] font-black text-[#707A8A] uppercase tracking-[0.2em]">Target_Threshold_Locked</label>
+                                <label className="text-[9px] font-black text-[#707A8A] uppercase tracking-[0.2em]">{t.target_threshold || 'Target_Threshold_Locked'}</label>
                             </div>
                             <input type="number" value={calcData.targetAmount} onChange={e => updateField('targetAmount', Number(e.target.value))} className="w-full h-11 bg-[#050505] border border-[#1A1A1A] rounded px-4 text-[13px] font-mono font-bold text-[#EAECEF] outline-none focus:border-[#F0B90B]/50 transition-all" />
                             <p className="text-[8px] font-bold text-[#707A8A] uppercase tracking-widest italic opacity-60">Rule: (PERF_KPI - TARGET) × RATE_VAL</p>
@@ -152,7 +232,7 @@ const Step4Logic: React.FC<Step4LogicProps> = ({ calcData, updateField }) => {
                     <div className="space-y-3">
                         <div className="flex items-center gap-2">
                             <Activity className="w-3.5 h-3.5 text-[#707A8A]" />
-                            <label className="text-[9px] font-black text-[#707A8A] uppercase tracking-[0.2em]">Multiplier_Value ({calcData.commissionMethod === 'Percentage' ? '%' : '$'})</label>
+                            <label className="text-[9px] font-black text-[#707A8A] uppercase tracking-[0.2em]">{t.multiplier_value || 'Multiplier_Value'} ({calcData.commissionMethod === 'Percentage' ? '%' : '$'})</label>
                         </div>
                         <input type="number" value={calcData.commissionRate} onChange={e => updateField('commissionRate', Number(e.target.value))} className="w-full h-14 bg-[#050505] border border-[#1A1A1A] rounded px-6 text-2xl font-mono font-black text-[#F0B90B] outline-none focus:border-[#F0B90B] transition-all shadow-inner" />
                     </div>
