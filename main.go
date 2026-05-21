@@ -134,6 +134,8 @@ func mapToDBColumn(key string) string {
 		"Return Photo":            "return_photo_url",
 		"Return Received By":      "return_received_by",
 		"Return Received Time":    "return_received_time",
+		"Delivery Photo Sent Count": "delivery_photo_sent_count",
+		"Delivery Telegram Message ID": "delivery_telegram_message_id",
 		"Driver Name":             "driver_name",
 		"Tracking Number":         "tracking_number",
 		"Dispatched Time":         "dispatched_time",
@@ -1345,7 +1347,13 @@ func handleAdminUpdateOrder(c *gin.Context) {
 
 		// ✅ Auto-log ReturnItems when status changes to Returned
 		if newStatusRaw, ok := r.NewData["Fulfillment Status"]; ok {
-			if strings.TrimSpace(fmt.Sprintf("%v", newStatusRaw)) == "Returned" {
+			newStatusStr := strings.TrimSpace(fmt.Sprintf("%v", newStatusRaw))
+
+			if newStatusStr == "Returned" || newStatusStr == "Cancelled" {
+				go AddWatermarkAndEditTelegramMedia(originalOrder, newStatusStr)
+			}
+
+			if newStatusStr == "Returned" {
 				var products []map[string]interface{}
 				if err := json.Unmarshal([]byte(originalOrder.ProductsJSON), &products); err == nil {
 					for _, p := range products {
@@ -2431,6 +2439,7 @@ func main() {
 			adminGroup.GET("/orders", RequirePermission("view_order_list"), handleGetAllOrders)
 			adminGroup.GET("/all-orders", RequirePermission("view_order_list"), handleGetAllOrders)
 			adminGroup.POST("/update-order", RequirePermission("edit_order"), handleAdminUpdateOrder)
+			adminGroup.POST("/send-delivery-telegram", RequirePermission("edit_order"), handleSendDeliveryTelegram)
 
 			// ── Shift Management Routes ──
 			adminGroup.GET("/shifts/active/:storeName", handleGetActiveShift)
@@ -2615,6 +2624,112 @@ func convertDriveURLToDirect(url string) string {
 		return fmt.Sprintf("https://drive.google.com/thumbnail?id=%s&sz=w1000", id)
 	}
 	return url
+}
+
+func handleSendDeliveryTelegram(c *gin.Context) {
+	var r struct {
+		OrderID string `json:"orderId"`
+	}
+	if err := c.ShouldBindJSON(&r); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"status": "error", "message": err.Error()})
+		return
+	}
+
+	var order Order
+	if err := backend.DB.Where("order_id = ?", r.OrderID).First(&order).Error; err != nil {
+		c.JSON(http.StatusNotFound, gin.H{"status": "error", "message": "Order not found"})
+		return
+	}
+
+	if order.FulfillmentStore == "" {
+		c.JSON(http.StatusBadRequest, gin.H{"status": "error", "message": "Order has no fulfillment store"})
+		return
+	}
+
+	var store Store
+	if err := backend.DB.Where("store_name = ?", order.FulfillmentStore).First(&store).Error; err != nil {
+		c.JSON(http.StatusNotFound, gin.H{"status": "error", "message": "Store not found"})
+		return
+	}
+
+	if store.TelegramBotToken == "" || store.DeliveryTelegramGroupID == "" {
+		c.JSON(http.StatusBadRequest, gin.H{"status": "error", "message": "Telegram settings for delivery driver missing for this store"})
+		return
+	}
+
+	if order.PackagePhotoURL == "" {
+		c.JSON(http.StatusBadRequest, gin.H{"status": "error", "message": "No package photo found for this order"})
+		return
+	}
+
+	// Prepare message
+	text := fmt.Sprintf("📦 *រូបភាពកញ្ចប់បញ្ញើ*\n🏷️ លេខកូដ: `%s`\n🏠 ហាង: *%s*\n🧑‍🔧 អ្នកវេចខ្ចប់: *%s*", order.OrderID, order.FulfillmentStore, order.PackedBy)
+	if order.InternalShippingMethod != "" {
+		text += fmt.Sprintf("\n🚚 ដឹកដោយ: *%s*", order.InternalShippingMethod)
+	}
+
+	apiURL := fmt.Sprintf("https://api.telegram.org/bot%s/sendPhoto", store.TelegramBotToken)
+	payload := map[string]interface{}{
+		"chat_id":    store.DeliveryTelegramGroupID,
+		"parse_mode": "Markdown",
+		"photo":      convertDriveURLToDirect(order.PackagePhotoURL),
+		"caption":    text,
+	}
+
+	if store.DeliveryTelegramTopicID != "" {
+		payload["message_thread_id"] = store.DeliveryTelegramTopicID
+	}
+
+	jsonData, _ := json.Marshal(payload)
+	resp, err := http.Post(apiURL, "application/json", bytes.NewBuffer(jsonData))
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"status": "error", "message": "Failed to call Telegram API: " + err.Error()})
+		return
+	}
+	defer resp.Body.Close()
+
+	var resData map[string]interface{}
+	json.NewDecoder(resp.Body).Decode(&resData)
+	if ok, _ := resData["ok"].(bool); !ok {
+		c.JSON(http.StatusInternalServerError, gin.H{"status": "error", "message": "Telegram API error", "details": resData})
+		return
+	}
+
+	// Capture the message ID from the response
+	var messageID string
+	if result, ok := resData["result"].(map[string]interface{}); ok {
+		if msgID, ok := result["message_id"].(float64); ok {
+			messageID = fmt.Sprintf("%.0f", msgID)
+		}
+	}
+
+	// Update counter and message ID in database
+	newCount := order.DeliveryPhotoSentCount + 1
+	backend.DB.Model(&order).Updates(map[string]interface{}{
+		"delivery_photo_sent_count":    newCount,
+		"delivery_telegram_message_id": messageID,
+	})
+
+	// Trigger Sheet Sync
+	backend.EnqueueSync("updateSheet", map[string]interface{}{
+		"Delivery Photo Sent Count": newCount,
+		"Delivery Telegram Message ID": messageID,
+	}, "AllOrders", map[string]string{"Order ID": order.OrderID})
+
+	// Trigger WebSocket Broadcast
+	eventBytes, _ := json.Marshal(map[string]interface{}{
+		"type": "update_order",
+		"data": map[string]interface{}{
+			"orderId": order.OrderID,
+			"newData": map[string]interface{}{
+				"Delivery Photo Sent Count": newCount,
+				"Delivery Telegram Message ID": messageID,
+			},
+		},
+	})
+	hub.Broadcast <- eventBytes
+
+	c.JSON(http.StatusOK, gin.H{"status": "success", "message": "បញ្ជូនរូបភាពទៅ Telegram អ្នកដឹកជោគជ័យ!"})
 }
 
 func sendShiftTelegramNotification(storeName string, shiftType string, userName string, photoURL string, summary string, stickerID string) {
