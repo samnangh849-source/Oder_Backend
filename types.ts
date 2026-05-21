@@ -82,8 +82,10 @@ export interface FullOrder {
     "Return Photo"?: string;
     "Return Received By"?: string;
     "Return Received Time"?: string;
-}
-
+    "Delivery Photo Sent Count"?: number;
+    "Delivery Telegram Message ID"?: string;
+    "Delivery Daily Sequence"?: number;
+    }
 export interface InventoryItem {
     id?: number; // Added for GORM
     StoreName: string;
@@ -128,13 +130,12 @@ export interface Store {
   Address: string;
   TelegramBotToken: string;
   TelegramGroupID: string;
-  TelegramTopicID: string;
-  LabelPrinterURL: string;
-  CODAlertGroupID: string;
-}
+  TelegramTopicID?: string;
+  LabelPrinterURL?: string;
+  CODAlertGroupID?: string;
+  }
 
-export interface TeamPage {
-  ID?: number; // Added to match Go
+  export interface TeamPage {  ID?: number; // Added to match Go
   PageName: string;
   Team: string;
   TelegramValue: string;
@@ -151,6 +152,8 @@ export interface ShippingMethod {
   InternalCost: number;
   CostShortcuts: string;
   EnableDriverRecommendation?: boolean;
+  DeliveryTelegramGroupID?: string;
+  DeliveryTelegramTopicID?: string;
 }
 
 export interface DriverRecommendation {

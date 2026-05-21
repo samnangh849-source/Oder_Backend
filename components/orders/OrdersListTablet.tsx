@@ -183,8 +183,15 @@ const OrdersListTablet: React.FC<OrdersListTabletProps> = ({
                                         `}</style>
                                         {/* Watermark Overlay (List Mode) */}
                                         {(isCancelled || isReturned) && (
-                                            <div className={`absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 rotate-[-12deg] pointer-events-none z-10 opacity-20 font-black text-2xl tracking-[0.2em] whitespace-nowrap ${isCancelled ? 'text-red-600' : 'text-purple-400'}`}>
-                                                {isCancelled ? 'CANCELLED' : 'RETURNED'}
+                                            <div className={`absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 rotate-[-12deg] pointer-events-none z-10 flex flex-col items-center justify-center`}>
+                                                <div className={`font-black text-2xl tracking-[0.2em] whitespace-nowrap opacity-20 ${isCancelled ? 'text-red-600' : 'text-purple-400'}`}>
+                                                    {isCancelled ? 'CANCELLED' : 'RETURNED'}
+                                                </div>
+                                                {(order['Cancel Reason'] || order['Return Reason']) && (
+                                                    <div className={`text-[10px] font-black uppercase tracking-widest mt-1 px-2 py-0.5 rounded border opacity-60 ${isCancelled ? 'text-red-500 border-red-500/30' : 'text-purple-400 border-purple-400/30'}`}>
+                                                        {order['Cancel Reason'] || order['Return Reason']}
+                                                    </div>
+                                                )}
                                             </div>
                                         )}
                                         <div className="flex-shrink-0" onClick={e => e.stopPropagation()}>
@@ -259,8 +266,15 @@ const OrdersListTablet: React.FC<OrdersListTabletProps> = ({
                                     `}</style>
                                     {/* Watermark Overlay (Card Mode) */}
                                     {(isCancelled || isReturned) && (
-                                        <div className={`absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 rotate-[-12deg] pointer-events-none z-10 opacity-20 font-black text-5xl tracking-[0.2em] whitespace-nowrap ${isCancelled ? 'text-red-600' : 'text-purple-400'}`}>
-                                            {isCancelled ? 'CANCELLED' : 'RETURNED'}
+                                        <div className={`absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 rotate-[-12deg] pointer-events-none z-10 flex flex-col items-center justify-center`}>
+                                            <div className={`font-black text-5xl tracking-[0.2em] whitespace-nowrap opacity-20 ${isCancelled ? 'text-red-600' : 'text-purple-400'}`}>
+                                                {isCancelled ? 'CANCELLED' : 'RETURNED'}
+                                            </div>
+                                            {(order['Cancel Reason'] || order['Return Reason']) && (
+                                                <div className={`text-xs font-black uppercase tracking-[0.2em] mt-2 px-3 py-1 rounded-lg border opacity-60 ${isCancelled ? 'text-red-500 border-red-500/30' : 'text-purple-400 border-purple-400/30'}`}>
+                                                    {order['Cancel Reason'] || order['Return Reason']}
+                                                </div>
+                                            )}
                                         </div>
                                     )}
                                     <div className="flex justify-between items-start mb-5">

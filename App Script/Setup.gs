@@ -18,7 +18,7 @@ const SYSTEM_STRUCTURE = {
   "TeamsPages": ["ID", "Team", "PageName", "TelegramValue", "PageLogoURL", "DefaultStore", "TelegramTopicID"],
   "Products": ["Barcode", "ProductName", "Price", "Cost", "ImageURL", "Tags"],
   "Locations": ["ID", "Province", "District", "Sangkat"],
-  "ShippingMethods": ["MethodName", "LogoURL", "AllowManualDriver", "RequireDriverSelection", "InternalCost", "CostShortcuts", "EnableDriverRecommendation"],
+  "ShippingMethods": ["MethodName", "LogoURL", "AllowManualDriver", "RequireDriverSelection", "InternalCost", "CostShortcuts", "EnableDriverRecommendation", "DeliveryTelegramGroupID", "DeliveryTelegramTopicID"],
   "Colors": ["ColorName"],
   "Drivers": ["DriverName", "ImageURL", "Phone", "InternalCost", "AssignedStores"],
   "BankAccounts": ["BankName", "LogoURL", "AssignedStores"],
@@ -46,7 +46,7 @@ const SYSTEM_STRUCTURE = {
     "Total Product Cost ($)", "Telegram Message ID 1", "Telegram Message ID 2", "Telegram Message ID 3", "Scheduled Time", 
     "Fulfillment Store", "Team", "IsVerified", "Fulfillment Status", "Packed By", "Packed Time", 
     "Package Photo", "Driver Name", "Tracking Number", "Dispatched Time", "Dispatched By", "Delivered Time", "Delivery Photo URL",
-    "Cancel Reason", "Return Reason", "Return Photo", "Return Received By", "Return Received Time"
+    "Cancel Reason", "Return Reason", "Return Photo", "Return Received By", "Return Received Time", "Delivery Photo Sent Count", "Delivery Telegram Message ID", "Delivery Daily Sequence"
   ],
   "RevenueDashboard": ["ID", "Timestamp", "Team", "Page", "Revenue", "FulfillmentStore"],
   

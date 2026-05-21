@@ -237,6 +237,11 @@ const OrdersListMobile: React.FC<OrdersListMobileProps> = ({
                                     </span>
                                 )}
                                 {isVisible('fulfillmentStatus') && <FulfillmentBadge status={fs} />}
+                                {(order['Cancel Reason'] || order['Return Reason']) && (
+                                    <span className={`text-[9px] font-bold px-1.5 py-0.5 rounded-sm border uppercase tracking-tight flex items-center gap-1 ${isCancelled ? 'bg-red-500/10 text-red-500 border-red-500/20' : 'bg-purple-500/10 text-purple-400 border-purple-500/20'}`}>
+                                        <Clock size={8} /> {order['Cancel Reason'] || order['Return Reason']}
+                                    </span>
+                                )}
                                 {showVerify && isVerified && (
                                     <div className="flex items-center gap-1 text-emerald-500 text-[9px] font-black uppercase">
                                         <Check size={10} strokeWidth={4}/> VERIFIED
@@ -500,6 +505,11 @@ const OrdersListMobile: React.FC<OrdersListMobileProps> = ({
                         {isVisible('status') && (
                             <span className={`text-[8px] font-black px-1 py-0.5 rounded-sm ${isPaid ? 'bg-emerald-500/10 text-emerald-500' : 'bg-red-500/10 text-red-500'}`}>
                                 {isPaid ? 'PAID' : 'UNPAID'}
+                            </span>
+                        )}
+                        {(order['Cancel Reason'] || order['Return Reason']) && (
+                            <span className={`text-[8px] font-bold px-1 py-0.5 rounded-sm border uppercase tracking-tighter flex items-center gap-0.5 ${order.FulfillmentStatus === 'Cancelled' ? 'bg-red-500/10 text-red-500 border-red-500/20' : 'bg-purple-500/10 text-purple-400 border-purple-500/20'}`}>
+                                <Clock size={7} /> {order['Cancel Reason'] || order['Return Reason']}
                             </span>
                         )}
                     </div>

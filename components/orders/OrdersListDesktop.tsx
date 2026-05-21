@@ -408,8 +408,10 @@ const ColumnContent = ({ col, order, data, item, enriched }: { col: string, orde
                 'Cancelled': 'bg-[#F6465D]/10 text-[#F6465D]',
                 'Returned': 'bg-purple-500/20 text-purple-300',
             };
+            const reason = order['Cancel Reason'] || order['Return Reason'];
             return (
-                <div className="w-full flex items-center justify-center">
+                <div className="w-full flex items-center justify-center os-tooltip-trigger">
+                    {reason && <div className="os-tooltip">{reason}</div>}
                     <span className={`px-2.5 py-1 rounded text-[9px] font-bold uppercase tracking-wider ${fsColors[fs] || 'bg-[#2B3139] text-[#848E9C]'}`}>
                         {fs}
                     </span>

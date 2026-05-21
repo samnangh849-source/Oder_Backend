@@ -339,6 +339,11 @@ const MobilePackagingHub: React.FC<MobilePackagingHubProps> = ({
                                             <div className={`rotate-[-12deg] font-black text-2xl tracking-[0.1em] whitespace-nowrap opacity-25 ${isCancelled ? 'text-red-500' : 'text-purple-400'}`}>
                                                 {isCancelled ? 'CANCELLED' : 'RETURNED'}
                                             </div>
+                                            {(order['Cancel Reason'] || order['Return Reason']) && (
+                                                <div className={`text-[9px] font-black uppercase tracking-widest mt-1 px-2 py-0.5 rounded border opacity-40 ${isCancelled ? 'text-red-500 border-red-500/30' : 'text-purple-400 border-purple-400/30'}`}>
+                                                    {order['Cancel Reason'] || order['Return Reason']}
+                                                </div>
+                                            )}
                                         </div>
                                     )}
                                     {loadingActionId === order['Order ID'] && (

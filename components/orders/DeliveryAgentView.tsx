@@ -483,6 +483,11 @@ const DeliveryAgentView: React.FC<DeliveryAgentViewProps> = ({ orderIds, returnO
                                                         <span className={`text-[8px] font-black uppercase px-2 py-0.5 rounded border ${isReturned ? 'bg-red-600/10 text-red-500 border-red-500/20' : isFailed ? 'bg-orange-600/10 text-orange-500 border-orange-500/20' : 'bg-emerald-600/10 text-emerald-500 border-emerald-500/20'}`}>
                                                             {isReturned ? 'Returned' : isFailed ? 'Failed' : 'Success'}
                                                         </span>
+                                                        {(o['Return Reason'] || o['Cancel Reason']) && (
+                                                            <span className="text-[7px] font-bold text-red-400 uppercase truncate max-w-[80px]">
+                                                                {o['Return Reason'] || o['Cancel Reason']}
+                                                            </span>
+                                                        )}
                                                     </div>
                                                 </div>
                                             </div>

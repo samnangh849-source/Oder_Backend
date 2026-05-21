@@ -599,7 +599,6 @@ const PackagingView: React.FC<{ orders?: ParsedOrder[], onExit?: () => void }> =
         },
         onCloseShift: handleCloseShift,
         shippingFilter, setShippingFilter, teamFilter, setTeamFilter,
-        shippingCounts,
         selectedStore, tabCounts, viewMode, setViewMode, loadingActionId: isShiftLoading ? 'shift-loading' : loadingActionId,
         selectedOrderIds, toggleOrderSelection: (id: string) => !isViewOnly && setSelectedOrderIds(prev => { const n = new Set(prev); n.has(id) ? n.delete(id) : n.add(id); return n; }),
         clearSelection: () => setSelectedOrderIds(new Set()),

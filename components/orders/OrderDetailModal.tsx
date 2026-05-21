@@ -3,6 +3,8 @@ import { AppContext } from '../../context/AppContext';
 import { ParsedOrder } from '../../types';
 import { safeParseDate } from '../../utils/dateUtils';
 import { convertGoogleDriveUrl, getOptimisticPackagePhoto } from '../../utils/fileUtils';
+import { WEB_APP_URL } from '../../constants';
+import { CacheService, CACHE_KEYS } from '../../services/cacheService';
 import Modal from '../common/Modal';
 import { 
     Copy, 
@@ -11,6 +13,7 @@ import {
     Phone, 
     MapPin, 
     Truck, 
+    Trash,
     CreditCard, 
     Package, 
     Box, 
@@ -29,10 +32,71 @@ interface OrderDetailModalProps {
 const OrderDetailModal: React.FC<OrderDetailModalProps> = ({ order, onClose }) => {
     const { previewImage, appData } = useContext(AppContext);
     const [copiedField, setCopiedField] = useState<string | null>(null);
+    const [isSendingTelegram, setIsSendingTelegram] = useState(false);
 
     const page = appData.pages?.find(p => p.PageName === order.Page);
     const bank = appData.bankAccounts?.find(b => b.BankName === order['Payment Info']);
     const shippingMethod = appData.shippingMethods?.find(m => m.MethodName === order['Internal Shipping Method']);
+
+    const handleSendToDeliveryTelegram = async () => {
+        setIsSendingTelegram(true);
+        try {
+            const session = await CacheService.get<{ token: string }>(CACHE_KEYS.SESSION);
+            const token = session?.token || '';
+            const res = await fetch(`${WEB_APP_URL}/api/admin/send-delivery-telegram`, {
+                method: 'POST',
+                headers: { 
+                    'Content-Type': 'application/json',
+                    ...(token ? { 'Authorization': `Bearer ${token}` } : {})
+                },
+                body: JSON.stringify({ orderId: order['Order ID'] })
+            });
+            const data = await res.json();
+            if (data.status === 'success') {
+                alert('បញ្ជូនរូបភាពទៅ Telegram អ្នកដឹកជោគជ័យ!');
+            } else {
+                let errorMsg = data.message || 'មិនស្គាល់បញ្ហា';
+                if (data.details && data.details.description) {
+                    errorMsg += ` (${data.details.description})`;
+                }
+                alert('បរាជ័យ: ' + errorMsg);
+            }
+        } catch (error) {
+            console.error("Error sending to telegram:", error);
+            alert('មានបញ្ហាក្នុងការបញ្ជូនរូបភាព (Server Error)។');
+        } finally {
+            setIsSendingTelegram(false);
+        }
+    };
+
+    const handleDeleteFromDeliveryTelegram = async () => {
+        if (!confirm('តើអ្នកពិតជាចង់លុបរូបភាពនេះចេញពី Telegram មែនទេ? លេខរៀងនឹងត្រូវបានរៀបចំឡើងវិញ។')) return;
+        
+        setIsSendingTelegram(true);
+        try {
+            const session = await CacheService.get<{ token: string }>(CACHE_KEYS.SESSION);
+            const token = session?.token || '';
+            const res = await fetch(`${WEB_APP_URL}/api/admin/delete-delivery-telegram`, {
+                method: 'POST',
+                headers: { 
+                    'Content-Type': 'application/json',
+                    ...(token ? { 'Authorization': `Bearer ${token}` } : {})
+                },
+                body: JSON.stringify({ orderId: order['Order ID'] })
+            });
+            const data = await res.json();
+            if (data.status === 'success') {
+                alert('លុបចេញពី Telegram ជោគជ័យ!');
+            } else {
+                alert('បរាជ័យ: ' + (data.message || 'មិនស្គាល់បញ្ហា'));
+            }
+        } catch (error) {
+            console.error("Error deleting from telegram:", error);
+            alert('មានបញ្ហាក្នុងការលុប។');
+        } finally {
+            setIsSendingTelegram(false);
+        }
+    };
 
     const handleCopy = (text: string, field: string) => {
         navigator.clipboard.writeText(text);
@@ -330,6 +394,36 @@ const OrderDetailModal: React.FC<OrderDetailModalProps> = ({ order, onClose }) =
                                     <h3 className="text-[10px] sm:text-xs font-black uppercase tracking-[0.2em] sm:tracking-[0.3em] text-[#FCD535]">Operations Hub</h3>
                                 </div>
                                 <div className="space-y-5 sm:space-y-6 relative z-10">
+                                    {order['Cancel Reason'] && (
+                                        <div className="space-y-2">
+                                            <label className="text-[8px] sm:text-[9px] font-black text-red-400 uppercase tracking-[0.2em] sm:tracking-[0.25em] ml-1 flex items-center gap-2">
+                                                <Zap size={10} /> Cancel Reason (មូលហេតុបោះបង់)
+                                            </label>
+                                            <div className="bg-red-500/10 border border-red-500/30 p-3 sm:p-4 rounded-xl">
+                                                <p className="text-[10px] sm:text-xs font-black text-red-400 uppercase tracking-wider">{order['Cancel Reason']}</p>
+                                            </div>
+                                        </div>
+                                    )}
+                                    {order['Return Reason'] && (
+                                        <div className="space-y-2">
+                                            <label className="text-[8px] sm:text-[9px] font-black text-purple-400 uppercase tracking-[0.2em] sm:tracking-[0.25em] ml-1 flex items-center gap-2">
+                                                <Zap size={10} /> Return Reason (មូលហេតុប្តូរ/សង)
+                                            </label>
+                                            <div className="bg-purple-500/10 border border-purple-500/30 p-3 sm:p-4 rounded-xl">
+                                                <p className="text-[10px] sm:text-xs font-black text-purple-400 uppercase tracking-wider">{order['Return Reason']}</p>
+                                            </div>
+                                        </div>
+                                    )}
+                                    {order['Return Received By'] && (
+                                        <div className="space-y-2">
+                                            <label className="text-[8px] sm:text-[9px] font-black text-emerald-400 uppercase tracking-[0.2em] sm:tracking-[0.25em] ml-1 flex items-center gap-2">
+                                                <ShieldCheck size={10} /> Return Confirmed By
+                                            </label>
+                                            <div className="bg-emerald-500/10 border border-emerald-500/30 p-3 sm:p-4 rounded-xl">
+                                                <p className="text-[10px] sm:text-xs font-black text-emerald-400 uppercase tracking-wider">{order['Return Received By']} at {order['Return Received Time']}</p>
+                                            </div>
+                                        </div>
+                                    )}
                                     <div className="space-y-2">
                                         <label className="text-[8px] sm:text-[9px] font-black text-[#848E9C] uppercase tracking-[0.2em] sm:tracking-[0.25em] ml-1 flex items-center gap-2">
                                             <User size={10} /> Packed By (អ្នកវេចខ្ចប់)
@@ -428,7 +522,8 @@ const OrderDetailModal: React.FC<OrderDetailModalProps> = ({ order, onClose }) =
                                     <h3 className="text-[10px] sm:text-[11px] font-black uppercase tracking-[0.2em] sm:tracking-[0.25em] text-[#848E9C]">Package Evidence</h3>
                                 </div>
                                 {getOptimisticPackagePhoto(order['Order ID'], order['Package Photo']) ? (
-                                    <div className="relative group aspect-square rounded-2xl border-2 border-[#2B3139] bg-[#0B0E11] cursor-pointer overflow-hidden shadow-2xl transition-all hover:border-[#FCD535]/50" onClick={() => previewImage(getOptimisticPackagePhoto(order['Order ID'], order['Package Photo']))}>
+                                    <>
+                                        <div className="relative group aspect-square rounded-2xl border-2 border-[#2B3139] bg-[#0B0E11] cursor-pointer overflow-hidden shadow-2xl transition-all hover:border-[#FCD535]/50" onClick={() => previewImage(getOptimisticPackagePhoto(order['Order ID'], order['Package Photo']))}>
                                        <img src={getOptimisticPackagePhoto(order['Order ID'], order['Package Photo'])} className="w-full h-full object-cover transition-all duration-1000 sm:grayscale sm:group-hover:grayscale-0 group-hover:scale-110" alt="Package Proof" />
                                        <div className="absolute inset-0 bg-black/50 opacity-0 group-hover:opacity-100 transition-all duration-500 flex items-center justify-center backdrop-blur-[2px]">
                                             <div className="w-12 h-12 sm:w-16 sm:h-16 border-2 border-[#FCD535] bg-[#0B0E11]/90 rounded-xl sm:rounded-2xl flex items-center justify-center text-[#FCD535] shadow-[0_0_30px_rgba(252,213,53,0.3)] scale-75 group-hover:scale-100 transition-all duration-500">
@@ -441,8 +536,32 @@ const OrderDetailModal: React.FC<OrderDetailModalProps> = ({ order, onClose }) =
                                             <span className="text-[8px] sm:text-[10px] font-black uppercase tracking-widest text-white">Encrypted Proof</span>
                                         </div>
                                     </div>
-                                ) : (
-                                    <div className="aspect-square rounded-2xl border-2 border-dashed border-[#2B3139] flex flex-col items-center justify-center gap-4 sm:gap-5 text-[#848E9C] bg-[#1E2329]/30 group hover:border-[#FCD535]/30 transition-all">
+                                    <div className="flex gap-2 mt-3">
+                                        <button 
+                                            onClick={handleSendToDeliveryTelegram}
+                                            disabled={isSendingTelegram}
+                                            className={`flex-1 flex items-center justify-center gap-2 px-4 py-2.5 ${order['Delivery Photo Sent Count'] && order['Delivery Photo Sent Count'] > 0 ? 'bg-[#1E2329] hover:bg-[#2B3139] border border-[#0ECB81]/30' : 'bg-[#2B3139] hover:bg-[#323842]'} text-white rounded-xl text-[10px] sm:text-xs font-black uppercase tracking-widest transition-all shadow-lg active:scale-95 disabled:opacity-50`}
+                                        >
+                                            <Truck size={14} className="text-[#0ECB81]" />
+                                            {isSendingTelegram ? '...' : 
+                                                order['Delivery Photo Sent Count'] && order['Delivery Photo Sent Count'] > 0 
+                                                    ? `ម្តងទៀត (${order['Delivery Daily Sequence'] ? '#' + order['Delivery Daily Sequence'] : order['Delivery Photo Sent Count'] + ' ដង'})` 
+                                                    : 'បញ្ជូនទៅអ្នកដឹក'}
+                                        </button>
+                                        {(order['Delivery Telegram Message ID'] || (order as any)['Delivery Telegram Message ID']) && (
+                                            <button 
+                                                onClick={handleDeleteFromDeliveryTelegram}
+                                                disabled={isSendingTelegram}
+                                                className="w-10 flex items-center justify-center bg-red-500/10 hover:bg-red-500/20 text-red-500 rounded-xl border border-red-500/20 transition-all active:scale-95 disabled:opacity-50"
+                                                title="លុបចេញពី Telegram"
+                                            >
+                                                <Trash size={16} />
+                                            </button>
+                                        )}
+                                    </div>
+                                </>
+                            ) : (
+                                <div className="aspect-square rounded-2xl border-2 border-dashed border-[#2B3139] flex flex-col items-center justify-center gap-4 sm:gap-5 text-[#848E9C] bg-[#1E2329]/30 group hover:border-[#FCD535]/30 transition-all">
                                         <div className="w-12 h-12 sm:w-16 sm:h-16 bg-[#1E2329] border border-[#2B3139] rounded-xl sm:rounded-2xl flex items-center justify-center opacity-40 group-hover:opacity-100 group-hover:scale-110 duration-500 shadow-xl">
                                             <Package size={24} className="sm:w-8 sm:h-8" />
                                         </div>
