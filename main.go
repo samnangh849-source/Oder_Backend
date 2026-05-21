@@ -2688,16 +2688,25 @@ func handleSendDeliveryTelegram(c *gin.Context) {
 	}
 
 	jsonData, _ := json.Marshal(payload)
+	log.Printf("📤 [Telegram Delivery] Sending photo for order %s to chat %v", order.OrderID, payload["chat_id"])
+	
 	resp, err := http.Post(apiURL, "application/json", bytes.NewBuffer(jsonData))
 	if err != nil {
+		log.Printf("❌ [Telegram Delivery] HTTP Error: %v", err)
 		c.JSON(http.StatusInternalServerError, gin.H{"status": "error", "message": "Failed to call Telegram API: " + err.Error()})
 		return
 	}
 	defer resp.Body.Close()
 
 	var resData map[string]interface{}
-	json.NewDecoder(resp.Body).Decode(&resData)
+	if err := json.NewDecoder(resp.Body).Decode(&resData); err != nil {
+		log.Printf("❌ [Telegram Delivery] Decode Error: %v", err)
+		c.JSON(http.StatusInternalServerError, gin.H{"status": "error", "message": "Failed to decode Telegram response"})
+		return
+	}
+
 	if ok, _ := resData["ok"].(bool); !ok {
+		log.Printf("❌ [Telegram Delivery] API Error: %v", resData)
 		c.JSON(http.StatusInternalServerError, gin.H{"status": "error", "message": "Telegram API error", "details": resData})
 		return
 	}
@@ -2710,12 +2719,16 @@ func handleSendDeliveryTelegram(c *gin.Context) {
 		}
 	}
 
+	log.Printf("✅ [Telegram Delivery] Photo sent for order %s, Message ID: %s", order.OrderID, messageID)
+
 	// Update counter and message ID in database
 	newCount := order.DeliveryPhotoSentCount + 1
-	backend.DB.Model(&order).Updates(map[string]interface{}{
+	if err := backend.DB.Model(&order).Updates(map[string]interface{}{
 		"delivery_photo_sent_count":    newCount,
 		"delivery_telegram_message_id": messageID,
-	})
+	}).Error; err != nil {
+		log.Printf("❌ [Telegram Delivery] DB Update Error: %v", err)
+	}
 
 	// Trigger Sheet Sync
 	backend.EnqueueSync("updateSheet", map[string]interface{}{
@@ -2723,15 +2736,13 @@ func handleSendDeliveryTelegram(c *gin.Context) {
 		"Delivery Telegram Message ID": messageID,
 	}, "AllOrders", map[string]string{"Order ID": order.OrderID})
 
-	// Trigger WebSocket Broadcast
+	// Trigger WebSocket Broadcast - Use the standard structure
 	eventBytes, _ := json.Marshal(map[string]interface{}{
 		"type": "update_order",
-		"data": map[string]interface{}{
-			"orderId": order.OrderID,
-			"newData": map[string]interface{}{
-				"Delivery Photo Sent Count": newCount,
-				"Delivery Telegram Message ID": messageID,
-			},
+		"orderId": order.OrderID,
+		"newData": map[string]interface{}{
+			"Delivery Photo Sent Count": newCount,
+			"Delivery Telegram Message ID": messageID,
 		},
 	})
 	hub.Broadcast <- eventBytes
@@ -2878,23 +2889,38 @@ func AddWatermarkAndEditTelegramMedia(order Order, newStatus string) {
 		fontSize = 20
 	}
 	
-	err = dc.LoadFontFace("Font/DOMEG.ttf", fontSize)
-	if err != nil {
-		err = dc.LoadFontFace("../Font/DOMEG.ttf", fontSize)
+	fontLoaded := false
+	fontPaths := []string{"Font/DOMEG.ttf", "../Font/DOMEG.ttf", "Font/DOMKH.ttf", "../Font/DOMKH.ttf"}
+	for _, path := range fontPaths {
+		if err := dc.LoadFontFace(path, fontSize); err == nil {
+			fontLoaded = true
+			break
+		}
 	}
 
 	dc.SetColor(watermarkColor)
 	dc.Rotate(gg.Radians(-30))
-	dc.DrawStringAnchored(watermarkText, float64(width)/2.0, float64(height)/2.0, 0.5, 0.5)
+	if fontLoaded {
+		dc.DrawStringAnchored(watermarkText, float64(width)/2.0, float64(height)/2.0, 0.5, 0.5)
+	} else {
+		// Fallback if no font loaded: draw a big rectangle and text using strokes (gg doesn't have internal fonts)
+		// Or just draw a big X
+		dc.SetLineWidth(fontSize / 2.0)
+		dc.DrawLine(0, 0, float64(width), float64(height))
+		dc.DrawLine(0, float64(height), float64(width), 0)
+		dc.Stroke()
+	}
 	dc.Identity() // Reset transformations
 
-	// Draw border / additional strokes for better visibility
-	dc.SetColor(color.RGBA{255, 255, 255, 150})
-	dc.SetLineWidth(4)
-	dc.Rotate(gg.Radians(-30))
-	dc.DrawStringAnchored(watermarkText, float64(width)/2.0, float64(height)/2.0, 0.5, 0.5)
-	dc.Stroke()
-	dc.Identity()
+	if fontLoaded {
+		// Draw border / additional strokes for better visibility
+		dc.SetColor(color.RGBA{255, 255, 255, 150})
+		dc.SetLineWidth(4)
+		dc.Rotate(gg.Radians(-30))
+		dc.DrawStringAnchored(watermarkText, float64(width)/2.0, float64(height)/2.0, 0.5, 0.5)
+		dc.Stroke()
+		dc.Identity()
+	}
 
 	// Save to buffer
 	buf := new(bytes.Buffer)
