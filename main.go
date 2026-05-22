@@ -3143,7 +3143,7 @@ func handleSendDeliveryTelegram(c *gin.Context) {
 	})
 	hub.Broadcast <- eventBytes
 
-	c.JSON(http.StatusOK, gin.H{"status": "success", "message": "បញ្ជូនរូបភាពទៅ Telegram អ្នកដឹកជោគជ័យ!"})
+	c.JSON(http.StatusOK, gin.H{"status": "success", "message": "បញ្ជូនរូបភាពកញ្ចប់ទៅ Telegram រួចរាល់!"})
 }
 
 func sendShiftTelegramNotification(storeName string, shiftType string, userName string, photoURL string, summary string, stickerID string) {
