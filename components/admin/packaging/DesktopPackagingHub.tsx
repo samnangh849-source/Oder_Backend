@@ -816,10 +816,10 @@ const DesktopPackagingHub: React.FC<DesktopPackagingHubProps> = ({
                                                                                         onClick={(e) => { e.stopPropagation(); handleSendToDeliveryTelegram(order); }}
                                                                                         disabled={isSendingTelegram || !getCanSendToDriver(order)}
                                                                                         className={`px-2 py-1 ${!getCanSendToDriver(order) ? 'bg-[#2B3139] text-gray-500 cursor-not-allowed' : 'bg-blue-600 hover:bg-blue-500 text-white'} rounded-sm text-[9px] font-black uppercase tracking-wider transition-all flex items-center gap-1`}
-                                                                                        title="Send to Driver Telegram"
+                                                                                        title="Send Package Photo"
                                                                                     >
-                                                                                        {isSendingTelegram ? <Spinner size="xs" /> : <Truck size={10} />}
-                                                                                        បញ្ជូនអោយអ្នកដឹក
+                                                                                        {isSendingTelegram ? <Spinner size="xs" /> : <ImageIcon size={10} />}
+                                                                                        បញ្ជូនរូបភាពកញ្ចប់
                                                                                     </button>
                                                                                 )}
                                                                             </div>

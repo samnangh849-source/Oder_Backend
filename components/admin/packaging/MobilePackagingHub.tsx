@@ -559,9 +559,10 @@ const MobilePackagingHub: React.FC<MobilePackagingHubProps> = ({
                                                         disabled={isSendingTelegram || !getCanSendToDriver(order)}
                                                         className={`w-full flex items-center justify-center gap-3 py-2 ${!getCanSendToDriver(order) ? 'bg-[#2B3139] text-gray-500 cursor-not-allowed' : 'bg-blue-600 hover:bg-blue-500 text-white'} rounded-sm text-xs font-black uppercase tracking-widest transition-all shadow-lg active:scale-95 disabled:opacity-50`}
                                                     >
-                                                        {isSendingTelegram ? <Spinner size="xs" /> : <Truck size={14} />}
-                                                        {isSendingTelegram ? 'Processing...' : 'បញ្ជូនអោយអ្នកដឹក (Send to Driver)'}
+                                                        {isSendingTelegram ? <Spinner size="xs" /> : <ImageIcon size={14} />}
+                                                        {isSendingTelegram ? 'Processing...' : 'បញ្ជូនរូបភាពកញ្ចប់ (Send Photo)'}
                                                     </button>
+
                                                 )}
                                             </div>
                                         )}
@@ -695,3 +696,4 @@ const MobilePackagingHub: React.FC<MobilePackagingHubProps> = ({
 };
 
 export default MobilePackagingHub;
+gHub;

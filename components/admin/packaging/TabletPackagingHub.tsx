@@ -538,8 +538,8 @@ const TabletPackagingHub: React.FC<TabletPackagingHubProps> = ({
                                                                             disabled={isSendingTelegram || !getCanSendToDriver(order)}
                                                                             className={`w-full flex items-center justify-center gap-1.5 py-1 ${!getCanSendToDriver(order) ? 'bg-[#2B3139] text-gray-500 cursor-not-allowed' : 'bg-blue-600 hover:bg-blue-500 text-white'} rounded-sm text-[8px] font-black uppercase tracking-widest transition-all shadow-lg active:scale-95 disabled:opacity-50`}
                                                                         >
-                                                                            {isSendingTelegram ? <Spinner size="xs" /> : <Truck size={10} />}
-                                                                            បញ្ជូនអោយអ្នកដឹក
+                                                                            {isSendingTelegram ? <Spinner size="xs" /> : <ImageIcon size={10} />}
+                                                                            បញ្ជូនរូបភាពកញ្ចប់
                                                                         </button>
                                                                     )}
                                                                 </div>
@@ -660,3 +660,4 @@ const TabletPackagingHub: React.FC<TabletPackagingHubProps> = ({
 };
 
 export default TabletPackagingHub;
+b;
