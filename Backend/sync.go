@@ -383,8 +383,8 @@ func processPersistentTask(workerID int, task *SyncTask) {
 func processStuckTasks(workerID int) {
 	// 1. Handle addRow batching (Efficient for logs)
 	var batchRecords []PendingSync
-	// Find all pending addRow tasks
-	DB.Where("status = 'pending' AND (payload->>'action' = 'addRow' OR payload LIKE '%\"action\":\"addRow\"%')").Find(&batchRecords)
+	// Find all pending addRow tasks (Using LIKE for cross-DB compatibility with TEXT columns)
+	DB.Where("status = 'pending' AND payload LIKE '%\"action\":\"addRow\"%'").Find(&batchRecords)
 	
 	if len(batchRecords) > 1 {
 		// Group by sheetName
