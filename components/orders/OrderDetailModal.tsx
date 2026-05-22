@@ -13,7 +13,7 @@ import {
     User, 
     Phone, 
     MapPin, 
-    Truck, 
+    Image as ImageIcon,
     Trash,
     CreditCard, 
     Package, 
@@ -120,7 +120,7 @@ const OrderDetailModal: React.FC<OrderDetailModalProps> = ({ order, onClose }) =
             });
             const data = await res.json();
             if (data.status === 'success') {
-                alert('បញ្ជូនរូបភាពទៅ Telegram អ្នកដឹកជោគជ័យ!');
+                alert('បញ្ជូនរូបភាពកញ្ចប់ទៅ Telegram រួចរាល់!');
             } else {
                 let errorMsg = data.message || 'មិនស្គាល់បញ្ហា';
                 if (data.details && data.details.description) {
@@ -662,10 +662,10 @@ const OrderDetailModal: React.FC<OrderDetailModalProps> = ({ order, onClose }) =
                                                                             onClick={(e) => { e.stopPropagation(); handleSendToDeliveryTelegram(); }}
                                                                             disabled={isSendingTelegram || !canSendToDriver}
                                                                             className={`w-full flex items-center justify-center gap-2 px-3 py-2 ${!canSendToDriver ? 'bg-gray-800 text-gray-500 cursor-not-allowed border-gray-700' : 'bg-blue-600 hover:bg-blue-500 text-white'} rounded-lg text-[9px] font-black uppercase tracking-widest transition-all shadow-lg active:scale-95 disabled:opacity-50`}
-                                                                            title={!canSendToDriver ? "អាចផ្ញើបានតែក្នុងស្ថានភាព Ready for Dispatch និងដោយអ្នកបើកវេនប៉ុណ្ណោះ" : "ចុចដើម្បីបញ្ជូនទៅ Telegram"}
+                                                                            title={!canSendToDriver ? "អាចផ្ញើបានតែក្នុងស្ថានភាព Ready for Dispatch និងដោយអ្នកបើកវេនប៉ុណ្ណោះ" : "បញ្ជូនរូបភាពកញ្ចប់ទៅ Telegram"}
                                                                         >
-                                                                            <Truck size={12} className={canSendToDriver ? "text-white" : "text-gray-600"} />
-                                                                            {isSendingTelegram ? 'Processing...' : 'បញ្ជូនទៅអ្នកដឹក'}
+                                                                            <ImageIcon size={12} className={canSendToDriver ? "text-white" : "text-gray-600"} />
+                                                                            {isSendingTelegram ? 'Processing...' : 'បញ្ជូនរូបភាពកញ្ចប់'}
                                                                         </button>
                                                                     ) : null}
                                                                 </div>

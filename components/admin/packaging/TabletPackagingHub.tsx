@@ -82,7 +82,7 @@ const TabletPackagingHub: React.FC<TabletPackagingHubProps> = ({
             });
             const data = await res.json();
             if (data.status === 'success') {
-                alert('បញ្ជូនរូបភាពទៅ Telegram អ្នកដឹកជោគជ័យ!');
+                alert('បញ្ជូនរូបភាពកញ្ចប់ទៅ Telegram រួចរាល់!');
             } else {
                 alert('បញ្ជូនបរាជ័យ: ' + (data.message || 'Unknown error'));
             }

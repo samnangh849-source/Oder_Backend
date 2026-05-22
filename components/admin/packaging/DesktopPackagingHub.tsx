@@ -88,7 +88,7 @@ const DesktopPackagingHub: React.FC<DesktopPackagingHubProps> = ({
             });
             const data = await res.json();
             if (data.status === 'success') {
-                alert('បញ្ជូនរូបភាពទៅ Telegram អ្នកដឹកជោគជ័យ!');
+                alert('បញ្ជូនរូបភាពកញ្ចប់ទៅ Telegram រួចរាល់!');
             } else {
                 alert('បញ្ជូនបរាជ័យ: ' + (data.message || 'Unknown error'));
             }
@@ -647,10 +647,10 @@ const DesktopPackagingHub: React.FC<DesktopPackagingHubProps> = ({
                                                                                         onClick={(e) => { e.stopPropagation(); handleSendToDeliveryTelegram(order); }}
                                                                                         disabled={isSendingTelegram || !getCanSendToDriver(order)}
                                                                                         className={`w-full flex items-center justify-center gap-2 py-1.5 ${!getCanSendToDriver(order) ? 'bg-[#2B3139] text-gray-500 cursor-not-allowed border-[#363C44]' : 'bg-blue-600 hover:bg-blue-500 text-white'} rounded-sm text-[10px] font-black uppercase tracking-widest transition-all shadow-lg active:scale-95 disabled:opacity-50`}
-                                                                                        title={!getCanSendToDriver(order) ? "Only shift opener can send" : "Send to Driver Telegram"}
+                                                                                        title={!getCanSendToDriver(order) ? "Only shift opener can send" : "Send Package Photo"}
                                                                                     >
-                                                                                        {isSendingTelegram ? <Spinner size="xs" /> : <Truck size={12} />}
-                                                                                        {isSendingTelegram ? 'Processing...' : 'បញ្ជូនអោយអ្នកដឹក'}
+                                                                                        {isSendingTelegram ? <Spinner size="xs" /> : <ImageIcon size={12} />}
+                                                                                        {isSendingTelegram ? 'Processing...' : 'បញ្ជូនរូបភាពកញ្ចប់'}
                                                                                     </button>
                                                                                 )}
                                                                             </div>
