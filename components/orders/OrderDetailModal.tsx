@@ -46,14 +46,12 @@ const OrderDetailModal: React.FC<OrderDetailModalProps> = ({ order, onClose }) =
 
         // Global rule: Only allowed in "Ready to Ship" status
         if (!isReadyForDispatch) return false;
-
         if (!currentUser) return false;
-        // If user is System Admin, allow override for the person check (but still must be Ready to Ship)
-        if (currentUser.IsSystemAdmin) return true;
         
         const orderStore = (order['Fulfillment Store'] || '').trim().toLowerCase();
         const myShiftStore = (activeShiftStore || '').trim().toLowerCase();
         
+        // Strict: Only the person who opened the packaging shift for this store can send
         return isShiftOpener && orderStore === myShiftStore;
     }, [isShiftOpener, activeShiftStore, order, currentUser]);
 

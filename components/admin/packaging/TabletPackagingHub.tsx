@@ -135,11 +135,11 @@ const TabletPackagingHub: React.FC<TabletPackagingHubProps> = ({
         const isReadyForDispatch = fs === 'Ready to Ship';
         if (!isReadyForDispatch) return false;
         if (!currentUser) return false;
-        if (currentUser.IsSystemAdmin) return true;
         
         const orderStore = (order['Fulfillment Store'] || '').trim().toLowerCase();
         const myShiftStore = (activeShiftStore || '').trim().toLowerCase();
         
+        // Strict: Only the person who opened the packaging shift for this store can send
         return isShiftOpener && orderStore === myShiftStore;
     };
 
