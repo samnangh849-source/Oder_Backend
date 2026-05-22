@@ -1848,6 +1848,20 @@ func handleGetRevenueSummary(c *gin.Context) {
 	c.JSON(200, gin.H{"status": "success", "data": revs})
 }
 
+func handleGetSyncStatus(c *gin.Context) {
+	var count int64
+	backend.DB.Model(&backend.PendingSync{}).Where("status = 'pending' OR status = 'failed'").Count(&count)
+	
+	var permanentFailures int64
+	backend.DB.Model(&backend.PendingSync{}).Where("status = 'permanent_failure'").Count(&permanentFailures)
+
+	c.JSON(200, gin.H{
+		"status": "success", 
+		"pendingCount": count,
+		"permanentFailures": permanentFailures,
+	})
+}
+
 // ─── Telegram Bot Webhook Handlers ───
 
 func handleRegisterTelegramWebhook(c *gin.Context) {
@@ -2609,6 +2623,7 @@ func main() {
 
 				restricted.POST("/migrate-data", backend.HandleMigrateData)
 				restricted.GET("/revenue-summary", handleGetRevenueSummary)
+				restricted.GET("/sync-status", handleGetSyncStatus)
 				restricted.POST("/update-sheet", handleAdminUpdateSheet)
 				restricted.POST("/add-row", handleAdminAddRow)
 				restricted.POST("/delete-row", handleAdminDeleteRow)
