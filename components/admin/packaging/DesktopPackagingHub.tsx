@@ -5,6 +5,9 @@ import Spinner from '@/components/common/Spinner';
 import { convertGoogleDriveUrl, getOptimisticPackagePhoto } from '@/utils/fileUtils';
 import { safeParseDate } from '@/utils/dateUtils';
 import Modal from '@/components/common/Modal';
+import { Truck, Trash, Check } from 'lucide-react';
+import { WEB_APP_URL } from '@/constants';
+import { CacheService, CACHE_KEYS } from '@/services/cacheService';
 
 // --- Theme Constants ---
 const B_BG_MAIN = 'bg-[#0B0E11]';
@@ -66,10 +69,85 @@ const DesktopPackagingHub: React.FC<DesktopPackagingHubProps> = ({
     selectedOrderIds, toggleOrderSelection, clearSelection, onBulkShip, isBulkProcessing,
     onToggleSelectAll, onConfirmReturn, onCloseShift, isViewOnly, activeShift, onUnpack
 }) => {
-    const { appData, previewImage: showFullImage } = useContext(AppContext);
+    const { appData, previewImage: showFullImage, isShiftOpener, activeShiftStore, currentUser } = useContext(AppContext);
     const [unpackTarget, setUnpackTarget] = useState<ParsedOrder | null>(null);
+    const [isSendingTelegram, setIsSendingTelegram] = useState(false);
+
+    const handleSendToDeliveryTelegram = async (order: ParsedOrder) => {
+        setIsSendingTelegram(true);
+        try {
+            const session = await CacheService.get<{ token: string }>(CACHE_KEYS.SESSION);
+            const token = session?.token || '';
+            const res = await fetch(`${WEB_APP_URL}/api/admin/send-delivery-telegram`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    ...(token ? { 'Authorization': `Bearer ${token}` } : {})
+                },
+                body: JSON.stringify({ orderId: order['Order ID'] })
+            });
+            const data = await res.json();
+            if (data.status === 'success') {
+                alert('បញ្ជូនរូបភាពទៅ Telegram អ្នកដឹកជោគជ័យ!');
+            } else {
+                alert('បញ្ជូនបរាជ័យ: ' + (data.message || 'Unknown error'));
+            }
+        } catch (err: any) {
+            alert('បញ្ជូនបរាជ័យ: ' + err.message);
+        } finally {
+            setIsSendingTelegram(false);
+        }
+    };
+
+    const handleDeleteFromDeliveryTelegram = async (order: ParsedOrder) => {
+        if (!window.confirm('តើអ្នកពិតជាចង់លុបរូបភាពចេញពី Telegram អ្នកដឹកមែនទេ?')) return;
+        setIsSendingTelegram(true);
+        try {
+            const session = await CacheService.get<{ token: string }>(CACHE_KEYS.SESSION);
+            const token = session?.token || '';
+            const res = await fetch(`${WEB_APP_URL}/api/admin/delete-delivery-telegram`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    ...(token ? { 'Authorization': `Bearer ${token}` } : {})
+                },
+                body: JSON.stringify({ orderId: order['Order ID'] })
+            });
+            const data = await res.json();
+            if (data.status === 'success') {
+                alert('លុបរូបភាពចេញពី Telegram រួចរាល់!');
+            } else {
+                alert('លុបបរាជ័យ: ' + (data.message || 'Unknown error'));
+            }
+        } catch (err: any) {
+            alert('លុបបរាជ័យ: ' + err.message);
+        } finally {
+            setIsSendingTelegram(false);
+        }
+    };
 
     const activeFilterCount = (shippingFilter ? 1 : 0) + (teamFilter ? 1 : 0);
+
+    const getDeliveryGroup = (order: ParsedOrder) => {
+        if (!order['Internal Shipping Method'] || !order['Fulfillment Store']) return null;
+        return appData.deliveryGroups?.find(dg =>
+            dg.ShippingMethod === order['Internal Shipping Method'] &&
+            dg.StoreName === order['Fulfillment Store']
+        );
+    };
+
+    const getCanSendToDriver = (order: ParsedOrder) => {
+        const fs = (order as any).FulfillmentStatus || (order as any)['Fulfillment Status'] || 'Pending';
+        const isReadyForDispatch = fs === 'Ready to Ship';
+        if (!isReadyForDispatch) return false;
+        if (!currentUser) return false;
+        if (currentUser.IsSystemAdmin) return true;
+        
+        const orderStore = (order['Fulfillment Store'] || '').trim().toLowerCase();
+        const myShiftStore = (activeShiftStore || '').trim().toLowerCase();
+        
+        return isShiftOpener && orderStore === myShiftStore;
+    };
 
     const handleCopy = (text: string, label: string) => {
         if (!text) return;
@@ -530,7 +608,7 @@ const DesktopPackagingHub: React.FC<DesktopPackagingHubProps> = ({
                                                         </div>
                                                     </div>
 
-                                                    <div className={`p-2 border-t ${B_BORDER} bg-[#0B0E11] grid ${activeTab === 'Pending' ? 'grid-cols-2 gap-2' : activeTab === 'Ready to Ship' ? 'grid-cols-3 gap-2' : activeTab === 'Cancelled' ? 'grid-cols-[80px_1fr] gap-2' : 'grid-cols-2 gap-2'}`}>
+                                                    <div className={`p-2 border-t ${B_BORDER} bg-[#0B0E11] grid ${activeTab === 'Pending' ? 'grid-cols-2 gap-2' : activeTab === 'Ready to Ship' ? 'grid-cols-2 gap-2' : activeTab === 'Cancelled' ? 'grid-cols-[80px_1fr] gap-2' : 'grid-cols-2 gap-2'}`}>
                                                         <button onClick={(e) => { e.stopPropagation(); onView(order); }} className={`w-full py-1.5 bg-[#2B3139] hover:bg-[#3B424A] ${B_TEXT_PRIMARY} text-xs font-medium transition-colors rounded-sm`}>Details</button>
                                                         {activeTab === 'Cancelled' && order['Return Received By'] && (
                                                             <div className="flex items-center justify-center border border-[#FCD535]/30 bg-[#FCD535]/10 rounded-sm px-2 overflow-hidden shadow-[0_0_10px_rgba(252,213,53,0.05)]">
@@ -546,6 +624,37 @@ const DesktopPackagingHub: React.FC<DesktopPackagingHubProps> = ({
                                                                     <>
                                                                         <button onClick={(e) => { e.stopPropagation(); onUndo(order); }} className={`w-full py-1.5 bg-[#F6465D]/10 hover:bg-[#F6465D]/20 ${B_RED} text-xs font-bold uppercase transition-colors rounded-sm`}>Undo</button>
                                                                         <button onClick={(e) => { e.stopPropagation(); onShip(order); }} className={`w-full py-1.5 ${B_ACCENT_BG} text-xs font-bold uppercase transition-colors rounded-sm`}>Ship</button>
+                                                                        
+                                                                        {getDeliveryGroup(order)?.TelegramGroupID && (
+                                                                            <div className="col-span-2">
+                                                                                {!!(order['Delivery Telegram Message ID'] || (order as any)['Delivery Telegram Message ID']) ? (
+                                                                                    <div className="flex items-center gap-2">
+                                                                                        <div className="flex-grow flex items-center justify-center gap-2 py-1.5 bg-[#0ECB81]/10 border border-[#0ECB81]/20 rounded-sm">
+                                                                                            <Check size={10} className="text-[#0ECB81]" />
+                                                                                            <span className="text-[9px] font-black text-[#0ECB81] uppercase tracking-widest">Sent to Driver</span>
+                                                                                        </div>
+                                                                                        <button 
+                                                                                            onClick={(e) => { e.stopPropagation(); handleDeleteFromDeliveryTelegram(order); }}
+                                                                                            disabled={isSendingTelegram || !getCanSendToDriver(order)}
+                                                                                            className={`w-9 h-9 flex items-center justify-center ${!getCanSendToDriver(order) ? 'bg-[#2B3139] text-gray-600' : 'bg-red-500/10 hover:bg-red-500/20 text-red-500'} rounded-sm border border-red-500/20 transition-all active:scale-95 disabled:opacity-50`}
+                                                                                            title={!getCanSendToDriver(order) ? "Only shift opener can delete" : "Delete from Telegram"}
+                                                                                        >
+                                                                                            {isSendingTelegram ? <Spinner size="xs" /> : <Trash size={12} />}
+                                                                                        </button>
+                                                                                    </div>
+                                                                                ) : (
+                                                                                    <button 
+                                                                                        onClick={(e) => { e.stopPropagation(); handleSendToDeliveryTelegram(order); }}
+                                                                                        disabled={isSendingTelegram || !getCanSendToDriver(order)}
+                                                                                        className={`w-full flex items-center justify-center gap-2 py-1.5 ${!getCanSendToDriver(order) ? 'bg-[#2B3139] text-gray-500 cursor-not-allowed border-[#363C44]' : 'bg-blue-600 hover:bg-blue-500 text-white'} rounded-sm text-[10px] font-black uppercase tracking-widest transition-all shadow-lg active:scale-95 disabled:opacity-50`}
+                                                                                        title={!getCanSendToDriver(order) ? "Only shift opener can send" : "Send to Driver Telegram"}
+                                                                                    >
+                                                                                        {isSendingTelegram ? <Spinner size="xs" /> : <Truck size={12} />}
+                                                                                        {isSendingTelegram ? 'Processing...' : 'បញ្ជូនអោយអ្នកដឹក'}
+                                                                                    </button>
+                                                                                )}
+                                                                            </div>
+                                                                        )}
                                                                     </>
                                                                 )}
                                                             </>
@@ -684,10 +793,40 @@ const DesktopPackagingHub: React.FC<DesktopPackagingHubProps> = ({
                                                             <>
                                                                 {activeTab === 'Pending' && <button onClick={(e) => { e.stopPropagation(); onPack(order); }} className={`px-4 py-1 ${B_ACCENT_BG} text-xs font-bold uppercase rounded-sm`}>Pack</button>}
                                                                 {activeTab === 'Ready to Ship' && (
-                                                                    <>
+                                                                    <div className="flex items-center gap-2">
+                                                                        {getDeliveryGroup(order)?.TelegramGroupID && (
+                                                                            <div className="flex items-center gap-1.5 mr-1">
+                                                                                {!!(order['Delivery Telegram Message ID'] || (order as any)['Delivery Telegram Message ID']) ? (
+                                                                                    <div className="flex items-center gap-1.5">
+                                                                                        <div className="flex items-center gap-1 px-2 py-0.5 bg-[#0ECB81]/10 border border-[#0ECB81]/20 rounded-sm">
+                                                                                            <Check size={8} className="text-[#0ECB81]" />
+                                                                                            <span className="text-[8px] font-black text-[#0ECB81] uppercase">Sent</span>
+                                                                                        </div>
+                                                                                        <button 
+                                                                                            onClick={(e) => { e.stopPropagation(); handleDeleteFromDeliveryTelegram(order); }}
+                                                                                            disabled={isSendingTelegram || !getCanSendToDriver(order)}
+                                                                                            className={`p-1 ${!getCanSendToDriver(order) ? 'text-gray-600' : 'text-red-500 hover:bg-red-500/10'} rounded-sm transition-all disabled:opacity-50`}
+                                                                                            title="Delete from Telegram"
+                                                                                        >
+                                                                                            {isSendingTelegram ? <Spinner size="xs" /> : <Trash size={10} />}
+                                                                                        </button>
+                                                                                    </div>
+                                                                                ) : (
+                                                                                    <button 
+                                                                                        onClick={(e) => { e.stopPropagation(); handleSendToDeliveryTelegram(order); }}
+                                                                                        disabled={isSendingTelegram || !getCanSendToDriver(order)}
+                                                                                        className={`px-2 py-1 ${!getCanSendToDriver(order) ? 'bg-[#2B3139] text-gray-500 cursor-not-allowed' : 'bg-blue-600 hover:bg-blue-500 text-white'} rounded-sm text-[9px] font-black uppercase tracking-wider transition-all flex items-center gap-1`}
+                                                                                        title="Send to Driver Telegram"
+                                                                                    >
+                                                                                        {isSendingTelegram ? <Spinner size="xs" /> : <Truck size={10} />}
+                                                                                        បញ្ជូនអោយអ្នកដឹក
+                                                                                    </button>
+                                                                                )}
+                                                                            </div>
+                                                                        )}
                                                                         <button onClick={(e) => { e.stopPropagation(); onUndo(order); }} className={`px-3 py-1 bg-[#F6465D]/10 hover:bg-[#F6465D]/20 ${B_RED} text-xs font-bold uppercase rounded-sm transition-colors`}>Undo</button>
                                                                         <button onClick={(e) => { e.stopPropagation(); onShip(order); }} className={`px-4 py-1 ${B_ACCENT_BG} text-xs font-bold uppercase rounded-sm`}>Ship</button>
-                                                                    </>
+                                                                    </div>
                                                                 )}
                                                             </>
                                                         )}
