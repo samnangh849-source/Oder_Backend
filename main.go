@@ -1649,6 +1649,36 @@ func handleAdminUpdateSheet(c *gin.Context) {
 					backend.DB.Session(&gorm.Session{AllowGlobalUpdate: true}).Delete(&RolePermission{})
 					backend.DB.CreateInBatches(items, 100)
 				}
+			case "Locations":
+				var items []Location
+				if err := backend.FetchSheetDataToStruct(sheetName, &items); err == nil {
+					backend.DB.Session(&gorm.Session{AllowGlobalUpdate: true}).Delete(&Location{})
+					backend.DB.CreateInBatches(items, 100)
+				}
+			case "Colors":
+				var items []Color
+				if err := backend.FetchSheetDataToStruct(sheetName, &items); err == nil {
+					backend.DB.Session(&gorm.Session{AllowGlobalUpdate: true}).Delete(&Color{})
+					backend.DB.CreateInBatches(items, 100)
+				}
+			case "PhoneCarriers":
+				var items []PhoneCarrier
+				if err := backend.FetchSheetDataToStruct(sheetName, &items); err == nil {
+					backend.DB.Session(&gorm.Session{AllowGlobalUpdate: true}).Delete(&PhoneCarrier{})
+					backend.DB.CreateInBatches(items, 100)
+				}
+			case "TelegramTemplates":
+				var items []TelegramTemplate
+				if err := backend.FetchSheetDataToStruct(sheetName, &items); err == nil {
+					backend.DB.Session(&gorm.Session{AllowGlobalUpdate: true}).Delete(&TelegramTemplate{})
+					backend.DB.CreateInBatches(items, 100)
+				}
+			case "DeliveryGroups":
+				var items []DeliveryGroup
+				if err := backend.FetchSheetDataToStruct(sheetName, &items); err == nil {
+					backend.DB.Session(&gorm.Session{AllowGlobalUpdate: true}).Delete(&DeliveryGroup{})
+					backend.DB.CreateInBatches(items, 100)
+				}
 			}
 			log.Printf("✅ Selective Sync: Completed refresh for sheet %s", sheetName)
 			// Broadcast completion

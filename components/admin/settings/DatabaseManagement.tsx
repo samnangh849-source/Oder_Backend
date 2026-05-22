@@ -46,6 +46,7 @@ const SYNC_STEPS = [
     { label: 'Products',             showCount: true,  sheet: "Products" },
     { label: 'Locations',            showCount: true,  sheet: "Locations" },
     { label: 'ShippingMethods',      showCount: true,  sheet: "ShippingMethods" },
+    { label: 'DeliveryGroups',       showCount: true,  sheet: "DeliveryGroups" },
     { label: 'Colors',               showCount: true,  sheet: "Colors" },
     { label: 'Drivers',              showCount: true,  sheet: "Drivers" },
     { label: 'BankAccounts',         showCount: true,  sheet: "BankAccounts" },
