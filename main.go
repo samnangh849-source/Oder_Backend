@@ -170,6 +170,9 @@ func mapToDBColumn(key string) string {
 		"Key":                     "config_key",
 		"Value":                   "config_value",
 		"Description":             "description",
+		"TelegramGroupID":         "telegram_group_id",
+		"TelegramTopicID":          "telegram_topic_id",
+		"CODAlertGroupID":         "cod_alert_group_id",
 	}
 
 	// Standard mapping logic
