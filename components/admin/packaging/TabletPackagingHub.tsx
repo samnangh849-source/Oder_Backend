@@ -660,4 +660,3 @@ const TabletPackagingHub: React.FC<TabletPackagingHubProps> = ({
 };
 
 export default TabletPackagingHub;
-b;

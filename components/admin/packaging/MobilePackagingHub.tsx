@@ -696,4 +696,3 @@ const MobilePackagingHub: React.FC<MobilePackagingHubProps> = ({
 };
 
 export default MobilePackagingHub;
-gHub;
