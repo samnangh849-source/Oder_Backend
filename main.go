@@ -1594,7 +1594,6 @@ func handleAdminUpdateSheet(c *gin.Context) {
 	if req.FullSync && req.SheetName != "" {
 		go func(sheetName string) {
 			log.Printf("🔄 Selective Sync: Starting refresh for sheet %s", sheetName)
-			var target interface{}
 			switch sheetName {
 			case "Users":
 				var items []User
