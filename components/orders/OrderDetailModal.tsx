@@ -13,6 +13,7 @@ import {
     User, 
     Phone, 
     MapPin, 
+    Truck,
     Image as ImageIcon,
     Trash,
     CreditCard, 
