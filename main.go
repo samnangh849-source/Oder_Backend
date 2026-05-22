@@ -1584,11 +1584,84 @@ func handleAdminUpdateSheet(c *gin.Context) {
 		SheetName  string                 `json:"sheetName"`
 		PrimaryKey map[string]interface{} `json:"primaryKey"`
 		NewData    map[string]interface{} `json:"newData"`
+		FullSync   bool                   `json:"fullSync"`
 	}
 	if err := c.ShouldBindJSON(&req); err != nil {
 		c.Error(err)
 		return
 	}
+
+	if req.FullSync && req.SheetName != "" {
+		go func(sheetName string) {
+			log.Printf("🔄 Selective Sync: Starting refresh for sheet %s", sheetName)
+			var target interface{}
+			switch sheetName {
+			case "Users":
+				var items []User
+				if err := backend.FetchSheetDataToStruct(sheetName, &items); err == nil {
+					backend.DB.Session(&gorm.Session{AllowGlobalUpdate: true}).Delete(&User{})
+					backend.DB.CreateInBatches(items, 100)
+				}
+			case "Products":
+				var items []Product
+				if err := backend.FetchSheetDataToStruct(sheetName, &items); err == nil {
+					backend.DB.Session(&gorm.Session{AllowGlobalUpdate: true}).Delete(&Product{})
+					backend.DB.CreateInBatches(items, 100)
+				}
+			case "Stores":
+				var items []Store
+				if err := backend.FetchSheetDataToStruct(sheetName, &items); err == nil {
+					backend.DB.Session(&gorm.Session{AllowGlobalUpdate: true}).Delete(&Store{})
+					backend.DB.CreateInBatches(items, 100)
+				}
+			case "TeamsPages":
+				var items []TeamPage
+				if err := backend.FetchSheetDataToStruct(sheetName, &items); err == nil {
+					backend.DB.Session(&gorm.Session{AllowGlobalUpdate: true}).Delete(&TeamPage{})
+					backend.DB.CreateInBatches(items, 100)
+				}
+			case "ShippingMethods":
+				var items []ShippingMethod
+				if err := backend.FetchSheetDataToStruct(sheetName, &items); err == nil {
+					backend.DB.Session(&gorm.Session{AllowGlobalUpdate: true}).Delete(&ShippingMethod{})
+					backend.DB.CreateInBatches(items, 100)
+				}
+			case "Drivers":
+				var items []Driver
+				if err := backend.FetchSheetDataToStruct(sheetName, &items); err == nil {
+					backend.DB.Session(&gorm.Session{AllowGlobalUpdate: true}).Delete(&Driver{})
+					backend.DB.CreateInBatches(items, 100)
+				}
+			case "BankAccounts":
+				var items []BankAccount
+				if err := backend.FetchSheetDataToStruct(sheetName, &items); err == nil {
+					backend.DB.Session(&gorm.Session{AllowGlobalUpdate: true}).Delete(&BankAccount{})
+					backend.DB.CreateInBatches(items, 100)
+				}
+			case "Roles":
+				var items []Role
+				if err := backend.FetchSheetDataToStruct(sheetName, &items); err == nil {
+					backend.DB.Session(&gorm.Session{AllowGlobalUpdate: true}).Delete(&Role{})
+					backend.DB.CreateInBatches(items, 100)
+				}
+			case "RolePermissions":
+				var items []RolePermission
+				if err := backend.FetchSheetDataToStruct(sheetName, &items); err == nil {
+					backend.DB.Session(&gorm.Session{AllowGlobalUpdate: true}).Delete(&RolePermission{})
+					backend.DB.CreateInBatches(items, 100)
+				}
+			}
+			log.Printf("✅ Selective Sync: Completed refresh for sheet %s", sheetName)
+			// Broadcast completion
+			if hub != nil {
+				msg, _ := json.Marshal(map[string]interface{}{"type": "selective_sync_complete", "sheet": sheetName})
+				hub.Broadcast <- msg
+			}
+		}(req.SheetName)
+		c.JSON(200, gin.H{"status": "success", "message": "Selective sync started"})
+		return
+	}
+
 	tableName := getTableName(req.SheetName)
 	if tableName == "" {
 		c.Error(fmt.Errorf("unknown sheet"))
@@ -1850,18 +1923,95 @@ func handleGetRevenueSummary(c *gin.Context) {
 
 func handleGetSyncStatus(c *gin.Context) {
 	var count int64
-	backend.DB.Model(&backend.PendingSync{}).Where("status = 'pending' OR status = 'failed'").Count(&count)
-	
+	backend.DB.Model(&backend.PendingSync{}).Where("status = 'pending' OR status = 'processing'").Count(&count)
+
 	var permanentFailures int64
 	backend.DB.Model(&backend.PendingSync{}).Where("status = 'permanent_failure'").Count(&permanentFailures)
 
 	c.JSON(200, gin.H{
-		"status": "success", 
-		"pendingCount": count,
+		"status":            "success",
+		"pendingCount":      count,
 		"permanentFailures": permanentFailures,
 	})
 }
 
+func handleGetSyncQueue(c *gin.Context) {
+	var queue []backend.PendingSync
+	backend.DB.Order("created_at DESC").Limit(50).Find(&queue)
+	c.JSON(200, gin.H{"status": "success", "data": queue})
+}
+
+func handleRetrySyncTask(c *gin.Context) {
+	id := c.Param("id")
+	if err := backend.DB.Model(&backend.PendingSync{}).Where("id = ?", id).Updates(map[string]interface{}{
+		"status":      "pending",
+		"retry_count": 0,
+	}).Error; err != nil {
+		c.JSON(500, gin.H{"status": "error", "message": err.Error()})
+		return
+	}
+	c.JSON(200, gin.H{"status": "success"})
+}
+
+func handleRetryAllFailedSyncTasks(c *gin.Context) {
+	if err := backend.DB.Model(&backend.PendingSync{}).Where("status = 'failed' OR status = 'permanent_failure'").Updates(map[string]interface{}{
+		"status":      "pending",
+		"retry_count": 0,
+	}).Error; err != nil {
+		c.JSON(500, gin.H{"status": "error", "message": err.Error()})
+		return
+	}
+	c.JSON(200, gin.H{"status": "success"})
+}
+
+func handleClearFailedSyncTasks(c *gin.Context) {
+	if err := backend.DB.Where("status = 'permanent_failure'").Delete(&backend.PendingSync{}).Error; err != nil {
+		c.JSON(500, gin.H{"status": "error", "message": err.Error()})
+		return
+	}
+	c.JSON(200, gin.H{"status": "success"})
+}
+
+func handleHealthCheck(c *gin.Context) {
+	dbStatus := "Stable"
+	dbErr := ""
+	sqlDB, err := backend.DB.DB()
+	if err != nil {
+		dbStatus = "Error"
+		dbErr = err.Error()
+	} else if err := sqlDB.Ping(); err != nil {
+		dbStatus = "Unstable"
+		dbErr = err.Error()
+	}
+
+	sheetStatus := "Authorized"
+	sheetErr := ""
+	if backend.SheetsService == nil {
+		sheetStatus = "Not Initialized"
+	} else {
+		// Try a very small metadata fetch to verify auth
+		_, err := backend.SheetsService.Spreadsheets.Get(backend.SpreadsheetID).Fields("spreadsheetId").Do()
+		if err != nil {
+			sheetStatus = "Auth Failed"
+			sheetErr = err.Error()
+		}
+	}
+
+	c.JSON(200, gin.H{
+		"status": "success",
+		"health": gin.H{
+			"database": gin.H{
+				"status": dbStatus,
+				"error":  dbErr,
+			},
+			"googleSheets": gin.H{
+				"status": sheetStatus,
+				"error":  sheetErr,
+			},
+			"uptime": time.Since(startTime).Seconds(),
+		},
+	})
+}
 // ─── Telegram Bot Webhook Handlers ───
 
 func handleRegisterTelegramWebhook(c *gin.Context) {
@@ -2475,7 +2625,10 @@ func handleSheetsWebhook(c *gin.Context) {
 	c.JSON(200, gin.H{"status": "success"})
 }
 
+var startTime time.Time
+
 func main() {
+	startTime = time.Now()
 	port := os.Getenv("PORT")
 	if port == "" {
 		port = "8080"
@@ -2624,6 +2777,11 @@ func main() {
 				restricted.POST("/migrate-data", backend.HandleMigrateData)
 				restricted.GET("/revenue-summary", handleGetRevenueSummary)
 				restricted.GET("/sync-status", handleGetSyncStatus)
+				restricted.GET("/sync-queue", handleGetSyncQueue)
+				restricted.POST("/sync-retry/:id", handleRetrySyncTask)
+				restricted.POST("/sync-retry-all", handleRetryAllFailedSyncTasks)
+				restricted.DELETE("/sync-clear-failed", handleClearFailedSyncTasks)
+				restricted.GET("/health-check", handleHealthCheck)
 				restricted.POST("/update-sheet", handleAdminUpdateSheet)
 				restricted.POST("/add-row", handleAdminAddRow)
 				restricted.POST("/delete-row", handleAdminDeleteRow)
