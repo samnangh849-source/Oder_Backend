@@ -5,7 +5,7 @@ import Spinner from '@/components/common/Spinner';
 import { convertGoogleDriveUrl, getOptimisticPackagePhoto } from '@/utils/fileUtils';
 import { safeParseDate } from '@/utils/dateUtils';
 import Modal from '@/components/common/Modal';
-import { Truck, Trash, Check } from 'lucide-react';
+import { Image as ImageIcon, Trash, Check } from 'lucide-react';
 import { WEB_APP_URL } from '@/constants';
 import { CacheService, CACHE_KEYS } from '@/services/cacheService';
 
