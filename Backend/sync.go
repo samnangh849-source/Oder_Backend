@@ -323,12 +323,24 @@ func processPersistentTask(workerID int, task *SyncTask) {
 	}
 
 	if err != nil || resp.Status != "success" {
+		errMsg := ""
+		if err != nil {
+			errMsg = err.Error()
+		} else {
+			errMsg = resp.Message
+			if errMsg == "" { errMsg = "Unknown AppsScript error" }
+		}
+
 		// "locked" means the Apps Script global lock was held by another concurrent request
 		// (e.g. a Drive upload from another packer). This is transient — keep the task as
 		// "pending" without counting it as a real retry so it is picked up again quickly.
 		if resp.Status == "locked" {
 			log.Printf("🔒 SyncManager: Task %d got script lock contention — requeuing as pending", dbID)
-			DB.Model(&record).Update("status", "pending")
+			DB.Model(&record).Updates(map[string]interface{}{
+				"status": "pending",
+				"last_error_message": "Script lock contention (retrying)",
+			})
+			broadcastSyncQueueUpdated()
 			return
 		}
 
@@ -340,24 +352,24 @@ func processPersistentTask(workerID int, task *SyncTask) {
 			if HubGlobal != nil {
 				errPayload, _ := json.Marshal(map[string]interface{}{
 					"type":    "sync_error",
-					"message": fmt.Sprintf("Sheets sync failed permanently: action=%s sheet=%s orderID=%s", req.Action, req.SheetName, req.OrderID),
+					"message": fmt.Sprintf("Sheets sync failed permanently: action=%s sheet=%s orderID=%s. Error: %s", req.Action, req.SheetName, req.OrderID, errMsg),
 					"action":  req.Action,
 					"sheet":   req.SheetName,
 				})
-				select {
-				case HubGlobal.Broadcast <- errPayload:
-				default:
-					log.Printf("⚠️  SyncManager: hub broadcast channel full, dropping sync_error notification")
-				}
+				HubGlobal.Broadcast <- errPayload
 			}
 		}
 		DB.Model(&record).Updates(map[string]interface{}{
-			"status":      newStatus,
-			"retry_count": record.RetryCount + 1,
+			"status":             newStatus,
+			"retry_count":        record.RetryCount + 1,
+			"last_error_message": errMsg,
+			"updated_at":         time.Now(),
 		})
+		broadcastSyncQueueUpdated()
 	} else {
 		// SUCCESS
 		DB.Delete(&record) // Remove successful tasks to keep table clean
+		broadcastSyncQueueUpdated()
 
 		// Update local DB with Telegram Message IDs if returned
 		if (resp.MessageIds.ID1 != nil && resp.MessageIds.ID1 != "") || 
@@ -437,6 +449,15 @@ func processStuckTasks(workerID int) {
 	DB.Where("(status = 'pending' OR status = 'failed') AND updated_at < ?", time.Now().Add(-30*time.Second)).Limit(10).Find(&records)
 	for _, r := range records {
 		processPersistentTask(workerID, &SyncTask{RetryCount: int(r.ID)})
+	}
+}
+
+func broadcastSyncQueueUpdated() {
+	if HubGlobal != nil {
+		event, _ := json.Marshal(map[string]interface{}{
+			"type": "sync_queue_updated",
+		})
+		HubGlobal.Broadcast <- event
 	}
 }
 
