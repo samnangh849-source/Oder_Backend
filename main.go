@@ -1973,8 +1973,9 @@ func handleGetSyncQueue(c *gin.Context) {
 func handleRetrySyncTask(c *gin.Context) {
 	id := c.Param("id")
 	if err := backend.DB.Model(&backend.PendingSync{}).Where("id = ?", id).Updates(map[string]interface{}{
-		"status":      "pending",
-		"retry_count": 0,
+		"status":             "pending",
+		"retry_count":        0,
+		"last_error_message": "",
 	}).Error; err != nil {
 		c.JSON(500, gin.H{"status": "error", "message": err.Error()})
 		return
@@ -1984,8 +1985,9 @@ func handleRetrySyncTask(c *gin.Context) {
 
 func handleRetryAllFailedSyncTasks(c *gin.Context) {
 	if err := backend.DB.Model(&backend.PendingSync{}).Where("status = 'failed' OR status = 'permanent_failure'").Updates(map[string]interface{}{
-		"status":      "pending",
-		"retry_count": 0,
+		"status":             "pending",
+		"retry_count":        0,
+		"last_error_message": "",
 	}).Error; err != nil {
 		c.JSON(500, gin.H{"status": "error", "message": err.Error()})
 		return
