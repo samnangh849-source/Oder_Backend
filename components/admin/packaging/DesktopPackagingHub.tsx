@@ -854,10 +854,10 @@ const DesktopPackagingHub: React.FC<DesktopPackagingHubProps> = ({
                                                 </div>
                                             )
                                         );
-                                        })}
-                                    </div>
-                                </section>
-                            ))}
+                                    })}
+                                </div>
+                            </section>
+                        ))}
                         </div>
                     )}
                 </div>

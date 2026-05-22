@@ -589,10 +589,12 @@ const TabletPackagingHub: React.FC<TabletPackagingHubProps> = ({
                                                 </div>
                                             </div>
                                         </div>
-                                    )})}
-                                </div>
-                            </section>
-                        ))}
+                                    </div>
+                                    );
+                                })}
+                            </div>
+                        </section>
+                    ))}
                     </div>
                 </div>
             </main>
