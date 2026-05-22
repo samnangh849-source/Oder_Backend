@@ -1290,6 +1290,17 @@ func handleAdminUpdateOrder(c *gin.Context) {
 	var editLogs []EditLog
 	currentTime := time.Now().Format("2006-01-02 15:04:05")
 
+	if forceSync {
+		editLogs = append(editLogs, EditLog{
+			Timestamp:    currentTime,
+			OrderID:      r.OrderID,
+			Requester:    r.UserName,
+			FieldChanged: "Action",
+			OldValue:     "Synced",
+			NewValue:     "RE-SENT TO TELEGRAM",
+		})
+	}
+
 	for k, v := range r.NewData {
 		if k == "Force Sync" || v == nil {
 			continue
@@ -1336,25 +1347,27 @@ func handleAdminUpdateOrder(c *gin.Context) {
 			c.Error(err)
 			return
 		}
+	}
 
-		// Save EditLogs to DB and Sync
-		if len(editLogs) > 0 {
-			if err := backend.DB.Create(&editLogs).Error; err != nil {
-				log.Println("Error saving edit logs:", err)
-			} else {
-				for _, el := range editLogs {
-					go enqueueSync("addRow", map[string]interface{}{
-						"Timestamp":     el.Timestamp,
-						"OrderID":       el.OrderID,
-						"Requester":     el.Requester,
-						"Field Changed": el.FieldChanged,
-						"Old Value":     el.OldValue,
-						"New Value":     el.NewValue,
-					}, "EditLogs", nil)
-				}
+	// Save EditLogs to DB and Sync (Moved outside len(mappedData) check to support Force Sync logging)
+	if len(editLogs) > 0 {
+		if err := backend.DB.Create(&editLogs).Error; err != nil {
+			log.Println("Error saving edit logs:", err)
+		} else {
+			for _, el := range editLogs {
+				go enqueueSync("addRow", map[string]interface{}{
+					"Timestamp":     el.Timestamp,
+					"OrderID":       el.OrderID,
+					"Requester":     el.Requester,
+					"Field Changed": el.FieldChanged,
+					"Old Value":     el.OldValue,
+					"New Value":     el.NewValue,
+				}, "EditLogs", nil)
 			}
 		}
+	}
 
+	if len(mappedData) > 0 {
 		// ✅ Auto-log ReturnItems when status changes to Returned
 		if newStatusRaw, ok := r.NewData["Fulfillment Status"]; ok {
 			newStatusStr := strings.TrimSpace(fmt.Sprintf("%v", newStatusRaw))
@@ -1528,6 +1541,28 @@ func handleAdminDeleteOrder(c *gin.Context) {
 
 	// 4. Delete from local DB if it exists
 	if foundLocally {
+		// ─── Generate EditLog for Deletion ───
+		deleteLog := EditLog{
+			Timestamp:    time.Now().Format("2006-01-02 15:04:05"),
+			OrderID:      r.OrderID,
+			Requester:    r.UserName,
+			FieldChanged: "Action",
+			OldValue:     "Existing",
+			NewValue:     "DELETED",
+		}
+		backend.DB.Create(&deleteLog)
+
+		// Sync deletion log to Google Sheets
+		go enqueueSync("addRow", map[string]interface{}{
+			"Timestamp":     deleteLog.Timestamp,
+			"OrderID":       deleteLog.OrderID,
+			"Requester":     deleteLog.Requester,
+			"Field Changed": deleteLog.FieldChanged,
+			"Old Value":     deleteLog.OldValue,
+			"New Value":     deleteLog.NewValue,
+		}, "EditLogs", nil)
+		// ─────────────────────────────────────
+
 		backend.DB.Delete(&order)
 	}
 
