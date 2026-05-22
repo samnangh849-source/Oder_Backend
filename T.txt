@@ -93,3 +93,6 @@
 
   គួរដាក់ Button បញ្ជូនរូបភាពនោះ នៅក្នុង Node សម្រាប់ Step (Ready for Dispatch) ហើយប្រសិនបើបានចុចម្ដងហើយ គឺមិនបង្ហាញទៀតទេ តែគួរមានអ្វីបញ្ជាក់ថា បញ្ជូនរូបរួច។ ហើយButton នោះបង្ហាញសម្រាប់តែ ShippingMethod ណាដែលមានទិន្នន័យ(TelegramGroupID)ប៉ុណ្ណោះ ប្រសិនបើមិនមានទេ គឺមិនចាំបាច់បង្ហាញ button ក្នុង Node ឡើយ
 
+ខ្ញុំចង់អោយ Telegram bot របស់ Store នីមួយៗមានមុខងារឆែក GroupID ឬ TopicID បានទេ?
+
+ខ្ញុំចង់អោយ Telegram bot របស់ Store នីមួយៗមានមុខងារឆែក GroupID ឬ TopicID ដោយប្រើ Command នៅក្នុង Group បានទេ?

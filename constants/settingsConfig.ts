@@ -89,9 +89,48 @@ export const configSections: ConfigSection[] = [
             { name: 'PageName', label: 'ឈ្មោះ Page', type: 'text' }, 
             { name: 'Team', label: 'ក្រុម', type: 'text' }, 
             { name: 'TelegramValue', label: 'Telegram Value', type: 'text' }, 
-            { name: 'PageLogoURL', label: 'URL ឡូហ្គោ', type: 'image_url' } 
+            { name: 'PageLogoURL', label: 'URL ឡូហ្គោ', type: 'image_url' },
+            { name: 'DefaultStore', label: 'ឃ្លាំងលំនាំដើម', type: 'select', dataRef: 'stores' },
+            { name: 'TelegramTopicID', label: 'Topic ID (Optional)', type: 'text' }
         ], 
         displayField: 'PageName' 
+    },
+    {
+        id: 'stores',
+        title: 'បញ្ជីឃ្លាំង (Stores)',
+        description: 'គ្រប់គ្រងព័ត៌មានឃ្លាំង និង Telegram Bot',
+        icon: '🏠',
+        dataKey: 'stores',
+        sheetName: 'Stores',
+        primaryKeyField: 'StoreName',
+        fields: [
+            { name: 'StoreName', label: 'ឈ្មោះឃ្លាំង', type: 'text' },
+            { name: 'StoreType', label: 'ប្រភេទឃ្លាំង', type: 'text' },
+            { name: 'Address', label: 'អាសយដ្ឋាន', type: 'text' },
+            { name: 'TelegramBotToken', label: 'Bot Token', type: 'password' },
+            { name: 'TelegramGroupID', label: 'Group ID', type: 'text' },
+            { name: 'TelegramTopicID', label: 'Topic ID', type: 'text' },
+            { name: 'LabelPrinterURL', label: 'Printer URL', type: 'text' },
+            { name: 'CODAlertGroupID', label: 'COD Alert Group', type: 'text' }
+        ],
+        displayField: 'StoreName'
+    },
+    {
+        id: 'deliveryGroups',
+        title: 'Telegram អ្នកដឹក',
+        description: 'កំណត់ Group Telegram សម្រាប់សេវាដឹកជញ្ជូននីមួយៗ',
+        icon: '🚛',
+        dataKey: 'deliveryGroups',
+        sheetName: 'DeliveryGroups',
+        primaryKeyField: 'ID',
+        fields: [
+            { name: 'ID', label: 'ID', type: 'text', readOnly: true, placeholder: 'ស្វ័យប្រវត្តិ (Auto)' },
+            { name: 'StoreName', label: 'ឃ្លាំង', type: 'select', dataRef: 'stores' },
+            { name: 'ShippingMethod', label: 'សេវាដឹកជញ្ជូន', type: 'select', dataRef: 'shippingMethods' },
+            { name: 'TelegramGroupID', label: 'Group ID', type: 'text' },
+            { name: 'TelegramTopicID', label: 'Topic ID', type: 'text' }
+        ],
+        displayField: 'ShippingMethod'
     },
     { 
         id: 'shippingMethods', 
