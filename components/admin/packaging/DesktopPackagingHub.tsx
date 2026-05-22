@@ -608,76 +608,89 @@ const DesktopPackagingHub: React.FC<DesktopPackagingHubProps> = ({
                                                         </div>
                                                     </div>
 
-                                                    <div className={`p-2 border-t ${B_BORDER} bg-[#0B0E11] grid ${activeTab === 'Pending' ? 'grid-cols-2 gap-2' : activeTab === 'Ready to Ship' ? 'grid-cols-2 gap-2' : activeTab === 'Cancelled' ? 'grid-cols-[80px_1fr] gap-2' : 'grid-cols-2 gap-2'}`}>
-                                                        <button onClick={(e) => { e.stopPropagation(); onView(order); }} className={`w-full py-1.5 bg-[#2B3139] hover:bg-[#3B424A] ${B_TEXT_PRIMARY} text-xs font-medium transition-colors rounded-sm`}>Details</button>
+                                                    <div className={`p-2 border-t ${B_BORDER} bg-[#0B0E11] flex flex-col gap-2`}>
                                                         {activeTab === 'Cancelled' && order['Return Received By'] && (
-                                                            <div className="flex items-center justify-center border border-[#FCD535]/30 bg-[#FCD535]/10 rounded-sm px-2 overflow-hidden shadow-[0_0_10px_rgba(252,213,53,0.05)]">
-                                                                <span className="text-[9px] font-black text-[#FCD535] uppercase truncate" title={order['Return Received By']}>
+                                                            <div className="flex items-center justify-center border border-[#FCD535]/30 bg-[#FCD535]/10 rounded-sm py-1 shadow-[0_0_10px_rgba(252,213,53,0.05)]">
+                                                                <span className="text-[9px] font-black text-[#FCD535] uppercase truncate px-2" title={order['Return Received By']}>
                                                                     Confirm by {order['Return Received By']}
                                                                 </span>
                                                             </div>
                                                         )}
-                                                        {!isCancelled && (
-                                                            <>
-                                                                {activeTab === 'Pending' && <button onClick={(e) => { e.stopPropagation(); onPack(order); }} className={`w-full py-1.5 ${B_ACCENT_BG} text-xs font-bold uppercase transition-colors rounded-sm`}>Pack</button>}
-                                                                {activeTab === 'Ready to Ship' && (
-                                                                    <>
-                                                                        <button onClick={(e) => { e.stopPropagation(); onUndo(order); }} className={`w-full py-1.5 bg-[#F6465D]/10 hover:bg-[#F6465D]/20 ${B_RED} text-xs font-bold uppercase transition-colors rounded-sm`}>Undo</button>
-                                                                        <button onClick={(e) => { e.stopPropagation(); onShip(order); }} className={`w-full py-1.5 ${B_ACCENT_BG} text-xs font-bold uppercase transition-colors rounded-sm`}>Ship</button>
-                                                                        
-                                                                        {getDeliveryGroup(order)?.TelegramGroupID && (
-                                                                            <div className="col-span-2">
-                                                                                {!!(order['Delivery Telegram Message ID'] || (order as any)['Delivery Telegram Message ID']) ? (
-                                                                                    <div className="flex items-center gap-2">
-                                                                                        <div className="flex-grow flex items-center justify-center gap-2 py-1.5 bg-[#0ECB81]/10 border border-[#0ECB81]/20 rounded-sm">
-                                                                                            <Check size={10} className="text-[#0ECB81]" />
-                                                                                            <span className="text-[9px] font-black text-[#0ECB81] uppercase tracking-widest">Sent to Driver</span>
-                                                                                        </div>
-                                                                                        <button 
-                                                                                            onClick={(e) => { e.stopPropagation(); handleDeleteFromDeliveryTelegram(order); }}
-                                                                                            disabled={isSendingTelegram || !getCanSendToDriver(order)}
-                                                                                            className={`w-9 h-9 flex items-center justify-center ${!getCanSendToDriver(order) ? 'bg-[#2B3139] text-gray-600' : 'bg-red-500/10 hover:bg-red-500/20 text-red-500'} rounded-sm border border-red-500/20 transition-all active:scale-95 disabled:opacity-50`}
-                                                                                            title={!getCanSendToDriver(order) ? "Only shift opener can delete" : "Delete from Telegram"}
-                                                                                        >
-                                                                                            {isSendingTelegram ? <Spinner size="xs" /> : <Trash size={12} />}
-                                                                                        </button>
-                                                                                    </div>
-                                                                                ) : (
-                                                                                    <button 
-                                                                                        onClick={(e) => { e.stopPropagation(); handleSendToDeliveryTelegram(order); }}
-                                                                                        disabled={isSendingTelegram || !getCanSendToDriver(order)}
-                                                                                        className={`w-full flex items-center justify-center gap-2 py-1.5 ${!getCanSendToDriver(order) ? 'bg-[#2B3139] text-gray-500 cursor-not-allowed border-[#363C44]' : 'bg-blue-600 hover:bg-blue-500 text-white'} rounded-sm text-[10px] font-black uppercase tracking-widest transition-all shadow-lg active:scale-95 disabled:opacity-50`}
-                                                                                        title={!getCanSendToDriver(order) ? "Only shift opener can send" : "Send Package Photo"}
-                                                                                    >
-                                                                                        {isSendingTelegram ? <Spinner size="xs" /> : <ImageIcon size={12} />}
-                                                                                        {isSendingTelegram ? 'Processing...' : 'បញ្ជូនរូបភាពកញ្ចប់'}
-                                                                                    </button>
-                                                                                )}
+
+                                                        {!isCancelled && activeTab === 'Ready to Ship' ? (
+                                                            <div className="space-y-2">
+                                                                {/* Primary Action Row */}
+                                                                <button onClick={(e) => { e.stopPropagation(); onShip(order); }} className={`w-full py-2 ${B_ACCENT_BG} text-sm font-black uppercase tracking-widest transition-all rounded-sm shadow-lg shadow-[#FCD535]/10 flex items-center justify-center gap-2`}>
+                                                                    <Check size={14} strokeWidth={3} />
+                                                                    Confirm Shipping (Ship)
+                                                                </button>
+
+                                                                {/* Secondary Action Row (Telegram) */}
+                                                                {getDeliveryGroup(order)?.TelegramGroupID && (
+                                                                    <div className="w-full">
+                                                                        {!!(order['Delivery Telegram Message ID'] || (order as any)['Delivery Telegram Message ID']) ? (
+                                                                            <div className="flex items-center gap-1.5">
+                                                                                <div className="flex-grow flex items-center justify-center gap-2 py-1.5 bg-[#0ECB81]/10 border border-[#0ECB81]/20 rounded-sm">
+                                                                                    <Check size={12} className="text-[#0ECB81]" />
+                                                                                    <span className="text-[10px] font-black text-[#0ECB81] uppercase tracking-wider">Sent to Driver</span>
+                                                                                </div>
+                                                                                <button 
+                                                                                    onClick={(e) => { e.stopPropagation(); handleDeleteFromDeliveryTelegram(order); }}
+                                                                                    disabled={isSendingTelegram || !getCanSendToDriver(order)}
+                                                                                    className={`w-9 h-9 flex items-center justify-center ${!getCanSendToDriver(order) ? 'bg-[#2B3139] text-gray-600' : 'bg-red-500/10 hover:bg-red-500/20 text-red-500'} rounded-sm border border-red-500/20 transition-all active:scale-95 disabled:opacity-50`}
+                                                                                    title="Delete from Telegram"
+                                                                                >
+                                                                                    {isSendingTelegram ? <Spinner size="xs" /> : <Trash size={12} />}
+                                                                                </button>
                                                                             </div>
+                                                                        ) : (
+                                                                            <button 
+                                                                                onClick={(e) => { e.stopPropagation(); handleSendToDeliveryTelegram(order); }}
+                                                                                disabled={isSendingTelegram || !getCanSendToDriver(order)}
+                                                                                className={`w-full flex items-center justify-center gap-2 py-2 ${!getCanSendToDriver(order) ? 'bg-[#2B3139] text-gray-500 cursor-not-allowed' : 'bg-blue-600 hover:bg-blue-500 text-white shadow-blue-600/20 shadow-lg'} rounded-sm text-[10px] font-black uppercase tracking-widest transition-all active:scale-95 disabled:opacity-50`}
+                                                                            >
+                                                                                {isSendingTelegram ? <Spinner size="xs" /> : <ImageIcon size={14} />}
+                                                                                {isSendingTelegram ? 'Processing...' : 'បញ្ជូនរូបភាពកញ្ចប់'}
+                                                                            </button>
                                                                         )}
+                                                                    </div>
+                                                                )}
+
+                                                                {/* Utility Row */}
+                                                                <div className="grid grid-cols-2 gap-2">
+                                                                    <button onClick={(e) => { e.stopPropagation(); onView(order); }} className={`w-full py-1.5 bg-[#2B3139] hover:bg-[#3B424A] ${B_TEXT_PRIMARY} text-[10px] font-bold uppercase transition-colors rounded-sm`}>Order Node</button>
+                                                                    <button onClick={(e) => { e.stopPropagation(); onUndo(order); }} className={`w-full py-1.5 bg-red-500/5 hover:bg-red-500/10 ${B_RED} text-[10px] font-bold uppercase transition-colors rounded-sm border border-red-500/10`}>Undo Pack</button>
+                                                                </div>
+                                                            </div>
+                                                        ) : (
+                                                            <div className={`grid ${activeTab === 'Cancelled' ? 'grid-cols-[80px_1fr]' : 'grid-cols-2'} gap-2`}>
+                                                                <button onClick={(e) => { e.stopPropagation(); onView(order); }} className={`w-full py-1.5 bg-[#2B3139] hover:bg-[#3B424A] ${B_TEXT_PRIMARY} text-xs font-medium transition-colors rounded-sm`}>Details</button>
+                                                                {!isCancelled && (
+                                                                    <>
+                                                                        {activeTab === 'Pending' && <button onClick={(e) => { e.stopPropagation(); onPack(order); }} className={`w-full py-1.5 ${B_ACCENT_BG} text-xs font-bold uppercase transition-colors rounded-sm`}>Pack</button>}
                                                                     </>
                                                                 )}
-                                                            </>
-                                                        )}
-                                                        {isCancelled && activeTab !== 'Cancelled' && (
-                                                            <button 
-                                                                onClick={(e) => { e.stopPropagation(); setUnpackTarget(order); }} 
-                                                                className={`w-full py-1.5 bg-red-600 hover:bg-red-700 text-white text-xs font-bold uppercase transition-colors rounded-sm shadow-lg shadow-red-600/20`}
-                                                            >
-                                                                {!!(order['Packed By'] || order['Packed Time']) ? 'ហែកកញ្ចប់' : 'បញ្ជាក់ការបោះបង់'}
-                                                            </button>
-                                                        )}
-                                                        {activeTab === 'Shipped' && (
-                                                            <button onClick={(e) => { e.stopPropagation(); onUndoShipped(order); }} className={`w-full py-1.5 bg-[#F6465D]/10 hover:bg-[#F6465D]/20 ${B_RED} text-xs font-bold uppercase transition-colors rounded-sm`}>Undo</button>
-                                                        )}
-                                                        {activeTab === 'Returned' && (
-                                                            <button 
-                                                                onClick={(e) => { e.stopPropagation(); onConfirmReturn?.(order); }} 
-                                                                disabled={!!order['Return Received By']}
-                                                                className={`w-full py-1.5 ${order['Return Received By'] ? 'bg-gray-500/20 text-gray-500' : 'bg-purple-500 text-white hover:bg-purple-600'} text-xs font-bold uppercase transition-colors rounded-sm`}
-                                                            >
-                                                                {order['Return Received By'] ? 'Received' : 'Confirm Receipt'}
-                                                            </button>
+                                                                {isCancelled && activeTab !== 'Cancelled' && (
+                                                                    <button 
+                                                                        onClick={(e) => { e.stopPropagation(); setUnpackTarget(order); }} 
+                                                                        className={`w-full py-1.5 bg-red-600 hover:bg-red-700 text-white text-xs font-bold uppercase transition-colors rounded-sm shadow-lg shadow-red-600/20`}
+                                                                    >
+                                                                        {!!(order['Packed By'] || order['Packed Time']) ? 'ហែកកញ្ចប់' : 'បញ្ជាក់ការបោះបង់'}
+                                                                    </button>
+                                                                )}
+                                                                {activeTab === 'Shipped' && (
+                                                                    <button onClick={(e) => { e.stopPropagation(); onUndoShipped(order); }} className={`w-full py-1.5 bg-[#F6465D]/10 hover:bg-[#F6465D]/20 ${B_RED} text-xs font-bold uppercase transition-colors rounded-sm`}>Undo</button>
+                                                                )}
+                                                                {activeTab === 'Returned' && (
+                                                                    <button 
+                                                                        onClick={(e) => { e.stopPropagation(); onConfirmReturn?.(order); }} 
+                                                                        disabled={!!order['Return Received By']}
+                                                                        className={`w-full py-1.5 ${order['Return Received By'] ? 'bg-gray-500/20 text-gray-500' : 'bg-purple-500 text-white hover:bg-purple-600'} text-xs font-bold uppercase transition-colors rounded-sm`}
+                                                                    >
+                                                                        {order['Return Received By'] ? 'Received' : 'Confirm Receipt'}
+                                                                    </button>
+                                                                )}
+                                                            </div>
                                                         )}
                                                     </div>
                                                 </div>

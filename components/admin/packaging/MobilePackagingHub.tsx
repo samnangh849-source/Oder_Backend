@@ -537,76 +537,87 @@ const MobilePackagingHub: React.FC<MobilePackagingHubProps> = ({
                                     </div>
 
                                     <div className={`p-2 border-t ${B_BORDER} flex flex-col gap-2`}>
-                                        {activeTab === 'Ready to Ship' && getDeliveryGroup(order)?.TelegramGroupID && (
-                                            <div className="w-full">
-                                                {!!(order['Delivery Telegram Message ID'] || (order as any)['Delivery Telegram Message ID']) ? (
-                                                    <div className="flex items-center gap-2">
-                                                        <div className="flex-grow flex items-center justify-center gap-2 py-2 bg-[#0ECB81]/10 border border-[#0ECB81]/20 rounded-sm">
-                                                            <Check size={12} className="text-[#0ECB81]" />
-                                                            <span className="text-[10px] font-black text-[#0ECB81] uppercase tracking-widest">Sent to Driver Telegram</span>
-                                                        </div>
-                                                        <button 
-                                                            onClick={(e) => { e.stopPropagation(); handleDeleteFromDeliveryTelegram(order); }}
-                                                            disabled={isSendingTelegram || !getCanSendToDriver(order)}
-                                                            className={`w-10 h-10 flex items-center justify-center ${!getCanSendToDriver(order) ? 'bg-[#2B3139] text-gray-600' : 'bg-red-500/10 hover:bg-red-500/20 text-red-500'} rounded-sm border border-red-500/20 transition-all active:scale-95 disabled:opacity-50`}
-                                                        >
-                                                            {isSendingTelegram ? <Spinner size="xs" /> : <Trash size={16} />}
-                                                        </button>
-                                                    </div>
-                                                ) : (
-                                                    <button 
-                                                        onClick={(e) => { e.stopPropagation(); handleSendToDeliveryTelegram(order); }}
-                                                        disabled={isSendingTelegram || !getCanSendToDriver(order)}
-                                                        className={`w-full flex items-center justify-center gap-3 py-2 ${!getCanSendToDriver(order) ? 'bg-[#2B3139] text-gray-500 cursor-not-allowed' : 'bg-blue-600 hover:bg-blue-500 text-white'} rounded-sm text-xs font-black uppercase tracking-widest transition-all shadow-lg active:scale-95 disabled:opacity-50`}
-                                                    >
-                                                        {isSendingTelegram ? <Spinner size="xs" /> : <ImageIcon size={14} />}
-                                                        {isSendingTelegram ? 'Processing...' : 'បញ្ជូនរូបភាពកញ្ចប់ (Send Photo)'}
-                                                    </button>
+                                        {!isCancelled && activeTab === 'Ready to Ship' ? (
+                                            <div className="space-y-2">
+                                                {/* Primary Ship Action */}
+                                                <button onClick={(e) => { e.stopPropagation(); onShip(order); }} className={`w-full py-2.5 bg-[#0ECB81] text-[#0B0E11] rounded-sm text-sm font-black uppercase tracking-widest flex items-center justify-center gap-2 shadow-lg shadow-[#0ECB81]/10`}>
+                                                    <Check size={16} strokeWidth={3} />
+                                                    Confirm Shipping (Ship)
+                                                </button>
 
+                                                {/* Photo Action */}
+                                                {getDeliveryGroup(order)?.TelegramGroupID && (
+                                                    <div className="w-full">
+                                                        {!!(order['Delivery Telegram Message ID'] || (order as any)['Delivery Telegram Message ID']) ? (
+                                                            <div className="flex items-center gap-2">
+                                                                <div className="flex-grow flex items-center justify-center gap-2 py-2 bg-[#0ECB81]/10 border border-[#0ECB81]/20 rounded-sm">
+                                                                    <Check size={12} className="text-[#0ECB81]" />
+                                                                    <span className="text-[10px] font-black text-[#0ECB81] uppercase tracking-widest">Photo Sent to Driver</span>
+                                                                </div>
+                                                                <button 
+                                                                    onClick={(e) => { e.stopPropagation(); handleDeleteFromDeliveryTelegram(order); }}
+                                                                    disabled={isSendingTelegram || !getCanSendToDriver(order)}
+                                                                    className={`w-10 h-10 flex items-center justify-center ${!getCanSendToDriver(order) ? 'bg-[#2B3139] text-gray-600' : 'bg-red-500/10 hover:bg-red-500/20 text-red-500'} rounded-sm border border-red-500/20 transition-all active:scale-95 disabled:opacity-50`}
+                                                                >
+                                                                    {isSendingTelegram ? <Spinner size="xs" /> : <Trash size={16} />}
+                                                                </button>
+                                                            </div>
+                                                        ) : (
+                                                            <button 
+                                                                onClick={(e) => { e.stopPropagation(); handleSendToDeliveryTelegram(order); }}
+                                                                disabled={isSendingTelegram || !getCanSendToDriver(order)}
+                                                                className={`w-full flex items-center justify-center gap-3 py-2 ${!getCanSendToDriver(order) ? 'bg-[#2B3139] text-gray-500 cursor-not-allowed' : 'bg-blue-600 hover:bg-blue-500 text-white'} rounded-sm text-[11px] font-black uppercase tracking-widest transition-all shadow-lg active:scale-95 disabled:opacity-50`}
+                                                            >
+                                                                {isSendingTelegram ? <Spinner size="xs" /> : <ImageIcon size={16} />}
+                                                                {isSendingTelegram ? 'Processing...' : 'បញ្ជូនរូបភាពកញ្ចប់ (Send Photo)'}
+                                                            </button>
+                                                        )}
+                                                    </div>
+                                                )}
+
+                                                {/* Secondary Utility Row */}
+                                                <div className="flex gap-2">
+                                                    <button onClick={(e) => { e.stopPropagation(); onView(order); }} className={`flex-1 py-1.5 bg-[#2B3139] text-[#EAECEF] rounded-sm text-xs font-bold uppercase`}>View Info</button>
+                                                    <button onClick={(e) => { e.stopPropagation(); onUndo(order); }} className={`w-24 py-1.5 bg-red-500/5 text-[#F6465D] rounded-sm text-xs font-bold uppercase border border-red-500/10`}>Undo Pack</button>
+                                                </div>
+                                            </div>
+                                        ) : (
+                                            <div className="flex gap-2 w-full">
+                                                <button onClick={(e) => { e.stopPropagation(); onView(order); }} className={`flex-1 py-1.5 bg-[#2B3139] text-[#EAECEF] rounded-sm text-sm font-medium`}>View Info</button>
+                                                {activeTab === 'Cancelled' && order['Return Received By'] && (
+                                                    <div className="flex-[1.5] flex items-center justify-center border border-[#FCD535]/20 bg-[#FCD535]/5 rounded-sm px-2 overflow-hidden">
+                                                        <span className="text-[9px] font-black text-[#FCD535] uppercase truncate" title={order['Return Received By']}>
+                                                            Confirm by: {order['Return Received By']}
+                                                        </span>
+                                                    </div>
+                                                )}
+                                                {!isCancelled && (
+                                                    <>
+                                                        {activeTab === 'Pending' && <button onClick={(e) => { e.stopPropagation(); onPack(order); }} className={`flex-1 py-1.5 bg-[#FCD535] text-[#0B0E11] rounded-sm text-sm font-bold uppercase`}>Pack Order</button>}
+                                                    </>
+                                                )}
+                                                {isCancelled && activeTab !== 'Cancelled' && (
+                                                    <button
+                                                        onClick={(e) => { e.stopPropagation(); setUnpackTarget(order); }}
+                                                        className={`flex-1 py-1.5 bg-red-600 text-white rounded-sm text-sm font-bold uppercase shadow-lg shadow-red-600/20`}
+                                                    >
+                                                        {!!(order['Packed By'] || order['Packed Time']) ? 'ហែកកញ្ចប់' : 'បញ្ជាក់ការបោះបង់'}
+                                                    </button>
+                                                )}
+                                                {activeTab === 'Shipped' && (
+                                                    <button onClick={(e) => { e.stopPropagation(); onUndoShipped(order); }} className={`w-20 py-1.5 bg-[#F6465D]/10 text-[#F6465D] rounded-sm text-xs font-bold uppercase`}>Undo</button>
+                                                )}
+                                                {activeTab === 'Returned' && (
+                                                    <button
+                                                        onClick={(e) => { e.stopPropagation(); onConfirmReturn?.(order); }}
+                                                        disabled={!!order['Return Received By']}
+                                                        className={`flex-1 py-1.5 ${order['Return Received By'] ? 'bg-gray-500/20 text-gray-500' : 'bg-purple-500 text-white font-bold'} rounded-sm text-sm uppercase`}
+                                                    >
+                                                        {order['Return Received By'] ? 'Received' : 'Confirm Receipt'}
+                                                    </button>
                                                 )}
                                             </div>
                                         )}
-                                        <div className="flex gap-2 w-full">
-                                            <button onClick={(e) => { e.stopPropagation(); onView(order); }} className={`flex-1 py-1.5 bg-[#2B3139] text-[#EAECEF] rounded-sm text-sm font-medium`}>View Info</button>
-                                            {activeTab === 'Cancelled' && order['Return Received By'] && (
-                                                <div className="flex-[1.5] flex items-center justify-center border border-[#FCD535]/20 bg-[#FCD535]/5 rounded-sm px-2 overflow-hidden">
-                                                    <span className="text-[9px] font-black text-[#FCD535] uppercase truncate" title={order['Return Received By']}>
-                                                        Confirm by: {order['Return Received By']}
-                                                    </span>
-                                                </div>
-                                            )}
-                                            {!isCancelled && (
-                                                <>
-                                                    {activeTab === 'Pending' && <button onClick={(e) => { e.stopPropagation(); onPack(order); }} className={`flex-1 py-1.5 bg-[#FCD535] text-[#0B0E11] rounded-sm text-sm font-bold uppercase`}>Pack Order</button>}
-                                                    {activeTab === 'Ready to Ship' && (
-                                                        <>
-                                                            <button onClick={(e) => { e.stopPropagation(); onUndo(order); }} className={`w-20 py-1.5 bg-[#F6465D]/10 text-[#F6465D] rounded-sm text-xs font-bold uppercase`}>Undo</button>
-                                                            <button onClick={(e) => { e.stopPropagation(); onShip(order); }} className={`flex-1 py-1.5 bg-[#0ECB81] text-[#0B0E11] rounded-sm text-sm font-bold uppercase`}>Ship Order</button>
-                                                        </>
-                                                    )}
-                                                </>
-                                            )}
-                                            {isCancelled && activeTab !== 'Cancelled' && (
-                                                <button
-                                                    onClick={(e) => { e.stopPropagation(); setUnpackTarget(order); }}
-                                                    className={`flex-1 py-1.5 bg-red-600 text-white rounded-sm text-sm font-bold uppercase shadow-lg shadow-red-600/20`}
-                                                >
-                                                    {!!(order['Packed By'] || order['Packed Time']) ? 'ហែកកញ្ចប់' : 'បញ្ជាក់ការបោះបង់'}
-                                                </button>
-                                            )}
-                                            {activeTab === 'Shipped' && (
-                                                <button onClick={(e) => { e.stopPropagation(); onUndoShipped(order); }} className={`w-20 py-1.5 bg-[#F6465D]/10 text-[#F6465D] rounded-sm text-xs font-bold uppercase`}>Undo</button>
-                                            )}
-                                            {activeTab === 'Returned' && (
-                                                <button
-                                                    onClick={(e) => { e.stopPropagation(); onConfirmReturn?.(order); }}
-                                                    disabled={!!order['Return Received By']}
-                                                    className={`flex-1 py-1.5 ${order['Return Received By'] ? 'bg-gray-500/20 text-gray-500' : 'bg-purple-500 text-white font-bold'} rounded-sm text-sm uppercase`}
-                                                >
-                                                    {order['Return Received By'] ? 'Received' : 'Confirm Receipt'}
-                                                </button>
-                                            )}
-                                        </div>
                                     </div>
 
                                 </div>

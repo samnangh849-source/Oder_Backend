@@ -545,45 +545,87 @@ const TabletPackagingHub: React.FC<TabletPackagingHubProps> = ({
                                                                 </div>
                                                             </div>
                                                         )}
-                                                        <div className="flex gap-1 justify-end">
-                                                            <button onClick={(e) => { e.stopPropagation(); onView(order); }} className={`px-2 py-1 bg-[#2B3139] text-[#EAECEF] rounded-sm text-xs`}>View</button>
-                                                        {activeTab === 'Cancelled' && order['Return Received By'] && (
-                                                            <div className="flex items-center justify-center border border-[#FCD535]/20 bg-[#FCD535]/5 rounded-sm px-2 overflow-hidden">
-                                                                <span className="text-[9px] font-black text-[#FCD535] uppercase truncate" title={order['Return Received By']}>
-                                                                    Confirm by: {order['Return Received By']}
-                                                                </span>
+                                                    <div className="flex flex-col gap-2 w-full">
+                                                        {!isCancelled && activeTab === 'Ready to Ship' ? (
+                                                            <div className="space-y-1.5">
+                                                                {/* Primary Ship Action */}
+                                                                <button onClick={(e) => { e.stopPropagation(); onShip(order); }} className={`w-full py-2 bg-[#0ECB81] text-[#0B0E11] rounded-sm text-xs font-black uppercase tracking-widest flex items-center justify-center gap-1.5 shadow-lg shadow-[#0ECB81]/10`}>
+                                                                    <Check size={14} strokeWidth={3} />
+                                                                    Confirm Ship
+                                                                </button>
+
+                                                                {/* Send Photo Action */}
+                                                                {getDeliveryGroup(order)?.TelegramGroupID && (
+                                                                    <div className="w-full">
+                                                                        {!!(order['Delivery Telegram Message ID'] || (order as any)['Delivery Telegram Message ID']) ? (
+                                                                            <div className="flex items-center gap-1">
+                                                                                <div className="flex-grow flex items-center justify-center gap-1 py-1.5 bg-[#0ECB81]/10 border border-[#0ECB81]/20 rounded-sm">
+                                                                                    <Check size={10} className="text-[#0ECB81]" />
+                                                                                    <span className="text-[9px] font-black text-[#0ECB81] uppercase tracking-tighter">Sent to Driver</span>
+                                                                                </div>
+                                                                                <button 
+                                                                                    onClick={(e) => { e.stopPropagation(); handleDeleteFromDeliveryTelegram(order); }}
+                                                                                    disabled={isSendingTelegram || !getCanSendToDriver(order)}
+                                                                                    className={`w-8 h-8 flex items-center justify-center ${!getCanSendToDriver(order) ? 'bg-[#2B3139] text-gray-600' : 'bg-red-500/10 hover:bg-red-500/20 text-red-500'} rounded-sm border border-red-500/20 transition-all active:scale-95 disabled:opacity-50`}
+                                                                                >
+                                                                                    {isSendingTelegram ? <Spinner size="xs" /> : <Trash size={12} />}
+                                                                                </button>
+                                                                            </div>
+                                                                        ) : (
+                                                                            <button 
+                                                                                onClick={(e) => { e.stopPropagation(); handleSendToDeliveryTelegram(order); }}
+                                                                                disabled={isSendingTelegram || !getCanSendToDriver(order)}
+                                                                                className={`w-full flex items-center justify-center gap-1.5 py-1.5 ${!getCanSendToDriver(order) ? 'bg-[#2B3139] text-gray-500 cursor-not-allowed border-[#363C44]' : 'bg-blue-600 hover:bg-blue-500 text-white'} rounded-sm text-[9px] font-black uppercase tracking-tight transition-all active:scale-95 disabled:opacity-50`}
+                                                                            >
+                                                                                {isSendingTelegram ? <Spinner size="xs" /> : <ImageIcon size={14} />}
+                                                                                បញ្ជូនរូបភាពកញ្ចប់
+                                                                            </button>
+                                                                        )}
+                                                                    </div>
+                                                                )}
+
+                                                                {/* Utility Row */}
+                                                                <div className="flex gap-1.5">
+                                                                    <button onClick={(e) => { e.stopPropagation(); onView(order); }} className={`flex-1 py-1.5 bg-[#2B3139] text-[#EAECEF] rounded-sm text-[10px] font-bold uppercase`}>Node Info</button>
+                                                                    <button onClick={(e) => { e.stopPropagation(); onUndo(order); }} className={`w-16 py-1.5 bg-red-500/5 text-[#F6465D] rounded-sm text-[10px] font-bold uppercase border border-red-500/10`}>Undo</button>
+                                                                </div>
                                                             </div>
-                                                        )}
-                                                        {!isCancelled && (
-                                                            <>
-                                                                {activeTab === 'Pending' && <button onClick={(e) => { e.stopPropagation(); onPack(order); }} className={`px-3 py-1 bg-[#FCD535] text-[#0B0E11] rounded-sm text-xs font-bold uppercase`}>Pack</button>}
-                                                                {activeTab === 'Ready to Ship' && (
+                                                        ) : (
+                                                            <div className="flex gap-1 justify-end">
+                                                                <button onClick={(e) => { e.stopPropagation(); onView(order); }} className={`px-2 py-1 bg-[#2B3139] text-[#EAECEF] rounded-sm text-xs`}>View</button>
+                                                                {activeTab === 'Cancelled' && order['Return Received By'] && (
+                                                                    <div className="flex items-center justify-center border border-[#FCD535]/20 bg-[#FCD535]/5 rounded-sm px-2 overflow-hidden">
+                                                                        <span className="text-[9px] font-black text-[#FCD535] uppercase truncate" title={order['Return Received By']}>
+                                                                            Confirm by: {order['Return Received By']}
+                                                                        </span>
+                                                                    </div>
+                                                                )}
+                                                                {!isCancelled && (
                                                                     <>
-                                                                        <button onClick={(e) => { e.stopPropagation(); onUndo(order); }} className={`px-2 py-1 bg-[#F6465D]/10 text-[#F6465D] rounded-sm text-xs font-bold uppercase`}>Undo</button>
-                                                                        <button onClick={(e) => { e.stopPropagation(); onShip(order); }} className={`px-3 py-1 bg-[#0ECB81] text-[#0B0E11] rounded-sm text-xs font-bold uppercase`}>Ship</button>
+                                                                        {activeTab === 'Pending' && <button onClick={(e) => { e.stopPropagation(); onPack(order); }} className={`px-3 py-1 bg-[#FCD535] text-[#0B0E11] rounded-sm text-xs font-bold uppercase`}>Pack</button>}
                                                                     </>
                                                                 )}
-                                                            </>
-                                                        )}
-                                                        {isCancelled && activeTab !== 'Cancelled' && (
-                                                            <button 
-                                                                onClick={(e) => { e.stopPropagation(); setUnpackTarget(order); }} 
-                                                                className={`px-3 py-1 bg-red-600 text-white rounded-sm text-[10px] font-bold uppercase shadow-lg shadow-red-600/20 transition-all active:scale-95`}
-                                                            >
-                                                                {!!(order['Packed By'] || order['Packed Time']) ? 'ហែកកញ្ចប់' : 'បញ្ជាក់ការបោះបង់'}
-                                                            </button>
-                                                        )}
-                                                        {activeTab === 'Shipped' && (
-                                                            <button onClick={(e) => { e.stopPropagation(); onUndoShipped(order); }} className={`px-2 py-1 bg-[#F6465D]/10 text-[#F6465D] rounded-sm text-xs font-bold uppercase`}>Undo</button>
-                                                        )}
-                                                        {activeTab === 'Returned' && (
-                                                            <button 
-                                                                onClick={(e) => { e.stopPropagation(); onConfirmReturn?.(order); }} 
-                                                                disabled={!!order['Return Received By']}
-                                                                className={`px-3 py-1 ${order['Return Received By'] ? 'bg-gray-500/20 text-gray-500' : 'bg-purple-500 text-white font-bold'} rounded-sm text-xs uppercase transition-colors`}
-                                                            >
-                                                                {order['Return Received By'] ? 'Received' : 'Confirm'}
-                                                            </button>
+                                                                {isCancelled && activeTab !== 'Cancelled' && (
+                                                                    <button 
+                                                                        onClick={(e) => { e.stopPropagation(); setUnpackTarget(order); }} 
+                                                                        className={`px-3 py-1 bg-red-600 text-white rounded-sm text-[10px] font-bold uppercase shadow-lg shadow-red-600/20 transition-all active:scale-95`}
+                                                                    >
+                                                                        {!!(order['Packed By'] || order['Packed Time']) ? 'ហែកកញ្ចប់' : 'បញ្ជាក់ការបោះបង់'}
+                                                                    </button>
+                                                                )}
+                                                                {activeTab === 'Shipped' && (
+                                                                    <button onClick={(e) => { e.stopPropagation(); onUndoShipped(order); }} className={`px-2 py-1 bg-[#F6465D]/10 text-[#F6465D] rounded-sm text-xs font-bold uppercase`}>Undo</button>
+                                                                )}
+                                                                {activeTab === 'Returned' && (
+                                                                    <button 
+                                                                        onClick={(e) => { e.stopPropagation(); onConfirmReturn?.(order); }} 
+                                                                        disabled={!!order['Return Received By']}
+                                                                        className={`px-3 py-1 ${order['Return Received By'] ? 'bg-gray-500/20 text-gray-500' : 'bg-purple-500 text-white font-bold'} rounded-sm text-xs uppercase transition-colors`}
+                                                                    >
+                                                                        {order['Return Received By'] ? 'Received' : 'Confirm'}
+                                                                    </button>
+                                                                )}
+                                                            </div>
                                                         )}
                                                     </div>
                                                 </div>
