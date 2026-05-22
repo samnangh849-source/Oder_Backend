@@ -21,6 +21,7 @@ type PendingSync = {
     status: 'pending' | 'processing' | 'failed' | 'permanent_failure';
     retryCount: number;
     maxRetries: number;
+    lastErrorMessage?: string;
     createdAt: string;
     updatedAt: string;
 };
@@ -240,7 +241,7 @@ const DatabaseManagement: React.FC = () => {
                 showNotification(`${data.sheet} Sync Complete`, 'success');
                 refreshData();
                 fetchHealth();
-            } else if (data?.type === 'sync_error' || data?.type === 'sheet_webhook_sync') {
+            } else if (data?.type === 'sync_error' || data?.type === 'sheet_webhook_sync' || data?.type === 'sync_queue_updated') {
                 fetchSyncQueue();
             }
         } catch (_) { /* ignore */ }
@@ -579,35 +580,56 @@ const DatabaseManagement: React.FC = () => {
                                         <tbody className="divide-y divide-[#2b3139]">
                                             {syncQueue.map(task => {
                                                 const payload = JSON.parse(task.payload);
+                                                const isFailed = task.status === 'failed' || task.status === 'permanent_failure';
+                                                
                                                 return (
-                                                    <tr key={task.id} className="hover:bg-[#2b3139]/50 transition-colors">
-                                                        <td className="px-4 py-3">
-                                                            <div className="font-medium text-[#eaecef]">{payload.action}</div>
-                                                            <div className="text-[10px] text-[#848e9c]">{payload.sheetName || 'N/A'} {payload.orderId ? `| ID: ${payload.orderId}` : ''}</div>
-                                                        </td>
-                                                        <td className="px-4 py-3">
-                                                            <span className={`px-1.5 py-0.5 rounded-[2px] text-[10px] font-medium uppercase ${
-                                                                task.status === 'pending' ? 'bg-[#2b3139] text-[#848e9c]' :
-                                                                task.status === 'processing' ? 'bg-[#032a22] text-[#fcd535]' :
-                                                                task.status === 'failed' ? 'bg-[#3f1619] text-[#f6465d]' :
-                                                                'bg-[#3f1619] text-[#f6465d] border border-[#f6465d]/30'
-                                                            }`}>
-                                                                {task.status.replace('_', ' ')}
-                                                            </span>
-                                                        </td>
-                                                        <td className="px-4 py-3 text-[#848e9c] tabular-nums">
-                                                            {task.retryCount} / {task.maxRetries}
-                                                        </td>
-                                                        <td className="px-4 py-3 text-right">
-                                                            {(task.status === 'failed' || task.status === 'permanent_failure') && (
-                                                                <button onClick={() => handleRetryTask(task.id)} className="p-1 hover:bg-[#474d57] rounded text-[#fcd535] transition-colors">
-                                                                    <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
-                                                                    </svg>
-                                                                </button>
-                                                            )}
-                                                        </td>
-                                                    </tr>
+                                                    <React.Fragment key={task.id}>
+                                                        <tr className="hover:bg-[#2b3139]/50 transition-colors">
+                                                            <td className="px-4 py-3">
+                                                                <div className="font-medium text-[#eaecef] flex items-center gap-2">
+                                                                    {payload.action}
+                                                                    {payload.isAsync && <span className="text-[8px] bg-blue-500/10 text-blue-400 px-1 rounded">ASYNC</span>}
+                                                                </div>
+                                                                <div className="text-[10px] text-[#848e9c]">{payload.sheetName || 'N/A'} {payload.orderId ? `| ID: ${payload.orderId}` : ''}</div>
+                                                            </td>
+                                                            <td className="px-4 py-3">
+                                                                <span className={`px-1.5 py-0.5 rounded-[2px] text-[10px] font-medium uppercase ${
+                                                                    task.status === 'pending' ? 'bg-[#2b3139] text-[#848e9c]' :
+                                                                    task.status === 'processing' ? 'bg-[#032a22] text-[#fcd535]' :
+                                                                    task.status === 'failed' ? 'bg-[#3f1619] text-[#f6465d]' :
+                                                                    'bg-[#3f1619] text-[#f6465d] border border-[#f6465d]/30'
+                                                                }`}>
+                                                                    {task.status.replace('_', ' ')}
+                                                                </span>
+                                                            </td>
+                                                            <td className="px-4 py-3 text-[#848e9c] tabular-nums">
+                                                                {task.retryCount} / {task.maxRetries}
+                                                            </td>
+                                                            <td className="px-4 py-3 text-right">
+                                                                <div className="flex justify-end gap-1">
+                                                                    {isFailed && (
+                                                                        <button onClick={() => handleRetryTask(task.id)} className="p-1 hover:bg-[#474d57] rounded text-[#fcd535] transition-colors" title="Retry Task">
+                                                                            <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                                                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+                                                                            </svg>
+                                                                        </button>
+                                                                    )}
+                                                                </div>
+                                                            </td>
+                                                        </tr>
+                                                        {task.lastErrorMessage && isFailed && (
+                                                            <tr className="bg-[#211114]">
+                                                                <td colSpan={4} className="px-4 py-2 text-[10px] text-[#f6465d] font-mono whitespace-pre-wrap break-all border-l-2 border-[#f6465d]">
+                                                                    <div className="flex items-start gap-2">
+                                                                        <svg className="w-3 h-3 mt-0.5 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                                                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+                                                                        </svg>
+                                                                        {task.lastErrorMessage}
+                                                                    </div>
+                                                                </td>
+                                                            </tr>
+                                                        )}
+                                                    </React.Fragment>
                                                 );
                                             })}
                                         </tbody>

@@ -1973,8 +1973,9 @@ func handleGetSyncQueue(c *gin.Context) {
 func handleRetrySyncTask(c *gin.Context) {
 	id := c.Param("id")
 	if err := backend.DB.Model(&backend.PendingSync{}).Where("id = ?", id).Updates(map[string]interface{}{
-		"status":      "pending",
-		"retry_count": 0,
+		"status":             "pending",
+		"retry_count":        0,
+		"last_error_message": "",
 	}).Error; err != nil {
 		c.JSON(500, gin.H{"status": "error", "message": err.Error()})
 		return
@@ -1984,8 +1985,9 @@ func handleRetrySyncTask(c *gin.Context) {
 
 func handleRetryAllFailedSyncTasks(c *gin.Context) {
 	if err := backend.DB.Model(&backend.PendingSync{}).Where("status = 'failed' OR status = 'permanent_failure'").Updates(map[string]interface{}{
-		"status":      "pending",
-		"retry_count": 0,
+		"status":             "pending",
+		"retry_count":        0,
+		"last_error_message": "",
 	}).Error; err != nil {
 		c.JSON(500, gin.H{"status": "error", "message": err.Error()})
 		return
@@ -2089,7 +2091,60 @@ func handleRegisterTelegramWebhook(c *gin.Context) {
 }
 
 func handleTelegramWebhook(c *gin.Context) {
-	// ... (existing code remains same)
+	token := c.Param("token")
+	var update struct {
+		Message struct {
+			MessageID int `json:"message_id"`
+			Chat      struct {
+				ID int64 `json:"id"`
+			} `json:"chat"`
+			Text            string `json:"text"`
+			MessageThreadID int    `json:"message_thread_id"`
+		} `json:"message"`
+	}
+
+	if err := c.ShouldBindJSON(&update); err != nil {
+		// Just log and return 200 to Telegram to stop retries
+		return
+	}
+
+	if update.Message.Text == "" {
+		c.JSON(200, gin.H{"status": "ok"})
+		return
+	}
+
+	text := strings.TrimSpace(update.Message.Text)
+	if strings.HasPrefix(text, "/id") {
+		chatID := update.Message.Chat.ID
+		threadID := update.Message.MessageThreadID
+		
+		go func(t string, cid int64, tid int) {
+			response := fmt.Sprintf("🆔 *Chat Information*\n\n🔹 *Group ID:* `%d`", cid)
+			if tid != 0 {
+				response += fmt.Sprintf("\n🔹 *Thread ID:* `%d`", tid)
+			}
+			
+			payload := map[string]interface{}{
+				"chat_id":    cid,
+				"text":       response,
+				"parse_mode": "Markdown",
+			}
+			if tid != 0 {
+				payload["message_thread_id"] = tid
+			}
+
+			apiURL := fmt.Sprintf("https://api.telegram.org/bot%s/sendMessage", t)
+			jsonData, _ := json.Marshal(payload)
+			resp, err := http.Post(apiURL, "application/json", bytes.NewBuffer(jsonData))
+			if err != nil {
+				log.Printf("❌ [Telegram Bot] Failed to send /id response: %v", err)
+				return
+			}
+			defer resp.Body.Close()
+		}(token, chatID, threadID)
+	}
+
+	c.JSON(200, gin.H{"status": "ok"})
 }
 
 func handleTestTelegram(c *gin.Context) {
