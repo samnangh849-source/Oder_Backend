@@ -116,19 +116,13 @@ const SettingsDashboard: React.FC<SettingsDashboardProps> = ({ onBack, initialSe
                 const json = await res.json();
                 if (json.status === 'success') {
                     const data = getArrayCaseInsensitive(json.data, section.dataKey);
-                    if (data.length > 0) {
-                        setLocalData(data);
-                        return;
-                    }
+                    setLocalData(data || []);
+                    return;
                 }
             }
 
             // If API failed but appData has data from initial load, use it
-            if (fromAppData.length > 0) {
-                setLocalData(fromAppData);
-            } else {
-                setFetchError(true);
-            }
+            setLocalData(fromAppData || []);
         } catch (err) {
             console.error(`[SettingsDashboard] Failed to fetch ${sectionId}:`, err);
             // Fallback to appData even on error

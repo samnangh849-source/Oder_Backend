@@ -149,7 +149,7 @@ const ConfigEditModal: React.FC<ConfigEditModalProps> = ({ section, item, onClos
     };
     
     // Fields that are always optional (never block save)
-    const OPTIONAL_FIELDS = new Set(['Team', 'TelegramUsername', 'ProfilePictureURL', 'Description']);
+    const OPTIONAL_FIELDS = new Set(['Team', 'TelegramUsername', 'ProfilePictureURL', 'Description', 'TelegramTopicID']);
 
     const handleSave = async () => {
         setError('');

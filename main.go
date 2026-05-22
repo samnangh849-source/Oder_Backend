@@ -170,6 +170,9 @@ func mapToDBColumn(key string) string {
 		"Key":                     "config_key",
 		"Value":                   "config_value",
 		"Description":             "description",
+		"TelegramGroupID":         "telegram_group_id",
+		"TelegramTopicID":          "telegram_topic_id",
+		"CODAlertGroupID":         "cod_alert_group_id",
 	}
 
 	// Standard mapping logic
@@ -219,6 +222,8 @@ func getTableName(sheetName string) string {
 		return "locations"
 	case "ShippingMethods":
 		return "shipping_methods"
+	case "DeliveryGroups":
+		return "delivery_groups"
 	case "Colors":
 		return "colors"
 	case "Drivers":
@@ -743,6 +748,7 @@ func handleGetStaticData(c *gin.Context) {
 		func() { var d []Driver; backend.DB.Find(&d); mu.Lock(); result["drivers"] = d; mu.Unlock() },
 		func() { var d []BankAccount; backend.DB.Find(&d); mu.Lock(); result["bankAccounts"] = d; mu.Unlock() },
 		func() { var d []PhoneCarrier; backend.DB.Find(&d); mu.Lock(); result["phoneCarriers"] = d; mu.Unlock() },
+		func() { var d []DeliveryGroup; backend.DB.Find(&d); mu.Lock(); result["deliveryGroups"] = d; mu.Unlock() },
 		func() { var d []Inventory; backend.DB.Find(&d); mu.Lock(); result["inventory"] = d; mu.Unlock() },
 		func() {
 			var d []StockTransfer
@@ -2219,6 +2225,8 @@ func handleSheetsWebhook(c *gin.Context) {
 		pkName = "Barcode"
 	} else if req.SheetName == "ShippingMethods" {
 		pkName = "MethodName"
+	} else if req.SheetName == "DeliveryGroups" {
+		pkName = "ID"
 	} else if req.SheetName == "Colors" {
 		pkName = "ColorName"
 	} else if req.SheetName == "Drivers" {
