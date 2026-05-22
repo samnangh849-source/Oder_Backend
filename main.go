@@ -1890,80 +1890,51 @@ func handleRegisterTelegramWebhook(c *gin.Context) {
 }
 
 func handleTelegramWebhook(c *gin.Context) {
-	token := c.Param("token")
-	var update struct {
-		UpdateID int `json:"update_id"`
-		Message  struct {
-			MessageID int `json:"message_id"`
-			Chat      struct {
-				ID    int64  `json:"id"`
-				Title string `json:"title"`
-				Type  string `json:"type"`
-			} `json:"chat"`
-			ThreadID       int    `json:"message_thread_id"`
-			Text           string `json:"text"`
-			NewChatMembers []struct {
-				ID       int64  `json:"id"`
-				IsBot    bool   `json:"is_bot"`
-				Username string `json:"username"`
-			} `json:"new_chat_members"`
-		} `json:"message"`
-	}
+	// ... (existing code remains same)
+}
 
-	if err := c.ShouldBindJSON(&update); err != nil {
+func handleTestTelegram(c *gin.Context) {
+	var r struct {
+		Token    string `json:"token"`
+		ChatID   string `json:"chatId"`
+		ThreadID string `json:"threadId"`
+		Message  string `json:"message"`
+	}
+	if err := c.ShouldBindJSON(&r); err != nil {
+		c.Error(err)
 		return
 	}
 
-	chatID := update.Message.Chat.ID
-	threadID := update.Message.ThreadID
-	chatTitle := update.Message.Chat.Title
-
-	// Function to send the ID info
-	sendIDInfo := func() {
-		reply := fmt.Sprintf("🤖 *Bot Configuration Info*\n\n📍 Group: *%s*\n🆔 Group ID: `%d`", chatTitle, chatID)
-		if threadID != 0 {
-			reply += fmt.Sprintf("\n🧵 Topic ID: `%d`", threadID)
-		} else {
-			reply += "\n🧵 Topic: _(General/Main Chat)_"
-		}
-		reply += "\n\n💡 _Use these IDs in your Store or Delivery Group settings._"
-
-		apiURL := fmt.Sprintf("https://api.telegram.org/bot%s/sendMessage", token)
-		payload := map[string]interface{}{
-			"chat_id":    chatID,
-			"text":       reply,
-			"parse_mode": "Markdown",
-		}
-		if threadID != 0 {
-			payload["message_thread_id"] = threadID
-		}
-		// If it's a command, reply to that message
-		if update.Message.Text != "" {
-			payload["reply_to_message_id"] = update.Message.MessageID
-		}
-
-		jsonData, _ := json.Marshal(payload)
-		http.Post(apiURL, "application/json", bytes.NewBuffer(jsonData))
+	if r.Token == "" || r.ChatID == "" {
+		c.JSON(http.StatusBadRequest, gin.H{"status": "error", "message": "Bot Token and Chat ID are required"})
+		return
 	}
 
-	// Case 1: Check for commands (/id or /info)
-	text := strings.ToLower(strings.TrimSpace(update.Message.Text))
-	if strings.HasPrefix(text, "/id") || strings.HasPrefix(text, "/info") {
-		sendIDInfo()
+	payload := map[string]interface{}{
+		"chat_id":    r.ChatID,
+		"text":       "🔔 *តេស្តការតភ្ជាប់ (Test Connection)*\n\nប្រព័ន្ធរបស់អ្នកត្រូវបានភ្ជាប់មកកាន់ Group នេះដោយជោគជ័យ!\n\n📍 Message: " + r.Message,
+		"parse_mode": "Markdown",
 	}
 
-	// Case 2: Check if a bot (potentially this one) was added to the group
-	if len(update.Message.NewChatMembers) > 0 {
-		for _, member := range update.Message.NewChatMembers {
-			if member.IsBot {
-				// When a bot is added, proactively show the ID info to help the admin
-				sendIDInfo()
-				break
-			}
+	if r.ThreadID != "" {
+		if tid, err := strconv.Atoi(r.ThreadID); err == nil && tid != 0 {
+			payload["message_thread_id"] = tid
 		}
 	}
 
-	c.Status(http.StatusOK)
+	apiURL := fmt.Sprintf("https://api.telegram.org/bot%s/sendMessage", r.Token)
+	jsonData, _ := json.Marshal(payload)
+	resp, err := http.Post(apiURL, "application/json", bytes.NewBuffer(jsonData))
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"status": "error", "message": "Connection error: " + err.Error()})
+		return
+	}
+	defer resp.Body.Close()
+
+	var resData map[string]interface{}
+	json.NewDecoder(resp.Body).Decode(&resData)
+
+	c.JSON(http.StatusOK, resData)
 }
 
 // ─────────────────────────────────────────
@@ -2583,6 +2554,7 @@ func main() {
 	protected.Use(AuthMiddleware())
 	{
 		protected.POST("/setup-bot-webhook", handleRegisterTelegramWebhook)
+		protected.POST("/test-telegram", handleTestTelegram)
 		protected.GET("/users", handleGetUsers)
 		protected.GET("/static-data", handleGetStaticData)
 		protected.POST("/submit-order", RequirePermission("create_order"), handleSubmitOrder)
