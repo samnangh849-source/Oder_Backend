@@ -231,6 +231,55 @@ const SettingsDashboard: React.FC<SettingsDashboardProps> = ({ onBack, initialSe
         }
     };
 
+    const handleTestTelegram = async (item: any, sectionId: string) => {
+        let token = '';
+        let chatId = '';
+        let threadId = '';
+
+        if (sectionId === 'stores') {
+            token = getValueCaseInsensitive(item, 'TelegramBotToken');
+            chatId = getValueCaseInsensitive(item, 'TelegramGroupID');
+            threadId = getValueCaseInsensitive(item, 'TelegramTopicID');
+        } else if (sectionId === 'deliveryGroups') {
+            const storeName = getValueCaseInsensitive(item, 'StoreName');
+            const store = getArrayCaseInsensitive(appData, 'stores').find(s => s.StoreName === storeName);
+            if (!store) {
+                showNotification('រកមិនឃើញព័ត៌មានឃ្លាំងដើម្បីយក Bot Token', 'error', 'Error');
+                return;
+            }
+            token = store.TelegramBotToken;
+            chatId = getValueCaseInsensitive(item, 'TelegramGroupID');
+            threadId = getValueCaseInsensitive(item, 'TelegramTopicID');
+        }
+
+        if (!token || !chatId) {
+            showNotification('សូមបញ្ចូល Bot Token និង Group ID ជាមុនសិន!', 'error', 'Error');
+            return;
+        }
+
+        try {
+            const session = await CacheService.get<{ token: string }>(CACHE_KEYS.SESSION);
+            const authToken = session?.token || localStorage.getItem('token');
+            
+            const res = await fetch(`${WEB_APP_URL}/api/test-telegram`, {
+                method: 'POST',
+                headers: { 
+                    'Content-Type': 'application/json',
+                    'Authorization': `Bearer ${authToken}`
+                },
+                body: JSON.stringify({ token, chatId, threadId, message: `Test from ${sectionId === 'stores' ? 'Store Settings' : 'Delivery Group Settings'}` })
+            });
+            const data = await res.json();
+            if (data.ok) {
+                showNotification('ផ្ញើសារសាកល្បងជោគជ័យ! សូមពិនិត្យមើលក្នុង Telegram។', 'success', 'Success');
+            } else {
+                showNotification('បរាជ័យ: ' + (data.description || 'Unknown error'), 'error', 'Error');
+            }
+        } catch (err) {
+            showNotification('មានបញ្ហាក្នុងការផ្ញើសារសាកល្បង', 'error', 'Error');
+        }
+    };
+
     const handleDelete = async (section: ConfigSection, item: any) => {
         const displayValue = getValueCaseInsensitive(item, section.displayField);
         
@@ -456,13 +505,22 @@ const SettingsDashboard: React.FC<SettingsDashboardProps> = ({ onBack, initialSe
                                                 })}
                                                 <td className="px-4 py-4 text-center">
                                                     <div className="flex items-center justify-center gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
+                                                        {(activeId === 'stores' || activeId === 'deliveryGroups') && (
+                                                            <button 
+                                                                onClick={() => handleTestTelegram(item, activeId)} 
+                                                                className="p-2 bg-emerald-500/10 text-emerald-400 rounded-lg hover:bg-emerald-500 hover:text-white transition-all"
+                                                                title="Test Telegram Message"
+                                                            >
+                                                                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" strokeWidth={2}/></svg>
+                                                            </button>
+                                                        )}
                                                         {activeId === 'stores' && (
                                                             <button 
                                                                 onClick={() => handleSetupBot(item)} 
                                                                 className="p-2 bg-blue-500/10 text-blue-400 rounded-lg hover:bg-blue-500 hover:text-white transition-all"
                                                                 title="Setup Telegram Bot Webhook"
                                                             >
-                                                                <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 24 24"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm4.64 6.8c-.15.31-.3.6-.45.89-.64 1.25-1.28 2.51-1.92 3.76-.11.22-.22.44-.33.67-.09.18-.18.36-.26.54l-.45.89c-.06.12-.11.23-.17.35-.11.23-.21.46-.32.69-.11.22-.22.44-.33.67-.11.23-.21.46-.32.69-.11.22-.22.44-.33.67-.11.23-.21.46-.32.69-.11.22-.22.44-.33.67-.11.23-.21.46-.32.69-.11.22-.22.44-.33.67-.11.23-.21.46-.32.69-.11.22-.22.44-.33.67-.11.23-.21.46-.32.69-.11.22-.22.44-.33.67-.11.23-.21.46-.32.69-.11.22-.22.44-.33.67-.11.23-.21.46-.32.69-.11.22-.22.44-.33.67-.11.23-.21.46-.32.69-.11.22-.22.44-.33.67-.11.23-.21.46-.32.69-.11.22-.22.44-.33.67zM12 4c4.41 0 8 3.59 8 8s-3.59 8-8 8-8-3.59-8-8 3.59-8 8-8z"/></svg>
+                                                                <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 24 24"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm4.64 6.8c-.15.31-.3.6-.45.89-.64 1.25-1.28 2.51-1.92 3.76-.11.22-.22.44-.33.67-.09.18-.18.36-.26.54l-.45.89c-.06.12-.11.23-.17.35-.11.23-.21.46-.32.69-.11.22-.22.44-.33.67-.11.23-.21.46-.32.69-.11.22-.22.44-.33.67-.11.23-.21.46-.32.69-.11.22-.22.44-.33.67-.11.23-.21.46-.32.69-.11.22-.22.44-.33.67-.11.23-.21.46-.32.69-.11.22-.22.44-.33.67-.11.23-.21.46-.32.69-.11.22-.22.44-.33.67-.11.23-.21.46-.32.69-.11.22-.22.44-.33.67-.11.23-.21.46-.32.69-.11.22-.22.44-.33.67-.11.23-.21.46-.32.69-.11.22-.22.44-.33.67zM12 4c4.41 0 8 3.59 8 8s-3.59 8-8 8-8-3.59-8-8 3.59-8 8-8z"/></svg>
                                                             </button>
                                                         )}
                                                         <button onClick={() => setModal({ isOpen: true, sectionId: activeId, item })} className="p-2 bg-amber-500/10 text-amber-400 rounded-lg hover:bg-amber-500 hover:text-white transition-all"><svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" strokeWidth={2}/></svg></button>
