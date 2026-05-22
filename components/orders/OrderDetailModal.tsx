@@ -1,10 +1,11 @@
-import React, { useContext, useState } from 'react';
+import React, { useContext, useState, useEffect, useMemo } from 'react';
 import { AppContext } from '../../context/AppContext';
-import { ParsedOrder } from '../../types';
+import { ParsedOrder, EditLog, UserActivityLog } from '../../types';
 import { safeParseDate } from '../../utils/dateUtils';
 import { convertGoogleDriveUrl, getOptimisticPackagePhoto } from '../../utils/fileUtils';
 import { WEB_APP_URL } from '../../constants';
 import { CacheService, CACHE_KEYS } from '../../services/cacheService';
+import { fetchAuditLogs } from '../../services/auditService';
 import Modal from '../common/Modal';
 import { 
     Copy, 
@@ -21,7 +22,9 @@ import {
     ShieldCheck, 
     ExternalLink,
     Zap,
-    Hash
+    Hash,
+    History,
+    Activity
 } from 'lucide-react';
 
 interface OrderDetailModalProps {
@@ -30,13 +33,77 @@ interface OrderDetailModalProps {
 }
 
 const OrderDetailModal: React.FC<OrderDetailModalProps> = ({ order, onClose }) => {
-    const { previewImage, appData } = useContext(AppContext);
+    const { previewImage, appData, isShiftOpener, activeShiftStore, currentUser } = useContext(AppContext);
     const [copiedField, setCopiedField] = useState<string | null>(null);
     const [isSendingTelegram, setIsSendingTelegram] = useState(false);
+
+    // Permission Check: Only the user who opened the packaging shift for this store can send to driver
+    // AND it must be in the "Ready to Ship" (Ready for Dispatch) step.
+    const canSendToDriver = useMemo(() => {
+        const fs = (order as any).FulfillmentStatus || (order as any)['Fulfillment Status'] || 'Pending';
+        const isReadyForDispatch = fs === 'Ready to Ship';
+
+        // Global rule: Only allowed in "Ready to Ship" status
+        if (!isReadyForDispatch) return false;
+
+        if (!currentUser) return false;
+        // If user is System Admin, allow override for the person check (but still must be Ready to Ship)
+        if (currentUser.IsSystemAdmin) return true;
+        
+        const orderStore = (order['Fulfillment Store'] || '').trim().toLowerCase();
+        const myShiftStore = (activeShiftStore || '').trim().toLowerCase();
+        
+        return isShiftOpener && orderStore === myShiftStore;
+    }, [isShiftOpener, activeShiftStore, order, currentUser]);
+
+    const [editLogs, setEditLogs] = useState<EditLog[]>([]);
+    const [activityLogs, setActivityLogs] = useState<UserActivityLog[]>([]);
+    const [loadingLogs, setLoadingLogs] = useState(false);
+
+    useEffect(() => {
+        const loadLogs = async () => {
+            setLoadingLogs(true);
+            try {
+                const [eLogs, aLogs] = await Promise.all([
+                    fetchAuditLogs('edit'),
+                    fetchAuditLogs('activity')
+                ]);
+                
+                // Filter EditLogs by OrderID
+                const filteredEditLogs = (eLogs as EditLog[]).filter(log => 
+                    log.OrderID && log.OrderID.toLowerCase() === order['Order ID'].toLowerCase()
+                );
+                setEditLogs(filteredEditLogs.sort((a, b) => new Date(b.Timestamp).getTime() - new Date(a.Timestamp).getTime()));
+
+                // Filter UserActivityLogs by OrderID in Details
+                const filteredActivityLogs = (aLogs as UserActivityLog[]).filter(log => 
+                    log.Details && log.Details.toLowerCase().includes(order['Order ID'].toLowerCase())
+                );
+                setActivityLogs(filteredActivityLogs.sort((a, b) => new Date(b.Timestamp).getTime() - new Date(a.Timestamp).getTime()));
+            } catch (error) {
+                console.error("Error loading order logs:", error);
+            } finally {
+                setLoadingLogs(false);
+            }
+        };
+        loadLogs();
+    }, [order['Order ID']]);
 
     const page = appData.pages?.find(p => p.PageName === order.Page);
     const bank = appData.bankAccounts?.find(b => b.BankName === order['Payment Info']);
     const shippingMethod = appData.shippingMethods?.find(m => m.MethodName === order['Internal Shipping Method']);
+
+    // Check if there is a Telegram group assigned for this delivery method and store
+    const deliveryGroup = useMemo(() => {
+        if (!order['Internal Shipping Method'] || !order['Fulfillment Store']) return null;
+        return appData.deliveryGroups?.find(dg => 
+            dg.ShippingMethod === order['Internal Shipping Method'] && 
+            dg.StoreName === order['Fulfillment Store']
+        );
+    }, [appData.deliveryGroups, order]);
+
+    const hasTelegramGroup = !!deliveryGroup?.TelegramGroupID;
+    const isAlreadySent = !!(order['Delivery Telegram Message ID'] || (order as any)['Delivery Telegram Message ID']);
 
     const handleSendToDeliveryTelegram = async () => {
         setIsSendingTelegram(true);
@@ -187,8 +254,8 @@ const OrderDetailModal: React.FC<OrderDetailModalProps> = ({ order, onClose }) =
     ];
 
     return (
-        <Modal isOpen={true} onClose={onClose} maxWidth="max-w-6xl">
-            <div className="flex flex-col h-[100dvh] sm:h-[90vh] overflow-hidden bg-[#0B0E11] text-[#EAECEF] selection:bg-[#FCD535]/30 sm:rounded-2xl border-x border-b border-[#2B3139]" style={{ fontFamily: "'Inter', sans-serif" }}>
+        <Modal isOpen={true} onClose={onClose} fullScreen={true}>
+            <div className="flex flex-col h-screen overflow-hidden bg-[#0B0E11] text-[#EAECEF] selection:bg-[#FCD535]/30 sm:rounded-2xl border-x border-b border-[#2B3139]" style={{ fontFamily: "'Inter', sans-serif" }}>
                 {/* Header: Terminal Style */}
                 <div className="p-4 sm:p-6 border-b border-[#2B3139] bg-gradient-to-r from-[#1E2329] to-[#0B0E11] flex justify-between items-center relative z-10">
                     <div className="flex items-center gap-3 sm:gap-5">
@@ -343,6 +410,94 @@ const OrderDetailModal: React.FC<OrderDetailModalProps> = ({ order, onClose }) =
                                 </div>
                             </div>
 
+                            {/* Audit Logs Section */}
+                            <div className="grid grid-cols-1 md:grid-cols-2 gap-6 sm:gap-8">
+                                {/* Edit Logs */}
+                                <div className="space-y-4">
+                                    <div className="flex items-center gap-3 ml-2">
+                                        <History size={16} className="text-[#FCD535]" />
+                                        <h3 className="text-[10px] sm:text-[11px] font-black uppercase tracking-[0.2em] sm:tracking-[0.25em] text-[#848E9C]">Edit Logs (ប្រវត្តិការកែប្រែ)</h3>
+                                    </div>
+                                    <div className="bg-[#1E2329]/60 backdrop-blur-md border border-[#2B3139] rounded-2xl overflow-hidden max-h-[300px] flex flex-col">
+                                        <div className="overflow-y-auto custom-scrollbar flex-grow p-1">
+                                            {loadingLogs ? (
+                                                <div className="p-8 flex flex-col items-center justify-center gap-3 opacity-50">
+                                                    <div className="w-5 h-5 border-2 border-[#FCD535] border-t-transparent rounded-full animate-spin"></div>
+                                                    <p className="text-[8px] font-black uppercase tracking-widest">Loading Protocol...</p>
+                                                </div>
+                                            ) : editLogs.length > 0 ? (
+                                                <div className="space-y-1">
+                                                    {editLogs.map((log, idx) => (
+                                                        <div key={idx} className="p-3 bg-[#0B0E11]/50 border border-[#2B3139] rounded-xl hover:border-[#FCD535]/30 transition-all group">
+                                                            <div className="flex justify-between items-start gap-2 mb-2">
+                                                                <p className="text-[8px] font-mono text-[#FCD535] font-black uppercase tracking-tighter opacity-70">{new Date(log.Timestamp).toLocaleString('km-KH', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit', hour12: false })}</p>
+                                                                <p className="text-[9px] font-black text-white/90 uppercase tracking-widest bg-[#2B3139] px-2 py-0.5 rounded shadow-inner">{log.Requester}</p>
+                                                            </div>
+                                                            <div className="space-y-1.5">
+                                                                <p className="text-[9px] font-black text-blue-400 uppercase tracking-widest border-l-2 border-blue-500/50 pl-2 ml-1">{log['Field Changed']}</p>
+                                                                <div className="grid grid-cols-2 gap-2 mt-2">
+                                                                    <div className="bg-red-500/5 p-2 rounded-lg border border-red-500/10">
+                                                                        <p className="text-[7px] font-black text-red-400 uppercase tracking-widest mb-1 opacity-50">Old</p>
+                                                                        <p className="text-[9px] font-bold text-[#848E9C] truncate italic">{log['Old Value'] || 'EMPTY'}</p>
+                                                                    </div>
+                                                                    <div className="bg-emerald-500/5 p-2 rounded-lg border border-emerald-500/10">
+                                                                        <p className="text-[7px] font-black text-emerald-400 uppercase tracking-widest mb-1 opacity-50">New</p>
+                                                                        <p className="text-[9px] font-bold text-white truncate">{log['New Value']}</p>
+                                                                    </div>
+                                                                </div>
+                                                            </div>
+                                                        </div>
+                                                    ))}
+                                                </div>
+                                            ) : (
+                                                <div className="p-10 text-center opacity-30 flex flex-col items-center gap-3">
+                                                    <History size={32} />
+                                                    <p className="text-[9px] font-black uppercase tracking-[0.3em]">No Modification Records</p>
+                                                </div>
+                                            )}
+                                        </div>
+                                    </div>
+                                </div>
+
+                                {/* Activity Logs */}
+                                <div className="space-y-4">
+                                    <div className="flex items-center gap-3 ml-2">
+                                        <Activity size={16} className="text-[#0ECB81]" />
+                                        <h3 className="text-[10px] sm:text-[11px] font-black uppercase tracking-[0.2em] sm:tracking-[0.25em] text-[#848E9C]">User Activity (សកម្មភាពអ្នកប្រើ)</h3>
+                                    </div>
+                                    <div className="bg-[#1E2329]/60 backdrop-blur-md border border-[#2B3139] rounded-2xl overflow-hidden max-h-[300px] flex flex-col">
+                                        <div className="overflow-y-auto custom-scrollbar flex-grow p-1">
+                                            {loadingLogs ? (
+                                                <div className="p-8 flex flex-col items-center justify-center gap-3 opacity-50">
+                                                    <div className="w-5 h-5 border-2 border-[#0ECB81] border-t-transparent rounded-full animate-spin"></div>
+                                                    <p className="text-[8px] font-black uppercase tracking-widest">Scanning Uplink...</p>
+                                                </div>
+                                            ) : activityLogs.length > 0 ? (
+                                                <div className="space-y-1">
+                                                    {activityLogs.map((log, idx) => (
+                                                        <div key={idx} className="p-3 bg-[#0B0E11]/50 border border-[#2B3139] rounded-xl hover:border-[#0ECB81]/30 transition-all group">
+                                                            <div className="flex justify-between items-start gap-2 mb-2">
+                                                                <p className="text-[8px] font-mono text-[#0ECB81] font-black uppercase tracking-tighter opacity-70">{new Date(log.Timestamp).toLocaleString('km-KH', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit', hour12: false })}</p>
+                                                                <p className="text-[9px] font-black text-white/90 uppercase tracking-widest bg-[#2B3139] px-2 py-0.5 rounded shadow-inner">{log.User}</p>
+                                                            </div>
+                                                            <div className="space-y-1">
+                                                                <p className="text-[9px] font-black text-emerald-400 uppercase tracking-widest">{log.Action}</p>
+                                                                <p className="text-[8px] font-medium text-[#848E9C] leading-relaxed break-words line-clamp-2 group-hover:line-clamp-none transition-all">{log.Details}</p>
+                                                            </div>
+                                                        </div>
+                                                    ))}
+                                                </div>
+                                            ) : (
+                                                <div className="p-10 text-center opacity-30 flex flex-col items-center gap-3">
+                                                    <Activity size={32} />
+                                                    <p className="text-[9px] font-black uppercase tracking-[0.3em]">No Activity Detected</p>
+                                                </div>
+                                            )}
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+
                             {/* Inventory Assets List */}
                             <div className="space-y-4 sm:space-y-5">
                                 <div className="flex justify-between items-center px-2">
@@ -464,16 +619,53 @@ const OrderDetailModal: React.FC<OrderDetailModalProps> = ({ order, onClose }) =
                                                                 </div>
                                                                 <div className={`w-1.5 h-1.5 rounded-full shrink-0 ${dateTime ? event.dot : 'bg-[#474D57]'}`}></div>
                                                             </div>
+                                                            
                                                             {dateTime ? (
-                                                                <div className="mt-2 grid grid-cols-2 gap-2">
-                                                                    <div className="min-w-0">
-                                                                        <p className="text-[7px] sm:text-[8px] font-black text-[#5E6673] uppercase tracking-widest">Date</p>
-                                                                        <p className="text-[9px] sm:text-[10px] font-mono font-black text-[#EAECEF] truncate">{dateTime.date}</p>
+                                                                <div className="mt-2 flex flex-col gap-2">
+                                                                    <div className="grid grid-cols-2 gap-2">
+                                                                        <div className="min-w-0">
+                                                                            <p className="text-[7px] sm:text-[8px] font-black text-[#5E6673] uppercase tracking-widest">Date</p>
+                                                                            <p className="text-[9px] sm:text-[10px] font-mono font-black text-[#EAECEF] truncate">{dateTime.date}</p>
+                                                                        </div>
+                                                                        <div className="min-w-0">
+                                                                            <p className="text-[7px] sm:text-[8px] font-black text-[#5E6673] uppercase tracking-widest">Time</p>
+                                                                            <p className={`text-[9px] sm:text-[10px] font-mono font-black truncate ${event.color}`}>{dateTime.time}</p>
+                                                                        </div>
                                                                     </div>
-                                                                    <div className="min-w-0">
-                                                                        <p className="text-[7px] sm:text-[8px] font-black text-[#5E6673] uppercase tracking-widest">Time</p>
-                                                                        <p className={`text-[9px] sm:text-[10px] font-mono font-black truncate ${event.color}`}>{dateTime.time}</p>
-                                                                    </div>
+
+                                                                    {/* Send to Driver Button inside Ready to Ship Node */}
+                                                                    {event.key === 'shipped' && (fs === 'Ready to Ship') && hasTelegramGroup && (
+                                                                        <div className="mt-1 pt-2 border-t border-[#2B3139] border-dashed">
+                                                                            {isAlreadySent ? (
+                                                                                <div className="flex items-center gap-2">
+                                                                                    <div className="flex-grow flex items-center gap-2 px-3 py-1.5 bg-[#0ECB81]/10 border border-[#0ECB81]/20 rounded-lg">
+                                                                                        <Check size={10} className="text-[#0ECB81]" />
+                                                                                        <span className="text-[8px] font-black text-[#0ECB81] uppercase tracking-widest">បញ្ជូនរូបរួចរាល់ (Sent)</span>
+                                                                                    </div>
+                                                                                    {(order['Delivery Telegram Message ID'] || (order as any)['Delivery Telegram Message ID']) && (
+                                                                                        <button 
+                                                                                            onClick={(e) => { e.stopPropagation(); handleDeleteFromDeliveryTelegram(); }}
+                                                                                            disabled={isSendingTelegram || !canSendToDriver}
+                                                                                            className={`w-8 h-8 flex items-center justify-center ${!canSendToDriver ? 'bg-gray-800 text-gray-600' : 'bg-red-500/10 hover:bg-red-500/20 text-red-500'} rounded-lg border border-red-500/20 transition-all active:scale-95 disabled:opacity-50`}
+                                                                                            title={!canSendToDriver ? "អាចលុបបានតែដោយអ្នកបើកវេនប៉ុណ្ណោះ" : "លុបចេញពី Telegram"}
+                                                                                        >
+                                                                                            <Trash size={12} />
+                                                                                        </button>
+                                                                                    )}
+                                                                                </div>
+                                                                            ) : (
+                                                                                <button 
+                                                                                    onClick={(e) => { e.stopPropagation(); handleSendToDeliveryTelegram(); }}
+                                                                                    disabled={isSendingTelegram || !canSendToDriver}
+                                                                                    className={`w-full flex items-center justify-center gap-2 px-3 py-2 ${!canSendToDriver ? 'bg-gray-800 text-gray-500 cursor-not-allowed border-gray-700' : 'bg-blue-600 hover:bg-blue-500 text-white'} rounded-lg text-[9px] font-black uppercase tracking-widest transition-all shadow-lg active:scale-95 disabled:opacity-50`}
+                                                                                    title={!canSendToDriver ? "អាចផ្ញើបានតែក្នុងស្ថានភាព Ready for Dispatch និងដោយអ្នកបើកវេនប៉ុណ្ណោះ" : "ចុចដើម្បីបញ្ជូនទៅ Telegram"}
+                                                                                >
+                                                                                    <Truck size={12} className={canSendToDriver ? "text-white" : "text-gray-600"} />
+                                                                                    {isSendingTelegram ? 'Processing...' : 'បញ្ជូនទៅអ្នកដឹក'}
+                                                                                </button>
+                                                                            )}
+                                                                        </div>
+                                                                    )}
                                                                 </div>
                                                             ) : (
                                                                 <p className="mt-2 text-[9px] sm:text-[10px] font-mono font-black text-[#5E6673] uppercase tracking-wider">UNRECORDED</p>
@@ -535,29 +727,6 @@ const OrderDetailModal: React.FC<OrderDetailModalProps> = ({ order, onClose }) =
                                             <div className="w-1 h-1 sm:w-1.5 sm:h-1.5 bg-[#0ECB81] rounded-full animate-pulse"></div>
                                             <span className="text-[8px] sm:text-[10px] font-black uppercase tracking-widest text-white">Encrypted Proof</span>
                                         </div>
-                                    </div>
-                                    <div className="flex gap-2 mt-3">
-                                        <button 
-                                            onClick={handleSendToDeliveryTelegram}
-                                            disabled={isSendingTelegram}
-                                            className={`flex-1 flex items-center justify-center gap-2 px-4 py-2.5 ${order['Delivery Photo Sent Count'] && order['Delivery Photo Sent Count'] > 0 ? 'bg-[#1E2329] hover:bg-[#2B3139] border border-[#0ECB81]/30' : 'bg-[#2B3139] hover:bg-[#323842]'} text-white rounded-xl text-[10px] sm:text-xs font-black uppercase tracking-widest transition-all shadow-lg active:scale-95 disabled:opacity-50`}
-                                        >
-                                            <Truck size={14} className="text-[#0ECB81]" />
-                                            {isSendingTelegram ? '...' : 
-                                                order['Delivery Photo Sent Count'] && order['Delivery Photo Sent Count'] > 0 
-                                                    ? `ម្តងទៀត (${order['Delivery Daily Sequence'] ? '#' + order['Delivery Daily Sequence'] : order['Delivery Photo Sent Count'] + ' ដង'})` 
-                                                    : 'បញ្ជូនទៅអ្នកដឹក'}
-                                        </button>
-                                        {(order['Delivery Telegram Message ID'] || (order as any)['Delivery Telegram Message ID']) && (
-                                            <button 
-                                                onClick={handleDeleteFromDeliveryTelegram}
-                                                disabled={isSendingTelegram}
-                                                className="w-10 flex items-center justify-center bg-red-500/10 hover:bg-red-500/20 text-red-500 rounded-xl border border-red-500/20 transition-all active:scale-95 disabled:opacity-50"
-                                                title="លុបចេញពី Telegram"
-                                            >
-                                                <Trash size={16} />
-                                            </button>
-                                        )}
                                     </div>
                                 </>
                             ) : (
