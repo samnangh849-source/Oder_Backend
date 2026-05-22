@@ -1954,7 +1954,7 @@ func handleTelegramWebhook(c *gin.Context) {
 
 	// Case 2: Check if a bot (potentially this one) was added to the group
 	if len(update.Message.NewChatMembers) > 0 {
-		for _, member := range update.NewChatMembers {
+		for _, member := range update.Message.NewChatMembers {
 			if member.IsBot {
 				// When a bot is added, proactively show the ID info to help the admin
 				sendIDInfo()
