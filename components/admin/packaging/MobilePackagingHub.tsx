@@ -66,10 +66,10 @@ const MobilePackagingHub: React.FC<MobilePackagingHubProps> = ({
 }) => {
     const { previewImage: showFullImage, appData, isShiftOpener, activeShiftStore, currentUser } = useContext(AppContext);
     const [unpackTarget, setUnpackTarget] = useState<ParsedOrder | null>(null);
-    const [isSendingTelegram, setIsSendingTelegram] = useState(false);
+    const [sendingOrderId, setSendingOrderId] = useState<string | null>(null);
 
     const handleSendToDeliveryTelegram = async (order: ParsedOrder) => {
-        setIsSendingTelegram(true);
+        setSendingOrderId(order['Order ID']);
         try {
             const session = await CacheService.get<{ token: string }>(CACHE_KEYS.SESSION);
             const token = session?.token || '';
@@ -82,21 +82,19 @@ const MobilePackagingHub: React.FC<MobilePackagingHubProps> = ({
                 body: JSON.stringify({ orderId: order['Order ID'] })
             });
             const data = await res.json();
-            if (data.status === 'success') {
-                alert('បញ្ជូនរូបភាពកញ្ចប់ទៅ Telegram រួចរាល់!');
-            } else {
+            if (data.status !== 'success') {
                 alert('បញ្ជូនបរាជ័យ: ' + (data.message || 'Unknown error'));
             }
         } catch (err: any) {
             alert('បញ្ជូនបរាជ័យ: ' + err.message);
         } finally {
-            setIsSendingTelegram(false);
+            setSendingOrderId(null);
         }
     };
 
     const handleDeleteFromDeliveryTelegram = async (order: ParsedOrder) => {
         if (!window.confirm('តើអ្នកពិតជាចង់លុបរូបភាពចេញពី Telegram អ្នកដឹកមែនទេ?')) return;
-        setIsSendingTelegram(true);
+        setSendingOrderId(order['Order ID']);
         try {
             const session = await CacheService.get<{ token: string }>(CACHE_KEYS.SESSION);
             const token = session?.token || '';
@@ -109,15 +107,13 @@ const MobilePackagingHub: React.FC<MobilePackagingHubProps> = ({
                 body: JSON.stringify({ orderId: order['Order ID'] })
             });
             const data = await res.json();
-            if (data.status === 'success') {
-                alert('លុបរូបភាពចេញពី Telegram រួចរាល់!');
-            } else {
+            if (data.status !== 'success') {
                 alert('លុបបរាជ័យ: ' + (data.message || 'Unknown error'));
             }
         } catch (err: any) {
             alert('លុបបរាជ័យ: ' + err.message);
         } finally {
-            setIsSendingTelegram(false);
+            setSendingOrderId(null);
         }
     };
 
@@ -556,20 +552,20 @@ const MobilePackagingHub: React.FC<MobilePackagingHubProps> = ({
                                                                 </div>
                                                                 <button 
                                                                     onClick={(e) => { e.stopPropagation(); handleDeleteFromDeliveryTelegram(order); }}
-                                                                    disabled={isSendingTelegram || !getCanSendToDriver(order)}
+                                                                    disabled={sendingOrderId === order['Order ID'] || !getCanSendToDriver(order)}
                                                                     className={`w-10 h-10 flex items-center justify-center ${!getCanSendToDriver(order) ? 'bg-[#2B3139] text-gray-600' : 'bg-red-500/10 hover:bg-red-500/20 text-red-500'} rounded-sm border border-red-500/20 transition-all active:scale-95 disabled:opacity-50`}
                                                                 >
-                                                                    {isSendingTelegram ? <Spinner size="xs" /> : <Trash size={16} />}
+                                                                    {sendingOrderId === order['Order ID'] ? <Spinner size="xs" /> : <Trash size={16} />}
                                                                 </button>
                                                             </div>
                                                         ) : (
                                                             <button 
                                                                 onClick={(e) => { e.stopPropagation(); handleSendToDeliveryTelegram(order); }}
-                                                                disabled={isSendingTelegram || !getCanSendToDriver(order)}
+                                                                disabled={sendingOrderId === order['Order ID'] || !getCanSendToDriver(order)}
                                                                 className={`w-full flex items-center justify-center gap-3 py-2 ${!getCanSendToDriver(order) ? 'bg-[#2B3139] text-gray-500 cursor-not-allowed' : 'bg-blue-600 hover:bg-blue-500 text-white'} rounded-sm text-[11px] font-black uppercase tracking-widest transition-all shadow-lg active:scale-95 disabled:opacity-50`}
                                                             >
-                                                                {isSendingTelegram ? <Spinner size="xs" /> : <ImageIcon size={16} />}
-                                                                {isSendingTelegram ? 'Processing...' : 'បញ្ជូនរូបភាពកញ្ចប់ (Send Photo)'}
+                                                                {sendingOrderId === order['Order ID'] ? <Spinner size="xs" /> : <ImageIcon size={16} />}
+                                                                {sendingOrderId === order['Order ID'] ? 'Processing...' : 'បញ្ជូនរូបភាពកញ្ចប់ (Send Photo)'}
                                                             </button>
                                                         )}
                                                     </div>
@@ -707,3 +703,4 @@ const MobilePackagingHub: React.FC<MobilePackagingHubProps> = ({
 };
 
 export default MobilePackagingHub;
+obilePackagingHub;

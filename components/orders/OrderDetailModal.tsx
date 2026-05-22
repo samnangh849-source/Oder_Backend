@@ -118,9 +118,7 @@ const OrderDetailModal: React.FC<OrderDetailModalProps> = ({ order, onClose }) =
                 body: JSON.stringify({ orderId: order['Order ID'] })
             });
             const data = await res.json();
-            if (data.status === 'success') {
-                alert('បញ្ជូនរូបភាពកញ្ចប់ទៅ Telegram រួចរាល់!');
-            } else {
+            if (data.status !== 'success') {
                 let errorMsg = data.message || 'មិនស្គាល់បញ្ហា';
                 if (data.details && data.details.description) {
                     errorMsg += ` (${data.details.description})`;
@@ -151,9 +149,7 @@ const OrderDetailModal: React.FC<OrderDetailModalProps> = ({ order, onClose }) =
                 body: JSON.stringify({ orderId: order['Order ID'] })
             });
             const data = await res.json();
-            if (data.status === 'success') {
-                alert('លុបចេញពី Telegram ជោគជ័យ!');
-            } else {
+            if (data.status !== 'success') {
                 alert('បរាជ័យ: ' + (data.message || 'មិនស្គាល់បញ្ហា'));
             }
         } catch (error) {

@@ -71,10 +71,10 @@ const DesktopPackagingHub: React.FC<DesktopPackagingHubProps> = ({
 }) => {
     const { appData, previewImage: showFullImage, isShiftOpener, activeShiftStore, currentUser } = useContext(AppContext);
     const [unpackTarget, setUnpackTarget] = useState<ParsedOrder | null>(null);
-    const [isSendingTelegram, setIsSendingTelegram] = useState(false);
+    const [sendingOrderId, setSendingOrderId] = useState<string | null>(null);
 
     const handleSendToDeliveryTelegram = async (order: ParsedOrder) => {
-        setIsSendingTelegram(true);
+        setSendingOrderId(order['Order ID']);
         try {
             const session = await CacheService.get<{ token: string }>(CACHE_KEYS.SESSION);
             const token = session?.token || '';
@@ -87,21 +87,19 @@ const DesktopPackagingHub: React.FC<DesktopPackagingHubProps> = ({
                 body: JSON.stringify({ orderId: order['Order ID'] })
             });
             const data = await res.json();
-            if (data.status === 'success') {
-                alert('បញ្ជូនរូបភាពកញ្ចប់ទៅ Telegram រួចរាល់!');
-            } else {
+            if (data.status !== 'success') {
                 alert('បញ្ជូនបរាជ័យ: ' + (data.message || 'Unknown error'));
             }
         } catch (err: any) {
             alert('បញ្ជូនបរាជ័យ: ' + err.message);
         } finally {
-            setIsSendingTelegram(false);
+            setSendingOrderId(null);
         }
     };
 
     const handleDeleteFromDeliveryTelegram = async (order: ParsedOrder) => {
         if (!window.confirm('តើអ្នកពិតជាចង់លុបរូបភាពចេញពី Telegram អ្នកដឹកមែនទេ?')) return;
-        setIsSendingTelegram(true);
+        setSendingOrderId(order['Order ID']);
         try {
             const session = await CacheService.get<{ token: string }>(CACHE_KEYS.SESSION);
             const token = session?.token || '';
@@ -114,15 +112,13 @@ const DesktopPackagingHub: React.FC<DesktopPackagingHubProps> = ({
                 body: JSON.stringify({ orderId: order['Order ID'] })
             });
             const data = await res.json();
-            if (data.status === 'success') {
-                alert('លុបរូបភាពចេញពី Telegram រួចរាល់!');
-            } else {
+            if (data.status !== 'success') {
                 alert('លុបបរាជ័យ: ' + (data.message || 'Unknown error'));
             }
         } catch (err: any) {
             alert('លុបបរាជ័យ: ' + err.message);
         } finally {
-            setIsSendingTelegram(false);
+            setSendingOrderId(null);
         }
     };
 
@@ -636,21 +632,21 @@ const DesktopPackagingHub: React.FC<DesktopPackagingHubProps> = ({
                                                                                 </div>
                                                                                 <button 
                                                                                     onClick={(e) => { e.stopPropagation(); handleDeleteFromDeliveryTelegram(order); }}
-                                                                                    disabled={isSendingTelegram || !getCanSendToDriver(order)}
+                                                                                    disabled={sendingOrderId === order['Order ID'] || !getCanSendToDriver(order)}
                                                                                     className={`w-9 h-9 flex items-center justify-center ${!getCanSendToDriver(order) ? 'bg-[#2B3139] text-gray-600' : 'bg-red-500/10 hover:bg-red-500/20 text-red-500'} rounded-sm border border-red-500/20 transition-all active:scale-95 disabled:opacity-50`}
                                                                                     title="Delete from Telegram"
                                                                                 >
-                                                                                    {isSendingTelegram ? <Spinner size="xs" /> : <Trash size={12} />}
+                                                                                    {sendingOrderId === order['Order ID'] ? <Spinner size="xs" /> : <Trash size={12} />}
                                                                                 </button>
                                                                             </div>
                                                                         ) : (
                                                                             <button 
                                                                                 onClick={(e) => { e.stopPropagation(); handleSendToDeliveryTelegram(order); }}
-                                                                                disabled={isSendingTelegram || !getCanSendToDriver(order)}
+                                                                                disabled={sendingOrderId === order['Order ID'] || !getCanSendToDriver(order)}
                                                                                 className={`w-full flex items-center justify-center gap-2 py-2 ${!getCanSendToDriver(order) ? 'bg-[#2B3139] text-gray-500 cursor-not-allowed' : 'bg-blue-600 hover:bg-blue-500 text-white shadow-blue-600/20 shadow-lg'} rounded-sm text-[10px] font-black uppercase tracking-widest transition-all active:scale-95 disabled:opacity-50`}
                                                                             >
-                                                                                {isSendingTelegram ? <Spinner size="xs" /> : <ImageIcon size={14} />}
-                                                                                {isSendingTelegram ? 'Processing...' : 'បញ្ជូនរូបភាពកញ្ចប់'}
+                                                                                {sendingOrderId === order['Order ID'] ? <Spinner size="xs" /> : <ImageIcon size={14} />}
+                                                                                {sendingOrderId === order['Order ID'] ? 'Processing...' : 'បញ្ជូនរូបភាពកញ្ចប់'}
                                                                             </button>
                                                                         )}
                                                                     </div>
@@ -817,22 +813,22 @@ const DesktopPackagingHub: React.FC<DesktopPackagingHubProps> = ({
                                                                                         </div>
                                                                                         <button 
                                                                                             onClick={(e) => { e.stopPropagation(); handleDeleteFromDeliveryTelegram(order); }}
-                                                                                            disabled={isSendingTelegram || !getCanSendToDriver(order)}
+                                                                                            disabled={sendingOrderId === order['Order ID'] || !getCanSendToDriver(order)}
                                                                                             className={`p-1 ${!getCanSendToDriver(order) ? 'text-gray-600' : 'text-red-500 hover:bg-red-500/10'} rounded-sm transition-all disabled:opacity-50`}
                                                                                             title="Delete from Telegram"
                                                                                         >
-                                                                                            {isSendingTelegram ? <Spinner size="xs" /> : <Trash size={10} />}
+                                                                                            {sendingOrderId === order['Order ID'] ? <Spinner size="xs" /> : <Trash size={10} />}
                                                                                         </button>
                                                                                     </div>
                                                                                 ) : (
                                                                                     <button 
                                                                                         onClick={(e) => { e.stopPropagation(); handleSendToDeliveryTelegram(order); }}
-                                                                                        disabled={isSendingTelegram || !getCanSendToDriver(order)}
+                                                                                        disabled={sendingOrderId === order['Order ID'] || !getCanSendToDriver(order)}
                                                                                         className={`px-2 py-1 ${!getCanSendToDriver(order) ? 'bg-[#2B3139] text-gray-500 cursor-not-allowed' : 'bg-blue-600 hover:bg-blue-500 text-white'} rounded-sm text-[9px] font-black uppercase tracking-wider transition-all flex items-center gap-1`}
                                                                                         title="Send Package Photo"
                                                                                     >
-                                                                                        {isSendingTelegram ? <Spinner size="xs" /> : <ImageIcon size={10} />}
-                                                                                        បញ្ជូនរូបភាពកញ្ចប់
+                                                                                        {sendingOrderId === order['Order ID'] ? <Spinner size="xs" /> : <ImageIcon size={10} />}
+                                                                                        {sendingOrderId === order['Order ID'] ? 'Processing...' : 'បញ្ជូនរូបភាពកញ្ចប់'}
                                                                                     </button>
                                                                                 )}
                                                                             </div>
