@@ -126,3 +126,33 @@
   បញ្ជាក់៖ ប្រសិនបើអ្នកទើបតែធ្វើការ Deploy ទៅ Render សូមរង់ចាំឱ្យវាជាប់ពណ៌បៃតង (Live) រួចសាកល្បងចុចប៊ូតុង Setup Bot សារជាថ្មីម្តងទៀត។
 
   ប្រសិនបើនៅតែមិនដំណើរការ សូមប្រាប់ខ្ញុំ ខ្ញុំនឹងជួយពិនិត្យមើលប្រព័ន្ធ Log បន្ថែម!
+
+
+
+
+
+បាទ! ខ្ញុំបានពិនិត្យ និងកែសម្រួលមុខងារនេះឱ្យកាន់តែហ្មត់ចត់ស្របតាមតម្រូវការរបស់អ្នក៖
+
+  ការកែលម្អដែលបានអនុវត្ត៖
+
+   1. ទីតាំងប៊ូតុង: ប៊ូតុង "បញ្ជូនទៅអ្នកដឹក" ត្រូវបានដាក់ក្នុង Node "Ready for Dispatch" (ដែលត្រូវនឹង Fulfillment Status: Ready to Ship)។
+   2. បង្ហាញតែម្តង (One-time Action): 
+       * ប្រសិនបើមិនទាន់បានផ្ញើ៖ អ្នកនឹងឃើញប៊ូតុងពណ៌ខៀវ "បញ្ជូនទៅអ្នកដឹក"។
+       * ប្រសិនបើផ្ញើរួច៖ ប៊ូតុងនឹងបាត់ទៅវិញភ្លាមៗ ហើយជំនួសដោយសញ្ញាគ្រីពណ៌បៃតង និងពាក្យថា "បញ្ជូនរូបរួចរាល់ (Sent)" ដើម្បីបញ្ជាក់ថាការងារនេះបានរួចរាល់។
+   3. បង្ហាញតាមលក្ខខណ្ឌ (Smart Visibility):
+       * ប្រព័ន្ធនឹងឆែកមើលក្នុង Delivery Telegram Groups ថាតើក្រុមហ៊ុនដឹកជញ្ជូនដែលអ្នកជ្រើសរើស សម្រាប់ស្តុក (Store) នោះ មានកំណត់លេខ Telegram Group ID ដែរឬទេ?
+       * ប្រសិនបើមិនមានការកំណត់ ID ទេ (តម្លៃទំនេរ) នោះប៊ូតុងនឹងមិនបង្ហាញក្នុង Node ឡើយ ដើម្បីកុំឱ្យរញ៉េរញ៉ៃ។
+   4. សុវត្ថិភាព: ប៊ូតុងនឹងអាចចុចបាន លុះត្រាតែអ្នកគឺជា អ្នកបើកវេន (Shift Opener) នៅក្នុងស្តុកនោះប៉ុណ្ណោះ។
+
+  ឥឡូវនេះ លំហូរការងារក្នុងផ្ទាំង Order Analysis មានភាពច្បាស់លាស់ និងការពារការភាន់ច្រឡំបានយ៉ាងល្អ។
+
+  ចំណុចគួរដឹង: ខ្ញុំក៏បានដោះស្រាយបញ្ហា SQL Error កាលពីមុនរួចរាល់ហើយ ដូច្នេះការបន្ថែម ឬកែប្រែ Group ID ក្នុង Settings នឹងលែងមានបញ្ហាទៀតហើយ។
+
+  តើមានអ្វីផ្សេងទៀតដែលអ្នកចង់ឱ្យខ្ញុំជួយរៀបចំដែរឬទេ?
+
+  strategic_intent: Summarizing the finalized lifecycle integration of the Telegram send button.
+  summary: I have fully implemented the requested logic for the Telegram send button within the OrderDetailModal.tsx. The button is now surgically placed inside the "Ready
+  for Dispatch" lifecycle node and is governed by three conditions: it only appears if a Telegram group is configured for the carrier, it disappears and shows a "Sent"
+  indicator once executed, and it is strictly reserved for the authorized shift opener. This creates a clean, state-aware UI that guides the user through the dispatch
+  process without redundant interface elements.
+  title: Dispatch Workflow Integration Completed

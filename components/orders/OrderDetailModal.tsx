@@ -632,43 +632,43 @@ const OrderDetailModal: React.FC<OrderDetailModalProps> = ({ order, onClose }) =
                                                                             <p className={`text-[9px] sm:text-[10px] font-mono font-black truncate ${event.color}`}>{dateTime.time}</p>
                                                                         </div>
                                                                     </div>
-
-                                                                    {/* Send to Driver Button inside Ready to Ship Node */}
-                                                                    {event.key === 'shipped' && (fs === 'Ready to Ship') && hasTelegramGroup && (
-                                                                        <div className="mt-1 pt-2 border-t border-[#2B3139] border-dashed">
-                                                                            {isAlreadySent ? (
-                                                                                <div className="flex items-center gap-2">
-                                                                                    <div className="flex-grow flex items-center gap-2 px-3 py-1.5 bg-[#0ECB81]/10 border border-[#0ECB81]/20 rounded-lg">
-                                                                                        <Check size={10} className="text-[#0ECB81]" />
-                                                                                        <span className="text-[8px] font-black text-[#0ECB81] uppercase tracking-widest">បញ្ជូនរូបរួចរាល់ (Sent)</span>
-                                                                                    </div>
-                                                                                    {(order['Delivery Telegram Message ID'] || (order as any)['Delivery Telegram Message ID']) && (
-                                                                                        <button 
-                                                                                            onClick={(e) => { e.stopPropagation(); handleDeleteFromDeliveryTelegram(); }}
-                                                                                            disabled={isSendingTelegram || !canSendToDriver}
-                                                                                            className={`w-8 h-8 flex items-center justify-center ${!canSendToDriver ? 'bg-gray-800 text-gray-600' : 'bg-red-500/10 hover:bg-red-500/20 text-red-500'} rounded-lg border border-red-500/20 transition-all active:scale-95 disabled:opacity-50`}
-                                                                                            title={!canSendToDriver ? "អាចលុបបានតែដោយអ្នកបើកវេនប៉ុណ្ណោះ" : "លុបចេញពី Telegram"}
-                                                                                        >
-                                                                                            <Trash size={12} />
-                                                                                        </button>
-                                                                                    )}
-                                                                                </div>
-                                                                            ) : (
-                                                                                <button 
-                                                                                    onClick={(e) => { e.stopPropagation(); handleSendToDeliveryTelegram(); }}
-                                                                                    disabled={isSendingTelegram || !canSendToDriver}
-                                                                                    className={`w-full flex items-center justify-center gap-2 px-3 py-2 ${!canSendToDriver ? 'bg-gray-800 text-gray-500 cursor-not-allowed border-gray-700' : 'bg-blue-600 hover:bg-blue-500 text-white'} rounded-lg text-[9px] font-black uppercase tracking-widest transition-all shadow-lg active:scale-95 disabled:opacity-50`}
-                                                                                    title={!canSendToDriver ? "អាចផ្ញើបានតែក្នុងស្ថានភាព Ready for Dispatch និងដោយអ្នកបើកវេនប៉ុណ្ណោះ" : "ចុចដើម្បីបញ្ជូនទៅ Telegram"}
-                                                                                >
-                                                                                    <Truck size={12} className={canSendToDriver ? "text-white" : "text-gray-600"} />
-                                                                                    {isSendingTelegram ? 'Processing...' : 'បញ្ជូនទៅអ្នកដឹក'}
-                                                                                </button>
-                                                                            )}
-                                                                        </div>
-                                                                    )}
                                                                 </div>
                                                             ) : (
                                                                 <p className="mt-2 text-[9px] sm:text-[10px] font-mono font-black text-[#5E6673] uppercase tracking-wider">UNRECORDED</p>
+                                                            )}
+
+                                                            {/* Send to Driver Button inside Shipped Node (Always check even if no timestamp) */}
+                                                            {event.key === 'shipped' && (fs === 'Ready to Ship') && hasTelegramGroup && (
+                                                                <div className="mt-2 pt-2 border-t border-[#2B3139] border-dashed">
+                                                                    {isAlreadySent ? (
+                                                                        <div className="flex items-center gap-2">
+                                                                            <div className="flex-grow flex items-center gap-2 px-3 py-1.5 bg-[#0ECB81]/10 border border-[#0ECB81]/20 rounded-lg">
+                                                                                <Check size={10} className="text-[#0ECB81]" />
+                                                                                <span className="text-[8px] font-black text-[#0ECB81] uppercase tracking-widest">បញ្ជូនរូបរួចរាល់ (Sent)</span>
+                                                                            </div>
+                                                                            {(order['Delivery Telegram Message ID'] || (order as any)['Delivery Telegram Message ID']) && (
+                                                                                <button 
+                                                                                    onClick={(e) => { e.stopPropagation(); handleDeleteFromDeliveryTelegram(); }}
+                                                                                    disabled={isSendingTelegram || !canSendToDriver}
+                                                                                    className={`w-8 h-8 flex items-center justify-center ${!canSendToDriver ? 'bg-gray-800 text-gray-600' : 'bg-red-500/10 hover:bg-red-500/20 text-red-500'} rounded-lg border border-red-500/20 transition-all active:scale-95 disabled:opacity-50`}
+                                                                                    title={!canSendToDriver ? "អាចលុបបានតែដោយអ្នកបើកវេនប៉ុណ្ណោះ" : "លុបចេញពី Telegram"}
+                                                                                >
+                                                                                    <Trash size={12} />
+                                                                                </button>
+                                                                            )}
+                                                                        </div>
+                                                                    ) : (
+                                                                        <button 
+                                                                            onClick={(e) => { e.stopPropagation(); handleSendToDeliveryTelegram(); }}
+                                                                            disabled={isSendingTelegram || !canSendToDriver}
+                                                                            className={`w-full flex items-center justify-center gap-2 px-3 py-2 ${!canSendToDriver ? 'bg-gray-800 text-gray-500 cursor-not-allowed border-gray-700' : 'bg-blue-600 hover:bg-blue-500 text-white'} rounded-lg text-[9px] font-black uppercase tracking-widest transition-all shadow-lg active:scale-95 disabled:opacity-50`}
+                                                                            title={!canSendToDriver ? "អាចផ្ញើបានតែក្នុងស្ថានភាព Ready for Dispatch និងដោយអ្នកបើកវេនប៉ុណ្ណោះ" : "ចុចដើម្បីបញ្ជូនទៅ Telegram"}
+                                                                        >
+                                                                            <Truck size={12} className={canSendToDriver ? "text-white" : "text-gray-600"} />
+                                                                            {isSendingTelegram ? 'Processing...' : 'បញ្ជូនទៅអ្នកដឹក'}
+                                                                        </button>
+                                                                    )}
+                                                                </div>
                                                             )}
                                                         </div>
                                                     </div>
