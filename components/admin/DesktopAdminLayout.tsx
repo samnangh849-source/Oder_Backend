@@ -40,7 +40,7 @@ const DesktopAdminLayout: React.FC<DesktopAdminLayoutProps> = ({
     setEditProfileModalOpen,
     setAdvancedSettingsOpen
 }) => {
-    const { currentUser, language, refreshData, setAppState, logout, originalAdminUser, advancedSettings, setIsSidebarCollapsed, isSyncing } = useContext(AppContext);
+    const { currentUser, language, refreshData, setAppState, logout, originalAdminUser, advancedSettings, setIsSidebarCollapsed, isSyncing, pendingSyncCount } = useContext(AppContext);
     const [dropdownOpen, setDropdownOpen] = useState(false);
     const [isRefreshing, setIsRefreshing] = useState(false);
     const dropdownRef = useRef<HTMLDivElement>(null);
@@ -144,7 +144,7 @@ const DesktopAdminLayout: React.FC<DesktopAdminLayoutProps> = ({
                             </h1>
                         </div>
                         <div className="flex items-center gap-6">
-                            <BinanceLiveIndicator isSyncing={isSyncing} language={language} />
+                            <BinanceLiveIndicator isSyncing={isSyncing} pendingSyncCount={pendingSyncCount} language={language} />
                             
                             <div className="flex items-center gap-3 border-l border-[#2B3139] pl-6">
                                 <div className="text-right hidden sm:block">
@@ -201,10 +201,11 @@ const DesktopAdminLayout: React.FC<DesktopAdminLayoutProps> = ({
                         </div>
 
                         <div className="flex items-center space-x-4">
-                            {/* Sync Status */}
+                            {/* Sync Status & Queue */}
                             <div className={`hidden md:flex items-center gap-2 px-3 py-1.5 rounded-full border ${isLightMode ? 'bg-slate-50 border-slate-200 text-slate-500' : 'bg-white/5 border-white/10 text-white/50'} text-[10px] font-bold uppercase tracking-wider`}>
-                                <div className={`h-1.5 w-1.5 rounded-full ${isSyncing ? 'bg-yellow-500 animate-pulse' : 'bg-green-500'}`}></div>
-                                {isSyncing ? 'Syncing' : 'Connected'}
+                                <div className={`h-1.5 w-1.5 rounded-full ${isSyncing || pendingSyncCount > 0 ? 'bg-yellow-500 animate-pulse' : 'bg-green-500'}`}></div>
+                                {isSyncing ? 'Syncing' : (pendingSyncCount > 0 ? `Queue: ${pendingSyncCount}` : 'Connected')}
+                                {pendingSyncCount > 0 && <i className="fa-solid fa-cloud-arrow-up ml-1 text-yellow-500"></i>}
                             </div>
 
                             {/* Notifications */}

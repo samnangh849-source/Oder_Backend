@@ -381,11 +381,60 @@ func processPersistentTask(workerID int, task *SyncTask) {
 }
 
 func processStuckTasks(workerID int) {
+	// 1. Handle addRow batching (Efficient for logs)
+	var batchRecords []PendingSync
+	// Find all pending addRow tasks
+	DB.Where("status = 'pending' AND (payload->>'action' = 'addRow' OR payload LIKE '%\"action\":\"addRow\"%')").Find(&batchRecords)
+	
+	if len(batchRecords) > 1 {
+		// Group by sheetName
+		sheetBatches := make(map[string][]PendingSync)
+		for _, r := range batchRecords {
+			var req AppsScriptRequest
+			json.Unmarshal([]byte(r.Payload), &req)
+			sheetBatches[req.SheetName] = append(sheetBatches[req.SheetName], r)
+		}
+
+		for sheetName, records := range sheetBatches {
+			if len(records) > 1 {
+				log.Printf("📦 SyncManager: Worker %d batching %d rows for %s", workerID, len(records), sheetName)
+				
+				var rows []interface{}
+				var recordIDs []uint
+				for _, r := range records {
+					var req AppsScriptRequest
+					json.Unmarshal([]byte(r.Payload), &req)
+					rows = append(rows, req.NewData)
+					recordIDs = append(recordIDs, r.ID)
+					// Mark as processing immediately
+					DB.Model(&r).Update("status", "processing")
+				}
+
+				batchReq := AppsScriptRequest{
+					Action:    "batchAddRows",
+					SheetName: sheetName,
+					Rows:      rows,
+				}
+
+				resp, err := CallAppsScriptPOST(batchReq)
+				if err == nil && resp.Status == "success" {
+					DB.Where("id IN ?", recordIDs).Delete(&PendingSync{})
+					log.Printf("✅ SyncManager: Batch success for %s (%d rows)", sheetName, len(records))
+					continue // Move to next sheet
+				} else {
+					// Fallback: mark back as pending for individual retry or next batch
+					log.Printf("⚠️ SyncManager: Batch failed for %s, reverting to individual processing", sheetName)
+					DB.Where("id IN ?", recordIDs).Update("status", "pending")
+				}
+			}
+		}
+	}
+
+	// 2. Process other tasks individually (or fallback from failed batch)
 	var records []PendingSync
 	// Retry pending tasks after 30 seconds (previously 5 minutes).
-	// "pending" tasks that were requeued after a script-lock contention get picked up fast.
-	// "failed" tasks (real errors) are also retried on the same cadence; MaxRetries caps abuse.
-	DB.Where("(status = 'pending' OR status = 'failed') AND updated_at < ?", time.Now().Add(-30*time.Second)).Limit(5).Find(&records)
+	// Limit to a small batch to avoid overwhelming the worker.
+	DB.Where("(status = 'pending' OR status = 'failed') AND updated_at < ?", time.Now().Add(-30*time.Second)).Limit(10).Find(&records)
 	for _, r := range records {
 		processPersistentTask(workerID, &SyncTask{RetryCount: int(r.ID)})
 	}

@@ -28,6 +28,7 @@ export interface AppContextType {
     orders: ParsedOrder[];
     isOrdersLoading: boolean;
     isSyncing: boolean;
+    pendingSyncCount: number;
     login: (user: User, token: string) => Promise<void>;
     logout: () => void;
     refreshData: () => Promise<Record<string, any> | null>;

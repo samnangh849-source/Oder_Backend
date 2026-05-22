@@ -550,8 +550,40 @@ const AppContent: React.FC = () => {
         return `${finalTopPadding} ${bottomPadding}`;
     }, [appState, shouldShowHeader, isMobile, originalAdminUser, selectedTeam]);
 
+    const [pendingSyncCount, setPendingSyncCount] = useState(0);
+
+    // Poll for Background Sync Status (Admin only)
+    useEffect(() => {
+        if (!currentUser || !currentUser.IsSystemAdmin) {
+            setPendingSyncCount(0);
+            return;
+        }
+
+        const fetchSyncStatus = async () => {
+            try {
+                const session = await CacheService.get<{ token: string }>(CACHE_KEYS.SESSION);
+                const token = session?.token || localStorage.getItem('token');
+                const res = await fetch(`${WEB_APP_URL}/api/admin/sync-status`, {
+                    headers: { 'Authorization': `Bearer ${token}` }
+                });
+                if (res.ok) {
+                    const data = await res.json();
+                    if (data.status === 'success') {
+                        setPendingSyncCount(data.pendingCount || 0);
+                    }
+                }
+            } catch (e) {
+                // Silent fail
+            }
+        };
+
+        fetchSyncStatus();
+        const interval = setInterval(fetchSyncStatus, 15000); // Poll every 15s
+        return () => clearInterval(interval);
+    }, [currentUser]);
+
     const legacyContextValue = useMemo(() => ({
-        currentUser, appData, orders, isOrdersLoading, isSyncing, login, logout, refreshData, refreshTimestamp,
+        currentUser, appData, orders, isOrdersLoading, isSyncing, pendingSyncCount, login, logout, refreshData, refreshTimestamp,
         originalAdminUser, returnToAdmin: () => {}, previewImage: (u: string) => setPreviewImageUrl(convertGoogleDriveUrl(u)),
         updateCurrentUser: (u: any) => {
             setCurrentUser(prev => {
