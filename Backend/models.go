@@ -471,13 +471,14 @@ type IncentiveCustomPayout struct {
 }
 
 type PendingSync struct {
-	ID         uint      `gorm:"primaryKey;autoIncrement" json:"id"`
-	Payload    string    `gorm:"type:text" json:"payload"`              // JSON of AppsScriptRequest
-	Status     string    `gorm:"index;default:'pending'" json:"status"` // pending, processing, failed
-	RetryCount int       `gorm:"default:0" json:"retryCount"`
-	MaxRetries int       `gorm:"default:5" json:"maxRetries"`
-	CreatedAt  time.Time `gorm:"index" json:"createdAt"`
-	UpdatedAt  time.Time `json:"updatedAt"`
+	ID               uint      `gorm:"primaryKey;autoIncrement" json:"id"`
+	Payload          string    `gorm:"type:text" json:"payload"`              // JSON of AppsScriptRequest
+	Status           string    `gorm:"index;default:'pending'" json:"status"` // pending, processing, failed, permanent_failure
+	RetryCount       int       `gorm:"default:0" json:"retryCount"`
+	MaxRetries       int       `gorm:"default:5" json:"maxRetries"`
+	LastErrorMessage string    `gorm:"type:text" json:"lastErrorMessage"`
+	CreatedAt        time.Time `gorm:"index" json:"createdAt"`
+	UpdatedAt        time.Time `json:"updatedAt"`
 }
 
 type Shift struct {
