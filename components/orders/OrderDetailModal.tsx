@@ -637,8 +637,8 @@ const OrderDetailModal: React.FC<OrderDetailModalProps> = ({ order, onClose }) =
                                                                 <p className="mt-2 text-[9px] sm:text-[10px] font-mono font-black text-[#5E6673] uppercase tracking-wider">UNRECORDED</p>
                                                             )}
 
-                                                            {/* Send to Driver Button inside Shipped Node (Always check even if no timestamp) */}
-                                                            {event.key === 'shipped' && (fs === 'Ready to Ship') && hasTelegramGroup && (
+                                                            {/* Send to Driver Action Block inside Shipped Node */}
+                                                            {event.key === 'shipped' && hasTelegramGroup && (
                                                                 <div className="mt-2 pt-2 border-t border-[#2B3139] border-dashed">
                                                                     {isAlreadySent ? (
                                                                         <div className="flex items-center gap-2">
@@ -657,7 +657,7 @@ const OrderDetailModal: React.FC<OrderDetailModalProps> = ({ order, onClose }) =
                                                                                 </button>
                                                                             )}
                                                                         </div>
-                                                                    ) : (
+                                                                    ) : String(fs).trim() === 'Ready to Ship' ? (
                                                                         <button 
                                                                             onClick={(e) => { e.stopPropagation(); handleSendToDeliveryTelegram(); }}
                                                                             disabled={isSendingTelegram || !canSendToDriver}
@@ -667,7 +667,7 @@ const OrderDetailModal: React.FC<OrderDetailModalProps> = ({ order, onClose }) =
                                                                             <Truck size={12} className={canSendToDriver ? "text-white" : "text-gray-600"} />
                                                                             {isSendingTelegram ? 'Processing...' : 'បញ្ជូនទៅអ្នកដឹក'}
                                                                         </button>
-                                                                    )}
+                                                                    ) : null}
                                                                 </div>
                                                             )}
                                                         </div>
