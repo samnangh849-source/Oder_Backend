@@ -1841,6 +1841,132 @@ func handleGetRevenueSummary(c *gin.Context) {
 	backend.DB.Find(&revs)
 	c.JSON(200, gin.H{"status": "success", "data": revs})
 }
+
+// ─── Telegram Bot Webhook Handlers ───
+
+func handleRegisterTelegramWebhook(c *gin.Context) {
+	var r struct {
+		Token string `json:"token"`
+	}
+	if err := c.ShouldBindJSON(&r); err != nil {
+		c.Error(err)
+		return
+	}
+
+	if r.Token == "" {
+		c.JSON(http.StatusBadRequest, gin.H{"status": "error", "message": "Bot Token is required"})
+		return
+	}
+
+	// Use the current request host to determine the webhook URL
+	protocol := "https"
+	if c.Request.TLS == nil {
+		// Fallback check if behind proxy (like Render/Heroku/Cloudflare)
+		if c.GetHeader("X-Forwarded-Proto") != "" {
+			protocol = c.GetHeader("X-Forwarded-Proto")
+		} else if !strings.Contains(c.Request.Host, "localhost") {
+			protocol = "https"
+		} else {
+			protocol = "http"
+		}
+	}
+	
+	webhookURL := fmt.Sprintf("%s://%s/api/telegram/webhook/%s", protocol, c.Request.Host, r.Token)
+	apiURL := fmt.Sprintf("https://api.telegram.org/bot%s/setWebhook?url=%s", r.Token, webhookURL)
+
+	log.Printf("🔌 [Telegram Setup] Registering webhook: %s", webhookURL)
+
+	resp, err := http.Get(apiURL)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"status": "error", "message": "Failed to call Telegram setWebhook: " + err.Error()})
+		return
+	}
+	defer resp.Body.Close()
+
+	var resData map[string]interface{}
+	json.NewDecoder(resp.Body).Decode(&resData)
+
+	c.JSON(http.StatusOK, resData)
+}
+
+func handleTelegramWebhook(c *gin.Context) {
+	token := c.Param("token")
+	var update struct {
+		UpdateID int `json:"update_id"`
+		Message  struct {
+			MessageID int `json:"message_id"`
+			Chat      struct {
+				ID    int64  `json:"id"`
+				Title string `json:"title"`
+				Type  string `json:"type"`
+			} `json:"chat"`
+			ThreadID       int    `json:"message_thread_id"`
+			Text           string `json:"text"`
+			NewChatMembers []struct {
+				ID       int64  `json:"id"`
+				IsBot    bool   `json:"is_bot"`
+				Username string `json:"username"`
+			} `json:"new_chat_members"`
+		} `json:"message"`
+	}
+
+	if err := c.ShouldBindJSON(&update); err != nil {
+		return
+	}
+
+	chatID := update.Message.Chat.ID
+	threadID := update.Message.ThreadID
+	chatTitle := update.Message.Chat.Title
+
+	// Function to send the ID info
+	sendIDInfo := func() {
+		reply := fmt.Sprintf("🤖 *Bot Configuration Info*\n\n📍 Group: *%s*\n🆔 Group ID: `%d`", chatTitle, chatID)
+		if threadID != 0 {
+			reply += fmt.Sprintf("\n🧵 Topic ID: `%d`", threadID)
+		} else {
+			reply += "\n🧵 Topic: _(General/Main Chat)_"
+		}
+		reply += "\n\n💡 _Use these IDs in your Store or Delivery Group settings._"
+
+		apiURL := fmt.Sprintf("https://api.telegram.org/bot%s/sendMessage", token)
+		payload := map[string]interface{}{
+			"chat_id":    chatID,
+			"text":       reply,
+			"parse_mode": "Markdown",
+		}
+		if threadID != 0 {
+			payload["message_thread_id"] = threadID
+		}
+		// If it's a command, reply to that message
+		if update.Message.Text != "" {
+			payload["reply_to_message_id"] = update.Message.MessageID
+		}
+
+		jsonData, _ := json.Marshal(payload)
+		http.Post(apiURL, "application/json", bytes.NewBuffer(jsonData))
+	}
+
+	// Case 1: Check for commands (/id or /info)
+	text := strings.ToLower(strings.TrimSpace(update.Message.Text))
+	if strings.HasPrefix(text, "/id") || strings.HasPrefix(text, "/info") {
+		sendIDInfo()
+	}
+
+	// Case 2: Check if a bot (potentially this one) was added to the group
+	if len(update.Message.NewChatMembers) > 0 {
+		for _, member := range update.NewChatMembers {
+			if member.IsBot {
+				// When a bot is added, proactively show the ID info to help the admin
+				sendIDInfo()
+				break
+			}
+		}
+	}
+
+	c.Status(http.StatusOK)
+}
+
+// ─────────────────────────────────────────
 func handleUpdateFormulaReport(c *gin.Context)    { c.JSON(200, gin.H{"status": "success"}) }
 func handleClearCache(c *gin.Context)             { c.JSON(200, gin.H{"status": "success"}) }
 func handleAdminUpdateProductTags(c *gin.Context) { c.JSON(200, gin.H{"status": "success"}) }
@@ -2451,10 +2577,12 @@ func main() {
 	// But admin group is defined inside protected block, so we'll call it there.
 	api.POST("/webhook/sheets-sync", handleSheetsWebhook)
 	api.GET("/order-metadata/:id", handleGetOrderMetadata)
+	api.POST("/telegram/webhook/:token", handleTelegramWebhook)
 
 	protected := api.Group("/")
 	protected.Use(AuthMiddleware())
 	{
+		protected.POST("/setup-bot-webhook", handleRegisterTelegramWebhook)
 		protected.GET("/users", handleGetUsers)
 		protected.GET("/static-data", handleGetStaticData)
 		protected.POST("/submit-order", RequirePermission("create_order"), handleSubmitOrder)
