@@ -86,7 +86,7 @@ func ResolveManualTarget(targetRaw string, userSet map[string]bool) (targetType 
 	return "team", NormalizeTeamKey(target)
 }
 
-func CalculatePayout(calc IncentiveCalculator, val float64, subPeriod string) float64 {
+func CalculatePayout(calc IncentiveCalculator, val float64, subPeriod string, marathonValues map[string]float64) float64 {
 	var rules IncentiveRules
 	if calc.RulesJSON != "" {
 		if err := json.Unmarshal([]byte(calc.RulesJSON), &rules); err != nil {
@@ -101,23 +101,45 @@ func CalculatePayout(calc IncentiveCalculator, val float64, subPeriod string) fl
 		// Marathon logic: Sum highest reward achieved in EACH unique sub-period
 		if rules.IsMarathon && subPeriod == "" {
 			subPeriodRewards := make(map[string]float64)
-			// Track tiers with no sub-period as a default group
 			const defaultSubGroup = "_default_"
 
-			for _, t := range tiers {
-				if val >= t.Target {
-					reward := t.RewardAmount
-					if t.RewardType == RewardTypePercentage {
-						reward = val * (t.RewardAmount / 100.0)
+			// If we have specific values per sub-period (Manual Data)
+			if len(marathonValues) > 0 {
+				for sp, spVal := range marathonValues {
+					maxReward := 0.0
+					for _, t := range tiers {
+						// Match tier to this sub-period or default
+						if t.SubPeriod == sp || (t.SubPeriod == "" && sp == defaultSubGroup) {
+							if spVal >= t.Target {
+								reward := t.RewardAmount
+								if t.RewardType == RewardTypePercentage {
+									reward = spVal * (t.RewardAmount / 100.0)
+								}
+								if reward > maxReward {
+									maxReward = reward
+								}
+							}
+						}
 					}
+					subPeriodRewards[sp] = maxReward
+				}
+			} else {
+				// Fallback to legacy behavior if no sub-period breakdown (System Data)
+				for _, t := range tiers {
+					if val >= t.Target {
+						reward := t.RewardAmount
+						if t.RewardType == RewardTypePercentage {
+							reward = val * (t.RewardAmount / 100.0)
+						}
 
-					spKey := t.SubPeriod
-					if spKey == "" {
-						spKey = defaultSubGroup
-					}
+						spKey := t.SubPeriod
+						if spKey == "" {
+							spKey = defaultSubGroup
+						}
 
-					if reward > subPeriodRewards[spKey] {
-						subPeriodRewards[spKey] = reward
+						if reward > subPeriodRewards[spKey] {
+							subPeriodRewards[spKey] = reward
+						}
 					}
 				}
 			}
@@ -205,11 +227,10 @@ func CalculatePayout(calc IncentiveCalculator, val float64, subPeriod string) fl
 	return 0
 }
 
-func (r *IncentiveRules) IsUserEligible(u User) bool {
+func (r *IncentiveRules) IsIncluded(u User) bool {
 	if len(r.ApplyTo) == 0 {
 		return true
 	}
-
 	for _, target := range r.ApplyTo {
 		if strings.HasPrefix(target, "Role:") && u.Role == strings.TrimPrefix(target, "Role:") {
 			return true
@@ -228,6 +249,25 @@ func (r *IncentiveRules) IsUserEligible(u User) bool {
 		}
 	}
 	return false
+}
+
+func (r *IncentiveRules) IsExcluded(u User) bool {
+	for _, target := range r.ExcludeTargets {
+		if strings.HasPrefix(target, "Role:") && u.Role == strings.TrimPrefix(target, "Role:") {
+			return true
+		}
+		if strings.HasPrefix(target, "User:") && u.UserName == strings.TrimPrefix(target, "User:") {
+			return true
+		}
+		if target == u.UserName {
+			return true
+		}
+	}
+	return false
+}
+
+func (r *IncentiveRules) IsUserEligible(u User) bool {
+	return r.IsIncluded(u) && !r.IsExcluded(u)
 }
 
 func ProcessIncentiveCalculation(db *gorm.DB, projectID uint, month string) ([]IncentiveResult, error) {
@@ -264,11 +304,21 @@ func ProcessIncentiveCalculation(db *gorm.DB, projectID uint, month string) ([]I
 	userProfit := make(map[string]float64)
 	userBreakdown := make(map[string][]PayoutResult)
 
-	for _, o := range orders {
-		userOrders[o.User]++
-		userRevenue[o.User] += o.GrandTotal
-		orderProfit := o.GrandTotal - o.TotalProductCost - o.InternalCost
-		userProfit[o.User] += orderProfit
+	ds := strings.ToLower(strings.TrimSpace(project.DataSource))
+	isManualProject := strings.Contains(ds, "manual")
+
+	if isManualProject {
+		// Strictly clear system data maps for manual projects
+		userOrders = make(map[string]int)
+		userRevenue = make(map[string]float64)
+		userProfit = make(map[string]float64)
+	} else {
+		for _, o := range orders {
+			userOrders[o.User]++
+			userRevenue[o.User] += o.GrandTotal
+			orderProfit := o.GrandTotal - o.TotalProductCost - o.InternalCost
+			userProfit[o.User] += orderProfit
+		}
 	}
 
 	userSet := make(map[string]bool, len(allUsers))
@@ -294,14 +344,28 @@ func ProcessIncentiveCalculation(db *gorm.DB, projectID uint, month string) ([]I
 			continue
 		}
 
-		eligibleUsers := []User{}
+		// 3. Find targeted users (Potential contributors)
+		var targetedUsers []User
+		teamMemberCount := make(map[string]int)
 		for _, u := range allUsers {
-			if rules.IsUserEligible(u) {
-				eligibleUsers = append(eligibleUsers, u)
+			if rules.IsIncluded(u) {
+				targetedUsers = append(targetedUsers, u)
+				if u.Team != "" {
+					userTeams := strings.Split(u.Team, ",")
+					for _, ut := range userTeams {
+						teamName := NormalizeTeamKey(ut)
+						if teamName != "" {
+							// For member count (used for division), only count those who can actually RECEIVE money
+							if !rules.IsExcluded(u) {
+								teamMemberCount[teamName]++
+							}
+						}
+					}
+				}
 			}
 		}
 
-		if len(eligibleUsers) == 0 {
+		if len(targetedUsers) == 0 {
 			continue
 		}
 
@@ -310,41 +374,46 @@ func ProcessIncentiveCalculation(db *gorm.DB, projectID uint, month string) ([]I
 			metricType = MetricSalesAmount
 		}
 
-		// Pre-calculate member counts for teams to distribute team manual data
-		teamMemberCount := make(map[string]int)
-		for _, u := range eligibleUsers {
-			if u.Team != "" {
-				userTeams := strings.Split(u.Team, ",")
-				for _, ut := range userTeams {
-					teamName := NormalizeTeamKey(ut)
-					if teamName != "" {
-						teamMemberCount[teamName]++
-					}
-				}
-			}
-		}
-
 		userManualPerf := make(map[string]float64)
 		teamManualPerf := make(map[string]float64)
+		userManualSubPerf := make(map[string]map[string]float64) // user -> subperiod -> value
+		teamManualSubPerf := make(map[string]map[string]float64) // team -> subperiod -> value
+
 		for _, md := range manualData {
-			if md.MetricType == metricType {
-				_, targetRaw, ok := ParseManualDataKey(md.DataKey)
+			// Normalize metric types for comparison
+			mdMetric := strings.ToLower(strings.TrimSpace(md.MetricType))
+			calcMetric := strings.ToLower(strings.TrimSpace(metricType))
+			
+			if mdMetric == calcMetric || 
+			   (mdMetric == "revenue" && calcMetric == "sales amount") ||
+			   (mdMetric == "sales amount" && calcMetric == "revenue") {
+				period, targetRaw, ok := ParseManualDataKey(md.DataKey)
 				if !ok {
 					continue
 				}
 				targetType, targetID := ResolveManualTarget(targetRaw, userSet)
 				if targetType == "user" {
 					userManualPerf[targetID] += md.Value
+					if userManualSubPerf[targetID] == nil {
+						userManualSubPerf[targetID] = make(map[string]float64)
+					}
+					userManualSubPerf[targetID][period] += md.Value
 				} else {
 					teamManualPerf[targetID] += md.Value
+					if teamManualSubPerf[targetID] == nil {
+						teamManualSubPerf[targetID] = make(map[string]float64)
+					}
+					teamManualSubPerf[targetID][period] += md.Value
 				}
 			}
 		}
 
 		perfMap := make(map[string]float64)
-		for _, u := range eligibleUsers {
+		userSubPerfMap := make(map[string]map[string]float64) // For Marathon
+
+		for _, u := range targetedUsers {
 			var baseVal float64
-			if !strings.EqualFold(project.DataSource, "manual") {
+			if !isManualProject {
 				mType := strings.ToLower(strings.TrimSpace(metricType))
 				switch mType {
 				case "sales amount", "revenue":
@@ -359,19 +428,36 @@ func ProcessIncentiveCalculation(db *gorm.DB, projectID uint, month string) ([]I
 			}
 
 			val := baseVal + userManualPerf[u.UserName]
+			
+			// Track sub-period breakdown for Marathon
+			subMap := make(map[string]float64)
+			// Add user's own manual sub-period data
+			for sp, spVal := range userManualSubPerf[u.UserName] {
+				subMap[sp] += spVal
+			}
 
 			if rules.DistributionRule.Method == "" || rules.DistributionRule.Method == DistIndividual {
 				if u.Team != "" {
 					userTeams := strings.Split(u.Team, ",")
 					for _, ut := range userTeams {
 						teamName := NormalizeTeamKey(ut)
-						if teamName != "" && teamManualPerf[teamName] > 0 && teamMemberCount[teamName] > 0 {
-							val += teamManualPerf[teamName] / float64(teamMemberCount[teamName])
+						if teamName != "" {
+							// Distribute aggregate team manual data (Shared among eligible recipients)
+							if teamManualPerf[teamName] > 0 && teamMemberCount[teamName] > 0 {
+								val += teamManualPerf[teamName] / float64(teamMemberCount[teamName])
+							}
+							// Distribute team sub-period data (For Marathon)
+							for sp, spVal := range teamManualSubPerf[teamName] {
+								if spVal > 0 && teamMemberCount[teamName] > 0 {
+									subMap[sp] += spVal / float64(teamMemberCount[teamName])
+								}
+							}
 						}
 					}
 				}
 			}
 			perfMap[u.UserName] = val
+			userSubPerfMap[u.UserName] = subMap
 		}
 
 		distMethod := rules.DistributionRule.Method
@@ -384,24 +470,37 @@ func ProcessIncentiveCalculation(db *gorm.DB, projectID uint, month string) ([]I
 			for _, v := range perfMap {
 				groupTotalPerf += v
 			}
-
-			poolReward := CalculatePayout(calc, groupTotalPerf, "")
+			
+			// For group methods, calculate overall reward
+			poolReward := CalculatePayout(calc, groupTotalPerf, "", nil)
 
 			if distMethod == DistEqualSplit {
-				share := poolReward / float64(len(eligibleUsers))
-				for _, u := range eligibleUsers {
-					userRewards[u.UserName] += share
+				// Count recipients
+				eligibleCount := 0
+				for _, u := range targetedUsers {
+					if !rules.IsExcluded(u) { eligibleCount++ }
+				}
+				
+				rewardPerPerson := 0.0
+				if eligibleCount > 0 {
+					rewardPerPerson = poolReward / float64(eligibleCount)
+				}
+
+				for _, u := range targetedUsers {
+					if rules.IsExcluded(u) { continue }
+					userRewards[u.UserName] += rewardPerPerson
 					userBreakdown[u.UserName] = append(userBreakdown[u.UserName], PayoutResult{
 						CalculatorID:   calc.ID,
 						CalculatorName: calc.Name,
 						MetricType:     metricType,
 						MetricValue:    groupTotalPerf, // Group metric
-						Amount:         share,
-						Description:    fmt.Sprintf("Equal split of group pool (Total Perf: %.2f)", groupTotalPerf),
+						Amount:         rewardPerPerson,
+						Description:    fmt.Sprintf("Equal split of group pool among %d members (Total Perf: %.2f)", eligibleCount, groupTotalPerf),
 					})
 				}
 			} else if distMethod == DistPercentageAllocation {
-				for _, u := range eligibleUsers {
+				for _, u := range targetedUsers {
+					if rules.IsExcluded(u) { continue }
 					for _, alloc := range rules.DistributionRule.Allocations {
 						if alloc.MemberRoleOrName == u.UserName || alloc.MemberRoleOrName == u.Role {
 							share := poolReward * (alloc.Percentage / 100.0)
@@ -420,17 +519,60 @@ func ProcessIncentiveCalculation(db *gorm.DB, projectID uint, month string) ([]I
 				}
 			}
 		} else {
-			for _, u := range eligibleUsers {
-				share := CalculatePayout(calc, perfMap[u.UserName], "")
+			for _, u := range targetedUsers {
+				if rules.IsExcluded(u) { continue }
+				share := CalculatePayout(calc, perfMap[u.UserName], "", userSubPerfMap[u.UserName])
 				userRewards[u.UserName] += share
+				
+				// Build detailed description for manual data & distribution
+				desc := fmt.Sprintf("Individual performance (Total: %.2f)", perfMap[u.UserName])
+				if isManualProject {
+					personal := userManualPerf[u.UserName]
+					fromTeam := perfMap[u.UserName] - personal
+					if fromTeam > 0 {
+						desc = fmt.Sprintf("Personal: %.2f | Team Dist: %.2f (Total: %.2f)", personal, fromTeam, perfMap[u.UserName])
+					} else {
+						desc = fmt.Sprintf("Manual Entry: %.2f", personal)
+					}
+				}
+
 				userBreakdown[u.UserName] = append(userBreakdown[u.UserName], PayoutResult{
 					CalculatorID:   calc.ID,
 					CalculatorName: calc.Name,
 					MetricType:     metricType,
 					MetricValue:    perfMap[u.UserName],
 					Amount:         share,
-					Description:    fmt.Sprintf("Individual performance (Value: %.2f)", perfMap[u.UserName]),
+					Description:    desc,
 				})
+			}
+		}
+
+		// Update performance display values in IncentiveResult
+		// If manual project, we want these fields to reflect the manual data used for calculation
+		if isManualProject {
+			mType := strings.ToLower(strings.TrimSpace(metricType))
+			for _, u := range targetedUsers {
+				uName := u.UserName
+				val := perfMap[uName] // This val now includes distributed team data
+				switch mType {
+				case "sales amount", "revenue":
+					if val > userRevenue[uName] {
+						userRevenue[uName] = val
+					}
+				case "profit":
+					if val > userProfit[uName] {
+						userProfit[uName] = val
+					}
+				case "orders", "order count", "number of orders":
+					if int(val) > userOrders[uName] {
+						userOrders[uName] = int(val)
+					}
+				default:
+					// Default to orders if unknown
+					if int(val) > userOrders[uName] {
+						userOrders[uName] = int(val)
+					}
+				}
 			}
 		}
 	}
