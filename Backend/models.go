@@ -399,6 +399,7 @@ type IncentiveRules struct {
 	Description         string           `json:"description"`
 	Status              string           `json:"status"`
 	ApplyTo             []string         `json:"applyTo"`
+	ExcludeTargets      []string         `json:"excludeTargets"`
 	MetricType          string           `json:"metricType"`
 	MetricUnit          string           `json:"metricUnit"`
 	CalculationPeriod   string           `json:"calculationPeriod"`
