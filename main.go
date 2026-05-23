@@ -167,6 +167,9 @@ func mapToDBColumn(key string) string {
 		"Thumbnail":               "thumbnail",
 		"Thumbnail URL":           "thumbnail",
 		"ID":                      "id",
+		"id":                      "id",
+		"status":                  "status",
+		"Status":                  "status",
 		"Key":                     "config_key",
 		"Value":                   "config_value",
 		"Description":             "description",
@@ -1751,6 +1754,7 @@ func handleAdminUpdateSheet(c *gin.Context) {
 	}
 
 	if err := backend.DB.Table(tableName).Where(pkCol+" = ?", pkVal).Updates(mappedData).Error; err != nil {
+		log.Printf("[ERROR] handleAdminUpdateSheet (Table: %s, PK: %s=%v): %v", tableName, pkCol, pkVal, err)
 		c.Error(err)
 		return
 	}
