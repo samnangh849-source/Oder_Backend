@@ -177,6 +177,8 @@ func mapToDBColumn(key string) string {
 		"TelegramTopicID":          "telegram_topic_id",
 		"CODAlertGroupID":         "cod_alert_group_id",
 		// Incentive System Mappings
+		"projectId":              "project_id",
+		"ProjectID":              "project_id",
 		"rulesJson":              "rules_json",
 		"RulesJSON":              "rules_json",
 		"projectName":            "project_name",
@@ -1731,6 +1733,16 @@ func handleAdminUpdateSheet(c *gin.Context) {
 		pkVal = v
 		originalPKKey = k
 	}
+
+	// Smart type conversion for known numeric primary keys
+	if pkCol == "id" || pkCol == "project_id" || pkCol == "calculator_id" {
+		if s, ok := pkVal.(string); ok {
+			if i, err := strconv.ParseUint(s, 10, 64); err == nil {
+				pkVal = uint(i)
+			}
+		}
+	}
+
 	if !isValidDBIdentifier(pkCol) {
 		c.JSON(http.StatusBadRequest, gin.H{"status": "error", "message": "Invalid primary key field"})
 		return
