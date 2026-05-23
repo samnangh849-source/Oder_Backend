@@ -33,6 +33,135 @@ interface OrderDetailModalProps {
     onClose: () => void;
 }
 
+const JsonValueRenderer: React.FC<{ value: string; field: string; type: 'old' | 'new' }> = ({ value, field, type }) => {
+    const { previewImage } = useContext(AppContext);
+    const [isExpanded, setIsExpanded] = useState(false);
+    
+    if (!value || value === 'EMPTY' || value === 'null') {
+        return <p className="text-[9px] font-bold text-[#848E9C] italic">EMPTY</p>;
+    }
+
+    let isJson = false;
+    let parsed: any = null;
+    try {
+        const trimmed = value.trim();
+        if ((trimmed.startsWith('[') && trimmed.endsWith(']')) || (trimmed.startsWith('{') && trimmed.endsWith('}'))) {
+            parsed = JSON.parse(trimmed);
+            isJson = true;
+        }
+    } catch (e) {}
+
+    if (!isJson) {
+        return <p className={`text-[9px] font-bold ${type === 'new' ? 'text-white' : 'text-[#848E9C] italic'} break-words line-clamp-2`}>{value}</p>;
+    }
+
+    // Special handling for Products
+    const isProductField = field.toLowerCase().includes('product');
+    if (isProductField && Array.isArray(parsed)) {
+        return (
+            <div className="space-y-2">
+                <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-1.5">
+                        <span className={`text-[7px] font-black px-1.5 py-0.5 rounded border ${
+                            type === 'new' 
+                            ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20' 
+                            : 'bg-red-500/10 text-red-400 border-red-500/20'
+                        }`}>
+                            {parsed.length} {parsed.length === 1 ? 'ASSET' : 'ASSETS'}
+                        </span>
+                    </div>
+                    <button 
+                        onClick={(e) => { e.stopPropagation(); setIsExpanded(!isExpanded); }}
+                        className="text-[7px] font-black text-[#FCD535] uppercase hover:underline tracking-tighter"
+                    >
+                        {isExpanded ? '[ CLOSE ]' : '[ VIEW ALL ]'}
+                    </button>
+                </div>
+
+                {isExpanded ? (
+                    <div className="grid grid-cols-1 gap-1.5 max-h-[200px] overflow-y-auto custom-scrollbar pr-1">
+                        {parsed.map((p: any, i: number) => (
+                            <div key={i} className="flex items-center gap-2.5 bg-black/40 p-2 rounded-xl border border-white/5 group hover:bg-black/60 transition-all">
+                                {p.image && (
+                                    <div className="relative shrink-0">
+                                        <img 
+                                            src={convertGoogleDriveUrl(p.image)} 
+                                            className="w-10 h-10 rounded-lg object-cover border border-white/10 shadow-lg cursor-zoom-in" 
+                                            alt="" 
+                                            onClick={(e) => { e.stopPropagation(); previewImage(convertGoogleDriveUrl(p.image)); }}
+                                        />
+                                        <div className="absolute -top-1.5 -right-1.5 bg-[#FCD535] text-black text-[7px] font-black w-4 h-4 rounded-full flex items-center justify-center border border-black shadow-sm">
+                                            {p.quantity || p.qty || 1}
+                                        </div>
+                                    </div>
+                                )}
+                                <div className="min-w-0 flex-grow">
+                                    <p className="text-white font-black text-[9px] truncate uppercase tracking-tight">{p.name || p.ProductName || 'Unnamed Asset'}</p>
+                                    <p className="text-[#848E9C] text-[7px] font-bold uppercase tracking-widest">{p.colorInfo || 'Standard Spec'}</p>
+                                </div>
+                            </div>
+                        ))}
+                    </div>
+                ) : (
+                    <div className="space-y-1.5">
+                        {parsed.slice(0, 3).map((p: any, i: number) => (
+                            <div key={i} className="flex items-center gap-2 bg-black/20 p-1 rounded-lg border border-white/5">
+                                {p.image ? (
+                                    <img 
+                                        src={convertGoogleDriveUrl(p.image)} 
+                                        className="w-6 h-6 rounded object-cover border border-white/10 shrink-0" 
+                                        alt="" 
+                                    />
+                                ) : (
+                                    <div className="w-6 h-6 rounded bg-white/5 border border-white/5 flex items-center justify-center text-[#848E9C] shrink-0">
+                                        <Package size={10} />
+                                    </div>
+                                )}
+                                <p className="text-[8px] font-bold text-white/90 truncate uppercase tracking-tight flex-grow">
+                                    {p.name || p.ProductName || 'Asset'}
+                                </p>
+                                <span className="text-[#FCD535] text-[8px] font-black px-1 font-mono shrink-0">
+                                    x{p.quantity || p.qty || 1}
+                                </span>
+                            </div>
+                        ))}
+                        {parsed.length > 3 && (
+                            <div 
+                                onClick={(e) => { e.stopPropagation(); setIsExpanded(true); }}
+                                className="text-[7px] font-black text-[#848E9C] hover:text-[#FCD535] transition-colors cursor-pointer ml-1 uppercase tracking-widest"
+                            >
+                                + {parsed.length - 3} more items detected...
+                            </div>
+                        )}
+                    </div>
+                )}
+            </div>
+        );
+    }
+
+    // Generic JSON
+    return (
+        <div className="space-y-1">
+             <div className="flex items-center justify-between mb-1">
+                <span className="text-[7px] font-black text-[#848E9C] opacity-50 tracking-widest">STRUCTURED LOG</span>
+                <button 
+                    onClick={(e) => { e.stopPropagation(); setIsExpanded(!isExpanded); }}
+                    className="text-[7px] font-black text-[#FCD535] uppercase hover:text-[#FCD535]/80 transition-colors"
+                >
+                    {isExpanded ? 'Collapse' : 'Raw Data'}
+                </button>
+            </div>
+            {isExpanded ? (
+                <pre className="text-[8px] font-mono leading-tight bg-black/60 p-2 rounded border border-white/5 overflow-x-auto custom-scrollbar max-h-[120px] text-[#848E9C]">
+                    {JSON.stringify(parsed, null, 2)}
+                </pre>
+            ) : (
+                <p className="text-[8px] text-[#848E9C] italic truncate opacity-70">{value}</p>
+            )}
+        </div>
+    );
+};
+
 const OrderDetailModal: React.FC<OrderDetailModalProps> = ({ order, onClose }) => {
     const { previewImage, appData, isShiftOpener, activeShiftStore, currentUser } = useContext(AppContext);
     const [copiedField, setCopiedField] = useState<string | null>(null);
@@ -433,11 +562,11 @@ const OrderDetailModal: React.FC<OrderDetailModalProps> = ({ order, onClose }) =
                                                                 <div className="grid grid-cols-2 gap-2 mt-2">
                                                                     <div className="bg-red-500/5 p-2 rounded-lg border border-red-500/10">
                                                                         <p className="text-[7px] font-black text-red-400 uppercase tracking-widest mb-1 opacity-50">Old</p>
-                                                                        <p className="text-[9px] font-bold text-[#848E9C] truncate italic">{log['Old Value'] || 'EMPTY'}</p>
+                                                                        <JsonValueRenderer value={log['Old Value']} field={log['Field Changed']} type="old" />
                                                                     </div>
                                                                     <div className="bg-emerald-500/5 p-2 rounded-lg border border-emerald-500/10">
                                                                         <p className="text-[7px] font-black text-emerald-400 uppercase tracking-widest mb-1 opacity-50">New</p>
-                                                                        <p className="text-[9px] font-bold text-white truncate">{log['New Value']}</p>
+                                                                        <JsonValueRenderer value={log['New Value']} field={log['Field Changed']} type="new" />
                                                                     </div>
                                                                 </div>
                                                             </div>
