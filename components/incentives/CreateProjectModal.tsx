@@ -4,6 +4,7 @@ import { createProject, updateProject, deleteProject } from '../../services/ince
 import { AppContext } from '../../context/AppContext';
 import { translations } from '../../translations';
 import { IncentiveProject } from '../../types';
+import { WEB_APP_URL } from '../../constants';
 import { X, Trash2, Save, Plus, Terminal, Settings, Box, Database, Palette, Activity } from 'lucide-react';
 
 interface CreateProjectModalProps {
@@ -95,15 +96,37 @@ const CreateProjectModal: React.FC<CreateProjectModalProps> = ({ isOpen, onClose
         if (!initialData || !initialData.id) return;
         
         const pwd = prompt("សូមបញ្ចូលពាក្យសម្ងាត់របស់អ្នកដើម្បីលុប (Please enter your password to delete):");
-        if (pwd === currentUser?.Password) {
+        if (pwd === null) return;
+
+        setIsSaving(true);
+        try {
+            // Verify password via API (Standard security pattern in this app)
+            const verifyRes = await fetch(`${WEB_APP_URL}/api/login`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ 
+                    userName: currentUser?.UserName, 
+                    password: pwd 
+                })
+            });
+
+            if (!verifyRes.ok) {
+                alert("ពាក្យសម្ងាត់មិនត្រឹមត្រូវ (Incorrect password)");
+                setIsSaving(false);
+                return;
+            }
+
             if (window.confirm(`តើអ្នកពិតជាចង់លុបគម្រោង "${initialData.projectName}" មែនទេ? (Are you sure you want to delete this project?)`)) {
                 if (await deleteProject(initialData.id)) {
                     onSuccess();
                     onClose();
                 }
             }
-        } else if (pwd !== null) {
-            alert("ពាក្យសម្ងាត់មិនត្រឹមត្រូវ (Incorrect password)");
+        } catch (error) {
+            console.error("Delete verification failed:", error);
+            alert("ការផ្ទៀងផ្ទាត់បរាជ័យ (Verification failed)");
+        } finally {
+            setIsSaving(false);
         }
     };
 

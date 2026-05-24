@@ -217,12 +217,18 @@ const DeliveryListGeneratorModal: React.FC<DeliveryListGeneratorModalProps> = ({
         
         try {
             // 1. Verify Password First
-            const response = await fetch(`${WEB_APP_URL}/api/users`, { cache: 'no-store' });
-            if (!response.ok) throw new Error('Network synchronization error');
-            const result = await response.json();
-            const users: User[] = result.data;
-            const foundUser = users.find(u => u.UserName === currentUser?.UserName && u.Password === password);
-            if (!foundUser) throw new Error("លេខសម្ងាត់មិនត្រឹមត្រូវ (Incorrect Password)");
+            const verifyRes = await fetch(`${WEB_APP_URL}/api/login`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ 
+                    userName: currentUser?.UserName, 
+                    password: password 
+                })
+            });
+
+            if (!verifyRes.ok) {
+                throw new Error("លេខសម្ងាត់មិនត្រឹមត្រូវ (Incorrect Password)");
+            }
 
             const concurrencyLimit = 5;
             const queue = [...pendingOrders];
