@@ -195,9 +195,18 @@ const IncentiveExecutionView: React.FC<IncentiveExecutionViewProps> = ({ project
                 }
                 catch (e) { console.error('Failed to parse breakdownJson', e); }
             }
-            const metricType = breakdown[0]?.metricType || (cr.totalRevenue > 0 ? 'Sales Amount' : 'Number of Orders');
-            const isAmountMetric = ['sales amount', 'revenue', 'profit'].includes(String(metricType).toLowerCase());
-            const performance = isAmountMetric ? (cr.totalRevenue || 0) : (cr.totalOrders || 0);
+            const metricType = String(breakdown[0]?.metricType || '').toLowerCase();
+            const isAmountMetric = ['sales amount', 'revenue', 'profit'].includes(metricType);
+            
+            let performance = 0;
+            if (metricType === 'profit') {
+                performance = cr.totalProfit || 0;
+            } else if (isAmountMetric) {
+                performance = cr.totalRevenue || 0;
+            } else {
+                performance = cr.totalOrders || 0;
+            }
+
             return {
                 username: cr.userName,
                 fullName: u?.FullName || cr.userName,
@@ -205,7 +214,7 @@ const IncentiveExecutionView: React.FC<IncentiveExecutionViewProps> = ({ project
                 role: u?.Role,
                 team: u?.Team,
                 performance,
-                performanceMetric: metricType,
+                performanceMetric: breakdown[0]?.metricType || (isAmountMetric ? 'Revenue' : 'Orders'),
                 isAmountMetric,
                 reward: cr.calculatedValue,
                 baseReward: cr.calculatedValue,
@@ -377,7 +386,21 @@ const IncentiveExecutionView: React.FC<IncentiveExecutionViewProps> = ({ project
 
                         <div className="overflow-x-auto max-h-[400px] overflow-y-auto">
                             {project.calculators?.filter(c => c.status === 'Active' && String(c.id) === activeMetricTab).map(calc => {
-                                const subPeriods = calc.calculationPeriod === 'Weekly' ? ['W1', 'W2', 'W3', 'W4', 'W5'] : ['month'];
+                                // Dynamically extract sub-periods defined in the tiers
+                                const definedSubPeriods = Array.from(new Set(
+                                    (calc.achievementTiers || [])
+                                        .map(t => t.subPeriod)
+                                        .filter(sp => sp && sp.trim() !== "")
+                                )).sort() as string[];
+
+                                // If no sub-periods are defined in tiers, use defaults for Weekly/Marathon or Month
+                                let subPeriods = definedSubPeriods;
+                                if (subPeriods.length === 0) {
+                                    subPeriods = (calc.calculationPeriod === 'Weekly' || calc.isMarathon) 
+                                        ? ['W1', 'W2', 'W3', 'W4', 'W5'] 
+                                        : ['month'];
+                                }
+
                                 const eligibleUsers = entryMode === 'user'
                                     ? (appData.users || []).filter(u => {
                                         if (!calc.applyTo || calc.applyTo.length === 0) return true;
@@ -397,69 +420,111 @@ const IncentiveExecutionView: React.FC<IncentiveExecutionViewProps> = ({ project
                                     return label.toLowerCase().includes(editorSearch.toLowerCase());
                                 });
                                 return (
-                                    <table key={calc.id} className="w-full text-left border-collapse min-w-[700px]">
-                                        <thead className="sticky top-0 z-10">
-                                            <tr className="bg-[#121212] border-b border-[#1A1A1A] text-[11px] text-[#707A8A] font-semibold">
-                                                <th className="px-4 py-3 min-w-[180px] border-r border-[#1A1A1A]">Entity</th>
-                                                {subPeriods.map(p => (
-                                                    <th key={p} className="px-2 py-3 text-center border-r border-[#1A1A1A] min-w-[160px]">
-                                                        {p === 'month' ? 'Accumulated KPI' : p}
-                                                    </th>
-                                                ))}
-                                                <th className="px-4 py-3 text-right text-[#F0B90B] bg-[#F0B90B]/5">Total</th>
-                                            </tr>
-                                        </thead>
-                                        <tbody className="divide-y divide-[#1A1A1A]">
-                                            {targets.map(t => {
-                                                const id = typeof t === 'string' ? t : t.UserName;
-                                                const label = typeof t === 'string' ? t : t.FullName;
-                                                const rowData = manualDataMap[calc.metricType || ''] || {};
-                                                const rowTotal = subPeriods.reduce((sum, p) => sum + (rowData[`${p}_${id}`] || 0), 0);
-                                                return (
-                                                    <tr key={id} className="hover:bg-[#121212] transition-colors group">
-                                                        <td className="px-4 py-3 border-r border-[#1A1A1A] font-bold text-[#EAECEF] text-xs group-hover:text-[#F0B90B] transition-colors">{label}</td>
-                                                        {subPeriods.map(p => {
-                                                            const cellVal = rowData[`${p}_${id}`] || 0;
-                                                            return (
-                                                                <td key={p} className="px-2 py-2 border-r border-[#1A1A1A]">
-                                                                    <div className="flex items-center gap-1">
-                                                                        <button
-                                                                            type="button"
-                                                                            disabled={isLocked || cellVal <= 0}
-                                                                            onClick={() => handleManualDataIncrement(calc.metricType || '', id, p, -1)}
-                                                                            className="w-7 h-8 flex items-center justify-center rounded bg-[#F6465D]/10 hover:bg-[#F6465D]/20 text-[#F6465D] font-black border border-[#F6465D]/20 transition-all disabled:opacity-25 disabled:cursor-not-allowed active:scale-95 shrink-0 select-none text-sm"
-                                                                            title="បន្ថយ 1"
-                                                                        >−</button>
-                                                                        <input
-                                                                            type="number"
-                                                                            value={cellVal || ''}
-                                                                            disabled={isLocked}
-                                                                            onChange={e => handleManualDataChange(calc.metricType || '', id, e.target.value, p)}
-                                                                            className="flex-1 bg-[#050505] border border-[#1A1A1A] text-center font-mono text-[12px] font-bold text-[#EAECEF] focus:bg-[#F0B90B]/5 focus:text-[#F0B90B] focus:border-[#F0B90B]/40 rounded py-2 outline-none transition-all disabled:opacity-30 min-w-0"
-                                                                            placeholder="0"
-                                                                            min={0}
-                                                                        />
-                                                                        <button
-                                                                            type="button"
-                                                                            disabled={isLocked}
-                                                                            onClick={() => handleManualDataIncrement(calc.metricType || '', id, p, 1)}
-                                                                            className="w-7 h-8 flex items-center justify-center rounded bg-[#0ECB81]/10 hover:bg-[#0ECB81]/20 text-[#0ECB81] font-black border border-[#0ECB81]/20 transition-all disabled:opacity-25 disabled:cursor-not-allowed active:scale-95 shrink-0 select-none text-sm"
-                                                                            title="បន្ថែម 1"
-                                                                        >+</button>
-                                                                    </div>
-                                                                </td>
-                                                            );
-                                                        })}
-                                                        <td className="px-4 py-3 text-right bg-[#F0B90B]/5">
-                                                            <span className="font-mono text-[14px] text-[#F0B90B] font-bold">{rowTotal.toLocaleString()}</span>
-                                                            <div className="text-[10px] text-[#707A8A] font-semibold">{calc.metricType || 'KPI'}</div>
-                                                        </td>
-                                                    </tr>
-                                                );
-                                            })}
-                                        </tbody>
-                                    </table>
+                                    <div key={calc.id} className="space-y-4">
+                                        {calc.isMarathon && (
+                                            <div className="px-4 py-2 bg-[#F0B90B]/5 border-y border-[#F0B90B]/10 flex items-center gap-3">
+                                                <Trophy className="w-4 h-4 text-[#F0B90B]" />
+                                                <span className="text-[10px] font-black text-[#F0B90B] uppercase tracking-[0.2em]">Marathon Mode Active: Rewards sum per unique sub-period (Weekly Cumulative)</span>
+                                            </div>
+                                        )}
+                                        <table className="w-full text-left border-collapse min-w-[700px]">
+                                            <thead className="sticky top-0 z-10">
+                                                <tr className="bg-[#121212] border-b border-[#1A1A1A] text-[11px] text-[#707A8A] font-semibold">
+                                                    <th className="px-4 py-3 min-w-[180px] border-r border-[#1A1A1A]">Entity</th>
+                                                    {subPeriods.map(p => (
+                                                        <th key={p} className="px-2 py-3 text-center border-r border-[#1A1A1A] min-w-[160px]">
+                                                            {p === 'month' ? 'Accumulated KPI' : p}
+                                                        </th>
+                                                    ))}
+                                                    <th className="px-4 py-3 text-right text-[#F0B90B] bg-[#F0B90B]/5">Total</th>
+                                                </tr>
+                                            </thead>
+                                            <tbody className="divide-y divide-[#1A1A1A]">
+                                                {targets.map(t => {
+                                                    const id = typeof t === 'string' ? t : t.UserName;
+                                                    const label = typeof t === 'string' ? t : t.FullName;
+                                                    const rowData = manualDataMap[calc.metricType || ''] || {};
+                                                    const rowTotal = subPeriods.reduce((sum, p) => sum + (rowData[`${p}_${id}`] || 0), 0);
+                                                    
+                                                    return (
+                                                        <tr key={id} className="hover:bg-[#121212] transition-colors group">
+                                                            <td className="px-4 py-3 border-r border-[#1A1A1A] font-bold text-[#EAECEF] text-xs group-hover:text-[#F0B90B] transition-colors">
+                                                                {label}
+                                                                {entryMode === 'user' && typeof t !== 'string' && (
+                                                                    <div className="text-[9px] text-[#707A8A] font-normal uppercase mt-0.5">{t.Team}</div>
+                                                                )}
+                                                            </td>
+                                                            {subPeriods.map(p => {
+                                                                const cellVal = rowData[`${p}_${id}`] || 0;
+                                                                
+                                                                // Find highest tier reached for this sub-period
+                                                                let activeTier = null;
+                                                                if (calc.achievementTiers) {
+                                                                    const tiers = [...calc.achievementTiers]
+                                                                        .filter(tier => !tier.subPeriod || tier.subPeriod === p)
+                                                                        .sort((a, b) => b.target - a.target);
+                                                                    activeTier = tiers.find(tier => cellVal >= tier.target);
+                                                                }
+
+                                                                return (
+                                                                    <td key={p} className="px-2 py-2 border-r border-[#1A1A1A]">
+                                                                        <div className="flex flex-col gap-1.5">
+                                                                            <div className="flex items-center gap-1">
+                                                                                <button
+                                                                                    type="button"
+                                                                                    disabled={isLocked || cellVal <= 0}
+                                                                                    onClick={() => handleManualDataIncrement(calc.metricType || '', id, p, -1)}
+                                                                                    className="w-7 h-8 flex items-center justify-center rounded bg-[#F6465D]/10 hover:bg-[#F6465D]/20 text-[#F6465D] font-black border border-[#F6465D]/20 transition-all disabled:opacity-25 disabled:cursor-not-allowed active:scale-95 shrink-0 select-none text-sm"
+                                                                                >−</button>
+                                                                                <input
+                                                                                    type="number"
+                                                                                    value={cellVal || ''}
+                                                                                    disabled={isLocked}
+                                                                                    onChange={e => handleManualDataChange(calc.metricType || '', id, e.target.value, p)}
+                                                                                    className="flex-1 bg-[#050505] border border-[#1A1A1A] text-center font-mono text-[12px] font-bold text-[#EAECEF] focus:bg-[#F0B90B]/5 focus:text-[#F0B90B] focus:border-[#F0B90B]/40 rounded py-2 outline-none transition-all disabled:opacity-30 min-w-0"
+                                                                                    placeholder="0"
+                                                                                    min={0}
+                                                                                />
+                                                                                <button
+                                                                                    type="button"
+                                                                                    disabled={isLocked}
+                                                                                    onClick={() => handleManualDataIncrement(calc.metricType || '', id, p, 1)}
+                                                                                    className="w-7 h-8 flex items-center justify-center rounded bg-[#0ECB81]/10 hover:bg-[#0ECB81]/20 text-[#0ECB81] font-black border border-[#0ECB81]/20 transition-all disabled:opacity-25 disabled:cursor-not-allowed active:scale-95 shrink-0 select-none text-sm"
+                                                                                >+</button>
+                                                                            </div>
+                                                                            
+                                                                            {activeTier ? (
+                                                                                <div className="flex items-center justify-between px-1">
+                                                                                    <span className="text-[8px] font-black text-[#0ECB81] uppercase tracking-tighter bg-[#0ECB81]/10 px-1 rounded">
+                                                                                        {activeTier.name || 'Achieved'}
+                                                                                    </span>
+                                                                                    <span className="text-[9px] font-mono font-bold text-[#0ECB81]">
+                                                                                        +${activeTier.rewardAmount.toFixed(0)}
+                                                                                    </span>
+                                                                                </div>
+                                                                            ) : cellVal > 0 ? (
+                                                                                <div className="px-1">
+                                                                                    <div className="h-0.5 w-full bg-[#1A1A1A] rounded-full overflow-hidden">
+                                                                                        <div className="h-full bg-[#707A8A] animate-pulse" style={{width: '30%'}}></div>
+                                                                                    </div>
+                                                                                </div>
+                                                                            ) : null}
+                                                                        </div>
+                                                                    </td>
+                                                                );
+                                                            })}
+                                                            <td className="px-4 py-3 text-right bg-[#F0B90B]/5">
+                                                                <span className="font-mono text-[14px] text-[#F0B90B] font-bold">{rowTotal.toLocaleString()}</span>
+                                                                <div className="text-[10px] text-[#707A8A] font-semibold">{calc.metricType || 'KPI'}</div>
+                                                            </td>
+                                                        </tr>
+                                                    );
+                                                })}
+                                            </tbody>
+                                        </table>
+                                    </div>
                                 );
+
                             })}
                         </div>
                     </div>
@@ -471,7 +536,11 @@ const IncentiveExecutionView: React.FC<IncentiveExecutionViewProps> = ({ project
                             <div className="w-1 h-5 bg-[#F0B90B] rounded-full" />
                             <h2 className="text-base font-bold text-[#EAECEF]">Payout ledger</h2>
                             <div className="h-4 w-px bg-[#1A1A1A]" />
-                            <span className="text-xs text-[#707A8A] truncate">Review calculated rewards and apply approved overrides.</span>
+                            <span className="text-xs text-[#707A8A] truncate">
+                                {project?.calculators?.some(c => c.isMarathon) 
+                                    ? 'Review Marathon cumulative rewards and apply approved overrides.' 
+                                    : 'Review calculated rewards and apply approved overrides.'}
+                            </span>
                         </div>
                         <button
                             onClick={() => setIsAdjustMode(!isAdjustMode)}
@@ -546,13 +615,27 @@ const IncentiveExecutionView: React.FC<IncentiveExecutionViewProps> = ({ project
 
                                         <td className="px-4 py-4 border-r border-[#1A1A1A]">
                                             <div className="flex flex-wrap gap-1.5">
-                                                {u.breakdown?.map((b: any, i: number) => (
-                                                    <div key={i} className="px-2 py-1 bg-[#050505] border border-[#1A1A1A] hover:border-[#F0B90B]/30 rounded text-[10px] flex items-center gap-1.5 transition-all">
-                                                        <span className="text-[#707A8A] font-semibold">{b.name || b.calculatorName || 'Bonus'}</span>
-                                                        <div className="w-px h-3 bg-[#1A1A1A]" />
-                                                        <span className="text-[#0ECB81] font-mono font-bold">${(b.amount || 0).toFixed(2)}</span>
-                                                    </div>
-                                                ))}
+                                                {u.breakdown?.map((b: any, i: number) => {
+                                                    const calc = project?.calculators?.find(c => c.id === b.calculatorId);
+                                                    const isMarathonComponent = calc?.isMarathon;
+                                                    return (
+                                                        <div key={i} className={`px-2 py-1 bg-[#050505] border hover:border-[#F0B90B]/30 rounded text-[10px] flex flex-col gap-0.5 transition-all ${isMarathonComponent ? 'border-[#F0B90B]/40' : 'border-[#1A1A1A]'}`} title={b.description}>
+                                                            <div className="flex items-center gap-1.5">
+                                                                {isMarathonComponent && <Trophy className="w-2.5 h-2.5 text-[#F0B90B]" />}
+                                                                <span className={`${isMarathonComponent ? 'text-[#F0B90B] font-bold' : 'text-[#707A8A] font-semibold'}`}>
+                                                                    {isMarathonComponent ? 'Marathon Cumulative' : (b.name || b.calculatorName || 'Bonus')}
+                                                                </span>
+                                                                <div className="w-px h-3 bg-[#1A1A1A]" />
+                                                                <span className="text-[#0ECB81] font-mono font-bold">${(b.amount || 0).toFixed(2)}</span>
+                                                            </div>
+                                                            {b.description && (
+                                                                <div className="text-[8px] text-[#707A8A] font-mono leading-none border-t border-[#1A1A1A] pt-1 mt-0.5">
+                                                                    {b.description}
+                                                                </div>
+                                                            )}
+                                                        </div>
+                                                    );
+                                                })}
                                                 {u.breakdown.length === 0 && (
                                                     <span className="text-xs text-[#707A8A]">No component breakdown</span>
                                                 )}

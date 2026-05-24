@@ -192,6 +192,12 @@ func runMigrations(db *gorm.DB) {
 		} else {
 			log.Println("✅ Table 'pending_syncs' created explicitly.")
 		}
+	} else {
+		// Ensure missing column exists
+		if !db.Migrator().HasColumn(&PendingSync{}, "LastErrorMessage") {
+			log.Println("⚠️ Column 'last_error_message' missing in 'pending_syncs'. Adding it...")
+			db.Migrator().AddColumn(&PendingSync{}, "LastErrorMessage")
+		}
 	}
 
 	// Functional index: allow UPPER(TRIM(order_id)) queries to use index instead of full table scan

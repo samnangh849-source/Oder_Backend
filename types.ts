@@ -355,6 +355,7 @@ export interface IncentiveCalculator {
     status?: 'Draft' | 'Active' | 'Disable';
     departmentOrRole?: string[];
     applyTo?: string[];
+    excludeTargets?: string[];
     metricType?: 'Sales Amount' | 'Number of Orders' | 'Number of Videos' | 'Leads Generated' | 'Revenue' | 'Profit' | 'Custom KPI';
     metricUnit?: 'USD' | 'Count' | '%';
     calculationPeriod?: 'Daily' | 'Weekly' | 'Monthly' | 'Per Order' | 'Custom Range';

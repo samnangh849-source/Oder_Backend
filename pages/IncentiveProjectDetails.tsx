@@ -357,20 +357,27 @@ const IncentiveProjectDetails: React.FC<IncentiveProjectDetailsProps> = ({ proje
                                         </div>
                                         
                                         {calc.type === 'Achievement' && calc.achievementTiers && (
-                                            <div className="bg-[#080808] px-4 sm:px-5 py-3 border-t border-[#1A1A1A] flex items-center gap-4 overflow-x-auto custom-scrollbar">
-                                                <span className="text-[11px] font-semibold text-[#707A8A] shrink-0">Tier preview</span>
-                                                <div className="flex items-center gap-2">
-                                                    {[...calc.achievementTiers].sort((a,b) => a.target - b.target).map((tier, i) => (
+                                            <div className="bg-[#080808] px-4 sm:px-5 py-3 border-t border-[#1A1A1A] flex flex-col sm:flex-row sm:items-center gap-4 overflow-hidden">
+                                                <div className="flex items-center gap-2 shrink-0">
+                                                    <div className="w-1 h-3 bg-[#F0B90B] rounded-full"></div>
+                                                    <span className="text-[10px] font-black text-[#707A8A] uppercase tracking-widest">Protocol_Nodes</span>
+                                                </div>
+                                                <div className="flex items-center gap-2 overflow-x-auto custom-scrollbar pb-1 sm:pb-0">
+                                                    {[...calc.achievementTiers].sort((a,b) => (a.subPeriod || '').localeCompare(b.subPeriod || '') || a.target - b.target).map((tier, i, arr) => (
                                                         <div key={tier.id} className="flex items-center gap-2 shrink-0">
-                                                            <div className="px-2 py-1 bg-[#121212] border border-[#1A1A1A] rounded flex flex-col items-center">
-                                                                {tier.subPeriod && <span className="text-[7px] font-black text-[#F0B90B] uppercase tracking-tighter mb-0.5">{tier.subPeriod}</span>}
-                                                                <div className="flex items-center gap-2">
-                                                                    <span className="text-[10px] font-mono text-[#F0B90B] font-bold">${tier.target.toLocaleString()}</span>
-                                                                    <ArrowRight className="w-2 h-2 text-[#707A8A]" />
-                                                                    <span className="text-[10px] font-mono text-[#0ECB81] font-bold">{tier.rewardType === 'Percentage' ? `${tier.rewardAmount}%` : `$${tier.rewardAmount}`}</span>
+                                                            <div className="px-3 py-1.5 bg-[#050505] border border-white/5 rounded-lg flex items-center gap-3 hover:border-primary/30 transition-colors group/node">
+                                                                <div className="flex flex-col">
+                                                                    {tier.subPeriod && <span className="text-[7px] font-black text-[#F0B90B] uppercase tracking-tighter leading-none mb-1 opacity-60">{tier.subPeriod}</span>}
+                                                                    <span className="text-[10px] font-mono text-white/40 font-bold leading-none group-hover/node:text-primary transition-colors">${tier.target.toLocaleString()}</span>
                                                                 </div>
+                                                                <div className="w-px h-4 bg-white/5"></div>
+                                                                <span className="text-[11px] font-mono text-[#0ECB81] font-black">{tier.rewardType === 'Percentage' ? `${tier.rewardAmount}%` : `$${tier.rewardAmount}`}</span>
                                                             </div>
-                                                            {i < calc.achievementTiers!.length - 1 && <div className="w-2 h-px bg-[#1A1A1A]"></div>}
+                                                            {i < arr.length - 1 && (
+                                                                <div className="flex flex-col items-center opacity-10">
+                                                                    <div className="w-4 h-px bg-white"></div>
+                                                                </div>
+                                                            )}
                                                         </div>
                                                     ))}
                                                 </div>

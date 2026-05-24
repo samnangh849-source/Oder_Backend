@@ -44,14 +44,15 @@ const inflateCalculatorRules = (calc: any): IncentiveCalculator => {
 };
 
 const serializeCalculator = (calc: Partial<IncentiveCalculator> & { projectId?: number }) => {
-    const { name, type, value, projectId, rulesJson: _, ...extraFields } = calc as any;
+    const { name, type, value, projectId, rulesJson: _, status, ...extraFields } = calc as any;
+    const jsonStr = JSON.stringify(extraFields);
     return {
         name,
         type,
         value: Number(value) || 0,
-        projectId: Number(projectId) || 0,
-        status: extraFields.status || 'Active',
-        rulesJson: JSON.stringify(extraFields)
+        projectId: Number(projectId) || Number(calc.projectId) || 0,
+        status: status || 'Active',
+        rulesJson: jsonStr === '{}' ? (calc.rulesJson || '') : jsonStr
     };
 };
 
@@ -241,7 +242,7 @@ export const updateProject = async (id: number, updates: Partial<IncentiveProjec
             headers,
             body: JSON.stringify({
                 sheetName: 'IncentiveProjects', // Assuming this table exists in Go
-                primaryKey: { id: String(id) },
+                primaryKey: { id: Number(id) },
                 newData: updates
             })
         });
@@ -263,7 +264,7 @@ export const deleteProject = async (id: number): Promise<boolean> => {
             headers,
             body: JSON.stringify({
                 sheetName: 'IncentiveProjects',
-                primaryKey: { id: String(id) }
+                primaryKey: { id: Number(id) }
             })
         });
         await readApiResult(response);
@@ -278,29 +279,14 @@ export const addCalculatorToProject = async (projectId: number, calculator: Omit
 export const updateCalculator = async (projectId: number, calculatorId: number, updates: Partial<IncentiveCalculator>): Promise<IncentiveCalculator | null> => {
     try {
         const headers = await getAuthHeaders();
+        const newData = serializeCalculator(updates);
         
-        // Split updates into core fields and extra fields
-        const { name, type, value, projectId: _, rulesJson, ...extraFields } = updates as any;
-        
-        const newData: any = {};
-        if (name !== undefined) newData.name = name;
-        if (type !== undefined) newData.type = type;
-        if (value !== undefined) newData.value = Number(value);
-        if (extraFields.status !== undefined) newData.status = extraFields.status;
-        
-        // Handle extra fields by putting them in rulesJson
-        if (Object.keys(extraFields).length > 0) {
-            newData.rulesJson = JSON.stringify(extraFields);
-        } else if (rulesJson !== undefined) {
-            newData.rulesJson = rulesJson;
-        }
-
         const response = await fetch(`${WEB_APP_URL}/api/admin/update-sheet`, {
             method: 'POST',
             headers,
             body: JSON.stringify({
                 sheetName: 'IncentiveCalculators',
-                primaryKey: { id: String(calculatorId) },
+                primaryKey: { id: Number(calculatorId) },
                 newData
             })
         });
@@ -317,7 +303,7 @@ export const deleteCalculator = async (projectId: number, calculatorId: number):
             headers,
             body: JSON.stringify({
                 sheetName: 'IncentiveCalculators',
-                primaryKey: { id: String(calculatorId) }
+                primaryKey: { id: Number(calculatorId) }
             })
         });
         await readApiResult(response);

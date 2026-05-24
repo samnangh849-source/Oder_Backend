@@ -167,12 +167,40 @@ func mapToDBColumn(key string) string {
 		"Thumbnail":               "thumbnail",
 		"Thumbnail URL":           "thumbnail",
 		"ID":                      "id",
+		"id":                      "id",
+		"status":                  "status",
+		"Status":                  "status",
 		"Key":                     "config_key",
 		"Value":                   "config_value",
 		"Description":             "description",
 		"TelegramGroupID":         "telegram_group_id",
 		"TelegramTopicID":          "telegram_topic_id",
 		"CODAlertGroupID":         "cod_alert_group_id",
+		// Incentive System Mappings
+		"projectId":              "project_id",
+		"ProjectID":              "project_id",
+		"rulesJson":              "rules_json",
+		"RulesJSON":              "rules_json",
+		"projectName":            "project_name",
+		"ProjectName":            "project_name",
+		"calculatorId":           "calculator_id",
+		"CalculatorID":           "calculator_id",
+		"startDate":              "start_date",
+		"StartDate":              "start_date",
+		"endDate":                "end_date",
+		"EndDate":                "end_date",
+		"targetTeam":             "target_team",
+		"TargetTeam":             "target_team",
+		"colorCode":              "color_code",
+		"ColorCode":              "color_code",
+		"dataSource":             "data_source",
+		"DataSource":             "data_source",
+		"requirePeriodSelection": "require_period_selection",
+		"totalOrders":            "total_orders",
+		"totalRevenue":           "total_revenue",
+		"totalProfit":            "total_profit",
+		"calculatedValue":        "calculated_value",
+		"breakdownJson":          "breakdown_json",
 	}
 
 	// Standard mapping logic
@@ -1705,6 +1733,16 @@ func handleAdminUpdateSheet(c *gin.Context) {
 		pkVal = v
 		originalPKKey = k
 	}
+
+	// Smart type conversion for known numeric primary keys
+	if pkCol == "id" || pkCol == "project_id" || pkCol == "calculator_id" {
+		if s, ok := pkVal.(string); ok {
+			if i, err := strconv.ParseUint(s, 10, 64); err == nil {
+				pkVal = uint(i)
+			}
+		}
+	}
+
 	if !isValidDBIdentifier(pkCol) {
 		c.JSON(http.StatusBadRequest, gin.H{"status": "error", "message": "Invalid primary key field"})
 		return
@@ -1728,6 +1766,7 @@ func handleAdminUpdateSheet(c *gin.Context) {
 	}
 
 	if err := backend.DB.Table(tableName).Where(pkCol+" = ?", pkVal).Updates(mappedData).Error; err != nil {
+		log.Printf("[ERROR] handleAdminUpdateSheet (Table: %s, PK: %s=%v): %v", tableName, pkCol, pkVal, err)
 		c.Error(err)
 		return
 	}

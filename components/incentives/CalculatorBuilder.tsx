@@ -33,6 +33,7 @@ const CalculatorBuilder: React.FC<CalculatorBuilderProps> = ({ projectId, initia
         status: 'Active',
         departmentOrRole: [],
         applyTo: [],
+        excludeTargets: [],
         metricType: 'Sales Amount',
         metricUnit: 'USD',
         calculationPeriod: 'Monthly',
@@ -64,6 +65,15 @@ const CalculatorBuilder: React.FC<CalculatorBuilderProps> = ({ projectId, initia
             updateField('applyTo', current.filter(i => i !== item));
         } else {
             updateField('applyTo', [...current, item]);
+        }
+    };
+
+    const toggleExcludeTarget = (item: string) => {
+        const current = calcData.excludeTargets || [];
+        if (current.includes(item)) {
+            updateField('excludeTargets', current.filter(i => i !== item));
+        } else {
+            updateField('excludeTargets', [...current, item]);
         }
     };
 
@@ -202,7 +212,7 @@ const CalculatorBuilder: React.FC<CalculatorBuilderProps> = ({ projectId, initia
                     <div className="relative z-10 animate-in fade-in slide-in-from-bottom-4 duration-700">
                         {step === 1 && <Step1Templates calcType={calcData.type || type} calcName={calcData.name || ''} onApplyTemplate={applyTemplate} onNameChange={(val) => updateField('name', val)} />}
                         {step === 2 && <Step2Configuration calcData={calcData} updateField={updateField} />}
-                        {step === 3 && <Step3TargetEntities calcData={calcData} appData={appData} updateField={updateField} toggleApplyTo={toggleApplyTo} />}
+                        {step === 3 && <Step3TargetEntities calcData={calcData} appData={appData} updateField={updateField} toggleApplyTo={toggleApplyTo} toggleExcludeTarget={toggleExcludeTarget} />}
                         {step === 4 && <Step4Logic calcData={calcData} updateField={updateField} />}
                         {step === 5 && <Step5Simulation calcData={calcData} previewInput={previewInput} setPreviewInput={setPreviewInput} updateField={updateField} />}
                     </div>
