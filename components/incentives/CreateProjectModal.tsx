@@ -95,46 +95,19 @@ const CreateProjectModal: React.FC<CreateProjectModalProps> = ({ isOpen, onClose
     const handleDelete = async () => {
         if (!initialData || !initialData.id) return;
         
-        const pwd = prompt("សូមបញ្ចូលពាក្យសម្ងាត់របស់អ្នកដើម្បីលុប (Please enter your password to delete):");
-        if (pwd === null) return;
-
-        // Ensure we have a username to verify against
-        const username = currentUser?.UserName || (currentUser as any)?.userName || (currentUser as any)?.user_name;
-        if (!username) {
-            alert("មិនអាចរកឃើញឈ្មោះអ្នកប្រើប្រាស់ (User name not found)");
-            return;
-        }
-
-        setIsSaving(true);
-        try {
-            // Verify password via API (Standard security pattern in this app)
-            const verifyRes = await fetch(`${WEB_APP_URL}/api/login`, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ 
-                    userName: username, 
-                    password: pwd 
-                })
-            });
-
-            if (!verifyRes.ok) {
-                const errorData = await verifyRes.json().catch(() => ({}));
-                alert(errorData.message || "ពាក្យសម្ងាត់មិនត្រឹមត្រូវ (Incorrect password)");
-                setIsSaving(false);
-                return;
-            }
-
-            if (window.confirm(`តើអ្នកពិតជាចង់លុបគម្រោង "${initialData.projectName}" មែនទេ? (Are you sure you want to delete this project?)`)) {
+        if (window.confirm(`តើអ្នកពិតជាចង់លុបគម្រោង "${initialData.projectName}" មែនទេ? (Are you sure you want to delete this project?)`)) {
+            setIsSaving(true);
+            try {
                 if (await deleteProject(initialData.id)) {
                     onSuccess();
                     onClose();
                 }
+            } catch (error) {
+                console.error("Delete failed:", error);
+                alert("ការលុបមិនជោគជ័យ (Deletion failed)");
+            } finally {
+                setIsSaving(false);
             }
-        } catch (error) {
-            console.error("Delete verification failed:", error);
-            alert("ការផ្ទៀងផ្ទាត់បរាជ័យ (Verification failed)");
-        } finally {
-            setIsSaving(false);
         }
     };
 
