@@ -275,19 +275,26 @@ const BulkActionManager: React.FC<BulkActionManagerProps> = ({ orders, selectedI
         
         setIsProcessing(true);
         try {
-            const token = localStorage.getItem('token');
+            const username = currentUser?.UserName || (currentUser as any)?.userName || (currentUser as any)?.user_name;
+            if (!username) {
+                alert("មិនអាចរកឃើញឈ្មោះអ្នកប្រើប្រាស់ (User name not found)");
+                setIsProcessing(false);
+                return;
+            }
+
             // 1. Verify password via API
             const verifyRes = await fetch(`${WEB_APP_URL}/api/login`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ 
-                    username: currentUser?.UserName, 
+                    userName: username, 
                     password: deletePassword 
                 })
             });
 
             if (!verifyRes.ok) {
-                alert("លេខសម្ងាត់មិនត្រឹមត្រូវ!");
+                const errorData = await verifyRes.json().catch(() => ({}));
+                alert(errorData.message || "លេខសម្ងាត់មិនត្រឹមត្រូវ!");
                 setIsProcessing(false);
                 return;
             }

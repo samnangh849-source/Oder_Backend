@@ -216,18 +216,25 @@ const DeliveryListGeneratorModal: React.FC<DeliveryListGeneratorModalProps> = ({
         setIsSubmitting(true);
         
         try {
+            // Ensure we have a username to verify against
+            const username = currentUser?.UserName || (currentUser as any)?.userName || (currentUser as any)?.user_name;
+            if (!username) {
+                throw new Error("មិនអាចរកឃើញឈ្មោះអ្នកប្រើប្រាស់ (User name not found)");
+            }
+
             // 1. Verify Password First
             const verifyRes = await fetch(`${WEB_APP_URL}/api/login`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ 
-                    userName: currentUser?.UserName, 
+                    userName: username, 
                     password: password 
                 })
             });
 
             if (!verifyRes.ok) {
-                throw new Error("លេខសម្ងាត់មិនត្រឹមត្រូវ (Incorrect Password)");
+                const errorData = await verifyRes.json().catch(() => ({}));
+                throw new Error(errorData.message || "លេខសម្ងាត់មិនត្រឹមត្រូវ (Incorrect Password)");
             }
 
             const concurrencyLimit = 5;

@@ -98,6 +98,13 @@ const CreateProjectModal: React.FC<CreateProjectModalProps> = ({ isOpen, onClose
         const pwd = prompt("សូមបញ្ចូលពាក្យសម្ងាត់របស់អ្នកដើម្បីលុប (Please enter your password to delete):");
         if (pwd === null) return;
 
+        // Ensure we have a username to verify against
+        const username = currentUser?.UserName || (currentUser as any)?.userName || (currentUser as any)?.user_name;
+        if (!username) {
+            alert("មិនអាចរកឃើញឈ្មោះអ្នកប្រើប្រាស់ (User name not found)");
+            return;
+        }
+
         setIsSaving(true);
         try {
             // Verify password via API (Standard security pattern in this app)
@@ -105,13 +112,14 @@ const CreateProjectModal: React.FC<CreateProjectModalProps> = ({ isOpen, onClose
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ 
-                    userName: currentUser?.UserName, 
+                    userName: username, 
                     password: pwd 
                 })
             });
 
             if (!verifyRes.ok) {
-                alert("ពាក្យសម្ងាត់មិនត្រឹមត្រូវ (Incorrect password)");
+                const errorData = await verifyRes.json().catch(() => ({}));
+                alert(errorData.message || "ពាក្យសម្ងាត់មិនត្រឹមត្រូវ (Incorrect password)");
                 setIsSaving(false);
                 return;
             }
