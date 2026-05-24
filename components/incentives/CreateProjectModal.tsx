@@ -101,6 +101,19 @@ const CreateProjectModal: React.FC<CreateProjectModalProps> = ({ isOpen, onClose
                 if (await deleteProject(initialData.id)) {
                     onSuccess();
                     onClose();
+                    
+                    // Standard redirection: Go back to Incentives Dashboard
+                    try {
+                        const url = new URL(window.location.href);
+                        url.searchParams.set('tab', 'incentives');
+                        url.searchParams.delete('incentiveProjectId'); // Remove specific project ID
+                        url.searchParams.set('incentiveMode', 'execute'); // Reset mode
+                        
+                        window.history.pushState(null, '', url.pathname + url.search);
+                        window.dispatchEvent(new PopStateEvent('popstate'));
+                    } catch (e) {
+                        console.error("Navigation error:", e);
+                    }
                 }
             } catch (error) {
                 console.error("Delete failed:", error);
