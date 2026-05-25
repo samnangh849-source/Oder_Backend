@@ -436,26 +436,25 @@ func ProcessIncentiveCalculation(db *gorm.DB, projectID uint, month string) ([]I
 				subMap[sp] += spVal
 			}
 
-			if rules.DistributionRule.Method == "" || rules.DistributionRule.Method == DistIndividual {
-				if u.Team != "" {
-					userTeams := strings.Split(u.Team, ",")
-					for _, ut := range userTeams {
-						teamName := NormalizeTeamKey(ut)
-						if teamName != "" {
-							// Distribute aggregate team manual data (Shared among eligible recipients)
-							if teamManualPerf[teamName] > 0 && teamMemberCount[teamName] > 0 {
-								val += teamManualPerf[teamName] / float64(teamMemberCount[teamName])
-							}
-							// Distribute team sub-period data (For Marathon)
-							for sp, spVal := range teamManualSubPerf[teamName] {
-								if spVal > 0 && teamMemberCount[teamName] > 0 {
-									subMap[sp] += spVal / float64(teamMemberCount[teamName])
-								}
+			if u.Team != "" {
+				userTeams := strings.Split(u.Team, ",")
+				for _, ut := range userTeams {
+					teamName := NormalizeTeamKey(ut)
+					if teamName != "" {
+						// Distribute aggregate team manual data (Shared among eligible recipients)
+						if teamManualPerf[teamName] > 0 && teamMemberCount[teamName] > 0 {
+							val += teamManualPerf[teamName] / float64(teamMemberCount[teamName])
+						}
+						// Distribute team sub-period data (For Marathon)
+						for sp, spVal := range teamManualSubPerf[teamName] {
+							if spVal > 0 && teamMemberCount[teamName] > 0 {
+								subMap[sp] += spVal / float64(teamMemberCount[teamName])
 							}
 						}
 					}
 				}
 			}
+
 			perfMap[u.UserName] = val
 			userSubPerfMap[u.UserName] = subMap
 		}
@@ -467,15 +466,19 @@ func ProcessIncentiveCalculation(db *gorm.DB, projectID uint, month string) ([]I
 
 		if distMethod == DistEqualSplit || distMethod == DistPercentageAllocation {
 			var groupTotalPerf float64
-			for _, v := range perfMap {
-				groupTotalPerf += v
-			}
-			
-			// For group methods, calculate overall reward
-			poolReward := CalculatePayout(calc, groupTotalPerf, "", nil)
+			groupSubPerfMap := make(map[string]float64)
 
-			if distMethod == DistEqualSplit {
-				// Count recipients
+			for _, u := range targetedUsers {
+				groupTotalPerf += perfMap[u.UserName]
+				for sp, spVal := range userSubPerfMap[u.UserName] {
+					groupSubPerfMap[sp] += spVal
+				}
+			}
+
+			// For group methods, calculate overall reward
+			poolReward := CalculatePayout(calc, groupTotalPerf, "", groupSubPerfMap)
+
+			if distMethod == DistEqualSplit {				// Count recipients
 				eligibleCount := 0
 				for _, u := range targetedUsers {
 					if !rules.IsExcluded(u) { eligibleCount++ }
