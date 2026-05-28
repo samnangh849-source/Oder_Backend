@@ -227,12 +227,17 @@ const FlexiLabel: React.FC<FlexiLabelProps> = ({ data, qrValue, isDesignMode, wa
         {/* 4. FOOTER GRID (QR & PAYMENT) */}
         <div className="mx-2 mb-2 mt-0.5 h-[28mm] grid grid-cols-[1fr_1.3fr] gap-2 shrink-0">
             
-            {/* QR MODULE */}
-            <div className="bg-white border border-black rounded-xl flex flex-col items-center justify-center relative overflow-hidden pt-1 pb-0.5">
-                <div className="grow flex items-center justify-center -mt-1">
-                   <SmartQR storageKey="flexi_qr" value={qrValue} baseSize={72} isDesignMode={isDesignMode} />
+            {/* QR MODULE - Enhanced Design */}
+            <div className="bg-white border border-black rounded-xl flex flex-col items-center justify-center relative overflow-hidden p-1.5 shadow-sm">
+                <div className="absolute top-0 left-0 w-2 h-2 border-t border-l border-black/20 rounded-tl-sm"></div>
+                <div className="absolute top-0 right-0 w-2 h-2 border-t border-r border-black/20 rounded-tr-sm"></div>
+                <div className="absolute bottom-0 left-0 w-2 h-2 border-b border-l border-black/20 rounded-bl-sm"></div>
+                <div className="absolute bottom-0 right-0 w-2 h-2 border-b border-r border-black/20 rounded-br-sm"></div>
+                
+                <div className="grow flex items-center justify-center">
+                   <SmartQR storageKey="flexi_qr" value={qrValue} baseSize={76} isDesignMode={isDesignMode} />
                 </div>
-                <span className="text-[4.5pt] font-bold uppercase tracking-wider text-black leading-none pb-0.5">(Driver Scan)</span>
+                <span className="text-[4.2pt] font-black uppercase tracking-[0.1em] text-black/40 mt-1 leading-none">(Driver Link)</span>
             </div>
 
             {/* PRICE & STATUS MODULE */}

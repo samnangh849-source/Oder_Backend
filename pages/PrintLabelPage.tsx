@@ -297,7 +297,7 @@ const PrintLabelPage: React.FC<PrintLabelPageProps> = ({ initialData, onClose, s
                     </div>
                     <div className="flex-1 flex flex-col items-center justify-center p-1 relative bg-white overflow-hidden min-h-0">
                          <div className="flex flex-col items-center gap-1.5 z-10">
-                             <div className="border-[3px] border-black p-1 rounded-xl bg-white shadow-lg"><QRCode value={qrValue} size={90} /></div>
+                             <div className="bg-white p-2 rounded-2xl border border-black shadow-sm mb-1.5"><QRCode value={qrValue} size={90} /></div>
                              <div className="flex items-center gap-1.5 bg-black text-white px-3 py-1 rounded-full">
                                 <MapPin size={10} className="text-yellow-500" /><span className="text-[8pt] font-black uppercase tracking-[0.15em] leading-none pt-[1px]">Driver Scan</span>
                              </div>
@@ -324,7 +324,7 @@ const PrintLabelPage: React.FC<PrintLabelPageProps> = ({ initialData, onClose, s
                          </div>
                      </div>
                      <div className="flex-1 bg-gray-50 rounded-xl border-2 border-dashed border-gray-200 flex flex-col items-center justify-center p-2 relative overflow-hidden">
-                          <div className="z-10 bg-white p-1.5 rounded-lg border border-black/5 shadow-sm mb-2"><QRCode value={qrValue} size={90} /></div>
+                          <div className="z-10 bg-white p-2 rounded-2xl border border-black shadow-sm mb-2"><QRCode value={qrValue} size={90} /></div>
                           <div className="z-10 flex items-center gap-1.5 bg-black text-white px-3 py-1 rounded-full"><Navigation size={10} className="text-white fill-current" /><span className="text-[7pt] font-black uppercase tracking-wider leading-none pt-[1px]">Driver Scan</span></div>
                      </div>
                 </div>
