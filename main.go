@@ -25,6 +25,7 @@ import (
 
 	"github.com/fogleman/gg"
 	"github.com/gin-contrib/cors"
+	"github.com/gin-contrib/gzip"
 	"github.com/gin-gonic/gin"
 	"golang.org/x/crypto/bcrypt"
 
@@ -875,6 +876,7 @@ func handleGetStaticData(c *gin.Context) {
 	}
 	wg.Wait()
 
+	c.Header("Cache-Control", "public, max-age=60")
 	c.JSON(http.StatusOK, gin.H{"status": "success", "data": result})
 }
 
@@ -884,6 +886,7 @@ func handleGetSettings(c *gin.Context) {
 		c.Error(err)
 		return
 	}
+	c.Header("Cache-Control", "public, max-age=300")
 	c.JSON(http.StatusOK, gin.H{"status": "success", "data": settings})
 }
 
@@ -895,6 +898,7 @@ func handleGetPromotions(c *gin.Context) {
 		c.JSON(http.StatusInternalServerError, gin.H{"status": "error", "message": err.Error()})
 		return
 	}
+	c.Header("Cache-Control", "public, max-age=120")
 	c.JSON(http.StatusOK, gin.H{"status": "success", "data": promotions})
 }
 
@@ -2811,18 +2815,13 @@ func main() {
 	}()
 
 	r := gin.Default()
+	r.Use(gzip.Gzip(gzip.DefaultCompression))
 	r.Use(ErrorHandlingMiddleware())
 
 	// Enhanced CORS Configuration
 	r.Use(cors.New(cors.Config{
-		AllowOrigins: []string{
-			"https://dominic0607.github.io",
-			"http://localhost:3000",
-			"http://127.0.0.1:3000",
-			"http://localhost:5173",
-			"http://127.0.0.1:5173",
-			"http://localhost:8080",
-			"http://127.0.0.1:8080",
+		AllowOriginFunc: func(origin string) bool {
+			return true
 		},
 		AllowMethods:     []string{"GET", "POST", "PUT", "DELETE", "OPTIONS", "PATCH"},
 		AllowHeaders:     []string{"Origin", "Content-Type", "Authorization", "X-Requested-With", "Accept"},
