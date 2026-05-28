@@ -107,7 +107,7 @@ const BarcodeScannerModal: React.FC<BarcodeScannerModalProps> = ({
         isInitializing, error, zoom, zoomCapabilities, handleZoomChange, 
         isTorchOn, isTorchSupported, toggleTorch, trackingBox, isAutoZooming,
         triggerFocus, switchCamera, scanFromImage
-    } = useBarcodeScanner("barcode-reader-container", handleScan, scanMode);
+    } = useBarcodeScanner("barcode-reader-container", handleScan, scanMode, { initialZoom: 1.3 });
 
     // Touch Event Handlers (Zoom & Swipe & Focus)
     const handleTouchStart = (e: React.TouchEvent) => {

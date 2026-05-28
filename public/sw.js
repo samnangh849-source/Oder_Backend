@@ -136,7 +136,15 @@ self.addEventListener('fetch', (event) => {
 
   // Simple network-first strategy for API calls, cache-first for static assets
   if (event.request.url.includes('/api/')) {
-    event.respondWith(fetch(event.request));
+    event.respondWith(
+      fetch(event.request).catch(error => {
+        console.error("Service Worker API Fetch Error:", error);
+        return new Response(JSON.stringify({ status: "error", message: "Network error" }), {
+          status: 502,
+          headers: { 'Content-Type': 'application/json' }
+        });
+      })
+    );
     return;
   }
 

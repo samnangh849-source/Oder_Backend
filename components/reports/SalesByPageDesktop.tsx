@@ -64,68 +64,67 @@ const SalesByPageDesktop: React.FC<SalesByPageDesktopProps> = ({
         ];
         
         return (
-            <div className="hidden xl:flex page-card flex-col mb-8 !p-6 border-gray-700/50 shadow-xl overflow-hidden bg-gray-900/40">
+            <div className="hidden xl:flex flex-col mb-8 p-6 overflow-hidden bg-[#1E2329]">
                 <div className="flex justify-between items-center mb-6">
-                    <h3 className={`text-xl font-black flex items-center gap-2 ${type === 'Revenue' ? 'text-blue-300' : 'text-green-400'}`}>
-                        <span className={`w-2 h-6 rounded-full ${type === 'Revenue' ? 'bg-blue-600' : 'bg-green-600'}`}></span>
-                        តារាង{type === 'Revenue' ? 'ចំណូល' : 'ប្រាក់ចំណេញ'}តាម Page (Desktop)
-                    </h3>
+                    <div className="flex items-center gap-3">
+                        <div className={`w-1.5 h-6 rounded-full ${type === 'Revenue' ? 'bg-[#FCD535]' : 'bg-[#0ECB81]'}`}></div>
+                        <h3 className="text-lg font-black text-white uppercase tracking-[0.1em]">
+                            តារាង{type === 'Revenue' ? 'ចំណូល' : 'ប្រាក់ចំណេញ'}តាម Page
+                        </h3>
+                    </div>
                     <div className="flex items-center gap-2">
                         {type === 'Revenue' && (
                              <>
-                                <button onClick={() => setShowAllPages(!showAllPages)} className={`btn !py-1 !px-3 text-[10px] font-black border transition-all ${showAllPages ? 'bg-purple-600 border-purple-500 text-white shadow-lg shadow-purple-900/20' : 'bg-gray-800 border-gray-700 text-gray-400'}`}>
+                                <button 
+                                    onClick={() => setShowAllPages(!showAllPages)} 
+                                    className={`px-3 py-1.5 rounded-lg text-[10px] font-black border transition-all uppercase tracking-widest ${showAllPages ? 'bg-[#FCD535] border-[#FCD535] text-black shadow-lg shadow-[#FCD535]/10' : 'bg-[#2B3139] border-[#474D57] text-[#848E9C]'}`}
+                                >
                                     {showAllPages ? 'ALL PAGES' : 'ACTIVE ONLY'}
                                 </button>
                                 <button 
                                     onClick={() => setOnlyTelegram && setOnlyTelegram(!onlyTelegram)} 
-                                    className={`btn !py-1 !px-3 text-[10px] font-black border transition-all flex items-center gap-1.5 ${onlyTelegram ? 'bg-sky-600 border-sky-500 text-white shadow-lg shadow-sky-900/20' : 'bg-gray-800 border-gray-700 text-gray-400'}`}
+                                    className={`px-3 py-1.5 rounded-lg text-[10px] font-black border transition-all uppercase tracking-widest flex items-center gap-1.5 ${onlyTelegram ? 'bg-sky-500 border-sky-400 text-white shadow-lg shadow-sky-500/10' : 'bg-[#2B3139] border-[#474D57] text-[#848E9C]'}`}
                                 >
-                                    <svg className="w-3 h-3" viewBox="0 0 24 24" fill="currentColor">
-                                        <path d="M20.665 3.717l-17.73 6.837c-1.21.486-1.203 1.161-.222 1.462l4.552 1.42l10.532-6.645c.498-.303.953-.14.579.192l-8.533 7.701l-.33 4.955c.488 0 .704-.223.977-.485l2.344-2.279l4.875 3.597c.897.494 1.54.24 1.763-.83l3.194-15.048c.326-1.308-.496-1.898-1.352-1.547z"/>
-                                    </svg>
                                     TELEGRAM
-                                </button>
-                                <button 
-                                    onClick={onExportPDF}
-                                    disabled={isExporting}
-                                    className="btn !py-1 !px-4 text-[10px] font-black bg-red-600/20 border border-red-500/30 text-red-400 hover:bg-red-600 hover:text-white transition-all flex items-center gap-2"
-                                >
-                                    {isExporting ? <Spinner size="sm"/> : <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/></svg>}
-                                    EXPORT PDF
                                 </button>
                              </>
                         )}
-                        <button onClick={() => setIsMerged(!isMerged)} className={`btn !py-1 !px-3 text-[10px] font-black border transition-all ${isMerged ? 'bg-indigo-600 border-indigo-500 text-white' : 'bg-gray-800 border-gray-700 text-gray-400'}`}>MERGE</button>
-                        <button onClick={() => setShowFillColor(!showFillColor)} className={`btn !py-1 !px-3 text-[10px] font-black border transition-all ${showFillColor ? 'bg-orange-600 border-orange-500 text-white' : 'bg-gray-800 border-gray-700 text-gray-400'}`}>COLOR</button>
-                        <button onClick={() => setIsFrozen(!isFrozen)} className={`btn !py-1 !px-3 text-[10px] font-black border transition-all ${isFrozen ? 'bg-blue-600 border-blue-500 text-white shadow-lg' : 'bg-gray-800 border-gray-700 text-gray-400'}`}>FREEZE</button>
-                        <button onClick={() => setShowBorders(!showBorders)} className={`btn !py-1 !px-3 text-[10px] font-black border transition-all ${showBorders ? 'bg-gray-700 border-gray-600 text-white shadow-lg' : 'bg-gray-800 border-gray-700 text-gray-400'}`}>BORDER</button>
+                        <button onClick={() => setIsMerged(!isMerged)} className={`px-3 py-1.5 rounded-lg text-[10px] font-black border transition-all uppercase tracking-widest ${isMerged ? 'bg-purple-500 border-purple-400 text-white shadow-lg' : 'bg-[#2B3139] border-[#474D57] text-[#848E9C]'}`}>MERGE</button>
+                        <button onClick={() => setShowFillColor(!showFillColor)} className={`px-3 py-1.5 rounded-lg text-[10px] font-black border transition-all uppercase tracking-widest ${showFillColor ? 'bg-orange-500 border-orange-400 text-white shadow-lg' : 'bg-[#2B3139] border-[#474D57] text-[#848E9C]'}`}>COLOR</button>
+                        <button onClick={() => setIsFrozen(!isFrozen)} className={`px-3 py-1.5 rounded-lg text-[10px] font-black border transition-all uppercase tracking-widest ${isFrozen ? 'bg-blue-500 border-blue-400 text-white shadow-lg' : 'bg-[#2B3139] border-[#474D57] text-[#848E9C]'}`}>FREEZE</button>
+                        <button onClick={() => setShowBorders(!showBorders)} className={`px-3 py-1.5 rounded-lg text-[10px] font-black border transition-all uppercase tracking-widest ${showBorders ? 'bg-[#474D57] border-[#474D57] text-white' : 'bg-[#2B3139] border-[#474D57] text-[#848E9C]'}`}>BORDER</button>
                     </div>
                 </div>
 
-                <div className={`overflow-x-auto custom-scrollbar pb-2 ${showBorders ? 'border-2 border-white/20 rounded-2xl shadow-[0_0_40px_rgba(0,0,0,0.6)]' : ''}`}>
-                    <table className={`report-table w-full border-separate border-spacing-0 text-sm ${showBorders ? 'border-collapse' : ''}`}>
-                        <thead className="bg-[#0f172a] backdrop-blur-md">
-                            <tr className="border-b-2 border-white/20">
+                <div className={`overflow-x-auto custom-scrollbar pb-2 ${showBorders ? 'border border-[#2B3139] rounded-xl' : ''}`}>
+                    <table className={`w-full border-separate border-spacing-0 text-sm`}>
+                        <thead className="bg-[#0B0E11]">
+                            <tr>
                                 {columns.map(col => {
                                     let stickyClass = "";
                                     let stickyStyle: React.CSSProperties = {};
                                     if (isFrozen) {
-                                        if (col.key === 'index') { stickyClass = "sticky left-0 z-30 bg-[#0f172a]"; stickyStyle = { width: '45px', minWidth: '45px' }; }
-                                        else if (col.key === 'teamName') { stickyClass = "sticky left-[45px] z-30 bg-[#0f172a] border-r border-white/20 shadow-md"; stickyStyle = { minWidth: '130px' }; }
-                                        else if (col.key === 'logo') { stickyClass = `sticky z-30 bg-[#0f172a]`; stickyStyle = { left: '175px', width: '50px', minWidth: '50px' }; }
-                                        else if (col.key === 'pageName') { stickyClass = `sticky z-30 bg-[#0f172a] shadow-md`; stickyStyle = { left: '225px', minWidth: '160px' }; }
-                                        else if (col.key.includes('total')) { stickyClass = `sticky z-30 bg-[#0f172a] border-r border-white/20 shadow-lg`; stickyStyle = { left: '385px', width: '100px', minWidth: '100px' }; }
+                                        if (col.key === 'index') { stickyClass = "sticky left-0 z-30 bg-[#0B0E11]"; stickyStyle = { width: '45px', minWidth: '45px' }; }
+                                        else if (col.key === 'teamName') { stickyClass = "sticky left-[45px] z-30 bg-[#0B0E11] border-r border-[#2B3139]"; stickyStyle = { minWidth: '130px' }; }
+                                        else if (col.key === 'logo') { stickyClass = `sticky z-30 bg-[#0B0E11]`; stickyStyle = { left: '175px', width: '50px', minWidth: '50px' }; }
+                                        else if (col.key === 'pageName') { stickyClass = `sticky z-30 bg-[#0B0E11] shadow-lg`; stickyStyle = { left: '225px', minWidth: '160px' }; }
+                                        else if (col.key.includes('total')) { stickyClass = `sticky z-30 bg-[#0B0E11] border-r border-[#2B3139] shadow-xl`; stickyStyle = { left: '385px', width: '100px', minWidth: '100px' }; }
                                     }
                                     const isSorting = sortConfig.key === col.sortKey;
-                                    const headerBg = col.key.includes('total') 
-                                        ? (type === 'Revenue' ? 'bg-blue-900/80' : 'bg-green-900/80') 
-                                        : isSorting ? 'bg-white/5' : '';
+                                    const headerColor = col.key.includes('total') 
+                                        ? (type === 'Revenue' ? 'text-[#FCD535]' : 'text-[#0ECB81]') 
+                                        : isSorting ? 'text-white' : 'text-[#848E9C]';
                                     return (
-                                        <th key={col.key} onClick={() => col.sortable && onToggleSort(col.sortKey!)} className={`px-4 py-5 whitespace-nowrap text-left font-black uppercase tracking-wider border-b-2 border-white/20 transition-colors ${showBorders ? 'border-x border-white/10' : ''} ${stickyClass} ${headerBg} ${col.sortable ? 'cursor-pointer hover:bg-gray-800' : ''}`} style={stickyStyle}>
+                                        <th 
+                                            key={col.key} 
+                                            onClick={() => col.sortable && onToggleSort(col.sortKey!)} 
+                                            className={`px-4 py-4 whitespace-nowrap text-left font-black uppercase tracking-[0.1em] border-b border-[#2B3139] transition-colors ${showBorders ? 'border-x border-[#2B3139]' : ''} ${stickyClass} ${col.sortable ? 'cursor-pointer hover:bg-white/5' : ''}`} 
+                                            style={stickyStyle}
+                                        >
                                             <div className="flex items-center gap-1.5">
-                                                <span className={isSorting ? 'text-blue-400' : 'text-gray-400'}>{col.label}</span>
+                                                <span className={headerColor}>{col.label}</span>
                                                 {col.sortable && isSorting && (
-                                                    <span className="text-blue-500 animate-pulse">
+                                                    <span className="text-[#FCD535] animate-pulse">
                                                         {sortConfig.direction === 'asc' ? '↑' : '↓'}
                                                     </span>
                                                 )}
@@ -135,29 +134,35 @@ const SalesByPageDesktop: React.FC<SalesByPageDesktopProps> = ({
                                 })}
                             </tr>
                         </thead>
-                        <tbody className="divide-y divide-white/10">
+                        <tbody className="divide-y divide-[#2B3139]">
                             {data.map((item: any, idx) => {
                                 const shouldDisplayTeam = isMerged ? displayRow[idx] : true;
                                 const currentSpan = isMerged ? rowSpans[idx] : 1;
                                 
                                 const teamColorIndex = Array.from(String(item.teamName)).reduce((acc: number, char: string) => acc + char.charCodeAt(0), 0) % 5;
-                                const groupColors = [{ bg: 'bg-blue-500/5', border: 'border-l-4 border-l-blue-500' }, { bg: 'bg-purple-500/5', border: 'border-l-4 border-l-purple-500' }, { bg: 'bg-emerald-500/5', border: 'border-l-4 border-l-emerald-500' }, { bg: 'bg-orange-500/5', border: 'border-l-4 border-l-orange-500' }, { bg: 'bg-pink-500/5', border: 'border-l-4 border-l-pink-500' }];
+                                const groupColors = [
+                                    { bg: 'bg-[#FCD535]/5', border: 'border-l-2 border-l-[#FCD535]' }, 
+                                    { bg: 'bg-purple-500/5', border: 'border-l-2 border-l-purple-500' }, 
+                                    { bg: 'bg-[#0ECB81]/5', border: 'border-l-2 border-l-[#0ECB81]' }, 
+                                    { bg: 'bg-orange-500/5', border: 'border-l-2 border-l-orange-500' }, 
+                                    { bg: 'bg-pink-500/5', border: 'border-l-2 border-l-pink-500' }
+                                ];
                                 const colorSet = groupColors[teamColorIndex];
-                                const rowBgClass = showFillColor ? colorSet.bg : 'hover:bg-blue-500/5';
+                                const rowBgClass = showFillColor ? colorSet.bg : 'hover:bg-white/5';
                                 return (
-                                    <tr key={item.pageName} className={`${rowBgClass} transition-colors group border-b border-white/10`}>
+                                    <tr key={item.pageName} className={`${rowBgClass} transition-colors group`}>
                                         {columns.map(col => {
-                                            const cellClass = `px-4 py-4 lg:py-5 whitespace-nowrap border-white/10 ${showBorders ? 'border-x border-white/10' : ''}`;
+                                            const cellClass = `px-4 py-4 whitespace-nowrap border-[#2B3139] ${showBorders ? 'border-x border-[#2B3139]' : ''}`;
                                             let stickyClass = "";
                                             let stickyStyle: React.CSSProperties = {};
                                             if (isFrozen) {
-                                                if (col.key === 'index') { stickyClass = "sticky left-0 z-10 bg-[#020617]"; stickyStyle = { width: '45px', minWidth: '45px' }; }
-                                                else if (col.key === 'teamName') { stickyClass = "sticky left-[45px] z-10 bg-[#020617] border-r border-white/20 shadow-md"; stickyStyle = { width: '130px', minWidth: '130px' }; }
-                                                else if (col.key === 'logo') { stickyClass = `sticky z-10 bg-[#020617]`; stickyStyle = { left: '175px', width: '50px', minWidth: '50px' }; }
-                                                else if (col.key === 'pageName') { stickyClass = `sticky z-10 bg-[#020617] shadow-md`; stickyStyle = { left: '225px', minWidth: '160px' }; }
-                                                else if (col.key.includes('total')) { stickyClass = `sticky z-10 bg-[#020617] border-r border-white/20 shadow-lg`; stickyStyle = { left: '385px', width: '100px', minWidth: '100px' }; }
+                                                if (col.key === 'index') { stickyClass = "sticky left-0 z-10 bg-[#1E2329]"; stickyStyle = { width: '45px', minWidth: '45px' }; }
+                                                else if (col.key === 'teamName') { stickyClass = "sticky left-[45px] z-10 bg-[#1E2329] border-r border-[#2B3139] shadow-md"; stickyStyle = { width: '130px', minWidth: '130px' }; }
+                                                else if (col.key === 'logo') { stickyClass = `sticky z-10 bg-[#1E2329]`; stickyStyle = { left: '175px', width: '50px', minWidth: '50px' }; }
+                                                else if (col.key === 'pageName') { stickyClass = `sticky z-10 bg-[#1E2329] shadow-lg`; stickyStyle = { left: '225px', minWidth: '160px' }; }
+                                                else if (col.key.includes('total')) { stickyClass = `sticky z-10 bg-[#1E2329] border-r border-[#2B3139] shadow-xl`; stickyStyle = { left: '385px', width: '100px', minWidth: '100px' }; }
                                             }
-                                            if (col.key === 'index') return <td key={col.key} className={`${cellClass} text-center font-bold text-gray-500 ${stickyClass}`} style={stickyStyle}>{idx + 1}</td>;
+                                            if (col.key === 'index') return <td key={col.key} className={`${cellClass} text-center font-bold text-[#474D57] ${stickyClass}`} style={stickyStyle}>{idx + 1}</td>;
                                             
                                             // Handle Merged Cells
                                             if (col.key === 'teamName') {
@@ -165,22 +170,22 @@ const SalesByPageDesktop: React.FC<SalesByPageDesktopProps> = ({
                                                 return <td 
                                                     key={col.key} 
                                                     rowSpan={currentSpan} 
-                                                    className={`${cellClass} font-black text-white bg-gray-900/95 align-middle text-center ${stickyClass} ${showFillColor ? colorSet.border : ''} border-b border-white/10 cursor-pointer hover:text-blue-400 group/team`} 
+                                                    className={`${cellClass} font-black text-white bg-[#0B0E11]/40 align-middle text-center ${stickyClass} ${showFillColor ? colorSet.border : ''} cursor-pointer hover:text-[#FCD535] group/team`} 
                                                     style={stickyStyle}
                                                     onClick={() => onNavigate('team', item.teamName)}
                                                 >
-                                                    <div className="bg-gray-800/80 py-1.5 px-4 rounded-xl border border-white/5 shadow-inner inline-block group-hover/team:bg-blue-600 transition-all">
+                                                    <div className="bg-[#2B3139] py-1.5 px-3 rounded-lg border border-white/5 shadow-inner inline-block group-hover/team:bg-[#FCD535] group-hover/team:text-black transition-all">
                                                         {item.teamName}
                                                     </div>
                                                 </td>;
                                             }
                                             
-                                            if (col.key === 'logo') return <td key={col.key} className={`${cellClass} text-center ${stickyClass} border-b border-white/10`} style={stickyStyle}><img src={convertGoogleDriveUrl(item.logoUrl)} className="w-9 h-9 rounded-full border border-gray-700 mx-auto shadow-md cursor-pointer hover:scale-110 active:scale-95 transition-all" alt="logo" onClick={() => onPreviewImage(convertGoogleDriveUrl(item.logoUrl))} /></td>;
+                                            if (col.key === 'logo') return <td key={col.key} className={`${cellClass} text-center ${stickyClass}`} style={stickyStyle}><img src={convertGoogleDriveUrl(item.logoUrl)} className="w-8 h-8 rounded-lg border border-[#2B3139] mx-auto shadow-md cursor-pointer hover:scale-110 active:scale-95 transition-all" alt="logo" onClick={() => onPreviewImage(convertGoogleDriveUrl(item.logoUrl))} /></td>;
                                             
                                             if (col.key === 'pageName') {
                                                 return <td 
                                                     key={col.key} 
-                                                    className={`${cellClass} font-black text-white ${stickyClass} border-b border-white/10 cursor-pointer hover:text-blue-400 hover:underline transition-colors`} 
+                                                    className={`${cellClass} font-black text-[#EAECEF] ${stickyClass} cursor-pointer hover:text-[#FCD535] transition-colors`} 
                                                     style={stickyStyle}
                                                     onClick={() => onNavigate('page', item.pageName)}
                                                 >
@@ -191,7 +196,7 @@ const SalesByPageDesktop: React.FC<SalesByPageDesktopProps> = ({
                                             if (col.key.includes('total')) {
                                                 return <td 
                                                     key={col.key} 
-                                                    className={`${cellClass} text-right font-black ${stickyClass} ${type === 'Revenue' ? 'text-blue-100 bg-blue-600/10 group-hover:text-blue-300' : 'text-green-100 bg-green-600/10 group-hover:text-green-300'} border-b border-white/10 cursor-pointer transition-colors`} 
+                                                    className={`${cellClass} text-right font-black ${stickyClass} ${type === 'Revenue' ? 'text-[#FCD535] bg-[#FCD535]/5' : 'text-[#0ECB81] bg-[#0ECB81]/5'} cursor-pointer transition-colors`} 
                                                     style={stickyStyle}
                                                     onClick={() => onNavigate('page', item.pageName)}
                                                 >
@@ -201,41 +206,41 @@ const SalesByPageDesktop: React.FC<SalesByPageDesktopProps> = ({
                                             
                                             if (col.key.startsWith(prefix)) {
                                                 const val = item[col.key] || 0;
-                                                const color = type === 'Profit' ? (val > 0 ? 'text-green-400' : val < 0 ? 'text-red-400' : 'text-gray-500') : (val > 0 ? 'text-blue-300' : 'text-gray-500');
+                                                const color = type === 'Profit' ? (val > 0 ? 'text-[#0ECB81]' : val < 0 ? 'text-[#F6465D]' : 'text-[#474D57]') : (val > 0 ? 'text-[#EAECEF]' : 'text-[#474D57]');
                                                 const monthIndex = MONTHS.indexOf(col.key.split('_')[1]);
                                                 return (
                                                     <td 
                                                         key={col.key} 
-                                                        className={`${cellClass} text-right font-bold font-mono ${color} border-b border-white/10 cursor-pointer hover:bg-white/5 transition-colors`}
+                                                        className={`${cellClass} text-right font-bold font-mono ${color} cursor-pointer hover:bg-white/5 transition-colors`}
                                                         onClick={() => onMonthClick(item.pageName, monthIndex)}
                                                     >
                                                         {val !== 0 ? `$${val.toLocaleString(undefined, {minimumFractionDigits: 2})}` : '-'}
                                                     </td>
                                                 );
                                             }
-                                            return <td key={col.key} className={`${cellClass} border-b border-white/10`}>-</td>;
+                                            return <td key={col.key} className={`${cellClass}`}>-</td>;
                                         })}
                                     </tr>
                                 );
                             })}
                         </tbody>
-                        <tfoot className="bg-[#0f172a] font-black border-t-2 border-white/20">
-                            <tr className="border-t-2 border-white/20">
+                        <tfoot className="bg-[#0B0E11] font-black border-t border-[#2B3139]">
+                            <tr>
                                 {columns.map((col, idx) => {
-                                    const cellClass = `px-4 py-5 whitespace-nowrap border-t-2 border-white/20 ${showBorders ? 'border-x border-white/10' : ''}`;
+                                    const cellClass = `px-4 py-5 whitespace-nowrap border-t border-[#2B3139] ${showBorders ? 'border-x border-[#2B3139]' : ''}`;
                                     let stickyClass = "";
                                     let stickyStyle: React.CSSProperties = {};
                                     if (isFrozen) {
-                                        if (col.key === 'index') { stickyClass = "sticky left-0 z-30 bg-[#0f172a]"; stickyStyle = { width: '45px', minWidth: '45px' }; }
-                                        else if (col.key === 'teamName') { stickyClass = "sticky left-[45px] z-30 bg-[#0f172a] border-r border-white/20 shadow-md"; stickyStyle = { minWidth: '130px' }; }
-                                        else if (col.key === 'logo') { stickyClass = `sticky z-30 bg-[#0f172a]`; stickyStyle = { left: '175px', width: '50px', minWidth: '50px' }; }
-                                        else if (col.key === 'pageName') { stickyClass = `sticky z-30 bg-[#0f172a] shadow-md`; stickyStyle = { left: '225px', minWidth: '160px' }; }
-                                        else if (col.key.includes('total')) { stickyClass = `sticky z-30 bg-[#0f172a] border-r border-white/20 shadow-lg`; stickyStyle = { left: '385px', width: '100px', minWidth: '100px' }; }
+                                        if (col.key === 'index') { stickyClass = "sticky left-0 z-30 bg-[#0B0E11]"; stickyStyle = { width: '45px', minWidth: '45px' }; }
+                                        else if (col.key === 'teamName') { stickyClass = "sticky left-[45px] z-30 bg-[#0B0E11] border-r border-[#2B3139]"; stickyStyle = { minWidth: '130px' }; }
+                                        else if (col.key === 'logo') { stickyClass = `sticky z-30 bg-[#0B0E11]`; stickyStyle = { left: '175px', width: '50px', minWidth: '50px' }; }
+                                        else if (col.key === 'pageName') { stickyClass = `sticky z-30 bg-[#0B0E11] shadow-lg`; stickyStyle = { left: '225px', minWidth: '160px' }; }
+                                        else if (col.key.includes('total')) { stickyClass = `sticky z-30 bg-[#0B0E11] border-r border-[#2B3139] shadow-xl`; stickyStyle = { left: '385px', width: '100px', minWidth: '100px' }; }
                                     }
-                                    if (idx === 0) return <td key={col.key} className={`${cellClass} uppercase tracking-widest text-white font-black ${stickyClass}`} style={stickyStyle} colSpan={4}>សរុបរួម (GRAND TOTAL)</td>;
+                                    if (idx === 0) return <td key={col.key} className={`${cellClass} uppercase tracking-[0.2em] text-[#848E9C] font-black ${stickyClass}`} style={stickyStyle} colSpan={4}>សរុបរួម (GRAND TOTAL)</td>;
                                     if (['teamName', 'logo', 'pageName'].includes(col.key)) return null;
-                                    if (col.key.includes('total')) return <td key={col.key} className={`${cellClass} text-right ${stickyClass} ${type === 'Revenue' ? 'text-blue-300 bg-blue-600/10' : 'text-green-300 bg-green-600/10'}`} style={stickyStyle}>${(type === 'Revenue' ? grandTotals.revenue : grandTotals.profit).toLocaleString(undefined, {minimumFractionDigits: 2})}</td>;
-                                    if (col.key.startsWith(prefix)) return <td key={col.key} className={`${cellClass} text-right text-gray-300 font-mono`}>${grandTotals[col.key].toLocaleString(undefined, {minimumFractionDigits: 2})}</td>;
+                                    if (col.key.includes('total')) return <td key={col.key} className={`${cellClass} text-right ${stickyClass} ${type === 'Revenue' ? 'text-[#FCD535] bg-[#FCD535]/10' : 'text-[#0ECB81] bg-[#0ECB81]/10'}`} style={stickyStyle}>${(type === 'Revenue' ? grandTotals.revenue : grandTotals.profit).toLocaleString(undefined, {minimumFractionDigits: 2})}</td>;
+                                    if (col.key.startsWith(prefix)) return <td key={col.key} className={`${cellClass} text-right text-[#848E9C] font-mono`}>${grandTotals[col.key].toLocaleString(undefined, {minimumFractionDigits: 2})}</td>;
                                     return <td key={col.key} className={cellClass}></td>;
                                 })}
                             </tr>
@@ -243,16 +248,16 @@ const SalesByPageDesktop: React.FC<SalesByPageDesktopProps> = ({
                     </table>
                 </div>
 
-                <div className="mt-4 flex flex-wrap items-center justify-between gap-4 px-2">
+                <div className="mt-6 flex flex-wrap items-center justify-between gap-4">
                     <div className="flex items-center gap-6">
                         <div className="flex items-center gap-2">
-                            <span className="text-[10px] font-black text-gray-500 uppercase tracking-widest">ចំនួន Page សរុប:</span>
+                            <span className="text-[10px] font-black text-[#848E9C] uppercase tracking-widest">PAGES COUNT:</span>
                             <span className="text-sm font-black text-white">{data.length}</span>
                         </div>
                     </div>
-                    <div className="flex items-center gap-3 bg-white/5 py-2 px-4 rounded-xl border border-white/5 shadow-inner">
-                        <span className="text-[10px] font-black text-blue-400 uppercase tracking-widest">មធ្យមភាគ/{type === 'Revenue' ? 'ចំណូល' : 'ចំណេញ'}:</span>
-                        <span className="text-sm font-black text-white">
+                    <div className="flex items-center gap-4 bg-[#0B0E11] py-2 px-5 rounded-xl border border-[#2B3139]">
+                        <span className="text-[10px] font-black text-[#848E9C] uppercase tracking-widest">AVG/{type === 'Revenue' ? 'REV' : 'PROFIT'}:</span>
+                        <span className={`text-sm font-black ${type === 'Revenue' ? 'text-[#FCD535]' : 'text-[#0ECB81]'}`}>
                             ${(grandTotals[type.toLowerCase() === 'revenue' ? 'revenue' : 'profit'] / (data.length || 1)).toLocaleString(undefined, {maximumFractionDigits: 2})}
                         </span>
                     </div>
@@ -262,10 +267,10 @@ const SalesByPageDesktop: React.FC<SalesByPageDesktopProps> = ({
     };
 
     return (
-        <>
+        <div className="animate-fade-in">
             {renderTable('Revenue', 'rev')}
             {renderTable('Profit', 'prof')}
-        </>
+        </div>
     );
 };
 

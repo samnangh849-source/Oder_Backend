@@ -5,17 +5,21 @@ import { WEB_APP_URL } from './constants';
 import { useUrlState } from './hooks/useUrlState';
 import { CacheService, CACHE_KEYS } from './services/cacheService';
 import { useOrderNotifications } from './hooks/useOrderNotifications';
-import LoginPage from './pages/LoginPage';
-import UserJourney from './pages/UserJourney';
-import AdminDashboard from './pages/AdminDashboard';
-import CreateOrderPage from './pages/CreateOrderPage';
-import FulfillmentPage from './pages/FulfillmentPage';
-import RoleSelectionPage from './pages/RoleSelectionPage';
-import SeriesPlayerPage from './pages/SeriesPlayerPage';
-import LongFilmPlayerPage from './pages/LongFilmPlayerPage';
-import ShortFilmPlayerPage from './pages/ShortFilmPlayerPage';
-import CambodiaMapPage from './pages/CambodiaMapPage';
-import PrintLabelPage from './pages/PrintLabelPage';
+
+// --- Lazy Load Pages for Better Performance ---
+const LoginPage = React.lazy(() => import('./pages/LoginPage'));
+const UserJourney = React.lazy(() => import('./pages/UserJourney'));
+const AdminDashboard = React.lazy(() => import('./pages/AdminDashboard'));
+const CreateOrderPage = React.lazy(() => import('./pages/CreateOrderPage'));
+const FulfillmentPage = React.lazy(() => import('./pages/FulfillmentPage'));
+const RoleSelectionPage = React.lazy(() => import('./pages/RoleSelectionPage'));
+const SeriesPlayerPage = React.lazy(() => import('./pages/SeriesPlayerPage'));
+const LongFilmPlayerPage = React.lazy(() => import('./pages/LongFilmPlayerPage'));
+const ShortFilmPlayerPage = React.lazy(() => import('./pages/ShortFilmPlayerPage'));
+const CambodiaMapPage = React.lazy(() => import('./pages/CambodiaMapPage'));
+const PrintLabelPage = React.lazy(() => import('./pages/PrintLabelPage'));
+const PromotionDashboard = React.lazy(() => import('./pages/PromotionDashboard'));
+
 import OrderMetadataView from './components/orders/OrderMetadataView';
 import NetflixEntertainment from './components/admin/netflix/NetflixEntertainment';
 import Header from './components/common/Header';
@@ -33,8 +37,6 @@ import { UserProvider, useUser } from './context/UserContext';
 import { OrderProvider, useOrder } from './context/OrderContext';
 import { localDbService } from './services/localDbService';
 import { translations } from './translations';
-
-import PromotionDashboard from './pages/PromotionDashboard';
 
 const OrderNotificationTrigger: React.FC = () => {
     useOrderNotifications();

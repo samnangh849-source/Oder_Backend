@@ -5,7 +5,7 @@ import { AppContext } from '../../context/AppContext';
 import { translations } from '../../translations';
 import { IncentiveProject } from '../../types';
 import { WEB_APP_URL } from '../../constants';
-import { X, Trash2, Save, Plus, Terminal, Settings, Box, Database, Palette, Activity } from 'lucide-react';
+import { X, Trash2, Save, Plus, Terminal, Settings, Box, Database, Palette, Activity, Shield, Cpu, Zap } from 'lucide-react';
 
 interface CreateProjectModalProps {
     isOpen: boolean;
@@ -127,111 +127,164 @@ const CreateProjectModal: React.FC<CreateProjectModalProps> = ({ isOpen, onClose
     if (!isOpen) return null;
 
     return (
-        <Modal isOpen={isOpen} onClose={onClose} maxWidth="max-w-lg">
-            <div className="incentive-surface bg-[#121212] border border-[#1A1A1A] shadow-2xl overflow-hidden text-[#EAECEF] font-sans rounded">
+        <Modal isOpen={isOpen} onClose={onClose} maxWidth="max-w-xl">
+            <div className="incentive-surface bg-[#050505] border border-white/10 shadow-[0_30px_60px_rgba(0,0,0,0.6)] overflow-hidden text-[#EAECEF] font-sans rounded-[40px] relative">
+                {/* Visual Accent */}
+                <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-transparent via-primary to-transparent opacity-50"></div>
+                <div className="absolute -top-24 -right-24 w-48 h-48 rounded-full blur-[100px] opacity-20" style={{ backgroundColor: colorCode }}></div>
+
                 {/* Modal Header */}
-                <div className="flex justify-between items-center px-5 py-4 bg-[#080808] border-b border-[#1A1A1A]">
-                    <div className="flex items-center gap-3">
-                        <div className="w-8 h-8 rounded bg-[#050505] border border-[#1A1A1A] flex items-center justify-center">
-                            <Terminal className="w-4 h-4 text-[#F0B90B]" />
+                <div className="flex justify-between items-center px-8 py-6 bg-white/[0.02] border-b border-white/5 backdrop-blur-xl">
+                    <div className="flex items-center gap-5">
+                        <div className="w-12 h-12 rounded-2xl bg-black border border-white/10 flex items-center justify-center shadow-lg relative overflow-hidden group">
+                            <div className="absolute inset-0 bg-primary/10 opacity-0 group-hover:opacity-100 transition-opacity"></div>
+                            <Terminal className="w-5 h-5 text-primary relative z-10" />
                         </div>
                         <div>
-                            <h2 className="text-xs font-black text-[#EAECEF] uppercase tracking-[0.2em]">
+                            <h2 className="text-sm font-black text-white uppercase tracking-[0.3em] leading-none mb-1.5">
                                 {initialData ? "Config_Engine_Node" : "Initialize_New_Node"}
                             </h2>
-                            <p className="text-[8px] font-mono text-[#707A8A] uppercase tracking-widest mt-0.5">Station Protocol // ACC_v2.5</p>
+                            <div className="flex items-center gap-2">
+                                <span className="text-[9px] font-mono text-white/30 uppercase tracking-[0.2em]">Protocol // Station_ACC_v2.5</span>
+                                {initialData && (
+                                    <>
+                                        <div className="w-1 h-1 bg-white/10 rounded-full"></div>
+                                        <span className="text-[9px] font-mono text-primary font-bold uppercase tracking-widest">ID #{String(initialData.id).padStart(4, '0')}</span>
+                                    </>
+                                )}
+                            </div>
                         </div>
                     </div>
-                    <button onClick={onClose} className="p-1.5 hover:bg-[#2B3139] rounded transition-all text-[#707A8A] hover:text-[#EAECEF] border border-transparent hover:border-[#1A1A1A]">
-                        <X className="w-4 h-4" />
+                    <button 
+                        onClick={onClose} 
+                        className="w-10 h-10 flex items-center justify-center bg-white/5 hover:bg-red-500/10 text-white/30 hover:text-red-500 transition-all rounded-xl border border-white/5 group active:scale-90"
+                    >
+                        <X className="w-5 h-5 group-hover:rotate-90 transition-transform duration-300" />
                     </button>
                 </div>
 
-                <form onSubmit={handleSubmit} className="p-5 space-y-6">
+                <form onSubmit={handleSubmit} className="p-8 space-y-8">
                     {/* Project Name Section */}
-                    <div className="space-y-2">
-                        <div className="flex items-center gap-2">
-                            <Box className="w-3 h-3 text-[#707A8A]" />
-                            <label className="text-[9px] font-black text-[#707A8A] uppercase tracking-[0.2em]">{t.project_name}</label>
+                    <div className="space-y-3">
+                        <div className="flex items-center justify-between">
+                            <div className="flex items-center gap-2.5">
+                                <Box className="w-3.5 h-3.5 text-white/40" />
+                                <label className="text-[10px] font-black text-white/40 uppercase tracking-[0.2em]">{t.project_name}</label>
+                            </div>
+                            {projectName && (
+                                <span className="text-[8px] font-mono text-emerald-500 font-black uppercase tracking-widest bg-emerald-500/10 px-2 py-0.5 rounded-full border border-emerald-500/20">Name_Validated</span>
+                            )}
                         </div>
-                        <input 
-                            type="text" 
-                            value={projectName}
-                            onChange={e => setProjectName(e.target.value)}
-                            className="w-full h-10 bg-[#050505] border border-[#1A1A1A] rounded px-4 text-[11px] font-bold text-[#EAECEF] focus:border-[#F0B90B]/50 outline-none transition-all uppercase tracking-widest"
-                            placeholder="STATION_IDENTITY_KEY"
-                            required
-                        />
+                        <div className="relative group">
+                            <input 
+                                type="text" 
+                                value={projectName}
+                                onChange={e => setProjectName(e.target.value)}
+                                className="w-full h-14 bg-white/[0.03] border border-white/10 rounded-2xl px-6 text-sm font-black text-white placeholder:text-white/10 focus:border-primary/50 focus:bg-white/[0.05] outline-none transition-all italic tracking-tight"
+                                placeholder="STATION_CORE_PROJECT"
+                                required
+                            />
+                            <div className="absolute right-4 top-1/2 -translate-y-1/2 opacity-20 group-focus-within:opacity-100 transition-opacity">
+                                <Cpu className="w-4 h-4 text-primary" />
+                            </div>
+                        </div>
                     </div>
 
                     {/* Tech Config Grid */}
-                    <div className="grid grid-cols-2 gap-4">
-                        <div className="space-y-2">
-                            <div className="flex items-center gap-2">
-                                <Palette className="w-3 h-3 text-[#707A8A]" />
-                                <label className="text-[9px] font-black text-[#707A8A] uppercase tracking-[0.2em]">{t.color_theme}</label>
+                    <div className="grid grid-cols-2 gap-6">
+                        <div className="space-y-3">
+                            <div className="flex items-center gap-2.5">
+                                <Palette className="w-3.5 h-3.5 text-white/40" />
+                                <label className="text-[10px] font-black text-white/40 uppercase tracking-[0.2em]">{t.color_theme}</label>
                             </div>
-                            <div className="flex items-center gap-3 bg-[#050505] p-2 rounded border border-[#1A1A1A]">
-                                <input 
-                                    type="color" 
-                                    value={colorCode}
-                                    onChange={e => setColorCode(e.target.value)}
-                                    className="w-6 h-6 rounded cursor-pointer border-0 bg-transparent p-0 overflow-hidden"
-                                />
-                                <span className="text-[10px] font-mono text-[#EAECEF] font-bold uppercase">{colorCode}</span>
+                            <div className="flex items-center gap-4 bg-white/[0.03] p-3 rounded-2xl border border-white/10 hover:border-white/20 transition-all group">
+                                <div className="relative">
+                                    <input 
+                                        type="color" 
+                                        value={colorCode}
+                                        onChange={e => setColorCode(e.target.value)}
+                                        className="w-10 h-10 rounded-xl cursor-pointer border-0 bg-transparent p-0 overflow-hidden relative z-10"
+                                    />
+                                    <div className="absolute inset-0 rounded-xl blur-md opacity-40 group-hover:opacity-60 transition-opacity" style={{ backgroundColor: colorCode }}></div>
+                                </div>
+                                <div className="flex flex-col">
+                                    <span className="text-[11px] font-mono text-white font-black uppercase tracking-widest">{colorCode}</span>
+                                    <span className="text-[8px] font-black text-white/20 uppercase tracking-widest">Hex_Protocol</span>
+                                </div>
                             </div>
                         </div>
-                        <div className="space-y-2">
-                            <div className="flex items-center gap-2">
-                                <Activity className="w-3 h-3 text-[#707A8A]" />
-                                <label className="text-[9px] font-black text-[#707A8A] uppercase tracking-[0.2em]">{t.status}</label>
+                        <div className="space-y-3">
+                            <div className="flex items-center gap-2.5">
+                                <Activity className="w-3.5 h-3.5 text-white/40" />
+                                <label className="text-[10px] font-black text-white/40 uppercase tracking-[0.2em]">{t.status}</label>
                             </div>
-                            <select 
-                                value={status}
-                                onChange={e => setStatus(e.target.value as any)}
-                                className="w-full h-10 bg-[#050505] border border-[#1A1A1A] rounded px-3 text-[10px] font-bold text-[#EAECEF] focus:border-[#F0B90B]/50 outline-none cursor-pointer"
-                            >
-                                <option value="Draft">PROTOCOL_DRAFT</option>
-                                <option value="Active">LIVE_NODE</option>
-                                <option value="Disable">OFFLINE_NODE</option>
-                            </select>
+                            <div className="relative">
+                                <select 
+                                    value={status}
+                                    onChange={e => setStatus(e.target.value as any)}
+                                    className="w-full h-[54px] bg-white/[0.03] border border-white/10 rounded-2xl px-5 text-[11px] font-black text-white focus:border-primary/50 outline-none cursor-pointer appearance-none uppercase tracking-widest"
+                                >
+                                    <option value="Draft">PROTOCOL_DRAFT</option>
+                                    <option value="Active">LIVE_NODE</option>
+                                    <option value="Disable">OFFLINE_NODE</option>
+                                </select>
+                                <div className="absolute right-5 top-1/2 -translate-y-1/2 pointer-events-none">
+                                    <div className={`w-2 h-2 rounded-full ${status === 'Active' ? 'bg-emerald-500 animate-pulse shadow-[0_0_10px_rgba(16,185,129,0.5)]' : status === 'Draft' ? 'bg-primary' : 'bg-red-500'}`}></div>
+                                </div>
+                            </div>
                         </div>
                     </div>
 
-                    {/* Data Source & Rules */}
-                    <div className="bg-[#080808] rounded border border-[#1A1A1A] p-4 space-y-5">
-                        <div className="flex items-center justify-between">
-                            <div className="flex items-center gap-3">
-                                <Settings className="w-4 h-4 text-[#F0B90B]/50" />
+                    {/* Data Source & Rules - Premium Card */}
+                    <div className="bg-white/[0.02] rounded-[32px] border border-white/5 p-6 space-y-6 relative overflow-hidden group/card">
+                        <div className="absolute top-0 right-0 p-6 opacity-[0.02] group-hover/card:opacity-[0.05] transition-opacity">
+                            <Shield className="w-32 h-32 text-white" />
+                        </div>
+
+                        <div className="flex items-center justify-between relative z-10">
+                            <div className="flex items-center gap-4">
+                                <div className="w-10 h-10 rounded-xl bg-black border border-white/10 flex items-center justify-center shadow-inner">
+                                    <Settings className="w-4 h-4 text-primary/60" />
+                                </div>
                                 <div>
-                                    <label className="text-[10px] font-black text-[#EAECEF] uppercase tracking-widest block">{t.require_period}</label>
-                                    <span className="text-[8px] font-bold text-[#707A8A] uppercase tracking-wider block mt-0.5">Mandatory Interval Control</span>
+                                    <label className="text-[11px] font-black text-white uppercase tracking-[0.15em] block">{t.require_period}</label>
+                                    <span className="text-[8px] font-black text-white/20 uppercase tracking-widest block mt-0.5 italic">Mandatory_Interval_Control</span>
                                 </div>
                             </div>
-                            <label className="relative inline-flex items-center cursor-pointer">
+                            <label className="relative inline-flex items-center cursor-pointer active:scale-95 transition-transform">
                                 <input type="checkbox" checked={requirePeriod} onChange={e => setRequirePeriod(e.target.checked)} className="sr-only peer" />
-                                <div className="w-10 h-5 bg-[#1A1A1A] border border-[#2B3139] peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full after:content-[''] after:absolute after:top-[3px] after:left-[3px] after:bg-[#707A8A] after:rounded-full after:h-3.5 after:w-4 after:transition-all peer-checked:bg-[#0ECB81]/20 peer-checked:border-[#0ECB81]/40 peer-checked:after:bg-[#0ECB81]"></div>
+                                <div className="w-12 h-6 bg-white/5 border border-white/10 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full after:content-[''] after:absolute after:top-[4px] after:left-[4px] after:bg-white/20 after:rounded-full after:h-4 after:w-5 after:transition-all peer-checked:bg-emerald-500/20 peer-checked:border-emerald-500/40 peer-checked:after:bg-emerald-500 peer-checked:after:shadow-[0_0_10px_rgba(16,185,129,0.6)]"></div>
                             </label>
                         </div>
 
-                        <div className="pt-4 border-t border-[#1A1A1A]">
-                            <div className="flex items-center gap-2 mb-3">
-                                <Database className="w-3 h-3 text-[#707A8A]" />
-                                <label className="text-[9px] font-black text-[#707A8A] uppercase tracking-[0.2em]">{t.data_source}</label>
+                        <div className="pt-6 border-t border-white/5 relative z-10">
+                            <div className="flex items-center gap-2.5 mb-4">
+                                <Database className="w-3.5 h-3.5 text-white/40" />
+                                <label className="text-[10px] font-black text-white/40 uppercase tracking-[0.2em]">{t.data_source}</label>
                             </div>
-                            <div className="flex gap-2">
+                            <div className="flex gap-3">
                                 <button
                                     type="button"
                                     onClick={() => setDataSource('system')}
-                                    className={`flex-1 h-9 rounded text-[9px] font-black uppercase tracking-widest border transition-all ${dataSource === 'system' ? 'bg-[#F0B90B] text-black border-[#F0B90B]' : 'bg-[#050505] border-[#1A1A1A] text-[#707A8A] hover:text-[#EAECEF] hover:border-[#2B3139]'}`}
+                                    className={`flex-1 h-12 rounded-2xl text-[10px] font-black uppercase tracking-[0.2em] border transition-all duration-300 flex items-center justify-center gap-2 ${
+                                        dataSource === 'system' 
+                                            ? 'bg-primary text-black border-primary shadow-[0_0_20px_rgba(252,213,53,0.3)]' 
+                                            : 'bg-black/40 border-white/5 text-white/30 hover:text-white hover:border-white/20'
+                                    }`}
                                 >
+                                    <Cpu className={`w-3.5 h-3.5 ${dataSource === 'system' ? 'text-black' : 'text-white/20'}`} />
                                     SYSTEM_CORE
                                 </button>
                                 <button
                                     type="button"
                                     onClick={() => setDataSource('manual')}
-                                    className={`flex-1 h-9 rounded text-[9px] font-black uppercase tracking-widest border transition-all ${dataSource === 'manual' ? 'bg-[#F0B90B] text-black border-[#F0B90B]' : 'bg-[#050505] border-[#1A1A1A] text-[#707A8A] hover:text-[#EAECEF] hover:border-[#2B3139]'}`}
+                                    className={`flex-1 h-12 rounded-2xl text-[10px] font-black uppercase tracking-[0.2em] border transition-all duration-300 flex items-center justify-center gap-2 ${
+                                        dataSource === 'manual' 
+                                            ? 'bg-primary text-black border-primary shadow-[0_0_20px_rgba(252,213,53,0.3)]' 
+                                            : 'bg-black/40 border-white/5 text-white/30 hover:text-white hover:border-white/20'
+                                    }`}
                                 >
+                                    <Zap className={`w-3.5 h-3.5 ${dataSource === 'manual' ? 'text-black' : 'text-white/20'}`} />
                                     MANUAL_OVERRIDE
                                 </button>
                             </div>
@@ -239,23 +292,29 @@ const CreateProjectModal: React.FC<CreateProjectModalProps> = ({ isOpen, onClose
                     </div>
 
                     {/* Form Actions */}
-                    <div className="flex flex-col gap-2 pt-2">
+                    <div className="flex flex-col gap-3 pt-4">
                         <button 
                             type="submit"
                             disabled={!projectName.trim() || isSaving}
-                            className="w-full h-11 bg-[#F0B90B] hover:bg-[#D4A50A] disabled:opacity-30 disabled:grayscale text-black font-black rounded text-[10px] uppercase tracking-[0.2em] transition-all flex items-center justify-center gap-3 active:scale-[0.98]"
+                            className="w-full h-14 bg-primary hover:bg-primary/90 disabled:opacity-30 disabled:grayscale text-black font-black rounded-2xl text-[11px] uppercase tracking-[0.3em] transition-all flex items-center justify-center gap-3 active:scale-[0.98] shadow-2xl shadow-primary/20 group"
                         >
-                            {initialData ? <Save className="w-4 h-4 stroke-[3]" /> : <Plus className="w-4 h-4 stroke-[3]" />}
-                            {isSaving ? "SAVING..." : initialData ? "VERIFY_&_DEPLOY" : "INITIALIZE_PROTOCOL"}
+                            {isSaving ? (
+                                <RefreshCw className="w-5 h-5 animate-spin" />
+                            ) : (
+                                <>
+                                    {initialData ? <Save className="w-5 h-5 stroke-[2.5] group-hover:scale-110 transition-transform" /> : <Plus className="w-5 h-5 stroke-[2.5] group-hover:scale-110 transition-transform" />}
+                                    {initialData ? "VERIFY_&_DEPLOY" : "INITIALIZE_PROTOCOL"}
+                                </>
+                            )}
                         </button>
                         
                         {initialData && (
                             <button 
                                 type="button"
                                 onClick={handleDelete}
-                                className="w-full h-9 text-[#F6465D] hover:bg-[#F6465D]/10 border border-transparent hover:border-[#F6465D]/20 rounded text-[9px] font-black uppercase tracking-widest transition-all flex items-center justify-center gap-2"
+                                className="w-full h-12 text-red-500/60 hover:text-red-500 hover:bg-red-500/10 border border-transparent hover:border-red-500/20 rounded-2xl text-[10px] font-black uppercase tracking-[0.2em] transition-all flex items-center justify-center gap-3 active:scale-95 group"
                             >
-                                <Trash2 className="w-3.5 h-3.5" />
+                                <Trash2 className="w-4 h-4 group-hover:shake" />
                                 TERMINATE_NODE
                             </button>
                         )}
@@ -265,5 +324,26 @@ const CreateProjectModal: React.FC<CreateProjectModalProps> = ({ isOpen, onClose
         </Modal>
     );
 };
+
+// Add helper component for RefreshCw which was missing in imports but added in logic
+const RefreshCw = (props: any) => (
+    <svg 
+        {...props}
+        xmlns="http://www.w3.org/2000/svg" 
+        width="24" 
+        height="24" 
+        viewBox="0 0 24 24" 
+        fill="none" 
+        stroke="currentColor" 
+        strokeWidth="2" 
+        strokeLinecap="round" 
+        strokeLinejoin="round"
+    >
+        <path d="M3 12a9 9 0 0 1 9-9 9.75 9.75 0 0 1 6.74 2.74L21 8" />
+        <path d="M21 3v5h-5" />
+        <path d="M21 12a9 9 0 0 1-9 9 9.75 9.75 0 0 1-6.74-2.74L3 16" />
+        <path d="M3 21v-5h5" />
+    </svg>
+);
 
 export default CreateProjectModal;

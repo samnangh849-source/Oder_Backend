@@ -43,12 +43,12 @@ export const compressImage = async (
                 ctx.drawImage(img, 0, 0, width, height);
 
                 let currentQuality = quality;
-                let blob = await new Promise<Blob | null>(res => canvas.toBlob(res, 'image/jpeg', currentQuality));
+                let blob = await new Promise<Blob | null>(res => canvas.toBlob(res, 'image/webp', currentQuality));
 
                 // Iterative compression if still too large (max 2 passes for speed)
                 if (blob && blob.size > targetSize) {
                     currentQuality *= 0.7;
-                    blob = await new Promise<Blob | null>(res => canvas.toBlob(res, 'image/jpeg', currentQuality));
+                    blob = await new Promise<Blob | null>(res => canvas.toBlob(res, 'image/webp', currentQuality));
                 }
 
                 if (blob) resolve(blob);

@@ -6,7 +6,7 @@ import { AppContext } from '../context/AppContext';
 import { translations } from '../translations';
 import {
     TrendingUp, Plus, Copy, Settings2,
-    ChevronLeft, Search,
+    ChevronLeft, Search, Zap, Terminal, Cpu,
     ArrowUpDown, AlertCircle, RefreshCw, Gift,
     ShieldCheck, Target, Activity, ExternalLink, Layers
 } from 'lucide-react';
@@ -240,63 +240,93 @@ const IncentivesDashboard: React.FC<IncentivesDashboardProps> = ({ onOpenProject
                         </button>
                     </div>
                 ) : (
-                    <section className="grid grid-cols-1 md:grid-cols-2 2xl:grid-cols-3 gap-4">
+                    <section className="grid grid-cols-1 md:grid-cols-2 2xl:grid-cols-3 gap-6">
                         {filteredAndSortedProjects.map((project) => (
                             <div 
                                 key={project.id}
-                                className="bg-[#121212] border border-[#1A1A1A] hover:border-[#2B3139] rounded transition-all flex flex-col group overflow-hidden"
+                                className="bg-[#121212] border border-white/5 hover:border-white/10 rounded-[32px] transition-all duration-500 flex flex-col group overflow-hidden relative shadow-2xl hover:shadow-[0_20px_50px_rgba(0,0,0,0.4)]"
                             >
-                                <div className="p-4 sm:p-5 flex flex-col gap-5 border-b border-[#1A1A1A]">
-                                    <div className="flex justify-between items-start">
-                                        <div className="flex items-center gap-3 min-w-0">
+                                {/* Decorative background element */}
+                                <div 
+                                    className="absolute -top-24 -right-24 w-48 h-48 rounded-full blur-[80px] opacity-[0.03] group-hover:opacity-[0.08] transition-all duration-700"
+                                    style={{ backgroundColor: project.colorCode || '#F0B90B' }}
+                                ></div>
+
+                                <div className="p-6 sm:p-7 flex flex-col gap-6 relative z-10">
+                                    <div className="flex justify-between items-start gap-4">
+                                        <div className="flex items-center gap-4 min-w-0">
                                             <div 
-                                                className="w-11 h-11 rounded bg-[#050505] border border-[#1A1A1A] flex items-center justify-center transition-all group-hover:border-[#F0B90B]/30 shrink-0"
+                                                className="w-14 h-14 rounded-2xl bg-black border border-white/10 flex items-center justify-center transition-all duration-500 group-hover:scale-110 shrink-0 relative overflow-hidden"
+                                                style={{ boxShadow: `0 0 20px ${project.colorCode || '#F0B90B'}15` }}
                                             >
-                                                <TrendingUp className="w-5 h-5" style={{ color: project.colorCode || '#F0B90B' }} />
+                                                {/* Inner Glow */}
+                                                <div 
+                                                    className="absolute inset-0 opacity-10 blur-xl"
+                                                    style={{ backgroundColor: project.colorCode || '#F0B90B' }}
+                                                ></div>
+                                                <Zap className="w-7 h-7 relative z-10" style={{ color: project.colorCode || '#F0B90B' }} />
                                             </div>
                                             <div className="min-w-0">
-                                                <h4 className="text-sm font-bold text-[#EAECEF] truncate">{project.projectName}</h4>
-                                                <span className="text-[11px] font-mono text-[#707A8A]">ID {String(project.id).padStart(4, '0')}</span>
+                                                <div className="flex items-center gap-2 mb-1">
+                                                    <span className="text-[10px] font-black text-white/20 uppercase tracking-[0.2em]">Protocol_ID</span>
+                                                    <span className="text-[10px] font-mono font-bold text-white/40">#{String(project.id).padStart(4, '0')}</span>
+                                                </div>
+                                                <h4 className="text-xl font-black text-white truncate italic tracking-tight leading-none group-hover:text-primary transition-colors">
+                                                    {project.projectName}
+                                                </h4>
                                             </div>
                                         </div>
-                                        <div className={`px-2.5 py-1 rounded text-[10px] font-bold border shrink-0 ${getStatusClasses(project.status)}`}>
-                                            {project.status}
+                                        <div className={`px-3 py-1 rounded-full text-[9px] font-black uppercase tracking-widest border transition-all duration-500 ${
+                                            project.status === 'Active' 
+                                                ? 'bg-[#0ECB81]/10 text-[#0ECB81] border-[#0ECB81]/20 group-hover:bg-[#0ECB81]/20' 
+                                                : 'bg-[#F0B90B]/10 text-[#F0B90B] border-[#F0B90B]/20 group-hover:bg-[#F0B90B]/20'
+                                        }`}>
+                                            <span className="flex items-center gap-1.5">
+                                                <div className={`w-1.5 h-1.5 rounded-full animate-pulse ${project.status === 'Active' ? 'bg-[#0ECB81]' : 'bg-[#F0B90B]'}`}></div>
+                                                {project.status === 'Active' ? 'PROTOCOL_ACTIVE' : 'SYSTEM_DRAFT'}
+                                            </span>
                                         </div>
                                     </div>
 
-                                    <div className="grid grid-cols-2 gap-2">
-                                        <div className="bg-[#050505] p-2 rounded border border-[#1A1A1A]">
-                                            <p className="text-[11px] font-semibold text-[#707A8A] mb-1">Calculators</p>
-                                            <p className="text-lg font-mono font-bold text-[#EAECEF]">{project.calculators?.length || 0}</p>
+                                    <div className="grid grid-cols-2 gap-3">
+                                        <div className="bg-white/[0.03] p-4 rounded-2xl border border-white/5 backdrop-blur-sm group-hover:bg-white/[0.05] transition-all">
+                                            <div className="flex items-center gap-2 mb-2">
+                                                <Cpu className="w-3 h-3 text-white/20" />
+                                                <p className="text-[10px] font-black text-white/30 uppercase tracking-widest leading-none">Modules</p>
+                                            </div>
+                                            <p className="text-2xl font-mono font-black text-white">{project.calculators?.length || 0}</p>
                                         </div>
-                                        <div className="bg-[#050505] p-2 rounded border border-[#1A1A1A]">
-                                            <p className="text-[11px] font-semibold text-[#707A8A] mb-1">Created</p>
-                                            <p className="text-xs font-mono font-bold text-[#EAECEF] truncate">{formatProjectDate(project.createdAt)}</p>
+                                        <div className="bg-white/[0.03] p-4 rounded-2xl border border-white/5 backdrop-blur-sm group-hover:bg-white/[0.05] transition-all">
+                                            <div className="flex items-center gap-2 mb-2">
+                                                <Activity className="w-3 h-3 text-white/20" />
+                                                <p className="text-[10px] font-black text-white/30 uppercase tracking-widest leading-none">Initialized</p>
+                                            </div>
+                                            <p className="text-xs font-mono font-bold text-white/60 truncate mt-1">{formatProjectDate(project.createdAt)}</p>
                                         </div>
                                     </div>
                                 </div>
 
-                                <div className="p-3 flex gap-2">
+                                <div className="p-4 bg-white/[0.02] border-t border-white/5 flex gap-3 relative z-10">
                                     <button 
                                         onClick={() => onOpenProject(String(project.id), 'execute')}
-                                        className="flex-1 h-10 bg-[#2B3139] hover:bg-[#F0B90B] text-[#EAECEF] hover:text-black rounded text-xs font-bold transition-all flex items-center justify-center gap-2"
+                                        className="flex-grow h-12 bg-white/5 hover:bg-primary text-white/80 hover:text-black rounded-2xl text-[11px] font-black uppercase tracking-widest transition-all duration-300 flex items-center justify-center gap-3 border border-white/10 hover:border-primary shadow-lg active:scale-95"
                                     >
-                                        <ExternalLink className="w-3.5 h-3.5" />
-                                        Run payout
+                                        <Terminal className="w-4 h-4" />
+                                        EXECUTE_PAYOUT
                                     </button>
                                     <button 
                                         onClick={() => onOpenProject(String(project.id), 'manage')}
-                                        className="w-10 h-10 bg-[#1A1A1A] hover:bg-[#2B3139] text-[#707A8A] hover:text-[#EAECEF] rounded transition-all border border-[#1A1A1A] flex items-center justify-center"
-                                        title="Manage project"
+                                        className="w-12 h-12 bg-white/5 hover:bg-white/10 text-white/40 hover:text-white rounded-2xl transition-all duration-300 border border-white/10 flex items-center justify-center group/btn active:scale-90"
+                                        title="System Configuration"
                                     >
-                                        <Settings2 className="w-4 h-4" />
+                                        <Settings2 className="w-5 h-5 group-hover/btn:rotate-90 transition-transform duration-500" />
                                     </button>
                                     <button 
                                         onClick={() => handleDuplicate(String(project.id))}
-                                        className="w-10 h-10 bg-[#1A1A1A] hover:bg-[#2B3139] text-[#707A8A] hover:text-[#EAECEF] rounded transition-all border border-[#1A1A1A] flex items-center justify-center"
-                                        title="Duplicate project"
+                                        className="w-12 h-12 bg-white/5 hover:bg-white/10 text-white/40 hover:text-white rounded-2xl transition-all duration-300 border border-white/10 flex items-center justify-center group/btn active:scale-90"
+                                        title="Duplicate Logic"
                                     >
-                                        <Copy className="w-4 h-4" />
+                                        <Copy className="w-5 h-5 group-hover/btn:scale-110 transition-transform" />
                                     </button>
                                 </div>
                             </div>

@@ -10,7 +10,7 @@ import {
     Copy, Edit3, Trash2, Calendar, Database,
     Activity, AlertCircle, RefreshCw, TrendingUp,
     Target, Layers, ArrowRight,
-    Terminal, Box
+    Terminal, Box, Cpu, Plus
 } from 'lucide-react';
 
 interface IncentiveProjectDetailsProps {
@@ -23,12 +23,6 @@ const formatDate = (value?: string) => {
     const date = new Date(value);
     if (Number.isNaN(date.getTime())) return 'Not set';
     return date.toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' });
-};
-
-const statusBadgeClass = (status?: string) => {
-    if (status === 'Active') return 'bg-[#0ECB81]/10 border-[#0ECB81]/25 text-[#0ECB81]';
-    if (status === 'Draft') return 'bg-[#F0B90B]/10 border-[#F0B90B]/25 text-[#F0B90B]';
-    return 'bg-[#1A1A1A] border-[#2B3139] text-[#B7BDC6]';
 };
 
 const IncentiveProjectDetails: React.FC<IncentiveProjectDetailsProps> = ({ projectId, onBack }) => {
@@ -67,16 +61,6 @@ const IncentiveProjectDetails: React.FC<IncentiveProjectDetailsProps> = ({ proje
         loadProject();
     }, [loadProject]);
 
-    const handleUpdateStatus = async (newStatus: 'Active' | 'Disable' | 'Draft') => {
-        if (!project || !project.id) return;
-        try {
-            await updateProject(project.id, { status: newStatus });
-            loadProject();
-        } catch (err) {
-            alert('Failed to update status');
-        }
-    };
-
     const handleDeleteCalc = async (calcId: string | number | undefined) => {
         if (calcId === undefined) return;
         if (window.confirm('តើអ្នកពិតជាចង់លុប Formula នេះមែនទេ?')) {
@@ -107,7 +91,7 @@ const IncentiveProjectDetails: React.FC<IncentiveProjectDetailsProps> = ({ proje
 
     const openBuilderEdit = (calc: IncentiveCalculator) => {
         setEditingCalculator(calc);
-        setCalculatorType(calc.type);
+        setCalculatorType(calc.type as any);
         setIsBuilderOpen(true);
     };
 
@@ -155,228 +139,259 @@ const IncentiveProjectDetails: React.FC<IncentiveProjectDetailsProps> = ({ proje
 
     return (
         <div className="incentive-surface w-full h-screen bg-[#050505] text-[#EAECEF] font-sans selection:bg-[#F0B90B]/30 flex flex-col overflow-hidden">
-            <header className="bg-[#121212] border-b border-[#1A1A1A] px-4 sm:px-6 py-3 shrink-0">
-                <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4">
-                    <div className="flex items-center gap-4 min-w-0">
-                    <button 
-                        onClick={onBack} 
-                            className="w-9 h-9 flex items-center justify-center hover:bg-[#2B3139] rounded transition-all text-[#B7BDC6] hover:text-[#F0B90B] shrink-0"
+            <header className="bg-[#121212] border-b border-white/5 px-6 py-4 shrink-0 relative overflow-hidden group/header">
+                {/* Header Background Accent */}
+                <div 
+                    className="absolute -top-16 -left-16 w-32 h-32 rounded-full blur-[60px] opacity-[0.05] group-hover/header:opacity-[0.1] transition-all duration-700"
+                    style={{ backgroundColor: project.colorCode || '#F0B90B' }}
+                ></div>
+
+                <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-6 relative z-10">
+                    <div className="flex items-center gap-6 min-w-0">
+                        <button 
+                            onClick={onBack} 
+                            className="w-11 h-11 flex items-center justify-center bg-white/5 hover:bg-white/10 border border-white/10 rounded-2xl transition-all text-[#B7BDC6] hover:text-white shrink-0 active:scale-90"
                             title="Back"
-                    >
-                        <ChevronLeft className="w-5 h-5" />
-                    </button>
-                        <div className="h-8 w-px bg-[#1A1A1A] hidden sm:block"></div>
-                        <div className="flex items-center gap-3 min-w-0">
-                            <div className="w-10 h-10 rounded bg-[#F0B90B]/10 border border-[#F0B90B]/25 flex items-center justify-center shrink-0">
-                                <Terminal className="w-4 h-4 text-[#F0B90B]" />
+                        >
+                            <ChevronLeft className="w-6 h-6" />
+                        </button>
+                        <div className="h-10 w-px bg-white/10 hidden sm:block"></div>
+                        <div className="flex items-center gap-5 min-w-0">
+                            <div 
+                                className="w-12 h-12 rounded-2xl bg-black border border-white/10 flex items-center justify-center shrink-0 relative overflow-hidden shadow-lg"
+                                style={{ boxShadow: `0 0 15px ${project.colorCode || '#F0B90B'}10` }}
+                            >
+                                <div className="absolute inset-0 opacity-10 blur-xl" style={{ backgroundColor: project.colorCode || '#F0B90B' }}></div>
+                                <Terminal className="w-5 h-5 relative z-10" style={{ color: project.colorCode || '#F0B90B' }} />
                             </div>
                             <div className="min-w-0">
-                                <h2 className="text-lg font-bold truncate">{project.projectName}</h2>
-                                <p className="text-xs text-[#707A8A] truncate">Project ID {String(project.id).padStart(3, '0')}</p>
+                                <h2 className="text-2xl font-black text-white italic tracking-tighter leading-none mb-1.5 truncate">
+                                    {project.projectName}
+                                </h2>
+                                <div className="flex items-center gap-2">
+                                    <span className="text-[10px] font-black text-white/20 uppercase tracking-[0.2em]">Protocol_ID</span>
+                                    <span className="text-[10px] font-mono font-bold text-white/40">#{String(project.id).padStart(4, '0')}</span>
+                                </div>
                             </div>
                         </div>
                     </div>
 
-                    <div className="flex items-center gap-3">
-                        <div className={`px-3 py-1.5 rounded text-xs font-bold flex items-center gap-2 border ${statusBadgeClass(project.status)}`}>
-                        <div className={`w-1.5 h-1.5 rounded-full ${project.status === 'Active' ? 'bg-[#0ECB81] animate-pulse' : 'bg-current'}`}></div>
-                        {project.status}
-                    </div>
-                    <button 
-                        onClick={() => setIsSettingsOpen(true)}
-                            className="h-9 px-4 bg-[#1A1A1A] hover:bg-[#2B3139] text-[#B7BDC6] hover:text-[#EAECEF] rounded text-xs font-bold transition-all border border-[#2B3139] flex items-center gap-2"
-                    >
-                        <Settings className="w-3.5 h-3.5" />
-                        Project settings
-                    </button>
+                    <div className="flex items-center gap-4">
+                        <div className={`px-4 py-2 rounded-full text-[10px] font-black uppercase tracking-[0.2em] border transition-all duration-500 shadow-lg ${
+                            project.status === 'Active' 
+                                ? 'bg-[#0ECB81]/10 text-[#0ECB81] border-[#0ECB81]/20' 
+                                : 'bg-[#F0B90B]/10 text-[#F0B90B] border-[#F0B90B]/20'
+                        }`}>
+                            <span className="flex items-center gap-2">
+                                <div className={`w-2 h-2 rounded-full animate-pulse ${project.status === 'Active' ? 'bg-[#0ECB81]' : 'bg-[#F0B90B]'}`}></div>
+                                {project.status === 'Active' ? 'PROTOCOL_ACTIVE' : 'SYSTEM_DRAFT'}
+                            </span>
+                        </div>
+                        <button 
+                            onClick={() => setIsSettingsOpen(true)}
+                            className="h-11 px-5 bg-white/5 hover:bg-white/10 text-white/60 hover:text-white rounded-2xl text-[11px] font-black uppercase tracking-widest transition-all border border-white/10 flex items-center gap-3 active:scale-95"
+                        >
+                            <Settings className="w-4 h-4" />
+                            CONFIG_PROJECT
+                        </button>
                     </div>
                 </div>
             </header>
 
             <div className="flex-1 overflow-auto custom-scrollbar">
-                <div className="grid lg:grid-cols-[320px_minmax(0,1fr)] min-h-full">
-                <aside className="bg-[#121212] border-b lg:border-b-0 lg:border-r border-[#1A1A1A] flex flex-col">
-                    <div className="p-5 sm:p-6 space-y-6">
-                        <div className="space-y-4">
-                            <h3 className="text-xs font-bold text-[#B7BDC6] flex items-center gap-2">
-                                <Box className="w-3 h-3" />
-                                Project overview
-                            </h3>
-                            <div className="space-y-3">
-                                <div className="bg-[#050505] p-3 rounded border border-[#1A1A1A]">
-                                    <p className="text-[11px] font-semibold text-[#707A8A] mb-1 flex items-center gap-2">
-                                        <Database className="w-3 h-3" /> Data Source
-                                    </p>
-                                    <p className="text-sm font-bold text-[#EAECEF] capitalize">{project.dataSource || 'system'}</p>
-                                </div>
-                                <div className="bg-[#050505] p-3 rounded border border-[#1A1A1A]">
-                                    <p className="text-[11px] font-semibold text-[#707A8A] mb-1 flex items-center gap-2">
-                                        <Calendar className="w-3 h-3" /> Created
-                                    </p>
-                                    <p className="text-sm font-bold text-[#EAECEF]">{formatDate(project.createdAt)}</p>
-                                </div>
-                                <div className="bg-[#050505] p-3 rounded border border-[#1A1A1A]">
-                                    <p className="text-[11px] font-semibold text-[#707A8A] mb-1 flex items-center gap-2">
-                                        <Target className="w-3 h-3" /> Target Group
-                                    </p>
-                                    <p className="text-sm font-bold text-[#EAECEF]">{project.targetTeam || 'All teams'}</p>
-                                </div>
+                <div className="grid lg:grid-cols-[340px_minmax(0,1fr)] min-h-full">
+                <aside className="bg-[#121212]/50 backdrop-blur-xl border-b lg:border-b-0 lg:border-r border-white/5 flex flex-col">
+                    <div className="p-8 space-y-8">
+                        <div className="space-y-6">
+                            <div className="flex items-center gap-3 mb-2">
+                                <div className="w-1.5 h-4 bg-primary rounded-full"></div>
+                                <h3 className="text-[10px] font-black text-white/40 uppercase tracking-[0.3em]">
+                                    CORE_OVERVIEW
+                                </h3>
+                            </div>
+                            <div className="space-y-4">
+                                {[
+                                    { icon: Database, label: 'DATA_SOURCE', value: project.dataSource || 'system', accent: 'text-primary' },
+                                    { icon: Calendar, label: 'INITIALIZED', value: formatDate(project.createdAt), accent: 'text-white/60' },
+                                    { icon: Target, label: 'TARGET_ENTITY', value: project.targetTeam || 'GLOBAL_PROTOCOL', accent: 'text-primary' }
+                                ].map((item, i) => (
+                                    <div key={i} className="bg-white/[0.03] p-4 rounded-2xl border border-white/5 group/item hover:bg-white/[0.05] transition-all">
+                                        <p className="text-[9px] font-black text-white/20 mb-2.5 flex items-center gap-2 tracking-widest">
+                                            <item.icon className="w-3 h-3" /> {item.label}
+                                        </p>
+                                        <p className={`text-sm font-black uppercase tracking-wide ${item.accent}`}>{item.value}</p>
+                                    </div>
+                                ))}
                             </div>
                         </div>
 
-                        <div className="space-y-4">
-                            <h3 className="text-xs font-bold text-[#B7BDC6] flex items-center gap-2">
-                                <Activity className="w-3 h-3" /> Calculator summary
-                            </h3>
-                            <div className="grid grid-cols-2 gap-2">
-                                <div className="bg-[#050505] p-3 rounded border border-[#1A1A1A]">
-                                    <p className="text-[11px] font-semibold text-[#707A8A] mb-1">Total</p>
-                                    <p className="text-lg font-mono font-bold text-[#F0B90B]">{project.calculators?.length || 0}</p>
+                        <div className="space-y-6">
+                            <div className="flex items-center gap-3 mb-2">
+                                <div className="w-1.5 h-4 bg-emerald-500 rounded-full"></div>
+                                <h3 className="text-[10px] font-black text-white/40 uppercase tracking-[0.3em]">
+                                    LOGIC_MODULES
+                                </h3>
+                            </div>
+                            <div className="grid grid-cols-2 gap-4">
+                                <div className="bg-white/[0.03] p-5 rounded-2xl border border-white/5 backdrop-blur-sm">
+                                    <p className="text-[9px] font-black text-white/20 mb-2 uppercase tracking-widest">Total</p>
+                                    <p className="text-3xl font-mono font-black text-primary">{project.calculators?.length || 0}</p>
                                 </div>
-                                <div className="bg-[#050505] p-3 rounded border border-[#1A1A1A]">
-                                    <p className="text-[11px] font-semibold text-[#707A8A] mb-1">Active</p>
-                                    <p className="text-lg font-mono font-bold text-[#0ECB81]">{project.calculators?.filter(c => c.status === 'Active').length || 0}</p>
+                                <div className="bg-white/[0.03] p-5 rounded-2xl border border-white/5 backdrop-blur-sm">
+                                    <p className="text-[9px] font-black text-white/20 mb-2 uppercase tracking-widest">Active</p>
+                                    <p className="text-3xl font-mono font-black text-emerald-500">{project.calculators?.filter(c => c.status === 'Active').length || 0}</p>
                                 </div>
                             </div>
                         </div>
                     </div>
 
-                    <div className="mt-auto p-4 border-t border-[#1A1A1A] bg-[#080808]">
-                        <p className="text-xs text-[#707A8A] leading-relaxed">
-                            Build formulas here, then run payouts from the execution view.
-                        </p>
+                    <div className="mt-auto p-8 border-t border-white/5 bg-black/20">
+                        <div className="flex items-start gap-4 text-white/40">
+                            <Activity className="w-5 h-5 shrink-0 mt-1 opacity-20" />
+                            <p className="text-xs font-medium leading-relaxed italic">
+                                Initialize logic modules to establish incentive protocols. Monitor real-time performance within each node.
+                            </p>
+                        </div>
                     </div>
                 </aside>
 
-                <main className="bg-[#050505] p-4 sm:p-6">
-                    <div className="max-w-6xl mx-auto space-y-8">
-                        <div className="flex flex-col xl:flex-row xl:items-center justify-between gap-4 border-b border-[#1A1A1A] pb-6">
-                            <div className="flex items-center gap-4 min-w-0">
-                                <div className="w-1.5 h-6 bg-[#F0B90B] rounded-full"></div>
-                                <h3 className="text-lg font-bold text-[#EAECEF]">{t.calculators}</h3>
-                                <div className="h-4 w-px bg-[#1A1A1A]"></div>
-                                <span className="text-xs text-[#707A8A] truncate">{project.calculators?.length || 0} rules configured</span>
+                <main className="bg-[#050505] p-8 sm:p-12">
+                    <div className="max-w-5xl mx-auto space-y-12">
+                        <div className="flex flex-col xl:flex-row xl:items-center justify-between gap-8 border-b border-white/5 pb-10">
+                            <div className="flex items-center gap-6 min-w-0">
+                                <div className="w-2 h-8 bg-primary rounded-full shadow-[0_0_15px_rgba(252,213,53,0.3)]"></div>
+                                <div>
+                                    <h3 className="text-3xl font-black text-white italic tracking-tighter uppercase leading-none mb-2">
+                                        Logic_Studio
+                                    </h3>
+                                    <p className="text-xs text-white/30 font-black uppercase tracking-[0.3em]">
+                                        {project.calculators?.length || 0} Modules_Deployed
+                                    </p>
+                                </div>
                             </div>
                             
-                            <div className="flex flex-col sm:flex-row gap-2">
-                                <button 
+                            <div className="flex flex-col sm:flex-row gap-3">
+                                <button
                                     onClick={() => openBuilderNew('Achievement')}
-                                    className="h-10 px-4 bg-[#1A1A1A] hover:bg-[#2B3139] text-[#F0B90B] rounded text-xs font-bold border border-[#F0B90B]/30 transition-all flex items-center justify-center gap-2 active:scale-95"
+                                    className="h-12 px-6 bg-[#FCD535] hover:bg-[#FCD535]/90 text-black rounded-sm text-[11px] font-black transition-all flex items-center justify-center gap-3 active:scale-95 shadow-[0_0_20px_rgba(252,213,53,0.2)] hover:shadow-[0_0_30px_rgba(252,213,53,0.4)] uppercase tracking-[0.2em]"
                                 >
-                                    <Award className="w-3.5 h-3.5" />
-                                    {t.achievement_bonus}
+                                    <Award className="w-5 h-5" />
+                                    Deploy_Achievement
                                 </button>
-                                <button 
+                                <button
                                     onClick={() => openBuilderNew('Commission')}
-                                    className="h-10 px-4 bg-[#1A1A1A] hover:bg-[#2B3139] text-[#0ECB81] rounded text-xs font-bold border border-[#0ECB81]/30 transition-all flex items-center justify-center gap-2 active:scale-95"
+                                    className="h-12 px-6 bg-[#0ECB81] hover:bg-[#0CA66B] text-[#0B0E11] rounded-sm text-[11px] font-black transition-all flex items-center justify-center gap-3 active:scale-95 shadow-[0_0_20px_rgba(14,203,129,0.2)] hover:shadow-[0_0_30px_rgba(14,203,129,0.4)] uppercase tracking-[0.2em]"
                                 >
-                                    <DollarSign className="w-3.5 h-3.5" />
-                                    {t.commission_rate}
+                                    <DollarSign className="w-5 h-5" />
+                                    Deploy_Commission
                                 </button>
-                            </div>
-                        </div>
+                            </div>                        </div>
 
                         {(!project.calculators || project.calculators.length === 0) ? (
-                            <div className="min-h-[360px] bg-[#121212] border border-[#1A1A1A] border-dashed rounded flex flex-col items-center justify-center text-center p-8">
-                                <div className="w-14 h-14 rounded bg-[#050505] border border-[#1A1A1A] flex items-center justify-center mb-5">
-                                    <Layers className="w-7 h-7 text-[#707A8A]" />
+                            <div className="min-h-[400px] bg-white/[0.02] border border-white/5 border-dashed rounded-[48px] flex flex-col items-center justify-center text-center p-12 group/empty transition-all hover:bg-white/[0.03]">
+                                <div className="w-20 h-20 rounded-3xl bg-black border border-white/10 flex items-center justify-center mb-8 shadow-2xl group-hover/empty:scale-110 transition-transform">
+                                    <Layers className="w-10 h-10 text-white/10" />
                                 </div>
-                                <p className="text-[#EAECEF] font-bold text-sm mb-2">{t.no_calculators}</p>
-                                <p className="text-[#707A8A] text-xs max-w-xs mb-8">{t.add_calculator_desc}</p>
-                                <button onClick={() => openBuilderNew('Achievement')} className="h-10 px-6 bg-[#2B3139] hover:bg-[#F0B90B] text-[#EAECEF] hover:text-black rounded text-xs font-bold transition-all flex items-center gap-2">
-                                    <Award className="w-3.5 h-3.5" />
-                                    Add first calculator
+                                <p className="text-white font-black text-xl mb-3 uppercase tracking-tight italic">No_Logic_Found</p>
+                                <p className="text-white/30 text-sm max-w-sm mb-10 font-medium">The system protocol requires at least one logic module to begin data processing.</p>
+                                <button onClick={() => openBuilderNew('Achievement')} className="h-12 px-8 bg-primary hover:bg-primary/90 text-black rounded-2xl text-[11px] font-black transition-all flex items-center gap-3 shadow-xl active:scale-95 uppercase tracking-widest">
+                                    <Plus className="w-5 h-5 stroke-[3]" />
+                                    Initialize_First_Module
                                 </button>
                             </div>
                         ) : (
-                            <div className="grid grid-cols-1 gap-4">
+                            <div className="grid grid-cols-1 gap-6 pb-20">
                                 {project.calculators.map((calc) => (
                                     <div 
                                         key={calc.id} 
-                                        className="bg-[#121212] border border-[#1A1A1A] hover:border-[#2B3139] transition-all rounded overflow-hidden group"
+                                        className="bg-[#121212] border border-white/5 hover:border-white/10 transition-all duration-500 rounded-[32px] overflow-hidden group shadow-xl hover:shadow-2xl relative"
                                     >
-                                        <div className="p-4 sm:p-5 grid grid-cols-1 lg:grid-cols-[minmax(220px,1.2fr)_minmax(0,2fr)_auto] gap-5 lg:items-center">
-                                            <div className="flex items-center gap-4 min-w-0">
-                                                <div className={`w-12 h-12 rounded bg-[#050505] border flex items-center justify-center shrink-0 ${
-                                                    calc.type === 'Achievement' ? 'border-[#F0B90B]/20 text-[#F0B90B]' : 'border-[#0ECB81]/20 text-[#0ECB81]'
-                                                }`}>
-                                                    {calc.type === 'Achievement' ? <Zap className="w-6 h-6" /> : <TrendingUp className="w-6 h-6" />}
+                                        <div className="p-6 sm:p-8 grid grid-cols-1 lg:grid-cols-[minmax(250px,1.2fr)_minmax(0,2fr)_auto] gap-8 lg:items-center relative z-10">
+                                            <div className="flex items-center gap-6 min-w-0">
+                                                <div 
+                                                    className={`w-16 h-16 rounded-2xl bg-black border flex items-center justify-center shrink-0 transition-all duration-500 group-hover:scale-110 relative overflow-hidden ${
+                                                        calc.type === 'Achievement' ? 'border-primary/20 text-primary' : 'border-emerald-500/20 text-emerald-400'
+                                                    }`}
+                                                    style={{ boxShadow: `0 0 20px ${calc.type === 'Achievement' ? '#FCD53510' : '#10B98110'}` }}
+                                                >
+                                                    <div className="absolute inset-0 opacity-10 blur-xl" style={{ backgroundColor: calc.type === 'Achievement' ? '#FCD535' : '#10B981' }}></div>
+                                                    {calc.type === 'Achievement' ? <Zap className="w-8 h-8 relative z-10" /> : <TrendingUp className="w-8 h-8 relative z-10" />}
                                                 </div>
                                                 <div className="min-w-0">
-                                                    <h4 className="font-bold text-[#EAECEF] text-sm truncate">{calc.name}</h4>
-                                                    <div className="flex items-center gap-2 mt-1">
-                                                        <span className={`text-[10px] font-bold px-2 py-0.5 rounded border ${
-                                                            calc.type === 'Achievement' ? 'bg-[#F0B90B]/5 border-[#F0B90B]/20 text-[#F0B90B]' : 'bg-[#0ECB81]/5 border-[#0ECB81]/20 text-[#0ECB81]'
+                                                    <h4 className="text-xl font-black text-white truncate italic tracking-tight mb-2 group-hover:text-primary transition-colors">
+                                                        {calc.name}
+                                                    </h4>
+                                                    <div className="flex items-center gap-3">
+                                                        <span className={`text-[9px] font-black px-2.5 py-1 rounded-full border uppercase tracking-widest ${
+                                                            calc.type === 'Achievement' ? 'bg-primary/10 border-primary/20 text-primary' : 'bg-emerald-500/10 border-emerald-500/20 text-emerald-400'
                                                         }`}>
                                                             {calc.type === 'Achievement' ? 'Achievement' : 'Commission'}
                                                         </span>
-                                                        <div className={`flex items-center gap-1.5 text-[10px] font-bold ${
-                                                            calc.status === 'Active' ? 'text-[#0ECB81]' : 'text-[#707A8A]'
+                                                        <div className={`flex items-center gap-2 text-[9px] font-black uppercase tracking-widest ${
+                                                            calc.status === 'Active' ? 'text-emerald-400' : 'text-white/20'
                                                         }`}>
-                                                            <div className={`w-1 h-1 rounded-full ${calc.status === 'Active' ? 'bg-[#0ECB81]' : 'bg-[#707A8A]'}`}></div>
+                                                            <div className={`w-1.5 h-1.5 rounded-full ${calc.status === 'Active' ? 'bg-emerald-400 animate-pulse' : 'bg-white/10'}`}></div>
                                                             {calc.status}
                                                         </div>
                                                     </div>
                                                 </div>
                                             </div>
 
-                                            <div className="grid grid-cols-2 sm:grid-cols-3 gap-3 lg:border-l border-[#1A1A1A] lg:pl-5">
-                                                <div className="space-y-1">
-                                                    <p className="text-[11px] text-[#707A8A] font-semibold flex items-center gap-1.5">
-                                                        <Target className="w-2.5 h-2.5" /> Metric
+                                            <div className="grid grid-cols-2 sm:grid-cols-3 gap-6 lg:border-l border-white/5 lg:pl-8">
+                                                <div className="space-y-2">
+                                                    <p className="text-[9px] text-white/20 font-black uppercase tracking-widest flex items-center gap-2">
+                                                        <Target className="w-3 h-3" /> Metric
                                                     </p>
-                                                    <p className="text-xs font-bold text-[#EAECEF] truncate">{calc.metricType || 'Custom KPI'}</p>
+                                                    <p className="text-sm font-black text-white/80 truncate uppercase tracking-tight italic">{calc.metricType || 'Custom KPI'}</p>
                                                 </div>
-                                                <div className="space-y-1">
-                                                    <p className="text-[11px] text-[#707A8A] font-semibold flex items-center gap-1.5">
-                                                        <Calendar className="w-2.5 h-2.5" /> Cycle
+                                                <div className="space-y-2">
+                                                    <p className="text-[9px] text-white/20 font-black uppercase tracking-widest flex items-center gap-2">
+                                                        <Calendar className="w-3 h-3" /> Cycle
                                                     </p>
-                                                    <p className="text-xs font-bold text-[#EAECEF]">{calc.calculationPeriod || 'Monthly'}</p>
+                                                    <p className="text-sm font-black text-white/80 uppercase tracking-tight italic">{calc.calculationPeriod || 'Monthly'}</p>
                                                 </div>
-                                                <div className="space-y-1">
-                                                    <p className="text-[11px] text-[#707A8A] font-semibold flex items-center gap-1.5">
-                                                        <Terminal className="w-2.5 h-2.5" /> Rule
+                                                <div className="space-y-2">
+                                                    <p className="text-[9px] text-white/20 font-black uppercase tracking-widest flex items-center gap-2">
+                                                        <Terminal className="w-3 h-3" /> Logic_Rule
                                                     </p>
-                                                    <p className="text-xs font-mono font-bold text-[#F0B90B] truncate">
-                                                        {calc.type === 'Achievement' ? `${calc.achievementTiers?.length || 0} tiers` : calc.commissionType || 'Commission'}
+                                                    <p className="text-sm font-mono font-black text-primary truncate">
+                                                        {calc.type === 'Achievement' ? `${calc.achievementTiers?.length || 0}_NODES` : (calc.commissionType || 'STATIC').toUpperCase()}
                                                     </p>
                                                 </div>
                                             </div>
 
-                                            <div className="flex items-center lg:justify-end gap-1.5">
-                                                <button onClick={() => handleDuplicateCalc(calc.id)} className="w-9 h-9 flex items-center justify-center bg-[#1A1A1A] hover:bg-[#2B3139] text-[#707A8A] hover:text-[#EAECEF] rounded transition-all border border-[#1A1A1A]" title="Duplicate">
-                                                    <Copy className="w-3.5 h-3.5" />
+                                            <div className="flex items-center lg:justify-end gap-3">
+                                                <button onClick={() => handleDuplicateCalc(calc.id)} className="w-11 h-11 flex items-center justify-center bg-white/5 hover:bg-white/10 text-white/30 hover:text-white rounded-2xl transition-all border border-white/10 active:scale-90" title="Duplicate">
+                                                    <Copy className="w-5 h-5" />
                                                 </button>
-                                                <button onClick={() => openBuilderEdit(calc)} className="w-9 h-9 flex items-center justify-center bg-[#1A1A1A] hover:bg-[#2B3139] text-[#707A8A] hover:text-[#EAECEF] rounded transition-all border border-[#1A1A1A]" title="Edit">
-                                                    <Edit3 className="w-3.5 h-3.5" />
+                                                <button onClick={() => openBuilderEdit(calc)} className="w-11 h-11 flex items-center justify-center bg-white/5 hover:bg-white/10 text-white/30 hover:text-white rounded-2xl transition-all border border-white/10 active:scale-90" title="Edit">
+                                                    <Edit3 className="w-5 h-5" />
                                                 </button>
-                                                <button onClick={() => handleDeleteCalc(calc.id)} className="w-9 h-9 flex items-center justify-center bg-[#1A1A1A] hover:bg-[#F6465D]/10 text-[#707A8A] hover:text-[#F6465D] rounded transition-all border border-[#1A1A1A]" title="Delete">
-                                                    <Trash2 className="w-3.5 h-3.5" />
+                                                <button onClick={() => handleDeleteCalc(calc.id)} className="w-11 h-11 flex items-center justify-center bg-white/5 hover:bg-red-500/10 text-white/30 hover:text-red-500 rounded-2xl transition-all border border-white/10 active:scale-90" title="Delete">
+                                                    <Trash2 className="w-5 h-5" />
                                                 </button>
                                             </div>
                                         </div>
                                         
                                         {calc.type === 'Achievement' && calc.achievementTiers && (
-                                            <div className="bg-[#080808] px-4 sm:px-5 py-3 border-t border-[#1A1A1A] flex flex-col sm:flex-row sm:items-center gap-4 overflow-hidden">
-                                                <div className="flex items-center gap-2 shrink-0">
-                                                    <div className="w-1 h-3 bg-[#F0B90B] rounded-full"></div>
-                                                    <span className="text-[10px] font-black text-[#707A8A] uppercase tracking-widest">Protocol_Nodes</span>
+                                            <div className="bg-white/[0.01] px-6 sm:px-8 py-4 border-t border-white/5 flex flex-col sm:flex-row sm:items-center gap-6 overflow-hidden">
+                                                <div className="flex items-center gap-3 shrink-0">
+                                                    <div className="w-1.5 h-4 bg-primary rounded-full shadow-[0_0_10px_rgba(252,213,53,0.2)]"></div>
+                                                    <span className="text-[9px] font-black text-white/20 uppercase tracking-[0.3em]">Protocol_Nodes</span>
                                                 </div>
-                                                <div className="flex items-center gap-2 overflow-x-auto custom-scrollbar pb-1 sm:pb-0">
+                                                <div className="flex items-center gap-4 overflow-x-auto custom-scrollbar no-scrollbar pb-1 sm:pb-0">
                                                     {[...calc.achievementTiers].sort((a,b) => (a.subPeriod || '').localeCompare(b.subPeriod || '') || a.target - b.target).map((tier, i, arr) => (
-                                                        <div key={tier.id} className="flex items-center gap-2 shrink-0">
-                                                            <div className="px-3 py-1.5 bg-[#050505] border border-white/5 rounded-lg flex items-center gap-3 hover:border-primary/30 transition-colors group/node">
+                                                        <div key={tier.id} className="flex items-center gap-4 shrink-0">
+                                                            <div className="px-5 py-3 bg-black/40 border border-white/5 rounded-[20px] flex items-center gap-4 hover:border-primary/40 hover:bg-black/60 transition-all duration-300 group/node shadow-lg">
                                                                 <div className="flex flex-col">
-                                                                    {tier.subPeriod && <span className="text-[7px] font-black text-[#F0B90B] uppercase tracking-tighter leading-none mb-1 opacity-60">{tier.subPeriod}</span>}
-                                                                    <span className="text-[10px] font-mono text-white/40 font-bold leading-none group-hover/node:text-primary transition-colors">${tier.target.toLocaleString()}</span>
+                                                                    {tier.subPeriod && <span className="text-[8px] font-black text-primary uppercase tracking-tighter leading-none mb-1.5 opacity-60">{tier.subPeriod}</span>}
+                                                                    <span className="text-xs font-mono text-white/50 font-black leading-none group-hover/node:text-white transition-colors tracking-tight">${tier.target.toLocaleString()}</span>
                                                                 </div>
-                                                                <div className="w-px h-4 bg-white/5"></div>
-                                                                <span className="text-[11px] font-mono text-[#0ECB81] font-black">{tier.rewardType === 'Percentage' ? `${tier.rewardAmount}%` : `$${tier.rewardAmount}`}</span>
+                                                                <div className="w-px h-5 bg-white/10"></div>
+                                                                <span className="text-sm font-mono text-emerald-400 font-black tracking-tight">{tier.rewardType === 'Percentage' ? `${tier.rewardAmount}%` : `$${tier.rewardAmount}`}</span>
                                                             </div>
                                                             {i < arr.length - 1 && (
-                                                                <div className="flex flex-col items-center opacity-10">
-                                                                    <div className="w-4 h-px bg-white"></div>
-                                                                </div>
+                                                                <div className="w-4 h-[2px] bg-white/5 rounded-full opacity-50 shrink-0"></div>
                                                             )}
                                                         </div>
                                                     ))}

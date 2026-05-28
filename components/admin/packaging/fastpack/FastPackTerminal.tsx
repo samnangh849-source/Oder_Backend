@@ -1212,7 +1212,6 @@ const FastPackTerminal: React.FC<FastPackTerminalProps> = ({ order, onClose, onS
                     object-fit: cover !important;
                     width: 100% !important;
                     height: 100% !important;
-                    transform: scale(1.3) !important;
                     transform-origin: center center !important;
                 }
                 

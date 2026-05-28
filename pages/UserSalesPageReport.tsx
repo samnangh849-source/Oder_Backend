@@ -1,4 +1,3 @@
-
 import React, { useState, useMemo, useContext } from 'react';
 import { AppContext } from '../context/AppContext';
 import { ParsedOrder } from '../types';
@@ -8,13 +7,12 @@ import 'jspdf-autotable';
 import Spinner from '../components/common/Spinner';
 import SimpleBarChart from '../components/admin/SimpleBarChart';
 import { safeParseDate } from '../utils/dateUtils';
-import { ChevronLeft, Download, BarChart3, TrendingUp, Package, Layout } from 'lucide-react';
-
+import { ChevronLeft, Download, BarChart3, TrendingUp, Package, Layout, Terminal, Activity, Cpu, DollarSign, Layers, Zap } from 'lucide-react';
+import SalesStatisticModal from '../components/reports/SalesStatisticModal';
 // Import separate view components
 import SalesByPageDesktop from '../components/reports/SalesByPageDesktop';
 import SalesByPageTablet from '../components/reports/SalesByPageTablet';
 import SalesByPageMobile from '../components/reports/SalesByPageMobile';
-
 interface UserSalesPageReportProps {
     orders: ParsedOrder[];
     onBack: () => void;
@@ -24,37 +22,32 @@ interface UserSalesPageReportProps {
     customStart?: string;
     customEnd?: string;
 }
-
 type SortKey = 'revenue' | 'pageName';
-
 const MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
-
 const UserSalesPageReport: React.FC<UserSalesPageReportProps> = ({
     orders: sourceOrders,
     onBack,
     team,
     onNavigate,
-    dateFilter,
-    customStart,
-    customEnd,
+    dateFilter: initialDateFilter,
+    customStart: initialStart,
+    customEnd: initialEnd,
 }) => {
     const { appData, previewImage, language, advancedSettings } = useContext(AppContext);
-    const [showBorders, setShowBorders] = useState(true);
-    const [isFrozen, setIsFrozen] = useState(false);
-    const [showFillColor, setShowFillColor] = useState(true);
     const [showAllPages, setShowAllPages] = useState(true); 
     const [isExporting, setIsExporting] = useState(false);
+    const [isStatisticOpen, setIsStatisticOpen] = useState(false);
     const [sortConfig, setSortConfig] = useState<{ key: SortKey, direction: 'asc' | 'desc' }>({ key: 'revenue', direction: 'desc' });
-
-    const isBinance = advancedSettings?.uiTheme === 'binance';
-
+    // Local filter state to allow shortcuts to work without navigating away
+    const [activeDateFilter, setActiveDateFilter] = useState(initialDateFilter || 'all');
+    const [activeStart, setActiveStart] = useState(initialStart || '');
+    const [activeEnd, setActiveEnd] = useState(initialEnd || '');
     const toggleSort = (key: SortKey) => {
         setSortConfig(prev => ({
             key,
             direction: prev.key === key && prev.direction === 'desc' ? 'asc' : 'desc'
         }));
     };
-
     const handleNavigate = (key: string, value: string) => {
         if (onNavigate) {
             const filters: any = { team };
@@ -62,7 +55,6 @@ const UserSalesPageReport: React.FC<UserSalesPageReportProps> = ({
             onNavigate(filters);
         }
     };
-
     const handleMonthClick = (pageName: string, monthIndex: number) => {
         if (onNavigate) {
             const year = new Date().getFullYear();
@@ -77,21 +69,20 @@ const UserSalesPageReport: React.FC<UserSalesPageReportProps> = ({
             onNavigate({ team, page: pageName, datePreset: 'custom', customStart: fmt(monthStart), customEnd: fmt(monthEnd), isMonthlyDrilldown: true });
         }
     };
-
-    const filteredOrders = useMemo(() => {
-        const teamOrders = sourceOrders.filter(o =>
+    const teamOrders = useMemo(() => {
+        return sourceOrders.filter(o =>
             (o.Team || '').trim().toLowerCase() === team.trim().toLowerCase()
         );
+    }, [sourceOrders, team]);
 
-        if (!dateFilter || dateFilter === 'all') return teamOrders;
-
+    const filteredOrders = useMemo(() => {
+        if (!activeDateFilter || activeDateFilter === 'all') return teamOrders;
         const now = new Date();
         const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
         const endOfToday = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 23, 59, 59, 999);
         let start: Date | null = null;
         let end: Date | null = endOfToday;
-
-        switch (dateFilter) {
+        switch (activeDateFilter) {
             case 'today': start = today; end = endOfToday; break;
             case 'yesterday':
                 start = new Date(today); start.setDate(today.getDate() - 1);
@@ -110,12 +101,11 @@ const UserSalesPageReport: React.FC<UserSalesPageReportProps> = ({
                 start = new Date(now.getFullYear() - 1, 0, 1);
                 end = new Date(now.getFullYear() - 1, 11, 31, 23, 59, 59, 999); break;
             case 'custom':
-                if (customStart) start = new Date(customStart + 'T00:00:00');
-                if (customEnd) end = new Date(customEnd + 'T23:59:59');
+                if (activeStart) start = new Date(activeStart + 'T00:00:00');
+                if (activeEnd) end = new Date(activeEnd + 'T23:59:59');
                 break;
             default: return teamOrders;
         }
-
         return teamOrders.filter(o => {
             if (!o.Timestamp) return false;
             const d = safeParseDate(o.Timestamp);
@@ -124,8 +114,7 @@ const UserSalesPageReport: React.FC<UserSalesPageReportProps> = ({
             if (end && d > end) return false;
             return true;
         });
-    }, [sourceOrders, team, dateFilter, customStart, customEnd]);
-
+    }, [sourceOrders, team, activeDateFilter, activeStart, activeEnd]);
     const pageStats = useMemo(() => {
         const stats: Record<string, any> = {};
         if (appData.pages) {
@@ -138,7 +127,6 @@ const UserSalesPageReport: React.FC<UserSalesPageReportProps> = ({
         filteredOrders.forEach(o => {
             const fs = o.FulfillmentStatus || o['Fulfillment Status'] || 'Pending';
             if (fs === 'Cancelled' || fs === 'Returned') return;
-
             const page = o.Page || 'Unknown';
             if (!stats[page]) {
                 const info = appData.pages?.find(p => p.PageName === page);
@@ -170,7 +158,6 @@ const UserSalesPageReport: React.FC<UserSalesPageReportProps> = ({
             return (valA - valB) * mult;
         });
     }, [filteredOrders, sortConfig, appData.pages, showAllPages, team]);
-
     const grandTotals = useMemo(() => {
         const totals: any = { revenue: 0, profit: 0, pagesCount: pageStats.length, orders: 0 };
         MONTHS.forEach(m => { totals[`rev_${m}`] = 0; totals[`prof_${m}`] = 0; });
@@ -180,18 +167,16 @@ const UserSalesPageReport: React.FC<UserSalesPageReportProps> = ({
         });
         return totals;
     }, [pageStats]);
-
     const filterLabel = useMemo(() => {
         const labels: Record<string, string> = {
             today: 'TODAY', yesterday: 'YESTERDAY', this_week: 'THIS WEEK',
             this_month: 'THIS MONTH', last_month: 'LAST MONTH',
             this_year: 'THIS YEAR', last_year: 'LAST YEAR',
             all: 'ALL TIME',
-            custom: customStart && customEnd ? `${customStart} → ${customEnd}` : 'CUSTOM',
+            custom: activeStart && activeEnd ? `${activeStart} → ${activeEnd}` : 'CUSTOM',
         };
-        return labels[dateFilter || 'all'] || 'ALL TIME';
-    }, [dateFilter, customStart, customEnd]);
-
+        return labels[activeDateFilter || 'all'] || 'ALL TIME';
+    }, [activeDateFilter, activeStart, activeEnd]);
     const handleExportPDF = () => {
         setIsExporting(true);
         setTimeout(() => {
@@ -211,97 +196,192 @@ const UserSalesPageReport: React.FC<UserSalesPageReportProps> = ({
             } catch (err) { console.error(err); alert("Export failed"); } finally { setIsExporting(false); }
         }, 100);
     };
-
     const topPagesChartData = useMemo(() => {
         return [...pageStats].sort((a, b) => b.revenue - a.revenue).slice(0, 5).map(p => ({ label: p.pageName, value: p.revenue, imageUrl: p.logoUrl }));
     }, [pageStats]);
-
     return (
-        <div className="w-full space-y-6 select-none animate-fade-in pb-12">
-            <style>{`
-                .finance-header {
-                    background: #1E2329;
-                    border-bottom: 1px solid #2B3139;
-                    padding: 20px;
-                }
-            `}</style>
-
-            {/* Premium Header */}
-            <div className="finance-header">
-                <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
-                    <div className="flex items-center gap-4">
-                        <button onClick={onBack} className="w-10 h-10 flex items-center justify-center bg-[#2B3139] rounded-sm hover:bg-[#363c45] active:scale-95 transition-all">
-                            <ChevronLeft size={20} color="#EAECEF" />
+        <div className="fixed inset-0 z-[150] bg-[#0B0E11] overflow-hidden flex flex-col font-sans select-none animate-fade-in">
+            {/* Header - Packaging View Style */}
+            <header className="flex-shrink-0 bg-[#0B0E11] border-b border-[#2B3139] px-4 py-3 flex items-center justify-between z-10">
+                <div className="flex flex-col lg:flex-row lg:items-center gap-6">
+                    <div className="flex items-center gap-3">
+                        <button 
+                            onClick={onBack}
+                            className="w-10 h-10 flex items-center justify-center bg-white/5 hover:bg-white/10 text-white rounded-xl border border-white/10 transition-all active:scale-95"
+                        >
+                            <ChevronLeft size={20} />
                         </button>
                         <div>
-                            <h1 className="text-xl font-black text-[#EAECEF] uppercase tracking-tighter italic flex items-center gap-2">
-                                <BarChart3 size={20} color="#F0B90B" />
-                                {language === 'km' ? 'របាយការណ៍លក់តាមផេក' : 'Sales Page Report'}
-                            </h1>
-                            <div className="flex items-center gap-2 mt-1">
-                                <div className="w-1 h-3 bg-[#F0B90B] rounded-full"></div>
-                                <p className="text-[10px] text-[#848E9C] font-black uppercase tracking-[0.1em]">TEAM: {team}</p>
-                                <span className="text-[10px] text-[#474D57] font-black">·</span>
-                                <p className="text-[10px] text-[#F0B90B] font-black uppercase tracking-[0.1em]">{filterLabel}</p>
+                            <div className="flex items-center gap-3">
+                                <div className="w-2 h-2 rounded-full bg-[#3B82F6] animate-pulse shadow-[0_0_10px_#3B82F6]"></div>
+                                <h1 className="text-xl font-black text-white uppercase tracking-tighter flex items-center gap-3">
+                                    <Cpu size={22} className="text-blue-500" />
+                                    {language === 'km' ? 'មជ្ឈមណ្ឌលបញ្ញាលក់' : 'Sales Intelligence Hub'}
+                                    <span className="ml-2 px-2 py-0.5 bg-blue-600/20 text-blue-400 text-[8px] rounded-lg border border-blue-500/30 font-black tracking-widest italic">QUANTUM v2.5</span>
+                                </h1>
+                            </div>
+                            <div className="flex items-center gap-2 mt-0.5">
+                                <p className="text-[10px] text-[#848E9C] font-black uppercase tracking-[0.2em]">NODE: {team}</p>
+                                <span className="text-[#474D57] font-black text-[10px]">|</span>
+                                <p className="text-[10px] text-[#FCD535] font-black uppercase tracking-[0.2em]">{filterLabel}</p>
                             </div>
                         </div>
                     </div>
-
-                    <div className="flex items-center gap-2">
-                        <button onClick={handleExportPDF} disabled={isExporting} className="flex items-center gap-2 px-4 py-2 bg-[#2B3139] border border-[#474D57] text-[#EAECEF] text-[10px] font-black uppercase tracking-widest rounded-sm hover:bg-[#363c45] active:scale-95 transition-all">
-                            {isExporting ? <Spinner size="xs" /> : <Download size={14} />}
-                            PDF
-                        </button>
+                    {/* Quick Date Shortcuts */}
+                    <div className="flex items-center gap-1.5 bg-[#1E2329] p-1.5 rounded-2xl border border-[#2B3139] shadow-inner overflow-x-auto no-scrollbar">
+                        {[
+                            { id: 'today', label: 'Today', km: 'ថ្ងៃនេះ' },
+                            { id: 'yesterday', label: 'Yesterday', km: 'ម្សិលមិញ' },
+                            { id: 'this_week', label: 'This Week', km: 'សប្តាហ៍នេះ' },
+                            { id: 'this_month', label: 'This Month', km: 'ខែនេះ' },
+                            { id: 'last_month', label: 'Last Month', km: 'ខែមុន' },
+                            { id: 'this_year', label: 'This Year', km: 'ឆ្នាំនេះ' },
+                            { id: 'all', label: 'All Time', km: 'ទាំងអស់' },
+                        ].map((range) => (
+                            <button
+                                key={range.id}
+                                onClick={() => setActiveDateFilter(range.id as any)}
+                                className={`px-4 py-2 rounded-xl text-[10px] font-black uppercase tracking-widest whitespace-nowrap transition-all ${
+                                    activeDateFilter === range.id
+                                        ? 'bg-blue-600 text-white shadow-lg shadow-blue-500/20'
+                                        : 'text-[#848E9C] hover:text-white hover:bg-white/5'
+                                }`}
+                            >
+                                {language === 'km' ? range.km : range.label}
+                            </button>
+                        ))}
                     </div>
                 </div>
-
-            </div>
-
-            <div className="px-4 space-y-6">
-                {/* Financial KPIs */}
-                <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
-                    <StatCard label={language === 'km' ? 'ចំណូលសរុប' : 'Total Revenue'} value={`$${grandTotals.revenue.toLocaleString()}`} icon={<TrendingUp size={18}/>} colorClass="from-[#F0B90B] to-[#FCD535]" variant="minimal" />
-                    <StatCard label={language === 'km' ? 'ប្រាក់ចំណេញ' : 'Net Profit'} value={`$${grandTotals.profit.toLocaleString()}`} icon={<TrendingUp size={18}/>} colorClass="from-[#0ECB81] to-[#0bb371]" variant="minimal" />
-                    <StatCard label={language === 'km' ? 'ការកម្មង់' : 'Total Orders'} value={grandTotals.orders} icon={<Package size={18}/>} colorClass="from-[#3b82f6] to-[#2563eb]" variant="minimal" />
-                    <StatCard label={language === 'km' ? 'ផេកសកម្ម' : 'Active Pages'} value={grandTotals.pagesCount} icon={<Layout size={18}/>} colorClass="from-[#8b5cf6] to-[#7c3aed]" variant="minimal" />
+                <div className="flex items-center gap-2">
+                    <button 
+                        onClick={() => setIsStatisticOpen(true)}
+                        className="group relative flex items-center gap-2 px-6 py-3 bg-gradient-to-r from-blue-700 to-indigo-600 hover:from-blue-600 hover:to-indigo-500 text-white text-[10px] font-black uppercase tracking-[0.2em] rounded-xl transition-all active:scale-[0.98] shadow-xl shadow-blue-500/20 border border-white/10"
+                    >
+                        <Cpu size={14} className="group-hover:rotate-90 transition-transform duration-500" />
+                        Intelligence Hub
+                        <div className="absolute -top-1 -right-1 w-3 h-3 bg-red-500 rounded-full border-2 border-[#0B0E11] animate-pulse"></div>
+                    </button>
+                    <button 
+                        onClick={handleExportPDF} 
+                        disabled={isExporting} 
+                        className="flex items-center gap-2 px-4 py-2.5 bg-[#FCD535] hover:bg-[#FCD535]/90 text-black text-[10px] font-black uppercase tracking-[0.2em] rounded-xl transition-all active:scale-[0.98] shadow-lg shadow-[#FCD535]/10 disabled:opacity-50"
+                    >
+                        {isExporting ? <Spinner size="xs" /> : <Download size={14} />}
+                        Export PDF
+                    </button>
                 </div>
-
-                {/* Report Content */}
-                <div className="bg-[#1E2329] border border-[#2B3139] rounded-sm overflow-hidden shadow-2xl">
+            </header>
+            <main className="flex-1 overflow-y-auto custom-scrollbar bg-[#0B0E11] p-4 space-y-6">
+                {/* Financial KPIs - Packaging View Card Style */}
+                <div className="grid grid-cols-2 lg:grid-cols-4 gap-6">
+                    <div className="bg-[#1E2329] border border-[#2B3139] p-6 rounded-[2rem] relative overflow-hidden group hover:border-blue-500/50 transition-all shadow-xl">
+                        <div className="absolute top-0 right-0 w-32 h-32 bg-blue-500/5 rounded-full -mr-16 -mt-16 transition-transform group-hover:scale-110"></div>
+                        <div className="flex items-center gap-3 mb-4 relative z-10">
+                            <div className="w-10 h-10 bg-blue-500/10 rounded-xl flex items-center justify-center text-blue-500 shadow-lg shadow-blue-500/10">
+                                <DollarSign size={20} />
+                            </div>
+                            <p className="text-[10px] font-black text-[#848E9C] uppercase tracking-[0.2em]">{language === 'km' ? 'ចំណូលសរុប' : 'Total Revenue'}</p>
+                        </div>
+                        <h3 className="text-3xl font-black text-white tabular-nums relative z-10">${grandTotals.revenue.toLocaleString()}</h3>
+                        <div className="mt-3 flex items-center gap-2 relative z-10">
+                            <div className="h-1 flex-1 bg-white/5 rounded-full overflow-hidden">
+                                <div className="h-full bg-blue-500 w-[70%]" />
+                            </div>
+                            <span className="text-[10px] font-black text-blue-500">+12%</span>
+                        </div>
+                    </div>
+                    <div className="bg-[#1E2329] border border-[#2B3139] p-6 rounded-[2rem] relative overflow-hidden group hover:border-emerald-500/50 transition-all shadow-xl">
+                        <div className="absolute top-0 right-0 w-32 h-32 bg-emerald-500/5 rounded-full -mr-16 -mt-16 transition-transform group-hover:scale-110"></div>
+                        <div className="flex items-center gap-3 mb-4 relative z-10">
+                            <div className="w-10 h-10 bg-emerald-500/10 rounded-xl flex items-center justify-center text-emerald-500 shadow-lg shadow-emerald-500/10">
+                                <TrendingUp size={20} />
+                            </div>
+                            <p className="text-[10px] font-black text-[#848E9C] uppercase tracking-[0.2em]">{language === 'km' ? 'ប្រាក់ចំណេញ' : 'Net Profit'}</p>
+                        </div>
+                        <h3 className="text-3xl font-black text-[#0ECB81] tabular-nums relative z-10">${grandTotals.profit.toLocaleString()}</h3>
+                        <div className="mt-3 flex items-center gap-2 relative z-10">
+                            <div className="h-1 flex-1 bg-white/5 rounded-full overflow-hidden">
+                                <div className="h-full bg-emerald-500 w-[65%]" />
+                            </div>
+                            <span className="text-[10px] font-black text-emerald-500">+8.4%</span>
+                        </div>
+                    </div>
+                    <div className="bg-[#1E2329] border border-[#2B3139] p-6 rounded-[2rem] relative overflow-hidden group hover:border-indigo-500/50 transition-all shadow-xl">
+                        <div className="absolute top-0 right-0 w-32 h-32 bg-indigo-500/5 rounded-full -mr-16 -mt-16 transition-transform group-hover:scale-110"></div>
+                        <div className="flex items-center gap-3 mb-4 relative z-10">
+                            <div className="w-10 h-10 bg-indigo-500/10 rounded-xl flex items-center justify-center text-indigo-500 shadow-lg shadow-indigo-500/10">
+                                <Package size={20} />
+                            </div>
+                            <p className="text-[10px] font-black text-[#848E9C] uppercase tracking-[0.2em]">{language === 'km' ? 'ការកម្មង់' : 'Total Orders'}</p>
+                        </div>
+                        <h3 className="text-3xl font-black text-white tabular-nums relative z-10">{grandTotals.orders}</h3>
+                        <div className="mt-3 flex items-center gap-2 relative z-10">
+                            <span className="text-[9px] font-black text-indigo-400 bg-indigo-500/10 px-2 py-0.5 rounded-md uppercase tracking-widest">Active Orders</span>
+                        </div>
+                    </div>
+                    <div className="bg-[#1E2329] border border-[#2B3139] p-6 rounded-[2rem] relative overflow-hidden group hover:border-purple-500/50 transition-all shadow-xl">
+                        <div className="absolute top-0 right-0 w-32 h-32 bg-purple-500/5 rounded-full -mr-16 -mt-16 transition-transform group-hover:scale-110"></div>
+                        <div className="flex items-center gap-3 mb-4 relative z-10">
+                            <div className="w-10 h-10 bg-purple-500/10 rounded-xl flex items-center justify-center text-purple-500 shadow-lg shadow-purple-500/10">
+                                <Layout size={20} />
+                            </div>
+                            <p className="text-[10px] font-black text-[#848E9C] uppercase tracking-[0.2em]">{language === 'km' ? 'ផេកសកម្ម' : 'Active Pages'}</p>
+                        </div>
+                        <h3 className="text-3xl font-black text-white tabular-nums relative z-10">{grandTotals.pagesCount}</h3>
+                        <div className="mt-3 flex items-center gap-2 relative z-10">
+                            <span className="text-[9px] font-black text-purple-400 bg-purple-500/10 px-2 py-0.5 rounded-md uppercase tracking-widest">Digital Nodes</span>
+                        </div>
+                    </div>
+                </div>
+                {/* Report Content - Wrap in Surface Container */}
+                <div className="bg-[#1E2329] border border-[#2B3139] rounded-2xl overflow-hidden shadow-2xl">
                     <SalesByPageDesktop data={pageStats} grandTotals={grandTotals} sortConfig={sortConfig} onToggleSort={toggleSort} showAllPages={showAllPages} setShowAllPages={setShowAllPages} onExportPDF={handleExportPDF} isExporting={isExporting} onPreviewImage={previewImage} onNavigate={handleNavigate} onMonthClick={handleMonthClick} />
                     <SalesByPageTablet data={pageStats} grandTotals={grandTotals} onPreviewImage={previewImage} onNavigate={handleNavigate} onMonthClick={handleMonthClick} />
                     <SalesByPageMobile data={pageStats} onPreviewImage={previewImage} onNavigate={handleNavigate} onMonthClick={handleMonthClick} />
                 </div>
-
                 {/* Analytical Charts */}
-                <div className="grid grid-cols-1 lg:grid-cols-12 gap-4">
-                    <div className="lg:col-span-8 bg-[#1E2329] border border-[#2B3139] p-6 rounded-sm shadow-xl">
-                        <div className="flex items-center gap-2 mb-6">
-                            <div className="w-1 h-4 bg-[#F0B90B] rounded-full"></div>
-                            <h3 className="text-xs font-black text-[#EAECEF] uppercase tracking-widest">{language === 'km' ? 'ផេកដែលមានចំណូលខ្ពស់បំផុត' : 'Top 5 Revenue Pages'}</h3>
+                <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 pb-8">
+                    <div className="lg:col-span-8 bg-[#1E2329] border border-[#2B3139] p-6 rounded-2xl shadow-xl">
+                        <div className="flex items-center gap-3 mb-8">
+                            <div className="w-1.5 h-6 bg-[#FCD535] rounded-full"></div>
+                            <h3 className="text-sm font-black text-white uppercase tracking-[0.2em]">{language === 'km' ? 'ផេកដែលមានចំណូលខ្ពស់បំផុត' : 'Top 5 Revenue Pages'}</h3>
                         </div>
-                        <SimpleBarChart data={topPagesChartData} title="" />
+                        <div className="bg-[#0B0E11]/50 p-4 rounded-xl border border-white/5">
+                            <SimpleBarChart data={topPagesChartData} title="" />
+                        </div>
                     </div>
-                    <div className="lg:col-span-4 bg-[#1E2329] border border-[#2B3139] p-6 rounded-sm shadow-xl flex flex-col justify-center">
-                        <div className="flex items-center gap-2 mb-8">
-                            <div className="w-1 h-4 bg-[#0ECB81] rounded-full"></div>
-                            <h3 className="text-xs font-black text-[#EAECEF] uppercase tracking-widest">{language === 'km' ? 'សង្ខេបប្រតិបត្តិការ' : 'Operational Summary'}</h3>
+                    <div className="lg:col-span-4 bg-[#1E2329] border border-[#2B3139] p-6 rounded-2xl shadow-xl flex flex-col">
+                        <div className="flex items-center gap-3 mb-8">
+                            <div className="w-1.5 h-6 bg-[#0ECB81] rounded-full"></div>
+                            <h3 className="text-sm font-black text-white uppercase tracking-[0.2em]">{language === 'km' ? 'សង្ខេបប្រតិបត្តិការ' : 'Operational Summary'}</h3>
                         </div>
-                        <div className="space-y-6">
-                            <div className="flex justify-between items-center border-b border-[#2B3139] pb-4">
-                                <span className="text-[10px] font-bold text-[#848E9C] uppercase">{language === 'km' ? 'ចំនួន Page សកម្ម' : 'Active Pages'}</span>
-                                <span className="text-[#EAECEF] font-black text-sm tabular-nums">{grandTotals.pagesCount}</span>
+                        <div className="space-y-4 flex-1 flex flex-col justify-center">
+                            <div className="bg-[#0B0E11] p-5 rounded-2xl border border-[#2B3139] flex justify-between items-center group hover:border-[#FCD535]/30 transition-all">
+                                <span className="text-[10px] font-black text-[#848E9C] uppercase tracking-widest">{language === 'km' ? 'ចំនួន Page សកម្ម' : 'Active Pages'}</span>
+                                <span className="text-white font-black text-lg tabular-nums">{grandTotals.pagesCount}</span>
                             </div>
-                            <div className="flex justify-between items-center">
-                                <span className="text-[10px] font-bold text-[#848E9C] uppercase">{language === 'km' ? 'មធ្យមភាគចំណូល/Page' : 'Avg Revenue/Page'}</span>
-                                <span className="text-[#F0B90B] font-black text-sm tabular-nums">${(grandTotals.revenue / (grandTotals.pagesCount || 1)).toLocaleString(undefined, {maximumFractionDigits: 0})}</span>
+                            <div className="bg-[#0B0E11] p-5 rounded-2xl border border-[#2B3139] flex justify-between items-center group hover:border-[#FCD535]/30 transition-all">
+                                <span className="text-[10px] font-black text-[#848E9C] uppercase tracking-widest">{language === 'km' ? 'មធ្យមភាគចំណូល/Page' : 'Avg Revenue/Page'}</span>
+                                <span className="text-[#FCD535] font-black text-lg tabular-nums">${(grandTotals.revenue / (grandTotals.pagesCount || 1)).toLocaleString(undefined, {maximumFractionDigits: 0})}</span>
+                            </div>
+                        </div>
+                        <div className="mt-8 pt-6 border-t border-[#2B3139] text-center">
+                            <div className="flex items-center justify-center gap-2">
+                                <Terminal size={12} className="text-[#848E9C]" />
+                                <span className="text-[9px] font-black text-[#474D57] uppercase tracking-[0.3em]">Secure Data Protocol Active</span>
                             </div>
                         </div>
                     </div>
                 </div>
-            </div>
+            </main>
+            <SalesStatisticModal 
+                isOpen={isStatisticOpen}
+                onClose={() => setIsStatisticOpen(false)}
+                orders={teamOrders} initialDateFilter={activeDateFilter} initialStart={activeStart} initialEnd={activeEnd}
+                title={language === 'km' ? 'ស្ថិតិលក់តាមផេក' : 'PAGE SALES STATS'}
+                subtitle={`TEAM: ${team} | ${filterLabel}`}
+            />
         </div>
     );
 };
-
 export default UserSalesPageReport;

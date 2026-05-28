@@ -8,7 +8,7 @@ import IncentivePdfExportModal from './IncentivePdfExportModal';
 import {
     ChevronLeft, FileText, Lock, Unlock, Search, CheckCircle, RefreshCw,
     AlertCircle, Activity, Coins, TrendingUp, ShieldCheck, MousePointer2,
-    Trophy, Terminal, Calendar, Target
+    Trophy, Terminal, Calendar, Target, Layout, Cpu, Zap, ArrowRight, Layers
 } from 'lucide-react';
 
 interface IncentiveExecutionViewProps {
@@ -18,8 +18,16 @@ interface IncentiveExecutionViewProps {
 }
 
 const IncentiveExecutionView: React.FC<IncentiveExecutionViewProps> = ({ projectId, orders, onBack }) => {
-    const { language, appData } = useContext(AppContext);
+    const { language, appData, currentUser } = useContext(AppContext);
     const t = translations[language];
+
+    const canViewLogic = useCallback((userTeam?: string) => {
+        if (!currentUser) return false;
+        if (currentUser.IsSystemAdmin || (currentUser.Role || '').toLowerCase().includes('admin')) return true;
+        const myTeams = (currentUser.Team || '').split(',').map(t => t.trim().toLowerCase()).filter(Boolean);
+        const theirTeams = (userTeam || '').split(',').map(t => t.trim().toLowerCase()).filter(Boolean);
+        return myTeams.some(t => theirTeams.includes(t));
+    }, [currentUser]);
 
     // Teams Identification
     const allTeams = useMemo(() => {
@@ -49,7 +57,6 @@ const IncentiveExecutionView: React.FC<IncentiveExecutionViewProps> = ({ project
     // Separate timers: saveTimer debounces API writes, recalcTimer debounces recalculation
     const debounceTimer = useRef<NodeJS.Timeout | null>(null);
     const recalcTimer = useRef<NodeJS.Timeout | null>(null);
-    // pendingManual tracks the latest committed value per cell (avoids stale closure reads)
     const pendingManual = useRef<Record<string, Record<string, number>>>({});
 
     useEffect(() => {
@@ -112,15 +119,12 @@ const IncentiveExecutionView: React.FC<IncentiveExecutionViewProps> = ({ project
         const valNum = Number(val) || 0;
         const cellKey = `${pk}_${tid}`;
 
-        // 1. Sync pending ref immediately (for rapid increment reads)
         if (!pendingManual.current[metric]) pendingManual.current[metric] = {};
         pendingManual.current[metric][cellKey] = valNum;
 
-        // 2. Optimistic UI update
         setManualDataMap(prev => ({ ...prev, [metric]: { ...(prev[metric] || {}), [cellKey]: valNum } }));
         setSaveStatus('saving');
 
-        // 3. Debounce the SAVE (800ms) — saves the latest pending value
         if (debounceTimer.current) clearTimeout(debounceTimer.current);
         debounceTimer.current = setTimeout(async () => {
             const latestVal = pendingManual.current[metric]?.[cellKey] ?? valNum;
@@ -134,8 +138,6 @@ const IncentiveExecutionView: React.FC<IncentiveExecutionViewProps> = ({ project
             if (success) {
                 setSaveStatus('saved');
                 setTimeout(() => setSaveStatus('idle'), 1500);
-                // 4. Debounce the RECALCULATE separately (3s after last save)
-                //    This prevents UI flicker from rapid +/- clicks
                 if (recalcTimer.current) clearTimeout(recalcTimer.current);
                 recalcTimer.current = setTimeout(() => loadDataAndCalculate(true), 3000);
             } else {
@@ -146,14 +148,12 @@ const IncentiveExecutionView: React.FC<IncentiveExecutionViewProps> = ({ project
 
     const handleManualDataIncrement = (metric: string, tid: string, p: string, delta: number) => {
         if (isLocked || !project?.id) return;
-        // Read from pendingManual ref (always up-to-date even under rapid clicks)
         const currentVal = pendingManual.current[metric]?.[`${p}_${tid}`]
             ?? (manualDataMap[metric] || {})[`${p}_${tid}`]
             ?? 0;
         handleManualDataChange(metric, tid, String(Math.max(0, currentVal + delta)), p);
     };
 
-    // Track pending payout per user (same pattern as pendingManual)
     const pendingPayout = useRef<Record<string, number>>({});
 
     const handleCustomPayoutChange = (un: string, val: string) => {
@@ -189,9 +189,7 @@ const IncentiveExecutionView: React.FC<IncentiveExecutionViewProps> = ({ project
             if (cr.breakdownJson) {
                 try { 
                     const parsed = JSON.parse(cr.breakdownJson);
-                    if (Array.isArray(parsed)) {
-                        breakdown = parsed;
-                    }
+                    if (Array.isArray(parsed)) breakdown = parsed;
                 }
                 catch (e) { console.error('Failed to parse breakdownJson', e); }
             }
@@ -199,13 +197,9 @@ const IncentiveExecutionView: React.FC<IncentiveExecutionViewProps> = ({ project
             const isAmountMetric = ['sales amount', 'revenue', 'profit'].includes(metricType);
             
             let performance = 0;
-            if (metricType === 'profit') {
-                performance = cr.totalProfit || 0;
-            } else if (isAmountMetric) {
-                performance = cr.totalRevenue || 0;
-            } else {
-                performance = cr.totalOrders || 0;
-            }
+            if (metricType === 'profit') performance = cr.totalProfit || 0;
+            else if (isAmountMetric) performance = cr.totalRevenue || 0;
+            else performance = cr.totalOrders || 0;
 
             return {
                 username: cr.userName,
@@ -228,172 +222,218 @@ const IncentiveExecutionView: React.FC<IncentiveExecutionViewProps> = ({ project
     const topStaff = preparedResults.length > 0 ? preparedResults[0] : null;
     const maxPerformance = useMemo(() => Math.max(...preparedResults.map(r => r.performance), 1), [preparedResults]);
 
-    // ---------- Loading State ----------
     if (!project) return (
         <div className="min-h-screen bg-[#050505] flex items-center justify-center">
-            <div className="w-8 h-8 border-2 border-[#F0B90B]/20 border-t-[#F0B90B] rounded-full animate-spin" />
+            <RefreshCw className="w-8 h-8 text-primary animate-spin" />
         </div>
     );
 
-    // ---------- MAIN RENDER (Binance Style) ----------
     return (
-        <div className="incentive-surface w-full h-screen bg-[#050505] text-[#EAECEF] font-sans selection:bg-[#F0B90B]/30 flex flex-col overflow-hidden">
+        <div className="incentive-surface w-full h-screen bg-[#050505] text-[#EAECEF] font-sans selection:bg-primary/30 flex flex-col overflow-hidden">
+            
+            {/* Header: Engineered Protocol Theme */}
+            <header className="bg-[#121212] border-b border-white/5 px-6 py-4 shrink-0 relative overflow-hidden group/header">
+                <div 
+                    className="absolute -top-16 -left-16 w-32 h-32 rounded-full blur-[60px] opacity-[0.05] group-hover/header:opacity-[0.1] transition-all duration-700"
+                    style={{ backgroundColor: project.colorCode || '#F0B90B' }}
+                ></div>
 
-            <header className="bg-[#121212] border-b border-[#1A1A1A] px-4 sm:px-6 py-3 shrink-0">
-                <div className="flex flex-col xl:flex-row xl:items-center justify-between gap-4">
-                    <div className="flex items-center gap-3 min-w-0">
-                    <button onClick={onBack} className="w-9 h-9 flex items-center justify-center hover:bg-[#2B3139] rounded transition-all text-[#B7BDC6] hover:text-[#F0B90B] shrink-0" title="Back">
-                        <ChevronLeft className="w-5 h-5" />
-                    </button>
-                        <div className="h-8 w-px bg-[#1A1A1A] hidden sm:block" />
-                        <div className="w-10 h-10 rounded bg-[#F0B90B]/10 border border-[#F0B90B]/25 flex items-center justify-center shrink-0">
-                            <Terminal className="w-4 h-4 text-[#F0B90B]" />
-                        </div>
-                        <div className="min-w-0">
-                            <h1 className="text-lg font-bold truncate">{project.projectName}</h1>
-                            <p className="text-xs text-[#707A8A] truncate">Payout run for {selectedMonth}</p>
-                        </div>
-                    {saveStatus === 'saving' && (
-                            <span className="hidden md:flex items-center gap-1.5 text-[11px] font-bold text-[#F0B90B] animate-pulse">
-                            <RefreshCw className="w-3 h-3 animate-spin" /> Auto-saving
-                        </span>
-                    )}
-                    {saveStatus === 'saved' && (
-                            <span className="hidden md:flex items-center gap-1.5 text-[11px] font-bold text-[#0ECB81]">
-                            <CheckCircle className="w-3 h-3" /> Saved, recalculating in 3s
-                        </span>
-                    )}
-                    {saveStatus === 'error' && (
-                            <span className="hidden md:flex items-center gap-1.5 text-[11px] font-bold text-[#F6465D]">
-                            <AlertCircle className="w-3 h-3" /> Save Failed
-                        </span>
-                    )}
-                </div>
-
-                    <div className="flex items-center gap-2 overflow-x-auto no-scrollbar">
-                    <div className="flex items-center gap-2 h-8 px-3 bg-[#1A1A1A] border border-[#2B3139] rounded text-[#F0B90B]">
-                        <Calendar className="w-3.5 h-3.5" />
-                        <input
-                            type="month"
-                            value={selectedMonth}
-                            onChange={e => setSelectedMonth(e.target.value)}
-                            className="bg-transparent border-none p-0 text-[#F0B90B] text-[10px] font-bold tracking-widest focus:ring-0 cursor-pointer outline-none"
-                        />
-                    </div>
-
-                        <div className={`h-8 px-3 rounded text-[11px] font-bold flex items-center gap-1.5 border ${
-                        isLocked ? 'bg-[#F6465D]/10 border-[#F6465D]/20 text-[#F6465D]' : 'bg-[#1A1A1A] border-[#2B3139] text-[#707A8A]'
-                    }`}>
-                        <div className={`w-1.5 h-1.5 rounded-full ${isLocked ? 'bg-[#F6465D] animate-pulse' : 'bg-[#707A8A]'}`} />
-                        {isLocked ? 'Locked' : 'Unlocked'}
-                    </div>
-
-                        <button onClick={() => setIsPdfModalOpen(true)} className="h-8 px-3 bg-[#1A1A1A] hover:bg-[#2B3139] text-[#B7BDC6] hover:text-[#EAECEF] rounded text-xs font-bold transition-all border border-[#2B3139] flex items-center gap-1.5 whitespace-nowrap">
-                        <FileText className="w-3.5 h-3.5" /> PDF
-                    </button>
-
-                        <button onClick={toggleLock} className={`h-8 px-3 rounded text-xs font-bold transition-all border flex items-center gap-1.5 whitespace-nowrap ${
-                        isLocked ? 'bg-[#F6465D]/10 border-[#F6465D]/30 text-[#F6465D] hover:bg-[#F6465D]/20' : 'bg-[#1A1A1A] hover:bg-[#2B3139] text-[#B7BDC6] border-[#2B3139]'
-                    }`}>
-                        {isLocked ? <><Lock className="w-3.5 h-3.5" />{t.locked}</> : <><Unlock className="w-3.5 h-3.5" />{t.lock_payout}</>}
-                    </button>
-
-                    {project.dataSource === 'manual' && (
-                            <button onClick={() => setShowInputPanel(!showInputPanel)} className={`h-8 px-3 rounded text-xs font-bold transition-all border flex items-center gap-1.5 whitespace-nowrap ${
-                            showInputPanel ? 'bg-[#F0B90B] text-black border-[#F0B90B]' : 'bg-[#F0B90B]/10 border-[#F0B90B]/30 text-[#F0B90B] hover:bg-[#F0B90B] hover:text-black'
-                        }`}>
-                            {showInputPanel ? 'Close input' : 'Performance input'}
+                <div className="flex flex-col xl:flex-row xl:items-center justify-between gap-6 relative z-10">
+                    <div className="flex items-center gap-6 min-w-0">
+                        <button onClick={onBack} className="w-11 h-11 flex items-center justify-center bg-white/5 hover:bg-white/10 border border-white/10 rounded-2xl transition-all text-[#B7BDC6] hover:text-white shrink-0 active:scale-90" title="Back">
+                            <ChevronLeft className="w-6 h-6" />
                         </button>
-                    )}
+                        <div className="h-10 w-px bg-white/10 hidden sm:block" />
+                        <div className="flex items-center gap-5 min-w-0">
+                            <div 
+                                className="w-12 h-12 rounded-2xl bg-black border border-white/10 flex items-center justify-center shrink-0 relative overflow-hidden shadow-lg"
+                                style={{ boxShadow: `0 0 15px ${project.colorCode || '#F0B90B'}10` }}
+                            >
+                                <div className="absolute inset-0 opacity-10 blur-xl" style={{ backgroundColor: project.colorCode || '#F0B90B' }}></div>
+                                <Terminal className="w-5 h-5 relative z-10" style={{ color: project.colorCode || '#F0B90B' }} />
+                            </div>
+                            <div className="min-w-0">
+                                <h1 className="text-2xl font-black text-white italic tracking-tighter leading-none mb-1.5 truncate">{project.projectName}</h1>
+                                <div className="flex items-center gap-3">
+                                    <div className="flex items-center gap-2">
+                                        <Calendar className="w-3 h-3 text-white/20" />
+                                        <span className="text-[10px] font-black text-white/40 uppercase tracking-[0.2em]">{selectedMonth} PAYOUT_CYCLE</span>
+                                    </div>
+                                    {saveStatus !== 'idle' && (
+                                        <div className={`flex items-center gap-2 px-2 py-0.5 rounded-full border text-[9px] font-black uppercase tracking-widest ${
+                                            saveStatus === 'saving' ? 'bg-primary/10 border-primary/20 text-primary' : 
+                                            saveStatus === 'saved' ? 'bg-emerald-500/10 border-emerald-500/20 text-emerald-400' : 
+                                            'bg-red-500/10 border-red-500/20 text-red-500'
+                                        }`}>
+                                            <div className={`w-1 h-1 rounded-full ${saveStatus === 'saving' ? 'bg-primary animate-pulse' : saveStatus === 'saved' ? 'bg-emerald-500' : 'bg-red-500'}`} />
+                                            {saveStatus === 'saving' ? 'SYNCING_DATA' : saveStatus === 'saved' ? 'DATA_COMMITTED' : 'SYNC_ERROR'}
+                                        </div>
+                                    )}
+                                </div>
+                            </div>
+                        </div>
+                    </div>
 
-                        <button onClick={() => loadDataAndCalculate()} disabled={isCalculating} className="w-8 h-8 bg-[#1A1A1A] hover:bg-[#2B3139] disabled:opacity-50 text-[#707A8A] hover:text-[#F0B90B] rounded border border-[#2B3139] flex items-center justify-center transition-all shrink-0" title="Refresh">
-                        <RefreshCw className={`w-3.5 h-3.5 ${isCalculating ? 'animate-spin' : ''}`} />
-                    </button>
+                    <div className="flex items-center gap-3 overflow-x-auto no-scrollbar">
+                        <div className="flex items-center gap-3 bg-white/5 border border-white/10 rounded-2xl p-1 px-3 h-11 shrink-0">
+                            <Calendar className="w-4 h-4 text-white/20" />
+                            <input
+                                type="month"
+                                value={selectedMonth}
+                                onChange={e => setSelectedMonth(e.target.value)}
+                                className="bg-transparent border-none p-0 text-white font-black text-[11px] tracking-[0.2em] uppercase focus:ring-0 cursor-pointer outline-none min-w-[120px]"
+                            />
+                        </div>
+
+                        <div className={`h-11 px-4 rounded-2xl text-[10px] font-black uppercase tracking-[0.2em] border transition-all duration-500 flex items-center gap-2.5 shrink-0 ${
+                            isLocked ? 'bg-red-500/10 border-red-500/20 text-red-500' : 'bg-white/5 border-white/10 text-white/40'
+                        }`}>
+                            <div className={`w-1.5 h-1.5 rounded-full ${isLocked ? 'bg-red-500 animate-pulse' : 'bg-white/10'}`} />
+                            {isLocked ? 'CYCLE_LOCKED' : 'CYCLE_OPEN'}
+                        </div>
+
+                        <button 
+                            onClick={() => setIsPdfModalOpen(true)} 
+                            className="h-11 px-5 bg-white/5 hover:bg-white/10 text-white/60 hover:text-white rounded-2xl text-[11px] font-black uppercase tracking-widest transition-all border border-white/10 flex items-center gap-3 active:scale-95 shrink-0"
+                        >
+                            <FileText className="w-4 h-4" /> EXPORT_PDF
+                        </button>
+
+                        <button 
+                            onClick={toggleLock} 
+                            className={`h-11 px-5 rounded-2xl text-[11px] font-black uppercase tracking-widest transition-all border flex items-center gap-3 active:scale-95 shrink-0 ${
+                                isLocked 
+                                    ? 'bg-red-500/10 border-red-500/20 text-red-500 hover:bg-red-500/20' 
+                                    : 'bg-white/5 border-white/10 text-white/60 hover:text-white'
+                            }`}
+                        >
+                            {isLocked ? <><Lock className="w-4 h-4" /> UNLOCK_CYCLE</> : <><Unlock className="w-4 h-4" /> COMMIT_PAYOUT</>}
+                        </button>
+
+                        {project.dataSource === 'manual' && (
+                            <button 
+                                onClick={() => setShowInputPanel(!showInputPanel)} 
+                                className={`h-11 px-5 rounded-2xl text-[11px] font-black uppercase tracking-widest transition-all border flex items-center gap-3 active:scale-95 shrink-0 ${
+                                    showInputPanel 
+                                        ? 'bg-primary text-black border-primary shadow-lg shadow-primary/20' 
+                                        : 'bg-primary/5 border-primary/20 text-primary hover:bg-primary/10'
+                                }`}
+                            >
+                                <Layout className="w-4 h-4" />
+                                {showInputPanel ? 'CLOSE_INPUT' : 'DATA_INPUT'}
+                            </button>
+                        )}
+
+                        <button 
+                            onClick={() => loadDataAndCalculate()} 
+                            disabled={isCalculating} 
+                            className="w-11 h-11 bg-white/5 hover:bg-white/10 disabled:opacity-50 text-white/40 hover:text-white rounded-2xl border border-white/10 flex items-center justify-center transition-all shrink-0 active:scale-90" 
+                            title="Recalculate Protocol"
+                        >
+                            <RefreshCw className={`w-5 h-5 ${isCalculating ? 'animate-spin text-primary' : ''}`} />
+                        </button>
                     </div>
                 </div>
             </header>
 
-            <main className="flex-1 overflow-auto custom-scrollbar">
-
-                <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-3 p-4 border-b border-[#1A1A1A]">
+            <main className="flex-1 overflow-auto custom-scrollbar bg-[#050505] p-6 lg:p-8">
+                
+                {/* Protocol KPI Stats */}
+                <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-6 mb-8">
                     {[
-                        { label: 'Total payout', value: `$${totalPayout.toLocaleString(undefined, { maximumFractionDigits: 2 })}`, color: '#F0B90B', icon: Coins, sub: `${preparedResults.length} recipients` },
-                        { label: 'Top earner', value: topStaff?.fullName || 'N/A', sub: topStaff ? `$${topStaff.reward.toFixed(2)}` : 'No payout yet', color: '#0ECB81', icon: Trophy },
-                        { label: 'Average payout', value: `$${(totalPayout / (preparedResults.length || 1)).toLocaleString(undefined, { maximumFractionDigits: 0 })}`, color: '#B7BDC6', icon: TrendingUp, sub: 'Per recipient' },
-                        { label: 'Qualified staff', value: String(preparedResults.length), color: '#F0B90B', icon: ShieldCheck, sub: isLocked ? 'Report locked' : 'Editable cycle' },
+                        { label: 'TOTAL_PAYOUT_RESERVE', value: `$${totalPayout.toLocaleString(undefined, { maximumFractionDigits: 2 })}`, color: 'text-primary', accent: 'bg-primary', icon: Coins, detail: `${preparedResults.length} Qualified_Nodes` },
+                        { label: 'ALPHA_PERFORMER', value: topStaff?.fullName || 'N/A', detail: topStaff ? `$${topStaff.reward.toFixed(2)}_CREDITED` : 'PROTOCOL_PENDING', color: 'text-emerald-500', accent: 'bg-emerald-500', icon: Trophy },
+                        { label: 'MEDIAN_PAYOUT_VAL', value: `$${(totalPayout / (preparedResults.length || 1)).toLocaleString(undefined, { maximumFractionDigits: 0 })}`, color: 'text-white/60', accent: 'bg-white', icon: TrendingUp, detail: 'Average_Per_Entity' },
+                        { label: 'ACTIVE_DATA_NODES', value: String(preparedResults.length), color: 'text-primary', accent: 'bg-primary', icon: ShieldCheck, detail: isLocked ? 'STATE_IMMUTABLE' : 'STATE_VARIABLE' },
                     ].map((s, i) => (
-                        <div key={i} className="p-4 bg-[#121212] border border-[#1A1A1A] rounded flex items-start justify-between gap-4">
-                            <div className="min-w-0">
-                                <span className="text-xs font-semibold text-[#707A8A]">{s.label}</span>
-                                <p className="text-lg font-mono font-bold truncate mt-1" style={{ color: s.color }}>{s.value}</p>
-                                {s.sub && <p className="text-[11px] text-[#707A8A] mt-1 truncate">{s.sub}</p>}
+                        <div key={i} className="bg-[#121212] border border-white/5 rounded-[32px] p-6 flex flex-col justify-between gap-6 group hover:border-white/10 transition-all shadow-xl">
+                            <div className="flex justify-between items-start">
+                                <div className="space-y-1">
+                                    <p className="text-[9px] font-black text-white/20 uppercase tracking-[0.3em]">{s.label}</p>
+                                    <h3 className={`text-2xl font-mono font-black ${s.color} truncate`}>{s.value}</h3>
+                                </div>
+                                <div className={`w-12 h-12 rounded-2xl bg-black border border-white/5 flex items-center justify-center shrink-0 group-hover:scale-110 transition-transform`}>
+                                    <s.icon className={`w-6 h-6 ${s.color}`} />
+                                </div>
                             </div>
-                            <div className="w-10 h-10 rounded bg-[#050505] border border-[#1A1A1A] flex items-center justify-center shrink-0">
-                                <s.icon className="w-5 h-5" style={{ color: s.color }} />
+                            <div className="flex items-center gap-2">
+                                <div className={`w-1 h-1 rounded-full ${s.accent} opacity-40`} />
+                                <p className="text-[9px] font-black text-white/20 uppercase tracking-widest">{s.detail}</p>
                             </div>
                         </div>
                     ))}
                 </div>
 
+                {/* Data Entry Panel (Manual Override) */}
                 {showInputPanel && project.dataSource === 'manual' && (
-                    <div className="border-b border-[#1A1A1A] bg-[#0A0A0A]">
-                        <div className="px-4 py-3 bg-[#121212] border-b border-[#1A1A1A] flex flex-col xl:flex-row xl:items-center gap-3">
-                            <div className="flex flex-col sm:flex-row sm:items-center gap-2 min-w-0">
-                                <span className="text-xs font-semibold text-[#707A8A] shrink-0">Calculator</span>
-                                <div className="flex items-center gap-1 bg-[#050505] p-1 rounded border border-[#1A1A1A] overflow-x-auto no-scrollbar">
+                    <div className="mb-10 bg-[#121212] border border-white/5 rounded-[40px] overflow-hidden shadow-2xl relative">
+                        <div className="absolute top-0 right-0 p-12 opacity-[0.01] pointer-events-none">
+                            <Cpu className="w-64 h-64 text-white" />
+                        </div>
+
+                        <div className="px-8 py-6 bg-white/[0.02] border-b border-white/5 flex flex-col xl:flex-row xl:items-center gap-6 relative z-10">
+                            <div className="flex flex-col sm:flex-row sm:items-center gap-4 min-w-0">
+                                <div className="flex items-center gap-2">
+                                    <Layers className="w-3.5 h-3.5 text-white/20" />
+                                    <span className="text-[10px] font-black text-white/40 uppercase tracking-[0.2em]">Active_Module</span>
+                                </div>
+                                <div className="flex items-center gap-2 bg-black p-1 rounded-2xl border border-white/5 overflow-x-auto no-scrollbar">
                                     {project.calculators?.filter(c => c.status === 'Active').map(calc => (
                                         <button
                                             key={calc.id}
                                             onClick={() => setActiveMetricTab(String(calc.id))}
-                                            className={`h-8 px-3 rounded text-xs font-bold transition-all whitespace-nowrap ${
+                                            className={`h-9 px-5 rounded-xl text-[10px] font-black uppercase tracking-[0.2em] transition-all whitespace-nowrap border ${
                                                 activeMetricTab === String(calc.id)
-                                                    ? 'bg-[#F0B90B] text-black'
-                                                    : 'text-[#707A8A] hover:text-[#EAECEF]'
+                                                    ? 'bg-primary border-primary text-black shadow-lg shadow-primary/20'
+                                                    : 'bg-transparent border-transparent text-white/30 hover:text-white hover:bg-white/5'
                                             }`}
                                         >{calc.name}</button>
                                     ))}
                                 </div>
                             </div>
 
-                            <div className="flex items-center gap-2">
-                                <span className="text-xs font-semibold text-[#707A8A]">Scope</span>
-                                <div className="flex items-center gap-1 bg-[#050505] p-1 rounded border border-[#1A1A1A]">
+                            <div className="flex items-center gap-4">
+                                <div className="flex items-center gap-2">
+                                    <Target className="w-3.5 h-3.5 text-white/20" />
+                                    <span className="text-[10px] font-black text-white/40 uppercase tracking-[0.2em]">Scale</span>
+                                </div>
+                                <div className="flex items-center gap-1 bg-black p-1 rounded-2xl border border-white/5">
                                     {(['team', 'user'] as const).map(mode => (
-                                        <button key={mode} onClick={() => setEntryMode(mode)} className={`h-8 px-3 rounded text-xs font-bold transition-all ${entryMode === mode ? 'bg-[#2B3139] text-[#EAECEF]' : 'text-[#707A8A] hover:text-[#EAECEF]'}`}>
-                                            {mode === 'team' ? 'Teams' : 'Staff'}
+                                        <button 
+                                            key={mode} 
+                                            onClick={() => setEntryMode(mode)} 
+                                            className={`h-9 px-5 rounded-xl text-[10px] font-black uppercase tracking-[0.2em] transition-all ${
+                                                entryMode === mode 
+                                                    ? 'bg-white/10 text-white border border-white/10 shadow-lg' 
+                                                    : 'text-white/20 hover:text-white/40'
+                                            }`}
+                                        >
+                                            {mode === 'team' ? 'TEAMS' : 'ENTITIES'}
                                         </button>
                                     ))}
                                 </div>
                             </div>
 
-                            <div className="relative xl:ml-auto w-full xl:w-64 group">
-                                <Search className="pointer-events-none absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-[#707A8A] group-focus-within:text-[#F0B90B] transition-colors" />
+                            <div className="relative xl:ml-auto w-full xl:w-80 group">
+                                <Search className="pointer-events-none absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-white/20 group-focus-within:text-primary transition-colors" />
                                 <input
                                     type="text"
-                                    placeholder="Search entity..."
+                                    placeholder="FILTER_ENGINE_NODES..."
                                     value={editorSearch}
                                     onChange={e => setEditorSearch(e.target.value)}
-                                    className="w-full h-9 bg-[#050505] border border-[#1A1A1A] rounded pl-8 pr-8 text-xs font-semibold text-[#EAECEF] placeholder:text-[#707A8A] focus:border-[#F0B90B]/50 outline-none transition-all"
+                                    className="w-full h-11 bg-black border border-white/10 rounded-2xl pl-11 pr-11 text-[11px] font-black text-white placeholder:text-white/10 focus:border-primary/50 focus:bg-white/[0.02] outline-none transition-all uppercase tracking-widest"
                                 />
-                                {editorSearch && (
-                                    <button
-                                        onClick={() => setEditorSearch('')}
-                                        className="absolute right-2 top-1/2 -translate-y-1/2 w-4 h-4 flex items-center justify-center text-[#707A8A] hover:text-[#EAECEF] transition-colors text-[10px] font-bold"
-                                    >✕</button>
-                                )}
                             </div>
                         </div>
 
-                        <div className="overflow-x-auto max-h-[400px] overflow-y-auto">
+                        <div className="overflow-x-auto max-h-[500px] overflow-y-auto custom-scrollbar">
                             {project.calculators?.filter(c => c.status === 'Active' && String(c.id) === activeMetricTab).map(calc => {
-                                // Dynamically extract sub-periods defined in the tiers
                                 const definedSubPeriods = Array.from(new Set(
                                     (calc.achievementTiers || [])
                                         .map(t => t.subPeriod)
                                         .filter(sp => sp && sp.trim() !== "")
                                 )).sort() as string[];
 
-                                // If no sub-periods are defined in tiers, use defaults for Weekly/Marathon or Month
                                 let subPeriods = definedSubPeriods;
                                 if (subPeriods.length === 0) {
                                     subPeriods = (calc.calculationPeriod === 'Weekly' || calc.isMarathon) 
@@ -420,26 +460,26 @@ const IncentiveExecutionView: React.FC<IncentiveExecutionViewProps> = ({ project
                                     return label.toLowerCase().includes(editorSearch.toLowerCase());
                                 });
                                 return (
-                                    <div key={calc.id} className="space-y-4">
+                                    <div key={calc.id} className="relative">
                                         {calc.isMarathon && (
-                                            <div className="px-4 py-2 bg-[#F0B90B]/5 border-y border-[#F0B90B]/10 flex items-center gap-3">
-                                                <Trophy className="w-4 h-4 text-[#F0B90B]" />
-                                                <span className="text-[10px] font-black text-[#F0B90B] uppercase tracking-[0.2em]">Marathon Mode Active: Rewards sum per unique sub-period (Weekly Cumulative)</span>
+                                            <div className="px-8 py-3 bg-primary/5 border-y border-primary/10 flex items-center gap-4">
+                                                <Trophy className="w-4 h-4 text-primary shadow-[0_0_10px_rgba(252,213,53,0.5)]" />
+                                                <span className="text-[10px] font-black text-primary uppercase tracking-[0.2em] italic underline underline-offset-4 decoration-primary/30">Protocol_Marathon_Active: Cumulative reward aggregation per unique node interval</span>
                                             </div>
                                         )}
-                                        <table className="w-full text-left border-collapse min-w-[700px]">
-                                            <thead className="sticky top-0 z-10">
-                                                <tr className="bg-[#121212] border-b border-[#1A1A1A] text-[11px] text-[#707A8A] font-semibold">
-                                                    <th className="px-4 py-3 min-w-[180px] border-r border-[#1A1A1A]">Entity</th>
+                                        <table className="w-full text-left border-collapse min-w-[800px]">
+                                            <thead className="sticky top-0 z-20">
+                                                <tr className="bg-black/80 backdrop-blur-xl border-b border-white/10 text-[9px] text-white/30 font-black uppercase tracking-[0.3em]">
+                                                    <th className="px-8 py-4 min-w-[220px] border-r border-white/5">Engine_Node</th>
                                                     {subPeriods.map(p => (
-                                                        <th key={p} className="px-2 py-3 text-center border-r border-[#1A1A1A] min-w-[160px]">
-                                                            {p === 'month' ? 'Accumulated KPI' : p}
+                                                        <th key={p} className="px-4 py-4 text-center border-r border-white/5 min-w-[180px]">
+                                                            {p === 'month' ? 'ACCUMULATED_KPI' : p}
                                                         </th>
                                                     ))}
-                                                    <th className="px-4 py-3 text-right text-[#F0B90B] bg-[#F0B90B]/5">Total</th>
+                                                    <th className="px-8 py-4 text-right text-primary bg-primary/5">Node_Total</th>
                                                 </tr>
                                             </thead>
-                                            <tbody className="divide-y divide-[#1A1A1A]">
+                                            <tbody className="divide-y divide-white/5">
                                                 {targets.map(t => {
                                                     const id = typeof t === 'string' ? t : t.UserName;
                                                     const label = typeof t === 'string' ? t : t.FullName;
@@ -447,17 +487,15 @@ const IncentiveExecutionView: React.FC<IncentiveExecutionViewProps> = ({ project
                                                     const rowTotal = subPeriods.reduce((sum, p) => sum + (rowData[`${p}_${id}`] || 0), 0);
                                                     
                                                     return (
-                                                        <tr key={id} className="hover:bg-[#121212] transition-colors group">
-                                                            <td className="px-4 py-3 border-r border-[#1A1A1A] font-bold text-[#EAECEF] text-xs group-hover:text-[#F0B90B] transition-colors">
+                                                        <tr key={id} className="hover:bg-white/[0.02] transition-colors group">
+                                                            <td className="px-8 py-5 border-r border-white/5 font-black text-white text-xs italic tracking-tight group-hover:text-primary transition-colors">
                                                                 {label}
                                                                 {entryMode === 'user' && typeof t !== 'string' && (
-                                                                    <div className="text-[9px] text-[#707A8A] font-normal uppercase mt-0.5">{t.Team}</div>
+                                                                    <div className="text-[8px] text-white/20 font-black uppercase tracking-[0.2em] mt-1">{t.Team || 'GLOBAL'}</div>
                                                                 )}
                                                             </td>
                                                             {subPeriods.map(p => {
                                                                 const cellVal = rowData[`${p}_${id}`] || 0;
-                                                                
-                                                                // Find highest tier reached for this sub-period
                                                                 let activeTier = null;
                                                                 if (calc.achievementTiers) {
                                                                     const tiers = [...calc.achievementTiers]
@@ -467,45 +505,44 @@ const IncentiveExecutionView: React.FC<IncentiveExecutionViewProps> = ({ project
                                                                 }
 
                                                                 return (
-                                                                    <td key={p} className="px-2 py-2 border-r border-[#1A1A1A]">
-                                                                        <div className="flex flex-col gap-1.5">
-                                                                            <div className="flex items-center gap-1">
+                                                                    <td key={p} className="px-4 py-4 border-r border-white/5">
+                                                                        <div className="flex flex-col gap-3">
+                                                                            <div className="flex items-center gap-2">
                                                                                 <button
                                                                                     type="button"
                                                                                     disabled={isLocked || cellVal <= 0}
                                                                                     onClick={() => handleManualDataIncrement(calc.metricType || '', id, p, -1)}
-                                                                                    className="w-7 h-8 flex items-center justify-center rounded bg-[#F6465D]/10 hover:bg-[#F6465D]/20 text-[#F6465D] font-black border border-[#F6465D]/20 transition-all disabled:opacity-25 disabled:cursor-not-allowed active:scale-95 shrink-0 select-none text-sm"
+                                                                                    className="w-9 h-11 flex items-center justify-center rounded-xl bg-red-500/10 hover:bg-red-500/20 text-red-500 border border-red-500/20 transition-all disabled:opacity-20 active:scale-90 shrink-0 text-lg font-black"
                                                                                 >−</button>
                                                                                 <input
                                                                                     type="number"
                                                                                     value={cellVal || ''}
                                                                                     disabled={isLocked}
                                                                                     onChange={e => handleManualDataChange(calc.metricType || '', id, e.target.value, p)}
-                                                                                    className="flex-1 bg-[#050505] border border-[#1A1A1A] text-center font-mono text-[12px] font-bold text-[#EAECEF] focus:bg-[#F0B90B]/5 focus:text-[#F0B90B] focus:border-[#F0B90B]/40 rounded py-2 outline-none transition-all disabled:opacity-30 min-w-0"
+                                                                                    className="flex-1 h-11 bg-black border border-white/10 text-center font-mono text-[14px] font-black text-white focus:border-primary/50 focus:bg-primary/[0.02] rounded-xl outline-none transition-all disabled:opacity-30"
                                                                                     placeholder="0"
-                                                                                    min={0}
                                                                                 />
                                                                                 <button
                                                                                     type="button"
                                                                                     disabled={isLocked}
                                                                                     onClick={() => handleManualDataIncrement(calc.metricType || '', id, p, 1)}
-                                                                                    className="w-7 h-8 flex items-center justify-center rounded bg-[#0ECB81]/10 hover:bg-[#0ECB81]/20 text-[#0ECB81] font-black border border-[#0ECB81]/20 transition-all disabled:opacity-25 disabled:cursor-not-allowed active:scale-95 shrink-0 select-none text-sm"
+                                                                                    className="w-9 h-11 flex items-center justify-center rounded-xl bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-400 border border-emerald-500/20 transition-all disabled:opacity-20 active:scale-90 shrink-0 text-lg font-black"
                                                                                 >+</button>
                                                                             </div>
                                                                             
                                                                             {activeTier ? (
-                                                                                <div className="flex items-center justify-between px-1">
-                                                                                    <span className="text-[8px] font-black text-[#0ECB81] uppercase tracking-tighter bg-[#0ECB81]/10 px-1 rounded">
-                                                                                        {activeTier.name || 'Achieved'}
+                                                                                <div className="flex items-center justify-between px-2 py-1 bg-emerald-500/5 rounded-lg border border-emerald-500/10">
+                                                                                    <span className="text-[8px] font-black text-emerald-400 uppercase tracking-tighter">
+                                                                                        {activeTier.name || 'TARGET_REACHED'}
                                                                                     </span>
-                                                                                    <span className="text-[9px] font-mono font-bold text-[#0ECB81]">
+                                                                                    <span className="text-[10px] font-mono font-black text-emerald-400">
                                                                                         +${activeTier.rewardAmount.toFixed(0)}
                                                                                     </span>
                                                                                 </div>
                                                                             ) : cellVal > 0 ? (
-                                                                                <div className="px-1">
-                                                                                    <div className="h-0.5 w-full bg-[#1A1A1A] rounded-full overflow-hidden">
-                                                                                        <div className="h-full bg-[#707A8A] animate-pulse" style={{width: '30%'}}></div>
+                                                                                <div className="px-2">
+                                                                                    <div className="h-0.5 w-full bg-white/5 rounded-full overflow-hidden">
+                                                                                        <div className="h-full bg-white/20 animate-pulse" style={{width: '40%'}}></div>
                                                                                     </div>
                                                                                 </div>
                                                                             ) : null}
@@ -513,9 +550,9 @@ const IncentiveExecutionView: React.FC<IncentiveExecutionViewProps> = ({ project
                                                                     </td>
                                                                 );
                                                             })}
-                                                            <td className="px-4 py-3 text-right bg-[#F0B90B]/5">
-                                                                <span className="font-mono text-[14px] text-[#F0B90B] font-bold">{rowTotal.toLocaleString()}</span>
-                                                                <div className="text-[10px] text-[#707A8A] font-semibold">{calc.metricType || 'KPI'}</div>
+                                                            <td className="px-8 py-5 text-right bg-primary/[0.02]">
+                                                                <span className="font-mono text-[16px] text-primary font-black tracking-tight">{rowTotal.toLocaleString()}</span>
+                                                                <div className="text-[9px] text-white/20 font-black uppercase tracking-[0.2em] mt-1">{calc.metricType || 'KPI'}</div>
                                                             </td>
                                                         </tr>
                                                     );
@@ -524,196 +561,215 @@ const IncentiveExecutionView: React.FC<IncentiveExecutionViewProps> = ({ project
                                         </table>
                                     </div>
                                 );
-
                             })}
                         </div>
                     </div>
                 )}
 
-                <div className="p-4 space-y-4">
-                    <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-3">
-                        <div className="flex items-center gap-3 min-w-0">
-                            <div className="w-1 h-5 bg-[#F0B90B] rounded-full" />
-                            <h2 className="text-base font-bold text-[#EAECEF]">Payout ledger</h2>
-                            <div className="h-4 w-px bg-[#1A1A1A]" />
-                            <span className="text-xs text-[#707A8A] truncate">
-                                {project?.calculators?.some(c => c.isMarathon) 
-                                    ? 'Review Marathon cumulative rewards and apply approved overrides.' 
-                                    : 'Review calculated rewards and apply approved overrides.'}
-                            </span>
+                {/* Payout Ledger Table */}
+                <div className="space-y-6">
+                    <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-6">
+                        <div className="flex items-center gap-5 min-w-0">
+                            <div className="w-2 h-8 bg-primary rounded-full shadow-[0_0_15px_rgba(252,213,53,0.3)]" />
+                            <div>
+                                <h2 className="text-3xl font-black text-white italic tracking-tighter uppercase leading-none mb-1.5">Payout_Ledger</h2>
+                                <p className="text-[10px] text-white/30 font-black uppercase tracking-[0.3em]">
+                                    {project?.calculators?.some(c => c.isMarathon) 
+                                        ? 'Aggregate Marathon Protocol Credits & Final Verification' 
+                                        : 'Verified Rewards aggregation and Manual Override Protocol'}
+                                </p>
+                            </div>
                         </div>
                         <button
                             onClick={() => setIsAdjustMode(!isAdjustMode)}
                             disabled={isLocked}
-                            className={`h-9 px-4 text-xs font-bold rounded border transition-all flex items-center justify-center gap-2 ${
+                            className={`h-11 px-6 text-[10px] font-black uppercase tracking-widest rounded-2xl border transition-all flex items-center justify-center gap-3 active:scale-95 shadow-lg ${
                                 isLocked
-                                    ? 'bg-[#1A1A1A] text-[#707A8A] border-[#2B3139] opacity-50 cursor-not-allowed'
+                                    ? 'bg-white/5 text-white/20 border-white/5 opacity-50 cursor-not-allowed'
                                     : isAdjustMode
-                                        ? 'bg-[#F0B90B] text-black border-[#F0B90B]'
-                                        : 'bg-[#1A1A1A] text-[#707A8A] hover:text-[#EAECEF] border-[#2B3139]'
+                                        ? 'bg-primary text-black border-primary shadow-primary/20'
+                                        : 'bg-white/5 text-white/40 hover:text-white border-white/10 hover:bg-white/10'
                             }`}
                         >
-                            <MousePointer2 className="w-3.5 h-3.5" />
-                            {isAdjustMode ? 'Finish adjustments' : 'Adjust payouts'}
+                            <MousePointer2 className="w-4 h-4" />
+                            {isAdjustMode ? 'FINISH_ADJUSTMENTS' : 'INITIATE_OVERRIDE'}
                         </button>
                     </div>
 
-                    <div className="bg-[#121212] border border-[#1A1A1A] rounded overflow-hidden">
+                    <div className="bg-[#121212] border border-white/5 rounded-[40px] overflow-hidden shadow-2xl relative">
                         <div className="overflow-x-auto custom-scrollbar">
-                        <table className="w-full text-left border-collapse min-w-[900px]">
-                            <thead>
-                                <tr className="bg-[#0A0A0A] border-b border-[#1A1A1A] text-[11px] text-[#707A8A] font-semibold">
-                                    <th className="px-4 py-3 w-12 text-center border-r border-[#1A1A1A]">Rank</th>
-                                    <th className="px-4 py-3 min-w-[220px] border-r border-[#1A1A1A]">Staff</th>
-                                    <th className="px-4 py-3 border-r border-[#1A1A1A]">Performance</th>
-                                    <th className="px-4 py-3 border-r border-[#1A1A1A]">Reward components</th>
-                                    <th className="px-4 py-3 text-right">Payout (USD)</th>
-                                </tr>
-                            </thead>
-                            <tbody className="divide-y divide-[#1A1A1A]">
-                                {preparedResults.map((u, idx) => (
-                                    <tr key={u.username} className={`hover:bg-[#1A1A1A] transition-all group ${idx === 0 ? 'bg-[#F0B90B]/[0.02]' : ''}`}>
-                                        <td className="px-4 py-4 text-center border-r border-[#1A1A1A]">
-                                            <span className={`font-mono font-bold text-sm ${idx === 0 ? 'text-[#F0B90B]' : 'text-[#2B3139]'}`}>
-                                                {(idx + 1).toString().padStart(2, '0')}
-                                            </span>
-                                        </td>
-
-                                        <td className="px-4 py-4 border-r border-[#1A1A1A]">
-                                            <div className="flex items-center gap-3">
-                                                <div className="relative shrink-0">
-                                                    <UserAvatar avatarUrl={u.avatar} name={u.fullName} size="sm" className="border border-[#2B3139] group-hover:border-[#F0B90B]/40 transition-colors" />
-                                                    {idx === 0 && (
-                                                        <div className="absolute -top-1.5 -right-1.5 w-4 h-4 bg-[#F0B90B] rounded-full flex items-center justify-center border border-[#050505]">
-                                                            <Trophy className="w-2.5 h-2.5 text-black" />
-                                                        </div>
-                                                    )}
-                                                </div>
-                                                <div className="min-w-0">
-                                                    <p className="font-bold text-[#EAECEF] text-xs truncate group-hover:text-[#F0B90B] transition-colors">{u.fullName}</p>
-                                                    <p className="text-[10px] text-[#707A8A] font-mono truncate">{u.username} - {u.role || 'Staff'}</p>
-                                                </div>
-                                            </div>
-                                        </td>
-
-                                        <td className="px-4 py-4 border-r border-[#1A1A1A]">
-                                            <p className="font-mono font-bold text-[#EAECEF] text-[13px]">
-                                                {u.isAmountMetric ? '$' : ''}{u.performance.toLocaleString()}
-                                            </p>
-                                            <div className="flex items-center gap-2 mt-1.5">
-                                                <div className="h-1 w-20 bg-[#1A1A1A] rounded-full overflow-hidden">
-                                                    <div
-                                                        className="h-full bg-[#F0B90B] rounded-full transition-all duration-700"
-                                                        style={{ width: `${Math.min(100, Math.round((u.performance / maxPerformance) * 100))}%` }}
-                                                    />
-                                                </div>
-                                                <span className="text-[10px] text-[#707A8A] font-semibold">
-                                                    {Math.round((u.performance / maxPerformance) * 100)}% - {u.performanceMetric}
+                            <table className="w-full text-left border-collapse min-w-[1000px]">
+                                <thead>
+                                    <tr className="bg-white/[0.02] border-b border-white/5 text-[9px] text-white/30 font-black uppercase tracking-[0.3em]">
+                                        <th className="px-8 py-5 w-20 text-center border-r border-white/5">RANK</th>
+                                        <th className="px-8 py-5 min-w-[280px] border-r border-white/5">ENTITY_IDENTITY</th>
+                                        <th className="px-8 py-5 border-r border-white/5">PERFORMANCE_INDEX</th>
+                                        <th className="px-8 py-5 border-r border-white/5">LOGIC_COMPONENTS</th>
+                                        <th className="px-8 py-5 text-right">CREDIT_VALUE (USD)</th>
+                                    </tr>
+                                </thead>
+                                <tbody className="divide-y divide-white/5">
+                                    {preparedResults.map((u, idx) => (
+                                        <tr key={u.username} className={`hover:bg-white/[0.03] transition-all duration-300 group ${idx === 0 ? 'bg-primary/[0.01]' : ''}`}>
+                                            <td className="px-8 py-6 text-center border-r border-white/5">
+                                                <span className={`font-mono font-black text-lg ${idx === 0 ? 'text-primary' : 'text-white/10'}`}>
+                                                    {(idx + 1).toString().padStart(2, '0')}
                                                 </span>
-                                            </div>
-                                        </td>
+                                            </td>
 
-                                        <td className="px-4 py-4 border-r border-[#1A1A1A]">
-                                            <div className="flex flex-wrap gap-1.5">
-                                                {u.breakdown?.map((b: any, i: number) => {
-                                                    const calc = project?.calculators?.find(c => c.id === b.calculatorId);
-                                                    const isMarathonComponent = calc?.isMarathon;
-                                                    return (
-                                                        <div key={i} className={`px-2 py-1 bg-[#050505] border hover:border-[#F0B90B]/30 rounded text-[10px] flex flex-col gap-0.5 transition-all ${isMarathonComponent ? 'border-[#F0B90B]/40' : 'border-[#1A1A1A]'}`} title={b.description}>
-                                                            <div className="flex items-center gap-1.5">
-                                                                {isMarathonComponent && <Trophy className="w-2.5 h-2.5 text-[#F0B90B]" />}
-                                                                <span className={`${isMarathonComponent ? 'text-[#F0B90B] font-bold' : 'text-[#707A8A] font-semibold'}`}>
-                                                                    {isMarathonComponent ? 'Marathon Cumulative' : (b.name || b.calculatorName || 'Bonus')}
-                                                                </span>
-                                                                <div className="w-px h-3 bg-[#1A1A1A]" />
-                                                                <span className="text-[#0ECB81] font-mono font-bold">${(b.amount || 0).toFixed(2)}</span>
+                                            <td className="px-8 py-6 border-r border-white/5">
+                                                <div className="flex items-center gap-4">
+                                                    <div className="relative shrink-0">
+                                                        <UserAvatar avatarUrl={u.avatar} name={u.fullName} size="md" className="border-2 border-white/5 group-hover:border-primary/40 transition-all duration-500 scale-90 group-hover:scale-100" />
+                                                        {idx === 0 && (
+                                                            <div className="absolute -top-1 -right-1 w-6 h-6 bg-primary rounded-full flex items-center justify-center border-2 border-[#121212] shadow-lg">
+                                                                <Trophy className="w-3 h-3 text-black" />
                                                             </div>
-                                                            {b.description && (
-                                                                <div className="text-[8px] text-[#707A8A] font-mono leading-none border-t border-[#1A1A1A] pt-1 mt-0.5">
-                                                                    {b.description}
+                                                        )}
+                                                    </div>
+                                                    <div className="min-w-0">
+                                                        <p className="font-black text-white text-sm uppercase italic tracking-tight truncate group-hover:text-primary transition-colors">{u.fullName}</p>
+                                                        <p className="text-[9px] text-white/20 font-black uppercase tracking-[0.2em] mt-1">{u.username} // {u.role || 'STAFF_NODE'}</p>
+                                                    </div>
+                                                </div>
+                                            </td>
+
+                                            <td className="px-8 py-6 border-r border-white/5">
+                                                <p className="font-mono font-black text-white text-base">
+                                                    {u.isAmountMetric ? '$' : ''}{u.performance.toLocaleString()}
+                                                </p>
+                                                <div className="flex items-center gap-3 mt-3">
+                                                    <div className="h-1.5 flex-grow bg-white/5 rounded-full overflow-hidden max-w-[120px]">
+                                                        <div
+                                                            className="h-full bg-primary rounded-full transition-all duration-1000 ease-out shadow-[0_0_10px_rgba(252,213,53,0.4)]"
+                                                            style={{ width: `${Math.min(100, Math.round((u.performance / maxPerformance) * 100))}%` }}
+                                                        />
+                                                    </div>
+                                                    <span className="text-[9px] text-white/30 font-black uppercase tracking-widest">
+                                                        {Math.round((u.performance / maxPerformance) * 100)}% {u.performanceMetric}
+                                                    </span>
+                                                </div>
+                                            </td>
+
+                                            <td className="px-8 py-6 border-r border-white/5">
+                                                {canViewLogic(u.team) ? (
+                                                    <div className="flex flex-wrap gap-2">
+                                                        {u.breakdown?.map((b: any, i: number) => {
+                                                            const calc = project?.calculators?.find(c => c.id === b.calculatorId);
+                                                            const isMarathonComponent = calc?.isMarathon;
+                                                            return (
+                                                                <div key={i} className={`px-3 py-1.5 bg-black/40 border rounded-xl text-[10px] flex flex-col gap-1 transition-all duration-300 hover:scale-105 ${isMarathonComponent ? 'border-primary/40 bg-primary/5' : 'border-white/5 hover:border-white/20'}`} title={b.description}>
+                                                                    <div className="flex items-center gap-2.5">
+                                                                        {isMarathonComponent ? <Trophy className="w-3 h-3 text-primary" /> : <Cpu className="w-3 h-3 text-white/20" />}
+                                                                        <span className={`uppercase tracking-widest font-black text-[9px] ${isMarathonComponent ? 'text-primary' : 'text-white/40'}`}>
+                                                                            {isMarathonComponent ? 'MARATHON_CREDIT' : (b.name || b.calculatorName || 'BONUS_NODE')}
+                                                                        </span>
+                                                                        <div className="w-px h-3 bg-white/10" />
+                                                                        <span className="text-emerald-400 font-mono font-black">${(b.amount || 0).toFixed(2)}</span>
+                                                                    </div>
                                                                 </div>
+                                                            );
+                                                        })}
+                                                        {u.breakdown.length === 0 && (
+                                                            <span className="text-[9px] font-black text-white/10 uppercase tracking-[0.2em]">NO_DATA_BREAKDOWN</span>
+                                                        )}
+                                                    </div>
+                                                ) : (
+                                                    <div className="flex items-center gap-2">
+                                                        <Lock className="w-3 h-3 text-white/20" />
+                                                        <span className="text-[9px] font-black text-white/20 uppercase tracking-[0.2em]">CLASSIFIED_PROTOCOL</span>
+                                                    </div>
+                                                )}
+                                            </td>
+
+                                            <td className="px-8 py-6 text-right">
+                                                {canViewLogic(u.team) ? (
+                                                    isAdjustMode ? (
+                                                        <div className="flex flex-col items-end gap-2">
+                                                            <div className="flex items-center gap-2 bg-black border border-white/10 p-1 rounded-2xl">
+                                                                <button
+                                                                    type="button"
+                                                                    disabled={isLocked}
+                                                                    onClick={() => {
+                                                                        const cur = customPayouts[u.username] !== undefined ? customPayouts[u.username] : u.reward;
+                                                                        handleCustomPayoutChange(u.username, String(Math.max(0, cur - 1)));
+                                                                    }}
+                                                                    className="w-9 h-9 flex items-center justify-center rounded-xl bg-white/5 hover:bg-red-500/10 text-white/40 hover:text-red-500 transition-all active:scale-90 font-black"
+                                                                >−</button>
+                                                                <div className="flex items-center px-2">
+                                                                    <span className="text-white/20 font-mono text-sm mr-1.5">$</span>
+                                                                    <input
+                                                                        type="number"
+                                                                        value={customPayouts[u.username] !== undefined ? customPayouts[u.username] : u.reward}
+                                                                        onChange={e => handleCustomPayoutChange(u.username, e.target.value)}
+                                                                        disabled={isLocked}
+                                                                        className="w-24 bg-transparent border-none p-0 text-base text-right font-mono font-black text-primary focus:ring-0 outline-none"
+                                                                        min={0}
+                                                                    />
+                                                                </div>
+                                                                <button
+                                                                    type="button"
+                                                                    disabled={isLocked}
+                                                                    onClick={() => {
+                                                                        const cur = customPayouts[u.username] !== undefined ? customPayouts[u.username] : u.reward;
+                                                                        handleCustomPayoutChange(u.username, String(cur + 1));
+                                                                    }}
+                                                                    className="w-9 h-9 flex items-center justify-center rounded-xl bg-white/5 hover:bg-emerald-500/10 text-white/40 hover:text-emerald-400 transition-all active:scale-90 font-black"
+                                                                >+</button>
+                                                            </div>
+                                                            {customPayouts[u.username] !== undefined && (
+                                                                <button
+                                                                    disabled={isLocked}
+                                                                    onClick={() => handleCustomPayoutChange(u.username, String(u.baseReward))}
+                                                                    className="text-[9px] font-black text-white/20 hover:text-primary uppercase tracking-[0.2em] transition-all"
+                                                                >
+                                                                    RESET_ORIGINAL_${u.baseReward.toFixed(2)}
+                                                                </button>
                                                             )}
                                                         </div>
-                                                    );
-                                                })}
-                                                {u.breakdown.length === 0 && (
-                                                    <span className="text-xs text-[#707A8A]">No component breakdown</span>
-                                                )}
-                                            </div>
-                                        </td>
-
-                                        <td className="px-4 py-4 text-right">
-                                            {isAdjustMode ? (
-                                                <div className="flex flex-col items-end gap-1.5">
-                                                    <div className="flex items-center gap-1.5">
-                                                        <button
-                                                            type="button"
-                                                            disabled={isLocked}
-                                                            onClick={() => {
-                                                                const cur = customPayouts[u.username] !== undefined ? customPayouts[u.username] : u.reward;
-                                                                handleCustomPayoutChange(u.username, String(Math.max(0, cur - 1)));
-                                                            }}
-                                                            className="w-7 h-8 flex items-center justify-center rounded bg-[#F6465D]/10 hover:bg-[#F6465D]/20 text-[#F6465D] font-black text-sm border border-[#F6465D]/20 transition-all active:scale-95 select-none disabled:opacity-30 disabled:cursor-not-allowed"
-                                                            title="បន្ថយ $1"
-                                                        >-</button>
-                                                        <div className="flex items-center">
-                                                            <span className="text-[#707A8A] font-mono text-sm mr-1">$</span>
-                                                            <input
-                                                                type="number"
-                                                                value={customPayouts[u.username] !== undefined ? customPayouts[u.username] : u.reward}
-                                                                onChange={e => handleCustomPayoutChange(u.username, e.target.value)}
-                                                                disabled={isLocked}
-                                                                className="w-24 bg-[#050505] border border-[#F0B90B]/30 rounded py-1.5 px-2 text-[13px] text-right font-mono font-bold text-[#F0B90B] focus:border-[#F0B90B] outline-none disabled:opacity-30"
-                                                                min={0}
-                                                            />
+                                                    ) : (
+                                                        <div className="group/val">
+                                                            <div className="flex flex-col items-end">
+                                                                <span className="font-mono font-black text-[22px] text-primary group-hover/val:scale-110 transition-transform duration-300 origin-right">
+                                                                    ${u.reward.toLocaleString(undefined, { minimumFractionDigits: 2 })}
+                                                                </span>
+                                                                {u.isCustom && (
+                                                                    <div className="flex items-center gap-1.5 mt-1">
+                                                                        <div className="w-1 h-1 rounded-full bg-primary animate-pulse" />
+                                                                        <span className="text-[9px] font-black text-white/30 uppercase tracking-[0.2em]">Manual_Override_Active</span>
+                                                                    </div>
+                                                                )}
+                                                            </div>
                                                         </div>
-                                                        <button
-                                                            type="button"
-                                                            disabled={isLocked}
-                                                            onClick={() => {
-                                                                const cur = customPayouts[u.username] !== undefined ? customPayouts[u.username] : u.reward;
-                                                                handleCustomPayoutChange(u.username, String(cur + 1));
-                                                            }}
-                                                            className="w-7 h-8 flex items-center justify-center rounded bg-[#0ECB81]/10 hover:bg-[#0ECB81]/20 text-[#0ECB81] font-black text-sm border border-[#0ECB81]/20 transition-all active:scale-95 select-none disabled:opacity-30 disabled:cursor-not-allowed"
-                                                            title="បន្ថែម $1"
-                                                        >+</button>
+                                                    )
+                                                ) : (
+                                                    <div className="flex flex-col items-end">
+                                                        <span className="font-mono font-black text-xl text-white/10">
+                                                            $***.**
+                                                        </span>
+                                                        <span className="text-[9px] font-black text-white/20 uppercase tracking-[0.2em] mt-1">RESTRICTED_ACCESS</span>
                                                     </div>
-                                                    {customPayouts[u.username] !== undefined && (
-                                                        <button
-                                                            disabled={isLocked}
-                                                            onClick={() => handleCustomPayoutChange(u.username, String(u.baseReward))}
-                                                            className="text-[10px] text-[#707A8A] hover:text-[#F0B90B] font-bold transition-all disabled:opacity-30"
-                                                        >
-                                                            Reset ${u.baseReward.toFixed(2)}
-                                                        </button>
-                                                    )}
-                                                </div>
-                                            ) : (
-                                                <div>
-                                                    <span className="font-mono font-bold text-[18px] text-[#F0B90B]">
-                                                        ${u.reward.toLocaleString(undefined, { minimumFractionDigits: 2 })}
-                                                    </span>
-                                                    {u.isCustom && (
-                                                        <p className="text-[10px] text-[#707A8A] font-semibold mt-0.5">Override applied</p>
-                                                    )}
-                                                </div>
-                                            )}
-                                        </td>
-                                    </tr>
-                                ))}
-                            </tbody>
-                        </table>
+                                                )}
+                                            </td>
+                                        </tr>
+                                    ))}
+                                </tbody>
+                            </table>
                         </div>
 
                         {preparedResults.length === 0 && !isCalculating && (
-                            <div className="py-20 text-center">
-                                <Search className="w-10 h-10 text-[#1A1A1A] mx-auto mb-4" />
-                                <p className="text-sm font-bold text-[#707A8A]">No payout records found for this cycle</p>
+                            <div className="py-32 text-center group/empty">
+                                <div className="w-20 h-20 rounded-[32px] bg-black border border-white/5 flex items-center justify-center mx-auto mb-8 shadow-2xl group-hover/empty:scale-110 transition-transform">
+                                    <Search className="w-10 h-10 text-white/10" />
+                                </div>
+                                <p className="text-xl font-black text-white italic tracking-tight uppercase mb-2">Null_Data_Detected</p>
+                                <p className="text-sm font-medium text-white/20 uppercase tracking-[0.2em]">No payout records found for the current protocol cycle</p>
                             </div>
                         )}
                         {isCalculating && (
-                            <div className="py-10 text-center">
-                                <div className="w-6 h-6 border-2 border-[#F0B90B]/20 border-t-[#F0B90B] rounded-full animate-spin mx-auto" />
+                            <div className="py-20 text-center">
+                                <RefreshCw className="w-10 h-10 text-primary animate-spin mx-auto mb-4" />
+                                <p className="text-[10px] font-black text-primary uppercase tracking-[0.4em] animate-pulse">Processing_Protocol_Calculations...</p>
                             </div>
                         )}
                     </div>

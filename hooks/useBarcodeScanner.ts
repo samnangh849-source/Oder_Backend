@@ -16,9 +16,9 @@ export const useBarcodeScanner = (
     elementId: string, 
     onScan: (decodedText: string) => void,
     scanMode: 'single' | 'increment',
-    options: { fps?: number, disableScanner?: boolean } = {}
+    options: { fps?: number, disableScanner?: boolean, initialZoom?: number } = {}
 ) => {
-    const { fps = 30, disableScanner = false } = options;
+    const { fps = 30, disableScanner = false, initialZoom = 1.0 } = options;
     const scannerRef = useRef<any>(null);
     const isTransitioning = useRef(false);
     const [isInitializing, setIsInitializing] = useState(true);
@@ -311,8 +311,8 @@ export const useBarcodeScanner = (
                         setZoomCapabilities(null);
                     }
                     
-                    // 🚀 Apply initial 1.3x zoom to match visual preview and improve distance scanning
-                    setSmoothZoom(1.3);
+                    // 🚀 Apply initial zoom to match requested configuration
+                    setSmoothZoom(initialZoom);
                 }
 
                 setIsInitializing(false);
