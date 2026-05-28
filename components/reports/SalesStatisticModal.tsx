@@ -1039,89 +1039,113 @@ isOpen, onClose, orders, title, subtitle,
                         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 2xl:grid-cols-6 gap-8 pb-20 relative z-10">
                             {stats.bottomCharts.map((item, idx) => (
                                 <div key={item.page} className="group relative">
-                                    {/* Outer Border Glow */}
-                                    <div className={`absolute -inset-0.5 bg-gradient-to-b from-${item.growth >= 0 ? 'emerald' : 'red'}-500/20 to-transparent rounded-[2.5rem] blur opacity-0 group-hover:opacity-100 transition duration-500`}></div>
+                                    {/* Tech Aura Glow */}
+                                    <div className="absolute -inset-1 bg-gradient-to-br from-blue-500/10 via-transparent to-indigo-500/10 rounded-[3rem] blur-2xl opacity-0 group-hover:opacity-100 transition-all duration-700"></div>
                                     
-                                    <div className="relative bg-white p-8 rounded-[2.5rem] shadow-sm border border-gray-100 flex flex-col h-[420px] hover:shadow-[0_40px_80px_-15px_rgba(0,0,0,0.08)] transition-all duration-500 hover:-translate-y-2 overflow-hidden">
-                                        {/* Tech Coordinate Labels */}
-                                        <div className="absolute top-4 right-8 text-[7px] font-mono text-gray-300 tracking-tighter uppercase pointer-events-none">
-                                            SEC-0{idx+1} / NODE-INF
+                                    <div className="relative bg-white/90 backdrop-blur-xl p-8 rounded-[2.5rem] shadow-sm border border-white flex flex-col h-[450px] hover:shadow-[0_50px_100px_-20px_rgba(0,0,0,0.1)] transition-all duration-500 hover:-translate-y-2 overflow-hidden ring-1 ring-black/[0.02]">
+                                        {/* Decorative Tech Elements */}
+                                        <div className="absolute top-0 right-0 p-4 opacity-[0.03] pointer-events-none">
+                                            <div className="grid grid-cols-3 gap-1">
+                                                {[...Array(9)].map((_, i) => <div key={i} className="w-1 h-1 bg-black rounded-full"></div>)}
+                                            </div>
+                                        </div>
+                                        
+                                        <div className="absolute top-6 right-8 flex flex-col items-end gap-0.5 pointer-events-none">
+                                            <span className="text-[8px] font-black font-mono text-blue-500/40 tracking-[0.2em] uppercase">Node: INF-{idx.toString().padStart(3, '0')}</span>
+                                            <div className="flex items-center gap-1.5">
+                                                <div className="w-1 h-1 rounded-full bg-emerald-500 animate-pulse"></div>
+                                                <span className="text-[6px] font-bold text-gray-300 uppercase tracking-widest">Active Link</span>
+                                            </div>
                                         </div>
 
                                         <div className="mb-6 relative z-10">
                                             <div className="flex items-start justify-between mb-5">
-                                                <div className="relative">
-                                                    <div className="absolute -inset-2 bg-blue-500/5 rounded-full blur-xl group-hover:bg-blue-500/10 transition-colors"></div>
+                                                <div className="relative group/logo">
+                                                    <div className="absolute -inset-4 bg-blue-400/10 rounded-full blur-2xl opacity-0 group-hover/logo:opacity-100 transition-opacity"></div>
                                                     {item.logoUrl ? (
-                                                        <img src={convertGoogleDriveUrl(item.logoUrl)} alt="" className="w-14 h-14 rounded-2xl object-cover shadow-2xl relative z-10 group-hover:scale-110 transition-transform duration-500 border border-white" />
+                                                        <div className="relative w-16 h-16 p-1 bg-white rounded-2xl shadow-xl border border-gray-100 group-hover/logo:rotate-3 transition-transform duration-500">
+                                                            <img src={convertGoogleDriveUrl(item.logoUrl)} alt="" className="w-full h-full rounded-[14px] object-cover" />
+                                                        </div>
                                                     ) : (
-                                                        <div className="w-14 h-14 bg-gradient-to-br from-gray-50 to-gray-100 rounded-2xl flex items-center justify-center text-gray-400 relative z-10 shadow-inner">
-                                                            <Cpu size={24} />
+                                                        <div className="w-16 h-16 bg-gradient-to-br from-blue-50 to-indigo-50 rounded-2xl flex items-center justify-center text-blue-400 relative z-10 shadow-inner border border-blue-100">
+                                                            <Cpu size={28} />
                                                         </div>
                                                     )}
                                                 </div>
-                                                <div className={`flex flex-col items-end gap-1 px-3 py-1.5 rounded-2xl ${item.growth >= 0 ? 'bg-emerald-50 text-emerald-600' : 'bg-red-50 text-red-600'} border border-current/10`}>
-                                                    <div className="flex items-center gap-1">
-                                                        {item.growth >= 0 ? <TrendingUp size={12} /> : <TrendingUp size={12} className="rotate-180" />}
-                                                        <span className="text-[11px] font-black font-mono">{Math.abs(item.growth).toFixed(1)}%</span>
+                                                <div className={`flex flex-col items-end gap-1 px-4 py-2 rounded-2xl ${item.growth >= 0 ? 'bg-emerald-50 text-emerald-600' : 'bg-red-50 text-red-600'} border border-current/10 shadow-sm backdrop-blur-sm`}>
+                                                    <div className="flex items-center gap-1.5">
+                                                        {item.growth >= 0 ? <TrendingUp size={14} className="animate-bounce" /> : <TrendingUp size={14} className="rotate-180" />}
+                                                        <span className="text-sm font-black font-mono tracking-tighter">{Math.abs(item.growth).toFixed(1)}%</span>
                                                     </div>
-                                                    <span className="text-[7px] font-black uppercase tracking-tighter opacity-70">Growth Rate</span>
+                                                    <span className="text-[8px] font-black uppercase tracking-[0.1em] opacity-60">Node Velocity</span>
                                                 </div>
                                             </div>
                                             
-                                            <h4 className="text-lg font-black text-gray-900 group-hover:text-blue-600 transition-colors uppercase tracking-tight truncate mb-2">{item.page}</h4>
+                                            <h4 className="text-xl font-black text-gray-900 group-hover:text-blue-600 transition-colors uppercase tracking-tight truncate mb-3">{item.page}</h4>
                                             
-                                            {/* Product Selection UI - Polished with Search & Images */}
-                                            <div className="mb-4 flex flex-col gap-2 relative z-20">
-                                                <div className="flex flex-wrap items-center gap-2 min-h-[28px]">
+                                            {/* Product Selection UI - Premium High-Tech Standard */}
+                                            <div className="mb-5 flex flex-col gap-2 relative z-20">
+                                                <div className="flex flex-wrap items-center gap-2.5 min-h-[32px]">
                                                     {(pageProductMapping[item.page] || []).map(prod => {
                                                         const prodData = appData.products?.find(p => p.ProductName === prod);
                                                         return (
-                                                            <div key={prod} className="flex items-center gap-1.5 bg-indigo-50/80 backdrop-blur-sm text-indigo-700 pl-1 pr-2.5 py-1 rounded-xl border border-indigo-100/50 shadow-sm transition-all hover:shadow hover:border-indigo-200 group/tag">
-                                                                {prodData?.ImageURL ? (
-                                                                    <img src={convertGoogleDriveUrl(prodData.ImageURL)} alt={prod} className="w-5 h-5 rounded-lg object-cover bg-white" />
-                                                                ) : (
-                                                                    <div className="w-5 h-5 rounded-lg bg-indigo-100 flex items-center justify-center text-indigo-400">
-                                                                        <Package size={10} />
-                                                                    </div>
-                                                                )}
-                                                                <span className="text-[10px] font-black truncate max-w-[90px]" title={prod}>{prod}</span>
+                                                            <div key={prod} className="flex items-center gap-2 bg-gradient-to-r from-blue-50 to-indigo-50/80 backdrop-blur-md text-blue-800 pl-1 pr-2 py-1.5 rounded-2xl border border-blue-200/50 shadow-sm transition-all hover:shadow-md hover:border-blue-300 group/tag relative overflow-hidden">
+                                                                <div className="absolute inset-0 bg-blue-400/5 opacity-0 group-hover/tag:opacity-100 transition-opacity"></div>
+                                                                <div className="relative w-7 h-7 rounded-xl overflow-hidden border border-white shadow-sm shrink-0">
+                                                                    {prodData?.ImageURL ? (
+                                                                        <img src={convertGoogleDriveUrl(prodData.ImageURL)} alt={prod} className="w-full h-full object-cover" />
+                                                                    ) : (
+                                                                        <div className="w-full h-full bg-blue-100 flex items-center justify-center text-blue-400">
+                                                                            <Package size={12} />
+                                                                        </div>
+                                                                    )}
+                                                                </div>
+                                                                <span className="text-[11px] font-black truncate max-w-[100px] tracking-tight relative z-10" title={prod}>{prod}</span>
                                                                 <button 
                                                                     onClick={() => handlePageProductSelect(item.page, prod)}
-                                                                    className="text-indigo-300 hover:text-red-500 hover:bg-red-50 rounded-full p-0.5 transition-colors ml-0.5"
+                                                                    className="relative z-10 text-blue-300 hover:text-red-500 hover:bg-red-50 rounded-lg p-1 transition-all ml-1"
                                                                 >
-                                                                    <X size={12} />
+                                                                    <X size={14} />
                                                                 </button>
                                                             </div>
                                                         );
                                                     })}
                                                     {(!pageProductMapping[item.page] || pageProductMapping[item.page].length < 2) && (
                                                         <div className="relative group/addprod">
-                                                            <button className="flex items-center justify-center w-7 h-[26px] rounded-xl border border-dashed border-gray-300 bg-gray-50/50 text-gray-400 hover:border-indigo-400 hover:bg-indigo-50 hover:text-indigo-600 transition-all shadow-sm">
-                                                                <Plus size={14} />
+                                                            <button className="flex items-center justify-center w-8 h-8 rounded-2xl border-2 border-dashed border-gray-200 bg-white/50 text-gray-400 hover:border-blue-400 hover:bg-blue-50 hover:text-blue-600 transition-all shadow-sm group-hover/addprod:scale-110">
+                                                                <Plus size={16} />
                                                             </button>
-                                                            {/* Premium Glass Dropdown with Search */}
-                                                            <div className="absolute top-full left-0 mt-2 w-64 bg-white/95 backdrop-blur-xl rounded-2xl shadow-[0_20px_40px_-15px_rgba(0,0,0,0.1)] border border-white/20 opacity-0 invisible group-hover/addprod:opacity-100 group-hover/addprod:visible translate-y-2 group-hover/addprod:translate-y-0 transition-all duration-300 z-50 overflow-hidden">
-                                                                <div className="p-3 bg-gray-50/50 border-b border-gray-100/50 space-y-2">
+                                                            
+                                                            {/* Premium Glass Dropdown - High-Tech Redesign */}
+                                                            <div className="absolute top-full left-0 mt-3 w-72 bg-white/98 backdrop-blur-2xl rounded-[2rem] shadow-[0_25px_70px_-15px_rgba(0,0,0,0.15)] border border-white opacity-0 invisible group-hover/addprod:opacity-100 group-hover/addprod:visible translate-y-4 group-hover/addprod:translate-y-0 transition-all duration-500 z-50 overflow-hidden ring-1 ring-black/5">
+                                                                <div className="p-4 bg-gradient-to-b from-gray-50/80 to-transparent border-b border-gray-100 space-y-3">
                                                                     <div className="flex items-center justify-between">
-                                                                        <p className="text-[9px] font-black text-gray-500 uppercase tracking-widest flex items-center gap-1.5">
-                                                                            <Layers size={10} className="text-blue-500" />
-                                                                            {language === 'km' ? 'ជ្រើសរើសផលិតផល' : 'Select Product'}
-                                                                        </p>
-                                                                        <span className="text-[9px] text-gray-400 font-mono bg-white px-1.5 py-0.5 rounded border border-gray-100">MAX 2</span>
+                                                                        <div className="flex flex-col">
+                                                                            <p className="text-[10px] font-black text-gray-900 uppercase tracking-[0.2em] flex items-center gap-2">
+                                                                                <div className="w-1.5 h-1.5 rounded-full bg-blue-500 animate-pulse"></div>
+                                                                                {language === 'km' ? 'ជ្រើសរើសផលិតផល' : 'Select Product'}
+                                                                            </p>
+                                                                            <span className="text-[8px] text-gray-400 font-bold uppercase tracking-widest mt-0.5">Asset Registry Control</span>
+                                                                        </div>
+                                                                        <div className="flex flex-col items-end">
+                                                                            <span className="text-[10px] font-black text-blue-600 font-mono bg-blue-50 px-2 py-1 rounded-lg border border-blue-100">02</span>
+                                                                            <span className="text-[7px] text-gray-400 font-black uppercase mt-0.5">Limit</span>
+                                                                        </div>
                                                                     </div>
-                                                                    <div className="relative">
-                                                                        <Search size={12} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-gray-400" />
+                                                                    <div className="relative group/search">
+                                                                        <div className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 group-focus-within/search:text-blue-500 transition-colors">
+                                                                            <Search size={14} />
+                                                                        </div>
                                                                         <input 
                                                                             type="text" 
-                                                                            placeholder="Search products..."
+                                                                            placeholder="Search product metadata..."
                                                                             value={productSearchQueries[item.page] || ''}
                                                                             onChange={(e) => setProductSearchQueries(prev => ({ ...prev, [item.page]: e.target.value }))}
-                                                                            className="w-full bg-white border border-gray-200 rounded-lg pl-7 pr-3 py-1.5 text-[10px] font-bold text-gray-700 focus:outline-none focus:border-indigo-400 focus:ring-1 focus:ring-indigo-400/50 transition-all"
+                                                                            className="w-full bg-white border border-gray-200 rounded-2xl pl-10 pr-4 py-2.5 text-xs font-bold text-gray-800 focus:outline-none focus:border-blue-400 focus:ring-4 focus:ring-blue-500/5 transition-all placeholder:text-gray-300"
                                                                         />
                                                                     </div>
                                                                 </div>
-                                                                <div className="p-2 max-h-[200px] overflow-y-auto custom-scrollbar overscroll-contain">
+                                                                <div className="p-3 max-h-[280px] overflow-y-auto custom-scrollbar overscroll-contain space-y-1">
                                                                     {(appData.products || [])
                                                                         .filter(p => !p.ProductName?.includes('Delivery'))
                                                                         .filter(p => !productSearchQueries[item.page] || p.ProductName?.toLowerCase().includes(productSearchQueries[item.page].toLowerCase()))
@@ -1130,27 +1154,41 @@ isOpen, onClose, orders, title, subtitle,
                                                                             key={p.ProductName}
                                                                             onClick={() => handlePageProductSelect(item.page, p.ProductName || '')}
                                                                             disabled={pageProductMapping[item.page]?.includes(p.ProductName || '')}
-                                                                            className="w-full text-left p-1.5 hover:bg-indigo-50 rounded-xl disabled:opacity-40 disabled:hover:bg-transparent disabled:cursor-not-allowed transition-colors flex items-center gap-2.5 group/item"
+                                                                            className="w-full text-left p-2.5 hover:bg-blue-50/50 rounded-2xl disabled:opacity-40 disabled:hover:bg-transparent disabled:cursor-not-allowed transition-all flex items-center gap-3.5 group/item border border-transparent hover:border-blue-100 active:scale-[0.98]"
                                                                         >
-                                                                            {p.ImageURL ? (
-                                                                                <img src={convertGoogleDriveUrl(p.ImageURL)} alt={p.ProductName} className="w-8 h-8 rounded-lg object-cover bg-white shadow-sm border border-gray-100" />
-                                                                            ) : (
-                                                                                <div className="w-8 h-8 rounded-lg bg-gray-100 flex items-center justify-center text-gray-400 border border-gray-200">
-                                                                                    <Package size={14} />
-                                                                                </div>
-                                                                            )}
-                                                                            <div className="flex-1 min-w-0 flex flex-col justify-center">
-                                                                                <span className="text-[11px] font-bold text-gray-700 group-hover/item:text-indigo-700 truncate block">{p.ProductName}</span>
-                                                                                <span className="text-[9px] font-mono text-gray-400 truncate block">{p.Barcode || 'No Barcode'}</span>
+                                                                            <div className="relative w-11 h-11 shrink-0 bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden group-hover/item:border-blue-200 transition-colors">
+                                                                                {p.ImageURL ? (
+                                                                                    <img src={convertGoogleDriveUrl(p.ImageURL)} alt={p.ProductName} className="w-full h-full object-cover transition-transform duration-500 group-hover/item:scale-110" />
+                                                                                ) : (
+                                                                                    <div className="w-full h-full bg-gray-50 flex items-center justify-center text-gray-300">
+                                                                                        <Package size={18} />
+                                                                                    </div>
+                                                                                )}
+                                                                                <div className="absolute inset-0 bg-gradient-to-t from-black/20 to-transparent opacity-0 group-hover/item:opacity-100 transition-opacity"></div>
                                                                             </div>
-                                                                            {pageProductMapping[item.page]?.includes(p.ProductName || '') && (
-                                                                                <div className="w-1.5 h-1.5 rounded-full bg-indigo-500 mr-1"></div>
-                                                                            )}
+                                                                            <div className="flex-1 min-w-0 flex flex-col justify-center">
+                                                                                <span className="text-[12px] font-black text-gray-900 group-hover/item:text-blue-700 truncate block leading-tight">{p.ProductName}</span>
+                                                                                <div className="flex items-center gap-2 mt-1">
+                                                                                    <span className="text-[9px] font-mono text-gray-400 font-bold tracking-tight uppercase group-hover/item:text-blue-400 transition-colors">#{p.Barcode || 'UNTRACKED'}</span>
+                                                                                    <div className="w-1 h-1 rounded-full bg-gray-200"></div>
+                                                                                    <span className="text-[9px] font-black text-emerald-600 bg-emerald-50 px-1.5 py-0.5 rounded uppercase">In Stock</span>
+                                                                                </div>
+                                                                            </div>
+                                                                            <div className="shrink-0 flex items-center justify-center w-6 h-6 rounded-full border border-gray-100 group-hover/item:border-blue-200 transition-colors">
+                                                                                {pageProductMapping[item.page]?.includes(p.ProductName || '') ? (
+                                                                                    <div className="w-2.5 h-2.5 rounded-full bg-blue-500 shadow-[0_0_8px_rgba(59,130,246,0.5)]"></div>
+                                                                                ) : (
+                                                                                    <Plus size={12} className="text-gray-300 group-hover/item:text-blue-500" />
+                                                                                )}
+                                                                            </div>
                                                                         </button>
                                                                     ))}
                                                                     {(appData.products || []).filter(p => !p.ProductName?.includes('Delivery') && (!productSearchQueries[item.page] || p.ProductName?.toLowerCase().includes(productSearchQueries[item.page].toLowerCase()))).length === 0 && (
-                                                                        <div className="p-4 text-center text-[10px] font-bold text-gray-400">
-                                                                            No products found
+                                                                        <div className="p-8 text-center space-y-2">
+                                                                            <div className="w-12 h-12 bg-gray-50 rounded-full flex items-center justify-center mx-auto text-gray-300">
+                                                                                <Search size={20} />
+                                                                            </div>
+                                                                            <p className="text-[11px] font-black text-gray-400 uppercase tracking-widest">No matching registry found</p>
                                                                         </div>
                                                                     )}
                                                                 </div>
