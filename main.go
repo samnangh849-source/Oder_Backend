@@ -1256,7 +1256,12 @@ func handleAdminUpdateOrder(c *gin.Context) {
 			// so we should not strictly require it for the 'Shipped' transition to avoid blocking packers.
 		case "Delivered":
 			_, hasDriver := r.NewData["Driver Name"]
-			if !hasDriver && strings.TrimSpace(originalOrder.DriverName) == "" && strings.TrimSpace(originalOrder.InternalShippingDetails) == "" {
+			_, hasShippingDetails := r.NewData["Internal Shipping Details"]
+			
+			driverValid := hasDriver || strings.TrimSpace(originalOrder.DriverName) != ""
+			detailsValid := hasShippingDetails || strings.TrimSpace(originalOrder.InternalShippingDetails) != ""
+
+			if !driverValid && !detailsValid {
 				c.JSON(http.StatusBadRequest, gin.H{"status": "error", "message": "ត្រូវការអ្នកដឹកជញ្ជូន (Driver Name) ឬព័ត៌មានដឹកជញ្ជូន មុនពេលបញ្ជាក់ការដឹកជញ្ជូន"})
 				return
 			}
