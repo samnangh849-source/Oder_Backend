@@ -3184,6 +3184,22 @@ func handleSendDeliveryTelegram(c *gin.Context) {
 	text += fmt.Sprintf("\n📍 ទីតាំង: *%s*", location)
 	text += fmt.Sprintf("\n🏠 អាស័យដ្ឋាន: _%s_", address)
 
+	// Build inline keyboard for contact
+	var replyMarkup map[string]interface{}
+	if phoneNumber != "N/A" {
+		cleanPhone := strings.ReplaceAll(phoneNumber, " ", "")
+		cleanPhone = strings.TrimPrefix(cleanPhone, "0")
+		if cleanPhone != "" {
+			replyMarkup = map[string]interface{}{
+				"inline_keyboard": [][]map[string]interface{}{
+					{
+						{"text": "💬 ទាក់ទងអតិថិជន", "url": "https://t.me/+855" + cleanPhone},
+					},
+				},
+			}
+		}
+	}
+
 	apiURL := fmt.Sprintf("https://api.telegram.org/bot%s/sendPhoto", store.TelegramBotToken)
 	chatID := strings.TrimSpace(delGroup.TelegramGroupID)
 	payload := map[string]interface{}{
@@ -3191,6 +3207,10 @@ func handleSendDeliveryTelegram(c *gin.Context) {
 		"parse_mode": "Markdown",
 		"photo":      convertDriveURLToDirect(order.PackagePhotoURL),
 		"caption":    text,
+	}
+
+	if replyMarkup != nil {
+		payload["reply_markup"] = replyMarkup
 	}
 
 	if delGroup.TelegramTopicID != "" {
