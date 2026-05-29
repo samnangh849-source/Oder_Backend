@@ -290,8 +290,14 @@ const FastPackTerminal: React.FC<FastPackTerminalProps> = ({ order, onClose, onS
             const ctx = canvas.getContext('2d'); 
             if (!ctx) throw new Error("Canvas Error");
 
-            // 1. Draw Video Frame
-            ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+            // 1. Draw Video Frame (Zoomed 10% as requested: preview remains full, captured photo is zoomed)
+            const zoomFactor = 1.1; // 10% zoom
+            const sourceWidth = videoWidth / zoomFactor;
+            const sourceHeight = videoHeight / zoomFactor;
+            const sourceX = (videoWidth - sourceWidth) / 2;
+            const sourceY = (videoHeight - sourceHeight) / 2;
+
+            ctx.drawImage(video, sourceX, sourceY, sourceWidth, sourceHeight, 0, 0, canvas.width, canvas.height);
 
             // 2. Setup styles
             const paddingX = canvas.width * 0.06;
