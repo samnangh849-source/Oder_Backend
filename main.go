@@ -1256,8 +1256,8 @@ func handleAdminUpdateOrder(c *gin.Context) {
 			// so we should not strictly require it for the 'Shipped' transition to avoid blocking packers.
 		case "Delivered":
 			_, hasDriver := r.NewData["Driver Name"]
-			if !hasDriver && strings.TrimSpace(originalOrder.DriverName) == "" {
-				c.JSON(http.StatusBadRequest, gin.H{"status": "error", "message": "ត្រូវការអ្នកដឹកជញ្ជូន (Driver Name) មុនពេលបញ្ជាក់ការដឹកជញ្ជូន"})
+			if !hasDriver && strings.TrimSpace(originalOrder.DriverName) == "" && strings.TrimSpace(originalOrder.InternalShippingDetails) == "" {
+				c.JSON(http.StatusBadRequest, gin.H{"status": "error", "message": "ត្រូវការអ្នកដឹកជញ្ជូន (Driver Name) ឬព័ត៌មានដឹកជញ្ជូន មុនពេលបញ្ជាក់ការដឹកជញ្ជូន"})
 				return
 			}
 		}
@@ -3180,7 +3180,7 @@ func handleSendDeliveryTelegram(c *gin.Context) {
 	text := fmt.Sprintf("📦 *រូបភាពកញ្ចប់បញ្ញើ #%d*\n🏷️ លេខកូដ: `%s`",
 		dailySeq, order.OrderID)
 
-	text += fmt.Sprintf("\n\n📱 លេខទូរស័ព្ទ: `%s`", phoneNumber)
+	text += fmt.Sprintf("\n\n📱 លេខទូរស័ព្ទ: %s", phoneNumber)
 	text += fmt.Sprintf("\n📍 ទីតាំង: *%s*", location)
 	text += fmt.Sprintf("\n🏠 អាស័យដ្ឋាន: _%s_", address)
 
