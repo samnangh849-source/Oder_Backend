@@ -3187,7 +3187,8 @@ func handleSendDeliveryTelegram(c *gin.Context) {
 	// Build inline keyboard for contact
 	var replyMarkup map[string]interface{}
 	if phoneNumber != "N/A" {
-		cleanPhone := strings.ReplaceAll(phoneNumber, " ", "")
+		re := regexp.MustCompile(`\D`)
+		cleanPhone := re.ReplaceAllString(phoneNumber, "")
 		cleanPhone = strings.TrimPrefix(cleanPhone, "0")
 		if cleanPhone != "" {
 			replyMarkup = map[string]interface{}{
