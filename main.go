@@ -111,7 +111,7 @@ func broadcastToAll(payload interface{}) {
 	backend.SafeBroadcastJSON(payload)
 }
 
-func mapToDBColumn(key string) string {
+func mapToDBColumn(key string, sheetName string) string {
 	specialCases := map[string]string{
 		"Order ID":                "order_id",
 		"Discount ($)":            "discount_usd",
@@ -171,8 +171,6 @@ func mapToDBColumn(key string) string {
 		"id":                      "id",
 		"status":                  "status",
 		"Status":                  "status",
-		"Key":                     "config_key",
-		"Value":                   "config_value",
 		"Description":             "description",
 		"TelegramGroupID":         "telegram_group_id",
 		"TelegramTopicID":          "telegram_topic_id",
@@ -202,6 +200,16 @@ func mapToDBColumn(key string) string {
 		"totalProfit":            "total_profit",
 		"calculatedValue":        "calculated_value",
 		"breakdownJson":          "breakdown_json",
+	}
+
+	// Handle Settings table specifics separately
+	if sheetName == "Settings" {
+		if strings.EqualFold(key, "Key") {
+			return "config_key"
+		}
+		if strings.EqualFold(key, "Value") {
+			return "config_value"
+		}
 	}
 
 	// Standard mapping logic
@@ -1301,7 +1309,7 @@ func handleAdminUpdateOrder(c *gin.Context) {
 
 	mappedData := make(map[string]interface{})
 	for k, v := range r.NewData {
-		dbCol := mapToDBColumn(k)
+		dbCol := mapToDBColumn(k, "AllOrders")
 		if isValidOrderColumn(dbCol) && v != nil {
 			if dbCol == "discount_usd" || dbCol == "grand_total" || dbCol == "subtotal" || dbCol == "shipping_fee_customer" || dbCol == "internal_cost" || dbCol == "delivery_unpaid" || dbCol == "delivery_paid" || dbCol == "total_product_cost" {
 				if f, ok := v.(float64); ok {
@@ -1750,7 +1758,7 @@ func handleAdminUpdateSheet(c *gin.Context) {
 	var pkVal interface{}
 	originalPKKey := ""
 	for k, v := range req.PrimaryKey {
-		pkCol = mapToDBColumn(k)
+		pkCol = mapToDBColumn(k, req.SheetName)
 		pkVal = v
 		originalPKKey = k
 	}
@@ -1772,7 +1780,7 @@ func handleAdminUpdateSheet(c *gin.Context) {
 	}
 	mappedData := make(map[string]interface{})
 	for k, v := range req.NewData {
-		dbCol := mapToDBColumn(k)
+		dbCol := mapToDBColumn(k, req.SheetName)
 		if v == nil {
 			continue
 		}
@@ -1932,7 +1940,7 @@ func handleAdminAddRow(c *gin.Context) {
 
 		mappedData := make(map[string]interface{})
 		for k, v := range req.NewData {
-			colName := mapToDBColumn(k)
+			colName := mapToDBColumn(k, req.SheetName)
 			if v == nil {
 				continue
 			}
@@ -2011,7 +2019,7 @@ func handleAdminDeleteRow(c *gin.Context) {
 	pkCol := ""
 	var pkVal interface{}
 	for k, v := range req.PrimaryKey {
-		pkCol = mapToDBColumn(k)
+		pkCol = mapToDBColumn(k, req.SheetName)
 		pkVal = v
 	}
 	if !isValidDBIdentifier(pkCol) {
@@ -2364,7 +2372,7 @@ func handleUpdateProfile(c *gin.Context) {
 		if k == "Password" {
 			continue
 		}
-		mappedData[mapToDBColumn(k)] = v
+		mappedData[mapToDBColumn(k, "Users")] = v
 	}
 	if err := backend.DB.Model(&User{}).Where("user_name = ?", req.UserName).Updates(mappedData).Error; err != nil {
 		c.Error(err)
@@ -2633,7 +2641,7 @@ func handleSheetsWebhook(c *gin.Context) {
 	}
 
 	for k, v := range req.RowData {
-		dbCol := mapToDBColumn(k)
+		dbCol := mapToDBColumn(k, "AllOrders")
 
 		normalizedK := strings.ReplaceAll(strings.ToLower(k), " ", "")
 		normalizedPK := strings.ReplaceAll(strings.ToLower(pkName), " ", "")
@@ -2861,7 +2869,7 @@ func main() {
 
 	// ── Wire Upload-package injectable dependencies ──────────────────────────
 	backend.UploadGenerateIDFunc = generateShortID
-	backend.UploadMapToDBColumnFunc = mapToDBColumn
+	backend.UploadMapToDBColumnFunc = func(key string) string { return mapToDBColumn(key, "") }
 	backend.UploadGetTableNameFunc = getTableName
 	backend.UploadIsValidOrderColumnFunc = isValidOrderColumn
 
