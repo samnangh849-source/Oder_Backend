@@ -1766,13 +1766,18 @@ func handleAdminUpdateSheet(c *gin.Context) {
 		}
 
 		// Smart type conversion for known numeric columns in mappedData
-		if dbCol == "id" || dbCol == "project_id" || dbCol == "calculator_id" || dbCol == "total_orders" {
-			if f, ok := v.(float64); ok {
+		// We convert all whole-number float64 to int to avoid PG type mismatch
+		if f, ok := v.(float64); ok {
+			if f == float64(int(f)) {
 				v = int(f)
-			} else if s, ok := v.(string); ok {
-				if i, err := strconv.Atoi(s); err == nil {
-					v = i
-				}
+			}
+		} else if s, ok := v.(string); ok {
+			// Handle boolean strings for columns like is_verified, is_custom, require_period_selection
+			lowerS := strings.ToLower(s)
+			if lowerS == "true" || lowerS == "false" {
+				v = (lowerS == "true")
+			} else if i, err := strconv.Atoi(s); err == nil {
+				v = i
 			}
 		}
 
@@ -1901,13 +1906,18 @@ func handleAdminAddRow(c *gin.Context) {
 			}
 
 			// Smart type conversion for known numeric columns in mappedData
-			if colName == "id" || colName == "project_id" || colName == "calculator_id" || colName == "total_orders" {
-				if f, ok := v.(float64); ok {
+			// We convert all whole-number float64 to int to avoid PG type mismatch
+			if f, ok := v.(float64); ok {
+				if f == float64(int(f)) {
 					v = int(f)
-				} else if s, ok := v.(string); ok {
-					if i, err := strconv.Atoi(s); err == nil {
-						v = i
-					}
+				}
+			} else if s, ok := v.(string); ok {
+				// Handle boolean strings
+				lowerS := strings.ToLower(s)
+				if lowerS == "true" || lowerS == "false" {
+					v = (lowerS == "true")
+				} else if i, err := strconv.Atoi(s); err == nil {
+					v = i
 				}
 			}
 
