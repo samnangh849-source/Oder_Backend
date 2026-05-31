@@ -408,8 +408,9 @@ func ProcessIncentiveCalculation(db *gorm.DB, projectID uint, month string) ([]I
 			}
 		}
 
-		perfMap := make(map[string]float64)
-		userSubPerfMap := make(map[string]map[string]float64) // For Marathon
+		// Track individual vs team performance components to prevent leaks during aggregation
+		individualPerfMap := make(map[string]float64)
+		individualSubPerfMap := make(map[string]map[string]float64)
 
 		for _, u := range targetedUsers {
 			var baseVal float64
@@ -427,13 +428,26 @@ func ProcessIncentiveCalculation(db *gorm.DB, projectID uint, month string) ([]I
 				}
 			}
 
-			val := baseVal + userManualPerf[u.UserName]
+			// Individual total = system data + individual manual entry
+			individualPerfMap[u.UserName] = baseVal + userManualPerf[u.UserName]
 			
-			// Track sub-period breakdown for Marathon
+			// Individual sub-period = individual manual entry breakdown
 			subMap := make(map[string]float64)
-			// Add user's own manual sub-period data
 			for sp, spVal := range userManualSubPerf[u.UserName] {
 				subMap[sp] += spVal
+			}
+			individualSubPerfMap[u.UserName] = subMap
+		}
+
+		// Pre-calculate full user profiles (including distributed team data) for display and individual rules
+		fullPerfMap := make(map[string]float64)
+		fullSubPerfMap := make(map[string]map[string]float64)
+
+		for _, u := range targetedUsers {
+			val := individualPerfMap[u.UserName]
+			subMap := make(map[string]float64)
+			for sp, spVal := range individualSubPerfMap[u.UserName] {
+				subMap[sp] = spVal
 			}
 
 			if u.Team != "" {
@@ -441,11 +455,9 @@ func ProcessIncentiveCalculation(db *gorm.DB, projectID uint, month string) ([]I
 				for _, ut := range userTeams {
 					teamName := NormalizeTeamKey(ut)
 					if teamName != "" {
-						// Distribute aggregate team manual data (Shared among eligible recipients)
 						if teamManualPerf[teamName] > 0 && teamMemberCount[teamName] > 0 {
 							val += teamManualPerf[teamName] / float64(teamMemberCount[teamName])
 						}
-						// Distribute team sub-period data (For Marathon)
 						for sp, spVal := range teamManualSubPerf[teamName] {
 							if spVal > 0 && teamMemberCount[teamName] > 0 {
 								subMap[sp] += spVal / float64(teamMemberCount[teamName])
@@ -454,9 +466,8 @@ func ProcessIncentiveCalculation(db *gorm.DB, projectID uint, month string) ([]I
 					}
 				}
 			}
-
-			perfMap[u.UserName] = val
-			userSubPerfMap[u.UserName] = subMap
+			fullPerfMap[u.UserName] = val
+			fullSubPerfMap[u.UserName] = subMap
 		}
 
 		distMethod := rules.DistributionRule.Method
@@ -482,17 +493,29 @@ func ProcessIncentiveCalculation(db *gorm.DB, projectID uint, month string) ([]I
 			}
 
 			for teamName, groupUsers := range teamToUsers {
+				// CALCULATE TEAM ACHIEVEMENT:
+				// Team Achievement = Sum(Members' Individual Base) + Team's Shared Data
+				// We DO NOT sum members' full profiles because that would leak data from their OTHER teams.
+				
 				var groupTotalPerf float64
 				groupSubPerfMap := make(map[string]float64)
 
 				for _, u := range groupUsers {
-					groupTotalPerf += perfMap[u.UserName]
-					for sp, spVal := range userSubPerfMap[u.UserName] {
+					groupTotalPerf += individualPerfMap[u.UserName]
+					for sp, spVal := range individualSubPerfMap[u.UserName] {
+						groupSubPerfMap[sp] += spVal
+					}
+				}
+				
+				// Add the collective manual data for THIS team exactly once
+				if teamName != "_unassigned_" {
+					groupTotalPerf += teamManualPerf[teamName]
+					for sp, spVal := range teamManualSubPerf[teamName] {
 						groupSubPerfMap[sp] += spVal
 					}
 				}
 
-				// For group methods, calculate reward for this specific team group
+				// For group methods, calculate reward for this specific team group achievement
 				poolReward := CalculatePayout(calc, groupTotalPerf, "", groupSubPerfMap)
 				if poolReward <= 0 {
 					continue
@@ -552,16 +575,16 @@ func ProcessIncentiveCalculation(db *gorm.DB, projectID uint, month string) ([]I
 		} else {
 			for _, u := range targetedUsers {
 				if rules.IsExcluded(u) { continue }
-				share := CalculatePayout(calc, perfMap[u.UserName], "", userSubPerfMap[u.UserName])
+				share := CalculatePayout(calc, fullPerfMap[u.UserName], "", fullSubPerfMap[u.UserName])
 				userRewards[u.UserName] += share
 				
 				// Build detailed description for manual data & distribution
-				desc := fmt.Sprintf("Individual performance (Total: %.2f)", perfMap[u.UserName])
+				desc := fmt.Sprintf("Individual performance (Total: %.2f)", fullPerfMap[u.UserName])
 				if isManualProject {
 					personal := userManualPerf[u.UserName]
-					fromTeam := perfMap[u.UserName] - personal
+					fromTeam := fullPerfMap[u.UserName] - personal
 					if fromTeam > 0 {
-						desc = fmt.Sprintf("Personal: %.2f | Team Dist: %.2f (Total: %.2f)", personal, fromTeam, perfMap[u.UserName])
+						desc = fmt.Sprintf("Personal: %.2f | Team Dist: %.2f (Total: %.2f)", personal, fromTeam, fullPerfMap[u.UserName])
 					} else {
 						desc = fmt.Sprintf("Manual Entry: %.2f", personal)
 					}
@@ -571,7 +594,7 @@ func ProcessIncentiveCalculation(db *gorm.DB, projectID uint, month string) ([]I
 					CalculatorID:   calc.ID,
 					CalculatorName: calc.Name,
 					MetricType:     metricType,
-					MetricValue:    perfMap[u.UserName],
+					MetricValue:    fullPerfMap[u.UserName],
 					Amount:         share,
 					Description:    desc,
 				})
@@ -584,7 +607,7 @@ func ProcessIncentiveCalculation(db *gorm.DB, projectID uint, month string) ([]I
 			mType := strings.ToLower(strings.TrimSpace(metricType))
 			for _, u := range targetedUsers {
 				uName := u.UserName
-				val := perfMap[uName] // This val now includes distributed team data
+				val := fullPerfMap[uName] // This val now includes distributed team data
 				switch mType {
 				case "sales amount", "revenue":
 					if val > userRevenue[uName] {
@@ -595,11 +618,6 @@ func ProcessIncentiveCalculation(db *gorm.DB, projectID uint, month string) ([]I
 						userProfit[uName] = val
 					}
 				case "orders", "order count", "number of orders":
-					if int(val) > userOrders[uName] {
-						userOrders[uName] = int(val)
-					}
-				default:
-					// Default to orders if unknown
 					if int(val) > userOrders[uName] {
 						userOrders[uName] = int(val)
 					}
