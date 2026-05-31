@@ -1749,6 +1749,8 @@ func handleAdminUpdateSheet(c *gin.Context) {
 			if i, err := strconv.ParseUint(s, 10, 64); err == nil {
 				pkVal = uint(i)
 			}
+		} else if f, ok := pkVal.(float64); ok {
+			pkVal = uint(f)
 		}
 	}
 
@@ -1761,6 +1763,17 @@ func handleAdminUpdateSheet(c *gin.Context) {
 		dbCol := mapToDBColumn(k)
 		if v == nil {
 			continue
+		}
+
+		// Smart type conversion for known numeric columns in mappedData
+		if dbCol == "id" || dbCol == "project_id" || dbCol == "calculator_id" || dbCol == "total_orders" {
+			if f, ok := v.(float64); ok {
+				v = int(f)
+			} else if s, ok := v.(string); ok {
+				if i, err := strconv.Atoi(s); err == nil {
+					v = i
+				}
+			}
 		}
 
 		// Hashing password if updating users table
@@ -1883,6 +1896,21 @@ func handleAdminAddRow(c *gin.Context) {
 		mappedData := make(map[string]interface{})
 		for k, v := range req.NewData {
 			colName := mapToDBColumn(k)
+			if v == nil {
+				continue
+			}
+
+			// Smart type conversion for known numeric columns in mappedData
+			if colName == "id" || colName == "project_id" || colName == "calculator_id" || colName == "total_orders" {
+				if f, ok := v.(float64); ok {
+					v = int(f)
+				} else if s, ok := v.(string); ok {
+					if i, err := strconv.Atoi(s); err == nil {
+						v = i
+					}
+				}
+			}
+
 			// Hashing password if adding to users table
 			if tableName == "users" && colName == "password" && v != "" {
 				hashed, err := bcrypt.GenerateFromPassword([]byte(fmt.Sprintf("%v", v)), bcrypt.DefaultCost)
@@ -1892,7 +1920,11 @@ func handleAdminAddRow(c *gin.Context) {
 			}
 			mappedData[colName] = v
 		}
-		backend.DB.Table(tableName).Create(mappedData)
+		if err := backend.DB.Table(tableName).Create(mappedData).Error; err != nil {
+			log.Printf("[ERROR] handleAdminAddRow (Table: %s): %v", tableName, err)
+			c.Error(err)
+			return
+		}
 	}
 
 	eventBytes, _ := json.Marshal(map[string]interface{}{"type": "add_row", "sheetName": req.SheetName, "newData": req.NewData})
