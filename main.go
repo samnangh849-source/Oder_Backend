@@ -1734,6 +1734,18 @@ func handleAdminUpdateSheet(c *gin.Context) {
 		return
 	}
 
+	var modelInstance interface{}
+	switch req.SheetName {
+	case "IncentiveCalculators":
+		modelInstance = &IncentiveCalculator{}
+	case "IncentiveProjects":
+		modelInstance = &IncentiveProject{}
+	case "AllOrders":
+		modelInstance = &Order{}
+	case "Users":
+		modelInstance = &User{}
+	}
+
 	pkCol := ""
 	var pkVal interface{}
 	originalPKKey := ""
@@ -1792,9 +1804,17 @@ func handleAdminUpdateSheet(c *gin.Context) {
 		mappedData[dbCol] = v
 	}
 
-	if err := backend.DB.Table(tableName).Where(pkCol+" = ?", pkVal).Updates(mappedData).Error; err != nil {
+	dbQuery := backend.DB.Table(tableName)
+	if modelInstance != nil {
+		dbQuery = backend.DB.Model(modelInstance)
+	}
+
+	if err := dbQuery.Where(pkCol+" = ?", pkVal).Updates(mappedData).Error; err != nil {
 		log.Printf("[ERROR] handleAdminUpdateSheet (Table: %s, PK: %s=%v): %v", tableName, pkCol, pkVal, err)
-		c.Error(err)
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"status":  "error",
+			"message": fmt.Sprintf("Database update failed for %s: %v", req.SheetName, err),
+		})
 		return
 	}
 
@@ -1898,6 +1918,18 @@ func handleAdminAddRow(c *gin.Context) {
 
 	tableName := getTableName(req.SheetName)
 	if tableName != "" {
+		var modelInstance interface{}
+		switch req.SheetName {
+		case "IncentiveCalculators":
+			modelInstance = &IncentiveCalculator{}
+		case "IncentiveProjects":
+			modelInstance = &IncentiveProject{}
+		case "AllOrders":
+			modelInstance = &Order{}
+		case "Users":
+			modelInstance = &User{}
+		}
+
 		mappedData := make(map[string]interface{})
 		for k, v := range req.NewData {
 			colName := mapToDBColumn(k)
@@ -1930,9 +1962,18 @@ func handleAdminAddRow(c *gin.Context) {
 			}
 			mappedData[colName] = v
 		}
-		if err := backend.DB.Table(tableName).Create(mappedData).Error; err != nil {
+
+		dbQuery := backend.DB.Table(tableName)
+		if modelInstance != nil {
+			dbQuery = backend.DB.Model(modelInstance)
+		}
+
+		if err := dbQuery.Create(mappedData).Error; err != nil {
 			log.Printf("[ERROR] handleAdminAddRow (Table: %s): %v", tableName, err)
-			c.Error(err)
+			c.JSON(http.StatusInternalServerError, gin.H{
+				"status":  "error",
+				"message": fmt.Sprintf("Database creation failed for %s: %v", req.SheetName, err),
+			})
 			return
 		}
 	}
