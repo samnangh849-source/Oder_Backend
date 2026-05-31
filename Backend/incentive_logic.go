@@ -465,58 +465,86 @@ func ProcessIncentiveCalculation(db *gorm.DB, projectID uint, month string) ([]I
 		}
 
 		if distMethod == DistEqualSplit || distMethod == DistPercentageAllocation {
-			var groupTotalPerf float64
-			groupSubPerfMap := make(map[string]float64)
-
+			// Group users by team to ensure rewards are not pooled across different teams
+			teamToUsers := make(map[string][]User)
 			for _, u := range targetedUsers {
-				groupTotalPerf += perfMap[u.UserName]
-				for sp, spVal := range userSubPerfMap[u.UserName] {
-					groupSubPerfMap[sp] += spVal
+				if u.Team == "" {
+					teamToUsers["_unassigned_"] = append(teamToUsers["_unassigned_"], u)
+					continue
+				}
+				teams := strings.Split(u.Team, ",")
+				for _, t := range teams {
+					tName := NormalizeTeamKey(t)
+					if tName != "" {
+						teamToUsers[tName] = append(teamToUsers[tName], u)
+					}
 				}
 			}
 
-			// For group methods, calculate overall reward
-			poolReward := CalculatePayout(calc, groupTotalPerf, "", groupSubPerfMap)
+			for teamName, groupUsers := range teamToUsers {
+				var groupTotalPerf float64
+				groupSubPerfMap := make(map[string]float64)
 
-			if distMethod == DistEqualSplit {				// Count recipients
-				eligibleCount := 0
-				for _, u := range targetedUsers {
-					if !rules.IsExcluded(u) { eligibleCount++ }
-				}
-				
-				rewardPerPerson := 0.0
-				if eligibleCount > 0 {
-					rewardPerPerson = poolReward / float64(eligibleCount)
+				for _, u := range groupUsers {
+					groupTotalPerf += perfMap[u.UserName]
+					for sp, spVal := range userSubPerfMap[u.UserName] {
+						groupSubPerfMap[sp] += spVal
+					}
 				}
 
-				for _, u := range targetedUsers {
-					if rules.IsExcluded(u) { continue }
-					userRewards[u.UserName] += rewardPerPerson
-					userBreakdown[u.UserName] = append(userBreakdown[u.UserName], PayoutResult{
-						CalculatorID:   calc.ID,
-						CalculatorName: calc.Name,
-						MetricType:     metricType,
-						MetricValue:    groupTotalPerf, // Group metric
-						Amount:         rewardPerPerson,
-						Description:    fmt.Sprintf("Equal split of group pool among %d members (Total Perf: %.2f)", eligibleCount, groupTotalPerf),
-					})
+				// For group methods, calculate reward for this specific team group
+				poolReward := CalculatePayout(calc, groupTotalPerf, "", groupSubPerfMap)
+				if poolReward <= 0 {
+					continue
 				}
-			} else if distMethod == DistPercentageAllocation {
-				for _, u := range targetedUsers {
-					if rules.IsExcluded(u) { continue }
-					for _, alloc := range rules.DistributionRule.Allocations {
-						if alloc.MemberRoleOrName == u.UserName || alloc.MemberRoleOrName == u.Role {
-							share := poolReward * (alloc.Percentage / 100.0)
-							userRewards[u.UserName] += share
-							userBreakdown[u.UserName] = append(userBreakdown[u.UserName], PayoutResult{
-								CalculatorID:   calc.ID,
-								CalculatorName: calc.Name,
-								MetricType:     metricType,
-								MetricValue:    groupTotalPerf,
-								Amount:         share,
-								Description:    fmt.Sprintf("%.1f%% allocation of group pool (Total Perf: %.2f)", alloc.Percentage, groupTotalPerf),
-							})
-							break
+
+				if distMethod == DistEqualSplit {
+					// Count recipients in this group
+					eligibleCount := 0
+					for _, u := range groupUsers {
+						if !rules.IsExcluded(u) {
+							eligibleCount++
+						}
+					}
+
+					rewardPerPerson := 0.0
+					if eligibleCount > 0 {
+						rewardPerPerson = poolReward / float64(eligibleCount)
+					}
+
+					for _, u := range groupUsers {
+						if rules.IsExcluded(u) {
+							continue
+						}
+						userRewards[u.UserName] += rewardPerPerson
+						userBreakdown[u.UserName] = append(userBreakdown[u.UserName], PayoutResult{
+							CalculatorID:   calc.ID,
+							CalculatorName: calc.Name,
+							MetricType:     metricType,
+							MetricValue:    groupTotalPerf, // Group metric
+							Amount:         rewardPerPerson,
+							Description:    fmt.Sprintf("Equal split of %s group pool among %d members (Total Perf: %.2f)", teamName, eligibleCount, groupTotalPerf),
+						})
+					}
+				} else if distMethod == DistPercentageAllocation {
+					for _, u := range groupUsers {
+						if rules.IsExcluded(u) {
+							continue
+						}
+						for _, alloc := range rules.DistributionRule.Allocations {
+							if alloc.MemberRoleOrName == u.UserName || alloc.MemberRoleOrName == u.Role {
+								share := poolReward * (alloc.Percentage / 100.0)
+								userRewards[u.UserName] += share
+								userBreakdown[u.UserName] = append(userBreakdown[u.UserName], PayoutResult{
+									CalculatorID:   calc.ID,
+									CalculatorName: calc.Name,
+									MetricType:     metricType,
+									MetricValue:    groupTotalPerf,
+									Amount:         share,
+									Description:    fmt.Sprintf("%.1f%% allocation of %s group pool (Total Perf: %.2f)", alloc.Percentage, teamName, groupTotalPerf),
+								})
+								break
+							}
 						}
 					}
 				}
