@@ -58,7 +58,27 @@ const TelegramScheduler: React.FC<TelegramSchedulerProps> = ({ schedule, time, o
             </div>
 
             {schedule && (
-                <div className="animate-fade-in-down pt-6 mt-4 border-t border-cyan-500/10">
+                <div className="animate-reveal pt-6 mt-4 border-t border-cyan-500/10 space-y-4">
+                    {/* Quick Select Buttons */}
+                    <div className="flex flex-wrap gap-2">
+                        {[
+                            { label: '+1 ម៉ោង', getValue: () => { const d = new Date(); d.setHours(d.getHours() + 1); return d.toISOString().slice(0, 16); } },
+                            { label: '+2 ម៉ោង', getValue: () => { const d = new Date(); d.setHours(d.getHours() + 2); return d.toISOString().slice(0, 16); } },
+                            { label: '+4 ម៉ោង', getValue: () => { const d = new Date(); d.setHours(d.getHours() + 4); return d.toISOString().slice(0, 16); } },
+                            { label: 'ស្អែក 8AM', getValue: () => { const d = new Date(); d.setDate(d.getDate() + 1); d.setHours(8, 0, 0, 0); return d.toISOString().slice(0, 16); } },
+                            { label: 'ស្អែក 1PM', getValue: () => { const d = new Date(); d.setDate(d.getDate() + 1); d.setHours(13, 0, 0, 0); return d.toISOString().slice(0, 16); } },
+                        ].map((opt, idx) => (
+                            <button
+                                key={idx}
+                                type="button"
+                                onClick={() => onChange({ schedule, time: opt.getValue() })}
+                                className="px-3 py-1.5 bg-cyan-500/10 border border-cyan-500/20 text-cyan-400 rounded-xl text-[10px] font-black uppercase tracking-wider hover:bg-cyan-500 hover:text-white transition-all active:scale-95"
+                            >
+                                {opt.label}
+                            </button>
+                        ))}
+                    </div>
+
                     <div className="relative group">
                         <input 
                             type="datetime-local" 
@@ -66,18 +86,16 @@ const TelegramScheduler: React.FC<TelegramSchedulerProps> = ({ schedule, time, o
                             onChange={e => onChange({ schedule, time: e.target.value })} 
                             onClick={(e) => {
                                 try {
-                                    // កោះហៅផ្ទាំងប្រតិទិនមកបង្ហាញភ្លាមៗ
                                     if ('showPicker' in HTMLInputElement.prototype) {
                                         e.currentTarget.showPicker();
                                     }
                                 } catch(err) {}
                             }}
-                            /* pr-14 ដើម្បីទុកចន្លោះឱ្យ Icon ដែលធំជាងមុន */
                             className="cyan-calendar-picker form-input !py-4 !pl-5 !pr-14 bg-black/40 border-cyan-500/20 text-white font-mono font-bold rounded-2xl focus:border-cyan-500 focus:ring-4 focus:ring-cyan-500/10 transition-all text-sm w-full cursor-pointer" 
                             min={new Date().toISOString().slice(0, 16)} 
                         />
                     </div>
-                    <p className="text-[9px] text-cyan-400/60 font-black uppercase tracking-widest text-center mt-3">សារនឹងត្រូវផ្ញើដោយស្វ័យប្រវត្តិតាមម៉ោងកំណត់</p>
+                    <p className="text-[9px] text-cyan-400/60 font-black uppercase tracking-widest text-center mt-3">សារនឹងត្រូវផ្ញើ និងបង្ហាញក្នុងតារាងតាមម៉ោងកំណត់</p>
                 </div>
             )}
             
