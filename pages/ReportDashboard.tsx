@@ -261,6 +261,10 @@ const ReportDashboard: React.FC<ReportDashboardProps> = ({ activeReport, onBack,
 
     const activeFilterCount = Object.values(filters).filter(v => v !== '' && v !== 'this_month' && v !== 'all').length;
 
+    const handleFilterChange = (newFilters: Partial<FilterState>) => {
+        setFilters(prev => ({ ...prev, ...newFilters }));
+    };
+
     return (
         <div className="animate-fade-in space-y-4 pb-20 select-none">
             {/* Header (Compact) */}
@@ -288,7 +292,7 @@ const ReportDashboard: React.FC<ReportDashboardProps> = ({ activeReport, onBack,
 
             {/* Dynamic Report Content Area */}
             <div className="min-h-[500px]">
-                {activeReport === 'overview' && <ReportsView orders={filteredOrders} reportType="overview" allOrders={orders} dateFilter={filters.datePreset} />}
+                {activeReport === 'overview' && <ReportsView orders={filteredOrders} reportType="overview" allOrders={orders} dateFilter={filters.datePreset} onFilterChange={handleFilterChange} />}
                 {activeReport === 'sales_team' && <SalesByTeamPage orders={filteredOrders} onBack={onBack} />}
                 {activeReport === 'sales_page' && (
                     <SalesByPageReport 
@@ -299,6 +303,7 @@ const ReportDashboard: React.FC<ReportDashboardProps> = ({ activeReport, onBack,
                         dateFilter={filters.datePreset}
                         startDate={filters.startDate}
                         endDate={filters.endDate}
+                        onFilterChange={handleFilterChange}
                     />
                 )}
                 {activeReport === 'shipping' && (
@@ -311,11 +316,13 @@ const ReportDashboard: React.FC<ReportDashboardProps> = ({ activeReport, onBack,
                         endDate={filters.endDate} 
                         onNavigate={onNavigate}
                         contextFilters={filters} 
+                        onOpenFilter={() => setIsFilterOpen(true)}
+                        onFilterChange={handleFilterChange}
                     />
                 )}
-                {activeReport === 'profitability' && <ReportsView orders={filteredOrders} reportType="profitability" allOrders={orders} dateFilter={filters.datePreset} />}
-                {activeReport === 'performance' && <ReportsView orders={filteredOrders} reportType="performance" allOrders={orders} dateFilter={filters.datePreset} />}
-                {activeReport === 'forecasting' && <ReportsView orders={orders} reportType="forecasting" allOrders={orders} dateFilter={filters.datePreset} />}
+                {activeReport === 'profitability' && <ReportsView orders={filteredOrders} reportType="profitability" allOrders={orders} dateFilter={filters.datePreset} onFilterChange={handleFilterChange} />}
+                {activeReport === 'performance' && <ReportsView orders={filteredOrders} reportType="performance" allOrders={orders} dateFilter={filters.datePreset} onFilterChange={handleFilterChange} />}
+                {activeReport === 'forecasting' && <ReportsView orders={orders} reportType="forecasting" allOrders={orders} dateFilter={filters.datePreset} onFilterChange={handleFilterChange} />}
             </div>
 
             {/* Global Filter Modal */}

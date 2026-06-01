@@ -1,7 +1,8 @@
-import React, { useState, useMemo, useContext } from 'react';
+import React, { useState, useMemo, useContext, useEffect } from 'react';
 import { ParsedOrder, AppData } from '../../types';
 import { analyzeReportData } from '../../services/geminiService';
 import GeminiButton from '../common/GeminiButton';
+import SimpleLineChart from '../common/SimpleLineChart';
 import StatCard from '../performance/StatCard';
 import { convertGoogleDriveUrl } from '../../utils/fileUtils';
 import { FilterState } from '../orders/OrderFilters';
@@ -12,6 +13,7 @@ import { AppContext } from '../../context/AppContext';
 import Modal from '../common/Modal';
 import OrdersList from '../orders/OrdersList';
 import OrderDetailModal from '../orders/OrderDetailModal';
+import UserAvatar from '../common/UserAvatar';
 
 interface ShippingReportProps {
     orders: ParsedOrder[];
@@ -22,10 +24,12 @@ interface ShippingReportProps {
     onNavigate?: (filters: any) => void;
     contextFilters?: FilterState;
     onBack?: () => void;
+    onOpenFilter?: () => void;
+    onFilterChange?: (filters: Partial<FilterState>) => void;
 }
 
-const ShippingReport: React.FC<ShippingReportProps> = ({ orders, appData, dateFilter: initialDateFilter, startDate: initialStartDate, endDate: initialEndDate, onNavigate, contextFilters, onBack }) => {
-    const { advancedSettings, language } = useContext(AppContext);
+const ShippingReport: React.FC<ShippingReportProps> = ({ orders, appData, dateFilter: initialDateFilter, startDate: initialStartDate, endDate: initialEndDate, onNavigate, contextFilters, onBack, onOpenFilter, onFilterChange }) => {
+    const { advancedSettings, language, currentUser } = useContext(AppContext);
     const uiTheme = advancedSettings?.uiTheme || 'default';
     const isLightMode = advancedSettings?.themeMode === 'light';
 
@@ -33,10 +37,33 @@ const ShippingReport: React.FC<ShippingReportProps> = ({ orders, appData, dateFi
     const [loadingAnalysis, setLoadingAnalysis] = useState(false);
     const [storeFilter, setStoreFilter] = useState<string>('All');
     
-    // Internal Date Filtering State
+    // Internal Date Filtering State synced with parent
     const [dateFilter, setDateFilter] = useState(initialDateFilter || 'this_month');
     const [startDate, setStartDate] = useState(initialStartDate || new Date().toISOString().split('T')[0]);
     const [endDate, setEndDate] = useState(initialEndDate || new Date().toISOString().split('T')[0]);
+
+    // Sync from parent
+    useEffect(() => {
+        if (initialDateFilter) setDateFilter(initialDateFilter);
+        if (initialStartDate) setStartDate(initialStartDate);
+        if (initialEndDate) setEndDate(initialEndDate);
+    }, [initialDateFilter, initialStartDate, initialEndDate]);
+
+    const handleDateChange = (preset: string) => {
+        setDateFilter(preset);
+        if (onFilterChange) onFilterChange({ datePreset: preset as any });
+    };
+
+    const handleCustomDateChange = (type: 'start' | 'end', value: string) => {
+        if (type === 'start') {
+            setStartDate(value);
+            if (onFilterChange) onFilterChange({ datePreset: 'custom', startDate: value, endDate });
+        }
+        if (type === 'end') {
+            setEndDate(value);
+            if (onFilterChange) onFilterChange({ datePreset: 'custom', startDate, endDate: value });
+        }
+    };
 
     // Drilldown State
     const [drilldownOrders, setDrilldownOrders] = useState<ParsedOrder[] | null>(null);
@@ -58,21 +85,23 @@ const ShippingReport: React.FC<ShippingReportProps> = ({ orders, appData, dateFi
                     tableRowHover: 'hover:bg-white/5',
                     tableBorder: 'border-[#2B3139]',
                     buttonSecondary: 'bg-[#2B3139] border-[#474D57] text-[#848E9C] hover:text-[#EAECEF]',
-                    buttonAccent: 'bg-[#FCD535] text-[#1E2329] hover:bg-[#f0c51d]'
+                    buttonAccent: 'bg-[#FCD535] text-[#1E2329] hover:bg-[#f0c51d]',
+                    indicator: 'bg-[#FCD535]'
                 };
             default:
                 return {
-                    headerBg: 'bg-gray-900/40 border-white/5',
-                    cardBg: 'bg-gray-900/40 border-white/5',
+                    headerBg: isLightMode ? 'bg-white border-slate-200 shadow-sm' : 'bg-gray-900/40 border-white/5',
+                    cardBg: isLightMode ? 'bg-white border-slate-200 shadow-sm' : 'bg-gray-900/40 border-white/5',
                     accent: '#3b82f6',
-                    accentText: 'text-blue-400',
-                    secondaryText: 'text-gray-500',
-                    primaryText: 'text-white',
-                    innerBg: 'bg-black/40',
-                    tableRowHover: 'hover:bg-white/5',
-                    tableBorder: 'border-white/5',
-                    buttonSecondary: 'bg-gray-800 border-gray-700 text-gray-400 hover:bg-gray-700',
-                    buttonAccent: 'bg-blue-600 text-white hover:bg-blue-700'
+                    accentText: isLightMode ? 'text-blue-600' : 'text-blue-400',
+                    secondaryText: isLightMode ? 'text-slate-500' : 'text-gray-500',
+                    primaryText: isLightMode ? 'text-slate-900' : 'text-white',
+                    innerBg: isLightMode ? 'bg-slate-50' : 'bg-black/40',
+                    tableRowHover: isLightMode ? 'hover:bg-slate-50' : 'hover:bg-white/5',
+                    tableBorder: isLightMode ? 'border-slate-100' : 'border-white/5',
+                    buttonSecondary: isLightMode ? 'bg-white border-slate-200 text-slate-600 hover:bg-slate-50' : 'bg-gray-800 border-gray-700 text-gray-400 hover:bg-gray-700',
+                    buttonAccent: 'bg-blue-600 text-white hover:bg-blue-700',
+                    indicator: 'bg-blue-500'
                 };
         }
     };
@@ -181,6 +210,7 @@ const ShippingReport: React.FC<ShippingReportProps> = ({ orders, appData, dateFi
         const methods: Record<string, { name: string, cost: number, orders: number, logo: string }> = {};
         const drivers: Record<string, { name: string, cost: number, orders: number, photo: string }> = {};
         const stores: Record<string, { name: string, cost: number, orders: number }> = {};
+        const dateMap: Record<string, { cost: number, fees: number, count: number }> = {};
 
         activeOrders.forEach(o => {
             const mName = o['Internal Shipping Method'] || 'Other';
@@ -207,7 +237,24 @@ const ShippingReport: React.FC<ShippingReportProps> = ({ orders, appData, dateFi
             }
             stores[sName].cost += (Number(o['Internal Cost']) || 0);
             stores[sName].orders += 1;
+
+            if (o.Timestamp) {
+                const date = o.Timestamp.split(' ')[0];
+                if (!dateMap[date]) dateMap[date] = { cost: 0, fees: 0, count: 0 };
+                dateMap[date].cost += (Number(o['Internal Cost']) || 0);
+                dateMap[date].fees += (Number(o['Shipping Fee (Customer)']) || 0);
+                dateMap[date].count += 1;
+            }
         });
+
+        const chartData = Object.keys(dateMap).sort().map(date => ({
+            name: date,
+            cost: dateMap[date].cost,
+            fees: dateMap[date].fees,
+            count: dateMap[date].count,
+            // SimpleLineChart typically expects 'value'
+            value: dateMap[date].cost 
+        }));
 
         return {
             totalInternalCost,
@@ -216,14 +263,16 @@ const ShippingReport: React.FC<ShippingReportProps> = ({ orders, appData, dateFi
             totalOrders: activeOrders.length,
             methods: Object.values(methods).sort((a, b) => b.cost - a.cost),
             drivers: Object.values(drivers).sort((a, b) => b.cost - a.cost),
-            stores: Object.values(stores).sort((a, b) => b.cost - a.cost)
+            stores: Object.values(stores).sort((a, b) => b.cost - a.cost),
+            chartData
         };
     }, [filteredOrders, appData]);
 
     const handleAnalyze = async () => {
         setLoadingAnalysis(true);
         try {
-            const result = await analyzeReportData(shippingStats, { reportType: 'shipping' });
+            const prompt = `Analyze this shipping report. Total Cost: $${shippingStats.totalInternalCost}, Total Fees: $${shippingStats.totalCustomerFee}, Net: $${shippingStats.netShipping}, Orders: ${shippingStats.totalOrders}. Top carrier: ${shippingStats.methods[0]?.name}. Provide 3 short, high-impact shipping efficiency insights in uppercase KHMER language.`;
+            const result = await analyzeReportData(prompt);
             setAnalysis(result);
         } catch (e) { setAnalysis("AI Analysis error."); } finally { setLoadingAnalysis(false); }
     };
@@ -450,185 +499,259 @@ const ShippingReport: React.FC<ShippingReportProps> = ({ orders, appData, dateFi
     const avgFeePerOrder = shippingStats.totalOrders > 0 ? shippingStats.totalCustomerFee / shippingStats.totalOrders : 0;
     const profitMargin = shippingStats.totalInternalCost > 0 ? (shippingStats.netShipping / shippingStats.totalCustomerFee) * 100 : 0;
 
-    return (
-        <div className="space-y-6 animate-fade-in pb-12 select-none">
-            
-            {/* Header Section */}
-            <div className={`${styles.headerBg} border backdrop-blur-md`} style={uiTheme === 'binance' ? { borderRadius: '4px' } : undefined}>
-                {/* Title Row */}
-                <div className="flex justify-between items-center px-5 pt-5 pb-4">
+    // --- Inline Drilldown View ---
+    if (drilldownOrders && !selectedOrder) {
+        return (
+            <div className="animate-fade-in space-y-4 min-h-[80vh] flex flex-col">
+                <div className={`flex items-center justify-between p-4 ${styles.headerBg} border`} style={uiTheme === 'binance' ? { borderRadius: '4px' } : undefined}>
                     <div className="flex items-center gap-3">
-                        {onBack && (
-                            <button onClick={onBack} className={`p-2 transition-all active:scale-95 ${styles.buttonSecondary}`} style={uiTheme === 'binance' ? { borderRadius: '4px', border: 'none', background: 'transparent' } : { border: 'none' }}>
-                                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2.5}><path d="M15 19l-7-7 7-7" /></svg>
-                            </button>
-                        )}
-                        <div className="flex items-center gap-2">
-                            <div className="w-1 h-5 rounded-full" style={{ backgroundColor: styles.accent }}></div>
-                            <div>
-                                <h2 className={`text-base font-black ${styles.primaryText} uppercase tracking-tight`}>របាយការណ៍ដឹកជញ្ជូន</h2>
-                                <p className={`text-[9px] ${styles.secondaryText} font-bold uppercase tracking-widest`}>Shipping & Fulfillment Cost Analysis</p>
+                        <button 
+                            onClick={() => setDrilldownOrders(null)}
+                            className={`p-2 transition-all active:scale-95 ${styles.buttonSecondary}`}
+                            style={uiTheme === 'binance' ? { borderRadius: '4px', border: 'none' } : { border: 'none' }}
+                        >
+                            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2.5}><path d="M15 19l-7-7 7-7" /></svg>
+                        </button>
+                        <div>
+                            <h2 className={`text-base font-black ${styles.primaryText} uppercase tracking-tight`}>{drilldownTitle}</h2>
+                            <p className={`text-[9px] ${styles.secondaryText} font-bold uppercase tracking-widest`}>
+                                {drilldownOrders.length} {language === 'km' ? 'ការកម្មង់ត្រូវបានរកឃើញ' : 'Orders Found'}
+                            </p>
+                        </div>
+                    </div>
+                </div>
+
+                <div className={`${styles.cardBg} border p-4 overflow-hidden flex-grow flex flex-col`} style={uiTheme === 'binance' ? { borderRadius: '4px' } : undefined}>
+                    <div className="flex-grow">
+                        <OrdersList 
+                            orders={drilldownOrders}
+                            showActions={true}
+                            onView={(order) => setSelectedOrder(order)}
+                            viewMode="list"
+                        />
+                    </div>
+                </div>
+            </div>
+        );
+    }
+
+    // --- Inline Order Detail View ---
+    if (selectedOrder) {
+        return (
+            <div className="animate-fade-in min-h-[85vh] flex flex-col">
+                <div className="flex-grow">
+                    <OrderDetailModal 
+                        order={selectedOrder}
+                        onClose={() => setSelectedOrder(null)}
+                        inline={true}
+                    />
+                </div>
+            </div>
+        );
+    }
+
+    return (
+        <div className="space-y-6 sm:space-y-8 animate-fade-in pb-12 select-none px-1">
+            
+            {/* Header Section - Intelligence Hub */}
+            <div className={`${styles.headerBg} border shadow-2xl backdrop-blur-2xl rounded-[2.5rem] overflow-hidden relative group`}>
+                {/* Glossy Overlay */}
+                <div className="absolute inset-0 bg-gradient-to-tr from-white/[0.02] to-transparent pointer-events-none"></div>
+                
+                <div className="relative z-10">
+                    <div className="flex flex-col xl:flex-row justify-between xl:items-center px-8 py-8 gap-8">
+                        {/* Title & Brand */}
+                        <div className="flex items-center gap-5">
+                            {onBack && (
+                                <button onClick={onBack} className={`w-12 h-12 flex items-center justify-center transition-all active:scale-90 ${styles.buttonSecondary} rounded-2xl shadow-xl border hover:border-${styles.accent}/50`}>
+                                    <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={3}><path d="M15 19l-7-7 7-7" /></svg>
+                                </button>
+                            )}
+                            <div className="flex items-center gap-4">
+                                <div className={`w-2 h-12 ${styles.indicator} rounded-full shadow-[0_0_15px_${styles.accent}]`}></div>
+                                <div>
+                                    <h2 className={`text-2xl font-black ${styles.primaryText} uppercase tracking-tighter italic leading-none`}>របាយការណ៍ដឹកជញ្ជូន</h2>
+                                    <div className="flex items-center gap-2 mt-2">
+                                        <span className={`text-[10px] font-black ${styles.accentText} uppercase tracking-[0.3em]`}>Logic v4.2</span>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        {/* Unified Filter Station */}
+                        <div className="flex flex-wrap items-center gap-4 bg-black/10 p-2 rounded-[2rem] border border-white/5 shadow-inner">
+                            {/* Store Selector */}
+                            <div className={`flex items-center ${styles.innerBg} rounded-[1.5rem] px-4 py-1.5 border ${styles.tableBorder} group/store hover:border-${styles.accent}/30 transition-all`}>
+                                <div className={`w-7 h-7 rounded-full flex items-center justify-center text-[11px] font-black ${styles.secondaryText} bg-white/5 mr-2`}>
+                                    <i className="fa-solid fa-server"></i>
+                                </div>
+                                <div className="flex flex-col">
+                                    <span className="text-[8px] font-black text-[#848E9C] uppercase tracking-widest leading-none">Stream</span>
+                                    <select 
+                                        value={storeFilter} 
+                                        onChange={(e) => setStoreFilter(e.target.value)}
+                                        className={`bg-transparent border-none text-[12px] font-black ${styles.primaryText} focus:ring-0 cursor-pointer py-0 pr-8 pl-0 uppercase tracking-tight`}
+                                    >
+                                        <option value="All" className={styles.innerBg}>Entire Network</option>
+                                        {appData.stores?.map(s => (
+                                            <option key={s.StoreName} value={s.StoreName} className={styles.innerBg}>{s.StoreName}</option>
+                                        ))}
+                                    </select>
+                                </div>
+                            </div>
+
+                            <div className="h-8 w-[1px] bg-white/10 hidden md:block"></div>
+
+                            {/* Action Matrix */}
+                            <div className="flex items-center gap-2">
+                                <button 
+                                    onClick={() => onOpenFilter && onOpenFilter()}
+                                    className={`flex items-center gap-2.5 px-6 py-3 text-[11px] font-black uppercase tracking-[0.2em] transition-all active:scale-95 bg-white/5 hover:bg-white/10 text-white rounded-[1.5rem] border border-white/10`}
+                                >
+                                    <i className="fa-solid fa-filter"></i>
+                                    {language === 'km' ? 'ចម្រោះ' : 'Filter'}
+                                </button>
+
+                                <button 
+                                    onClick={handleExportExcel}
+                                    className={`flex items-center gap-2.5 px-6 py-3 text-[11px] font-black uppercase tracking-[0.2em] transition-all active:scale-95 bg-emerald-500 hover:bg-emerald-400 text-white rounded-[1.5rem] shadow-lg shadow-emerald-500/20`}
+                                >
+                                    <i className="fa-solid fa-cloud-arrow-down"></i>
+                                    {language === 'km' ? 'នាំចេញ' : 'Excel'}
+                                </button>
+
+                                <button 
+                                    onClick={handleOpenPrintView}
+                                    className={`flex items-center gap-2.5 px-6 py-3 text-[11px] font-black uppercase tracking-[0.2em] transition-all active:scale-95 bg-rose-500 hover:bg-rose-400 text-white rounded-[1.5rem] shadow-lg shadow-rose-500/20`}
+                                >
+                                    <i className="fa-solid fa-print"></i>
+                                    {language === 'km' ? 'បោះពុម្ព' : 'Print'}
+                                </button>
                             </div>
                         </div>
                     </div>
 
-                    <div className="flex items-center gap-2">
-                        {/* Store Filter */}
-                        <div className={`flex items-center border ${styles.tableBorder} ${styles.innerBg}`} style={uiTheme === 'binance' ? { borderRadius: '4px' } : undefined}>
-                            <span className={`text-[9px] font-bold ${styles.secondaryText} uppercase px-3 whitespace-nowrap`}>Store</span>
-                            <select 
-                                value={storeFilter} 
-                                onChange={(e) => setStoreFilter(e.target.value)}
-                                className={`bg-transparent border-none text-[10px] font-bold ${styles.primaryText} focus:ring-0 cursor-pointer py-2 pr-6 pl-1 uppercase`}
-                            >
-                                <option value="All" className={styles.innerBg}>All</option>
-                                {appData.stores?.map(s => (
-                                    <option key={s.StoreName} value={s.StoreName} className={styles.innerBg}>{s.StoreName}</option>
+                    {/* Date Presets Strip - High Tech Look */}
+                    <div className={`px-8 border-t ${styles.tableBorder} bg-white/[0.02]`}>
+                        <div className="flex flex-wrap items-center justify-between py-2 gap-4">
+                            <div className="flex items-center overflow-x-auto no-scrollbar gap-1">
+                                {[
+                                    { id: 'today', icon: 'fa-bolt' },
+                                    { id: 'yesterday', icon: 'fa-rotate-left' },
+                                    { id: 'this_week', icon: 'fa-calendar-week' },
+                                    { id: 'this_month', icon: 'fa-calendar-days' },
+                                    { id: 'last_month', icon: 'fa-history' },
+                                    { id: 'all', icon: 'fa-layer-group' }
+                                ].map(preset => (
+                                    <button
+                                        key={preset.id}
+                                        onClick={() => handleDateChange(preset.id)}
+                                        className={`group flex items-center gap-2 px-4 py-3 text-[10px] font-black uppercase tracking-widest transition-all rounded-xl ${
+                                            dateFilter === preset.id 
+                                            ? `${styles.innerBg} ${styles.accentText} border ${styles.tableBorder} shadow-sm` 
+                                            : `${styles.secondaryText} hover:${styles.primaryText} hover:bg-white/5`
+                                        }`}
+                                    >
+                                        <i className={`fa-solid ${preset.icon} ${dateFilter === preset.id ? styles.accentText : 'opacity-40 group-hover:opacity-100 transition-opacity'}`}></i>
+                                        {preset.id.replace('_', ' ')}
+                                    </button>
                                 ))}
-                            </select>
+                                <div className="w-[1px] h-6 bg-white/10 mx-2"></div>
+                                <button
+                                    onClick={() => handleDateChange('custom')}
+                                    className={`flex items-center gap-2 px-4 py-3 text-[10px] font-black uppercase tracking-widest transition-all rounded-xl ${
+                                        dateFilter === 'custom' 
+                                        ? `${styles.innerBg} ${styles.accentText} border ${styles.tableBorder} shadow-sm` 
+                                        : `${styles.secondaryText} hover:${styles.primaryText} hover:bg-white/5`
+                                    }`}
+                                >
+                                    <i className="fa-solid fa-sliders"></i>
+                                    Custom Range
+                                </button>
+                            </div>
+
+                            <div className={`px-4 py-1.5 rounded-full border ${styles.tableBorder} ${styles.innerBg} text-[10px] font-mono font-black ${styles.secondaryText} uppercase tracking-tighter flex items-center gap-3`}>
+                                <div className="flex items-center gap-1.5">
+                                    <div className={`w-1 h-1 rounded-full ${styles.indicator} animate-pulse`}></div>
+                                    <span className="opacity-50">EPOCH:</span>
+                                </div>
+                                <span className={styles.accentText}>{dateFilter === 'custom' ? `${startDate} / ${endDate}` : dateFilter.replace('_', ' ')}</span>
+                            </div>
                         </div>
-
-                        {/* Export Excel */}
-                        <button 
-                            onClick={handleExportExcel}
-                            className={`flex items-center gap-1.5 px-3 py-2 text-[10px] font-bold uppercase tracking-wider transition-all active:scale-95 ${uiTheme === 'binance' ? 'bg-[#0ECB81] text-[#1E2329] hover:bg-[#0bb371]' : 'bg-emerald-600 text-white hover:bg-emerald-700'}`}
-                            style={uiTheme === 'binance' ? { borderRadius: '4px' } : undefined}
-                        >
-                            <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2.5}><path d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" /></svg>
-                            Excel
-                        </button>
-
-                        {/* Print */}
-                        <button 
-                            onClick={handleOpenPrintView}
-                            className={`flex items-center gap-1.5 px-3 py-2 text-[10px] font-bold uppercase tracking-wider transition-all active:scale-95 ${uiTheme === 'binance' ? 'bg-[#F6465D] text-white hover:bg-[#e03f54]' : 'bg-red-600 text-white hover:bg-red-700'}`}
-                            style={uiTheme === 'binance' ? { borderRadius: '4px' } : undefined}
-                        >
-                            <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2.5}><path d="M7 21h10a2 2 0 002-2V9.414a1 1 0 00-.293-.707l-5.414-5.414A1 1 0 0012.586 3H7a2 2 0 00-2 2v14a2 2 0 002 2z" /></svg>
-                            Print
-                        </button>
                     </div>
+
+                    {/* Custom Range Sub-Station */}
+                    {dateFilter === 'custom' && (
+                        <div className="px-8 pb-6 animate-fade-in-down">
+                            <div className={`p-6 border ${styles.tableBorder} ${styles.innerBg} rounded-[2rem] flex flex-col md:flex-row items-center gap-6 shadow-2xl`}>
+                                <div className="flex-1 w-full space-y-2">
+                                    <div className="flex items-center justify-between px-1">
+                                        <label className={`text-[9px] font-black ${styles.secondaryText} uppercase tracking-[0.3em]`}>Temporal Start</label>
+                                        <i className={`fa-solid fa-hourglass-start text-[10px] ${styles.accentText} opacity-30`}></i>
+                                    </div>
+                                    <input 
+                                        type="date" 
+                                        value={startDate} 
+                                        onChange={e => handleCustomDateChange('start', e.target.value)} 
+                                        className={`w-full bg-black/20 border ${styles.tableBorder} px-5 py-3 ${styles.primaryText} text-xs font-black focus:ring-2 focus:ring-${styles.accent}/20 focus:border-${styles.accent}/50 outline-none rounded-2xl transition-all shadow-inner`}
+                                    />
+                                </div>
+                                <div className="hidden md:flex items-center justify-center pt-6">
+                                    <div className="w-10 h-[1px] bg-white/10 relative">
+                                        <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-2 h-2 bg-white/20 rounded-full"></div>
+                                    </div>
+                                </div>
+                                <div className="flex-1 w-full space-y-2">
+                                    <div className="flex items-center justify-between px-1">
+                                        <label className={`text-[9px] font-black ${styles.secondaryText} uppercase tracking-[0.3em]`}>Temporal End</label>
+                                        <i className={`fa-solid fa-hourglass-end text-[10px] ${styles.accentText} opacity-30`}></i>
+                                    </div>
+                                    <input 
+                                        type="date" 
+                                        value={endDate} 
+                                        onChange={e => handleCustomDateChange('end', e.target.value)} 
+                                        className={`w-full bg-black/20 border ${styles.tableBorder} px-5 py-3 ${styles.primaryText} text-xs font-black focus:ring-2 focus:ring-${styles.accent}/20 focus:border-${styles.accent}/50 outline-none rounded-2xl transition-all shadow-inner`}
+                                    />
+                                </div>
+                            </div>
+                        </div>
+                    )}
                 </div>
-
-                {/* Date Filter Tabs */}
-                <div className={`flex items-center justify-between px-5 pb-0 border-b ${styles.tableBorder}`}>
-                    <div className="flex items-center">
-                        {(['today', 'yesterday', 'this_week', 'this_month', 'last_month', 'all'] as const).map(preset => (
-                            <button
-                                key={preset}
-                                onClick={() => setDateFilter(preset)}
-                                className={`px-4 py-2.5 text-[10px] font-bold uppercase tracking-wider transition-all border-b-2 ${
-                                    dateFilter === preset 
-                                    ? `${styles.primaryText} border-[${styles.accent}]` 
-                                    : `${styles.secondaryText} border-transparent hover:${styles.primaryText}`
-                                }`}
-                                style={dateFilter === preset ? { borderBottomColor: styles.accent } : { borderBottomColor: 'transparent' }}
-                            >
-                                {preset.replace('_', ' ')}
-                            </button>
-                        ))}
-                        <button
-                            onClick={() => setDateFilter('custom')}
-                            className={`px-4 py-2.5 text-[10px] font-bold uppercase tracking-wider transition-all border-b-2 ${
-                                dateFilter === 'custom' 
-                                ? `${styles.primaryText} border-[${styles.accent}]` 
-                                : `${styles.secondaryText} border-transparent hover:${styles.primaryText}`
-                            }`}
-                            style={dateFilter === 'custom' ? { borderBottomColor: styles.accent } : { borderBottomColor: 'transparent' }}
-                        >
-                            Custom
-                        </button>
-                    </div>
-
-                    {/* Period indicator */}
-                    <div className={`text-[9px] font-bold ${styles.secondaryText} uppercase tracking-wider pb-2`}>
-                        {dateFilter === 'custom' ? `${startDate} → ${endDate}` : dateFilter.replace('_', ' ')}
-                    </div>
-                </div>
-
-                {/* Custom Date Range */}
-                {dateFilter === 'custom' && (
-                    <div className={`flex items-center gap-3 mx-5 mt-3 mb-1 ${styles.innerBg} p-3 border ${styles.tableBorder} animate-fade-in-down`} style={uiTheme === 'binance' ? { borderRadius: '4px' } : undefined}>
-                        <input 
-                            type="date" 
-                            value={startDate} 
-                            onChange={e => setStartDate(e.target.value)} 
-                            className={`${styles.innerBg} border ${styles.tableBorder} px-3 py-1.5 ${styles.primaryText} text-xs font-bold focus:ring-0 focus:border-[${styles.accent}] outline-none`}
-                            style={uiTheme === 'binance' ? { borderRadius: '4px' } : undefined}
-                        />
-                        <span className={`${styles.secondaryText} font-bold text-xs uppercase`}>to</span>
-                        <input 
-                            type="date" 
-                            value={endDate} 
-                            onChange={e => setEndDate(e.target.value)} 
-                            className={`${styles.innerBg} border ${styles.tableBorder} px-3 py-1.5 ${styles.primaryText} text-xs font-bold focus:ring-0 focus:border-[${styles.accent}] outline-none`}
-                            style={uiTheme === 'binance' ? { borderRadius: '4px' } : undefined}
-                        />
-                    </div>
-                )}
             </div>
 
-            {/* Stats Cards */}
-            <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
-                {[
-                    { 
-                        label: language === 'km' ? 'ចំណាយដឹកជញ្ជូន' : 'Shipping Cost', 
-                        sublabel: language === 'km' ? 'សរុបផ្ទៃក្នុង' : 'Internal Total',
-                        value: `$${shippingStats.totalInternalCost.toLocaleString()}`,
-                        subvalue: `$${avgCostPerOrder.toFixed(2)}/order`,
-                        color: uiTheme === 'binance' ? '#F6465D' : '#f97316',
-                        icon: '🚚',
-                        onClick: () => handleDrilldown(language === 'km' ? 'ចំណាយដឹកជញ្ជូន' : 'Shipping Cost', 'cost')
-                    },
-                    { 
-                        label: language === 'km' ? 'ថ្លៃដឹកពីអតិថិជន' : 'Customer Fees', 
-                        sublabel: language === 'km' ? 'ប្រាក់ចំណូល' : 'Revenue',
-                        value: `$${shippingStats.totalCustomerFee.toLocaleString()}`,
-                        subvalue: `$${avgFeePerOrder.toFixed(2)}/order`,
-                        color: uiTheme === 'binance' ? '#FCD535' : '#3b82f6',
-                        icon: '💰',
-                        onClick: () => handleDrilldown(language === 'km' ? 'ថ្លៃដឹកពីអតិថិជន' : 'Customer Fees', 'customerFee')
-                    },
-                    { 
-                        label: language === 'km' ? 'តុល្យភាព' : 'Net Balance', 
-                        sublabel: shippingStats.netShipping >= 0 ? (language === 'km' ? 'ចំណេញ' : 'Profit') : (language === 'km' ? 'ខាត' : 'Loss'),
-                        value: `$${shippingStats.netShipping.toLocaleString()}`,
-                        subvalue: `${profitMargin.toFixed(1)}% margin`,
-                        color: shippingStats.netShipping >= 0 ? (uiTheme === 'binance' ? '#0ECB81' : '#10b981') : (uiTheme === 'binance' ? '#F6465D' : '#ef4444'),
-                        icon: '⚖️'
-                    },
-                    { 
-                        label: language === 'km' ? 'កញ្ចប់សរុប' : 'Total Packages', 
-                        sublabel: language === 'km' ? 'ចំនួន' : 'Count',
-                        value: shippingStats.totalOrders.toLocaleString(),
-                        subvalue: `${shippingStats.methods.length} carriers`,
-                        color: uiTheme === 'binance' ? '#F0B90B' : '#8b5cf6',
-                        icon: '📦',
-                        onClick: () => handleDrilldown(language === 'km' ? 'កញ្ចប់សរុប' : 'Total Packages', 'all')
-                    }
-                ].map((card, i) => (
-                    <div 
-                        key={i} 
-                        className={`${styles.cardBg} border p-4 ${card.onClick ? 'cursor-pointer hover:border-white/20 transition-all active:scale-95' : ''}`} 
-                        style={uiTheme === 'binance' ? { borderRadius: '4px' } : undefined}
-                        onClick={card.onClick}
-                    >
-                        <div className="flex items-start justify-between mb-3">
-                            <span className="text-xl">{card.icon}</span>
-                            <div className="w-2 h-2 rounded-full" style={{ backgroundColor: card.color, opacity: 0.6 }}></div>
-                        </div>
-                        <div className={`text-[9px] font-bold ${styles.secondaryText} uppercase tracking-wider mb-1`}>{card.label}</div>
-                        <div className={`text-xl font-black ${styles.primaryText} tabular-nums mb-1`}>{card.value}</div>
-                        <div className="flex items-center justify-between">
-                            <span className={`text-[9px] font-bold ${styles.secondaryText}`}>{card.sublabel}</span>
-                            <span className={`text-[9px] font-bold tabular-nums`} style={{ color: card.color }}>{card.subvalue}</span>
-                        </div>
-                    </div>
-                ))}
+            {/* High Impact Stats Grid */}
+            <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 sm:gap-6">
+                <StatCard 
+                    label={""} 
+                    value={`$${shippingStats.totalInternalCost.toLocaleString()}`} 
+                    icon={<i className="fa-solid fa-truck-fast"></i>} 
+                    colorClass={uiTheme === 'binance' ? "from-[#F6465D] to-[#d93a4e]" : "from-orange-500 to-red-600"} 
+                    onClick={() => handleDrilldown(language === 'km' ? 'ចំណាយដឹកជញ្ជូន' : 'Shipping Cost', 'cost')}
+                />
+                <StatCard 
+                    label={language === 'km' ? 'ថ្លៃដឹកពីអតិថិជន' : 'Customer Fees'} 
+                    value={`$${shippingStats.totalCustomerFee.toLocaleString()}`} 
+                    icon={<i className="fa-solid fa-sack-dollar"></i>} 
+                    colorClass={uiTheme === 'binance' ? "from-[#FCD535] to-[#f0c51d] !text-[#1E2329]" : "from-blue-600 to-indigo-600"} 
+                    onClick={() => handleDrilldown(language === 'km' ? 'ថ្លៃដឹកពីអតិថិជន' : 'Customer Fees', 'customerFee')}
+                />
+                <StatCard 
+                    label={language === 'km' ? 'តុល្យភាព' : 'Net Balance'} 
+                    value={`$${shippingStats.netShipping.toLocaleString()}`} 
+                    icon={<i className="fa-solid fa-scale-balanced"></i>} 
+                    colorClass={shippingStats.netShipping >= 0 ? (uiTheme === 'binance' ? "from-[#0ECB81] to-[#059669]" : "from-emerald-600 to-teal-600") : "from-red-600 to-rose-700"} 
+                />
+                <StatCard 
+                    label={language === 'km' ? 'កញ្ចប់សរុប' : 'Total Packages'} 
+                    value={shippingStats.totalOrders} 
+                    icon={<i className="fa-solid fa-box-open"></i>} 
+                    colorClass={uiTheme === 'binance' ? "from-[#2B3139] to-[#1E2329]" : "from-indigo-600 to-purple-600"} 
+                    onClick={() => handleDrilldown(language === 'km' ? 'កញ្ចប់សរុប' : 'Total Packages', 'all')}
+                />
             </div>
 
-            <div className="grid grid-cols-1 lg:grid-cols-12 gap-4">
-                <div className="lg:col-span-8 space-y-4">
+            <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 lg:gap-8">
+                <div className="lg:col-span-8 space-y-6 lg:space-y-8">
                     {/* Table 1: Methods (Shipping Companies) */}
                     <div className={`${styles.cardBg} border p-5`} style={uiTheme === 'binance' ? { borderRadius: '4px' } : undefined}>
                         <h3 className={`text-[10px] font-black ${styles.primaryText} uppercase tracking-widest mb-4 flex items-center gap-2`}>
@@ -850,54 +973,6 @@ const ShippingReport: React.FC<ShippingReportProps> = ({ orders, appData, dateFi
                     </div>
                 </div>
             </div>
-
-            {/* Drilldown Modal */}
-            <Modal
-                isOpen={drilldownOrders !== null}
-                onClose={() => setDrilldownOrders(null)}
-                maxWidth="max-w-6xl"
-            >
-                <div className={`flex flex-col h-[85vh] ${styles.cardBg}`}>
-                    {/* Modal Header */}
-                    <div className={`p-4 border-b ${styles.tableBorder} flex justify-between items-center shrink-0`}>
-                        <div className="flex items-center gap-3">
-                            <div className="w-1.5 h-6 rounded-full" style={{ backgroundColor: styles.accent }}></div>
-                            <div>
-                                <h2 className={`text-sm font-black ${styles.primaryText} uppercase tracking-tight`}>{drilldownTitle}</h2>
-                                <p className={`text-[9px] ${styles.secondaryText} font-bold uppercase tracking-widest`}>
-                                    {drilldownOrders?.length || 0} {language === 'km' ? 'ការកម្មង់ត្រូវបានរកឃើញ' : 'Orders Found'}
-                                </p>
-                            </div>
-                        </div>
-                        <button 
-                            onClick={() => setDrilldownOrders(null)}
-                            className={`p-2 rounded-lg transition-all active:scale-95 ${styles.buttonSecondary}`}
-                        >
-                            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M6 18L18 6M6 6l12 12" /></svg>
-                        </button>
-                    </div>
-
-                    {/* Modal Content */}
-                    <div className="flex-1 min-h-0 overflow-auto p-4 custom-scrollbar">
-                        {drilldownOrders && (
-                            <OrdersList 
-                                orders={drilldownOrders}
-                                showActions={true}
-                                onView={(order) => setSelectedOrder(order)}
-                                viewMode="list"
-                            />
-                        )}
-                    </div>
-                </div>
-            </Modal>
-
-            {/* Order Detail Modal */}
-            {selectedOrder && (
-                <OrderDetailModal 
-                    order={selectedOrder}
-                    onClose={() => setSelectedOrder(null)}
-                />
-            )}
         </div>
     );
 };

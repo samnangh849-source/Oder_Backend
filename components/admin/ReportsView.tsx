@@ -20,9 +20,11 @@ interface ReportsViewProps {
     endDate?: string;
     onNavigate?: (filters: any) => void;
     contextFilters?: FilterState;
+    onOpenFilter?: () => void;
+    onFilterChange?: (filters: Partial<FilterState>) => void;
 }
 
-const ReportsView: React.FC<ReportsViewProps> = ({ orders, reportType, dateFilter, startDate, endDate, onNavigate, contextFilters }) => {
+const ReportsView: React.FC<ReportsViewProps> = ({ orders, reportType, dateFilter, startDate, endDate, onNavigate, contextFilters, onOpenFilter, onFilterChange }) => {
     const { advancedSettings, appData, language } = useContext(AppContext);
     
     // Redirect to specialized Shipping Report if requested
@@ -36,6 +38,8 @@ const ReportsView: React.FC<ReportsViewProps> = ({ orders, reportType, dateFilte
                 endDate={endDate} 
                 onNavigate={onNavigate}
                 contextFilters={contextFilters}
+                onOpenFilter={onOpenFilter}
+                onFilterChange={onFilterChange}
             />
         );
     }
