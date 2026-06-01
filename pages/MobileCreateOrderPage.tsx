@@ -184,8 +184,16 @@ const MobileCreateOrderPage: React.FC<MobileCreateOrderPageProps> = ({ team, onS
         let phoneToSend = '0' + order.customer.phone.replace(/[^0-9]/g, '').replace(/^0+/, '');
         const addressParts = [order.customer.additionalLocation, order.customer.sangkat, order.customer.district].filter(Boolean);
         const fullAddress = addressParts.join(', ');
-        let scheduledTimeStr = order.telegram.schedule ? order.telegram.time : '';
-        if (scheduledTimeStr) scheduledTimeStr = scheduledTimeStr.replace('T', ' ');
+        
+        // Format scheduled time to UTC ISO string for accurate backend comparison
+        let scheduledTimeStr = '';
+        if (order.telegram.schedule && order.telegram.time) {
+            try {
+                scheduledTimeStr = new Date(order.telegram.time).toISOString();
+            } catch (e) {
+                scheduledTimeStr = order.telegram.time;
+            }
+        }
 
         const payload = { 
             currentUser, 

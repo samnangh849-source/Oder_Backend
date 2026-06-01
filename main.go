@@ -1100,7 +1100,16 @@ func handleSubmitOrder(c *gin.Context) {
 	}
 
 	orderID := generateShortID()
+	
+	// Default timestamp is NOW
 	timestamp := time.Now().UTC().Format(time.RFC3339)
+	
+	// If ScheduledTime is provided, use it as the primary timestamp (Drop Order Time)
+	// to ensure consistency between the UI, Sheet, and Telegram message.
+	if orderRequest.ScheduledTime != "" {
+		timestamp = orderRequest.ScheduledTime
+	}
+
 	custName, _ := orderRequest.Customer["name"].(string)
 	custPhone, _ := orderRequest.Customer["phone"].(string)
 	paymentStatus, _ := orderRequest.Payment["status"].(string)
@@ -1125,10 +1134,21 @@ func handleSubmitOrder(c *gin.Context) {
 	// Determine initial status based on scheduling
 	fulfillmentStatus := "Pending"
 	if orderRequest.ScheduledTime != "" {
-		if st, err := time.Parse(time.RFC3339, orderRequest.ScheduledTime); err == nil {
-			if st.After(time.Now().Add(1 * time.Minute)) {
-				fulfillmentStatus = "Scheduled"
-			}
+		var st time.Time
+		var err error
+		
+		// Use flexible parsing to match the timestamp logic above
+		// Prioritize RFC3339 as the frontend now sends UTC ISO strings
+		if t, e := time.Parse(time.RFC3339, orderRequest.ScheduledTime); e == nil {
+			st = t
+		} else if t, e := time.Parse("2006-01-02 15:04", orderRequest.ScheduledTime); e == nil {
+			st = t
+		} else {
+			err = e
+		}
+
+		if err == nil && st.After(time.Now().Add(1 * time.Minute)) {
+			fulfillmentStatus = "Scheduled"
 		}
 	}
 
