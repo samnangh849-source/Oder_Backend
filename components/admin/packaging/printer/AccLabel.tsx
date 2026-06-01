@@ -98,11 +98,13 @@ const AccLabel: React.FC<AccLabelProps> = ({ data, qrValue, isDesignMode, printD
 
                     <div className="w-full mt-auto flex flex-col justify-end min-h-[14mm]">
                         {isPaid ? (
-                            <div className="bg-black text-white rounded-sm p-1.5 w-full flex flex-col items-center justify-center h-full">
-                                <div className="flex items-center gap-1 mb-0.5">
-                                    <CheckCircle2 size={8} strokeWidth={3} /><span className="text-[6pt] font-black uppercase tracking-widest">PAID</span>
+                            <div className="bg-white text-black border-[2.5px] border-black rounded-sm p-1 w-full flex flex-col items-center justify-center h-full relative overflow-hidden">
+                                <div className="absolute top-0 left-0 w-full h-[3px] bg-black"></div>
+                                <div className="flex items-center gap-1 mb-0.5 mt-1">
+                                    <CheckCircle2 size={8} strokeWidth={3} className="text-black" />
+                                    <span className="text-[6.5pt] font-black uppercase tracking-widest">PAID</span>
                                 </div>
-                                <SmartText storageKey="acc_total_paid" isDesignMode={isDesignMode} initialValue={`$${data.total}`} baseSize={11} bold heavy font="sans" align="center" block className="text-white" />
+                                <SmartText storageKey="acc_total_paid" isDesignMode={isDesignMode} initialValue={`$${data.total}`} baseSize={14} bold heavy font="sans" align="center" block className="text-black" />
                             </div>
                         ) : (isCOD ? (
                             <div className="bg-white text-black border-[2.5px] border-black rounded-sm p-1 w-full flex flex-col items-center justify-center h-full relative overflow-hidden">

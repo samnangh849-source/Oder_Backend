@@ -175,7 +175,7 @@ const DeliveryListGeneratorModal: React.FC<DeliveryListGeneratorModalProps> = ({
         
         if (selectedOrderIds.length > 0 || returnOrderIds.length > 0 || failedOrderIds.length > 0) {
             const confirmUrl = `${window.location.origin}${window.location.pathname}?v=cd&i=${selectedOrderIds.join(',')}&r=${returnOrderIds.join(',')}&f=${failedOrderIds.join(',')}&s=${encodeURIComponent(selectedStore)}&e=${Date.now() + (2 * 60 * 60 * 1000)}`;
-            text += `--------------------------------\n🔗 **បញ្ជាក់ថ្លៃដឹក (Confirm Delivery):**\n👉 [ចុចទីនេះដើម្បីបញ្ជាក់ថ្លៃដឹក (Confirm)](${confirmUrl})`;
+            text += `--------------------------------\n🔗 **តំណភ្ជាប់បញ្ជាក់ថ្លៃដឹក (Confirm Delivery Link):**\n👉 [ចុចទីនេះដើម្បីបញ្ជាក់ (Confirm Here)](${confirmUrl})\n\n*(⚠️ បញ្ជាក់៖ លីងនេះមានសុពលភាពត្រឹមតែ ២ ម៉ោងប៉ុណ្ណោះ)*`;
         }
         setPreviewText(text); setIsPreviewing(true);
     };
