@@ -9,6 +9,9 @@ import { APP_LOGO_URL } from '../../constants';
 import Spinner from '../common/Spinner';
 import { safeParseDate, getValidDate } from '../../utils/dateUtils';
 import { AppContext } from '../../context/AppContext';
+import Modal from '../common/Modal';
+import OrdersList from '../orders/OrdersList';
+import OrderDetailModal from '../orders/OrderDetailModal';
 
 interface ShippingReportProps {
     orders: ParsedOrder[];
@@ -34,6 +37,11 @@ const ShippingReport: React.FC<ShippingReportProps> = ({ orders, appData, dateFi
     const [dateFilter, setDateFilter] = useState(initialDateFilter || 'this_month');
     const [startDate, setStartDate] = useState(initialStartDate || new Date().toISOString().split('T')[0]);
     const [endDate, setEndDate] = useState(initialEndDate || new Date().toISOString().split('T')[0]);
+
+    // Drilldown State
+    const [drilldownOrders, setDrilldownOrders] = useState<ParsedOrder[] | null>(null);
+    const [drilldownTitle, setDrilldownTitle] = useState<string>('');
+    const [selectedOrder, setSelectedOrder] = useState<ParsedOrder | null>(null);
 
     // Theme-specific styles
     const getThemeStyles = () => {
@@ -70,6 +78,28 @@ const ShippingReport: React.FC<ShippingReportProps> = ({ orders, appData, dateFi
     };
 
     const styles = getThemeStyles();
+
+    const handleDrilldown = (title: string, filterKey: 'shippingFilter' | 'driverFilter' | 'fulfillmentStore' | 'all' | 'cost' | 'customerFee', filterValue?: string) => {
+        let filtered = filteredOrders.filter(o => {
+            const fs = o.FulfillmentStatus || o['Fulfillment Status'] || 'Pending';
+            return fs !== 'Cancelled' && fs !== 'Returned';
+        });
+
+        if (filterKey === 'shippingFilter') {
+            filtered = filtered.filter(o => (o['Internal Shipping Method'] || 'Other') === filterValue);
+        } else if (filterKey === 'driverFilter') {
+            filtered = filtered.filter(o => (o['Driver Name'] || o['Internal Shipping Details'] || 'N/A') === filterValue);
+        } else if (filterKey === 'fulfillmentStore') {
+            filtered = filtered.filter(o => (o['Fulfillment Store'] || 'Unassigned') === filterValue);
+        } else if (filterKey === 'cost') {
+            filtered = filtered.filter(o => (Number(o['Internal Cost']) || 0) > 0);
+        } else if (filterKey === 'customerFee') {
+            filtered = filtered.filter(o => (Number(o['Shipping Fee (Customer)']) || 0) > 0);
+        }
+
+        setDrilldownTitle(title);
+        setDrilldownOrders(filtered);
+    };
 
     // Filter Navigation Handler
     const handleFilterNavigation = (key: string, value: string) => {
@@ -547,7 +577,8 @@ const ShippingReport: React.FC<ShippingReportProps> = ({ orders, appData, dateFi
                         value: `$${shippingStats.totalInternalCost.toLocaleString()}`,
                         subvalue: `$${avgCostPerOrder.toFixed(2)}/order`,
                         color: uiTheme === 'binance' ? '#F6465D' : '#f97316',
-                        icon: '🚚'
+                        icon: '🚚',
+                        onClick: () => handleDrilldown(language === 'km' ? 'ចំណាយដឹកជញ្ជូន' : 'Shipping Cost', 'cost')
                     },
                     { 
                         label: language === 'km' ? 'ថ្លៃដឹកពីអតិថិជន' : 'Customer Fees', 
@@ -555,7 +586,8 @@ const ShippingReport: React.FC<ShippingReportProps> = ({ orders, appData, dateFi
                         value: `$${shippingStats.totalCustomerFee.toLocaleString()}`,
                         subvalue: `$${avgFeePerOrder.toFixed(2)}/order`,
                         color: uiTheme === 'binance' ? '#FCD535' : '#3b82f6',
-                        icon: '💰'
+                        icon: '💰',
+                        onClick: () => handleDrilldown(language === 'km' ? 'ថ្លៃដឹកពីអតិថិជន' : 'Customer Fees', 'customerFee')
                     },
                     { 
                         label: language === 'km' ? 'តុល្យភាព' : 'Net Balance', 
@@ -571,10 +603,16 @@ const ShippingReport: React.FC<ShippingReportProps> = ({ orders, appData, dateFi
                         value: shippingStats.totalOrders.toLocaleString(),
                         subvalue: `${shippingStats.methods.length} carriers`,
                         color: uiTheme === 'binance' ? '#F0B90B' : '#8b5cf6',
-                        icon: '📦'
+                        icon: '📦',
+                        onClick: () => handleDrilldown(language === 'km' ? 'កញ្ចប់សរុប' : 'Total Packages', 'all')
                     }
                 ].map((card, i) => (
-                    <div key={i} className={`${styles.cardBg} border p-4`} style={uiTheme === 'binance' ? { borderRadius: '4px' } : undefined}>
+                    <div 
+                        key={i} 
+                        className={`${styles.cardBg} border p-4 ${card.onClick ? 'cursor-pointer hover:border-white/20 transition-all active:scale-95' : ''}`} 
+                        style={uiTheme === 'binance' ? { borderRadius: '4px' } : undefined}
+                        onClick={card.onClick}
+                    >
                         <div className="flex items-start justify-between mb-3">
                             <span className="text-xl">{card.icon}</span>
                             <div className="w-2 h-2 rounded-full" style={{ backgroundColor: card.color, opacity: 0.6 }}></div>
@@ -619,13 +657,13 @@ const ShippingReport: React.FC<ShippingReportProps> = ({ orders, appData, dateFi
                                                 <td 
                                                     className={`px-3 py-2.5 text-center font-black text-[${styles.accent}] cursor-pointer hover:underline transition-colors tabular-nums text-xs`}
                                                     style={{ color: styles.accent }}
-                                                    onClick={() => handleFilterNavigation('shippingFilter', m.name)}
+                                                    onClick={() => handleDrilldown(`${language === 'km' ? 'ក្រុមហ៊ុន៖' : 'Carrier:'} ${m.name}`, 'shippingFilter', m.name)}
                                                 >
                                                     {m.orders}
                                                 </td>
                                                 <td 
                                                     className={`px-3 py-2.5 text-right font-black ${styles.primaryText} cursor-pointer hover:underline transition-colors tabular-nums text-xs`}
-                                                    onClick={() => handleFilterNavigation('shippingFilter', m.name)}
+                                                    onClick={() => handleDrilldown(`${language === 'km' ? 'ក្រុមហ៊ុន៖' : 'Carrier:'} ${m.name}`, 'shippingFilter', m.name)}
                                                 >
                                                     ${m.cost.toLocaleString(undefined, {minimumFractionDigits: 2})}
                                                 </td>
@@ -686,13 +724,13 @@ const ShippingReport: React.FC<ShippingReportProps> = ({ orders, appData, dateFi
                                                 <td 
                                                     className={`px-3 py-2.5 text-center font-black cursor-pointer hover:underline transition-colors tabular-nums text-xs`}
                                                     style={{ color: driverColor }}
-                                                    onClick={() => handleFilterNavigation('driverFilter', d.name)}
+                                                    onClick={() => handleDrilldown(`${language === 'km' ? 'អ្នកដឹក៖' : 'Driver:'} ${d.name}`, 'driverFilter', d.name)}
                                                 >
                                                     {d.orders}
                                                 </td>
                                                 <td 
                                                     className={`px-3 py-2.5 text-right font-black ${styles.primaryText} cursor-pointer hover:underline transition-colors tabular-nums text-xs`}
-                                                    onClick={() => handleFilterNavigation('driverFilter', d.name)}
+                                                    onClick={() => handleDrilldown(`${language === 'km' ? 'អ្នកដឹក៖' : 'Driver:'} ${d.name}`, 'driverFilter', d.name)}
                                                 >
                                                     ${d.cost.toLocaleString(undefined, {minimumFractionDigits: 2})}
                                                 </td>
@@ -753,13 +791,13 @@ const ShippingReport: React.FC<ShippingReportProps> = ({ orders, appData, dateFi
                                                 <td 
                                                     className={`px-3 py-2.5 text-center font-black cursor-pointer hover:underline transition-colors tabular-nums text-xs`}
                                                     style={{ color: storeColor }}
-                                                    onClick={() => handleFilterNavigation('fulfillmentStore', s.name)}
+                                                    onClick={() => handleDrilldown(`${language === 'km' ? 'ឃ្លាំង៖' : 'Store:'} ${s.name}`, 'fulfillmentStore', s.name)}
                                                 >
                                                     {s.orders}
                                                 </td>
                                                 <td 
                                                     className={`px-3 py-2.5 text-right font-black ${styles.primaryText} cursor-pointer hover:underline transition-colors tabular-nums text-xs`}
-                                                    onClick={() => handleFilterNavigation('fulfillmentStore', s.name)}
+                                                    onClick={() => handleDrilldown(`${language === 'km' ? 'ឃ្លាំង៖' : 'Store:'} ${s.name}`, 'fulfillmentStore', s.name)}
                                                 >
                                                     ${s.cost.toLocaleString(undefined, {minimumFractionDigits: 2})}
                                                 </td>
@@ -812,6 +850,54 @@ const ShippingReport: React.FC<ShippingReportProps> = ({ orders, appData, dateFi
                     </div>
                 </div>
             </div>
+
+            {/* Drilldown Modal */}
+            <Modal
+                isOpen={drilldownOrders !== null}
+                onClose={() => setDrilldownOrders(null)}
+                maxWidth="max-w-6xl"
+            >
+                <div className={`flex flex-col h-[85vh] ${styles.cardBg}`}>
+                    {/* Modal Header */}
+                    <div className={`p-4 border-b ${styles.tableBorder} flex justify-between items-center shrink-0`}>
+                        <div className="flex items-center gap-3">
+                            <div className="w-1.5 h-6 rounded-full" style={{ backgroundColor: styles.accent }}></div>
+                            <div>
+                                <h2 className={`text-sm font-black ${styles.primaryText} uppercase tracking-tight`}>{drilldownTitle}</h2>
+                                <p className={`text-[9px] ${styles.secondaryText} font-bold uppercase tracking-widest`}>
+                                    {drilldownOrders?.length || 0} {language === 'km' ? 'ការកម្មង់ត្រូវបានរកឃើញ' : 'Orders Found'}
+                                </p>
+                            </div>
+                        </div>
+                        <button 
+                            onClick={() => setDrilldownOrders(null)}
+                            className={`p-2 rounded-lg transition-all active:scale-95 ${styles.buttonSecondary}`}
+                        >
+                            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M6 18L18 6M6 6l12 12" /></svg>
+                        </button>
+                    </div>
+
+                    {/* Modal Content */}
+                    <div className="flex-1 min-h-0 overflow-auto p-4 custom-scrollbar">
+                        {drilldownOrders && (
+                            <OrdersList 
+                                orders={drilldownOrders}
+                                showActions={true}
+                                onView={(order) => setSelectedOrder(order)}
+                                viewMode="list"
+                            />
+                        )}
+                    </div>
+                </div>
+            </Modal>
+
+            {/* Order Detail Modal */}
+            {selectedOrder && (
+                <OrderDetailModal 
+                    order={selectedOrder}
+                    onClose={() => setSelectedOrder(null)}
+                />
+            )}
         </div>
     );
 };

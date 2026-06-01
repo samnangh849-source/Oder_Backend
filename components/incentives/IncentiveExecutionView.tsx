@@ -183,7 +183,7 @@ const IncentiveExecutionView: React.FC<IncentiveExecutionViewProps> = ({ project
     };
 
     const preparedResults = useMemo(() => {
-        return calculationResults.map(cr => {
+        return (calculationResults || []).map(cr => {
             const u = appData.users?.find(x => x.UserName === cr.userName);
             let breakdown: any[] = [];
             if (cr.breakdownJson) {

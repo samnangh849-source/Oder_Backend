@@ -111,7 +111,7 @@ func broadcastToAll(payload interface{}) {
 	backend.SafeBroadcastJSON(payload)
 }
 
-func mapToDBColumn(key string) string {
+func mapToDBColumn(key string, sheetName string) string {
 	specialCases := map[string]string{
 		"Order ID":                "order_id",
 		"Discount ($)":            "discount_usd",
@@ -171,8 +171,6 @@ func mapToDBColumn(key string) string {
 		"id":                      "id",
 		"status":                  "status",
 		"Status":                  "status",
-		"Key":                     "config_key",
-		"Value":                   "config_value",
 		"Description":             "description",
 		"TelegramGroupID":         "telegram_group_id",
 		"TelegramTopicID":          "telegram_topic_id",
@@ -202,6 +200,16 @@ func mapToDBColumn(key string) string {
 		"totalProfit":            "total_profit",
 		"calculatedValue":        "calculated_value",
 		"breakdownJson":          "breakdown_json",
+	}
+
+	// Handle Settings table specifics separately
+	if sheetName == "Settings" {
+		if strings.EqualFold(key, "Key") {
+			return "config_key"
+		}
+		if strings.EqualFold(key, "Value") {
+			return "config_value"
+		}
 	}
 
 	// Standard mapping logic
@@ -1256,8 +1264,13 @@ func handleAdminUpdateOrder(c *gin.Context) {
 			// so we should not strictly require it for the 'Shipped' transition to avoid blocking packers.
 		case "Delivered":
 			_, hasDriver := r.NewData["Driver Name"]
-			if !hasDriver && strings.TrimSpace(originalOrder.DriverName) == "" {
-				c.JSON(http.StatusBadRequest, gin.H{"status": "error", "message": "ត្រូវការអ្នកដឹកជញ្ជូន (Driver Name) មុនពេលបញ្ជាក់ការដឹកជញ្ជូន"})
+			_, hasShippingDetails := r.NewData["Internal Shipping Details"]
+			
+			driverValid := hasDriver || strings.TrimSpace(originalOrder.DriverName) != ""
+			detailsValid := hasShippingDetails || strings.TrimSpace(originalOrder.InternalShippingDetails) != ""
+
+			if !driverValid && !detailsValid {
+				c.JSON(http.StatusBadRequest, gin.H{"status": "error", "message": "ត្រូវការអ្នកដឹកជញ្ជូន (Driver Name) ឬព័ត៌មានដឹកជញ្ជូន មុនពេលបញ្ជាក់ការដឹកជញ្ជូន"})
 				return
 			}
 		}
@@ -1296,7 +1309,7 @@ func handleAdminUpdateOrder(c *gin.Context) {
 
 	mappedData := make(map[string]interface{})
 	for k, v := range r.NewData {
-		dbCol := mapToDBColumn(k)
+		dbCol := mapToDBColumn(k, "AllOrders")
 		if isValidOrderColumn(dbCol) && v != nil {
 			if dbCol == "discount_usd" || dbCol == "grand_total" || dbCol == "subtotal" || dbCol == "shipping_fee_customer" || dbCol == "internal_cost" || dbCol == "delivery_unpaid" || dbCol == "delivery_paid" || dbCol == "total_product_cost" {
 				if f, ok := v.(float64); ok {
@@ -1729,11 +1742,23 @@ func handleAdminUpdateSheet(c *gin.Context) {
 		return
 	}
 
+	var modelInstance interface{}
+	switch req.SheetName {
+	case "IncentiveCalculators":
+		modelInstance = &IncentiveCalculator{}
+	case "IncentiveProjects":
+		modelInstance = &IncentiveProject{}
+	case "AllOrders":
+		modelInstance = &Order{}
+	case "Users":
+		modelInstance = &User{}
+	}
+
 	pkCol := ""
 	var pkVal interface{}
 	originalPKKey := ""
 	for k, v := range req.PrimaryKey {
-		pkCol = mapToDBColumn(k)
+		pkCol = mapToDBColumn(k, req.SheetName)
 		pkVal = v
 		originalPKKey = k
 	}
@@ -1744,6 +1769,8 @@ func handleAdminUpdateSheet(c *gin.Context) {
 			if i, err := strconv.ParseUint(s, 10, 64); err == nil {
 				pkVal = uint(i)
 			}
+		} else if f, ok := pkVal.(float64); ok {
+			pkVal = uint(f)
 		}
 	}
 
@@ -1753,9 +1780,25 @@ func handleAdminUpdateSheet(c *gin.Context) {
 	}
 	mappedData := make(map[string]interface{})
 	for k, v := range req.NewData {
-		dbCol := mapToDBColumn(k)
+		dbCol := mapToDBColumn(k, req.SheetName)
 		if v == nil {
 			continue
+		}
+
+		// Smart type conversion for known numeric columns in mappedData
+		// We convert all whole-number float64 to int to avoid PG type mismatch
+		if f, ok := v.(float64); ok {
+			if f == float64(int(f)) {
+				v = int(f)
+			}
+		} else if s, ok := v.(string); ok {
+			// Handle boolean strings for columns like is_verified, is_custom, require_period_selection
+			lowerS := strings.ToLower(s)
+			if lowerS == "true" || lowerS == "false" {
+				v = (lowerS == "true")
+			} else if i, err := strconv.Atoi(s); err == nil {
+				v = i
+			}
 		}
 
 		// Hashing password if updating users table
@@ -1769,9 +1812,17 @@ func handleAdminUpdateSheet(c *gin.Context) {
 		mappedData[dbCol] = v
 	}
 
-	if err := backend.DB.Table(tableName).Where(pkCol+" = ?", pkVal).Updates(mappedData).Error; err != nil {
+	dbQuery := backend.DB.Table(tableName)
+	if modelInstance != nil {
+		dbQuery = backend.DB.Model(modelInstance)
+	}
+
+	if err := dbQuery.Where(pkCol+" = ?", pkVal).Updates(mappedData).Error; err != nil {
 		log.Printf("[ERROR] handleAdminUpdateSheet (Table: %s, PK: %s=%v): %v", tableName, pkCol, pkVal, err)
-		c.Error(err)
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"status":  "error",
+			"message": fmt.Sprintf("Database update failed for %s: %v", req.SheetName, err),
+		})
 		return
 	}
 
@@ -1875,9 +1926,41 @@ func handleAdminAddRow(c *gin.Context) {
 
 	tableName := getTableName(req.SheetName)
 	if tableName != "" {
+		var modelInstance interface{}
+		switch req.SheetName {
+		case "IncentiveCalculators":
+			modelInstance = &IncentiveCalculator{}
+		case "IncentiveProjects":
+			modelInstance = &IncentiveProject{}
+		case "AllOrders":
+			modelInstance = &Order{}
+		case "Users":
+			modelInstance = &User{}
+		}
+
 		mappedData := make(map[string]interface{})
 		for k, v := range req.NewData {
-			colName := mapToDBColumn(k)
+			colName := mapToDBColumn(k, req.SheetName)
+			if v == nil {
+				continue
+			}
+
+			// Smart type conversion for known numeric columns in mappedData
+			// We convert all whole-number float64 to int to avoid PG type mismatch
+			if f, ok := v.(float64); ok {
+				if f == float64(int(f)) {
+					v = int(f)
+				}
+			} else if s, ok := v.(string); ok {
+				// Handle boolean strings
+				lowerS := strings.ToLower(s)
+				if lowerS == "true" || lowerS == "false" {
+					v = (lowerS == "true")
+				} else if i, err := strconv.Atoi(s); err == nil {
+					v = i
+				}
+			}
+
 			// Hashing password if adding to users table
 			if tableName == "users" && colName == "password" && v != "" {
 				hashed, err := bcrypt.GenerateFromPassword([]byte(fmt.Sprintf("%v", v)), bcrypt.DefaultCost)
@@ -1887,7 +1970,20 @@ func handleAdminAddRow(c *gin.Context) {
 			}
 			mappedData[colName] = v
 		}
-		backend.DB.Table(tableName).Create(mappedData)
+
+		dbQuery := backend.DB.Table(tableName)
+		if modelInstance != nil {
+			dbQuery = backend.DB.Model(modelInstance)
+		}
+
+		if err := dbQuery.Create(mappedData).Error; err != nil {
+			log.Printf("[ERROR] handleAdminAddRow (Table: %s): %v", tableName, err)
+			c.JSON(http.StatusInternalServerError, gin.H{
+				"status":  "error",
+				"message": fmt.Sprintf("Database creation failed for %s: %v", req.SheetName, err),
+			})
+			return
+		}
 	}
 
 	eventBytes, _ := json.Marshal(map[string]interface{}{"type": "add_row", "sheetName": req.SheetName, "newData": req.NewData})
@@ -1923,7 +2019,7 @@ func handleAdminDeleteRow(c *gin.Context) {
 	pkCol := ""
 	var pkVal interface{}
 	for k, v := range req.PrimaryKey {
-		pkCol = mapToDBColumn(k)
+		pkCol = mapToDBColumn(k, req.SheetName)
 		pkVal = v
 	}
 	if !isValidDBIdentifier(pkCol) {
@@ -2276,7 +2372,7 @@ func handleUpdateProfile(c *gin.Context) {
 		if k == "Password" {
 			continue
 		}
-		mappedData[mapToDBColumn(k)] = v
+		mappedData[mapToDBColumn(k, "Users")] = v
 	}
 	if err := backend.DB.Model(&User{}).Where("user_name = ?", req.UserName).Updates(mappedData).Error; err != nil {
 		c.Error(err)
@@ -2545,7 +2641,7 @@ func handleSheetsWebhook(c *gin.Context) {
 	}
 
 	for k, v := range req.RowData {
-		dbCol := mapToDBColumn(k)
+		dbCol := mapToDBColumn(k, "AllOrders")
 
 		normalizedK := strings.ReplaceAll(strings.ToLower(k), " ", "")
 		normalizedPK := strings.ReplaceAll(strings.ToLower(pkName), " ", "")
@@ -2773,7 +2869,7 @@ func main() {
 
 	// ── Wire Upload-package injectable dependencies ──────────────────────────
 	backend.UploadGenerateIDFunc = generateShortID
-	backend.UploadMapToDBColumnFunc = mapToDBColumn
+	backend.UploadMapToDBColumnFunc = func(key string) string { return mapToDBColumn(key, "") }
 	backend.UploadGetTableNameFunc = getTableName
 	backend.UploadIsValidOrderColumnFunc = isValidOrderColumn
 
@@ -3180,9 +3276,26 @@ func handleSendDeliveryTelegram(c *gin.Context) {
 	text := fmt.Sprintf("📦 *រូបភាពកញ្ចប់បញ្ញើ #%d*\n🏷️ លេខកូដ: `%s`",
 		dailySeq, order.OrderID)
 
-	text += fmt.Sprintf("\n\n📱 លេខទូរស័ព្ទ: `%s`", phoneNumber)
+	text += fmt.Sprintf("\n\n📱 លេខទូរស័ព្ទ: %s", phoneNumber)
 	text += fmt.Sprintf("\n📍 ទីតាំង: *%s*", location)
 	text += fmt.Sprintf("\n🏠 អាស័យដ្ឋាន: _%s_", address)
+
+	// Build inline keyboard for contact
+	var replyMarkup map[string]interface{}
+	if phoneNumber != "N/A" {
+		re := regexp.MustCompile(`\D`)
+		cleanPhone := re.ReplaceAllString(phoneNumber, "")
+		cleanPhone = strings.TrimPrefix(cleanPhone, "0")
+		if cleanPhone != "" {
+			replyMarkup = map[string]interface{}{
+				"inline_keyboard": [][]map[string]interface{}{
+					{
+						{"text": "💬 ទាក់ទងអតិថិជន", "url": "https://t.me/+855" + cleanPhone},
+					},
+				},
+			}
+		}
+	}
 
 	apiURL := fmt.Sprintf("https://api.telegram.org/bot%s/sendPhoto", store.TelegramBotToken)
 	chatID := strings.TrimSpace(delGroup.TelegramGroupID)
@@ -3191,6 +3304,10 @@ func handleSendDeliveryTelegram(c *gin.Context) {
 		"parse_mode": "Markdown",
 		"photo":      convertDriveURLToDirect(order.PackagePhotoURL),
 		"caption":    text,
+	}
+
+	if replyMarkup != nil {
+		payload["reply_markup"] = replyMarkup
 	}
 
 	if delGroup.TelegramTopicID != "" {

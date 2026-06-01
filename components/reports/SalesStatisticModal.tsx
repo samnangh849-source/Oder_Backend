@@ -186,6 +186,7 @@ isOpen, onClose, orders, title, subtitle,
     const [customEnd, setCustomEnd] = useState('');
     const [selectedVelocityPages, setSelectedVelocityPages] = useState<string[]>([]);
     const [productSearchQueries, setProductSearchQueries] = useState<Record<string, string>>({});
+    const [openProductSelector, setOpenProductSelector] = useState<string | null>(null);
     const [pageProductMapping, setPageProductMapping] = useState<Record<string, string[]>>(() => {
         try {
             const saved = localStorage.getItem('global_page_product_mapping');
@@ -201,10 +202,10 @@ isOpen, onClose, orders, title, subtitle,
             let updated;
             if (current.includes(productName)) {
                 updated = current.filter(p => p !== productName);
-            } else if (current.length < 2) {
+            } else if (current.length < 3) {
                 updated = [...current, productName];
             } else {
-                updated = [current[1], productName]; // Keep max 2
+                updated = [current[1], current[2], productName]; // Keep max 3
             }
             const nextState = { ...prev, [pageName]: updated };
             localStorage.setItem('global_page_product_mapping', JSON.stringify(nextState));
@@ -279,6 +280,16 @@ isOpen, onClose, orders, title, subtitle,
     }, [orders, activeDateRange, customStart, customEnd]);
 
     const stats = useMemo(() => {
+        const parsedOrders: ParsedOrder[] = orders.map(o => {
+            let p: Product[] = [];
+            try {
+                p = JSON.parse(o["Products (JSON)"] || '[]');
+            } catch {
+                p = [];
+            }
+            return { ...o, Products: p };
+        });
+
         const onlineTotal = filteredOrders.reduce((sum, o) => sum + (Number(o['Grand Total']) || 0), 0);
         const orderCount = filteredOrders.length;
         const avgOrderValue = orderCount > 0 ? onlineTotal / orderCount : 0;
@@ -299,8 +310,10 @@ isOpen, onClose, orders, title, subtitle,
             return { name, value: pageTotals[name], logoUrl: pageInfo?.PageLogoURL || '' };
         });
         if (offlineSale > 0) pieData.push({ name: 'Offline Sale', value: offlineSale, logoUrl: '' });
+        
         const lineChartData = Array.from({ length: 8 }, (_, i) => ({ name: `P${i + 1}`, timestamp: 0 }));
-        lineChartData.forEach(p => sortedPages.forEach(page => p[page as any] = 0));
+        lineChartData.forEach(p => sortedPages.forEach(page => (p as any)[page] = 0));
+        
         if (filteredOrders.length > 0) {
             const ts = filteredOrders.map(o => safeParseDate(o.Timestamp)?.getTime()).filter(t => t) as number[];
             const minT = Math.min(...ts), maxT = Math.max(...ts);
@@ -319,7 +332,7 @@ isOpen, onClose, orders, title, subtitle,
                 if (!t) return;
                 const idx = Math.min(Math.floor((t - minT) / step), 7);
                 const page = o.Page || 'Unknown';
-                if (lineChartData[idx]) lineChartData[idx][page as any] = (lineChartData[idx][page as any] || 0) + (Number(o['Grand Total']) || 0);
+                if (lineChartData[idx]) (lineChartData[idx] as any)[page] = ((lineChartData[idx] as any)[page] || 0) + (Number(o['Grand Total']) || 0);
             });
         }
         const now = new Date();
@@ -332,7 +345,6 @@ isOpen, onClose, orders, title, subtitle,
             let prevLabel = language === 'km' ? 'មុន' : 'Previous';
 
             if (activeDateRange !== 'all') {
-                const now = new Date();
                 let filterStart: Date | null = null;
                 let filterEnd: Date | null = null;
 
@@ -401,6 +413,10 @@ isOpen, onClose, orders, title, subtitle,
         const bottomCharts = sortedPages.map((p, idx) => {
             const mData: Record<string, number> = {};
             const mOrders: Record<string, number> = {};
+            const pMapping = pageProductMapping[p] || [];
+            const productPerformance: Record<string, { revenue: number, quantity: number }> = {};
+            pMapping.forEach(prod => productPerformance[prod] = { revenue: 0, quantity: 0 });
+
             // Initialize with 0s for the last 3 months
             last3Months.forEach(m => {
                 mData[m.key] = 0;
@@ -408,13 +424,21 @@ isOpen, onClose, orders, title, subtitle,
             });
 
             // Use the full orders pool instead of filteredOrders to always show 3 month history
-            orders.filter(o => (o.Page || 'Unknown') === p).forEach(o => {
+            parsedOrders.filter(o => (o.Page || 'Unknown') === p).forEach(o => {
                 const d = safeParseDate(o.Timestamp);
                 if (d) { 
                     const key = `ខែ ${String(d.getMonth() + 1).padStart(2, '0')}`;
                     if (mData.hasOwnProperty(key)) {
                         mData[key] = (mData[key] || 0) + (Number(o['Grand Total']) || 0); 
                         mOrders[key] = (mOrders[key] || 0) + 1;
+
+                        // Last 3 months product performance
+                        o.Products.forEach(prod => {
+                            if (pMapping.includes(prod.name)) {
+                                productPerformance[prod.name].revenue += prod.total;
+                                productPerformance[prod.name].quantity += prod.quantity;
+                            }
+                        });
                     }
                 }
             });
@@ -435,6 +459,7 @@ isOpen, onClose, orders, title, subtitle,
                 color: COLORS[idx % COLORS.length], 
                 growth,
                 totalOrders,
+                productPerformance,
                 data: last3Months.map(m => ({ 
                     name: m.label, 
                     value: mData[m.key],
@@ -454,7 +479,8 @@ isOpen, onClose, orders, title, subtitle,
             bottomCharts, 
             sortedPages 
         };
-    }, [filteredOrders, offlineSale, appData.pages, language, activeDateRange, customStart, customEnd, orders]);
+    }, [filteredOrders, offlineSale, appData.pages, language, activeDateRange, customStart, customEnd, orders, pageProductMapping]);
+
 
     useEffect(() => {
         if (isOpen && stats.sortedPages.length > 0 && selectedVelocityPages.length === 0) {
@@ -1036,13 +1062,135 @@ isOpen, onClose, orders, title, subtitle,
                             </div>
                         </div>
 
-                        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 2xl:grid-cols-6 gap-8 pb-20 relative z-10">
+                        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 2xl:grid-cols-6 gap-x-8 gap-y-16 pb-20 relative z-10">
                             {stats.bottomCharts.map((item, idx) => (
-                                <div key={item.page} className="group relative">
+                                <div key={item.page} className={`group relative ${openProductSelector === item.page ? 'z-50' : 'z-10'} flex flex-col`}>
                                     {/* Tech Aura Glow */}
-                                    <div className="absolute -inset-1 bg-gradient-to-br from-blue-500/10 via-transparent to-indigo-500/10 rounded-[3rem] blur-2xl opacity-0 group-hover:opacity-100 transition-all duration-700"></div>
+                                    <div className="absolute -inset-x-4 -inset-y-8 bg-gradient-to-br from-blue-500/5 via-transparent to-indigo-500/5 rounded-[4rem] blur-3xl opacity-0 group-hover:opacity-100 transition-all duration-700 pointer-events-none"></div>
                                     
-                                    <div className="relative bg-white/90 backdrop-blur-xl p-8 rounded-[2.5rem] shadow-sm border border-white flex flex-col h-[450px] hover:shadow-[0_50px_100px_-20px_rgba(0,0,0,0.1)] transition-all duration-500 hover:-translate-y-2 overflow-hidden ring-1 ring-black/[0.02]">
+                                    {/* Product Selection UI - Outside and Above the Card */}
+                                    <div className="mb-6 relative z-30 px-2 min-h-[140px] flex flex-col justify-end">
+                                        <div className="flex items-center justify-between mb-5">
+                                            <div className="flex flex-col">
+                                                <h4 className="text-sm font-black text-gray-900 uppercase tracking-tight leading-none group-hover:text-blue-600 transition-colors">{item.page}</h4>
+                                                <p className="text-[8px] font-black text-blue-500 uppercase tracking-widest mt-2 flex items-center gap-1.5">
+                                                    <span className="w-1.5 h-1.5 rounded-full bg-blue-500 animate-pulse"></span>
+                                                    Boosting Video Posts
+                                                </p>
+                                            </div>
+                                            {(!pageProductMapping[item.page] || pageProductMapping[item.page].length < 3) && (
+                                                <div className="relative">
+                                                    <button 
+                                                        onClick={(e) => { e.stopPropagation(); setOpenProductSelector(openProductSelector === item.page ? null : item.page); }}
+                                                        className={`flex items-center justify-center w-7 h-7 rounded-xl border-2 border-dashed transition-all shadow-sm ${openProductSelector === item.page ? 'bg-blue-600 border-blue-600 text-white rotate-45' : 'border-gray-200 bg-white/50 text-gray-400 hover:border-blue-400 hover:bg-blue-50 hover:text-blue-600'}`}
+                                                    >
+                                                        <Plus size={14} />
+                                                    </button>
+
+                                                    {/* Premium Glass Dropdown */}
+                                                    {openProductSelector === item.page && (
+                                                        <div className="absolute top-full right-0 mt-3 w-80 bg-white/98 backdrop-blur-2xl rounded-[2rem] shadow-[0_25px_70px_-15px_rgba(0,0,0,0.15)] border border-white animate-in zoom-in-95 slide-in-from-top-2 duration-300 z-[100] overflow-hidden ring-1 ring-black/5" onClick={(e) => e.stopPropagation()}>
+                                                            <div className="p-5 bg-gradient-to-b from-gray-50/80 to-transparent border-b border-gray-100 space-y-3">
+                                                                <div className="flex items-center justify-between">
+                                                                    <div className="flex flex-col">
+                                                                        <p className="text-[10px] font-black text-gray-900 uppercase tracking-[0.2em] flex items-center gap-2">
+                                                                            <div className="w-1.5 h-1.5 rounded-full bg-blue-500 animate-pulse"></div>
+                                                                            {language === 'km' ? 'ជ្រើសរើសផលិតផល' : 'Select Product'}
+                                                                        </p>
+                                                                        <span className="text-[8px] text-gray-400 font-bold uppercase tracking-widest mt-0.5">Asset Registry Control</span>
+                                                                    </div>
+                                                                    <div className="bg-blue-50 px-2 py-1 rounded-lg">
+                                                                        <span className="text-[10px] font-black text-blue-600 font-mono">03</span>
+                                                                    </div>
+                                                                </div>
+                                                                <div className="relative group/search">
+                                                                    <div className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 group-focus-within/search:text-blue-500 transition-colors">
+                                                                        <Search size={14} />
+                                                                    </div>
+                                                                    <input 
+                                                                        type="text" 
+                                                                        placeholder="Search products..."
+                                                                        value={productSearchQueries[item.page] || ''}
+                                                                        onChange={(e) => setProductSearchQueries(prev => ({ ...prev, [item.page]: e.target.value }))}
+                                                                        className="w-full bg-white border border-gray-200 rounded-2xl pl-10 pr-4 py-2.5 text-xs font-bold text-gray-800 focus:outline-none focus:border-blue-400 focus:ring-4 focus:ring-blue-500/5 transition-all placeholder:text-gray-300"
+                                                                    />
+                                                                </div>
+                                                            </div>
+                                                            <div className="p-3 max-h-[280px] overflow-y-auto custom-scrollbar overscroll-contain space-y-1">
+                                                                {(appData.products || [])
+                                                                    .filter(p => !p.ProductName?.includes('Delivery'))
+                                                                    .filter(p => !productSearchQueries[item.page] || p.ProductName?.toLowerCase().includes(productSearchQueries[item.page].toLowerCase()))
+                                                                    .map(p => (
+                                                                    <button
+                                                                        key={p.ProductName}
+                                                                        onClick={(e) => { 
+                                                                            e.stopPropagation();
+                                                                            handlePageProductSelect(item.page, p.ProductName || ''); 
+                                                                            setOpenProductSelector(null); 
+                                                                        }}
+                                                                        disabled={pageProductMapping[item.page]?.includes(p.ProductName || '')}
+                                                                        className="w-full text-left p-2.5 hover:bg-blue-50/50 rounded-2xl disabled:opacity-40 disabled:hover:bg-transparent disabled:cursor-not-allowed transition-all flex items-center gap-3.5 group/item border border-transparent hover:border-blue-100 active:scale-[0.98]"
+                                                                    >
+                                                                        <div className="relative w-11 h-11 shrink-0 bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden group-hover/item:border-blue-200 transition-colors">
+                                                                            {p.ImageURL ? (
+                                                                                <img src={convertGoogleDriveUrl(p.ImageURL)} alt={p.ProductName} className="w-full h-full object-cover transition-transform duration-500 group-hover/item:scale-110" />
+                                                                            ) : (
+                                                                                <div className="w-full h-full bg-gray-50 flex items-center justify-center text-gray-300">
+                                                                                    <Package size={18} />
+                                                                                </div>
+                                                                            )}
+                                                                        </div>
+                                                                        <div className="flex-1 min-w-0 flex flex-col justify-center">
+                                                                            <span className="text-[12px] font-black text-gray-900 group-hover/item:text-blue-700 truncate block leading-tight">{p.ProductName}</span>
+                                                                            <div className="flex items-center gap-2 mt-1">
+                                                                                <span className="text-[9px] font-mono text-gray-400 font-bold tracking-tight uppercase">#{p.Barcode || 'UNTRACKED'}</span>
+                                                                            </div>
+                                                                        </div>
+                                                                    </button>
+                                                                ))}
+                                                            </div>
+                                                        </div>
+                                                    )}
+                                                </div>
+                                            )}
+                                        </div>
+                                        <div className="flex flex-wrap items-center gap-3">
+                                            {(pageProductMapping[item.page] || []).map(prod => {
+                                                const prodData = appData.products?.find(p => p.ProductName === prod);
+                                                const performance = item.productPerformance?.[prod];
+                                                return (
+                                                    <div key={prod} className="flex items-center gap-3 bg-white/80 backdrop-blur-md text-gray-800 pl-1 pr-3 py-2 rounded-[1.25rem] border border-gray-200 shadow-sm transition-all hover:shadow-md hover:border-blue-300 group/tag relative overflow-hidden max-w-full">
+                                                        <div className="relative w-14 h-14 rounded-2xl overflow-hidden border border-white shadow-sm shrink-0">
+                                                            {prodData?.ImageURL ? (
+                                                                <img src={convertGoogleDriveUrl(prodData.ImageURL)} alt={prod} className="w-full h-full object-cover" />
+                                                            ) : (
+                                                                <div className="w-full h-full bg-gray-100 flex items-center justify-center text-gray-400">
+                                                                    <Package size={24} />
+                                                                </div>
+                                                            )}
+                                                            <div className="absolute top-1 left-1 px-1.5 py-0.5 bg-blue-600 text-[6px] font-black text-white rounded-md uppercase tracking-tighter shadow-sm animate-pulse">Boosting</div>
+                                                        </div>
+                                                        <div className="flex flex-col min-w-0">
+                                                            <span className="text-[10px] font-black text-gray-900 leading-tight" title={prod}>{prod}</span>
+                                                            {performance && performance.revenue > 0 && (
+                                                                <span className="text-[9px] font-bold text-emerald-600 font-mono tracking-tighter mt-1">${performance.revenue.toLocaleString()}</span>
+                                                            )}
+                                                        </div>
+                                                        <button 
+                                                            onClick={(e) => { e.stopPropagation(); handlePageProductSelect(item.page, prod); }}
+                                                            className="text-gray-300 hover:text-red-500 hover:bg-red-50 rounded-lg p-1 transition-all"
+                                                        >
+                                                            <X size={14} />
+                                                        </button>
+                                                    </div>
+                                                );
+                                            })}
+                                        </div>
+                                    </div>
+
+                                    <div className="relative bg-white/90 backdrop-blur-xl p-8 rounded-[2.5rem] shadow-sm border border-white flex flex-col h-[380px] hover:shadow-[0_50px_100px_-20px_rgba(0,0,0,0.1)] transition-all duration-500 hover:-translate-y-2 ring-1 ring-black/[0.02]">
+
+
                                         {/* Decorative Tech Elements */}
                                         <div className="absolute top-0 right-0 p-4 opacity-[0.03] pointer-events-none">
                                             <div className="grid grid-cols-3 gap-1">
@@ -1081,123 +1229,12 @@ isOpen, onClose, orders, title, subtitle,
                                                 </div>
                                             </div>
                                             
-                                            <h4 className="text-xl font-black text-gray-900 group-hover:text-blue-600 transition-colors uppercase tracking-tight truncate mb-3">{item.page}</h4>
+
                                             
-                                            {/* Product Selection UI - Premium High-Tech Standard */}
-                                            <div className="mb-5 flex flex-col gap-2 relative z-20">
-                                                <div className="flex flex-wrap items-center gap-2.5 min-h-[32px]">
-                                                    {(pageProductMapping[item.page] || []).map(prod => {
-                                                        const prodData = appData.products?.find(p => p.ProductName === prod);
-                                                        return (
-                                                            <div key={prod} className="flex items-center gap-2 bg-gradient-to-r from-blue-50 to-indigo-50/80 backdrop-blur-md text-blue-800 pl-1 pr-2 py-1.5 rounded-2xl border border-blue-200/50 shadow-sm transition-all hover:shadow-md hover:border-blue-300 group/tag relative overflow-hidden">
-                                                                <div className="absolute inset-0 bg-blue-400/5 opacity-0 group-hover/tag:opacity-100 transition-opacity"></div>
-                                                                <div className="relative w-7 h-7 rounded-xl overflow-hidden border border-white shadow-sm shrink-0">
-                                                                    {prodData?.ImageURL ? (
-                                                                        <img src={convertGoogleDriveUrl(prodData.ImageURL)} alt={prod} className="w-full h-full object-cover" />
-                                                                    ) : (
-                                                                        <div className="w-full h-full bg-blue-100 flex items-center justify-center text-blue-400">
-                                                                            <Package size={12} />
-                                                                        </div>
-                                                                    )}
-                                                                </div>
-                                                                <span className="text-[11px] font-black truncate max-w-[100px] tracking-tight relative z-10" title={prod}>{prod}</span>
-                                                                <button 
-                                                                    onClick={() => handlePageProductSelect(item.page, prod)}
-                                                                    className="relative z-10 text-blue-300 hover:text-red-500 hover:bg-red-50 rounded-lg p-1 transition-all ml-1"
-                                                                >
-                                                                    <X size={14} />
-                                                                </button>
-                                                            </div>
-                                                        );
-                                                    })}
-                                                    {(!pageProductMapping[item.page] || pageProductMapping[item.page].length < 2) && (
-                                                        <div className="relative group/addprod">
-                                                            <button className="flex items-center justify-center w-8 h-8 rounded-2xl border-2 border-dashed border-gray-200 bg-white/50 text-gray-400 hover:border-blue-400 hover:bg-blue-50 hover:text-blue-600 transition-all shadow-sm group-hover/addprod:scale-110">
-                                                                <Plus size={16} />
-                                                            </button>
-                                                            
-                                                            {/* Premium Glass Dropdown - High-Tech Redesign */}
-                                                            <div className="absolute top-full left-0 mt-3 w-72 bg-white/98 backdrop-blur-2xl rounded-[2rem] shadow-[0_25px_70px_-15px_rgba(0,0,0,0.15)] border border-white opacity-0 invisible group-hover/addprod:opacity-100 group-hover/addprod:visible translate-y-4 group-hover/addprod:translate-y-0 transition-all duration-500 z-50 overflow-hidden ring-1 ring-black/5">
-                                                                <div className="p-4 bg-gradient-to-b from-gray-50/80 to-transparent border-b border-gray-100 space-y-3">
-                                                                    <div className="flex items-center justify-between">
-                                                                        <div className="flex flex-col">
-                                                                            <p className="text-[10px] font-black text-gray-900 uppercase tracking-[0.2em] flex items-center gap-2">
-                                                                                <div className="w-1.5 h-1.5 rounded-full bg-blue-500 animate-pulse"></div>
-                                                                                {language === 'km' ? 'ជ្រើសរើសផលិតផល' : 'Select Product'}
-                                                                            </p>
-                                                                            <span className="text-[8px] text-gray-400 font-bold uppercase tracking-widest mt-0.5">Asset Registry Control</span>
-                                                                        </div>
-                                                                        <div className="flex flex-col items-end">
-                                                                            <span className="text-[10px] font-black text-blue-600 font-mono bg-blue-50 px-2 py-1 rounded-lg border border-blue-100">02</span>
-                                                                            <span className="text-[7px] text-gray-400 font-black uppercase mt-0.5">Limit</span>
-                                                                        </div>
-                                                                    </div>
-                                                                    <div className="relative group/search">
-                                                                        <div className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 group-focus-within/search:text-blue-500 transition-colors">
-                                                                            <Search size={14} />
-                                                                        </div>
-                                                                        <input 
-                                                                            type="text" 
-                                                                            placeholder="Search product metadata..."
-                                                                            value={productSearchQueries[item.page] || ''}
-                                                                            onChange={(e) => setProductSearchQueries(prev => ({ ...prev, [item.page]: e.target.value }))}
-                                                                            className="w-full bg-white border border-gray-200 rounded-2xl pl-10 pr-4 py-2.5 text-xs font-bold text-gray-800 focus:outline-none focus:border-blue-400 focus:ring-4 focus:ring-blue-500/5 transition-all placeholder:text-gray-300"
-                                                                        />
-                                                                    </div>
-                                                                </div>
-                                                                <div className="p-3 max-h-[280px] overflow-y-auto custom-scrollbar overscroll-contain space-y-1">
-                                                                    {(appData.products || [])
-                                                                        .filter(p => !p.ProductName?.includes('Delivery'))
-                                                                        .filter(p => !productSearchQueries[item.page] || p.ProductName?.toLowerCase().includes(productSearchQueries[item.page].toLowerCase()))
-                                                                        .map(p => (
-                                                                        <button
-                                                                            key={p.ProductName}
-                                                                            onClick={() => handlePageProductSelect(item.page, p.ProductName || '')}
-                                                                            disabled={pageProductMapping[item.page]?.includes(p.ProductName || '')}
-                                                                            className="w-full text-left p-2.5 hover:bg-blue-50/50 rounded-2xl disabled:opacity-40 disabled:hover:bg-transparent disabled:cursor-not-allowed transition-all flex items-center gap-3.5 group/item border border-transparent hover:border-blue-100 active:scale-[0.98]"
-                                                                        >
-                                                                            <div className="relative w-11 h-11 shrink-0 bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden group-hover/item:border-blue-200 transition-colors">
-                                                                                {p.ImageURL ? (
-                                                                                    <img src={convertGoogleDriveUrl(p.ImageURL)} alt={p.ProductName} className="w-full h-full object-cover transition-transform duration-500 group-hover/item:scale-110" />
-                                                                                ) : (
-                                                                                    <div className="w-full h-full bg-gray-50 flex items-center justify-center text-gray-300">
-                                                                                        <Package size={18} />
-                                                                                    </div>
-                                                                                )}
-                                                                                <div className="absolute inset-0 bg-gradient-to-t from-black/20 to-transparent opacity-0 group-hover/item:opacity-100 transition-opacity"></div>
-                                                                            </div>
-                                                                            <div className="flex-1 min-w-0 flex flex-col justify-center">
-                                                                                <span className="text-[12px] font-black text-gray-900 group-hover/item:text-blue-700 truncate block leading-tight">{p.ProductName}</span>
-                                                                                <div className="flex items-center gap-2 mt-1">
-                                                                                    <span className="text-[9px] font-mono text-gray-400 font-bold tracking-tight uppercase group-hover/item:text-blue-400 transition-colors">#{p.Barcode || 'UNTRACKED'}</span>
-                                                                                    <div className="w-1 h-1 rounded-full bg-gray-200"></div>
-                                                                                    <span className="text-[9px] font-black text-emerald-600 bg-emerald-50 px-1.5 py-0.5 rounded uppercase">In Stock</span>
-                                                                                </div>
-                                                                            </div>
-                                                                            <div className="shrink-0 flex items-center justify-center w-6 h-6 rounded-full border border-gray-100 group-hover/item:border-blue-200 transition-colors">
-                                                                                {pageProductMapping[item.page]?.includes(p.ProductName || '') ? (
-                                                                                    <div className="w-2.5 h-2.5 rounded-full bg-blue-500 shadow-[0_0_8px_rgba(59,130,246,0.5)]"></div>
-                                                                                ) : (
-                                                                                    <Plus size={12} className="text-gray-300 group-hover/item:text-blue-500" />
-                                                                                )}
-                                                                            </div>
-                                                                        </button>
-                                                                    ))}
-                                                                    {(appData.products || []).filter(p => !p.ProductName?.includes('Delivery') && (!productSearchQueries[item.page] || p.ProductName?.toLowerCase().includes(productSearchQueries[item.page].toLowerCase()))).length === 0 && (
-                                                                        <div className="p-8 text-center space-y-2">
-                                                                            <div className="w-12 h-12 bg-gray-50 rounded-full flex items-center justify-center mx-auto text-gray-300">
-                                                                                <Search size={20} />
-                                                                            </div>
-                                                                            <p className="text-[11px] font-black text-gray-400 uppercase tracking-widest">No matching registry found</p>
-                                                                        </div>
-                                                                    )}
-                                                                </div>
-                                                            </div>
-                                                        </div>
-                                                    )}
-                                                </div>
-                                            </div>
-                                            
+
+    
+
+
                                             <div className="grid grid-cols-2 gap-3">
                                                 <div className="bg-gray-50/50 p-3 rounded-2xl border border-gray-100/50">
                                                     <p className="text-[9px] font-black text-gray-400 uppercase tracking-widest mb-1">Velocity</p>

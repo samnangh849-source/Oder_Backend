@@ -415,7 +415,19 @@ const DeliveryAgentView: React.FC<DeliveryAgentViewProps> = ({ orderIds, returnO
                                                     <td className="p-3 text-center font-black text-gray-700 text-[10px] group-hover:text-white transition-colors">{idx + 1}</td>
                                                     <td className="p-3 min-w-[200px]">
                                                         <div className="flex items-center gap-3">
-                                                            <span className="text-lg font-black text-blue-400 font-mono bg-blue-400/10 px-3 py-1 rounded-lg border border-blue-400/20 shadow-sm">{o['Customer Phone']}</span>
+                                                            <div className="flex items-center gap-2">
+                                                                <span className="text-lg font-black text-blue-400 font-mono bg-blue-400/10 px-3 py-1 rounded-lg border border-blue-400/20 shadow-sm">{o['Customer Phone']}</span>
+                                                                {o['Customer Phone'] && (
+                                                                    <div className="flex flex-col gap-1">
+                                                                        <a href={`tel:${o['Customer Phone'].replace(/\s+/g, '')}`} className="bg-emerald-500/20 text-emerald-400 hover:bg-emerald-500/40 p-1 rounded-md transition-colors" title="Call Customer" target="_blank" rel="noopener noreferrer">
+                                                                            <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M3 5a2 2 0 012-2h3.28a1 1 0 01.948.684l1.498 4.493a1 1 0 01-.502 1.21l-2.257 1.13a11.042 11.042 0 005.516 5.516l1.13-2.257a1 1 0 011.21-.502l4.493 1.498a1 1 0 01.684.949V19a2 2 0 01-2 2h-1C9.716 21 3 14.284 3 6V5z" /></svg>
+                                                                        </a>
+                                                                        <a href={`https://t.me/+855${o['Customer Phone'].replace(/\D/g, '').replace(/^0+/, '')}`} className="bg-blue-500/20 text-blue-400 hover:bg-blue-500/40 p-1 rounded-md transition-colors" title="Telegram Customer" target="_blank" rel="noopener noreferrer">
+                                                                            <svg className="w-3 h-3" fill="currentColor" viewBox="0 0 24 24"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm4.64 6.8c-.15 1.58-.8 5.42-1.13 7.19-.14.75-.42 1-.68 1.03-.58.05-1.02-.38-1.58-.75-.88-.58-1.38-.94-2.23-1.5-.99-.65-.35-1.01.22-1.59.15-.15 2.71-2.48 2.76-2.69a.2.2 0 00-.05-.18c-.06-.05-.14-.03-.21-.02-.09.02-1.49.95-4.22 2.79-.4.27-.76.41-1.08.4-.36-.01-1.04-.2-1.55-.37-.63-.2-1.12-.31-1.08-.66.02-.18.27-.36.74-.55 2.92-1.27 4.86-2.11 5.83-2.51 2.78-1.16 3.35-1.36 3.73-1.36.08 0 .27.02.39.12.1.08.13.19.14.27-.01.06.01.24 0 .38z"/></svg>
+                                                                        </a>
+                                                                    </div>
+                                                                )}
+                                                            </div>
                                                             <p className="text-[9px] text-gray-500 font-bold uppercase truncate max-w-[100px] opacity-60">{o['Customer Name']}</p>
                                                         </div>
                                                     </td>
@@ -467,7 +479,19 @@ const DeliveryAgentView: React.FC<DeliveryAgentViewProps> = ({ orderIds, returnO
                                                 <div className="flex items-start gap-3 min-w-0">
                                                     <div className={`w-8 h-8 rounded-lg flex items-center justify-center text-[10px] font-black border transition-all ${isNotSuccess ? 'bg-red-600 border-red-500 text-white' : 'bg-gray-800 border-white/5 text-gray-500'}`}>{idx + 1}</div>
                                                     <div className="min-w-0 space-y-1">
-                                                        <span className={`text-xl font-black font-mono leading-none block transition-colors ${isNotSuccess ? 'text-red-400' : 'text-blue-400'}`}>{o['Customer Phone']}</span>
+                                                        <div className="flex items-center gap-2">
+                                                            <span className={`text-xl font-black font-mono leading-none block transition-colors ${isNotSuccess ? 'text-red-400' : 'text-blue-400'}`}>{o['Customer Phone']}</span>
+                                                            {o['Customer Phone'] && (
+                                                                <div className="flex items-center gap-1.5 ml-1">
+                                                                    <a href={`tel:${o['Customer Phone'].replace(/\s+/g, '')}`} className="bg-emerald-500/20 text-emerald-400 hover:bg-emerald-500/40 p-1.5 rounded-md transition-colors" title="Call Customer" target="_blank" rel="noopener noreferrer">
+                                                                        <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M3 5a2 2 0 012-2h3.28a1 1 0 01.948.684l1.498 4.493a1 1 0 01-.502 1.21l-2.257 1.13a11.042 11.042 0 005.516 5.516l1.13-2.257a1 1 0 011.21-.502l4.493 1.498a1 1 0 01.684.949V19a2 2 0 01-2 2h-1C9.716 21 3 14.284 3 6V5z" /></svg>
+                                                                    </a>
+                                                                    <a href={`https://t.me/+855${o['Customer Phone'].replace(/\D/g, '').replace(/^0+/, '')}`} className="bg-blue-500/20 text-blue-400 hover:bg-blue-500/40 p-1.5 rounded-md transition-colors" title="Telegram Customer" target="_blank" rel="noopener noreferrer">
+                                                                        <svg className="w-3.5 h-3.5" fill="currentColor" viewBox="0 0 24 24"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm4.64 6.8c-.15 1.58-.8 5.42-1.13 7.19-.14.75-.42 1-.68 1.03-.58.05-1.02-.38-1.58-.75-.88-.58-1.38-.94-2.23-1.5-.99-.65-.35-1.01.22-1.59.15-.15 2.71-2.48 2.76-2.69a.2.2 0 00-.05-.18c-.06-.05-.14-.03-.21-.02-.09.02-1.49.95-4.22 2.79-.4.27-.76.41-1.08.4-.36-.01-1.04-.2-1.55-.37-.63-.2-1.12-.31-1.08-.66.02-.18.27-.36.74-.55 2.92-1.27 4.86-2.11 5.83-2.51 2.78-1.16 3.35-1.36 3.73-1.36.08 0 .27.02.39.12.1.08.13.19.14.27-.01.06.01.24 0 .38z"/></svg>
+                                                                    </a>
+                                                                </div>
+                                                            )}
+                                                        </div>
                                                         <div className="flex items-center gap-2">
                                                             <p className="text-sm text-gray-100 font-bold leading-none">📍 {o.Location}</p>
                                                             <p className="text-[10px] text-gray-500 font-black uppercase tracking-widest opacity-60 truncate max-w-[100px]">{o['Customer Name']}</p>

@@ -49,7 +49,7 @@ export const useFulfillment = (allOrders: ParsedOrder[], onUpdate?: () => void) 
                 body: JSON.stringify({
                     orderId,
                     team: order?.Team || '',
-                    userName: currentUser?.UserName || 'System',
+                    userName: currentUser?.FullName || currentUser?.UserName || 'System',
                     newData: { 
                         'Fulfillment Status': newStatus,
                         ...extraData
@@ -57,7 +57,10 @@ export const useFulfillment = (allOrders: ParsedOrder[], onUpdate?: () => void) 
                 })
             });
 
-            if (!response.ok) throw new Error("Failed to update status");
+            if (!response.ok) {
+                const errorData = await response.json();
+                throw new Error(errorData.message || "Failed to update status");
+            }
 
             // Broadcast to Chat
             try {
@@ -81,9 +84,9 @@ export const useFulfillment = (allOrders: ParsedOrder[], onUpdate?: () => void) 
             } catch (e) { console.warn("Chat broadcast failed", e); }
 
             if (onUpdate) onUpdate();
-        } catch (error) {
+        } catch (error: any) {
             console.error("Fulfillment update error:", error);
-            alert("មិនអាចធ្វើបច្ចុប្បន្នភាពស្ថានភាពបានទេ។ សូមព្យាយាមម្តងទៀត។");
+            alert(error.message || "មិនអាចធ្វើបច្ចុប្បន្នភាពស្ថានភាពបានទេ។ សូមព្យាយាមម្តងទៀត។");
         } finally {
             setLoadingId(null);
         }

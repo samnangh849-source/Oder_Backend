@@ -1130,8 +1130,10 @@ function sendTelegramMessage(settings, data, templates) {
     });
   }
 
-  // --- Build inline keyboard (Print Label button) ---
+  // --- Build inline keyboard (Print Label & Contact Customer) ---
   var inlineKeyboard = null;
+  var buttonsRow = [];
+  
   if (settings.labelPrinterURL) {
     const labelParams = {
       id: vars.orderId,
@@ -1153,10 +1155,19 @@ function sendTelegramMessage(settings, data, templates) {
     const labelUrl = settings.labelPrinterURL
       + (settings.labelPrinterURL.indexOf("?") === -1 ? "?" : "&")
       + qs;
+    buttonsRow.push({ text: "🖨️ ព្រីន Label", url: labelUrl });
+  }
+
+  if (vars.customerPhone) {
+    var cleanPhone = String(vars.customerPhone).replace(/\D/g, '').replace(/^0+/, '');
+    if (cleanPhone) {
+      buttonsRow.push({ text: "💬 ទាក់ទងអតិថិជន", url: "https://t.me/+855" + cleanPhone });
+    }
+  }
+
+  if (buttonsRow.length > 0) {
     inlineKeyboard = {
-      inline_keyboard: [[
-        { text: "🖨️ ព្រីន Label", url: labelUrl }
-      ]]
+      inline_keyboard: [buttonsRow]
     };
   }
 
@@ -1196,9 +1207,9 @@ function sendTelegramMessage(settings, data, templates) {
     const part3Text = isPacked ? applyTemplate(part3Tpl) : "📦 *ព័ត៌មានការវេចខ្ចប់*\n----------------------------------\n⏳ *ស្ថានភាព:* *រង់ចាំការវេចខ្ចប់...*";
 
     if (msgId3Existing) {
-      editSingleTelegramMsg(settings, msgId3Existing, part3Text);
+      editSingleTelegramMsg(settings, msgId3Existing, part3Text, inlineKeyboard);
     } else {
-      msgId3 = sendSingleTelegramMsg(settings, part3Text);
+      msgId3 = sendSingleTelegramMsg(settings, part3Text, inlineKeyboard);
     }
   }
 

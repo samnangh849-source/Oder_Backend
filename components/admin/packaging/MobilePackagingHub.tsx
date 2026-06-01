@@ -25,6 +25,7 @@ interface MobilePackagingHubProps {
     setSearchTerm: (term: string) => void;
     onPack: (order: ParsedOrder) => void;
     onShip: (order: ParsedOrder) => void;
+    onDeliver: (order: ParsedOrder) => void;
     onUndo: (order: ParsedOrder) => void;
     onUndoShipped: (order: ParsedOrder) => void;
     onUnpack: (order: ParsedOrder, skipConfirm?: boolean) => void;
@@ -56,7 +57,7 @@ interface MobilePackagingHubProps {
 
 const MobilePackagingHub: React.FC<MobilePackagingHubProps> = ({
     orders, activeTab, setActiveTab, searchTerm, setSearchTerm,
-    onPack, onShip, onUndo, onUndoShipped, onView, onPrintManifest, onSwitchHub, onExit,
+    onPack, onShip, onDeliver, onUndo, onUndoShipped, onView, onPrintManifest, onSwitchHub, onExit,
     shippingFilter, setShippingFilter, teamFilter, setTeamFilter,
     shippingCounts,
     selectedStore,
@@ -601,7 +602,16 @@ const MobilePackagingHub: React.FC<MobilePackagingHubProps> = ({
                                                     </button>
                                                 )}
                                                 {activeTab === 'Shipped' && (
-                                                    <button onClick={(e) => { e.stopPropagation(); onUndoShipped(order); }} className={`w-20 py-1.5 bg-[#F6465D]/10 text-[#F6465D] rounded-sm text-xs font-bold uppercase`}>Undo</button>
+                                                    <div className="flex gap-2 w-full">
+                                                        <button 
+                                                            onClick={(e) => { e.stopPropagation(); onDeliver(order); }} 
+                                                            className={`flex-1 py-1.5 bg-[#0ECB81] hover:bg-[#0CA66B] text-[#0B0E11] text-xs font-black uppercase transition-colors rounded-sm flex items-center justify-center gap-1.5 shadow-lg shadow-[#0ECB81]/10`}
+                                                        >
+                                                            <Check size={14} strokeWidth={3} />
+                                                            ដឹកជោគជ័យ (Done)
+                                                        </button>
+                                                        <button onClick={(e) => { e.stopPropagation(); onUndoShipped(order); }} className={`w-20 py-1.5 bg-[#F6465D]/10 text-[#F6465D] rounded-sm text-xs font-bold uppercase`}>Undo</button>
+                                                    </div>
                                                 )}
                                                 {activeTab === 'Returned' && (
                                                     <button

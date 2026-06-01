@@ -114,7 +114,19 @@ const DriverDeliveryView: React.FC<{ onOpenDeliveryList?: () => void }> = ({ onO
                             <div className="p-4 bg-[#0B0E11]/30 border-b border-[#2B3139] flex justify-between items-center">
                                 <div>
                                     <h3 className="text-sm font-bold text-[#EAECEF]">{foundOrder['Customer Name']}</h3>
-                                    <p className="text-[10px] font-mono text-[#FCD535] mt-0.5">{foundOrder['Customer Phone']}</p>
+                                    <div className="flex items-center gap-2 mt-1">
+                                        <p className="text-[11px] font-mono text-[#FCD535] font-bold">{foundOrder['Customer Phone']}</p>
+                                        {foundOrder['Customer Phone'] && (
+                                            <div className="flex items-center gap-1.5 ml-2">
+                                                <a href={`tel:${foundOrder['Customer Phone'].replace(/\s+/g, '')}`} className="bg-emerald-500/20 text-emerald-400 hover:bg-emerald-500/30 p-1.5 rounded-[4px] transition-colors" title="Call Customer" target="_blank" rel="noopener noreferrer">
+                                                    <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M3 5a2 2 0 012-2h3.28a1 1 0 01.948.684l1.498 4.493a1 1 0 01-.502 1.21l-2.257 1.13a11.042 11.042 0 005.516 5.516l1.13-2.257a1 1 0 011.21-.502l4.493 1.498a1 1 0 01.684.949V19a2 2 0 01-2 2h-1C9.716 21 3 14.284 3 6V5z" /></svg>
+                                                </a>
+                                                <a href={`https://t.me/+855${foundOrder['Customer Phone'].replace(/\D/g, '').replace(/^0+/, '')}`} className="bg-blue-500/20 text-blue-400 hover:bg-blue-500/30 p-1.5 rounded-[4px] transition-colors" title="Telegram Customer" target="_blank" rel="noopener noreferrer">
+                                                    <svg className="w-3.5 h-3.5" fill="currentColor" viewBox="0 0 24 24"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm4.64 6.8c-.15 1.58-.8 5.42-1.13 7.19-.14.75-.42 1-.68 1.03-.58.05-1.02-.38-1.58-.75-.88-.58-1.38-.94-2.23-1.5-.99-.65-.35-1.01.22-1.59.15-.15 2.71-2.48 2.76-2.69a.2.2 0 00-.05-.18c-.06-.05-.14-.03-.21-.02-.09.02-1.49.95-4.22 2.79-.4.27-.76.41-1.08.4-.36-.01-1.04-.2-1.55-.37-.63-.2-1.12-.31-1.08-.66.02-.18.27-.36.74-.55 2.92-1.27 4.86-2.11 5.83-2.51 2.78-1.16 3.35-1.36 3.73-1.36.08 0 .27.02.39.12.1.08.13.19.14.27-.01.06.01.24 0 .38z"/></svg>
+                                                </a>
+                                            </div>
+                                        )}
+                                    </div>
                                 </div>
                                 <div className="text-right">
                                     <p className="text-[9px] text-[#848E9C] font-bold uppercase">Margin</p>

@@ -84,8 +84,8 @@ const statusTone = (status: HubStatus) => {
 };
 
 const actionForStatus = (status: HubStatus) => {
-    if (status === 'Ready to Ship') return { label: 'Ship', next: 'Shipped' as FulfillmentStatus, icon: Truck };
-    if (status === 'Shipped') return { label: 'Deliver', next: 'Delivered' as FulfillmentStatus, icon: CheckCircle2 };
+    if (status === 'Ready to Ship') return { label: 'Confirm Shipping', next: 'Shipped' as FulfillmentStatus, icon: Truck, color: 'accent' };
+    if (status === 'Shipped') return { label: 'ដឹកជោគជ័យ (Done)', next: 'Delivered' as FulfillmentStatus, icon: CheckCircle2, color: 'success' };
     return null;
 };
 
@@ -234,11 +234,18 @@ const FulfillmentDashboard: React.FC<FulfillmentDashboardProps> = ({ orders, onO
 
     const extraDataForStatus = (order: ParsedOrder, status: FulfillmentStatus) => {
         const user = currentUser?.FullName || currentUser?.UserName || 'System';
-        const now = new Date().toLocaleString('km-KH');
+        const now = new Date().toISOString().slice(0, 19).replace('T', ' ');
         if (status === 'Processing') return { 'Processing By': user, 'Processing Time': now };
         if (status === 'Ready to Ship') return { 'Packed By': order['Packed By'] || user, 'Packed Time': order['Packed Time'] || now };
         if (status === 'Shipped') return { 'Dispatched By': user, 'Dispatched Time': now };
-        if (status === 'Delivered') return { 'Delivered Time': now };
+        if (status === 'Delivered') {
+            const extra: any = { 'Delivered Time': now };
+            // Ensure backend validation passes by providing fallback shipping details if no driver is assigned
+            if (!order['Driver Name'] && !order['Internal Shipping Details']) {
+                extra['Internal Shipping Details'] = order['Internal Shipping Method'] || 'Hub Operation';
+            }
+            return extra;
+        }
         if (status === 'Pending') {
             return {
                 'Packed By': '',
@@ -352,6 +359,11 @@ const FulfillmentDashboard: React.FC<FulfillmentDashboardProps> = ({ orders, onO
         const hasUndo = activeStatus === 'Ready to Ship' || activeStatus === 'Shipped';
         const buttonCount = 1 + (activeAction ? 1 : 0) + (hasUndo ? 1 : 0);
         const gridClass = buttonCount >= 3 ? 'grid-cols-3' : buttonCount === 2 ? 'grid-cols-2' : 'grid-cols-1';
+        
+        const actionBg = activeAction?.color === 'success' 
+            ? 'bg-[#0ECB81] hover:bg-[#0CA66B] text-[#0B0E11] shadow-lg shadow-[#0ECB81]/10' 
+            : B_ACCENT_BG;
+
         return (
             <div className={`grid gap-2 ${gridClass}`}>
                 <button
@@ -365,7 +377,7 @@ const FulfillmentDashboard: React.FC<FulfillmentDashboardProps> = ({ orders, onO
                     <button
                         onClick={(e) => { e.stopPropagation(); applyStatus(order, activeAction.next); }}
                         disabled={loadingId === order['Order ID']}
-                        className={`py-1.5 ${B_ACCENT_BG} text-xs font-bold uppercase transition-colors rounded-sm flex items-center justify-center gap-1.5 disabled:opacity-60`}
+                        className={`py-1.5 ${actionBg} text-xs font-bold uppercase transition-colors rounded-sm flex items-center justify-center gap-1.5 disabled:opacity-60`}
                     >
                         {loadingId === order['Order ID'] ? <Spinner size="sm" /> : ActionIcon && <ActionIcon className="w-3.5 h-3.5" />}
                         {activeAction.label}

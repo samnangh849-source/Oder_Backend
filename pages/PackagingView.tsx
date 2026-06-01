@@ -565,7 +565,15 @@ const PackagingView: React.FC<{ orders?: ParsedOrder[], onExit?: () => void }> =
         searchTerm, 
         setSearchTerm,
         onPack: (order: ParsedOrder) => !isViewOnly && setPackingOrder(order),
-        onShip: (order: ParsedOrder) => !isViewOnly && executeAction(order, 'Shipped', { 'Dispatched Time': new Date().toLocaleString('km-KH'), 'Dispatched By': currentUser?.FullName || 'Packer' }),
+        onShip: (order: ParsedOrder) => !isViewOnly && executeAction(order, 'Shipped', { 'Dispatched Time': new Date().toISOString().slice(0, 19).replace('T', ' '), 'Dispatched By': currentUser?.FullName || 'Packer' }),
+        onDeliver: (order: ParsedOrder) => {
+            if (isViewOnly) return;
+            const extra: any = { 'Delivered Time': new Date().toISOString().slice(0, 19).replace('T', ' ') };
+            if (!order['Driver Name'] && !order['Internal Shipping Details']) {
+                extra['Internal Shipping Details'] = order['Internal Shipping Method'] || 'Hub Operation';
+            }
+            executeAction(order, 'Delivered', extra);
+        },
         onUndo: (o: ParsedOrder) => !isViewOnly && setUndoConfirmation({ order: o, type: 'pending', isOpen: true }),
         onUndoShipped: (o: ParsedOrder) => !isViewOnly && setUndoConfirmation({ order: o, type: 'ready', isOpen: true }),
         onUnpack: (order: ParsedOrder, skipConfirm = false) => {
