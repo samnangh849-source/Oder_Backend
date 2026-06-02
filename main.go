@@ -3,7 +3,9 @@ package main
 import (
 	"bytes"
 	"context"
+	"crypto/rand"
 	"crypto/subtle"
+	"encoding/hex"
 	"encoding/json"
 	"fmt"
 	"image"
@@ -34,6 +36,60 @@ import (
 	// Import GORM
 	"gorm.io/gorm"
 )
+
+// GenerateSecureToken creates a cryptographically secure random token
+func GenerateSecureToken(length int) string {
+	b := make([]byte, length)
+	if _, err := rand.Read(b); err != nil {
+		return ""
+	}
+	return hex.EncodeToString(b)
+}
+
+func handleGenerateUploadToken(c *gin.Context) {
+	orderID := c.Query("orderId")
+	if orderID == "" {
+		c.JSON(400, gin.H{"status": "error", "message": "Missing orderId"})
+		return
+	}
+
+	token := GenerateSecureToken(16)
+	uploadToken := backend.UploadToken{
+		Token:     token,
+		OrderID:   orderID,
+		CreatedAt: time.Now(),
+		ExpiresAt: time.Now().Add(10 * time.Minute), // Valid for 10 minutes
+	}
+
+	if err := backend.DB.Create(&uploadToken).Error; err != nil {
+		c.JSON(500, gin.H{"status": "error", "message": "Failed to create token"})
+		return
+	}
+
+	c.JSON(200, gin.H{"status": "success", "token": token})
+}
+
+func handleVerifyUploadToken(c *gin.Context) {
+	token := c.Query("token")
+	secret := c.GetHeader("X-Internal-Secret")
+
+	// Apps Script must provide the shared secret
+	if secret != backend.AppsScriptSecret {
+		c.JSON(401, gin.H{"status": "error", "message": "Unauthorized internal call"})
+		return
+	}
+
+	var uploadToken backend.UploadToken
+	if err := backend.DB.Where("token = ? AND expires_at > ?", token, time.Now()).First(&uploadToken).Error; err != nil {
+		c.JSON(404, gin.H{"status": "error", "message": "Invalid or expired token"})
+		return
+	}
+
+	// Token is valid! Now DELETE it so it can't be used again (One-time use)
+	backend.DB.Delete(&uploadToken)
+
+	c.JSON(200, gin.H{"status": "success", "orderId": uploadToken.OrderID})
+}
 
 // --- Configuration ---
 var (
@@ -92,6 +148,8 @@ var calculatePayout = backend.CalculatePayout
 // =========================================================================
 func initDB() {
 	backend.InitDB()
+	// Migrate new tables
+	backend.DB.AutoMigrate(&backend.UploadToken{})
 }
 
 // =========================================================================
@@ -3009,6 +3067,7 @@ func main() {
 	api.POST("/webhook/sheets-sync", handleSheetsWebhook)
 	api.GET("/order-metadata/:id", handleGetOrderMetadata)
 	api.POST("/telegram/webhook/:token", handleTelegramWebhook)
+	api.GET("/internal/verify-upload-token", handleVerifyUploadToken) // New for Apps Script
 
 	protected := api.Group("/")
 	protected.Use(AuthMiddleware())
@@ -3018,6 +3077,7 @@ func main() {
 		protected.GET("/users", handleGetUsers)
 		protected.GET("/static-data", handleGetStaticData)
 		protected.POST("/submit-order", RequirePermission("create_order"), handleSubmitOrder)
+		protected.GET("/generate-upload-token", handleGenerateUploadToken) // New for Admin
 		protected.POST("/upload-image", backend.HandleImageUploadProxy)
 		protected.GET("/proxy-image", backend.HandleProxyImage)
 		protected.GET("/permissions", handleGetUserPermissions)
