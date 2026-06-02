@@ -994,8 +994,40 @@ func handleGetUsers(c *gin.Context) {
 
 func handleGetAllOrders(c *gin.Context) {
 	var orders []Order
+	
+	// 1. Pagination Params
+	limitStr := c.DefaultQuery("limit", "100")
+	offsetStr := c.DefaultQuery("offset", "0")
+	limit, _ := strconv.Atoi(limitStr)
+	offset, _ := strconv.Atoi(offsetStr)
+	
+	// 2. Date Filter Params
+	startDate := c.Query("startDate")
+	endDate := c.Query("endDate")
+	datePreset := c.Query("datePreset") // Optional: to explicitly request 'all'
+	
+	// 3. View mode (compact vs full)
+	view := c.Query("view")
+
 	query := backend.DB.Order("timestamp desc")
 	countQuery := backend.DB.Model(&Order{})
+
+	// Default date filter (7 days) if none provided and not explicitly 'all'
+	if startDate == "" && endDate == "" && datePreset != "all" {
+		sevenDaysAgo := time.Now().AddDate(0, 0, -7).Format("2006-01-02")
+		query = query.Where("timestamp >= ?", sevenDaysAgo)
+		countQuery = countQuery.Where("timestamp >= ?", sevenDaysAgo)
+	} else {
+		if startDate != "" {
+			query = query.Where("timestamp >= ?", startDate)
+			countQuery = countQuery.Where("timestamp >= ?", startDate)
+		}
+		if endDate != "" {
+			// Include full day of endDate
+			query = query.Where("timestamp <= ?", endDate+" 23:59:59")
+			countQuery = countQuery.Where("timestamp <= ?", endDate+" 23:59:59")
+		}
+	}
 
 	role, _ := c.Get("role")
 	team, _ := c.Get("team")
@@ -1012,7 +1044,6 @@ func handleGetAllOrders(c *gin.Context) {
 		}
 	}
 
-	// NEW: Check for 'view_global_orders' permission to bypass team filtering
 	hasGlobalView := isAdmin || hasPermissionInternal(roleString, (isSystemAdmin != nil && isSystemAdmin.(bool)), "view_global_orders")
 
 	if !hasGlobalView && team != nil {
@@ -1033,13 +1064,29 @@ func handleGetAllOrders(c *gin.Context) {
 		}
 	}
 
+	// Field Selection
+	if view == "compact" {
+		query = query.Select("order_id, timestamp, user, page, telegram_value, customer_name, customer_phone, location, subtotal, grand_total, fulfillment_status, is_verified, team, fulfillment_store, payment_status, payment_info")
+	}
+
+	// Apply Pagination
+	if limit > 0 {
+		query = query.Limit(limit).Offset(offset)
+	}
+
 	if err := query.Find(&orders).Error; err != nil {
 		c.Error(err)
 		return
 	}
 	var total int64
 	countQuery.Count(&total)
-	c.JSON(200, gin.H{"status": "success", "data": orders, "total": total})
+	c.JSON(200, gin.H{
+		"status": "success", 
+		"data":   orders, 
+		"total":  total,
+		"limit":  limit,
+		"offset": offset,
+	})
 }
 
 func handleSubmitOrder(c *gin.Context) {
