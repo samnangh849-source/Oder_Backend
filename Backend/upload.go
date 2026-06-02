@@ -126,13 +126,20 @@ func UploadToGoogleDriveDirectly(base64Data string, fileName string, mimeType st
 		UploadFolderID: targetFolder,
 	}
 
-	// Generate a one-time token for the Go Backend's own upload request
-	if UploadGenerateTokenFunc != nil {
+	// 1. If the original request already had a token (from Frontend), use it
+	if originalReq != nil && originalReq.Token != "" {
+		req.Token = originalReq.Token
+		log.Printf("🔑 [Drive Upload] Using existing token from request: %s", req.Token)
+	} else if UploadGenerateTokenFunc != nil {
+		// 2. Otherwise generate a new one-time token
 		id := ""
 		if originalReq != nil {
 			id = originalReq.OrderID
 		}
 		req.Token = UploadGenerateTokenFunc(id)
+		log.Printf("🔑 [Drive Upload] Generated new one-time token: %s (OrderID: %s)", req.Token, id)
+	} else {
+		log.Println("⚠️ [Drive Upload] No token provided and UploadGenerateTokenFunc is NIL")
 	}
 
 	// Pass caller metadata so Apps Script can route non-order uploads
