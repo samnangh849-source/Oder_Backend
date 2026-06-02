@@ -1,1597 +1,3867 @@
-/**
- */
+package main
 
-const SCRIPT_SECRET_KEY = "168333@$Oudom"; 
+import (
+	"bytes"
+	"context"
+	"crypto/subtle"
+	"encoding/json"
+	"fmt"
+	"image"
+	"image/color"
+	"image/jpeg"
+	"io"
+	"log"
+	"math/rand"
+	"mime/multipart"
+	"net/http"
+	"net/textproto"
+	"os"
+	"regexp"
+	"strconv"
+	"strings"
+	"sync"
+	"time"
+	"unicode"
 
-const CONFIG = {
-  USERS_SHEET: 'Users',
-  STORES_SHEET: 'Stores', 
-  SETTINGS_SHEET: 'Settings',
-  PAGES_SHEET: 'TeamsPages',
-  PRODUCTS_SHEET: 'Products',
-  LOCATIONS_SHEET: 'Locations',
-  SHIPPING_METHODS_SHEET: 'ShippingMethods',
-  COLORS_SHEET: 'Colors',
-  DRIVERS_SHEET: 'Drivers',
-  BANK_ACCOUNTS_SHEET: 'BankAccounts',
-  REVENUE_SHEET: 'RevenueDashboard',
-  TELEGRAM_TEMPLATES_SHEET: 'TelegramTemplates',
-  PHONE_CARRIERS_SHEET: 'PhoneCarriers',
-  EDIT_LOGS_SHEET: 'EditLogs',
-  USER_ACTIVITY_LOGS_SHEET: 'UserActivityLogs',
-  FORMULA_REPORT_SHEET: 'FormulaReport',
-  ALL_ORDERS_SHEET: 'AllOrders',
-  ORDER_SHEET_PREFIX: 'Orders_',
-  CHAT_MESSAGES_SHEET: 'ChatMessages',
-  ROLES_SHEET: 'Roles',
-  ROLE_PERMISSIONS_SHEET: 'RolePermissions',
-  INVENTORY_SHEET: 'Inventory',
-  STOCK_TRANSFERS_SHEET: 'StockTransfers',
-  RETURNS_SHEET: 'Returns',
-  DRIVER_RECOMMENDATIONS_SHEET: 'DriverRecommendations',
-  INCENTIVE_RESULTS_SHEET: 'IncentiveResults',
-  MOVIES_SHEET: 'Movies',
-  PROMOTIONS_SHEET: 'Promotions',
-  SHIFTS_SHEET: 'Shifts'
-};
+	"github.com/fogleman/gg"
+	"github.com/gin-contrib/cors"
+	"github.com/gin-contrib/gzip"
+	"github.com/gin-gonic/gin"
+	"golang.org/x/crypto/bcrypt"
 
-// --- មុខងារជំនួយ (Helpers) ---
+	backend "github.com/samnangh849-source/Oder_Backend-2-/Backend"
 
-function formatPhoneNumber(phone) {
-  if (!phone) return "";
-  let p = String(phone).trim();
-  p = p.replace(/[\s-]/g, ""); 
-  if (p.length > 0 && p.charAt(0) !== '0') return '0' + p;
-  return p;
+	// Import GORM
+	"gorm.io/gorm"
+)
+
+// --- Configuration ---
+var (
+	appsScriptURL    string
+	appsScriptSecret string
+)
+
+// =========================================================================
+// ម៉ូដែលទិន្នន័យ (GORM Models) - Aliased to Backend package
+// =========================================================================
+
+type User = backend.User
+type Movie = backend.Movie
+type Store = backend.Store
+type Setting = backend.Setting
+type TeamPage = backend.TeamPage
+type Product = backend.Product
+type Location = backend.Location
+type ShippingMethod = backend.ShippingMethod
+type DeliveryGroup = backend.DeliveryGroup
+type DriverRecommendation = backend.DriverRecommendation
+type Color = backend.Color
+type Driver = backend.Driver
+type BankAccount = backend.BankAccount
+type PhoneCarrier = backend.PhoneCarrier
+type TelegramTemplate = backend.TelegramTemplate
+type Inventory = backend.Inventory
+type StockTransfer = backend.StockTransfer
+type ReturnItem = backend.ReturnItem
+type Order = backend.Order
+type RevenueEntry = backend.RevenueEntry
+type ChatMessage = backend.ChatMessage
+type EditLog = backend.EditLog
+type UserActivityLog = backend.UserActivityLog
+type Role = backend.Role
+type RolePermission = backend.RolePermission
+type Promotion = backend.Promotion
+type IncentiveCalculator = backend.IncentiveCalculator
+type IncentiveProject = backend.IncentiveProject
+type IncentiveResult = backend.IncentiveResult
+type IncentiveManualData = backend.IncentiveManualData
+type IncentiveCustomPayout = backend.IncentiveCustomPayout
+type DeleteOrderRequest = backend.DeleteOrderRequest
+
+type IncentiveRules = backend.IncentiveRules
+type IncentiveTier = backend.IncentiveTier
+type CommissionTier = backend.CommissionTier
+
+var parseManualDataKey = backend.ParseManualDataKey
+var normalizeTeamKey = backend.NormalizeTeamKey
+var resolveManualTarget = backend.ResolveManualTarget
+var calculatePayout = backend.CalculatePayout
+
+// =========================================================================
+// INIT DATABASE & GOOGLE SERVICES
+// =========================================================================
+func initDB() {
+	backend.InitDB()
 }
 
-function normalizeKey(str) {
-  return String(str).toLowerCase().replace(/[^a-z0-9]/g, "");
+// =========================================================================
+// UTILS
+// =========================================================================
+
+func generateShortID() string {
+	const chars = "ABCDEFGHJKMNPQRSTUVWXYZ23456789"
+	b := make([]byte, 6)
+	for i := range b {
+		b[i] = chars[rand.Intn(len(chars))]
+	}
+	return string(b)
 }
 
-/**
- * មុខងារចម្បងសម្រាប់ទទួល Request ពី Backend (Golang)
- */
-function doPost(e) {
-  const lock = LockService.getScriptLock();
-  if (!lock.tryLock(30000)) return createJsonResponse({ status: 'locked' }, 429);
-
-  try {
-    if (!e.postData || !e.postData.contents) return createJsonResponse({ status: 'error', message: 'មិនមានទិន្នន័យបញ្ជូនមកទេ' }, 400);
-    
-    let contents;
-    try {
-      contents = JSON.parse(e.postData.contents);
-    } catch (parseErr) {
-      return createJsonResponse({ status: 'error', message: 'JSON Invalid: ' + parseErr.message }, 400);
-    }
-
-    if (!contents || typeof contents !== 'object') {
-      return createJsonResponse({ status: 'error', message: 'Payload ត្រូវតែជា JSON Object' }, 400);
-    }
-
-    if (contents.secret !== SCRIPT_SECRET_KEY) return createJsonResponse({ status: 'error', message: 'គ្មានសិទ្ធិអនុញ្ញាតទេ' }, 401);
-
-    let user = contents.userName || "System";
-
-    switch (contents.action) {
-      case 'checkScheduledOrders':
-        processScheduledOrders(); 
-        return createJsonResponse({ status: 'success' });
-
-      case 'submitOrder':
-        const submitData = contents.orderData || contents;
-        const result = processOrder(submitData);
-        logUserActivity(user, "បង្កើតការកម្មង់ថ្មី", `លេខសម្គាល់: ${result.orderId}`);
-        return createJsonResponse({ status: 'success', orderId: result.orderId, messageIds: result.messageIds });
-        
-      case 'updateOrderTelegram':
-        const updateData = contents.orderData || contents;
-        // Pass the lock so updateOrderTelegram can release it before slow Telegram API calls.
-        // This lets concurrent packers proceed in parallel once Sheet writes are done.
-        const updateRes = updateOrderTelegram(updateData, lock);
-        return createJsonResponse({ status: 'success', messageIds: updateRes });
-        
-      case 'deleteOrderTelegram':
-        const deleteData = contents.orderData || contents;
-        deleteOrderTelegramMessages(deleteData);
-        return createJsonResponse({ status: 'success' });
-        
-      case 'addRow': 
-        return handleAddRow(contents);
-
-      case 'batchAddRows':
-        return handleBatchAddRows(contents);
-
-      case 'deleteRow': 
-        return handleDeleteRow(contents);
-
-      case 'updateSheet':
-        return handleUpdateSheet(contents);
-
-      case 'clearSheet':
-        return handleClearSheet(contents);
-
-      case 'diagnose':
-        return handleDiagnose(contents);
-
-      case 'renameFile':
-        if (!contents.fileID || !contents.newName) {
-          return createJsonResponse({ status: 'error', message: 'fileID និង newName ត្រូវតែមាន' });
-        }
-        try {
-          const file = DriveApp.getFileById(contents.fileID);
-          file.setName(contents.newName);
-          return createJsonResponse({ status: 'success' });
-        } catch (e) {
-          return createJsonResponse({ status: 'error', message: 'Rename បរាជ័យ: ' + e.message });
-        }
-
-      case 'uploadImage':
-        console.log("📤 [uploadImage] Request received: fileName=" + contents.fileName + " mimeType=" + contents.mimeType);
-        try {
-          // Release lock BEFORE Drive upload — Drive upload is slow (~10-30s) and doesn't
-          // touch the spreadsheet. Holding the script lock during upload blocks all other
-          // concurrent requests (e.g. updateOrderTelegram from another packer).
-          // The finally block's releaseLock() is a safe no-op if already released.
-          lock.releaseLock();
-
-          // 1. Upload to Drive
-          const upRes = uploadImageToDrive(contents.fileData, contents.fileName, contents.mimeType, contents.uploadFolderID, contents.userName);
-          if (!upRes || !upRes.url) {
-            console.error("❌ [uploadImage] Drive upload failed, no URL returned.");
-            return createJsonResponse({ status: 'error', message: 'ការបង្ហោះរូបភាពទៅ Drive បរាជ័យ' }, 500);
-          }
-          console.log("📤 [uploadImage] Upload success: " + upRes.url);
-
-          // 2. Metadata Updates (Sync to Sheets)
-          const orderId = contents.orderId || contents.orderID;
-          if (orderId) {
-             console.log("✅ [uploadImage] Order Drive upload done, updating Sheet for Order: " + orderId);
-             
-             // Combine photo URL with other metadata (Status, Packed By, etc.)
-             const updateData = contents.newData || {};
-             if (contents.targetColumn) {
-               updateData[contents.targetColumn] = upRes.url;
-             } else {
-               updateData["Package Photo"] = upRes.url;
-             }
-
-             try {
-               const updateResult = handleUpdateSheet({
-                 sheetName: CONFIG.ALL_ORDERS_SHEET,
-                 primaryKey: { "Order ID": orderId },
-                 newData: updateData
-               });
-               
-               // Also update the Team-specific sheet if needed
-               if (contents.team) {
-                 handleUpdateSheet({
-                   sheetName: `${CONFIG.ORDER_SHEET_PREFIX}${contents.team}`,
-                   primaryKey: { "Order ID": orderId },
-                   newData: updateData
-                 });
-               }
-               
-               return createJsonResponse({ 
-                 status: 'success', 
-                 url: upRes.url, 
-                 fileID: upRes.fileID,
-                 sheetUpdated: updateResult.status === 'success'
-               });
-             } catch (sheetErr) {
-               console.error("⚠️ [uploadImage] Sheet sync failed but Drive OK: " + sheetErr.message);
-               return createJsonResponse({ status: 'success', url: upRes.url, fileID: upRes.fileID, warning: "Sheet sync failed" });
-             }
-          } else if (contents.sheetName && contents.primaryKey && contents.targetColumn) {
-             // Handle generic table updates
-             const newData = {};
-             newData[contents.targetColumn] = upRes.url;
-             try {
-               handleUpdateSheet({
-                 sheetName: contents.sheetName,
-                 primaryKey: contents.primaryKey,
-                 newData: newData
-               });
-               console.log("✅ [uploadImage] Generic Sheet updated: " + contents.sheetName);
-               return createJsonResponse({ status: 'success', url: upRes.url, fileID: upRes.fileID });
-             } catch (sheetErr) {
-               console.error("⚠️ [uploadImage] Generic sheet sync failed: " + sheetErr.message);
-               return createJsonResponse({ status: 'success', url: upRes.url, warning: "Sheet sync failed" });
-             }
-          } else if (contents.userName && contents.fileName === 'profile_picture') {
-             // Handle user profile picture
-             try {
-               handleUpdateSheet({
-                 sheetName: CONFIG.USERS_SHEET,
-                 primaryKey: { "UserName": contents.userName },
-                 newData: { "ProfilePictureURL": upRes.url }
-               });
-               console.log("✅ [uploadImage] User profile updated for: " + contents.userName);
-             } catch (sheetErr) {
-               console.error("⚠️ [uploadImage] User profile sheet sync failed: " + sheetErr.message);
-             }
-          } else if (contents.movieId && contents.targetColumn) {
-             // Handle movies
-             try {
-               handleUpdateSheet({
-                 sheetName: CONFIG.MOVIES_SHEET,
-                 primaryKey: { "ID": contents.movieId },
-                 newData: { [contents.targetColumn]: upRes.url }
-               });
-               console.log("✅ [uploadImage] Movie updated for ID: " + contents.movieId);
-             } catch (sheetErr) {
-               console.error("⚠️ [uploadImage] Movie sheet sync failed: " + sheetErr.message);
-             }
-          }
-
-          return createJsonResponse({ status: 'success', url: upRes.url, fileID: upRes.fileID, message: 'Upload completed successfully' });
-        } catch (e) {
-          console.error("📤 [uploadImage] FAILED: " + e.message);
-          return createJsonResponse({ status: 'error', message: 'Upload failed: ' + e.message });
-        }
-        
-      default:
-         return createJsonResponse({ status: 'error', message: 'Action មិនត្រឹមត្រូវ' });
-    }
-  } catch (error) {
-    return createJsonResponse({ status: 'error', message: error.message }, 500);
-  } finally {
-    lock.releaseLock();
-  }
+func broadcastToAll(payload interface{}) {
+	backend.SafeBroadcastJSON(payload)
 }
 
-// ✅ [REMOVED] Duplicate processScheduledOrders — kept the newer version below (uses updateOrderInSheets)
+func mapToDBColumn(key string, sheetName string) string {
+	specialCases := map[string]string{
+		"Order ID":                "order_id",
+		"Discount ($)":            "discount_usd",
+		"Total Product Cost ($)":  "total_product_cost",
+		"Shipping Fee (Customer)": "shipping_fee_customer",
+		"Products":                "products_json",
+		"Products (JSON)":         "products_json",
+		"Telegram Message ID 1":   "telegram_message_id1",
+		"Telegram Message ID 2":   "telegram_message_id2",
+		"Telegram Message ID 3":   "telegram_message_id3",
+		"Customer Name":           "customer_name",
+		"Customer Phone":          "customer_phone",
+		"Location":                "location",
+		"Address Details":         "address_details",
+		"Fulfillment Status":      "fulfillment_status",
+		"fulfillmentStatus":       "fulfillment_status",
+		"FulfillmentStatus":       "fulfillment_status",
+		"Fulfillment Store":       "fulfillment_store",
+		"fulfillmentStore":        "fulfillment_store",
+		"FulfillmentStore":        "fulfillment_store",
+		"Package Photo":           "package_photo_url",
+		"packagePhoto":            "package_photo_url",
+		"PackagePhoto":            "package_photo_url",
+		"Delivery Photo URL":      "delivery_photo_url",
+		"deliveryPhoto":           "delivery_photo_url",
+		"DeliveryPhoto":           "delivery_photo_url",
+		"Cancel Reason":           "cancel_reason",
+		"Return Reason":           "return_reason",
+		"Return Photo":            "return_photo_url",
+		"Return Received By":      "return_received_by",
+		"Return Received Time":    "return_received_time",
+		"Delivery Photo Sent Count": "delivery_photo_sent_count",
+		"Delivery Telegram Message ID": "delivery_telegram_message_id",
+		"Delivery Daily Sequence":   "delivery_daily_sequence",
+		"Delivery Telegram Date":     "delivery_telegram_date",
+		"Driver Name":             "driver_name",
+		"Tracking Number":         "tracking_number",
+		"Dispatched Time":         "dispatched_time",
+		"Dispatched By":           "dispatched_by",
+		"Delivered Time":          "delivered_time",
+		"Packed By":               "packed_by",
+		"Packed Time":             "packed_time",
+		"IsVerified":              "is_verified",
+		"UserName":                "user_name",
+		"FullName":                "full_name",
+		"ProfilePictureURL":       "profile_picture_url",
+		"IsSystemAdmin":           "is_system_admin",
+		"TelegramUsername":        "telegram_username",
+		"ImageURL":                "image_url",
+		"Image URL":               "image_url",
+		"LogosURL":                "logo_url",
+		"Logos URL":               "logo_url",
+		"LogoURL":                 "logo_url",
+		"Thumbnail":               "thumbnail",
+		"Thumbnail URL":           "thumbnail",
+		"ID":                      "id",
+		"id":                      "id",
+		"status":                  "status",
+		"Status":                  "status",
+		"Description":             "description",
+		"TelegramGroupID":         "telegram_group_id",
+		"TelegramTopicID":          "telegram_topic_id",
+		"CODAlertGroupID":         "cod_alert_group_id",
+		// Incentive System Mappings
+		"projectId":              "project_id",
+		"ProjectID":              "project_id",
+		"rulesJson":              "rules_json",
+		"RulesJSON":              "rules_json",
+		"projectName":            "project_name",
+		"ProjectName":            "project_name",
+		"calculatorId":           "calculator_id",
+		"CalculatorID":           "calculator_id",
+		"startDate":              "start_date",
+		"StartDate":              "start_date",
+		"endDate":                "end_date",
+		"EndDate":                "end_date",
+		"targetTeam":             "target_team",
+		"TargetTeam":             "target_team",
+		"colorCode":              "color_code",
+		"ColorCode":              "color_code",
+		"dataSource":             "data_source",
+		"DataSource":             "data_source",
+		"requirePeriodSelection": "require_period_selection",
+		"totalOrders":            "total_orders",
+		"totalRevenue":           "total_revenue",
+		"totalProfit":            "total_profit",
+		"calculatedValue":        "calculated_value",
+		"breakdownJson":          "breakdown_json",
+	}
 
+	// Handle Settings table specifics separately
+	if sheetName == "Settings" {
+		if strings.EqualFold(key, "Key") {
+			return "config_key"
+		}
+		if strings.EqualFold(key, "Value") {
+			return "config_value"
+		}
+	}
 
-// --- ការគ្រប់គ្រងជួរទិន្នន័យទូទៅ (Global Row Management) ---
+	// Standard mapping logic
+	for k, v := range specialCases {
+		if strings.EqualFold(strings.TrimSpace(k), strings.TrimSpace(key)) {
+			return v
+		}
+	}
 
-function handleAddRow(data) {
-  const ss = SpreadsheetApp.getActiveSpreadsheet();
-  const sheet = ss.getSheetByName(data.sheetName);
-  if (!sheet) return createJsonResponse({ status: "error", message: "រកមិនឃើញ Sheet" }, 404);
-  
-  const headers = sheet.getRange(1, 1, 1, sheet.getLastColumn()).getValues()[0];
-  const normalizedHeaders = headers.map(h => normalizeKey(h));
-  
-  // 1. Identify Primary Key for Idempotency
-  let pkField = "id"; // Default
-  if (data.sheetName === "Users") pkField = "username";
-  else if (data.sheetName === "Stores") pkField = "storename";
-  else if (data.sheetName === "Products") pkField = "barcode";
-  else if (data.sheetName === "AllOrders" || data.sheetName.indexOf("Orders_") === 0) pkField = "orderid";
-  
-  const pkValue = data.newData[Object.keys(data.newData).find(k => normalizeKey(k) === pkField)];
+	// If it's already snake_case (no spaces and no uppercase), keep as-is (normalized lower).
+	// Otherwise continue with generic converter below so CamelCase like "ProductName"
+	// becomes "product_name" instead of "productname".
+	if !strings.Contains(key, " ") && key == strings.ToLower(key) {
+		return key
+	}
 
-  // 2. If PK value exists, check if row already exists to prevent duplicates
-  if (pkValue) {
-    const pkIdx = normalizedHeaders.indexOf(pkField);
-    if (pkIdx !== -1) {
-      const values = sheet.getDataRange().getValues();
-      for (let i = 1; i < values.length; i++) {
-        if (normalizeKey(values[i][pkIdx]) === normalizeKey(pkValue)) {
-          console.warn("⚠️ [Idempotency] Row already exists for PK: " + pkValue + " in " + data.sheetName + ". Updating instead.");
-          return handleUpdateSheet({
-            sheetName: data.sheetName,
-            primaryKey: { [headers[pkIdx]]: pkValue },
-            newData: data.newData
-          });
-        }
-      }
-    }
-  }
+	var res []rune
+	for i, r := range key {
+		if i > 0 && (unicode.IsUpper(r) || r == ' ' || r == '(' || r == ')') {
+			if len(res) > 0 && res[len(res)-1] != '_' {
+				res = append(res, '_')
+			}
+		}
+		if r != ' ' && r != '(' && r != ')' && r != '$' {
+			res = append(res, unicode.ToLower(r))
+		}
+	}
 
-  // 3. Auto-generate numeric ID if required and missing
-  const idColIdx = normalizedHeaders.indexOf("id");
-  if (idColIdx !== -1 && (!data.newData.ID && !data.newData.id)) {
-    const values = sheet.getDataRange().getValues();
-    let maxId = 0;
-    for (let i = 1; i < values.length; i++) {
-      const val = parseInt(values[i][idColIdx]);
-      if (!isNaN(val) && val > maxId) maxId = val;
-    }
-    data.newData.ID = maxId + 1;
-  }
-
-  appendRowMapped(sheet, data.newData);
-  return createJsonResponse({ status: "success" });
+	final := strings.Trim(string(res), "_")
+	final = strings.ReplaceAll(final, "__", "_")
+	return final
 }
 
-function handleBatchAddRows(data) {
-  if (!data.sheetName || !data.rows || !Array.isArray(data.rows)) {
-    return createJsonResponse({ status: "error", message: "sheetName and rows array required" }, 400);
-  }
-  const ss = SpreadsheetApp.getActiveSpreadsheet();
-  const sheet = ss.getSheetByName(data.sheetName);
-  if (!sheet) return createJsonResponse({ status: "error", message: "Sheet not found" }, 404);
-
-  const headers = sheet.getRange(1, 1, 1, sheet.getLastColumn()).getValues()[0];
-  const normalizedHeaders = headers.map(h => normalizeKey(h));
-
-  const rowsToInsert = data.rows.map(row => {
-    const newRow = new Array(headers.length).fill("");
-    for (const [key, val] of Object.entries(row)) {
-      const nKey = normalizeKey(key);
-      const idx = normalizedHeaders.indexOf(nKey);
-      if (idx !== -1) {
-        let v = val;
-        // Force leading zero for Customer Phone in Sheets
-        if (nKey === "customerphone" && v && String(v).charAt(0) === '0') {
-          v = "'" + v;
-        }
-        newRow[idx] = v;
-      }
-    }
-    return newRow;
-  });
-
-  if (rowsToInsert.length > 0) {
-    sheet.getRange(sheet.getLastRow() + 1, 1, rowsToInsert.length, headers.length).setValues(rowsToInsert);
-  }
-
-  return createJsonResponse({ status: "success", count: rowsToInsert.length });
+func getTableName(sheetName string) string {
+	switch sheetName {
+	case "Users":
+		return "users"
+	case "Stores":
+		return "stores"
+	case "Settings":
+		return "settings"
+	case "TeamsPages":
+		return "team_pages"
+	case "Products":
+		return "products"
+	case "Locations":
+		return "locations"
+	case "ShippingMethods":
+		return "shipping_methods"
+	case "DeliveryGroups":
+		return "delivery_groups"
+	case "Colors":
+		return "colors"
+	case "Drivers":
+		return "drivers"
+	case "BankAccounts":
+		return "bank_accounts"
+	case "PhoneCarriers":
+		return "phone_carriers"
+	case "Inventory":
+		return "inventories"
+	case "StockTransfers":
+		return "stock_transfers"
+	case "Returns":
+		return "returns"
+	case "AllOrders":
+		return "orders"
+	case "Roles":
+		return "roles"
+	case "RolePermissions":
+		return "role_permissions"
+	case "DriverRecommendations":
+		return "driver_recommendations"
+	case "IncentiveCalculators":
+		return "incentive_calculators"
+	case "IncentiveProjects":
+		return "incentive_projects"
+	case "Movies":
+		return "movies"
+	case "Promotions":
+		return "promotions"
+	case "RevenueDashboard":
+		return "revenue_entries"
+	case "ChatMessages":
+		return "chat_messages"
+	case "EditLogs":
+		return "edit_logs"
+	case "UserActivityLogs":
+		return "user_activity_logs"
+	case "IncentiveResults":
+		return "incentive_results"
+	case "IncentiveManualData":
+		return "incentive_manual_data"
+	case "IncentiveCustomPayouts":
+		return "incentive_custom_payouts"
+	case "TelegramTemplates":
+		return "telegram_templates"
+	}
+	if strings.HasPrefix(sheetName, "Orders_") {
+		return "orders"
+	}
+	return ""
 }
 
-// Clears all data rows in a sheet (keeps header row). Used by Reset Permissions.
-function handleClearSheet(data) {
-  if (!data.sheetName) return createJsonResponse({ status: "error", message: "sheetName required" }, 400);
-  const ss = SpreadsheetApp.getActiveSpreadsheet();
-  const sheet = ss.getSheetByName(data.sheetName);
-  if (!sheet) return createJsonResponse({ status: "error", message: "Sheet not found: " + data.sheetName }, 404);
-
-  const lastRow = sheet.getLastRow();
-  const deleted = Math.max(0, lastRow - 1);
-  if (deleted > 0) sheet.deleteRows(2, deleted);
-
-  console.log("🗑️ [clearSheet] Cleared " + deleted + " rows from: " + data.sheetName);
-  return createJsonResponse({ status: "success", rowsDeleted: deleted });
+// isValidDBIdentifier allows only lowercase letters, digits, and underscores
+// to prevent SQL injection via dynamically constructed column/table identifiers.
+func isValidDBIdentifier(s string) bool {
+	if s == "" {
+		return false
+	}
+	for _, r := range s {
+		if !((r >= 'a' && r <= 'z') || (r >= '0' && r <= '9') || r == '_') {
+			return false
+		}
+	}
+	return true
 }
 
-function handleDeleteRow(data) {
-  const ss = SpreadsheetApp.getActiveSpreadsheet();
-  const sheet = ss.getSheetByName(data.sheetName);
-  if (!sheet) return createJsonResponse({ status: "error", message: "រកមិនឃើញ Sheet" }, 404);
-
-  const pkColName = Object.keys(data.primaryKey)[0];
-  const pkValue = data.primaryKey[pkColName];
-  
-  const values = sheet.getDataRange().getValues();
-  const headers = values[0];
-  const normalizedHeaders = headers.map(h => normalizeKey(h));
-  const pkIdx = normalizedHeaders.indexOf(normalizeKey(pkColName));
-
-  if (pkIdx === -1) return createJsonResponse({ status: "error", message: "រកជួរឈរ (Column) មិនឃើញ" }, 400);
-
-  let deletedCount = 0;
-  for (let i = values.length - 1; i >= 1; i--) {
-    if (String(values[i][pkIdx]) === String(pkValue)) {
-      sheet.deleteRow(i + 1);
-      deletedCount++;
-    }
-  }
-  return createJsonResponse({ status: "success", deletedCount: deletedCount });
+func isValidOrderColumn(col string) bool {
+	validCols := map[string]bool{
+		"order_id": true, "timestamp": true, "user": true, "page": true, "telegram_value": true,
+		"customer_name": true, "customer_phone": true, "location": true, "address_details": true,
+		"note": true, "shipping_fee_customer": true, "subtotal": true, "grand_total": true,
+		"products_json": true, "internal_shipping_method": true, "internal_shipping_details": true,
+		"internal_cost": true, "payment_status": true, "payment_info": true, "discount_usd": true,
+		"delivery_unpaid": true, "delivery_paid": true, "total_product_cost": true,
+		"telegram_message_id1": true, "telegram_message_id2": true, "telegram_message_id3": true, "scheduled_time": true,
+		"fulfillment_store": true, "team": true, "is_verified": true, "fulfillment_status": true,
+		"packed_by": true, "packed_time": true, "package_photo_url": true, "driver_name": true, "tracking_number": true,
+		"dispatched_time": true, "dispatched_by": true, "delivered_time": true, "delivery_photo_url": true,
+		"cancel_reason": true, "return_reason": true, "return_photo_url": true, "return_received_by": true, "return_received_time": true,
+	}
+	return validCols[col]
 }
 
-function handleUpdateSheet(data) {
-  console.log("📝 [UpdateSheet] Starting: sheetName=" + data.sheetName + " primaryKey=" + JSON.stringify(data.primaryKey) + " newData=" + JSON.stringify(data.newData));
-  
-  try {
-    const ss = SpreadsheetApp.getActiveSpreadsheet();
-    const sheet = ss.getSheetByName(data.sheetName);
-    if (!sheet) return createJsonResponse({ status: "error", message: "រកមិនឃើញ Sheet: " + data.sheetName }, 404);
-    
-    const headers = sheet.getRange(1, 1, 1, sheet.getLastColumn()).getValues()[0];
-    const normalizedHeaders = headers.map(h => normalizeKey(h));
-    
-    const pkKeys = Object.keys(data.primaryKey);
-    let rowIndex = -1;
+func ErrorHandlingMiddleware() gin.HandlerFunc {
+	return func(c *gin.Context) {
+		c.Next()
 
-    // 1. Try to find by 'ID' first if it exists in primaryKey, as it's the most reliable and fastest
-    const idKey = pkKeys.find(k => normalizeKey(k) === "id");
-    if (idKey) {
-      const idVal = data.primaryKey[idKey];
-      const idColIdx = normalizedHeaders.indexOf("id");
-      if (idColIdx !== -1) {
-        const searchRange = sheet.getRange(1, idColIdx + 1, sheet.getLastRow(), 1);
-        const finder = searchRange.createTextFinder(String(idVal).trim()).matchEntireCell(true);
-        const match = finder.findNext();
-        if (match) {
-          rowIndex = match.getRow();
-          console.log("🚀 [UpdateSheet] ID lookup success! Row: " + rowIndex);
-        }
-      }
-    }
+		if len(c.Errors) > 0 {
+			var errMsgs []string
+			for _, err := range c.Errors {
+				errMsgs = append(errMsgs, err.Error())
+				log.Printf("[ERROR] %s: %v\n", c.Request.URL.Path, err.Error())
+			}
 
-    // 2. Optimized Row Lookup using TextFinder (single-key PK only, if ID not found)
-    if (rowIndex === -1 && pkKeys.length === 1) {
-      const pkColName = pkKeys[0];
-      const pkValue = data.primaryKey[pkColName];
-      const pkIdx = normalizedHeaders.indexOf(normalizeKey(pkColName));
-
-      if (pkIdx !== -1) {
-        const searchRange = sheet.getRange(1, pkIdx + 1, sheet.getLastRow(), 1);
-        const finder = searchRange.createTextFinder(String(pkValue).trim()).matchEntireCell(true);
-        const match = finder.findNext();
-        if (match) {
-          rowIndex = match.getRow();
-          console.log("🚀 [UpdateSheet] Fast lookup success! Row: " + rowIndex);
-        }
-      }
-    }
-
-    // 3. Fallback to manual scan if TextFinder fails, composite PK, or column not found
-    if (rowIndex === -1) {
-      console.log("🔍 [UpdateSheet] Using full scan for PK matching...");
-      const values = sheet.getDataRange().getValues();
-      const targetPkVals = {};
-      for (const [k, v] of Object.entries(data.primaryKey)) { 
-        targetPkVals[normalizeKey(k)] = normalizeKey(v); 
-      }
-
-      for (let i = 1; i < values.length; i++) {
-        let match = true;
-        for (const pkKey in targetPkVals) {
-          const col = normalizedHeaders.indexOf(pkKey);
-          if (col === -1) {
-            match = false;
-            break;
-          }
-          
-          const cellVal = normalizeKey(values[i][col]);
-          const targetVal = targetPkVals[pkKey];
-          
-          if (cellVal !== targetVal) {
-            match = false;
-            break;
-          }
-        }
-        if (match) {
-          rowIndex = i + 1;
-          break;
-        }
-      }
-    }
-
-    // Row not found — for non-Order sheets, upsert (add new row) instead of failing
-    if (rowIndex === -1) {
-      const isOrderSheet = data.sheetName === 'AllOrders' || String(data.sheetName).indexOf('Orders_') === 0;
-      if (!isOrderSheet) {
-        console.log("⚡ [UpdateSheet] Row not found — upserting as new row for: " + data.sheetName);
-        const upsertData = Object.assign({}, data.primaryKey, data.newData);
-        return handleAddRow({ sheetName: data.sheetName, newData: upsertData });
-      }
-      console.error("❌ [UpdateSheet] Row not found for PK: " + JSON.stringify(data.primaryKey));
-      return createJsonResponse({ status: "error", message: "រកមិនឃើញជួរទិន្នន័យដើម្បីកែប្រែ" }, 404);
-    }
-
-    {
-      let updatedCount = 0;
-      const rowRange = sheet.getRange(rowIndex, 1, 1, headers.length);
-      const rowData = rowRange.getValues()[0];
-
-      const aliasMap = {
-        "packagephotourl": ["packagephoto", "packagephotourl", "packagephotolink", "packagephotoevidence", "packphoto", "package photo"],
-        "packagephoto": ["packagephotourl", "packagephoto", "packagephotolink", "packagephotoevidence", "packphoto", "package photo"],
-        "orderid": ["orderid", "id", "orderno", "order#", "order id"],
-        "deliveryphotourl": ["deliveryphoto", "deliveryphotourl", "deliveryphotolink", "proofofdelivery", "deliveryphotoevidence", "delivery photo url"],
-        "deliveryphoto": ["deliveryphotourl", "deliveryphoto", "deliveryphotolink", "proofofdelivery", "deliveryphotoevidence", "delivery photo url"],
-        "fulfillmentstatus": ["fulfillmentstatus", "status", "orderstatus", "fulfillment status"],
-        "fulfillmentstore": ["fulfillmentstore", "store", "warehouse", "fulfillment store"],
-        "cancelreason": ["cancelreason", "cancel_reason", "reason", "cancel reason"],
-        "returnreason": ["returnreason", "return_reason", "return reason"],
-        "returnphoto": ["returnphoto", "return_photo", "return photo", "returnphotourl"],
-        "returnreceivedby": ["returnreceivedby", "return_received_by", "return received by"],
-        "returnreceivedtime": ["returnreceivedtime", "return_received_time", "return received time"]
-      };
-
-      for (const [key, val] of Object.entries(data.newData)) {
-        const nKey = normalizeKey(key);
-        // Skip if this key is part of the primaryKey and it already matches
-        if (data.primaryKey[key] !== undefined && normalizeKey(data.primaryKey[key]) === normalizeKey(val)) {
-          continue;
-        }
-
-        let colIdx = normalizedHeaders.indexOf(nKey);
-        
-        if (colIdx === -1) {
-          const aliases = aliasMap[nKey] || [];
-          for (const alias of aliases) {
-            colIdx = normalizedHeaders.indexOf(normalizeKey(alias));
-            if (colIdx !== -1) break;
-          }
-        }
-
-        if (colIdx !== -1) {
-          let v = val;
-          // Robust boolean handling
-          if (typeof v === 'string') {
-            const lowV = v.toLowerCase().trim();
-            if (lowV === 'true') v = true;
-            else if (lowV === 'false') v = false;
-          }
-
-          // Force leading zero for Customer Phone in Sheets by prefixing with a single quote
-          if (nKey === "customerphone" && v && String(v).charAt(0) === '0') {
-            v = "'" + v;
-          }
-
-          rowData[colIdx] = v;
-          updatedCount++;
-        }
-      }
-
-      if (updatedCount > 0) {
-        rowRange.setValues([rowData]);
-        SpreadsheetApp.flush();
-        console.log("✅ [UpdateSheet] Atomic update success for row " + rowIndex + " (Fields: " + updatedCount + ")");
-      } else {
-        console.log("ℹ️ [UpdateSheet] No fields actually needed updating for row " + rowIndex);
-      }
-      return createJsonResponse({ status: "success", updated: updatedCount, rowIndex: rowIndex });
-    }
-  } catch (e) {
-    console.error("❌ [UpdateSheet] FAILED: " + e.message);
-    return createJsonResponse({ status: "error", message: "Update failed: " + e.message }, 500);
-  }
+			if !c.Writer.Written() {
+				c.JSON(http.StatusInternalServerError, gin.H{
+					"status":  "error",
+					"message": strings.Join(errMsgs, "; "),
+				})
+			}
+		}
+	}
 }
 
-// --- ដំណើរការកម្មង់ (Order Processing Logic) ---
+// =========================================================================
+// AUTHENTICATION, JWT & AUTHORIZATION (RBAC) - Aliased to Backend package
+// =========================================================================
 
-function processOrder(data) {
-  const ss = SpreadsheetApp.getActiveSpreadsheet();
-  const orderRequest = data.originalRequest;
-  const team = orderRequest.selectedTeam; 
-  const orderId = data.orderId; 
-  
-  let fulfillmentStore = orderRequest.fulfillmentStore || getDefaultStoreForTeam(team) || "Unknown";
-  const orderSheetName = `${CONFIG.ORDER_SHEET_PREFIX}${team}`;
-  
-  // Determine initial status based on scheduling
-  let fulfillmentStatus = "Pending";
-  if (data.scheduledTime) {
-      const scheduleDate = new Date(data.scheduledTime);
-      if (scheduleDate.getTime() > (new Date().getTime() + 60000)) {
-          fulfillmentStatus = "Scheduled";
-      }
-  }
+type Claims = backend.Claims
 
-  const flatData = {};
-  flatData[normalizeKey("Timestamp")] = data.scheduledTime || data.timestamp;
-  flatData[normalizeKey("Order ID")] = orderId;
-  flatData[normalizeKey("User")] = orderRequest.currentUser ? orderRequest.currentUser.UserName : "System";
-  flatData[normalizeKey("Page")] = orderRequest.page;
-  flatData[normalizeKey("TelegramValue")] = orderRequest.telegramValue;
-  flatData[normalizeKey("Customer Name")] = orderRequest.customer ? orderRequest.customer.name : "";
-  flatData[normalizeKey("Customer Phone")] = orderRequest.customer ? formatPhoneNumber(orderRequest.customer.phone) : "";
-  flatData[normalizeKey("Location")] = data.fullLocation;
-  flatData[normalizeKey("Address Details")] = orderRequest.customer ? orderRequest.customer.additionalLocation : "";
-  flatData[normalizeKey("Note")] = orderRequest.note;
-  flatData[normalizeKey("Shipping Fee (Customer)")] = orderRequest.customer ? orderRequest.customer.shippingFee : 0;
-  flatData[normalizeKey("Subtotal")] = orderRequest.subtotal;
-  flatData[normalizeKey("Grand Total")] = orderRequest.grandTotal;
-  flatData[normalizeKey("Products (JSON)")] = data.productsJSON;
-  flatData[normalizeKey("Internal Shipping Method")] = orderRequest.shipping ? orderRequest.shipping.method : "";
-  flatData[normalizeKey("Internal Shipping Details")] = orderRequest.shipping ? orderRequest.shipping.details : "";
-  flatData[normalizeKey("Internal Cost")] = data.shippingCost;
-  flatData[normalizeKey("Payment Status")] = orderRequest.payment ? orderRequest.payment.status : "";
-  flatData[normalizeKey("Payment Info")] = orderRequest.payment ? orderRequest.payment.info : "";
-  flatData[normalizeKey("Discount ($)")] = data.totalDiscount;
-  flatData[normalizeKey("Total Product Cost ($)")] = data.totalProductCost;
-  flatData[normalizeKey("Scheduled Time")] = data.scheduledTime;
-  flatData[normalizeKey("Fulfillment Store")] = fulfillmentStore;
-  flatData[normalizeKey("Team")] = team;
-  flatData[normalizeKey("Fulfillment Status")] = fulfillmentStatus;
+var generateJWT = backend.GenerateJWT
+var handleLogin = backend.HandleLogin
 
-  const teamSheet = ss.getSheetByName(orderSheetName);
-  if (teamSheet) appendRowMapped(teamSheet, flatData);
-  
-  const allOrdersSheet = ss.getSheetByName(CONFIG.ALL_ORDERS_SHEET);
-  if (allOrdersSheet) appendRowMapped(allOrdersSheet, flatData);
-  
-  const revenueSheet = ss.getSheetByName(CONFIG.REVENUE_SHEET);
-  if (revenueSheet) {
-    const revenueData = {
-      "Timestamp": flatData[normalizeKey("Timestamp")],
-      "Team": team,
-      "Page": orderRequest.page,
-      "Revenue": orderRequest.grandTotal,
-      "FulfillmentStore": fulfillmentStore
-    };
-    appendRowMapped(revenueSheet, revenueData);
-  }
-
-  // Ensure fulfillmentStore is set on data for sendOrderToTelegram
-  data.fulfillmentStore = fulfillmentStore;
-
-  // Send to Telegram ONLY if it's not scheduled for the future
-  let messageIds = { id1: null, id2: null, id3: null };
-  if (fulfillmentStatus !== "Scheduled") {
-      messageIds = sendOrderToTelegram(data);
-  }
-
-  return { orderId: orderId, fulfillmentStore: fulfillmentStore, messageIds: messageIds };
+func DBMiddleware() gin.HandlerFunc {
+	return func(c *gin.Context) {
+		if backend.DB == nil {
+			c.JSON(http.StatusServiceUnavailable, gin.H{
+				"status":  "error",
+				"message": "សេវាកម្មកំពុងចាប់ផ្តើម (Database is initializing...)",
+			})
+			c.Abort()
+			return
+		}
+		c.Next()
+	}
 }
 
-/**
- * Helper function to send an order to Telegram
- */
-function sendOrderToTelegram(data) {
-  const orderId = data.orderId;
-  const req = data.originalRequest || {};
-  const team = data.team || req.selectedTeam || data["Team"] || "";
-  const page = req.page || data["Page"] || "";
-  const telegramValue = req.telegramValue || data["TelegramValue"] || "";
-  const fulfillmentStore = data.fulfillmentStore || data["Fulfillment Store"];
-  const forceSync = data.forceSync === true;
-  const orderSheetName = `${CONFIG.ORDER_SHEET_PREFIX}${team}`;
+var AuthMiddleware = backend.AuthMiddleware
+var AdminOnlyMiddleware = backend.AdminOnlyMiddleware
+var RequirePermission = backend.RequirePermission
+var hasPermissionInternal = backend.HasPermissionInternal
 
-  console.log("📤 [sendOrderToTelegram] orderId=" + orderId + " team=" + team + " page=" + page + " store=" + fulfillmentStore + " forceSync=" + forceSync);
+// =========================================================================
+// API សម្រាប់គ្រប់គ្រងសិទ្ធិ (Role Permissions) - RBAC - Aliased to Backend package
+// =========================================================================
 
-  if (!fulfillmentStore) {
-    console.error("❌ [sendOrderToTelegram] fulfillmentStore is empty for order " + orderId + "! Cannot look up Telegram settings.");
-    return { id1: null, id2: null, id3: null };
-  }
+var handleGetRoles = backend.HandleGetRoles
+var handleCreateRole = backend.HandleCreateRole
+var handleGetAllPermissions = backend.HandleGetAllPermissions
+var handleGetUserPermissions = backend.HandleGetUserPermissions
+var handleUpdatePermission = backend.HandleUpdatePermission
+var handleSyncPermissionsToSheet = backend.HandleSyncPermissionsToSheet
+var handleResetPermissions = backend.HandleResetPermissions
 
-  // Check if already sent
-  if (!forceSync && !data.isUpdate) {
-    const existingData = fetchOrderDataFromSheet(orderId, team);
-    if (existingData) {
-      const id1 = existingData["Telegram Message ID 1"];
-      const id2 = existingData["Telegram Message ID 2"];
-      const id3 = existingData["Telegram Message ID 3"];
-      if (id1 || id2 || id3) {
-        console.log("ℹ️ [sendOrderToTelegram] Order " + orderId + " already has Telegram IDs. Skipping send (use Force Sync to retry).");
-        return { id1: id1, id2: id2, id3: id3 };
-      }
-    }
-  }
+// =========================================================================
 
-  const storeSettings = getStoreSettings(fulfillmentStore);
-  if (storeSettings.token && storeSettings.groupID) {
-      const finalTopicId = getTeamTopicId(team, page, telegramValue, fulfillmentStore) || storeSettings.topicID;
-      const templates = getTelegramTemplates(team);
-      console.log("📤 [sendOrderToTelegram] Sending to groupID=" + storeSettings.groupID + " topicID=" + finalTopicId + " (page=" + page + ")");
-      const messageIds = sendTelegramMessage({...storeSettings, topicID: finalTopicId}, data, templates);
-      if (messageIds.id1 || messageIds.id2 || messageIds.id3) {
-          updateMessageIdInSheet(orderSheetName, orderId, messageIds);
-          updateMessageIdInSheet(CONFIG.ALL_ORDERS_SHEET, orderId, messageIds);
-          console.log("✅ [sendOrderToTelegram] Message IDs updated in sheets for " + orderId);
-      } else {
-          console.warn("⚠️ [sendOrderToTelegram] Telegram message sent but no IDs returned for " + orderId);
-      }
-      return messageIds;
-  }
-  console.error("❌ [sendOrderToTelegram] Telegram settings missing for store '" + fulfillmentStore + "'. Check Stores sheet: TelegramBotToken=" + (storeSettings.token ? "OK" : "EMPTY") + " TelegramGroupID=" + (storeSettings.groupID ? "OK" : "EMPTY"));
-  return { id1: null, id2: null, id3: null };
+// =========================================================================
+// API សម្រាប់ប្រព័ន្ធ INCENTIVE (ប្រាក់លើកទឹកចិត្ត)
+// =========================================================================
+
+func handleGetIncentiveCalculators(c *gin.Context) {
+	var calcs []IncentiveCalculator
+	backend.DB.Find(&calcs)
+	c.JSON(200, gin.H{"status": "success", "data": calcs})
 }
 
-/**
- * មុខងារសម្រាប់ឆែក និងរុញការកម្មង់ដែលបានកំណត់ម៉ោង (Scheduled Orders)
- */
-function processScheduledOrders() {
-  const ss = SpreadsheetApp.getActiveSpreadsheet();
-  const sheet = ss.getSheetByName(CONFIG.ALL_ORDERS_SHEET);
-  if (!sheet) return;
+func handleCreateIncentiveCalculator(c *gin.Context) {
+	var req IncentiveCalculator
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(400, gin.H{"status": "error", "message": err.Error()})
+		return
+	}
 
-  const data = sheet.getDataRange().getValues();
-  if (data.length <= 1) return;
+	// Always let backend.DB generate unique IDs to avoid collisions when duplicating calculators.
+	req.ID = 0
+	if strings.TrimSpace(req.Status) == "" {
+		req.Status = "Active"
+	}
 
-  const headers = data[0].map(h => normalizeKey(h));
-  const statusIdx = headers.indexOf(normalizeKey("Fulfillment Status"));
-  const timeIdx = headers.indexOf(normalizeKey("Scheduled Time"));
-  const idCol = headers.indexOf(normalizeKey("Order ID"));
-  const teamCol = headers.indexOf(normalizeKey("Team"));
-
-  if (statusIdx === -1 || timeIdx === -1) return;
-
-  const now = new Date();
-  let processedCount = 0;
-
-  for (let i = 1; i < data.length; i++) {
-    const status = String(data[i][statusIdx]);
-    const scheduledTimeValue = data[i][timeIdx];
-    const orderId = data[i][idCol];
-    const team = data[i][teamCol];
-
-    if (status === "Scheduled" && scheduledTimeValue) {
-      const scheduledDate = new Date(scheduledTimeValue);
-      // ប្រសិនបើដល់ពេល ឬហួសពេលកំណត់
-      if (scheduledDate <= now) {
-        Logger.log(`⏰ ដល់ពេលបញ្ចេញការកម្មង់ដែលកំណត់ម៉ោង: ${orderId}`);
-
-        // 1. ទាញទិន្នន័យពេញលេញ (fetch ម្ដងគត់ — sendOrderToTelegram នឹងប្រើ forceSync:true)
-        const orderData = fetchOrderDataFromSheet(orderId, team);
-        if (orderData) {
-          // 2. ផ្ញើ Telegram ជាមុន — ប្រសិនបើបរាជ័យ status នៅជា "Scheduled" ដើម្បីអាច retry ម្ដងទៀត
-          const msgIds = sendOrderToTelegram({
-            orderId: orderId,
-            team: team,
-            fulfillmentStore: orderData["Fulfillment Store"],
-            forceSync: true, // skip duplicate fetchOrderDataFromSheet inside sendOrderToTelegram
-            ...orderData
-          });
-
-          // 3. ប្តូរ Status ទៅជា Pending — ធ្វើបន្ទាប់ពីព្យាយាមផ្ញើ Telegram
-          //    បើ msgIds ទទេ (Telegram fail) សូម log warning — status នៅ Scheduled ដើម្បី retry
-          if (msgIds && (msgIds.id1 || msgIds.id2 || msgIds.id3)) {
-            updateOrderInSheets(orderId, team, { "Fulfillment Status": "Pending" });
-            processedCount++;
-          } else {
-            Logger.log(`⚠️ Telegram failed for scheduled order ${orderId} — keeping status Scheduled for retry`);
-          }
-        }
-      }
-    }
-  }
-  
-  if (processedCount > 0) {
-    Logger.log(`✅ បានរុញការកម្មង់កំណត់ម៉ោងចំនួន ${processedCount} ទៅកាន់ Telegram`);
-  }
+	if err := backend.DB.Create(&req).Error; err != nil {
+		c.JSON(500, gin.H{"status": "error", "message": err.Error()})
+		return
+	}
+	c.JSON(200, gin.H{"status": "success", "data": req})
 }
 
-// --- មុខងារជំនួយបន្ថែម (Additional Helper Functions) ---
-
-function createJsonResponse(data, status) {
-  return ContentService.createTextOutput(JSON.stringify(data))
-    .setMimeType(ContentService.MimeType.JSON);
+func handleGetIncentiveProjects(c *gin.Context) {
+	var projects []IncentiveProject
+	backend.DB.Preload("Calculators").Find(&projects)
+	c.JSON(200, gin.H{"status": "success", "data": projects})
 }
 
-function uploadImageToDrive(base64Data, fileName, mimeType, folderID, userName) {
-  try {
-    let folder;
-    try {
-      folder = (folderID && folderID !== "root") ? DriveApp.getFolderById(folderID) : DriveApp.getRootFolder();
-    } catch (err) {
-      console.warn("⚠️ Folder ID មិនត្រឹមត្រូវ ប្រើ Root ជំនួសវិញ: " + folderID);
-      folder = DriveApp.getRootFolder();
-    }
-    const decodedData = Utilities.base64Decode(base64Data);
-    const blob = Utilities.newBlob(decodedData, mimeType, fileName);
-    const file = folder.createFile(blob);
-    
-    // Attempt to set public view access, but don't fail if it's restricted
-    try {
-      file.setSharing(DriveApp.Access.ANYONE_WITH_LINK, DriveApp.Permission.VIEW);
-      console.log("🔓 [uploadImageToDrive] Sharing set to ANYONE_WITH_LINK");
-    } catch (e) {
-      console.warn("⚠️ [uploadImageToDrive] Could not set sharing: " + e.message + ". The file was created but may require manual access settings.");
-    }
+func handleCreateIncentiveProject(c *gin.Context) {
+	var req IncentiveProject
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(400, gin.H{"status": "error", "message": err.Error()})
+		return
+	}
 
-    return {
-      url: file.getUrl(),
-      fileID: file.getId()
-    };
+	if req.ID == 0 {
+		var maxID uint
+		backend.DB.Model(&IncentiveProject{}).Select("COALESCE(MAX(id), 0)").Row().Scan(&maxID)
+		req.ID = maxID + 1
+	}
+	if strings.TrimSpace(req.Status) == "" {
+		req.Status = "Draft"
+	}
+	if strings.TrimSpace(req.DataSource) == "" {
+		req.DataSource = "system"
+	}
+	if strings.TrimSpace(req.CreatedAt) == "" {
+		req.CreatedAt = time.Now().Format("2006-01-02 15:04:05")
+	}
 
-  } catch (e) {
-    throw new Error("Drive Upload Error: " + e.message);
-  }
+	if err := backend.DB.Create(&req).Error; err != nil {
+		c.JSON(500, gin.H{"status": "error", "message": err.Error()})
+		return
+	}
+	c.JSON(200, gin.H{"status": "success", "data": req})
 }
 
-function updateOrderInSheets(orderId, team, updatedFields) {
-  const ss = SpreadsheetApp.getActiveSpreadsheet();
-  const sheetsToUpdate = [CONFIG.ALL_ORDERS_SHEET];
-  if (team) sheetsToUpdate.push(`${CONFIG.ORDER_SHEET_PREFIX}${team}`);
-
-  sheetsToUpdate.forEach(sheetName => {
-    const sheet = ss.getSheetByName(sheetName);
-    if (!sheet) {
-      console.warn("⚠️ [updateOrderInSheets] Sheet not found: " + sheetName);
-      return;
-    }
-
-    const result = handleUpdateSheet({
-      sheetName: sheetName,
-      primaryKey: { "Order ID": orderId },
-      newData: updatedFields
-    });
-
-    // Log failures so they are visible in Apps Script execution logs
-    try {
-      const parsed = JSON.parse(result.getContent());
-      if (parsed.status !== "success") {
-        console.error("❌ [updateOrderInSheets] Failed to update sheet=" + sheetName + " orderId=" + orderId + " reason=" + parsed.message);
-      }
-    } catch (e) {
-      // result might not be JSON if handleUpdateSheet returned something unexpected
-      console.warn("⚠️ [updateOrderInSheets] Could not parse result for sheet=" + sheetName);
-    }
-  });
-  SpreadsheetApp.flush();
+func handleGetIncentiveResults(c *gin.Context) {
+	projectId := c.Query("projectId")
+	var results []IncentiveResult
+	query := backend.DB.Model(&IncentiveResult{})
+	if projectId != "" {
+		query = query.Where("project_id = ?", projectId)
+	}
+	query.Find(&results)
+	c.JSON(200, gin.H{"status": "success", "data": results})
 }
 
-function appendRowMapped(sheet, data) {
-  const headers = sheet.getRange(1, 1, 1, sheet.getLastColumn()).getValues()[0];
-  
-  // Pre-normalize data keys to ensure they match normalized headers
-  const normalizedData = {};
-  for (let k in data) {
-    normalizedData[normalizeKey(k)] = data[k];
-  }
-  
-  const row = headers.map(h => {
-    const key = normalizeKey(h);
-    let val = normalizedData[key] !== undefined ? normalizedData[key] : "";
+func handleGetIncentiveManualData(c *gin.Context) {
+	projectId := c.Query("projectId")
+	month := c.Query("month")
 
-    // Force leading zero for Customer Phone in Sheets
-    if (key === "customerphone" && val && String(val).charAt(0) === '0') {
-      return "'" + val;
-    }
+	if month != "" {
+		matched, _ := regexp.MatchString(`^\d{4}-\d{2}$`, month)
+		if !matched {
+			c.JSON(400, gin.H{"status": "error", "message": "ទម្រង់ខែមិនត្រឹមត្រូវ (ត្រូវប្រើ YYYY-MM)"})
+			return
+		}
+	}
 
-    return val;
-  });
-  sheet.appendRow(row);
+	var data []IncentiveManualData
+	query := backend.DB.Model(&IncentiveManualData{})
+	if projectId != "" {
+		query = query.Where("project_id = ?", projectId)
+	}
+	if month != "" {
+		query = query.Where("month = ?", month)
+	}
+	query.Find(&data)
+	c.JSON(200, gin.H{"status": "success", "data": data})
 }
 
-function getDefaultStoreForTeam(team) {
-  const ss = SpreadsheetApp.getActiveSpreadsheet();
-  const sheet = ss.getSheetByName(CONFIG.PAGES_SHEET);
-  if (!sheet) return null;
-  
-  const data = sheet.getDataRange().getValues();
-  const headers = data[0].map(h => normalizeKey(h));
-  const teamIdx = headers.indexOf(normalizeKey("Team"));
-  const storeIdx = headers.indexOf(normalizeKey("DefaultStore"));
-  
-  if (teamIdx === -1 || storeIdx === -1) return null;
-  
-  for (let i = 1; i < data.length; i++) {
-    if (String(data[i][teamIdx]).trim() === String(team).trim()) {
-      return data[i][storeIdx];
-    }
-  }
-  return null;
+func handleSaveIncentiveManualData(c *gin.Context) {
+	var req IncentiveManualData
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(400, gin.H{"status": "error", "message": "ទិន្នន័យមិនត្រឹមត្រូវ"})
+		return
+	}
+
+	// Validate Month format (YYYY-MM)
+	matched, _ := regexp.MatchString(`^\d{4}-\d{2}$`, req.Month)
+	if !matched {
+		c.JSON(400, gin.H{"status": "error", "message": "ទម្រង់ខែមិនត្រឹមត្រូវ (ត្រូវប្រើ YYYY-MM)"})
+		return
+	}
+
+	var existing IncentiveManualData
+	err := backend.DB.Where("project_id = ? AND month = ? AND metric_type = ? AND data_key = ?", req.ProjectID, req.Month, req.MetricType, req.DataKey).First(&existing).Error
+	if err == nil {
+		backend.DB.Model(&existing).Update("value", req.Value)
+	} else {
+		backend.DB.Create(&req)
+	}
+	c.JSON(200, gin.H{"status": "success"})
 }
 
-function getStoreSettings(storeName) {
-  const ss = SpreadsheetApp.getActiveSpreadsheet();
-  const sheet = ss.getSheetByName(CONFIG.STORES_SHEET);
-  if (!sheet) return {};
-  
-  const data = sheet.getDataRange().getValues();
-  const headers = data[0].map(h => normalizeKey(h));
-  const nameIdx = headers.indexOf(normalizeKey("StoreName"));
-  const tokenIdx = headers.indexOf(normalizeKey("TelegramBotToken"));
-  const groupIdx = headers.indexOf(normalizeKey("TelegramGroupID"));
-  const topicIdx = headers.indexOf(normalizeKey("TelegramTopicID"));
-  const labelIdx = headers.indexOf(normalizeKey("LabelPrinterURL"));
+func handleGetIncentiveCustomPayouts(c *gin.Context) {
+	projectId := c.Query("projectId")
+	month := c.Query("month")
 
-  if (nameIdx === -1) return {};
+	if month != "" {
+		matched, _ := regexp.MatchString(`^\d{4}-\d{2}$`, month)
+		if !matched {
+			c.JSON(400, gin.H{"status": "error", "message": "ទម្រង់ខែមិនត្រឹមត្រូវ (ត្រូវប្រើ YYYY-MM)"})
+			return
+		}
+	}
 
-  const searchName = String(storeName || "").trim().toLowerCase();
-
-  for (let i = 1; i < data.length; i++) {
-    const rowStoreName = String(data[i][nameIdx]).trim().toLowerCase();
-    if (rowStoreName === searchName) {
-      return {
-        token: data[i][tokenIdx],
-        groupID: data[i][groupIdx],
-        topicID: data[i][topicIdx],
-        labelPrinterURL: labelIdx !== -1 ? data[i][labelIdx] : ""
-      };
-    }
-  }
-  return {};
+	var payouts []IncentiveCustomPayout
+	query := backend.DB.Model(&IncentiveCustomPayout{})
+	if projectId != "" {
+		query = query.Where("project_id = ?", projectId)
+	}
+	if month != "" {
+		query = query.Where("month = ?", month)
+	}
+	query.Find(&payouts)
+	c.JSON(200, gin.H{"status": "success", "data": payouts})
 }
 
-/**
- * Parse multi-store TelegramTopicID format: "ACC Store:10617, Flexi Gear:26"
- * Returns the numeric topic ID for the matching store, or the raw value if it's a plain number.
- */
-function parseTopicId(rawValue, storeName) {
-  if (!rawValue) return null;
-  const val = String(rawValue).trim();
-  if (!val) return null;
+func handleSaveIncentiveCustomPayout(c *gin.Context) {
+	var req IncentiveCustomPayout
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(400, gin.H{"status": "error", "message": "ទិន្នន័យមិនត្រឹមត្រូវ"})
+		return
+	}
 
-  // Plain number — return as-is
-  if (/^\d+$/.test(val)) return val;
+	// Validate Month format (YYYY-MM)
+	matched, _ := regexp.MatchString(`^\d{4}-\d{2}$`, req.Month)
+	if !matched {
+		c.JSON(400, gin.H{"status": "error", "message": "ទម្រង់ខែមិនត្រឹមត្រូវ (ត្រូវប្រើ YYYY-MM)"})
+		return
+	}
 
-  // Multi-store format: "StoreName:TopicID, StoreName:TopicID"
-  const parts = val.split(",");
-  for (let i = 0; i < parts.length; i++) {
-    const colonIdx = parts[i].lastIndexOf(":");
-    if (colonIdx === -1) continue;
-    const name = parts[i].substring(0, colonIdx).trim();
-    const id = parts[i].substring(colonIdx + 1).trim();
-    if (name === String(storeName).trim()) {
-      return id;
-    }
-  }
-
-  // No match found — try first entry as fallback
-  const firstColon = parts[0].lastIndexOf(":");
-  if (firstColon !== -1) {
-    const fallbackId = parts[0].substring(firstColon + 1).trim();
-    console.log("⚠️ [parseTopicId] No match for store '" + storeName + "' in '" + val + "', falling back to first entry: " + fallbackId);
-    return fallbackId;
-  }
-
-  return null;
+	var existing IncentiveCustomPayout
+	err := backend.DB.Where("project_id = ? AND month = ? AND user_name = ?", req.ProjectID, req.Month, req.UserName).First(&existing).Error
+	if err == nil {
+		backend.DB.Model(&existing).Update("value", req.Value)
+	} else {
+		backend.DB.Create(&req)
+	}
+	c.JSON(200, gin.H{"status": "success"})
 }
 
-function getTeamTopicId(team, page, telegramValue, fulfillmentStore) {
-  const ss = SpreadsheetApp.getActiveSpreadsheet();
-  const sheet = ss.getSheetByName(CONFIG.PAGES_SHEET);
-  if (!sheet) return null;
+func handleLockIncentivePayout(c *gin.Context) {
+	var req struct {
+		ProjectID uint              `json:"projectId"`
+		Month     string            `json:"month"`
+		Results   []IncentiveResult `json:"results"`
+	}
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(400, gin.H{"status": "error", "message": "ទិន្នន័យមិនត្រឹមត្រូវ"})
+		return
+	}
 
-  const data = sheet.getDataRange().getValues();
-  const headers = data[0].map(h => normalizeKey(h));
-  const teamIdx = headers.indexOf(normalizeKey("Team"));
-  const pageIdx = headers.indexOf(normalizeKey("PageName"));
-  const tvIdx = headers.indexOf(normalizeKey("TelegramValue"));
-  const topicIdx = headers.indexOf(normalizeKey("TelegramTopicID"));
+	// Validate Month format (YYYY-MM)
+	matched, _ := regexp.MatchString(`^\d{4}-\d{2}$`, req.Month)
+	if !matched {
+		c.JSON(400, gin.H{"status": "error", "message": "ទម្រង់ខែមិនត្រឹមត្រូវ (ត្រូវប្រើ YYYY-MM)"})
+		return
+	}
 
-  if (teamIdx === -1 || topicIdx === -1) return null;
+	// 1. Delete existing results for this project/month (assuming results are stored per project, but model lacks month. Let's add month if needed, or rely on Project ID if project is 1 per month. For now, just replace).
+	backend.DB.Where("project_id = ?", req.ProjectID).Delete(&IncentiveResult{})
 
-  let teamFallback = null;
-  for (let i = 1; i < data.length; i++) {
-    const rowTeam = String(data[i][teamIdx]).trim();
-    if (rowTeam !== String(team).trim()) continue;
+	// 2. Save new results
+	if len(req.Results) > 0 {
+		var maxID uint
+		backend.DB.Model(&IncentiveResult{}).Select("COALESCE(MAX(id), 0)").Row().Scan(&maxID)
 
-    // Match by TelegramValue first (most specific)
-    if (telegramValue && tvIdx !== -1 && String(data[i][tvIdx]).trim() === String(telegramValue).trim()) {
-      return parseTopicId(data[i][topicIdx], fulfillmentStore);
-    }
-    // Match by PageName
-    if (page && pageIdx !== -1 && String(data[i][pageIdx]).trim() === String(page).trim()) {
-      return parseTopicId(data[i][topicIdx], fulfillmentStore);
-    }
-    // Keep first team match as fallback
-    if (!teamFallback) teamFallback = data[i][topicIdx];
-  }
-  return parseTopicId(teamFallback, fulfillmentStore);
+		for i := range req.Results {
+			maxID++
+			req.Results[i].ID = maxID
+		}
+		backend.DB.Create(&req.Results)
+
+		// 3. Send to Google Sheet
+		go func() {
+			timestamp := time.Now().Format("2006-01-02 15:04:05")
+			for _, res := range req.Results {
+				sheetData := map[string]interface{}{
+					"Timestamp":       timestamp,
+					"ProjectID":       req.ProjectID,
+					"UserName":        res.UserName,
+					"TotalOrders":     res.TotalOrders,
+					"TotalRevenue":    res.TotalRevenue,
+					"TotalProfit":     res.TotalProfit,
+					"CalculatedValue": res.CalculatedValue,
+					"IsCustom":        res.IsCustom,
+				}
+				// Sync with Google Sheets via managed queue
+				enqueueSync("addRow", sheetData, "IncentiveResults", nil)
+			}
+		}()
+	}
+
+	c.JSON(200, gin.H{"status": "success", "message": "បានរក្សាទុករបាយការណ៍ជោគជ័យ!"})
 }
 
-function getTelegramTemplates(team) {
-  const ss = SpreadsheetApp.getActiveSpreadsheet();
-  const sheet = ss.getSheetByName(CONFIG.TELEGRAM_TEMPLATES_SHEET);
-  if (!sheet) return {};
+func handleCalculateIncentive(c *gin.Context) {
+	var req struct {
+		ProjectID uint   `json:"projectId"`
+		Month     string `json:"month"`
+	}
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(400, gin.H{"status": "error", "message": "ទិន្នន័យមិនត្រឹមត្រូវ"})
+		return
+	}
 
-  const data = sheet.getDataRange().getValues();
-  const headers = data[0].map(h => normalizeKey(h));
-  const teamIdx = headers.indexOf(normalizeKey("Team"));
-  const partIdx = headers.indexOf(normalizeKey("Part"));
-  const templateIdx = headers.indexOf(normalizeKey("Template"));
+	// Validate Month format (YYYY-MM)
+	matched, _ := regexp.MatchString(`^\d{4}-\d{2}$`, req.Month)
+	if !matched {
+		c.JSON(400, gin.H{"status": "error", "message": "ទម្រង់ខែមិនត្រឹមត្រូវ (ត្រូវប្រើ YYYY-MM)"})
+		return
+	}
 
-  const teamTemplates = {};
-  const globalTemplates = {};
-  for (let i = 1; i < data.length; i++) {
-    const rowTeam = String(data[i][teamIdx]).trim();
-    if (rowTeam === String(team).trim()) {
-      teamTemplates[data[i][partIdx]] = data[i][templateIdx];
-    } else if (rowTeam === "Global") {
-      globalTemplates[data[i][partIdx]] = data[i][templateIdx];
-    }
-  }
-  return Object.keys(teamTemplates).length > 0 ? teamTemplates : globalTemplates;
+	results, err := backend.ProcessIncentiveCalculation(backend.DB, req.ProjectID, req.Month)
+	if err != nil {
+		c.JSON(500, gin.H{"status": "error", "message": err.Error()})
+		return
+	}
+
+	c.JSON(200, gin.H{"status": "success", "data": results})
 }
 
-function sendTelegramMessage(settings, data, templates) {
-  const req = data.originalRequest || {};
-  const customer = req.customer || {};
-  const shipping = req.shipping || {};
-  const payment = req.payment || {};
+// =========================================================================
+// ប្រព័ន្ធ BACKGROUND QUEUE & SCHEDULER - Aliased to Backend package
+// =========================================================================
 
-  // --- Parse products list ---
-  let productsList = "";
-  try {
-    let products = [];
-    let rawProducts = data.productsJSON || data["Products (JSON)"] || req.products;
-    
-    if (rawProducts) {
-      if (typeof rawProducts === 'string') {
-        // CLEANING LOGIC: Remove common JSON-breaking characters
-        let cleanedJSON = rawProducts
-          .replace(/[\u201C\u201D]/g, '"') // Replace smart double quotes
-          .replace(/[\u2018\u2019]/g, "'") // Replace smart single quotes
-          .trim();
-        
-        try {
-          products = JSON.parse(cleanedJSON);
-        } catch (innerErr) {
-          console.warn("⚠️ [JSON Parse] Standard parse failed, attempting loose cleaning...");
-          // Try to handle unescaped newlines or other minor issues
-          cleanedJSON = cleanedJSON.replace(/\n/g, "\\n").replace(/\r/g, "\\r");
-          products = JSON.parse(cleanedJSON);
-        }
-      } else {
-        products = rawProducts;
-      }
-    }
+type AppsScriptRequest = backend.AppsScriptRequest
+type AppsScriptResponse = backend.AppsScriptResponse
+type SyncTask = backend.SyncTask
 
-    if (Array.isArray(products) && products.length > 0) {
-      productsList = products.map(function(p, i) {
-        const name = p.productName || p.ProductName || p.name || "N/A";
-        const qty = p.quantity || p.Quantity || 1;
-        const color = p.colorInfo || p.color || "";
-        const price = p.finalPrice !== undefined ? p.finalPrice : (p.price || p.Price || 0);
-        const colorText = color ? " (" + color + ")" : "";
-        return (i + 1) + ". " + name + colorText + " x" + qty + " = $" + (price * qty).toFixed(2);
-      }).join("\n");
-    }
-  } catch (e) {
-    console.warn("❌ [sendTelegramMessage] Critical JSON failure: " + e.message);
-    productsList = "⚠️ មិនអាចបង្ហាញបញ្ជីផលិតផលបាន (JSON Error)";
-  }
+var callAppsScriptPOST = backend.CallAppsScriptPOST
+var enqueueSync = backend.EnqueueSync
+var startSyncManager = backend.StartSyncManager
 
-  // --- Source info ---
-  const page = req.page || data["Page"] || "";
-  const telegramValue = req.telegramValue || data["TelegramValue"] || "";
-  const sourceInfo = telegramValue ? (page + " (" + telegramValue + ")") : page;
-
-  // --- Note ---
-  const noteRaw = req.note || data["Note"] || "";
-  const noteText = noteRaw ? ("📝 *ចំណាំ:* " + noteRaw) : "";
-  const isCancelled = data["Fulfillment Status"] === "Cancelled";
-
-  // --- Shipping details ---
-  const shippingDetailsRaw = shipping.details || data["Internal Shipping Details"] || "";
-  const shippingDetailsText = shippingDetailsRaw ? ("\n📋 *ព័ត៌មានដឹក:* " + shippingDetailsRaw) : "";
-
-  // --- Payment ---
-  const paymentStatusRaw = payment.status || data["Payment Status"] || "";
-  const paymentInfoRaw = payment.info || data["Payment Info"] || "";
-  let paymentText = "";
-  if (paymentStatusRaw) {
-    paymentText = "💵 *ស្ថានភាពបង់ប្រាក់:* " + paymentStatusRaw;
-    if (paymentInfoRaw) paymentText += " (" + paymentInfoRaw + ")";
-  }
-
-  // --- Date ---
-  const timestamp = data.timestamp || data.scheduledTime || data["Timestamp"] || "";
-  let dateText = "";
-  if (timestamp) {
-    try {
-      const d = new Date(timestamp);
-      dateText = "📅 " + Utilities.formatDate(d, Session.getScriptTimeZone(), "dd/MM/yyyy HH:mm");
-    } catch (e) {
-      dateText = "📅 " + String(timestamp);
-    }
-  }
-
-  // --- Build replacement map ---
-  const vars = {
-    "sourceInfo": sourceInfo,
-    "user": (req.currentUser ? req.currentUser.UserName : "") || data["User"] || "",
-    "fulfillmentStore": data.fulfillmentStore || data["Fulfillment Store"] || "",
-    "shippingMethod": shipping.method || data["Internal Shipping Method"] || "",
-    "shippingDetails": shippingDetailsText,
-    "note": noteText,
-    "orderId": data.orderId || "",
-    "customerName": customer.name || data["Customer Name"] || "",
-    "customerPhone": formatPhoneNumber(customer.phone || data["Customer Phone"] || ""),
-    "location": data.fullLocation || data["Location"] || "",
-    "addressDetails": customer.additionalLocation || data["Address Details"] || "",
-    "productsList": productsList,
-    "subtotal": String(req.subtotal || data["Subtotal"] || "0"),
-    "shippingFee": String(customer.shippingFee || data["Shipping Fee (Customer)"] || "0"),
-    "grandTotal": String(req.grandTotal || data["Grand Total"] || "0"),
-    "paymentStatus": paymentText,
-    "date": dateText,
-    "packedBy": data["Packed By"] || "",
-    "packedTime": formatDateTime(data["Packed Time"]),
-    "driverName": data["Driver Name"] || data["Internal Shipping Details"] || data["Internal Shipping Method"] || "",
-    "trackingNumber": data["Tracking Number"] || data.orderId || "",
-    "dispatchedBy": data["Dispatched By"] || "",
-    "dispatchedTime": formatDateTime(data["Dispatched Time"]),
-    "deliveredTime": formatDateTime(data["Delivered Time"]),
-    "packagePhotoUrl": toDirectLink(data["Package Photo"] || ""),
-    "deliveryPhotoUrl": toDirectLink(data["Delivery Photo URL"] || data["Delivery Photo"] || ""),
-    "dispatchInfo": (data["Dispatched By"] || data["Dispatched Time"]) ? ("\n\n--- ដឹកចេញ ---\n🚀 *យកចេញដោយ:* *" + (data["Dispatched By"] || "") + "*\n🕔 *ម៉ោងដឹកចេញ:* *" + formatDateTime(data["Dispatched Time"]) + "*") : "",
-    "deliveryInfo": (data["Delivered Time"] || data["Delivery Photo URL"] || data["Delivery Photo"]) ? ("\n\n--- ដឹកជោគជ័យ ---\n✅ *ម៉ោងទៅដល់:* *" + formatDateTime(data["Delivered Time"]) + "*" + (toDirectLink(data["Delivery Photo URL"] || data["Delivery Photo"] || "") ? ("\n[📸 រូបភាពដឹកជោគជ័យ](" + toDirectLink(data["Delivery Photo URL"] || data["Delivery Photo"] || "") + ")") : "")) : ""
-  };
-
-  function formatDateTime(rawDate) {
-    if (!rawDate) return "";
-    try {
-      const d = new Date(rawDate);
-      if (isNaN(d.getTime())) return String(rawDate); // Return as-is if invalid date string
-      return Utilities.formatDate(d, Session.getScriptTimeZone(), "dd/MM/yyyy HH:mm");
-    } catch (e) {
-      return String(rawDate);
-    }
-  }
-
-  function toDirectLink(url) {
-    if (!url || typeof url !== 'string') return url;
-    if (url.indexOf("drive.google.com") !== -1) {
-      const match = url.match(/[-\w]{25,}/);
-      if (match) return "https://drive.google.com/uc?export=view&id=" + match[0];
-    }
-    return url;
-  }
-
-  function applyTemplate(tpl) {
-    if (!tpl) return "";
-
-    // IF CANCELLED: Convert the entire message to Monospace + Emoji
-    if (isCancelled) {
-      let cancelReason = data["Cancel Reason"] || "";
-      let header = "🚫 *ការកម្មង់ត្រូវបានបោះបង់ (CANCELLED)* 🚫\n";
-      let footer = "\n----------------------------------\n" + (cancelReason ? ("❕ *មូលហេតុ:* `" + cancelReason + "`") : "");
-      
-      // Resolve template variables first
-      let processed = tpl.replace(/\{\{(\w+)\}\}/g, function(m, key) {
-        let val = vars[key] !== undefined ? vars[key] : m;
-        return val;
-      });
-
-      // Strip existing Markdown to keep monospace clean
-      processed = processed.replace(/[*_`\[]/g, ""); 
-      
-      let lines = processed.split("\n");
-      let monospaceLines = lines.map(function(line) {
-        let trimmed = line.trim();
-        return trimmed ? ("`" + trimmed + "`") : "";
-      });
-      
-      return header + monospaceLines.join("\n") + footer;
-    }
-
-    // DYNAMIC LABEL: Switch from "អ្នកដឹក:" to "ដាក់តាម:" if no driver/details exist
-    const hasDriverInfo = !!(data["Driver Name"] || data["Internal Shipping Details"]);
-    if (!hasDriverInfo && data["Internal Shipping Method"]) {
-      // Use regex to handle potential bold stars like *អ្នកដឹក:* or plain អ្នកដឹក:
-      tpl = tpl.replace(/អ្នកដឹក\s*:/g, "ដាក់តាម:");
-    }
-
-    return tpl.replace(/\{\{(\w+)\}\}/g, function(m, key) {
-      let val = vars[key] !== undefined ? vars[key] : m;
-      
-      // ESCAPE LOGIC: Protect Telegram Markdown V1 special characters
-      // Do NOT escape URLs as it breaks the link (e.g. underscores in Drive IDs)
-      if (typeof val === 'string' && 
-          key !== 'paymentStatus' && 
-          key !== 'note' && 
-          key !== 'shippingDetails' &&
-          !key.toLowerCase().includes('url')) {
-        // Characters to escape: * _ ` [
-        return val.replace(/([*_`\[])/g, '\\$1');
-      }
-      return val;
-    });
-  }
-
-  // --- Build inline keyboard (Print Label & Contact Customer) ---
-  var inlineKeyboard = null;
-  var buttonsRow = [];
-  
-  if (settings.labelPrinterURL) {
-    const labelParams = {
-      id: vars.orderId,
-      name: vars.customerName,
-      phone: vars.customerPhone,
-      location: vars.location,
-      address: vars.addressDetails,
-      store: vars.fulfillmentStore,
-      page: page,
-      user: vars.user,
-      total: vars.grandTotal,
-      shipping: shipping.method || data["Internal Shipping Method"] || "",
-      payment: (payment.status || data["Payment Status"] || ""),
-      note: (req.note || data["Note"] || "")
-    };
-    const qs = Object.keys(labelParams).map(function(k) {
-      return k + "=" + encodeURIComponent(labelParams[k] || "");
-    }).join("&");
-    const labelUrl = settings.labelPrinterURL
-      + (settings.labelPrinterURL.indexOf("?") === -1 ? "?" : "&")
-      + qs;
-    buttonsRow.push({ text: "🖨️ ព្រីន Label", url: labelUrl });
-  }
-
-  if (vars.customerPhone) {
-    var cleanPhone = String(vars.customerPhone).replace(/\D/g, '').replace(/^0+/, '');
-    if (cleanPhone) {
-      buttonsRow.push({ text: "💬 ទាក់ទងអតិថិជន", url: "https://t.me/+855" + cleanPhone });
-    }
-  }
-
-  if (buttonsRow.length > 0) {
-    inlineKeyboard = {
-      inline_keyboard: [buttonsRow]
-    };
-  }
-
-  // --- Get Part templates ---
-  const part1Tpl = templates["Part1"] || templates["part1"];
-  const part2Tpl = templates["Part2"] || templates["part2"];
-  const part3Tpl = templates["Part3"] || templates["part3"];
-
-  const msgId1Existing = data["Telegram Message ID 1"] || (req && req["Telegram Message ID 1"]);
-  const msgId2Existing = data["Telegram Message ID 2"] || (req && req["Telegram Message ID 2"]);
-  const msgId3Existing = data["Telegram Message ID 3"] || (req && req["Telegram Message ID 3"]);
-
-  let msgId1 = msgId1Existing || null;
-  let msgId2 = msgId2Existing || null;
-  let msgId3 = msgId3Existing || null;
-
-  if (part1Tpl) {
-    if (msgId1Existing) {
-      editSingleTelegramMsg(settings, msgId1Existing, applyTemplate(part1Tpl));
-    } else {
-      msgId1 = sendSingleTelegramMsg(settings, applyTemplate(part1Tpl));
-    }
-  }
-  if (part2Tpl) {
-    if (msgId2Existing) {
-      editSingleTelegramMsg(settings, msgId2Existing, applyTemplate(part2Tpl), inlineKeyboard);
-    } else {
-      msgId2 = sendSingleTelegramMsg(settings, applyTemplate(part2Tpl), inlineKeyboard);
-    }
-  }
-  if (part3Tpl) {
-    const isPacked = data["Fulfillment Status"] === "Ready to Ship" || 
-                     data["Fulfillment Status"] === "Shipped" || 
-                     data["Fulfillment Status"] === "Delivered" || 
-                     data["Package Photo"];
-    
-    const part3Text = isPacked ? applyTemplate(part3Tpl) : "📦 *ព័ត៌មានការវេចខ្ចប់*\n----------------------------------\n⏳ *ស្ថានភាព:* *រង់ចាំការវេចខ្ចប់...*";
-
-    if (msgId3Existing) {
-      editSingleTelegramMsg(settings, msgId3Existing, part3Text, inlineKeyboard);
-    } else {
-      msgId3 = sendSingleTelegramMsg(settings, part3Text, inlineKeyboard);
-    }
-  }
-
-  // Fallback if no templates configured
-  if (!part1Tpl && !part2Tpl && !part3Tpl) {
-    console.warn("⚠️ [sendTelegramMessage] No Part1/Part2/Part3 templates found, using fallback");
-    if (msgId1Existing) {
-      editSingleTelegramMsg(settings, msgId1Existing, "🛒 *ការកម្មង់ថ្មី*\nID: `" + vars.orderId + "`\n" + vars.customerName + " - " + vars.customerPhone, inlineKeyboard);
-    } else {
-      msgId1 = sendSingleTelegramMsg(settings, "🛒 *ការកម្មង់ថ្មី*\nID: `" + vars.orderId + "`\n" + vars.customerName + " - " + vars.customerPhone, inlineKeyboard);
-    }
-  }
-
-  console.log("📨 [sendTelegramMessage] Results: id1=" + msgId1 + " id2=" + msgId2 + " id3=" + msgId3);
-  return { id1: msgId1, id2: msgId2, id3: msgId3 };
+type OrderJob struct {
+	JobID     string
+	OrderID   string
+	UserName  string
+	OrderData map[string]interface{}
 }
 
-function sendSingleTelegramMsg(settings, text, replyMarkup) {
-  const payload = {
-    chat_id: settings.groupID,
-    text: text,
-    parse_mode: "Markdown"
-  };
-  if (settings.topicID) payload.message_thread_id = settings.topicID;
-  if (replyMarkup) payload.reply_markup = replyMarkup;
+var orderChannel = make(chan OrderJob, 2000)
 
-  const url = "https://api.telegram.org/bot" + settings.token + "/sendMessage";
-  const options = {
-    method: "post",
-    contentType: "application/json",
-    payload: JSON.stringify(payload),
-    muteHttpExceptions: true
-  };
+func startOrderWorker() {
+	for job := range orderChannel {
+		func() {
+			defer func() {
+				if r := recover(); r != nil {
+					log.Printf("⚠️ Recovered from panic in OrderWorker for Order %s: %v", job.OrderID, r)
+				}
+			}()
 
-  try {
-    const response = UrlFetchApp.fetch(url, options);
-    const resData = JSON.parse(response.getContentText());
-    if (resData.ok) {
-      console.log("✅ [Telegram] Sent message_id=" + resData.result.message_id);
-      return resData.result.message_id;
-    }
-    console.error("❌ [Telegram] API error: " + JSON.stringify(resData));
-  } catch (e) {
-    console.error("❌ [Telegram] Fetch error: " + e.message);
-  }
-  return null;
+			log.Printf("☁️ Background Worker: Processing Order %s", job.OrderID)
+			reqBody := AppsScriptRequest{Action: "submitOrder", Secret: backend.AppsScriptSecret, OrderData: job.OrderData}
+			jsonData, _ := json.Marshal(reqBody)
+
+			client := &http.Client{Timeout: 45 * time.Second}
+			resp, err := client.Post(backend.AppsScriptURL, "application/json", bytes.NewBuffer(jsonData))
+
+			if err != nil {
+				log.Printf("❌ Worker error for %s: %v", job.OrderID, err)
+				broadcastToAll(map[string]interface{}{"type": "system_notification", "status": "error", "targetUser": job.UserName, "message": "បញ្ជូនទៅ Telegram បរាជ័យ: " + err.Error(), "jobId": job.JobID})
+			} else {
+				defer resp.Body.Close()
+				var scriptResp AppsScriptResponse
+				telegramSent := false
+				if err := json.NewDecoder(resp.Body).Decode(&scriptResp); err == nil {
+					if (scriptResp.MessageIds.ID1 != "" || scriptResp.MessageIds.ID2 != "" || scriptResp.MessageIds.ID3 != "") && backend.DB != nil {
+						backend.DB.Model(&Order{}).Where("order_id = ?", job.OrderID).Updates(map[string]interface{}{
+							"telegram_message_id1": scriptResp.MessageIds.ID1,
+							"telegram_message_id2": scriptResp.MessageIds.ID2,
+							"telegram_message_id3": scriptResp.MessageIds.ID3,
+						})
+						telegramSent = true
+					}
+				}
+				notifStatus := "success"
+				notifMsg := "បាញ់ទៅ Telegram ជោគជ័យ!"
+				if !telegramSent {
+					notifStatus = "warning"
+					notifMsg = "កម្មង់បានរក្សាទុក ប៉ុន្តែ Telegram មិនបានផ្ញើ (ពិនិត្យ Stores sheet)"
+					log.Printf("⚠️ Worker: Order %s saved but Telegram message was not sent (messageIds empty)", job.OrderID)
+				}
+				broadcastToAll(map[string]interface{}{"type": "system_notification", "status": notifStatus, "targetUser": job.UserName, "message": notifMsg, "jobId": job.JobID})
+			}
+		}()
+	}
 }
 
-function editSingleTelegramMsg(settings, messageId, text, replyMarkup) {
-  const payload = {
-    chat_id: settings.groupID,
-    message_id: messageId,
-    text: text,
-    parse_mode: "Markdown"
-  };
-  if (replyMarkup) payload.reply_markup = replyMarkup;
+func startScheduler() {
+	ticker := time.NewTicker(2 * time.Minute)
+	reconcileTicker := time.NewTicker(15 * time.Minute)
 
-  const url = "https://api.telegram.org/bot" + settings.token + "/editMessageText";
-  const options = {
-    method: "post",
-    contentType: "application/json",
-    payload: JSON.stringify(payload),
-    muteHttpExceptions: true
-  };
-
-  try {
-    const response = UrlFetchApp.fetch(url, options);
-    const resData = JSON.parse(response.getContentText());
-    if (resData.ok) {
-      console.log("✅ [Telegram Edit] Edited message_id=" + messageId);
-      return messageId;
-    }
-    console.error("❌ [Telegram Edit] API error: " + JSON.stringify(resData));
-  } catch (e) {
-    console.error("❌ [Telegram Edit] Fetch error: " + e.message);
-  }
-  return messageId; // Return same ID even if it fails, to retain state
+	go func() {
+		for {
+			select {
+			case <-ticker.C:
+				// Sync with Google Sheets via managed queue
+				enqueueSync("checkScheduledOrders", nil, "", nil)
+			case <-reconcileTicker.C:
+				// 🛡️ Self-Healing: Check for missing photo links in Sheets
+				backend.ReconcileMissingPhotoLinks(backend.DB)
+			}
+		}
+	}()
 }
 
-function deleteSingleTelegramMsg(settings, messageId) {
-  if (!messageId) return;
-  const payload = {
-    chat_id: settings.groupID,
-    message_id: messageId
-  };
+// =========================================================================
+// WEB SOCKET - Aliased to Backend package
+// =========================================================================
 
-  const url = "https://api.telegram.org/bot" + settings.token + "/deleteMessage";
-  const options = {
-    method: "post",
-    contentType: "application/json",
-    payload: JSON.stringify(payload),
-    muteHttpExceptions: true
-  };
+type Client = backend.Client
+type Hub = backend.Hub
 
-  try {
-    const response = UrlFetchApp.fetch(url, options);
-    const resData = JSON.parse(response.getContentText());
-    if (resData.ok) {
-      console.log("✅ [Telegram Delete] Deleted message_id=" + messageId);
-    } else {
-      console.error("❌ [Telegram Delete] API error: " + JSON.stringify(resData));
-    }
-  } catch (e) {
-    console.error("❌ [Telegram Delete] Fetch error: " + e.message);
-  }
+var NewHub = backend.NewHub
+var serveWs = backend.ServeWs
+var upgrader = backend.Upgrader
+var hub *Hub
+
+// =========================================================================
+
+// =========================================================================
+// MIGRATION SCRIPT
+// =========================================================================
+
+func handleGetStaticData(c *gin.Context) {
+	var wg sync.WaitGroup
+	var mu sync.Mutex
+	result := make(map[string]interface{})
+
+	queries := []func(){
+		func() { var d []Product; backend.DB.Find(&d); mu.Lock(); result["products"] = d; mu.Unlock() },
+		func() { var d []Store; backend.DB.Find(&d); mu.Lock(); result["stores"] = d; mu.Unlock() },
+		func() { var d []TeamPage; backend.DB.Find(&d); mu.Lock(); result["pages"] = d; mu.Unlock() },
+		func() { var d []Location; backend.DB.Find(&d); mu.Lock(); result["locations"] = d; mu.Unlock() },
+		func() {
+			var d []ShippingMethod
+			backend.DB.Find(&d)
+			mu.Lock()
+			result["shippingMethods"] = d
+			mu.Unlock()
+		},
+		func() { var d []Color; backend.DB.Find(&d); mu.Lock(); result["colors"] = d; mu.Unlock() },
+		func() { var d []Driver; backend.DB.Find(&d); mu.Lock(); result["drivers"] = d; mu.Unlock() },
+		func() { var d []BankAccount; backend.DB.Find(&d); mu.Lock(); result["bankAccounts"] = d; mu.Unlock() },
+		func() { var d []PhoneCarrier; backend.DB.Find(&d); mu.Lock(); result["phoneCarriers"] = d; mu.Unlock() },
+		func() { var d []DeliveryGroup; backend.DB.Find(&d); mu.Lock(); result["deliveryGroups"] = d; mu.Unlock() },
+		func() { var d []Inventory; backend.DB.Find(&d); mu.Lock(); result["inventory"] = d; mu.Unlock() },
+		func() {
+			var d []StockTransfer
+			backend.DB.Find(&d)
+			mu.Lock()
+			result["stockTransfers"] = d
+			mu.Unlock()
+		},
+		func() { var d []ReturnItem; backend.DB.Find(&d); mu.Lock(); result["returns"] = d; mu.Unlock() },
+		func() { var d []Role; backend.DB.Find(&d); mu.Lock(); result["roles"] = d; mu.Unlock() },
+		func() {
+			var d []RolePermission
+			backend.DB.Find(&d)
+			mu.Lock()
+			result["rolePermissions"] = d
+			mu.Unlock()
+		},
+		func() {
+			var d []User
+			// Use backend.DB directly and explicit table name to avoid cross-package naming issues
+			if err := backend.DB.Table("users").Find(&d).Error; err != nil {
+				log.Printf("⚠️ Failed to fetch users in StaticData: %v", err)
+				d = []User{}
+			}
+			log.Printf("📊 StaticData: Fetched %d users from backend.DB", len(d))
+			for i := range d {
+				d[i].Password = ""
+			}
+			mu.Lock()
+			result["users"] = d
+			mu.Unlock()
+		},
+		func() {
+			var d []DriverRecommendation
+			backend.DB.Find(&d)
+			mu.Lock()
+			result["driverRecommendations"] = d
+			mu.Unlock()
+		},
+		func() { var d []Movie; backend.DB.Find(&d); mu.Lock(); result["movies"] = d; mu.Unlock() },
+		func() {
+			var d []TelegramTemplate
+			backend.DB.Find(&d)
+			mu.Lock()
+			result["telegramTemplates"] = d
+			mu.Unlock()
+		},
+		func() {
+			var d []RevenueEntry
+			backend.DB.Find(&d)
+			mu.Lock()
+			result["revenueEntries"] = d
+			mu.Unlock()
+		},
+		func() {
+			var d []EditLog
+			backend.DB.Limit(500).Order("timestamp desc").Find(&d)
+			mu.Lock()
+			result["editLogs"] = d
+			mu.Unlock()
+		},
+		func() {
+			var d []UserActivityLog
+			backend.DB.Limit(500).Order("timestamp desc").Find(&d)
+			mu.Lock()
+			result["actLogs"] = d
+			mu.Unlock()
+		},
+		func() {
+			var settings []Setting
+			backend.DB.Find(&settings)
+			settingsObj := make(map[string]interface{})
+			for _, s := range settings {
+				settingsObj[s.ConfigKey] = s.ConfigValue
+				if s.ConfigKey == "UploadFolderID" {
+					envVal := os.Getenv("UPLOAD_FOLDER_ID")
+					if envVal != "" {
+						backend.UploadFolderID = envVal
+					} else {
+						backend.UploadFolderID = s.ConfigValue
+					}
+				}
+			}
+			mu.Lock()
+			result["settings"] = settingsObj
+			mu.Unlock()
+		},
+	}
+
+	for _, q := range queries {
+		wg.Add(1)
+		go func(f func()) {
+			defer wg.Done()
+			f()
+		}(q)
+	}
+	wg.Wait()
+
+	c.Header("Cache-Control", "public, max-age=60")
+	c.JSON(http.StatusOK, gin.H{"status": "success", "data": result})
 }
 
-function updateMessageIdInSheet(sheetName, orderId, messageIds) {
-  handleUpdateSheet({
-    sheetName: sheetName,
-    primaryKey: { "Order ID": orderId },
-    newData: {
-      "Telegram Message ID 1": messageIds.id1,
-      "Telegram Message ID 2": messageIds.id2,
-      "Telegram Message ID 3": messageIds.id3
-    }
-  });
+func handleGetSettings(c *gin.Context) {
+	var settings []Setting
+	if err := backend.DB.Find(&settings).Error; err != nil {
+		c.Error(err)
+		return
+	}
+	c.Header("Cache-Control", "public, max-age=300")
+	c.JSON(http.StatusOK, gin.H{"status": "success", "data": settings})
 }
 
-function fetchOrderDataFromSheet(orderId, team) {
-  const ss = SpreadsheetApp.getActiveSpreadsheet();
-  const sheet = ss.getSheetByName(CONFIG.ALL_ORDERS_SHEET);
-  if (!sheet) return null;
+// ── Promotion Handlers ──────────────────────────────────────────────────────
 
-  const lastCol = sheet.getLastColumn();
-  const lastRow = sheet.getLastRow();
-  if (lastRow < 2) return null;
-
-  const headers = sheet.getRange(1, 1, 1, lastCol).getValues()[0];
-  const normalizedHeaders = headers.map(h => normalizeKey(h));
-  const idIdx = normalizedHeaders.indexOf(normalizeKey("Order ID"));
-  if (idIdx === -1) return null;
-
-  // Fast lookup via TextFinder — avoids loading the entire sheet into memory
-  const idColRange = sheet.getRange(2, idIdx + 1, lastRow - 1, 1);
-  const match = idColRange.createTextFinder(String(orderId).trim()).matchEntireCell(true).findNext();
-  if (!match) return null;
-
-  const rowValues = sheet.getRange(match.getRow(), 1, 1, lastCol).getValues()[0];
-  const orderData = {};
-  headers.forEach((h, idx) => { orderData[h] = rowValues[idx]; });
-  return orderData;
+func handleGetPromotions(c *gin.Context) {
+	var promotions []Promotion
+	if err := backend.DB.Order("updated_at DESC").Find(&promotions).Error; err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"status": "error", "message": err.Error()})
+		return
+	}
+	c.Header("Cache-Control", "public, max-age=120")
+	c.JSON(http.StatusOK, gin.H{"status": "success", "data": promotions})
 }
 
-function logUserActivity(user, action, details) {
-  const ss = SpreadsheetApp.getActiveSpreadsheet();
-  const sheet = ss.getSheetByName(CONFIG.USER_ACTIVITY_LOGS_SHEET);
-  if (!sheet) return;
-  
-  const data = {
-    "Timestamp": new Date(),
-    "User": user,
-    "Action": action,
-    "Details": details
-  };
-  appendRowMapped(sheet, data);
+func handleCreatePromotion(c *gin.Context) {
+	var p Promotion
+	if err := c.ShouldBindJSON(&p); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"status": "error", "message": "ទិន្នន័យមិនត្រឹមត្រូវ"})
+		return
+	}
+
+	p.UpdatedAt = time.Now().Format("2006-01-02 15:04:05")
+	if u, exists := c.Get("userName"); exists {
+		p.UpdatedBy = u.(string)
+	}
+
+	if err := backend.DB.Create(&p).Error; err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"status": "error", "message": err.Error()})
+		return
+	}
+
+	// Notify via WebSocket
+	broadcastToAll(gin.H{"type": "promotion_updated", "action": "create", "data": p})
+
+	c.JSON(http.StatusOK, gin.H{"status": "success", "message": "បង្កើតប្រូម៉ូសិនជោគជ័យ", "data": p})
 }
 
-function deleteOrderTelegramMessages(data) {
-  let orderId = data.orderId;
-  let team = data.team;
-  let messageId1 = data.messageId1;
-  let messageId2 = data.messageId2;
-  let messageId3 = data.messageId3; 
-  let fulfillmentStore = data.fulfillmentStore;
+func handleUpdatePromotion(c *gin.Context) {
+	id := c.Param("id")
+	var p Promotion
+	if err := backend.DB.First(&p, id).Error; err != nil {
+		c.JSON(http.StatusNotFound, gin.H{"status": "error", "message": "រកមិនឃើញប្រូម៉ូសិន"})
+		return
+	}
 
-  console.log("🗑️ [deleteOrderTelegramMessages] Deleting orderId=" + orderId + " team=" + team);
+	if err := c.ShouldBindJSON(&p); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"status": "error", "message": "ទិន្នន័យមិនត្រឹមត្រូវ"})
+		return
+	}
 
-  // Fallback: If metadata is missing, try to fetch it from the sheet before deleting row
-  if (orderId && (!fulfillmentStore || (!messageId1 && !messageId2 && !messageId3))) {
-    console.log("🔍 [deleteOrderTelegramMessages] Missing IDs or Store, attempting to recover from AllOrders...");
-    const existingData = fetchOrderDataFromSheet(orderId, ""); 
-    if (existingData) {
-      if (!team) team = existingData["Team"];
-      if (!fulfillmentStore) fulfillmentStore = existingData["Fulfillment Store"];
-      if (!messageId1) messageId1 = existingData["Telegram Message ID 1"];
-      if (!messageId2) messageId2 = existingData["Telegram Message ID 2"];
-      if (!messageId3) messageId3 = existingData["Telegram Message ID 3"];
-      console.log("✅ [deleteOrderTelegramMessages] Recovered metadata: store=" + fulfillmentStore + " team=" + team);
-    }
-  }
+	p.UpdatedAt = time.Now().Format("2006-01-02 15:04:05")
+	if u, exists := c.Get("userName"); exists {
+		p.UpdatedBy = u.(string)
+	}
 
-  // 1. Delete from Telegram (IMPORTANT: Do this BEFORE deleting from sheets to ensure we have settings)
-  if (fulfillmentStore && (messageId1 || messageId2 || messageId3)) {
-    const settings = getStoreSettings(fulfillmentStore);
-    if (settings.token && settings.groupID) {
-      if (messageId1) deleteSingleTelegramMsg(settings, messageId1);
-      if (messageId2) deleteSingleTelegramMsg(settings, messageId2);
-      if (messageId3) deleteSingleTelegramMsg(settings, messageId3);
-    } else {
-      console.error("❌ [deleteOrderTelegramMessages] Settings missing for store: " + fulfillmentStore);
-    }
-  } else {
-    console.warn("⚠️ [deleteOrderTelegramMessages] Skipping Telegram deletion: store=" + fulfillmentStore + " IDs=" + (messageId1 || messageId2 || messageId3));
-  }
+	if err := backend.DB.Save(&p).Error; err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"status": "error", "message": err.Error()})
+		return
+	}
 
-  // 2. Delete from Sheets
-  if (orderId) {
-    handleDeleteRow({
-      sheetName: CONFIG.ALL_ORDERS_SHEET,
-      primaryKey: { "Order ID": orderId }
-    });
-    if (team) {
-      handleDeleteRow({
-        sheetName: `${CONFIG.ORDER_SHEET_PREFIX}${team}`,
-        primaryKey: { "Order ID": orderId }
-      });
-    }
-    console.log("✅ [deleteOrderTelegramMessages] Deleted from Sheets for " + orderId);
-  }
+	// Notify via WebSocket
+	broadcastToAll(gin.H{"type": "promotion_updated", "action": "update", "data": p})
+
+	c.JSON(http.StatusOK, gin.H{"status": "success", "message": "កែប្រែប្រូម៉ូសិនជោគជ័យ", "data": p})
 }
 
-// lock is optional — passed from doPost so we can release it before slow Telegram API calls.
-// When called without a lock (e.g. from scheduled triggers), it behaves as before.
-function updateOrderTelegram(data, lock) {
-  try {
-    const orderId = data.orderId || data.OrderID;
-    let team = data.team || data.Team;
-    const updatedFields = data.updatedFields || data.newData || {};
+func handleDeletePromotion(c *gin.Context) {
+	id := c.Param("id")
+	if err := backend.DB.Delete(&Promotion{}, id).Error; err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"status": "error", "message": err.Error()})
+		return
+	}
 
-    if (!orderId) {
-      console.error("❌ updateOrderTelegram: Missing orderId");
-      return { id1: null, id2: null, id3: null };
-    }
+	// Notify via WebSocket
+	broadcastToAll(gin.H{"type": "promotion_updated", "action": "delete", "id": id})
 
-    // Phase 1: Sheet update (must happen under the script lock to prevent row corruption)
-    if (Object.keys(updatedFields).length > 0) {
-      // If team is missing from request, try to find it from the main sheet first
-      if (!team) {
-        const tempOrder = fetchOrderDataFromSheet(orderId, "");
-        if (tempOrder) team = tempOrder["Team"];
-      }
-
-      // 🛡️ Auto-generate Tracking Number if missing during packing
-      if (updatedFields["Fulfillment Status"] === "Ready to Ship" && !updatedFields["Tracking Number"]) {
-        const existing = fetchOrderDataFromSheet(orderId, team);
-        if (existing && !existing["Tracking Number"]) {
-          updatedFields["Tracking Number"] = orderId;
-        }
-      }
-      
-      updateOrderInSheets(orderId, team, updatedFields);
-      console.log("✅ updateOrderTelegram: Sheets updated for ID: " + orderId + " (Team: " + team + ")");
-    }
-
-    // Fetch full order data while still under lock (fast — uses TextFinder)
-    const fullOrderData = fetchOrderDataFromSheet(orderId, team);
-
-    // Phase 2: Release lock BEFORE slow Telegram API calls.
-    if (lock) {
-      try { lock.releaseLock(); } catch (_) {}
-    }
-
-    if (!fullOrderData) {
-      console.error("❌ updateOrderTelegram: Order not found for ID: " + orderId);
-      return { id1: null, id2: null, id3: null };
-    }
-
-    // ✅ SMART MERGE
-    const normalizedData = {};
-    for (let key in fullOrderData) {
-      normalizedData[key] = fullOrderData[key];
-    }
-
-    const sheetHeaders = Object.keys(fullOrderData);
-    for (let bKey in updatedFields) {
-      const normBKey = normalizeKey(bKey);
-      let found = false;
-      for (let sKey of sheetHeaders) {
-        if (normalizeKey(sKey) === normBKey) {
-          normalizedData[sKey] = updatedFields[bKey];
-          found = true;
-          break;
-        }
-      }
-      if (!found) {
-        normalizedData[bKey] = updatedFields[bKey];
-      }
-    }
-
-    normalizedData.orderId = orderId;
-    normalizedData.team = team || normalizedData["Team"];
-    normalizedData.fulfillmentStore = normalizedData["Fulfillment Store"] || updatedFields["Fulfillment Store"];
-    normalizedData.forceSync = updatedFields["Force Sync"] === true || data.forceSync === true;
-    normalizedData.isUpdate = true;
-
-    return sendOrderToTelegram(normalizedData);
-  } catch (e) {
-    console.error("❌ updateOrderTelegram Error: " + e.message);
-    return { id1: null, id2: null, id3: null };
-  }
+	c.JSON(http.StatusOK, gin.H{"status": "success", "message": "លុបប្រូម៉ូសិនជោគជ័យ"})
 }
 
-/**
- * មុខងារសម្រាប់តេស្តសិទ្ធិ (Permissions Test)
- * ដើម្បីដឹងថា Script មានសិទ្ធិ Upload ទៅ Drive និងយក Link បានឬនៅ។
- * របៀបប្រើ៖ ជ្រើសរើស function នេះក្នុង Apps Script Editor រួចចុច 'Run'។
- */
-function testDriveAccess() {
-  console.log("🚀 កំពុងសាកល្បងសិទ្ធិ Google Drive...");
-  try {
-    // ១. សាកល្បងបង្កើត File ជារូបភាពតូចមួយ
-    const blob = Utilities.newBlob("Test Data: Permissions Verification", "text/plain", "Test_Permissions_" + Date.now() + ".txt");
-    const file = DriveApp.createFile(blob);
-    
-    console.log("📁 បង្កើត File ជោគជ័យ: " + file.getName());
+// =========================================================================
+// HANDLERS
+// =========================================================================
 
-    // ២. សាកល្បងកំណត់ Permission ឱ្យមើលបាន (Public Link)
-    file.setSharing(DriveApp.Access.ANYONE_WITH_LINK, DriveApp.Permission.VIEW);
-    
-    // ៣. បង្ហាញលទ្ធផលក្នុង Log
-    console.log("✅ ជោគជ័យ! Script មានសិទ្ធិពេញលេញ។");
-    console.log("🔗 Link ឯកសារតេស្ត: " + file.getUrl());
-    console.log("🆔 File ID: " + file.getId());
-    
-    // ៤. លុប File តេស្តចោលវិញ ដើម្បីកុំឱ្យធ្ងន់ Drive
-    file.setTrashed(true);
-    console.log("🗑️ បានលុប File តេស្តចេញពី Drive វិញរួចរាល់។");
-    
-  } catch (e) {
-    console.error("❌ បរាជ័យ! Script មិនមានសិទ្ធិទេ: " + e.message);
-    if (e.message.includes("permission")) {
-      console.warn("💡 យោបល់៖ សូមពិនិត្យមើលថា តើលោកអ្នកបានចុច 'Authorize' ឱ្យ Script នេះហើយឬនៅ?");
-    }
-  }
+func handleGetUsers(c *gin.Context) {
+	var users []User
+	// Use backend.DB directly and explicit table name to avoid cross-package naming issues
+	if err := backend.DB.Table("users").Find(&users).Error; err != nil {
+		log.Printf("⚠️ Failed to fetch users: %v", err)
+		users = []User{} // Ensure non-nil slice so JSON returns [] not null
+	}
+	for i := range users {
+		users[i].Password = ""
+	}
+	c.JSON(200, gin.H{"status": "success", "data": users})
 }
 
+func handleGetAllOrders(c *gin.Context) {
+	var orders []Order
+	query := backend.DB.Order("timestamp desc")
+	countQuery := backend.DB.Model(&Order{})
 
-function handleDiagnose(data) {
-  try {
-    const ss = SpreadsheetApp.getActiveSpreadsheet();
-    const sheets = ss.getSheets();
-    const sheetNames = sheets.map(s => "'" + s.getName() + "'");
-    
-    const rolePermSheet = ss.getSheetByName("RolePermissions");
-    let sampleData = [];
-    let headers = [];
-    
-    if (rolePermSheet) {
-      const lastRow = Math.min(rolePermSheet.getLastRow(), 6);
-      const lastCol = rolePermSheet.getLastColumn();
-      if (lastRow > 0 && lastCol > 0) {
-        const values = rolePermSheet.getRange(1, 1, lastRow, lastCol).getValues();
-        headers = values[0];
-        sampleData = values.slice(1);
-      }
-    }
+	role, _ := c.Get("role")
+	team, _ := c.Get("team")
+	isSystemAdmin, _ := c.Get("isSystemAdmin")
 
-    return createJsonResponse({
-      status: "success",
-      spreadsheetName: ss.getName(),
-      spreadsheetId: ss.getId(),
-      allSheetNames: sheetNames,
-      rolePermissionsInfo: {
-        exists: !!rolePermSheet,
-        rowCount: rolePermSheet ? rolePermSheet.getLastRow() : 0,
-        headers: headers,
-        sampleRows: sampleData
-      }
-    });
-  } catch (e) {
-    return createJsonResponse({ status: "error", message: "Diagnose failed: " + e.message });
-  }
+	roleString := fmt.Sprintf("%v", role)
+	isAdmin := (isSystemAdmin != nil && isSystemAdmin.(bool))
+	if !isAdmin && roleString != "" {
+		for _, r := range strings.Split(roleString, ",") {
+			if strings.EqualFold(strings.TrimSpace(r), "Admin") {
+				isAdmin = true
+				break
+			}
+		}
+	}
+
+	// NEW: Check for 'view_global_orders' permission to bypass team filtering
+	hasGlobalView := isAdmin || hasPermissionInternal(roleString, (isSystemAdmin != nil && isSystemAdmin.(bool)), "view_global_orders")
+
+	if !hasGlobalView && team != nil {
+		teams := strings.Split(fmt.Sprintf("%v", team), ",")
+		var teamConditions []string
+		var teamArgs []interface{}
+		for _, t := range teams {
+			t = strings.TrimSpace(t)
+			if t != "" {
+				teamConditions = append(teamConditions, "LOWER(team) = LOWER(?)")
+				teamArgs = append(teamArgs, t)
+			}
+		}
+		if len(teamConditions) > 0 {
+			condition := strings.Join(teamConditions, " OR ")
+			query = query.Where(condition, teamArgs...)
+			countQuery = countQuery.Where(condition, teamArgs...)
+		}
+	}
+
+	if err := query.Find(&orders).Error; err != nil {
+		c.Error(err)
+		return
+	}
+	var total int64
+	countQuery.Count(&total)
+	c.JSON(200, gin.H{"status": "success", "data": orders, "total": total})
 }
+
+func handleSubmitOrder(c *gin.Context) {
+	var orderRequest struct {
+		CurrentUser      User                     `json:"currentUser"`
+		SelectedTeam     string                   `json:"selectedTeam"`
+		Page             string                   `json:"page"`
+		Customer         map[string]interface{}   `json:"customer"`
+		Products         []map[string]interface{} `json:"products"`
+		Payment          map[string]interface{}   `json:"payment"`
+		Shipping         map[string]interface{}   `json:"shipping"`
+		Subtotal         float64                  `json:"subtotal"`
+		GrandTotal       float64                  `json:"grandTotal"`
+		Note             string                   `json:"note"`
+		FulfillmentStore string                   `json:"fulfillmentStore"`
+		ScheduledTime    string                   `json:"scheduledTime"`
+	}
+	if err := c.ShouldBindJSON(&orderRequest); err != nil {
+		c.Error(err)
+		return
+	}
+
+	productsJSON, _ := json.Marshal(orderRequest.Products)
+	var locationParts []string
+	if p, ok := orderRequest.Customer["province"].(string); ok && p != "" {
+		locationParts = append(locationParts, p)
+	}
+	if d, ok := orderRequest.Customer["district"].(string); ok && d != "" {
+		locationParts = append(locationParts, d)
+	}
+	if s, ok := orderRequest.Customer["sangkat"].(string); ok && s != "" {
+		locationParts = append(locationParts, s)
+	}
+
+	var shippingCost float64 = 0
+	if costVal, ok := orderRequest.Shipping["cost"]; ok {
+		switch v := costVal.(type) {
+		case float64:
+			shippingCost = v
+		case string:
+			if parsed, err := strconv.ParseFloat(v, 64); err == nil {
+				shippingCost = parsed
+			}
+		}
+	}
+
+	var totalDiscount float64 = 0
+	var totalProductCost float64 = 0
+	for _, p := range orderRequest.Products {
+		op, _ := p["originalPrice"].(float64)
+		fp, _ := p["finalPrice"].(float64)
+		q, _ := p["quantity"].(float64)
+		cost, _ := p["cost"].(float64)
+		if op > 0 && q > 0 {
+			totalDiscount += (op - fp) * q
+		}
+		totalProductCost += (cost * q)
+	}
+
+	orderID := generateShortID()
+	
+	// Default timestamp is NOW
+	timestamp := time.Now().UTC().Format(time.RFC3339)
+	
+	// If ScheduledTime is provided, use it as the primary timestamp (Drop Order Time)
+	// to ensure consistency between the UI, Sheet, and Telegram message.
+	if orderRequest.ScheduledTime != "" {
+		timestamp = orderRequest.ScheduledTime
+	}
+
+	custName, _ := orderRequest.Customer["name"].(string)
+	custPhone, _ := orderRequest.Customer["phone"].(string)
+	paymentStatus, _ := orderRequest.Payment["status"].(string)
+	paymentInfo, _ := orderRequest.Payment["info"].(string)
+	addLocation, _ := orderRequest.Customer["additionalLocation"].(string)
+
+	var shipFeeCustomer float64 = 0
+	if feeVal, ok := orderRequest.Customer["shippingFee"]; ok {
+		switch v := feeVal.(type) {
+		case float64:
+			shipFeeCustomer = v
+		case string:
+			if parsed, err := strconv.ParseFloat(v, 64); err == nil {
+				shipFeeCustomer = parsed
+			}
+		}
+	}
+
+	internalShipMethod, _ := orderRequest.Shipping["method"].(string)
+	internalShipDetails, _ := orderRequest.Shipping["details"].(string)
+
+	// Determine initial status based on scheduling
+	fulfillmentStatus := "Pending"
+	if orderRequest.ScheduledTime != "" {
+		var st time.Time
+		var err error
+		
+		// Use flexible parsing to match the timestamp logic above
+		// Prioritize RFC3339 as the frontend now sends UTC ISO strings
+		if t, e := time.Parse(time.RFC3339, orderRequest.ScheduledTime); e == nil {
+			st = t
+		} else if t, e := time.Parse("2006-01-02 15:04", orderRequest.ScheduledTime); e == nil {
+			st = t
+		} else {
+			err = e
+		}
+
+		if err == nil && st.After(time.Now().Add(1 * time.Minute)) {
+			fulfillmentStatus = "Scheduled"
+		}
+	}
+
+	// Ensure Team is never empty if the user has a team
+	finalTeam := orderRequest.SelectedTeam
+	if finalTeam == "" && orderRequest.CurrentUser.Team != "" {
+		// Take the first team if they have multiple
+		parts := strings.Split(orderRequest.CurrentUser.Team, ",")
+		finalTeam = strings.TrimSpace(parts[0])
+	}
+
+	newOrder := Order{
+		OrderID: orderID, Timestamp: timestamp, User: orderRequest.CurrentUser.UserName, Team: finalTeam,
+		Page: orderRequest.Page, CustomerName: custName, CustomerPhone: custPhone, Subtotal: orderRequest.Subtotal,
+		GrandTotal: orderRequest.GrandTotal, ProductsJSON: string(productsJSON), Note: orderRequest.Note,
+		FulfillmentStore: orderRequest.FulfillmentStore, ScheduledTime: orderRequest.ScheduledTime, FulfillmentStatus: fulfillmentStatus,
+		PaymentStatus: paymentStatus, PaymentInfo: paymentInfo, InternalCost: shippingCost, DiscountUSD: totalDiscount,
+		TotalProductCost: totalProductCost, Location: strings.Join(locationParts, ", "), AddressDetails: addLocation,
+		ShippingFeeCustomer: shipFeeCustomer, InternalShippingMethod: internalShipMethod, InternalShippingDetails: internalShipDetails,
+	}
+
+	if err := backend.DB.Create(&newOrder).Error; err != nil {
+		c.Error(err)
+		return
+	}
+
+	eventBytes, _ := json.Marshal(map[string]interface{}{"type": "new_order", "data": newOrder})
+	hub.Broadcast <- eventBytes
+
+	orderChannel <- OrderJob{JobID: fmt.Sprintf("job_%d", time.Now().UnixNano()), OrderID: orderID, UserName: orderRequest.CurrentUser.UserName, OrderData: map[string]interface{}{"orderId": orderID, "timestamp": timestamp, "totalDiscount": totalDiscount, "totalProductCost": totalProductCost, "fullLocation": strings.Join(locationParts, ", "), "productsJSON": string(productsJSON), "shippingCost": shippingCost, "originalRequest": orderRequest, "scheduledTime": orderRequest.ScheduledTime}}
+	c.JSON(200, gin.H{"status": "success", "orderId": orderID})
+}
+
+func handleAdminUpdateOrder(c *gin.Context) {
+	var r struct {
+		OrderID  string                 `json:"orderId"`
+		UserName string                 `json:"userName"`
+		NewData  map[string]interface{} `json:"newData"`
+	}
+	if err := c.ShouldBindJSON(&r); err != nil {
+		c.Error(err)
+		return
+	}
+
+	if r.NewData == nil {
+		c.JSON(http.StatusBadRequest, gin.H{"status": "error", "message": "ត្រូវការទិន្នន័យថ្មី (NewData is required)"})
+		return
+	}
+
+	var originalOrder Order
+	// Use case-insensitive and robust trimming for matching Order IDs
+	if err := backend.DB.Where("UPPER(TRIM(order_id)) = UPPER(TRIM(?))", r.OrderID).First(&originalOrder).Error; err != nil {
+		c.JSON(http.StatusNotFound, gin.H{"status": "error", "message": "រកមិនឃើញការកម្មង់ " + r.OrderID})
+		return
+	}
+
+	// ✅ Validate status transitions — only allow valid state machine transitions
+	if newStatusRaw, ok := r.NewData["Fulfillment Status"]; ok {
+		newStatus := strings.TrimSpace(fmt.Sprintf("%v", newStatusRaw))
+		currentStatus := strings.TrimSpace(originalOrder.FulfillmentStatus)
+		if currentStatus == "" {
+			currentStatus = "Pending"
+		}
+
+		validTransitions := map[string][]string{
+			"Scheduled":     {"Pending", "Cancelled"},
+			"Pending":       {"Processing", "Ready to Ship", "Cancelled"},
+			"Processing":    {"Ready to Ship", "Pending", "Cancelled"},
+			"Ready to Ship": {"Shipped", "Pending", "Cancelled"},
+			"Shipped":       {"Delivered", "Ready to Ship", "Returned"},
+			"Delivered":     {"Returned"},
+			"Returned":      {"Delivered", "Pending"},
+			"Cancelled":     {"Pending", "Scheduled"},
+		}
+
+		allowed, ok := validTransitions[currentStatus]
+		if !ok {
+			c.JSON(http.StatusBadRequest, gin.H{"status": "error", "message": "ស្ថានភាពបច្ចុប្បន្នមិនត្រឹមត្រូវ"})
+			return
+		}
+
+		// ✅ Support re-packing / self-updates (allow same status transition)
+		transitionValid := (newStatus == currentStatus)
+		if !transitionValid {
+			for _, s := range allowed {
+				if s == newStatus {
+					transitionValid = true
+					break
+				}
+			}
+		}
+
+		if !transitionValid {
+			c.JSON(http.StatusBadRequest, gin.H{"status": "error", "message": fmt.Sprintf("មិនអាចផ្លាស់ប្តូរពី '%s' ទៅ '%s' បានទេ", currentStatus, newStatus)})
+			return
+		}
+
+		// ✅ Validate required fields for each transition
+		switch newStatus {
+		case "Cancelled":
+			cancelReason, _ := r.NewData["Cancel Reason"]
+			if cancelReason == nil || strings.TrimSpace(fmt.Sprintf("%v", cancelReason)) == "" {
+				if strings.TrimSpace(originalOrder.CancelReason) == "" {
+					c.JSON(http.StatusBadRequest, gin.H{"status": "error", "message": "ត្រូវការមូលហេតុដែល Cancel (Cancel Reason)"})
+					return
+				}
+			}
+		case "Returned":
+			returnReason, _ := r.NewData["Return Reason"]
+			if returnReason == nil || strings.TrimSpace(fmt.Sprintf("%v", returnReason)) == "" {
+				if strings.TrimSpace(originalOrder.ReturnReason) == "" {
+					c.JSON(http.StatusBadRequest, gin.H{"status": "error", "message": "ត្រូវការមូលហេតុដែល Return (Return Reason)"})
+					return
+				}
+			}
+		case "Ready to Ship":
+			packedBy, _ := r.NewData["Packed By"]
+			if packedBy == nil || strings.TrimSpace(fmt.Sprintf("%v", packedBy)) == "" {
+				if strings.TrimSpace(originalOrder.PackedBy) == "" {
+					c.JSON(http.StatusBadRequest, gin.H{"status": "error", "message": "ត្រូវការឈ្មោះអ្នកវេចខ្ចប់ (Packed By)"})
+					return
+				}
+			}
+		case "Shipped":
+			dispatchedBy, _ := r.NewData["Dispatched By"]
+			if dispatchedBy == nil || strings.TrimSpace(fmt.Sprintf("%v", dispatchedBy)) == "" {
+				if strings.TrimSpace(originalOrder.DispatchedBy) == "" {
+					c.JSON(http.StatusBadRequest, gin.H{"status": "error", "message": "ត្រូវការឈ្មោះអ្នកបញ្ជូន (Dispatched By)"})
+					return
+				}
+			}
+			// Driver assignment is usually done by logistics/dispatch or during delivery confirmation,
+			// so we should not strictly require it for the 'Shipped' transition to avoid blocking packers.
+		case "Delivered":
+			_, hasDriver := r.NewData["Driver Name"]
+			_, hasShippingDetails := r.NewData["Internal Shipping Details"]
+			
+			driverValid := hasDriver || strings.TrimSpace(originalOrder.DriverName) != ""
+			detailsValid := hasShippingDetails || strings.TrimSpace(originalOrder.InternalShippingDetails) != ""
+
+			if !driverValid && !detailsValid {
+				c.JSON(http.StatusBadRequest, gin.H{"status": "error", "message": "ត្រូវការអ្នកដឹកជញ្ជូន (Driver Name) ឬព័ត៌មានដឹកជញ្ជូន មុនពេលបញ្ជាក់ការដឹកជញ្ជូន"})
+				return
+			}
+		}
+	}
+
+	// Auto-set Delivered Time when transitioning to Delivered (if not already provided)
+	if newStatusRaw, ok := r.NewData["Fulfillment Status"]; ok {
+		if strings.TrimSpace(fmt.Sprintf("%v", newStatusRaw)) == "Delivered" {
+			if _, hasTime := r.NewData["Delivered Time"]; !hasTime {
+				r.NewData["Delivered Time"] = time.Now().Format("2006-01-02 15:04:05")
+			}
+		}
+	}
+
+	// ✅ Validate Return Receipt - If confirming receipt, require photo (unless it's just unpacking a Cancelled order)
+	if _, hasReceivedBy := r.NewData["Return Received By"]; hasReceivedBy {
+		// Determine the target status
+		targetStatus := originalOrder.FulfillmentStatus
+		if s, ok := r.NewData["Fulfillment Status"]; ok {
+			targetStatus = strings.TrimSpace(fmt.Sprintf("%v", s))
+		}
+
+		// Only require photo if we are NOT in Cancelled status
+		if targetStatus != "Cancelled" {
+			photo, hasPhoto := r.NewData["Return Photo"]
+			if (!hasPhoto || strings.TrimSpace(fmt.Sprintf("%v", photo)) == "") && strings.TrimSpace(originalOrder.ReturnPhotoURL) == "" {
+				c.JSON(http.StatusBadRequest, gin.H{"status": "error", "message": "ត្រូវការរូបភាពកញ្ចប់ឥវ៉ាន់ដែល Return (Return Photo)"})
+				return
+			}
+		}
+		// Auto-set received time if not provided
+		if _, hasTime := r.NewData["Return Received Time"]; !hasTime {
+			r.NewData["Return Received Time"] = time.Now().Format("2006-01-02 15:04:05")
+		}
+	}
+
+	mappedData := make(map[string]interface{})
+	for k, v := range r.NewData {
+		dbCol := mapToDBColumn(k, "AllOrders")
+		if isValidOrderColumn(dbCol) && v != nil {
+			if dbCol == "discount_usd" || dbCol == "grand_total" || dbCol == "subtotal" || dbCol == "shipping_fee_customer" || dbCol == "internal_cost" || dbCol == "delivery_unpaid" || dbCol == "delivery_paid" || dbCol == "total_product_cost" {
+				if f, ok := v.(float64); ok {
+					mappedData[dbCol] = f
+				} else if s, ok := v.(string); ok {
+					if fVal, err := strconv.ParseFloat(s, 64); err == nil {
+						mappedData[dbCol] = fVal
+					}
+				}
+			} else {
+				mappedData[dbCol] = fmt.Sprintf("%v", v)
+			}
+		}
+	}
+
+	// Handle 'Force Sync' to trigger Telegram/Google Sheets re-sync
+	forceSync := false
+	if fs, ok := r.NewData["Force Sync"]; ok {
+		if b, ok := fs.(bool); ok && b {
+			forceSync = true
+		}
+	}
+
+	// ─── Generate EditLogs ───
+	var origMap map[string]interface{}
+	origJSON, _ := json.Marshal(originalOrder)
+	json.Unmarshal(origJSON, &origMap)
+
+	var editLogs []EditLog
+	currentTime := time.Now().Format("2006-01-02 15:04:05")
+
+	if forceSync {
+		editLogs = append(editLogs, EditLog{
+			Timestamp:    currentTime,
+			OrderID:      r.OrderID,
+			Requester:    r.UserName,
+			FieldChanged: "Action",
+			OldValue:     "Synced",
+			NewValue:     "RE-SENT TO TELEGRAM",
+		})
+	}
+
+	for k, v := range r.NewData {
+		if k == "Force Sync" || v == nil {
+			continue
+		}
+
+		oldValRaw, exists := origMap[k]
+		if !exists {
+			continue
+		}
+
+		oldValStr := strings.TrimSpace(fmt.Sprintf("%v", oldValRaw))
+		newValStr := strings.TrimSpace(fmt.Sprintf("%v", v))
+
+		// Normalizing float formatting if possible (e.g. 10 == 10.0)
+		if fNew, ok := v.(float64); ok {
+			if fOld, okOld := oldValRaw.(float64); okOld {
+				if fNew == fOld {
+					continue
+				}
+			}
+			newValStr = strings.TrimSpace(fmt.Sprintf("%v", fNew))
+		}
+
+		if oldValStr != newValStr {
+			editLogs = append(editLogs, EditLog{
+				Timestamp:    currentTime,
+				OrderID:      r.OrderID,
+				Requester:    r.UserName,
+				FieldChanged: k,
+				OldValue:     oldValStr,
+				NewValue:     newValStr,
+			})
+		}
+	}
+	// ─────────────────────────
+
+	if len(mappedData) == 0 && !forceSync {
+		c.JSON(200, gin.H{"status": "success", "message": "No changes to update"})
+		return
+	}
+
+	if len(mappedData) > 0 {
+		if err := backend.DB.Model(&Order{}).Where("UPPER(TRIM(order_id)) = UPPER(TRIM(?))", r.OrderID).Updates(mappedData).Error; err != nil {
+			c.Error(err)
+			return
+		}
+	}
+
+	// Save EditLogs to DB and Sync (Moved outside len(mappedData) check to support Force Sync logging)
+	if len(editLogs) > 0 {
+		if err := backend.DB.Create(&editLogs).Error; err != nil {
+			log.Println("Error saving edit logs:", err)
+		} else {
+			for _, el := range editLogs {
+				go enqueueSync("addRow", map[string]interface{}{
+					"Timestamp":     el.Timestamp,
+					"OrderID":       el.OrderID,
+					"Requester":     el.Requester,
+					"Field Changed": el.FieldChanged,
+					"Old Value":     el.OldValue,
+					"New Value":     el.NewValue,
+				}, "EditLogs", nil)
+			}
+		}
+	}
+
+	if len(mappedData) > 0 {
+		// ✅ Auto-log ReturnItems when status changes to Returned
+		if newStatusRaw, ok := r.NewData["Fulfillment Status"]; ok {
+			newStatusStr := strings.TrimSpace(fmt.Sprintf("%v", newStatusRaw))
+
+			if newStatusStr == "Returned" || newStatusStr == "Cancelled" {
+				go AddWatermarkAndEditTelegramMedia(originalOrder, newStatusStr)
+			}
+
+			if newStatusStr == "Returned" {
+				var products []map[string]interface{}
+				if err := json.Unmarshal([]byte(originalOrder.ProductsJSON), &products); err == nil {
+					for _, p := range products {
+						name, _ := p["name"].(string)
+						qty, _ := p["quantity"].(float64)
+						if name != "" && qty > 0 {
+							reason := ""
+							if r, ok := r.NewData["Return Reason"].(string); ok && r != "" {
+								reason = r
+							} else {
+								reason = originalOrder.ReturnReason
+							}
+
+							barcode := ""
+							if b, ok := p["barcode"].(string); ok {
+								barcode = b
+							}
+
+							returnItem := ReturnItem{
+								Timestamp:   time.Now().Format("2006-01-02 15:04:05"),
+								OrderID:     originalOrder.OrderID,
+								StoreName:   originalOrder.FulfillmentStore,
+								Barcode:     barcode,
+								ProductName: name,
+								Quantity:    qty,
+								Reason:      reason,
+								HandledBy:   r.UserName,
+								Status:      "Pending Receipt",
+							}
+							var count int64
+							backend.DB.Table("returns").Where("order_id = ? AND product_name = ?", originalOrder.OrderID, name).Count(&count)
+							if count == 0 {
+								if err := backend.DB.Table("returns").Create(&returnItem).Error; err == nil {
+									// Sync with Google Sheets
+									go enqueueSync("addRow", map[string]interface{}{
+										"Timestamp":   returnItem.Timestamp,
+										"OrderID":     returnItem.OrderID,
+										"StoreName":   returnItem.StoreName,
+										"Barcode":     returnItem.Barcode,
+										"ProductName": returnItem.ProductName,
+										"Quantity":    returnItem.Quantity,
+										"Reason":      returnItem.Reason,
+										"HandledBy":   returnItem.HandledBy,
+										"Status":      returnItem.Status,
+									}, "Returns", nil)
+								}
+							}
+						}
+					}
+				}
+			}
+		}
+
+		// ✅ Update ReturnItems status when received
+		if _, hasReceivedBy := r.NewData["Return Received By"]; hasReceivedBy {
+			backend.DB.Table("returns").Where("order_id = ?", r.OrderID).Update("status", "Received")
+
+			// Sync with Google Sheets
+			go enqueueSync("updateSheet", map[string]interface{}{
+				"Status": "Received",
+			}, "Returns", map[string]string{"OrderID": r.OrderID})
+		}
+
+		eventBytes, _ := json.Marshal(map[string]interface{}{"type": "update_order", "orderId": r.OrderID, "newData": r.NewData})
+		hub.Broadcast <- eventBytes
+	}
+
+	go func() {
+		// Build comprehensive sheet data for Packing & Fulfillment
+		sheetData := make(map[string]interface{})
+		for k, v := range r.NewData {
+			if k != "Force Sync" {
+				sheetData[k] = v
+			}
+		}
+
+		var current Order
+		if err := backend.DB.Where("UPPER(TRIM(order_id)) = UPPER(TRIM(?))", r.OrderID).First(&current).Error; err == nil {
+			// Helper to fill missing fields from DB if not in the request
+			fill := func(key, val, dbField string) {
+				if _, exists := sheetData[key]; !exists && val != "" {
+					sheetData[key] = val
+				}
+			}
+			fill("Packed By", current.PackedBy, "packed_by")
+			fill("Packed Time", current.PackedTime, "packed_time")
+			fill("Package Photo", current.PackagePhotoURL, "package_photo_url")
+			fill("Fulfillment Status", current.FulfillmentStatus, "fulfillment_status")
+			fill("Fulfillment Store", current.FulfillmentStore, "fulfillment_store")
+			fill("Team", current.Team, "team")
+			fill("Page", current.Page, "page")
+
+			// Crucial: Determine team for sheet routing
+			team := current.Team
+			if t, ok := r.NewData["Team"].(string); ok && t != "" {
+				team = t
+			}
+
+			// 🚀 TRIGGER APPS SCRIPT: Update Sheet AND Edit Telegram Message
+			enqueueSync("updateOrderTelegram", map[string]interface{}{
+				"orderId":       r.OrderID,
+				"updatedFields": sheetData,
+				"team":          team,
+				"Force Sync":    forceSync,
+			}, "", nil)
+		}
+	}()
+
+	c.JSON(200, gin.H{"status": "success"})
+}
+
+func handleAdminDeleteOrder(c *gin.Context) {
+	var r DeleteOrderRequest
+	if err := c.ShouldBindJSON(&r); err != nil {
+		c.Error(err)
+		return
+	}
+
+	// 1. Try to find the order in the local database to get full metadata
+	var order Order
+	foundLocally := false
+	if err := backend.DB.Where("UPPER(TRIM(order_id)) = UPPER(TRIM(?))", r.OrderID).First(&order).Error; err == nil {
+		foundLocally = true
+	}
+
+	// 2. Prepare metadata for deletion, prioritizing DB data but falling back to request data
+	m1 := r.TelegramMessageID1
+	if foundLocally && order.TelegramMessageID1 != "" {
+		m1 = order.TelegramMessageID1
+	}
+	m2 := r.TelegramMessageID2
+	if foundLocally && order.TelegramMessageID2 != "" {
+		m2 = order.TelegramMessageID2
+	}
+	m3 := r.TelegramMessageID3
+	if foundLocally && order.TelegramMessageID3 != "" {
+		m3 = order.TelegramMessageID3
+	}
+
+	store := r.FulfillmentStore
+	if foundLocally && order.FulfillmentStore != "" {
+		store = order.FulfillmentStore
+	}
+
+	team := r.Team
+	if foundLocally && order.Team != "" {
+		team = order.Team
+	}
+
+	// 3. Trigger Apps Script deletion (Handles BOTH Sheets and Telegram)
+	go func() {
+		// We always call this even if not found locally, as it might exist in Sheets
+		enqueueSync("deleteOrderTelegram", map[string]interface{}{
+			"orderId":          r.OrderID,
+			"team":             team,
+			"messageId1":       m1,
+			"messageId2":       m2,
+			"messageId3":       m3,
+			"fulfillmentStore": store,
+		}, "", nil)
+	}()
+
+	// 4. Delete from local DB if it exists
+	if foundLocally {
+		// ─── Generate EditLog for Deletion ───
+		deleteLog := EditLog{
+			Timestamp:    time.Now().Format("2006-01-02 15:04:05"),
+			OrderID:      r.OrderID,
+			Requester:    r.UserName,
+			FieldChanged: "Action",
+			OldValue:     "Existing",
+			NewValue:     "DELETED",
+		}
+		backend.DB.Create(&deleteLog)
+
+		// Sync deletion log to Google Sheets
+		go enqueueSync("addRow", map[string]interface{}{
+			"Timestamp":     deleteLog.Timestamp,
+			"OrderID":       deleteLog.OrderID,
+			"Requester":     deleteLog.Requester,
+			"Field Changed": deleteLog.FieldChanged,
+			"Old Value":     deleteLog.OldValue,
+			"New Value":     deleteLog.NewValue,
+		}, "EditLogs", nil)
+		// ─────────────────────────────────────
+
+		backend.DB.Delete(&order)
+	}
+
+	// 5. Broadcast deletion to all connected clients
+	eventBytes, _ := json.Marshal(map[string]interface{}{"type": "delete_order", "orderId": r.OrderID})
+	hub.Broadcast <- eventBytes
+
+	c.JSON(200, gin.H{"status": "success"})
+}
+
+func handleAdminUpdateSheet(c *gin.Context) {
+	var req struct {
+		SheetName  string                 `json:"sheetName"`
+		PrimaryKey map[string]interface{} `json:"primaryKey"`
+		NewData    map[string]interface{} `json:"newData"`
+		FullSync   bool                   `json:"fullSync"`
+	}
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.Error(err)
+		return
+	}
+
+	if req.FullSync && req.SheetName != "" {
+		go func(sheetName string) {
+			log.Printf("🔄 Selective Sync: Starting refresh for sheet %s", sheetName)
+			switch sheetName {
+			case "Users":
+				var items []User
+				if err := backend.FetchSheetDataToStruct(sheetName, &items); err == nil {
+					backend.DB.Session(&gorm.Session{AllowGlobalUpdate: true}).Delete(&User{})
+					backend.DB.CreateInBatches(items, 100)
+				}
+			case "Products":
+				var items []Product
+				if err := backend.FetchSheetDataToStruct(sheetName, &items); err == nil {
+					backend.DB.Session(&gorm.Session{AllowGlobalUpdate: true}).Delete(&Product{})
+					backend.DB.CreateInBatches(items, 100)
+				}
+			case "Stores":
+				var items []Store
+				if err := backend.FetchSheetDataToStruct(sheetName, &items); err == nil {
+					backend.DB.Session(&gorm.Session{AllowGlobalUpdate: true}).Delete(&Store{})
+					backend.DB.CreateInBatches(items, 100)
+				}
+			case "TeamsPages":
+				var items []TeamPage
+				if err := backend.FetchSheetDataToStruct(sheetName, &items); err == nil {
+					backend.DB.Session(&gorm.Session{AllowGlobalUpdate: true}).Delete(&TeamPage{})
+					backend.DB.CreateInBatches(items, 100)
+				}
+			case "ShippingMethods":
+				var items []ShippingMethod
+				if err := backend.FetchSheetDataToStruct(sheetName, &items); err == nil {
+					backend.DB.Session(&gorm.Session{AllowGlobalUpdate: true}).Delete(&ShippingMethod{})
+					backend.DB.CreateInBatches(items, 100)
+				}
+			case "Drivers":
+				var items []Driver
+				if err := backend.FetchSheetDataToStruct(sheetName, &items); err == nil {
+					backend.DB.Session(&gorm.Session{AllowGlobalUpdate: true}).Delete(&Driver{})
+					backend.DB.CreateInBatches(items, 100)
+				}
+			case "BankAccounts":
+				var items []BankAccount
+				if err := backend.FetchSheetDataToStruct(sheetName, &items); err == nil {
+					backend.DB.Session(&gorm.Session{AllowGlobalUpdate: true}).Delete(&BankAccount{})
+					backend.DB.CreateInBatches(items, 100)
+				}
+			case "Roles":
+				var items []Role
+				if err := backend.FetchSheetDataToStruct(sheetName, &items); err == nil {
+					backend.DB.Session(&gorm.Session{AllowGlobalUpdate: true}).Delete(&Role{})
+					backend.DB.CreateInBatches(items, 100)
+				}
+			case "RolePermissions":
+				var items []RolePermission
+				if err := backend.FetchSheetDataToStruct(sheetName, &items); err == nil {
+					backend.DB.Session(&gorm.Session{AllowGlobalUpdate: true}).Delete(&RolePermission{})
+					backend.DB.CreateInBatches(items, 100)
+				}
+			case "Locations":
+				var items []Location
+				if err := backend.FetchSheetDataToStruct(sheetName, &items); err == nil {
+					backend.DB.Session(&gorm.Session{AllowGlobalUpdate: true}).Delete(&Location{})
+					backend.DB.CreateInBatches(items, 100)
+				}
+			case "Colors":
+				var items []Color
+				if err := backend.FetchSheetDataToStruct(sheetName, &items); err == nil {
+					backend.DB.Session(&gorm.Session{AllowGlobalUpdate: true}).Delete(&Color{})
+					backend.DB.CreateInBatches(items, 100)
+				}
+			case "PhoneCarriers":
+				var items []PhoneCarrier
+				if err := backend.FetchSheetDataToStruct(sheetName, &items); err == nil {
+					backend.DB.Session(&gorm.Session{AllowGlobalUpdate: true}).Delete(&PhoneCarrier{})
+					backend.DB.CreateInBatches(items, 100)
+				}
+			case "TelegramTemplates":
+				var items []TelegramTemplate
+				if err := backend.FetchSheetDataToStruct(sheetName, &items); err == nil {
+					backend.DB.Session(&gorm.Session{AllowGlobalUpdate: true}).Delete(&TelegramTemplate{})
+					backend.DB.CreateInBatches(items, 100)
+				}
+			case "DeliveryGroups":
+				var items []DeliveryGroup
+				if err := backend.FetchSheetDataToStruct(sheetName, &items); err == nil {
+					backend.DB.Session(&gorm.Session{AllowGlobalUpdate: true}).Delete(&DeliveryGroup{})
+					backend.DB.CreateInBatches(items, 100)
+				}
+			}
+			log.Printf("✅ Selective Sync: Completed refresh for sheet %s", sheetName)
+			// Broadcast completion
+			if hub != nil {
+				msg, _ := json.Marshal(map[string]interface{}{"type": "selective_sync_complete", "sheet": sheetName})
+				hub.Broadcast <- msg
+			}
+		}(req.SheetName)
+		c.JSON(200, gin.H{"status": "success", "message": "Selective sync started"})
+		return
+	}
+
+	tableName := getTableName(req.SheetName)
+	if tableName == "" {
+		c.Error(fmt.Errorf("unknown sheet"))
+		return
+	}
+
+	var modelInstance interface{}
+	switch req.SheetName {
+	case "IncentiveCalculators":
+		modelInstance = &IncentiveCalculator{}
+	case "IncentiveProjects":
+		modelInstance = &IncentiveProject{}
+	case "AllOrders":
+		modelInstance = &Order{}
+	case "Users":
+		modelInstance = &User{}
+	}
+
+	pkCol := ""
+	var pkVal interface{}
+	originalPKKey := ""
+	for k, v := range req.PrimaryKey {
+		pkCol = mapToDBColumn(k, req.SheetName)
+		pkVal = v
+		originalPKKey = k
+	}
+
+	// Smart type conversion for known numeric primary keys
+	if pkCol == "id" || pkCol == "project_id" || pkCol == "calculator_id" {
+		if s, ok := pkVal.(string); ok {
+			if i, err := strconv.ParseUint(s, 10, 64); err == nil {
+				pkVal = uint(i)
+			}
+		} else if f, ok := pkVal.(float64); ok {
+			pkVal = uint(f)
+		}
+	}
+
+	if !isValidDBIdentifier(pkCol) {
+		c.JSON(http.StatusBadRequest, gin.H{"status": "error", "message": "Invalid primary key field"})
+		return
+	}
+	mappedData := make(map[string]interface{})
+	for k, v := range req.NewData {
+		dbCol := mapToDBColumn(k, req.SheetName)
+		if v == nil {
+			continue
+		}
+
+		// Smart type conversion for known numeric columns in mappedData
+		// We convert all whole-number float64 to int to avoid PG type mismatch
+		if f, ok := v.(float64); ok {
+			if f == float64(int(f)) {
+				v = int(f)
+			}
+		} else if s, ok := v.(string); ok {
+			// Handle boolean strings for columns like is_verified, is_custom, require_period_selection
+			lowerS := strings.ToLower(s)
+			if lowerS == "true" || lowerS == "false" {
+				v = (lowerS == "true")
+			} else if i, err := strconv.Atoi(s); err == nil {
+				v = i
+			}
+		}
+
+		// Hashing password if updating users table
+		if tableName == "users" && dbCol == "password" && v != "" {
+			hashed, err := bcrypt.GenerateFromPassword([]byte(fmt.Sprintf("%v", v)), bcrypt.DefaultCost)
+			if err == nil {
+				v = string(hashed)
+			}
+		}
+
+		mappedData[dbCol] = v
+	}
+
+	dbQuery := backend.DB.Table(tableName)
+	if modelInstance != nil {
+		dbQuery = backend.DB.Model(modelInstance)
+	}
+
+	if err := dbQuery.Where(pkCol+" = ?", pkVal).Updates(mappedData).Error; err != nil {
+		log.Printf("[ERROR] handleAdminUpdateSheet (Table: %s, PK: %s=%v): %v", tableName, pkCol, pkVal, err)
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"status":  "error",
+			"message": fmt.Sprintf("Database update failed for %s: %v", req.SheetName, err),
+		})
+		return
+	}
+
+	// 🚀 CASCADE UPDATE: If RoleName is updated, update RolePermissions and Users tables
+	if req.SheetName == "Roles" {
+		newNameRaw, hasNewName := req.NewData["RoleName"]
+		if hasNewName {
+			newName := strings.TrimSpace(fmt.Sprintf("%v", newNameRaw))
+			var oldRole Role
+			if err := backend.DB.Table("roles").Where(pkCol+" = ?", pkVal).First(&oldRole).Error; err == nil {
+				oldName := oldRole.RoleName
+				if oldName != "" && oldName != newName {
+					log.Printf("🔄 Cascading Role Update: %s -> %s", oldName, newName)
+
+					// 1. Update RolePermissions (by name and ID)
+					backend.DB.Table("role_permissions").Where("LOWER(TRIM(role)) = LOWER(TRIM(?))", oldName).Updates(map[string]interface{}{
+						"role":    newName,
+						"role_id": pkVal,
+					})
+
+					// 2. Update Users table (Handle comma-separated roles)
+					var users []User
+					backend.DB.Table("users").Where("LOWER(role) LIKE LOWER(?)", "%"+oldName+"%").Find(&users)
+					for _, u := range users {
+						roles := strings.Split(u.Role, ",")
+						changed := false
+						for i, r := range roles {
+							if strings.EqualFold(strings.TrimSpace(r), oldName) {
+								roles[i] = newName
+								changed = true
+							}
+						}
+						if changed {
+							newRoleList := strings.Join(roles, ",")
+							backend.DB.Table("users").Where("user_name = ?", u.UserName).Update("role", newRoleList)
+						}
+					}
+
+					// 3. Trigger full sheet re-sync for these tables to keep Google Sheets in sync
+					go func() {
+						time.Sleep(2 * time.Second) // Wait for DB updates to settle
+						backend.SyncAllPermissionsToSheet()
+						// Optionally sync users too if needed
+					}()
+				}
+			}
+		}
+	}
+
+	eventBytes, _ := json.Marshal(map[string]interface{}{"type": "update_sheet", "sheetName": req.SheetName, "primaryKey": req.PrimaryKey, "newData": req.NewData})
+	hub.Broadcast <- eventBytes
+
+	// When a RolePermissions row is updated via the generic sheet endpoint, also broadcast
+	// the targeted "update_permission" event so connected clients immediately rebuild their
+	// permission state — without waiting for the 5-minute background poll.
+	if req.SheetName == "RolePermissions" {
+		permEvent, _ := json.Marshal(map[string]interface{}{
+			"type":      "update_permission",
+			"role":      req.NewData["Role"],
+			"feature":   req.NewData["Feature"],
+			"isEnabled": req.NewData["IsEnabled"],
+		})
+		hub.Broadcast <- permEvent
+	}
+
+	go func() {
+		sheetPKKey := originalPKKey
+		if req.SheetName == "Roles" && strings.ToLower(originalPKKey) == "id" {
+			sheetPKKey = "ID"
+		}
+		if req.SheetName == "RolePermissions" && strings.ToLower(originalPKKey) == "id" {
+			sheetPKKey = "ID"
+		}
+		// Sync with Google Sheets via managed queue
+		enqueueSync("updateSheet", req.NewData, req.SheetName, map[string]string{sheetPKKey: fmt.Sprintf("%v", pkVal)})
+
+		// If updating an Order row, also notify Telegram to keep message in sync
+		if req.SheetName == "AllOrders" {
+			orderID := fmt.Sprintf("%v", pkVal)
+			var order Order
+			backend.DB.Where("order_id = ?", orderID).Select("team").First(&order)
+			enqueueSync("updateOrderTelegram", map[string]interface{}{
+				"orderId":       orderID,
+				"updatedFields": req.NewData,
+				"team":          order.Team,
+			}, "", nil)
+		}
+	}()
+	c.JSON(200, gin.H{"status": "success"})
+}
+
+func handleAdminAddRow(c *gin.Context) {
+	var req struct {
+		SheetName string                 `json:"sheetName"`
+		NewData   map[string]interface{} `json:"newData"`
+	}
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.Error(err)
+		return
+	}
+
+	tableName := getTableName(req.SheetName)
+	if tableName != "" {
+		var modelInstance interface{}
+		switch req.SheetName {
+		case "IncentiveCalculators":
+			modelInstance = &IncentiveCalculator{}
+		case "IncentiveProjects":
+			modelInstance = &IncentiveProject{}
+		case "AllOrders":
+			modelInstance = &Order{}
+		case "Users":
+			modelInstance = &User{}
+		}
+
+		mappedData := make(map[string]interface{})
+		for k, v := range req.NewData {
+			colName := mapToDBColumn(k, req.SheetName)
+			if v == nil {
+				continue
+			}
+
+			// Smart type conversion for known numeric columns in mappedData
+			// We convert all whole-number float64 to int to avoid PG type mismatch
+			if f, ok := v.(float64); ok {
+				if f == float64(int(f)) {
+					v = int(f)
+				}
+			} else if s, ok := v.(string); ok {
+				// Handle boolean strings
+				lowerS := strings.ToLower(s)
+				if lowerS == "true" || lowerS == "false" {
+					v = (lowerS == "true")
+				} else if i, err := strconv.Atoi(s); err == nil {
+					v = i
+				}
+			}
+
+			// Hashing password if adding to users table
+			if tableName == "users" && colName == "password" && v != "" {
+				hashed, err := bcrypt.GenerateFromPassword([]byte(fmt.Sprintf("%v", v)), bcrypt.DefaultCost)
+				if err == nil {
+					v = string(hashed)
+				}
+			}
+			mappedData[colName] = v
+		}
+
+		dbQuery := backend.DB.Table(tableName)
+		if modelInstance != nil {
+			dbQuery = backend.DB.Model(modelInstance)
+		}
+
+		if err := dbQuery.Create(mappedData).Error; err != nil {
+			log.Printf("[ERROR] handleAdminAddRow (Table: %s): %v", tableName, err)
+			c.JSON(http.StatusInternalServerError, gin.H{
+				"status":  "error",
+				"message": fmt.Sprintf("Database creation failed for %s: %v", req.SheetName, err),
+			})
+			return
+		}
+	}
+
+	eventBytes, _ := json.Marshal(map[string]interface{}{"type": "add_row", "sheetName": req.SheetName, "newData": req.NewData})
+	hub.Broadcast <- eventBytes
+
+	if req.SheetName == "RolePermissions" {
+		permEvent, _ := json.Marshal(map[string]interface{}{
+			"type":      "update_permission",
+			"role":      req.NewData["Role"],
+			"feature":   req.NewData["Feature"],
+			"isEnabled": req.NewData["IsEnabled"],
+		})
+		hub.Broadcast <- permEvent
+	}
+
+	go func() {
+		// Sync with Google Sheets via managed queue
+		enqueueSync("addRow", req.NewData, req.SheetName, nil)
+	}()
+	c.JSON(200, gin.H{"status": "success"})
+}
+
+func handleAdminDeleteRow(c *gin.Context) {
+	var req struct {
+		SheetName  string                 `json:"sheetName"`
+		PrimaryKey map[string]interface{} `json:"primaryKey"`
+	}
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.Error(err)
+		return
+	}
+
+	pkCol := ""
+	var pkVal interface{}
+	for k, v := range req.PrimaryKey {
+		pkCol = mapToDBColumn(k, req.SheetName)
+		pkVal = v
+	}
+	if !isValidDBIdentifier(pkCol) {
+		c.JSON(http.StatusBadRequest, gin.H{"status": "error", "message": "Invalid primary key field"})
+		return
+	}
+
+	// ── Roles guard: prevent deleting Admin role (check by RoleName in backend.DB) ──
+	if req.SheetName == "Roles" {
+		var role Role
+		if err := backend.DB.Table("roles").Where(pkCol+" = ?", pkVal).First(&role).Error; err == nil {
+			if strings.EqualFold(role.RoleName, "Admin") {
+				c.JSON(403, gin.H{"status": "error", "message": "មិនអាចលុបតួនាទី Admin បានទេ (Cannot delete Admin role)"})
+				return
+			}
+		}
+	}
+
+	// ── Users guard: prevent deleting Admin user ──
+	if req.SheetName == "Users" {
+		if strings.EqualFold(fmt.Sprintf("%v", pkVal), "admin") {
+			c.JSON(403, gin.H{"status": "error", "message": "មិនអាចលុបអ្នកប្រើប្រាស់ Admin បានទេ (Cannot delete Admin user)"})
+			return
+		}
+	}
+
+	tableName := getTableName(req.SheetName)
+	if tableName != "" {
+		// Use map model so GORM executes DELETE without needing a struct with primary key
+		if err := backend.DB.Table(tableName).Where(pkCol+" = ?", pkVal).Delete(map[string]interface{}{}).Error; err != nil {
+			c.JSON(500, gin.H{"status": "error", "message": "Delete operation failed: " + err.Error()})
+			return
+		}
+	}
+
+	strPrimaryKey := make(map[string]string)
+	for k, v := range req.PrimaryKey {
+		sheetKey := k
+		if req.SheetName == "Roles" && strings.ToLower(k) == "id" {
+			sheetKey = "ID"
+		}
+		strPrimaryKey[sheetKey] = fmt.Sprintf("%v", v)
+	}
+
+	eventBytes, _ := json.Marshal(map[string]interface{}{"type": "delete_row", "sheetName": req.SheetName, "primaryKey": strPrimaryKey})
+	hub.Broadcast <- eventBytes
+
+	if req.SheetName == "RolePermissions" {
+		permEvent, _ := json.Marshal(map[string]interface{}{
+			"type":    "update_permission",
+			"role":    req.PrimaryKey["Role"],
+			"feature": req.PrimaryKey["Feature"],
+		})
+		hub.Broadcast <- permEvent
+	}
+
+	go func() {
+		// Sync with Google Sheets via managed queue
+		enqueueSync("deleteRow", nil, req.SheetName, strPrimaryKey)
+	}()
+	c.JSON(200, gin.H{"status": "success"})
+}
+
+func handleGetRevenueSummary(c *gin.Context) {
+	var revs []RevenueEntry
+	backend.DB.Find(&revs)
+	c.JSON(200, gin.H{"status": "success", "data": revs})
+}
+
+func handleGetSyncStatus(c *gin.Context) {
+	var count int64
+	backend.DB.Model(&backend.PendingSync{}).Where("status = 'pending' OR status = 'processing'").Count(&count)
+
+	var permanentFailures int64
+	backend.DB.Model(&backend.PendingSync{}).Where("status = 'permanent_failure'").Count(&permanentFailures)
+
+	c.JSON(200, gin.H{
+		"status":            "success",
+		"pendingCount":      count,
+		"permanentFailures": permanentFailures,
+	})
+}
+
+func handleGetSyncQueue(c *gin.Context) {
+	var queue []backend.PendingSync
+	backend.DB.Order("created_at DESC").Limit(50).Find(&queue)
+	c.JSON(200, gin.H{"status": "success", "data": queue})
+}
+
+func handleRetrySyncTask(c *gin.Context) {
+	id := c.Param("id")
+	if err := backend.DB.Model(&backend.PendingSync{}).Where("id = ?", id).Updates(map[string]interface{}{
+		"status":             "pending",
+		"retry_count":        0,
+		"last_error_message": "",
+	}).Error; err != nil {
+		c.JSON(500, gin.H{"status": "error", "message": err.Error()})
+		return
+	}
+	c.JSON(200, gin.H{"status": "success"})
+}
+
+func handleRetryAllFailedSyncTasks(c *gin.Context) {
+	if err := backend.DB.Model(&backend.PendingSync{}).Where("status = 'failed' OR status = 'permanent_failure'").Updates(map[string]interface{}{
+		"status":             "pending",
+		"retry_count":        0,
+		"last_error_message": "",
+	}).Error; err != nil {
+		c.JSON(500, gin.H{"status": "error", "message": err.Error()})
+		return
+	}
+	c.JSON(200, gin.H{"status": "success"})
+}
+
+func handleClearFailedSyncTasks(c *gin.Context) {
+	if err := backend.DB.Where("status = 'permanent_failure'").Delete(&backend.PendingSync{}).Error; err != nil {
+		c.JSON(500, gin.H{"status": "error", "message": err.Error()})
+		return
+	}
+	c.JSON(200, gin.H{"status": "success"})
+}
+
+func handleHealthCheck(c *gin.Context) {
+	dbStatus := "Stable"
+	dbErr := ""
+	sqlDB, err := backend.DB.DB()
+	if err != nil {
+		dbStatus = "Error"
+		dbErr = err.Error()
+	} else if err := sqlDB.Ping(); err != nil {
+		dbStatus = "Unstable"
+		dbErr = err.Error()
+	}
+
+	sheetStatus := "Authorized"
+	sheetErr := ""
+	if backend.SheetsService == nil {
+		sheetStatus = "Not Initialized"
+	} else {
+		// Try a very small metadata fetch to verify auth
+		_, err := backend.SheetsService.Spreadsheets.Get(backend.SpreadsheetID).Fields("spreadsheetId").Do()
+		if err != nil {
+			sheetStatus = "Auth Failed"
+			sheetErr = err.Error()
+		}
+	}
+
+	c.JSON(200, gin.H{
+		"status": "success",
+		"health": gin.H{
+			"database": gin.H{
+				"status": dbStatus,
+				"error":  dbErr,
+			},
+			"googleSheets": gin.H{
+				"status": sheetStatus,
+				"error":  sheetErr,
+			},
+			"uptime": time.Since(startTime).Seconds(),
+		},
+	})
+}
+// ─── Telegram Bot Webhook Handlers ───
+
+func handleRegisterTelegramWebhook(c *gin.Context) {
+	var r struct {
+		Token string `json:"token"`
+	}
+	if err := c.ShouldBindJSON(&r); err != nil {
+		c.Error(err)
+		return
+	}
+
+	if r.Token == "" {
+		c.JSON(http.StatusBadRequest, gin.H{"status": "error", "message": "Bot Token is required"})
+		return
+	}
+
+	// Use the current request host to determine the webhook URL
+	protocol := "https"
+	if c.Request.TLS == nil {
+		// Fallback check if behind proxy (like Render/Heroku/Cloudflare)
+		if c.GetHeader("X-Forwarded-Proto") != "" {
+			protocol = c.GetHeader("X-Forwarded-Proto")
+		} else if !strings.Contains(c.Request.Host, "localhost") {
+			protocol = "https"
+		} else {
+			protocol = "http"
+		}
+	}
+	
+	webhookURL := fmt.Sprintf("%s://%s/api/telegram/webhook/%s", protocol, c.Request.Host, r.Token)
+	apiURL := fmt.Sprintf("https://api.telegram.org/bot%s/setWebhook?url=%s", r.Token, webhookURL)
+
+	log.Printf("🔌 [Telegram Setup] Registering webhook: %s", webhookURL)
+
+	resp, err := http.Get(apiURL)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"status": "error", "message": "Failed to call Telegram setWebhook: " + err.Error()})
+		return
+	}
+	defer resp.Body.Close()
+
+	var resData map[string]interface{}
+	json.NewDecoder(resp.Body).Decode(&resData)
+
+	c.JSON(http.StatusOK, resData)
+}
+
+func handleTelegramWebhook(c *gin.Context) {
+	token := c.Param("token")
+	var update struct {
+		Message struct {
+			MessageID int `json:"message_id"`
+			Chat      struct {
+				ID int64 `json:"id"`
+			} `json:"chat"`
+			Text            string `json:"text"`
+			MessageThreadID int    `json:"message_thread_id"`
+		} `json:"message"`
+	}
+
+	if err := c.ShouldBindJSON(&update); err != nil {
+		// Just log and return 200 to Telegram to stop retries
+		return
+	}
+
+	if update.Message.Text == "" {
+		c.JSON(200, gin.H{"status": "ok"})
+		return
+	}
+
+	text := strings.TrimSpace(update.Message.Text)
+	if strings.HasPrefix(text, "/id") {
+		chatID := update.Message.Chat.ID
+		threadID := update.Message.MessageThreadID
+		
+		go func(t string, cid int64, tid int) {
+			response := fmt.Sprintf("🆔 *Chat Information*\n\n🔹 *Group ID:* `%d`", cid)
+			if tid != 0 {
+				response += fmt.Sprintf("\n🔹 *Thread ID:* `%d`", tid)
+			}
+			
+			payload := map[string]interface{}{
+				"chat_id":    cid,
+				"text":       response,
+				"parse_mode": "Markdown",
+			}
+			if tid != 0 {
+				payload["message_thread_id"] = tid
+			}
+
+			apiURL := fmt.Sprintf("https://api.telegram.org/bot%s/sendMessage", t)
+			jsonData, _ := json.Marshal(payload)
+			resp, err := http.Post(apiURL, "application/json", bytes.NewBuffer(jsonData))
+			if err != nil {
+				log.Printf("❌ [Telegram Bot] Failed to send /id response: %v", err)
+				return
+			}
+			defer resp.Body.Close()
+		}(token, chatID, threadID)
+	}
+
+	c.JSON(200, gin.H{"status": "ok"})
+}
+
+func handleTestTelegram(c *gin.Context) {
+	var r struct {
+		Token    string `json:"token"`
+		ChatID   string `json:"chatId"`
+		ThreadID string `json:"threadId"`
+		Message  string `json:"message"`
+	}
+	if err := c.ShouldBindJSON(&r); err != nil {
+		c.Error(err)
+		return
+	}
+
+	if r.Token == "" || r.ChatID == "" {
+		c.JSON(http.StatusBadRequest, gin.H{"status": "error", "message": "Bot Token and Chat ID are required"})
+		return
+	}
+
+	payload := map[string]interface{}{
+		"chat_id":    r.ChatID,
+		"text":       "🔔 *តេស្តការតភ្ជាប់ (Test Connection)*\n\nប្រព័ន្ធរបស់អ្នកត្រូវបានភ្ជាប់មកកាន់ Group នេះដោយជោគជ័យ!\n\n📍 Message: " + r.Message,
+		"parse_mode": "Markdown",
+	}
+
+	if r.ThreadID != "" {
+		if tid, err := strconv.Atoi(r.ThreadID); err == nil && tid != 0 {
+			payload["message_thread_id"] = tid
+		}
+	}
+
+	apiURL := fmt.Sprintf("https://api.telegram.org/bot%s/sendMessage", r.Token)
+	jsonData, _ := json.Marshal(payload)
+	resp, err := http.Post(apiURL, "application/json", bytes.NewBuffer(jsonData))
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"status": "error", "message": "Connection error: " + err.Error()})
+		return
+	}
+	defer resp.Body.Close()
+
+	var resData map[string]interface{}
+	json.NewDecoder(resp.Body).Decode(&resData)
+
+	c.JSON(http.StatusOK, resData)
+}
+
+// ─────────────────────────────────────────
+func handleUpdateFormulaReport(c *gin.Context)    { c.JSON(200, gin.H{"status": "success"}) }
+func handleClearCache(c *gin.Context)             { c.JSON(200, gin.H{"status": "success"}) }
+func handleAdminUpdateProductTags(c *gin.Context) { c.JSON(200, gin.H{"status": "success"}) }
+
+func handleGetGlobalShippingCosts(c *gin.Context) {
+	var results []struct {
+		OrderID        string  `json:"Order ID"`
+		Timestamp      string  `json:"Timestamp"`
+		Team           string  `json:"Team"`
+		InternalCost   float64 `json:"Internal Cost"`
+		ShippingMethod string  `json:"Internal Shipping Method"`
+	}
+
+	err := backend.DB.Model(&Order{}).
+		Select("order_id, timestamp, team, internal_cost, internal_shipping_method").
+		Where("order_id NOT LIKE ? AND order_id NOT LIKE ?", "%Opening_Balance%", "%Opening Balance%").
+		Order("timestamp DESC").
+		Scan(&results).Error
+
+	if err != nil {
+		c.JSON(500, gin.H{"status": "error", "message": err.Error()})
+		return
+	}
+
+	c.JSON(200, gin.H{"status": "success", "data": results})
+}
+
+func handleUpdateProfile(c *gin.Context) {
+	var req struct {
+		UserName string                 `json:"userName"`
+		NewData  map[string]interface{} `json:"newData"`
+	}
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.Error(err)
+		return
+	}
+	mappedData := make(map[string]interface{})
+	for k, v := range req.NewData {
+		if k == "Password" {
+			continue
+		}
+		mappedData[mapToDBColumn(k, "Users")] = v
+	}
+	if err := backend.DB.Model(&User{}).Where("user_name = ?", req.UserName).Updates(mappedData).Error; err != nil {
+		c.Error(err)
+		return
+	}
+
+	// Broadcast profile change so all connected clients refresh their user list / avatar cache.
+	profileEvent, _ := json.Marshal(map[string]interface{}{
+		"type":       "update_sheet",
+		"sheetName":  "Users",
+		"primaryKey": map[string]string{"UserName": req.UserName},
+		"newData":    req.NewData,
+	})
+	hub.Broadcast <- profileEvent
+
+	go func() {
+		if appsScriptURL != "" {
+			// Sync with Google Sheets via managed queue
+			enqueueSync("updateSheet", req.NewData, "Users", map[string]string{"UserName": req.UserName})
+		}
+	}()
+
+	c.JSON(200, gin.H{"status": "success"})
+}
+
+func handleChangePassword(c *gin.Context) {
+	var req struct {
+		UserName    string `json:"userName"`
+		NewPassword string `json:"newPassword"`
+	}
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.Error(err)
+		return
+	}
+	hashedPassword, err := bcrypt.GenerateFromPassword([]byte(req.NewPassword), bcrypt.DefaultCost)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"status": "error", "message": "មិនអាចកំណត់លេខសម្ងាត់ថ្មីបានទេ"})
+		return
+	}
+	if err := backend.DB.Model(&User{}).Where("user_name = ?", req.UserName).Update("password", string(hashedPassword)).Error; err != nil {
+		c.Error(err)
+		return
+	}
+
+	go func() {
+		if appsScriptURL != "" {
+			enqueueSync("updateSheet", map[string]interface{}{"PasswordChanged": true}, "Users", map[string]string{"UserName": req.UserName})
+		}
+	}()
+
+	c.JSON(200, gin.H{"status": "success"})
+}
+func handleGetChatMessages(c *gin.Context) {
+	limitParam := c.Query("limit")
+	receiverParam := c.Query("receiver")
+	currentUser, _ := c.Get("userName")
+	var messages []ChatMessage
+	query := backend.DB.Order("timestamp desc")
+	if receiverParam != "" {
+		query = query.Where("(user_name = ? AND receiver = ?) OR (user_name = ? AND receiver = ?)", currentUser, receiverParam, receiverParam, currentUser)
+	} else {
+		query = query.Where("receiver = ?", "")
+	}
+	limit, _ := strconv.Atoi(limitParam)
+	if limit <= 0 {
+		limit = 100
+	}
+	query.Limit(limit).Find(&messages)
+	for i, j := 0, len(messages)-1; i < j; i, j = i+1, j-1 {
+		messages[i], messages[j] = messages[j], messages[i]
+	}
+	c.JSON(200, gin.H{"status": "success", "data": messages})
+}
+
+func handleGetSingleChatMessage(c *gin.Context) {
+	id := c.Param("id")
+	var msg ChatMessage
+	if err := backend.DB.Where("id = ?", id).First(&msg).Error; err != nil {
+		c.JSON(404, gin.H{"error": "message not found"})
+		return
+	}
+	c.JSON(200, gin.H{"status": "success", "data": msg})
+}
+
+func handleSendChatMessage(c *gin.Context) {
+	var msg ChatMessage
+	if err := c.ShouldBindJSON(&msg); err != nil {
+		c.JSON(400, gin.H{"status": "error", "message": "Invalid format"})
+		return
+	}
+	if sender, exists := c.Get("userName"); exists {
+		msg.Sender = sender.(string)
+	}
+	msg.Timestamp = time.Now().Format(time.RFC3339)
+
+	msgType := strings.ToLower(msg.Type)
+
+	var base64Data string
+	if msgType == "audio" || msgType == "image" {
+		base64Data = msg.Message
+	}
+
+	if (msgType == "audio" || msgType == "image") && msg.FileURL == "" && len(base64Data) > 100 {
+		mimeType := "application/octet-stream"
+		if strings.Contains(base64Data, "data:") && strings.Contains(base64Data, ";base64,") {
+			parts := strings.Split(base64Data, ";base64,")
+			mimeType = strings.TrimPrefix(parts[0], "data:")
+			base64Data = parts[1]
+		}
+
+		// Upload to Drive synchronously
+		driveURL, fileId, err := backend.UploadToGoogleDriveDirectly(base64Data, "chat_file", mimeType, nil)
+		if err != nil {
+			log.Printf("❌ Chat media upload failed: %v", err)
+			c.JSON(500, gin.H{"status": "error", "message": "បរាជ័យក្នុងការ Upload មេឌៀ"})
+			return
+		}
+
+		msg.FileURL = fileId
+		if msgType == "image" {
+			msg.Message = driveURL
+		}
+
+		backend.DB.Create(&msg)
+		msgBytes, _ := json.Marshal(map[string]interface{}{"type": "new_message", "data": msg})
+		hub.Broadcast <- msgBytes
+
+		c.JSON(200, gin.H{"status": "success", "data": msg})
+		return
+	}
+
+	backend.DB.Create(&msg)
+	msgBytes, _ := json.Marshal(map[string]interface{}{"type": "new_message", "data": msg})
+	hub.Broadcast <- msgBytes
+	c.JSON(200, gin.H{"status": "success", "data": msg})
+}
+
+func handleDeleteChatMessage(c *gin.Context) {
+	var req struct {
+		ID       uint   `json:"id"`
+		UserName string `json:"userName"`
+	}
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"status": "error", "message": "ទិន្នន័យមិនត្រឹមត្រូវ"})
+		return
+	}
+
+	var msg ChatMessage
+	if err := backend.DB.First(&msg, req.ID).Error; err != nil {
+		c.JSON(http.StatusNotFound, gin.H{"status": "error", "message": "រកមិនឃើញសារ"})
+		return
+	}
+
+	currentUser, _ := c.Get("userName")
+	isSystemAdmin, _ := c.Get("isSystemAdmin")
+	if msg.Sender != currentUser.(string) && (isSystemAdmin == nil || !isSystemAdmin.(bool)) {
+		c.JSON(http.StatusForbidden, gin.H{"status": "error", "message": "គ្មានសិទ្ធិលុបសារនេះទេ"})
+		return
+	}
+
+	if err := backend.DB.Delete(&msg).Error; err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"status": "error", "message": "ការលុបសារបរាជ័យ"})
+		return
+	}
+
+	eventBytes, _ := json.Marshal(map[string]interface{}{
+		"type": "delete_message",
+		"id":   req.ID,
+	})
+	hub.Broadcast <- eventBytes
+
+	c.JSON(http.StatusOK, gin.H{"status": "success"})
+}
+
+func handleGetOrderMetadata(c *gin.Context) {
+	orderID := c.Param("id")
+	if orderID == "" {
+		c.JSON(http.StatusBadRequest, gin.H{"status": "error", "message": "Missing Order ID"})
+		return
+	}
+
+	var order Order
+	// Case-insensitive search for order_id
+	if err := backend.DB.Where("UPPER(TRIM(order_id)) = UPPER(TRIM(?))", orderID).First(&order).Error; err != nil {
+		if err == gorm.ErrRecordNotFound {
+			c.JSON(http.StatusNotFound, gin.H{"status": "error", "message": "Order not found"})
+		} else {
+			c.JSON(http.StatusInternalServerError, gin.H{"status": "error", "message": "Database error"})
+		}
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{"status": "success", "data": order})
+}
+
+// =========================================================================
+// GOOGLE SHEETS WEBHOOK (Real-time Sync Sheet -> backend.DB)
+// =========================================================================
+
+func handleSheetsWebhook(c *gin.Context) {
+	var req struct {
+		Secret    string                 `json:"secret"`
+		SheetName string                 `json:"sheetName"`
+		RowData   map[string]interface{} `json:"rowData"`
+		Action    string                 `json:"action"` // "update" or "delete"
+	}
+
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(400, gin.H{"status": "error", "message": "Invalid format"})
+		return
+	}
+
+	if subtle.ConstantTimeCompare([]byte(req.Secret), []byte(appsScriptSecret)) != 1 {
+		c.JSON(401, gin.H{"status": "error", "message": "Unauthorized"})
+		return
+	}
+
+	tableName := getTableName(req.SheetName)
+	if tableName == "" {
+		c.JSON(400, gin.H{"status": "error", "message": "Unknown sheet"})
+		return
+	}
+
+	mappedData := make(map[string]interface{})
+	var pkCol string
+	var pkVal interface{}
+
+	// Identify Primary Key based on SheetName
+	pkName := "ID"
+	if req.SheetName == "Users" {
+		pkName = "UserName"
+	} else if req.SheetName == "Stores" {
+		pkName = "StoreName"
+	} else if req.SheetName == "Settings" {
+		pkName = "Key"
+	} else if req.SheetName == "Products" {
+		pkName = "Barcode"
+	} else if req.SheetName == "ShippingMethods" {
+		pkName = "MethodName"
+	} else if req.SheetName == "DeliveryGroups" {
+		pkName = "ID"
+	} else if req.SheetName == "Colors" {
+		pkName = "ColorName"
+	} else if req.SheetName == "Drivers" {
+		pkName = "DriverName"
+	} else if req.SheetName == "BankAccounts" {
+		pkName = "BankName"
+	} else if req.SheetName == "PhoneCarriers" {
+		pkName = "CarrierName"
+	} else if req.SheetName == "StockTransfers" {
+		pkName = "TransferID"
+	} else if req.SheetName == "Returns" {
+		pkName = "ReturnID"
+	} else if req.SheetName == "TelegramTemplates" {
+		pkName = "ID"
+	} else if req.SheetName == "AllOrders" || strings.HasPrefix(req.SheetName, "Orders_") {
+		pkName = "Order ID"
+	} else {
+		// Default to "id" (lowercase) for Roles, Permissions, Incentive, etc.
+		// if "ID" (uppercase) doesn't find a match in RowData.
+		if _, exists := req.RowData["ID"]; !exists {
+			if _, lowerExists := req.RowData["id"]; lowerExists {
+				pkName = "id"
+			}
+		}
+	}
+
+	for k, v := range req.RowData {
+		dbCol := mapToDBColumn(k, "AllOrders")
+
+		normalizedK := strings.ReplaceAll(strings.ToLower(k), " ", "")
+		normalizedPK := strings.ReplaceAll(strings.ToLower(pkName), " ", "")
+
+		if normalizedK == normalizedPK {
+			pkCol = dbCol
+			pkVal = v
+			continue
+		}
+
+		// Skip empty or nil values to avoid overwriting with blanks
+		if v == nil || v == "" {
+			continue
+		}
+
+		// Handle Numeric fields
+		if backend.IsNumericHeader(k) {
+			if s, ok := v.(string); ok {
+				if f, err := strconv.ParseFloat(s, 64); err == nil {
+					mappedData[dbCol] = f
+				}
+			} else {
+				mappedData[dbCol] = v
+			}
+		} else if backend.IsBoolHeader(k) {
+			if s, ok := v.(string); ok {
+				mappedData[dbCol] = strings.ToUpper(s) == "TRUE"
+			} else {
+				mappedData[dbCol] = v
+			}
+		} else {
+			mappedData[dbCol] = fmt.Sprintf("%v", v)
+		}
+	}
+
+	// --- Status Protection (State Machine Safeguard) ---
+	if tableName == "orders" {
+		if newStatusRaw, hasNewStatus := mappedData["fulfillment_status"]; hasNewStatus {
+			newStatus := fmt.Sprintf("%v", newStatusRaw)
+
+			var currentOrder Order
+			// Using TRIM and UPPER for robust matching
+			whereClause := fmt.Sprintf("UPPER(TRIM(%s)) = UPPER(TRIM(?))", pkCol)
+			if err := backend.DB.Where(whereClause, pkVal).Select("fulfillment_status").First(&currentOrder).Error; err == nil {
+				cur := strings.TrimSpace(currentOrder.FulfillmentStatus)
+				if cur == "" {
+					cur = "Pending"
+				}
+
+				statusWeight := map[string]int{
+					"Pending":       1,
+					"Processing":    2,
+					"Ready to Ship": 3,
+					"Shipped":       4,
+					"Delivered":     5,
+					"Cancelled":     0,
+				}
+
+				// If we are already at "Ready to Ship" or further, don't let it revert to "Pending"
+				if statusWeight[cur] >= 3 && statusWeight[newStatus] < 3 && newStatus != "Cancelled" {
+					log.Printf("🛡️  [Webhook Protection] BLOCKED REVERT for Order %v: Current='%s' -> Incoming='%s' (preventing stale sheet data overwrite)", pkVal, cur, newStatus)
+					delete(mappedData, "fulfillment_status") // Remove status from update map
+				} else {
+					log.Printf("✅ [Webhook Sync] Allowed status change for Order %v: '%s' -> '%s'", pkVal, cur, newStatus)
+				}
+			} else if err != nil {
+				log.Printf("⚠️  [Webhook Sync] Error checking current status for Order %v: %v", pkVal, err)
+			}
+		}
+
+		// --- Fulfillment Data Protection (Crucial for preventing race conditions) ---
+		// We protect these fields from being cleared (made empty) by stale sheet webhooks.
+		protectedFields := []string{
+			"package_photo_url", "delivery_photo_url",
+			"packed_by", "packed_time",
+			"driver_name", "tracking_number",
+			"dispatched_by", "dispatched_time",
+			"delivered_time",
+		}
+
+		var existingOrder Order
+		hasFetchedExisting := false
+
+		for _, field := range protectedFields {
+			if incomingVal, hasVal := mappedData[field]; hasVal {
+				incomingStr := strings.TrimSpace(fmt.Sprintf("%v", incomingVal))
+
+				// If incoming data is empty, check if we already have data in DB
+				if incomingStr == "" || incomingStr == "<nil>" || incomingStr == "undefined" {
+					if !hasFetchedExisting {
+						whereClause := fmt.Sprintf("UPPER(TRIM(%s)) = UPPER(TRIM(?))", pkCol)
+						backend.DB.Where(whereClause, pkVal).First(&existingOrder)
+						hasFetchedExisting = true
+					}
+
+					// Get existing value for this field
+					existingStr := ""
+					switch field {
+					case "package_photo_url":
+						existingStr = existingOrder.PackagePhotoURL
+					case "delivery_photo_url":
+						existingStr = existingOrder.DeliveryPhotoURL
+					case "packed_by":
+						existingStr = existingOrder.PackedBy
+					case "packed_time":
+						existingStr = existingOrder.PackedTime
+					case "driver_name":
+						existingStr = existingOrder.DriverName
+					case "tracking_number":
+						existingStr = existingOrder.TrackingNumber
+					case "dispatched_by":
+						existingStr = existingOrder.DispatchedBy
+					case "dispatched_time":
+						existingStr = existingOrder.DispatchedTime
+					case "delivered_time":
+						existingStr = existingOrder.DeliveredTime
+					}
+
+					if existingStr != "" {
+						log.Printf("🛡️  [Webhook Protection] REJECTED clearing of %s for Order %v (stale sheet update)", field, pkVal)
+						delete(mappedData, field) // Don't let sheet clear existing data
+					}
+				}
+			}
+		}
+	}
+
+	if pkCol == "" || pkVal == nil {
+		c.JSON(400, gin.H{"status": "error", "message": "Missing primary key"})
+		return
+	}
+
+	if req.Action == "delete" {
+		whereClause := fmt.Sprintf("UPPER(TRIM(%s)) = UPPER(TRIM(?))", pkCol)
+		backend.DB.Table(tableName).Where(whereClause, pkVal).Delete(nil)
+	} else {
+		// UPSERT logic: Try to update first
+		whereClause := fmt.Sprintf("UPPER(TRIM(%s)) = UPPER(TRIM(?))", pkCol)
+		result := backend.DB.Table(tableName).Where(whereClause, pkVal).Updates(mappedData)
+		if result.Error != nil {
+			c.JSON(500, gin.H{"status": "error", "message": result.Error.Error()})
+			return
+		}
+
+		// If no rows were updated, it's likely a new record. Attempt to Create.
+		if result.RowsAffected == 0 {
+			// Ensure PK is in mappedData for creation
+			mappedData[pkCol] = pkVal
+			if err := backend.DB.Table(tableName).Create(mappedData).Error; err != nil {
+				// Log but don't fail, as it might have been created by another process/worker
+				log.Printf("⚠️ SyncManager: Upsert/Create failed for %s PK %v: %v", tableName, pkVal, err)
+			}
+		}
+	}
+
+	// Broadcast update to all connected clients
+	event, _ := json.Marshal(map[string]interface{}{
+		"type":      "sheet_webhook_sync",
+		"sheetName": req.SheetName,
+		"action":    req.Action,
+		"pk":        pkVal,
+	})
+	hub.Broadcast <- event
+
+	// --- NEW: Trigger Telegram Update (if Sheet Edit for an Order) ---
+	if tableName == "orders" && req.Action == "update" && pkVal != nil {
+		go func(orderId interface{}, sheetName string, rowData map[string]interface{}) {
+			// Apps Script re-fetches from the sheet, so we just need Order ID and Team.
+			// 1. Try to get team from rowData
+			team := ""
+			if t, exists := rowData["Team"]; exists {
+				team = fmt.Sprintf("%v", t)
+			} else if strings.HasPrefix(sheetName, "Orders_") {
+				team = strings.TrimPrefix(sheetName, "Orders_")
+			}
+
+			// 2. If team is still empty, fetch from backend.DB
+			if team == "" {
+				var order Order
+				whereClause := fmt.Sprintf("UPPER(TRIM(%s)) = UPPER(TRIM(?))", pkCol)
+				if err := backend.DB.Where(whereClause, orderId).Select("team").First(&order).Error; err == nil {
+					team = order.Team
+				}
+			}
+
+			if team != "" {
+				log.Printf("📢 [Webhook Sync] Triggering Telegram Edit for Order %v (Team: %s)", orderId, team)
+
+				// Prepare updatedFields from rowData to pass along (Apps Script uses this to UpdateSheets first)
+				updatedFields := make(map[string]interface{})
+				for k, v := range rowData {
+					updatedFields[k] = v
+				}
+
+				enqueueSync("updateOrderTelegram", map[string]interface{}{
+					"orderId":       fmt.Sprintf("%v", orderId),
+					"team":          team,
+					"updatedFields": updatedFields,
+				}, "", nil)
+			}
+		}(pkVal, req.SheetName, req.RowData)
+	}
+
+	c.JSON(200, gin.H{"status": "success"})
+}
+
+var startTime time.Time
+
+func main() {
+	startTime = time.Now()
+	port := os.Getenv("PORT")
+	if port == "" {
+		port = "8080"
+	}
+	backend.SpreadsheetID = os.Getenv("GOOGLE_SHEET_ID")
+	appsScriptURL = os.Getenv("APPS_SCRIPT_URL")
+	appsScriptSecret = os.Getenv("APPS_SCRIPT_SECRET")
+	backend.AppsScriptURL = appsScriptURL
+	backend.AppsScriptSecret = appsScriptSecret
+
+	// ── Wire Video-package injectable dependencies ──────────────────────────
+	backend.VideoFetchSheetFunc = backend.FetchSheetDataToStruct
+	backend.VideoGenerateIDFunc = generateShortID
+	backend.VideoExtractFileIDFunc = backend.ExtractFileIDFromURL
+
+	// ── Wire Upload-package injectable dependencies ──────────────────────────
+	backend.UploadGenerateIDFunc = generateShortID
+	backend.UploadMapToDBColumnFunc = func(key string) string { return mapToDBColumn(key, "") }
+	backend.UploadGetTableNameFunc = getTableName
+	backend.UploadIsValidOrderColumnFunc = isValidOrderColumn
+
+	// Pre-initialize UploadFolderID from environment for immediate use
+	backend.UploadFolderID = os.Getenv("UPLOAD_FOLDER_ID")
+
+	jwtSecretEnv := os.Getenv("JWT_SECRET")
+	if jwtSecretEnv == "" {
+		jwtSecretEnv = "change-me-in-production"
+	}
+	backend.JwtSecret = []byte(jwtSecretEnv)
+
+	hub = NewHub()
+	backend.HubGlobal = hub
+	go hub.Run()
+
+	// Initialize backend.DB
+	initDB()
+
+	// Initialize background processes
+	go func() {
+		// Start Background Workers ONLY after backend.DB is ready
+		startSyncManager(2)
+		go startOrderWorker()
+		startScheduler()
+		backend.CreateGoogleAPIClient(context.Background())
+
+		// Auto-migrate if DB is empty
+		var userCount int64
+		if err := backend.DB.Model(&User{}).Count(&userCount).Error; err == nil && userCount == 0 {
+			log.Println("Empty database detected. Starting automatic data migration...")
+			backend.PerformDataMigration()
+		} else if os.Getenv("AUTO_MIGRATE") == "true" {
+			log.Println("🚀 Starting forced automatic data migration on startup...")
+			backend.PerformDataMigration()
+		} else {
+			log.Println("ℹ️ Automatic migration skipped (DB not empty). Set AUTO_MIGRATE=true if you want to wipe and re-sync.")
+		}
+	}()
+
+	r := gin.Default()
+	r.Use(gzip.Gzip(gzip.DefaultCompression))
+	r.Use(ErrorHandlingMiddleware())
+
+	// Enhanced CORS Configuration
+	r.Use(cors.New(cors.Config{
+		AllowOriginFunc: func(origin string) bool {
+			return true
+		},
+		AllowMethods:     []string{"GET", "POST", "PUT", "DELETE", "OPTIONS", "PATCH"},
+		AllowHeaders:     []string{"Origin", "Content-Type", "Authorization", "X-Requested-With", "Accept"},
+		ExposeHeaders:    []string{"Content-Length"},
+		AllowCredentials: true,
+		MaxAge:           12 * time.Hour,
+	}))
+
+	r.GET("/ping", func(c *gin.Context) {
+		c.JSON(200, gin.H{"status": "ok", "message": "pong"})
+	})
+
+	// Apply DBMiddleware to all /api routes except root health checks
+	api := r.Group("/api", DBMiddleware())
+	api.POST("/login", handleLogin)
+	api.GET("/settings", handleGetSettings)
+	// ── Entertainment / Video Player routes (Backend/video.go) ────────────────────────
+	// All video handler logic lives in Backend/video.go (package backend).
+	// We call RegisterVideoRoutes to set up both public and admin routes.
+	// We pass the public group (api) and the admin group (admin) which already has AdminOnlyMiddleware.
+	// But admin group is defined inside protected block, so we'll call it there.
+	api.POST("/webhook/sheets-sync", handleSheetsWebhook)
+	api.GET("/order-metadata/:id", handleGetOrderMetadata)
+	api.POST("/telegram/webhook/:token", handleTelegramWebhook)
+
+	protected := api.Group("/")
+	protected.Use(AuthMiddleware())
+	{
+		protected.POST("/setup-bot-webhook", handleRegisterTelegramWebhook)
+		protected.POST("/test-telegram", handleTestTelegram)
+		protected.GET("/users", handleGetUsers)
+		protected.GET("/static-data", handleGetStaticData)
+		protected.POST("/submit-order", RequirePermission("create_order"), handleSubmitOrder)
+		protected.POST("/upload-image", backend.HandleImageUploadProxy)
+		protected.GET("/proxy-image", backend.HandleProxyImage)
+		protected.GET("/permissions", handleGetUserPermissions)
+		protected.GET("/roles", handleGetRoles)
+
+		// Promotions
+		protected.GET("/promotions", handleGetPromotions)
+		protected.POST("/promotions", RequirePermission("manage_promotions"), handleCreatePromotion)
+		protected.PUT("/promotions/:id", RequirePermission("manage_promotions"), handleUpdatePromotion)
+		protected.DELETE("/promotions/:id", RequirePermission("manage_promotions"), handleDeletePromotion)
+
+		protected.GET("/teams/shipping-costs", RequirePermission("view_revenue"), handleGetGlobalShippingCosts)
+
+		chat := protected.Group("/chat")
+		chat.GET("/messages", handleGetChatMessages)
+		chat.GET("/message/:id", handleGetSingleChatMessage)
+		chat.POST("/send", handleSendChatMessage)
+		chat.POST("/delete", handleDeleteChatMessage)
+
+		// ── Admin Group ──
+		adminGroup := protected.Group("/admin")
+		{
+			// Order Management (Accessible by anyone with permission, e.g. Packers/Admins)
+			adminGroup.GET("/orders", RequirePermission("view_order_list"), handleGetAllOrders)
+			adminGroup.GET("/all-orders", RequirePermission("view_order_list"), handleGetAllOrders)
+			adminGroup.POST("/update-order", RequirePermission("edit_order"), handleAdminUpdateOrder)
+			adminGroup.POST("/send-delivery-telegram", RequirePermission("edit_order"), handleSendDeliveryTelegram)
+			adminGroup.POST("/delete-delivery-telegram", RequirePermission("edit_order"), handleDeleteDeliveryTelegram)
+
+			// ── Shift Management Routes ──
+			adminGroup.GET("/shifts/active/:storeName", handleGetActiveShift)
+			adminGroup.POST("/shifts/open", handleOpenShift)
+			adminGroup.POST("/shifts/close", handleCloseShift)
+
+			// Restricted Admin Actions (Require Admin role)
+			restricted := adminGroup.Group("/")
+			restricted.Use(AdminOnlyMiddleware())
+			{
+				// Video/Movie admin routes from backend package
+				backend.RegisterVideoRoutes(api, restricted)
+
+				restricted.POST("/migrate-data", backend.HandleMigrateData)
+				restricted.GET("/revenue-summary", handleGetRevenueSummary)
+				restricted.GET("/sync-status", handleGetSyncStatus)
+				restricted.GET("/sync-queue", handleGetSyncQueue)
+				restricted.POST("/sync-retry/:id", handleRetrySyncTask)
+				restricted.POST("/sync-retry-all", handleRetryAllFailedSyncTasks)
+				restricted.DELETE("/sync-clear-failed", handleClearFailedSyncTasks)
+				restricted.GET("/health-check", handleHealthCheck)
+				restricted.POST("/update-sheet", handleAdminUpdateSheet)
+				restricted.POST("/add-row", handleAdminAddRow)
+				restricted.POST("/delete-row", handleAdminDeleteRow)
+				restricted.POST("/delete-order", RequirePermission("delete_order"), handleAdminDeleteOrder)
+				restricted.GET("/permissions", handleGetAllPermissions)
+				restricted.POST("/permissions", handleUpdatePermission)
+				restricted.POST("/permissions/sync-sheet", handleSyncPermissionsToSheet)
+				restricted.POST("/permissions/reset", handleResetPermissions)
+				restricted.POST("/roles", handleCreateRole)
+				restricted.GET("/incentive/calculators", handleGetIncentiveCalculators)
+				restricted.POST("/incentive/calculators", handleCreateIncentiveCalculator)
+				restricted.GET("/incentive/projects", handleGetIncentiveProjects)
+				restricted.POST("/incentive/projects", handleCreateIncentiveProject)
+				restricted.GET("/incentive/results", handleGetIncentiveResults)
+				restricted.POST("/incentive/calculate", handleCalculateIncentive)
+				restricted.GET("/incentive/manual-data", handleGetIncentiveManualData)
+				restricted.POST("/incentive/manual-data", handleSaveIncentiveManualData)
+				restricted.GET("/incentive/custom-payout", handleGetIncentiveCustomPayouts)
+				restricted.POST("/incentive/custom-payout", handleSaveIncentiveCustomPayout)
+				restricted.POST("/incentive/lock", handleLockIncentivePayout)
+			}
+		}
+		profile := protected.Group("/profile")
+		profile.POST("/update", handleUpdateProfile)
+		profile.POST("/change-password", handleChangePassword)
+	}
+	api.GET("/chat/ws", AuthMiddleware(), serveWs)
+	api.GET("/chat/audio/:fileID", backend.HandleGetAudioProxy)
+	r.Run("0.0.0.0:" + port)
+}
+
+// ── Shift Management Handlers ──────────────────────────────────────────────
+
+func handleGetActiveShift(c *gin.Context) {
+	storeName := c.Param("storeName")
+	var shift backend.Shift
+	if err := backend.DB.Where("store_name = ? AND status = 'Open'", storeName).First(&shift).Error; err != nil {
+		c.JSON(200, gin.H{"status": "none"})
+		return
+	}
+	c.JSON(200, gin.H{"status": "success", "shift": shift})
+}
+
+func handleOpenShift(c *gin.Context) {
+	var r struct {
+		UserName  string `json:"userName"`
+		Password  string `json:"password"`
+		StoreName string `json:"storeName"`
+		Photo     string `json:"photo"` // base64
+	}
+	if err := c.ShouldBindJSON(&r); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"status": "error", "message": "ទិន្នន័យមិនត្រឹមត្រូវ"})
+		return
+	}
+
+	// 1. Verify User
+	var user User
+	if err := backend.DB.Where("user_name = ?", strings.TrimSpace(r.UserName)).First(&user).Error; err != nil {
+		c.JSON(http.StatusUnauthorized, gin.H{"status": "error", "message": "អ្នកប្រើប្រាស់មិនត្រឹមត្រូវ"})
+		return
+	}
+	if err := bcrypt.CompareHashAndPassword([]byte(user.Password), []byte(strings.TrimSpace(r.Password))); err != nil {
+		c.JSON(http.StatusUnauthorized, gin.H{"status": "error", "message": "លេខសម្ងាត់មិនត្រឹមត្រូវ"})
+		return
+	}
+
+	// Check if already has an open shift for this store
+	var existingShift backend.Shift
+	if err := backend.DB.Where("store_name = ? AND status = 'Open'", r.StoreName).First(&existingShift).Error; err == nil {
+		c.JSON(http.StatusBadRequest, gin.H{"status": "error", "message": "ឃ្លាំងនេះត្រូវបានបើកវេនរួចហើយដោយ " + existingShift.OpenedBy})
+		return
+	}
+
+	// 2. Upload Photo
+	photoURL := ""
+	if r.Photo != "" {
+		url, _, err := backend.UploadToGoogleDriveDirectly(r.Photo, "shift_open_"+r.StoreName, "image/jpeg", nil)
+		if err == nil {
+			photoURL = url
+		} else {
+			log.Printf("❌ [handleOpenShift] Photo upload failed: %v", err)
+		}
+	}
+
+	// 3. Save Shift
+	shift := backend.Shift{
+		StoreName: r.StoreName,
+		OpenedBy:  user.FullName,
+		OpenedAt:  time.Now(),
+		OpenPhoto: photoURL,
+		Status:    "Open",
+	}
+	if err := backend.DB.Create(&shift).Error; err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"status": "error", "message": "មិនអាចបើកវេនបានទេ"})
+		return
+	}
+
+	// 4. Telegram Notification
+	go sendShiftTelegramNotification(r.StoreName, "Open", user.FullName, photoURL, "", user.TelegramStickerID)
+
+	// 5. Sync to Google Sheets
+	backend.EnqueueSync("addRow", map[string]interface{}{
+		"ID":        shift.ID,
+		"StoreName": shift.StoreName,
+		"OpenedBy":  shift.OpenedBy,
+		"OpenedAt":  shift.OpenedAt.Format("2006-01-02 15:04:05"),
+		"OpenPhoto": shift.OpenPhoto,
+		"Status":    shift.Status,
+	}, "Shifts", nil)
+
+	c.JSON(http.StatusOK, gin.H{"status": "success", "shift": shift})
+}
+
+func handleCloseShift(c *gin.Context) {
+	var r struct {
+		ShiftID uint   `json:"shiftId"`
+		Summary string `json:"summary"`
+	}
+	if err := c.ShouldBindJSON(&r); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"status": "error", "message": "ទិន្នន័យមិនត្រឹមត្រូវ"})
+		return
+	}
+
+	var shift backend.Shift
+	if err := backend.DB.First(&shift, r.ShiftID).Error; err != nil {
+		c.JSON(http.StatusNotFound, gin.H{"status": "error", "message": "រកមិនឃើញវេនដែលត្រូវបិទ"})
+		return
+	}
+
+	if shift.Status == "Closed" {
+		c.JSON(http.StatusBadRequest, gin.H{"status": "error", "message": "វេននេះត្រូវបានបិទរួចហើយ"})
+		return
+	}
+
+	now := time.Now()
+	shift.Status = "Closed"
+	shift.ClosedAt = &now
+	shift.ClosedBy = shift.OpenedBy // The one who opened it is the one who closes it usually, or current user?
+	// User specified "គណនីដែលគាត់ជាអ្នកបើកវេនគឺគាត់ នឹងឃើញមានមុខងារ បិទវេន"
+
+	shift.SummaryJSON = r.Summary
+
+	if err := backend.DB.Save(&shift).Error; err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"status": "error", "message": "មិនអាចបិទវេនបានទេ"})
+		return
+	}
+
+	// Query orders that are 'Packed' but not yet 'Dispatched' for this store
+	var pendingOrders []Order
+	backend.DB.Where("fulfillment_store = ? AND fulfillment_status = ?", shift.StoreName, "Packed").
+		Order("timestamp ASC").Find(&pendingOrders)
+
+	pendingSummary := ""
+	if len(pendingOrders) > 0 {
+		pendingSummary = "\n\n⚠️ *បញ្ជីអីវ៉ាន់មិនទាន់បញ្ជូនចេញ (Packed but not Dispatched):*"
+		for i, o := range pendingOrders {
+			phone := o.CustomerPhone
+			if phone == "" { phone = "N/A" }
+			if !strings.HasPrefix(phone, "0") && phone != "N/A" && len(phone) >= 8 {
+				phone = "0" + phone
+			}
+			
+			pendingSummary += fmt.Sprintf("\n%d. 📱 %s | 🆔 `%s` | 📍 %s | 👥 %s", 
+				i+1, phone, o.OrderID, o.Location, o.Team)
+		}
+	}
+
+	// Telegram Notification
+	go sendShiftTelegramNotification(shift.StoreName, "Close", shift.OpenedBy, "", r.Summary+pendingSummary, "")
+
+	// Sync to Google Sheets (Update the existing row)
+	backend.EnqueueSync("updateSheet", map[string]interface{}{
+		"ClosedBy":    shift.ClosedBy,
+		"ClosedAt":    shift.ClosedAt.Format("2006-01-02 15:04:05"),
+		"Status":      shift.Status,
+		"SummaryJSON": shift.SummaryJSON,
+	}, "Shifts", map[string]string{"ID": fmt.Sprintf("%v", shift.ID)})
+
+	c.JSON(http.StatusOK, gin.H{"status": "success", "shift": shift})
+}
+
+func convertDriveURLToDirect(url string) string {
+	id := backend.ExtractFileIDFromURL(url)
+	if id != "" {
+		// Use thumbnail link with high resolution (sz=w1000)
+		// This is more reliable for Telegram's photo fetcher than the uc?export link
+		return fmt.Sprintf("https://drive.google.com/thumbnail?id=%s&sz=w1000", id)
+	}
+	return url
+}
+
+func handleSendDeliveryTelegram(c *gin.Context) {
+	var r struct {
+		OrderID string `json:"orderId"`
+	}
+	if err := c.ShouldBindJSON(&r); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"status": "error", "message": err.Error()})
+		return
+	}
+
+	var order Order
+	if err := backend.DB.Where("order_id = ?", r.OrderID).First(&order).Error; err != nil {
+		c.JSON(http.StatusNotFound, gin.H{"status": "error", "message": "Order not found"})
+		return
+	}
+
+	if order.FulfillmentStore == "" {
+		c.JSON(http.StatusBadRequest, gin.H{"status": "error", "message": "Order has no fulfillment store"})
+		return
+	}
+
+	var store Store
+	if err := backend.DB.Where("store_name = ?", order.FulfillmentStore).First(&store).Error; err != nil {
+		c.JSON(http.StatusNotFound, gin.H{"status": "error", "message": "Store not found"})
+		return
+	}
+
+	if order.InternalShippingMethod == "" {
+		c.JSON(http.StatusBadRequest, gin.H{"status": "error", "message": "Order has no shipping method assigned"})
+		return
+	}
+
+	var delGroup DeliveryGroup
+	if err := backend.DB.Where("store_name = ? AND shipping_method = ?", order.FulfillmentStore, order.InternalShippingMethod).First(&delGroup).Error; err != nil {
+		c.JSON(http.StatusNotFound, gin.H{"status": "error", "message": "Telegram group not defined for this branch and shipping method"})
+		return
+	}
+
+	if store.TelegramBotToken == "" || delGroup.TelegramGroupID == "" {
+		c.JSON(http.StatusBadRequest, gin.H{"status": "error", "message": "Telegram settings missing for this branch and shipping method"})
+		return
+	}
+
+	if order.PackagePhotoURL == "" {
+		c.JSON(http.StatusBadRequest, gin.H{"status": "error", "message": "No package photo found for this order"})
+		return
+	}
+
+	// 1. Determine daily sequence number
+	ict := time.FixedZone("ICT", 7*3600)
+	todayStr := time.Now().In(ict).Format("2006-01-02")
+	var dailySeq int
+
+	if order.DeliveryDailySequence > 0 && order.DeliveryTelegramDate == todayStr {
+		// If already has a sequence for today, use it (case for resending)
+		dailySeq = order.DeliveryDailySequence
+	} else {
+		// Count orders shipped today with this method AND this store to get next sequence
+		var count int64
+		backend.DB.Model(&Order{}).
+			Where("fulfillment_store = ? AND internal_shipping_method = ? AND delivery_telegram_date = ? AND delivery_daily_sequence > 0",
+				order.FulfillmentStore, order.InternalShippingMethod, todayStr).
+			Count(&count)
+		dailySeq = int(count) + 1
+	}
+
+	// Prepare message details
+	phoneNumber := strings.TrimSpace(order.CustomerPhone)
+	if phoneNumber == "" {
+		phoneNumber = "N/A"
+	} else if !strings.HasPrefix(phoneNumber, "0") && len(phoneNumber) >= 8 {
+		phoneNumber = "0" + phoneNumber
+	}
+	location := order.Location
+	if location == "" {
+		location = "N/A"
+	}
+	address := order.AddressDetails
+	if address == "" {
+		address = "N/A"
+	}
+
+	// Prepare message
+	text := fmt.Sprintf("📦 *រូបភាពកញ្ចប់បញ្ញើ #%d*\n🏷️ លេខកូដ: `%s`",
+		dailySeq, order.OrderID)
+
+	text += fmt.Sprintf("\n\n📱 លេខទូរស័ព្ទ: %s", phoneNumber)
+	text += fmt.Sprintf("\n📍 ទីតាំង: *%s*", location)
+	text += fmt.Sprintf("\n🏠 អាស័យដ្ឋាន: _%s_", address)
+
+	// Build inline keyboard for contact
+	var replyMarkup map[string]interface{}
+	if phoneNumber != "N/A" {
+		re := regexp.MustCompile(`\D`)
+		cleanPhone := re.ReplaceAllString(phoneNumber, "")
+		cleanPhone = strings.TrimPrefix(cleanPhone, "0")
+		if cleanPhone != "" {
+			replyMarkup = map[string]interface{}{
+				"inline_keyboard": [][]map[string]interface{}{
+					{
+						{"text": "💬 ទាក់ទងអតិថិជន", "url": "https://t.me/+855" + cleanPhone},
+					},
+				},
+			}
+		}
+	}
+
+	apiURL := fmt.Sprintf("https://api.telegram.org/bot%s/sendPhoto", store.TelegramBotToken)
+	chatID := strings.TrimSpace(delGroup.TelegramGroupID)
+	payload := map[string]interface{}{
+		"chat_id":    chatID,
+		"parse_mode": "Markdown",
+		"photo":      convertDriveURLToDirect(order.PackagePhotoURL),
+		"caption":    text,
+	}
+
+	if replyMarkup != nil {
+		payload["reply_markup"] = replyMarkup
+	}
+
+	if delGroup.TelegramTopicID != "" {
+		topicID := strings.TrimSpace(delGroup.TelegramTopicID)
+		if threadID, err := strconv.Atoi(topicID); err == nil && threadID != 0 {
+			payload["message_thread_id"] = threadID
+		}
+	}
+
+	jsonData, _ := json.Marshal(payload)
+	log.Printf("📤 [Telegram Delivery] Sending photo for order %s to chat %v (thread: %v)", order.OrderID, payload["chat_id"], payload["message_thread_id"])
+	
+	resp, err := http.Post(apiURL, "application/json", bytes.NewBuffer(jsonData))
+	if err != nil {
+		log.Printf("❌ [Telegram Delivery] HTTP Error for order %s, chat %v: %v", order.OrderID, chatID, err)
+		c.JSON(http.StatusInternalServerError, gin.H{"status": "error", "message": "Failed to call Telegram API: " + err.Error()})
+		return
+	}
+	defer resp.Body.Close()
+
+	var resData map[string]interface{}
+	if err := json.NewDecoder(resp.Body).Decode(&resData); err != nil {
+		log.Printf("❌ [Telegram Delivery] Decode Error for order %s: %v", order.OrderID, err)
+		c.JSON(http.StatusInternalServerError, gin.H{"status": "error", "message": "Failed to decode Telegram response"})
+		return
+	}
+
+	if ok, _ := resData["ok"].(bool); !ok {
+		log.Printf("❌ [Telegram Delivery] API Error for order %s, chat %v: %v", order.OrderID, chatID, resData)
+		c.JSON(http.StatusInternalServerError, gin.H{"status": "error", "message": "Telegram API error", "details": resData})
+		return
+	}
+
+	// Capture the message ID from the response
+	var messageID string
+	if result, ok := resData["result"].(map[string]interface{}); ok {
+		if msgID, ok := result["message_id"].(float64); ok {
+			messageID = fmt.Sprintf("%.0f", msgID)
+		}
+	}
+
+	log.Printf("✅ [Telegram Delivery] Photo sent for order %s, Message ID: %s, Daily Seq: %d", order.OrderID, messageID, dailySeq)
+
+	// Update counter and message ID in database
+	newCount := order.DeliveryPhotoSentCount + 1
+	if err := backend.DB.Model(&order).Updates(map[string]interface{}{
+		"delivery_photo_sent_count":    newCount,
+		"delivery_telegram_message_id": messageID,
+		"delivery_daily_sequence":      dailySeq,
+		"delivery_telegram_date":       todayStr,
+	}).Error; err != nil {
+		log.Printf("❌ [Telegram Delivery] DB Update Error: %v", err)
+	}
+
+	// Trigger Sheet Sync
+	backend.EnqueueSync("updateSheet", map[string]interface{}{
+		"Delivery Photo Sent Count":    newCount,
+		"Delivery Telegram Message ID": messageID,
+		"Delivery Daily Sequence":      dailySeq,
+		"Delivery Telegram Date":       todayStr,
+	}, "AllOrders", map[string]string{"Order ID": order.OrderID})
+
+	// Trigger WebSocket Broadcast - Use the standard structure
+	eventBytes, _ := json.Marshal(map[string]interface{}{
+		"type": "update_order",
+		"orderId": order.OrderID,
+		"newData": map[string]interface{}{
+			"Delivery Photo Sent Count":    newCount,
+			"Delivery Telegram Message ID": messageID,
+			"Delivery Daily Sequence":      dailySeq,
+			"Delivery Telegram Date":       todayStr,
+		},
+	})
+	hub.Broadcast <- eventBytes
+
+	c.JSON(http.StatusOK, gin.H{"status": "success", "message": "បញ្ជូនរូបភាពកញ្ចប់ទៅ Telegram រួចរាល់!"})
+}
+
+func sendShiftTelegramNotification(storeName string, shiftType string, userName string, photoURL string, summary string, stickerID string) {
+	var store Store
+	if err := backend.DB.Where("store_name = ?", storeName).First(&store).Error; err != nil {
+		log.Printf("❌ [Shift Notification] Store not found: %s", storeName)
+		return
+	}
+
+	if store.TelegramBotToken == "" || store.TelegramGroupID == "" {
+		log.Printf("⚠️ [Shift Notification] Telegram settings missing for store: %s", storeName)
+		return
+	}
+
+	ict := time.FixedZone("ICT", 7*3600)
+	now := time.Now().In(ict).Format("03:04 PM")
+	var text string
+	if shiftType == "Open" {
+		text = fmt.Sprintf("👋 ជម្រាបសួរ! ខ្ញុំ %s (Store Assistant)\n\n📍 សាខា: *%s*\n🟢 បើកវេនម៉ោង %s", userName, storeName, now)
+	} else {
+		text = fmt.Sprintf("👋 ជម្រាបសួរ! ខ្ញុំ %s (Store Assistant)\n\n📍 សាខា: *%s*\n🔴 បិទវេនម៉ោង %s\n\n📊 %s", userName, storeName, now, summary)
+	}
+
+	apiURL := ""
+	chatID := strings.TrimSpace(store.TelegramGroupID)
+	payload := map[string]interface{}{
+		"chat_id":    chatID,
+		"parse_mode": "Markdown",
+	}
+	if store.TelegramTopicID != "" {
+		topicID := strings.TrimSpace(store.TelegramTopicID)
+		if threadID, err := strconv.Atoi(topicID); err == nil && threadID != 0 {
+			payload["message_thread_id"] = threadID
+		}
+	}
+
+	// 1. Send Sticker first if it's an Open Shift and stickerID is provided
+	if shiftType == "Open" && stickerID != "" {
+		stickerURL := fmt.Sprintf("https://api.telegram.org/bot%s/sendSticker", store.TelegramBotToken)
+		stickerPayload := map[string]interface{}{
+			"chat_id": chatID,
+			"sticker": stickerID,
+		}
+		if payload["message_thread_id"] != nil {
+			stickerPayload["message_thread_id"] = payload["message_thread_id"]
+		}
+		sData, _ := json.Marshal(stickerPayload)
+		http.Post(stickerURL, "application/json", bytes.NewBuffer(sData))
+	}
+
+	// 2. Send the main notification (Photo or Text)
+	if photoURL != "" && shiftType == "Open" {
+		apiURL = fmt.Sprintf("https://api.telegram.org/bot%s/sendPhoto", store.TelegramBotToken)
+		payload["photo"] = convertDriveURLToDirect(photoURL)
+		payload["caption"] = text
+	} else {
+		apiURL = fmt.Sprintf("https://api.telegram.org/bot%s/sendMessage", store.TelegramBotToken)
+		payload["text"] = text
+	}
+
+	jsonData, _ := json.Marshal(payload)
+	resp, err := http.Post(apiURL, "application/json", bytes.NewBuffer(jsonData))
+	if err != nil {
+		log.Printf("❌ [Shift Notification] HTTP error for %s, chat %v: %v", storeName, chatID, err)
+		return
+	}
+	defer resp.Body.Close()
+
+	var resData map[string]interface{}
+	json.NewDecoder(resp.Body).Decode(&resData)
+	if ok, _ := resData["ok"].(bool); !ok {
+		log.Printf("❌ [Shift Notification] Telegram API error for %s, chat %v: %v", storeName, chatID, resData)
+	} else {
+		log.Printf("✅ [Shift Notification] Sent successfully for %s to chat %v", storeName, chatID)
+	}
+}
+
+// AddWatermarkAndEditTelegramMedia modifies the message by adding a watermark to the photo
+func AddWatermarkAndEditTelegramMedia(order Order, newStatus string) {
+	if order.DeliveryTelegramMessageID == "" {
+		return
+	}
+
+	if order.FulfillmentStore == "" {
+		return
+	}
+
+	var store Store
+	if err := backend.DB.Where("store_name = ?", order.FulfillmentStore).First(&store).Error; err != nil {
+		return
+	}
+
+	if order.InternalShippingMethod == "" {
+		return
+	}
+
+	var delGroup DeliveryGroup
+	if err := backend.DB.Where("store_name = ? AND shipping_method = ?", order.FulfillmentStore, order.InternalShippingMethod).First(&delGroup).Error; err != nil {
+		return
+	}
+
+	if store.TelegramBotToken == "" || delGroup.TelegramGroupID == "" {
+		return
+	}
+
+	if order.PackagePhotoURL == "" {
+		return
+	}
+
+	var statusIndicator string
+	var watermarkText string
+	var watermarkColor color.RGBA
+
+	if newStatus == "Cancelled" {
+		statusIndicator = "❌ *ការកម្មង់ត្រូវបានលុបចោល (CANCELLED)* ❌"
+		watermarkText = "CANCELLED"
+		watermarkColor = color.RGBA{255, 0, 0, 150} // Red with alpha
+	} else if newStatus == "Returned" {
+		statusIndicator = "🔄 *ការកម្មង់ត្រូវបានបញ្ជូនត្រលប់ (RETURNED)* 🔄"
+		watermarkText = "RETURNED"
+		watermarkColor = color.RGBA{128, 0, 128, 150} // Purple with alpha
+	} else {
+		return
+	}
+
+	// 1. Download the original photo
+	photoURL := convertDriveURLToDirect(order.PackagePhotoURL)
+	resp, err := http.Get(photoURL)
+	if err != nil {
+		log.Printf("❌ Failed to download package photo for watermarking: %v", err)
+		return
+	}
+	defer resp.Body.Close()
+
+	img, _, err := image.Decode(resp.Body)
+	if err != nil {
+		log.Printf("❌ Failed to decode package photo: %v", err)
+		return
+	}
+
+	bounds := img.Bounds()
+	width := bounds.Dx()
+	height := bounds.Dy()
+
+	// 2. Draw the watermark
+	dc := gg.NewContext(width, height)
+	dc.DrawImage(img, 0, 0)
+
+	// Set font size based on image width (e.g. width / 5)
+	fontSize := float64(width) / 5.0
+	if fontSize < 20 {
+		fontSize = 20
+	}
+	
+	fontLoaded := false
+	fontPaths := []string{"Font/DOMEG.ttf", "../Font/DOMEG.ttf", "Font/DOMKH.ttf", "../Font/DOMKH.ttf"}
+	for _, path := range fontPaths {
+		if err := dc.LoadFontFace(path, fontSize); err == nil {
+			fontLoaded = true
+			break
+		}
+	}
+
+	dc.SetColor(watermarkColor)
+	dc.Rotate(gg.Radians(-30))
+	if fontLoaded {
+		dc.DrawStringAnchored(watermarkText, float64(width)/2.0, float64(height)/2.0, 0.5, 0.5)
+	} else {
+		// Fallback if no font loaded: draw a big rectangle and text using strokes (gg doesn't have internal fonts)
+		// Or just draw a big X
+		dc.SetLineWidth(fontSize / 2.0)
+		dc.DrawLine(0, 0, float64(width), float64(height))
+		dc.DrawLine(0, float64(height), float64(width), 0)
+		dc.Stroke()
+	}
+	dc.Identity() // Reset transformations
+
+	if fontLoaded {
+		// Draw border / additional strokes for better visibility
+		dc.SetColor(color.RGBA{255, 255, 255, 150})
+		dc.SetLineWidth(4)
+		dc.Rotate(gg.Radians(-30))
+		dc.DrawStringAnchored(watermarkText, float64(width)/2.0, float64(height)/2.0, 0.5, 0.5)
+		dc.Stroke()
+		dc.Identity()
+	}
+
+	// Save to buffer
+	buf := new(bytes.Buffer)
+	if err := jpeg.Encode(buf, dc.Image(), &jpeg.Options{Quality: 85}); err != nil {
+		log.Printf("❌ Failed to encode watermarked image: %v", err)
+		return
+	}
+
+	// 3. Upload new photo via editMessageMedia
+	// Prepare message details
+	phoneNumber := strings.TrimSpace(order.CustomerPhone)
+	if phoneNumber == "" {
+		phoneNumber = "N/A"
+	} else if !strings.HasPrefix(phoneNumber, "0") && len(phoneNumber) >= 8 {
+		phoneNumber = "0" + phoneNumber
+	}
+	location := order.Location
+	if location == "" {
+		location = "N/A"
+	}
+	address := order.AddressDetails
+	if address == "" {
+		address = "N/A"
+	}
+
+	caption := fmt.Sprintf("%s\n\n📦 *រូបភាពកញ្ចប់បញ្ញើ #%d*\n🏷️ លេខកូដ: `%s`",
+		statusIndicator, order.DeliveryDailySequence, order.OrderID)
+
+	caption += fmt.Sprintf("\n\n📱 លេខទូរស័ព្ទ: `%s`", phoneNumber)
+	caption += fmt.Sprintf("\n📍 ទីតាំង: *%s*", location)
+	caption += fmt.Sprintf("\n🏠 អាស័យដ្ឋាន: _%s_", address)
+
+	apiURL := fmt.Sprintf("https://api.telegram.org/bot%s/editMessageMedia", store.TelegramBotToken)
+
+	var b bytes.Buffer
+	w := multipart.NewWriter(&b)
+
+	// Create media part
+	h := make(textproto.MIMEHeader)
+	h.Set("Content-Disposition", `form-data; name="media"`)
+	h.Set("Content-Type", "application/json")
+	p, err := w.CreatePart(h)
+	if err != nil {
+		log.Printf("❌ Multipart create media part error: %v", err)
+		return
+	}
+
+	mediaJSON := map[string]interface{}{
+		"type":       "photo",
+		"media":      "attach://photo",
+		"caption":    caption,
+		"parse_mode": "Markdown",
+	}
+	mediaBytes, _ := json.Marshal(mediaJSON)
+	p.Write(mediaBytes)
+
+	// Create photo file part
+	photoPart, err := w.CreateFormFile("photo", "watermarked.jpg")
+	if err != nil {
+		log.Printf("❌ Multipart create photo file error: %v", err)
+		return
+	}
+	io.Copy(photoPart, buf)
+
+	chatID := strings.TrimSpace(delGroup.TelegramGroupID)
+	w.WriteField("chat_id", chatID)
+	w.WriteField("message_id", order.DeliveryTelegramMessageID)
+
+	w.Close()
+
+	req, err := http.NewRequest("POST", apiURL, &b)
+	if err != nil {
+		log.Printf("❌ HTTP request creation error for order %s: %v", order.OrderID, err)
+		return
+	}
+	req.Header.Set("Content-Type", w.FormDataContentType())
+
+	client := &http.Client{}
+	apiResp, err := client.Do(req)
+	if err != nil {
+		log.Printf("❌ Failed to update delivery telegram media for order %s, chat %v: %v", order.OrderID, chatID, err)
+		return
+	}
+	defer apiResp.Body.Close()
+
+	var apiResData map[string]interface{}
+	json.NewDecoder(apiResp.Body).Decode(&apiResData)
+	if ok, _ := apiResData["ok"].(bool); !ok {
+		log.Printf("⚠️ Telegram API error updating delivery media for order %s, chat %v: %v", order.OrderID, chatID, apiResData)
+	} else {
+		log.Printf("✅ Successfully updated delivery telegram photo for %s with %s in chat %v", order.OrderID, newStatus, chatID)
+	}
+	}
+
+	func getDeliveryTelegramCaption(order Order, sequence int, statusOverride string) string {
+	statusIndicator := ""
+	if statusOverride == "Cancelled" {
+		statusIndicator = "❌ *ការកម្មង់ត្រូវបានលុបចោល (CANCELLED)* ❌\n\n"
+	} else if statusOverride == "Returned" {
+		statusIndicator = "🔄 *ការកម្មង់ត្រូវបានបញ្ជូនត្រលប់ (RETURNED)* 🔄\n\n"
+	}
+
+	phoneNumber := strings.TrimSpace(order.CustomerPhone)
+	if phoneNumber == "" {
+		phoneNumber = "N/A"
+	} else if !strings.HasPrefix(phoneNumber, "0") && len(phoneNumber) >= 8 {
+		phoneNumber = "0" + phoneNumber
+	}
+	location := order.Location
+	if location == "" {
+		location = "N/A"
+	}
+	address := order.AddressDetails
+	if address == "" {
+		address = "N/A"
+	}
+
+	text := fmt.Sprintf("%s📦 *រូបភាពកញ្ចប់បញ្ញើ #%d*\n🏷️ លេខកូដ: `%s`",
+		statusIndicator, sequence, order.OrderID)
+
+	text += fmt.Sprintf("\n\n📱 លេខទូរស័ព្ទ: `%s`", phoneNumber)
+	text += fmt.Sprintf("\n📍 ទីតាំង: *%s*", location)
+	text += fmt.Sprintf("\n🏠 អាស័យដ្ឋាន: _%s_", address)
+
+	return text
+	}
+	func handleDeleteDeliveryTelegram(c *gin.Context) {
+	var r struct {
+		OrderID string `json:"orderId"`
+	}
+	if err := c.ShouldBindJSON(&r); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"status": "error", "message": err.Error()})
+		return
+	}
+
+	var order Order
+	if err := backend.DB.Where("order_id = ?", r.OrderID).First(&order).Error; err != nil {
+		c.JSON(http.StatusNotFound, gin.H{"status": "error", "message": "Order not found"})
+		return
+	}
+
+	if order.DeliveryTelegramMessageID == "" {
+		c.JSON(http.StatusBadRequest, gin.H{"status": "error", "message": "No telegram message linked to this order"})
+		return
+	}
+
+	var store Store
+	if err := backend.DB.Where("store_name = ?", order.FulfillmentStore).First(&store).Error; err != nil {
+		c.JSON(http.StatusNotFound, gin.H{"status": "error", "message": "Store not found"})
+		return
+	}
+
+	var delGroup DeliveryGroup
+	if err := backend.DB.Where("store_name = ? AND shipping_method = ?", order.FulfillmentStore, order.InternalShippingMethod).First(&delGroup).Error; err != nil {
+		c.JSON(http.StatusNotFound, gin.H{"status": "error", "message": "Telegram group not defined for this branch and shipping method"})
+		return
+	}
+
+	if store.TelegramBotToken == "" || delGroup.TelegramGroupID == "" {
+		c.JSON(http.StatusBadRequest, gin.H{"status": "error", "message": "Telegram settings missing"})
+		return
+	}
+
+	// 1. Delete the message from Telegram
+	apiURL := fmt.Sprintf("https://api.telegram.org/bot%s/deleteMessage", store.TelegramBotToken)
+	chatID := strings.TrimSpace(delGroup.TelegramGroupID)
+	payload := map[string]interface{}{
+		"chat_id":    chatID,
+		"message_id": order.DeliveryTelegramMessageID,
+	}
+	jsonData, _ := json.Marshal(payload)
+	resp, err := http.Post(apiURL, "application/json", bytes.NewBuffer(jsonData))
+	if err != nil {
+		log.Printf("❌ [Delete Delivery] HTTP error for order %s, chat %v: %v", order.OrderID, chatID, err)
+		c.JSON(http.StatusInternalServerError, gin.H{"status": "error", "message": "Failed to call Telegram API: " + err.Error()})
+		return
+	}
+	defer resp.Body.Close()
+
+	var resData map[string]interface{}
+	json.NewDecoder(resp.Body).Decode(&resData)
+	if ok, _ := resData["ok"].(bool); !ok {
+		// If message is already deleted or too old, we still want to clean up our DB
+		log.Printf("⚠️ Telegram Delete API error for order %s, chat %v: %v", order.OrderID, chatID, resData)
+	} else {
+		log.Printf("✅ Successfully deleted telegram message for order %s from chat %v", order.OrderID, chatID)
+	}
+
+	// 2. Clean up current order
+	deletedSeq := order.DeliveryDailySequence
+
+	backend.DB.Model(&order).Updates(map[string]interface{}{
+		"delivery_telegram_message_id": "",
+		"delivery_daily_sequence":      0,
+	})
+
+	// Trigger Sheet Sync for current order
+	backend.EnqueueSync("updateSheet", map[string]interface{}{
+		"Delivery Telegram Message ID": "",
+		"Delivery Daily Sequence":      0,
+	}, "AllOrders", map[string]string{"Order ID": order.OrderID})
+
+	// Broadcast update
+	eventBytes, _ := json.Marshal(map[string]interface{}{
+		"type": "update_order",
+		"orderId": order.OrderID,
+		"newData": map[string]interface{}{
+			"Delivery Telegram Message ID": "",
+			"Delivery Daily Sequence":      0,
+		},
+	})
+	hub.Broadcast <- eventBytes
+
+	// 3. Re-sequence subsequent orders
+	if deletedSeq > 0 && order.DeliveryTelegramDate != "" {
+		var subsequentOrders []Order
+		backend.DB.Where("internal_shipping_method = ? AND delivery_telegram_date = ? AND delivery_daily_sequence > ?",
+			order.InternalShippingMethod, order.DeliveryTelegramDate, deletedSeq).
+			Order("delivery_daily_sequence ASC").
+			Find(&subsequentOrders)
+
+		for _, subOrder := range subsequentOrders {
+			newSeq := subOrder.DeliveryDailySequence - 1
+
+			// Update DB
+			backend.DB.Model(&subOrder).Update("delivery_daily_sequence", newSeq)
+
+			// Update Telegram Caption
+			if subOrder.DeliveryTelegramMessageID != "" {
+				editCaptionURL := fmt.Sprintf("https://api.telegram.org/bot%s/editMessageCaption", store.TelegramBotToken)
+
+				statusOverride := ""
+				if strings.TrimSpace(subOrder.FulfillmentStatus) == "Cancelled" {
+					statusOverride = "Cancelled"
+				} else if strings.TrimSpace(subOrder.FulfillmentStatus) == "Returned" {
+					statusOverride = "Returned"
+				}
+
+				newCaption := getDeliveryTelegramCaption(subOrder, newSeq, statusOverride)
+				chatID := strings.TrimSpace(delGroup.TelegramGroupID)
+				editPayload := map[string]interface{}{
+					"chat_id":    chatID,
+					"message_id": subOrder.DeliveryTelegramMessageID,
+					"caption":    newCaption,
+					"parse_mode": "Markdown",
+				}
+				if delGroup.TelegramTopicID != "" {
+					topicID := strings.TrimSpace(delGroup.TelegramTopicID)
+					if threadID, err := strconv.Atoi(topicID); err == nil && threadID != 0 {
+						editPayload["message_thread_id"] = threadID
+					}
+				}
+				eJson, _ := json.Marshal(editPayload)
+				http.Post(editCaptionURL, "application/json", bytes.NewBuffer(eJson))
+			}
+
+			// Sync to Sheet
+			backend.EnqueueSync("updateSheet", map[string]interface{}{
+				"Delivery Daily Sequence": newSeq,
+			}, "AllOrders", map[string]string{"Order ID": subOrder.OrderID})
+
+			// Broadcast
+			subEvent, _ := json.Marshal(map[string]interface{}{
+				"type": "update_order",
+				"orderId": subOrder.OrderID,
+				"newData": map[string]interface{}{
+					"Delivery Daily Sequence": newSeq,
+				},
+			})
+			hub.Broadcast <- subEvent
+		}
+	}
+
+	c.JSON(http.StatusOK, gin.H{"status": "success", "message": "លុបចេញពី Telegram និងតម្រៀបលេខរៀងឡើងវិញជោគជ័យ!"})
+	}
