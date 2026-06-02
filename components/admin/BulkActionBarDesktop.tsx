@@ -9,7 +9,7 @@ interface BulkActionBarDesktopProps {
     onVerify: () => void;
     onUnverify: () => void;
     onSendTelegram?: () => void;
-    onOpenModal: (type: 'cost' | 'payment' | 'shipping' | 'delete' | 'date') => void;
+    onOpenModal: (type: 'cost' | 'payment' | 'shipping' | 'delete' | 'date' | 'cancel' | 'return') => void;
     onClearSelection: () => void;
 }
 
@@ -66,6 +66,21 @@ const BulkActionBarDesktop: React.FC<BulkActionBarDesktopProps> = ({
                     </button>
                 </div>
 
+                <div className={`flex items-center gap-1 ${isBinance ? 'bg-[#0B0E11] border-[#2B3139]' : 'bg-white/5 border-white/5 rounded-[1.8rem]'} px-2 py-1 border relative z-10`} style={isBinance ? { borderRadius: '2px' } : undefined}>
+                    <button 
+                        onClick={() => onOpenModal('cancel')} 
+                        className={`px-4 py-2 ${isBinance ? 'text-red-400 hover:bg-red-500/10' : 'text-red-400 hover:text-red-300'} text-[11px] font-bold uppercase tracking-wider transition-all active:scale-95`}
+                    >
+                        CANCEL
+                    </button>
+                    <button 
+                        onClick={() => onOpenModal('return')} 
+                        className={`px-4 py-2 ${isBinance ? 'text-purple-400 hover:bg-purple-500/10' : 'text-purple-400 hover:text-purple-300'} text-[11px] font-bold uppercase tracking-wider transition-all active:scale-95`}
+                    >
+                        RETURN
+                    </button>
+                </div>
+
                 <div className={`flex items-center ${isBinance ? 'bg-[#0B0E11] border-[#2B3139]' : 'bg-blue-600/10 border-blue-500/20 rounded-[1.8rem]'} p-1.5 border relative z-10`} style={isBinance ? { borderRadius: '2px' } : undefined}>
                     <button
                         onClick={onSendTelegram}
@@ -74,7 +89,7 @@ const BulkActionBarDesktop: React.FC<BulkActionBarDesktopProps> = ({
                         disabled={isProcessing}
                     >
                         <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2.5}><path d="M22 2L11 13M22 2l-7 20-4-9-9-4 20-7z" /></svg>
-                        SEND TELEGRAM
+                        TELEGRAM
                     </button>
                 </div>
 
@@ -94,7 +109,6 @@ const BulkActionBarDesktop: React.FC<BulkActionBarDesktopProps> = ({
                         style={isBinance ? { borderRadius: '2px' } : undefined}
                     >
                         <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path d="M6 18L18 6M6 6l12 12" strokeWidth={3} strokeLinecap="round" strokeLinejoin="round"/></svg>
-                        Unselect All
                     </button>
                 </div>
 
@@ -104,7 +118,7 @@ const BulkActionBarDesktop: React.FC<BulkActionBarDesktopProps> = ({
                         className={`px-5 py-3 ${isBinance ? 'bg-transparent border-[#F6465D] text-[#F6465D] hover:bg-[#F6465D] hover:text-white' : 'bg-red-600/10 hover:bg-red-600 text-red-500 hover:text-white border-red-500/20 rounded-[1.6rem] shadow-lg hover:shadow-red-900/20'} border text-[12px] font-bold transition-all active:scale-95`}
                         style={isBinance ? { borderRadius: '2px' } : undefined}
                     >
-                        លុបចោល
+                        លុប
                     </button>
                 </div>
             </div>

@@ -7,7 +7,7 @@ interface BulkActionBarMobileProps {
     onVerify: () => void;
     onUnverify: () => void;
     onSendTelegram?: () => void;
-    onOpenModal: (type: 'cost' | 'payment' | 'shipping' | 'delete' | 'date') => void;
+    onOpenModal: (type: 'cost' | 'payment' | 'shipping' | 'delete' | 'date' | 'cancel' | 'return') => void;
     isProcessing?: boolean;
 }
 
@@ -45,6 +45,19 @@ const BulkActionBarMobile: React.FC<BulkActionBarMobileProps> = ({
                         disabled={isProcessing}
                     >
                         Unverify
+                    </button>
+
+                    <button 
+                        onClick={() => onOpenModal('cancel')} 
+                        className="flex-shrink-0 px-4 py-2.5 bg-red-600/10 text-red-500 rounded-xl text-[9px] font-black uppercase tracking-widest border border-red-500/20 active:scale-95"
+                    >
+                        Cancel
+                    </button>
+                    <button 
+                        onClick={() => onOpenModal('return')} 
+                        className="flex-shrink-0 px-4 py-2.5 bg-purple-600/10 text-purple-400 rounded-xl text-[9px] font-black uppercase tracking-widest border border-purple-500/20 active:scale-95"
+                    >
+                        Return
                     </button>
 
                     <button 
