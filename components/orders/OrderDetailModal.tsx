@@ -870,7 +870,7 @@ const OrderDetailModal: React.FC<OrderDetailModalProps> = ({ order, onClose, inl
                                     <div className="w-1 h-3.5 sm:w-1.5 sm:h-4 bg-[#0ECB81] rounded-full"></div>
                                     <h3 className="text-[10px] sm:text-[11px] font-black uppercase tracking-[0.2em] sm:tracking-[0.25em] text-[#0ECB81]">Delivery Proof</h3>
                                 </div>
-                                <div className="relative group aspect-square rounded-2xl border-2 border-[#0ECB81]/30 bg-[#0B0E11] cursor-pointer overflow-hidden shadow-2xl transition-all hover:border-[#0ECB81]/50" onClick={() => previewImage(order['Delivery Photo URL']!)}>
+                                <div className="relative group aspect-square rounded-2xl border-2 border-[#0ECB81]/30 bg-[#0B0E11] cursor-pointer overflow-hidden shadow-2xl transition-all hover:border-[#0ECB81]/50" onClick={() => previewImage(convertGoogleDriveUrl(order['Delivery Photo URL']!))}>
                                     <img src={convertGoogleDriveUrl(order['Delivery Photo URL']!)} className="w-full h-full object-cover transition-all duration-1000 sm:grayscale sm:group-hover:grayscale-0 group-hover:scale-110" alt="Delivery Proof" />
                                     <div className="absolute inset-0 bg-black/50 opacity-0 group-hover:opacity-100 transition-all duration-500 flex items-center justify-center backdrop-blur-[2px]">
                                         <div className="w-12 h-12 sm:w-16 sm:h-16 border-2 border-[#0ECB81] bg-[#0B0E11]/90 rounded-xl sm:rounded-2xl flex items-center justify-center text-[#0ECB81] shadow-[0_0_30px_rgba(14,203,129,0.3)] scale-75 group-hover:scale-100 transition-all duration-500">
@@ -878,6 +878,29 @@ const OrderDetailModal: React.FC<OrderDetailModalProps> = ({ order, onClose, inl
                                         </div>
                                     </div>
                                     <div className="absolute inset-x-0 h-[2px] bg-[#0ECB81]/70 shadow-[0_0_15px_#0ECB81] top-0 animate-[scan_4s_linear_infinite] z-20"></div>
+                                </div>
+                            </div>
+                        )}
+
+                        {/* Digital Proof: Return Photo */}
+                        {order['Return Photo'] && (
+                            <div className="space-y-3 sm:space-y-4">
+                                <div className="flex items-center gap-3 ml-2">
+                                    <div className="w-1 h-3.5 sm:w-1.5 sm:h-4 bg-purple-500 rounded-full"></div>
+                                    <h3 className="text-[10px] sm:text-[11px] font-black uppercase tracking-[0.2em] sm:tracking-[0.25em] text-purple-400">Return Evidence (រូប Return)</h3>
+                                </div>
+                                <div className="relative group aspect-square rounded-2xl border-2 border-purple-500/30 bg-[#0B0E11] cursor-pointer overflow-hidden shadow-2xl transition-all hover:border-purple-500/50" onClick={() => previewImage(convertGoogleDriveUrl(order['Return Photo']!))}>
+                                    <img src={convertGoogleDriveUrl(order['Return Photo']!)} className="w-full h-full object-cover transition-all duration-1000 sm:grayscale sm:group-hover:grayscale-0 group-hover:scale-110" alt="Return Evidence" />
+                                    <div className="absolute inset-0 bg-black/50 opacity-0 group-hover:opacity-100 transition-all duration-500 flex items-center justify-center backdrop-blur-[2px]">
+                                        <div className="w-12 h-12 sm:w-16 sm:h-16 border-2 border-purple-500 bg-[#0B0E11]/90 rounded-xl sm:rounded-2xl flex items-center justify-center text-purple-400 shadow-[0_0_30px_rgba(168,85,247,0.3)] scale-75 group-hover:scale-100 transition-all duration-500">
+                                            <ExternalLink size={24} className="sm:w-7 sm:h-7" />
+                                        </div>
+                                    </div>
+                                    <div className="absolute inset-x-0 h-[2px] bg-purple-500/70 shadow-[0_0_15px_#a855f7] top-0 animate-[scan_4s_linear_infinite] z-20"></div>
+                                    <div className="absolute top-3 right-3 sm:top-4 sm:right-4 bg-black/60 backdrop-blur-md px-2 sm:px-3 py-1 sm:py-1.5 rounded-lg border border-white/10 flex items-center gap-1.5 sm:gap-2">
+                                        <div className="w-1 h-1 sm:w-1.5 sm:h-1.5 bg-purple-500 rounded-full animate-pulse"></div>
+                                        <span className="text-[8px] sm:text-[10px] font-black uppercase tracking-widest text-white">Return Verified</span>
+                                    </div>
                                 </div>
                             </div>
                         )}
