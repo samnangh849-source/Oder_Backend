@@ -13,6 +13,7 @@ interface EditOrderSummaryProps {
     onSave: (e: React.FormEvent) => void;
     onDelete: () => void;
     onCancelOrder: () => void;
+    onUnReturn?: () => void;
     fulfillmentStatus: string;
     loading: boolean;
 }
@@ -20,7 +21,7 @@ interface EditOrderSummaryProps {
 const EditOrderSummary: React.FC<EditOrderSummaryProps> = ({
     subtotal, grandTotal, shippingFee, onShippingFeeChange, 
     orderDiscount, onOrderDiscountChange,
-    onSave, onDelete, onCancelOrder, fulfillmentStatus, loading
+    onSave, onDelete, onCancelOrder, onUnReturn, fulfillmentStatus, loading
 }) => {
     const { hasPermission } = useContext(AppContext);
 
@@ -82,7 +83,7 @@ const EditOrderSummary: React.FC<EditOrderSummaryProps> = ({
             {/* Action Buttons */}
             <div className="flex flex-row gap-2.5 w-full lg:w-auto items-stretch">
                 {/* Cancel/Return Button */}
-                {!isCancelled && (
+                {!isCancelled ? (
                     <button 
                         type="button" 
                         onClick={onCancelOrder} 
@@ -98,6 +99,17 @@ const EditOrderSummary: React.FC<EditOrderSummaryProps> = ({
                             <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" strokeWidth="3" strokeLinecap="round" /></svg> 
                             <span className="text-[10px]">{isShipped ? 'REQUEST RETURN' : 'REQUEST CANCEL'}</span>
                         </div>
+                    </button>
+                ) : fulfillmentStatus === 'Returned' && onUnReturn && (
+                    <button 
+                        type="button" 
+                        onClick={onUnReturn} 
+                        disabled={loading}
+                        className="flex-1 lg:flex-none px-4 lg:px-6 py-2.5 bg-orange-500/10 text-orange-500 border-orange-500/40 hover:bg-orange-500/20 hover:border-orange-500 rounded-none font-black uppercase text-[10px] tracking-widest transition-all border-2 active:translate-y-[2px] flex items-center justify-center gap-2"
+                        title="Restore order from Returned status"
+                    >
+                        <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" strokeWidth="3" strokeLinecap="round" /></svg> 
+                        UN RETURN
                     </button>
                 )}
 

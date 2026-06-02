@@ -422,6 +422,46 @@ const EditOrderPage: React.FC<EditOrderPageProps> = ({ order, onSaveSuccess, onC
         }
     };
 
+    const handleUnReturn = async () => {
+        if (!window.confirm("តើអ្នកពិតជាចង់លុបចោលការ Return នេះមែនទេ? (Are you sure you want to Un-Return this order?)")) return;
+
+        setLoading(true);
+        try {
+            const session = await CacheService.get<{ token: string }>(CACHE_KEYS.SESSION);
+            const token = session?.token;
+            const headers: HeadersInit = { 'Content-Type': 'application/json' };
+            if (token) headers['Authorization'] = `Bearer ${token}`;
+
+            const response = await fetch(`${WEB_APP_URL}/api/admin/update-order`, {
+                method: 'POST',
+                headers,
+                body: JSON.stringify({ 
+                    orderId: formData['Order ID'], 
+                    team: formData.Team, 
+                    userName: currentUser?.FullName || 'System',
+                    newData: { 
+                        'Fulfillment Status': 'Delivered',
+                        'Return Reason': '',
+                        'Return Photo': '',
+                        'Return Received By': '',
+                        'Return Received Time': ''
+                    }
+                })
+            });
+            const result = await response.json();
+            if (!response.ok || result.status !== 'success') throw new Error(result.message || 'Un-Return failed');
+            
+            await logUserActivity(currentUser?.UserName || 'Unknown', 'UNRETURN_ORDER', `Un-Returned Order #${formData['Order ID']}`);
+
+            await refreshData();
+            onSaveSuccess();
+        } catch (err: any) {
+            setError(`Un-Return មិនបានសម្រេច: ${err.message}`);
+        } finally {
+            setLoading(false);
+        }
+    };
+
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
         setLoading(true); setError('');
@@ -769,6 +809,7 @@ const EditOrderPage: React.FC<EditOrderPageProps> = ({ order, onSaveSuccess, onC
                             onSave={handleSubmit}
                             onDelete={handleDelete}
                             onCancelOrder={handleCancelOrderClick}
+                            onUnReturn={handleUnReturn}
                             fulfillmentStatus={formData.FulfillmentStatus}
                             loading={loading}
                         />
