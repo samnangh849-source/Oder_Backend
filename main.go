@@ -46,6 +46,24 @@ func GenerateSecureToken(length int) string {
 	return hex.EncodeToString(b)
 }
 
+// generateUploadTokenInternal is the shared logic for creating one-time upload tokens
+func generateUploadTokenInternal(orderID string) string {
+	token := GenerateSecureToken(16)
+	uploadToken := backend.UploadToken{
+		Token:     token,
+		OrderID:   orderID,
+		CreatedAt: time.Now(),
+		ExpiresAt: time.Now().Add(10 * time.Minute),
+	}
+
+	if err := backend.DB.Create(&uploadToken).Error; err != nil {
+		log.Printf("❌ Failed to create upload token: %v", err)
+		return ""
+	}
+	log.Printf("🔑 [Token Gen] Successfully created token %s for OrderID %s", token, orderID)
+	return token
+}
+
 func handleGenerateUploadToken(c *gin.Context) {
 	orderID := c.Query("orderId")
 	if orderID == "" {
@@ -53,15 +71,8 @@ func handleGenerateUploadToken(c *gin.Context) {
 		return
 	}
 
-	token := GenerateSecureToken(16)
-	uploadToken := backend.UploadToken{
-		Token:     token,
-		OrderID:   orderID,
-		CreatedAt: time.Now(),
-		ExpiresAt: time.Now().Add(10 * time.Minute), // Valid for 10 minutes
-	}
-
-	if err := backend.DB.Create(&uploadToken).Error; err != nil {
+	token := generateUploadTokenInternal(orderID)
+	if token == "" {
 		c.JSON(500, gin.H{"status": "error", "message": "Failed to create token"})
 		return
 	}
@@ -2994,7 +3005,8 @@ func main() {
 
 	// ── Wire Upload-package injectable dependencies ──────────────────────────
 	backend.UploadGenerateIDFunc = generateShortID
-	backend.UploadMapToDBColumnFunc = func(key string) string { return mapToDBColumn(key, "") }
+	backend.UploadGenerateTokenFunc = generateUploadTokenInternal // Inject this
+	backend.UploadMapToDBColumnFunc = func(k string) string { return mapToDBColumn(k, "") }
 	backend.UploadGetTableNameFunc = getTableName
 	backend.UploadIsValidOrderColumnFunc = isValidOrderColumn
 
