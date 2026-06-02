@@ -195,7 +195,13 @@ func convertSheetValuesToMaps(sheetName string, values *sheets.ValueRange) ([]ma
 
 					var cellVal interface{}
 					if cellStr, ok := cell.(string); ok {
-						if IsNumericHeader(header) && !(sheetName == "TelegramTemplates" && strings.ToLower(header) == "id") {
+						isNumeric := IsNumericHeader(header)
+						// Special case: "Value" is numeric for Incentive sheets but string for Settings
+						if !isNumeric && isIncentiveSheet && strings.ToLower(header) == "value" {
+							isNumeric = true
+						}
+
+						if isNumeric && !(sheetName == "TelegramTemplates" && strings.ToLower(header) == "id") {
 							cleaned := strings.ReplaceAll(strings.ReplaceAll(strings.TrimSpace(cellStr), "$", ""), ",", "")
 							if f, err := strconv.ParseFloat(cleaned, 64); err == nil {
 								cellVal = f
@@ -205,11 +211,7 @@ func convertSheetValuesToMaps(sheetName string, values *sheets.ValueRange) ([]ma
 						} else if IsBoolHeader(header) {
 							cellVal = strings.ToUpper(strings.TrimSpace(cellStr)) == "TRUE"
 						} else {
-							if strings.ToLower(header) == "value" && (strings.TrimSpace(cellStr) == "" || strings.TrimSpace(cellStr) == "-") {
-								cellVal = "0"
-							} else {
-								cellVal = cellStr
-							}
+							cellVal = cellStr
 						}
 					} else {
 						if IsBoolHeader(header) {
