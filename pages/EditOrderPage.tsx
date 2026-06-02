@@ -423,7 +423,7 @@ const EditOrderPage: React.FC<EditOrderPageProps> = ({ order, onSaveSuccess, onC
     };
 
     const handleUnReturn = async () => {
-        if (!window.confirm("តើអ្នកពិតជាចង់លុបចោលការ Return នេះមែនទេ? (Are you sure you want to Un-Return this order?)")) return;
+        if (!window.confirm("តើអ្នកពិតជាចង់លុបចោលការ Return និងប្តូរទៅ Pending វិញមែនទេ? (Un-Return and reset to Pending?)")) return;
 
         setLoading(true);
         try {
@@ -440,7 +440,7 @@ const EditOrderPage: React.FC<EditOrderPageProps> = ({ order, onSaveSuccess, onC
                     team: formData.Team, 
                     userName: currentUser?.FullName || 'System',
                     newData: { 
-                        'Fulfillment Status': 'Delivered',
+                        'Fulfillment Status': 'Pending',
                         'Return Reason': '',
                         'Return Photo': '',
                         'Return Received By': '',

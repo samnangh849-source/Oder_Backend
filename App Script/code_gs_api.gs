@@ -311,8 +311,16 @@ function handleBatchAddRows(data) {
   const rowsToInsert = data.rows.map(row => {
     const newRow = new Array(headers.length).fill("");
     for (const [key, val] of Object.entries(row)) {
-      const idx = normalizedHeaders.indexOf(normalizeKey(key));
-      if (idx !== -1) newRow[idx] = val;
+      const nKey = normalizeKey(key);
+      const idx = normalizedHeaders.indexOf(nKey);
+      if (idx !== -1) {
+        let v = val;
+        // Force leading zero for Customer Phone in Sheets
+        if (nKey === "customerphone" && v && String(v).charAt(0) === '0') {
+          v = "'" + v;
+        }
+        newRow[idx] = v;
+      }
     }
     return newRow;
   });
@@ -501,6 +509,12 @@ function handleUpdateSheet(data) {
             if (lowV === 'true') v = true;
             else if (lowV === 'false') v = false;
           }
+
+          // Force leading zero for Customer Phone in Sheets by prefixing with a single quote
+          if (nKey === "customerphone" && v && String(v).charAt(0) === '0') {
+            v = "'" + v;
+          }
+
           rowData[colIdx] = v;
           updatedCount++;
         }
@@ -796,7 +810,14 @@ function appendRowMapped(sheet, data) {
   
   const row = headers.map(h => {
     const key = normalizeKey(h);
-    return normalizedData[key] !== undefined ? normalizedData[key] : "";
+    let val = normalizedData[key] !== undefined ? normalizedData[key] : "";
+
+    // Force leading zero for Customer Phone in Sheets
+    if (key === "customerphone" && val && String(val).charAt(0) === '0') {
+      return "'" + val;
+    }
+
+    return val;
   });
   sheet.appendRow(row);
 }
