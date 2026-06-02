@@ -3,7 +3,7 @@ package main
 import (
 	"bytes"
 	"context"
-	"crypto/rand"
+	crand "crypto/rand"
 	"crypto/subtle"
 	"encoding/hex"
 	"encoding/json"
@@ -40,7 +40,7 @@ import (
 // GenerateSecureToken creates a cryptographically secure random token
 func GenerateSecureToken(length int) string {
 	b := make([]byte, length)
-	if _, err := rand.Read(b); err != nil {
+	if _, err := io.ReadFull(crand.Reader, b); err != nil {
 		return ""
 	}
 	return hex.EncodeToString(b)
