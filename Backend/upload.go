@@ -29,6 +29,7 @@ import (
 
 var (
 	UploadGenerateIDFunc         func() string
+	UploadGenerateTokenFunc      func(string) string // (orderId) -> token
 	UploadMapToDBColumnFunc      func(string) string
 	UploadGetTableNameFunc       func(string) string
 	UploadIsValidOrderColumnFunc func(string) bool
@@ -123,6 +124,15 @@ func UploadToGoogleDriveDirectly(base64Data string, fileName string, mimeType st
 		FileName:       fileName,
 		MimeType:       mimeType,
 		UploadFolderID: targetFolder,
+	}
+
+	// Generate a one-time token for the Go Backend's own upload request
+	if UploadGenerateTokenFunc != nil {
+		id := ""
+		if originalReq != nil {
+			id = originalReq.OrderID
+		}
+		req.Token = UploadGenerateTokenFunc(id)
 	}
 
 	// Pass caller metadata so Apps Script can route non-order uploads
