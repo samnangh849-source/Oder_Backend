@@ -9,6 +9,8 @@ import { CacheService, CACHE_KEYS } from '../services/cacheService';
 // Import New Utils & Services
 import { formatForInput, recalculateTotals, generateAuditLog } from '../utils/orderLogic';
 import { logUserActivity, logOrderEdit } from '../services/auditService';
+import { compressImage } from '../utils/imageCompressor';
+import { fileToDataUrl } from '../utils/fileUtils';
 
 // Import New Sub-Components
 import EditCustomerPanel from '../components/orders/edit/EditCustomerPanel';
@@ -17,6 +19,8 @@ import EditProductPanel from '../components/orders/edit/EditProductPanel';
 import EditOrderSummary from '../components/orders/edit/EditOrderSummary';
 import BarcodeScannerModal from '../components/orders/BarcodeScannerModal';
 import OrderActionModal from '../components/orders/OrderActionModal';
+import Modal from '../components/common/Modal';
+import Spinner from '../components/common/Spinner';
 
 interface EditOrderPageProps {
     order: ParsedOrder;
@@ -26,7 +30,7 @@ interface EditOrderPageProps {
 
 const EditOrderPage: React.FC<EditOrderPageProps> = ({ order, onSaveSuccess, onCancel }) => {
     const { appData, currentUser, previewImage, refreshData, advancedSettings } = useContext(AppContext);
-    
+
     // Keep a reference to the original order for Audit comparison
     const originalOrderRef = useRef<ParsedOrder>(order);
 
@@ -40,6 +44,13 @@ const EditOrderPage: React.FC<EditOrderPageProps> = ({ order, onSaveSuccess, onC
     // Action Modal State
     const [isActionModalOpen, setIsActionModalOpen] = useState(false);
     const [actionModalType, setActionModalType] = useState<'cancel' | 'return'>('cancel');
+    const [pendingReason, setPendingReason] = useState('');
+
+    // Return Photo State
+    const [isReturnPhotoModalOpen, setIsReturnPhotoModalOpen] = useState(false);
+    const [returnPhoto, setReturnPhoto] = useState<string | null>(null);
+    const [isSubmittingReturn, setIsSubmittingReturn] = useState(false);
+    const [returnActionType, setReturnActionType] = useState<'to_returned' | 'to_pending'>('to_returned');
 
     // Scanner State
     const [isScannerVisible, setIsScannerVisible] = useState(false);
@@ -383,48 +394,16 @@ const EditOrderPage: React.FC<EditOrderPageProps> = ({ order, onSaveSuccess, onC
 
     const handleConfirmAction = async (reason: string) => {
         setIsActionModalOpen(false);
-        const isShipped = actionModalType === 'return';
-        const actionText = isShipped ? 'Return' : 'Cancel';
+        const isReturn = actionModalType === 'return';
         
-        setLoading(true);
-        try {
-            const session = await CacheService.get<{ token: string }>(CACHE_KEYS.SESSION);
-            const token = session?.token;
-            const headers: HeadersInit = { 'Content-Type': 'application/json' };
-            if (token) headers['Authorization'] = `Bearer ${token}`;
-
-            const newStatus = isShipped ? 'Returned' : 'Cancelled';
-            const newData: any = { 'Fulfillment Status': newStatus };
-            if (isShipped) newData['Return Reason'] = reason;
-            else newData['Cancel Reason'] = reason;
-
-            const response = await fetch(`${WEB_APP_URL}/api/admin/update-order`, {
-                method: 'POST',
-                headers,
-                body: JSON.stringify({ 
-                    orderId: formData['Order ID'], 
-                    team: formData.Team, 
-                    userName: currentUser?.FullName || 'System',
-                    newData: newData
-                })
-            });
-            const result = await response.json();
-            if (!response.ok || result.status !== 'success') throw new Error(result.message || 'Action failed');
-            
-            await logUserActivity(currentUser?.UserName || 'Unknown', `${actionText.toUpperCase()}_ORDER`, `${actionText}ed Order #${formData['Order ID']} with reason: ${reason}`);
-
-            await refreshData();
-            onSaveSuccess();
-        } catch (err: any) {
-            setError(`${actionText} មិនបានសម្រេច: ${err.message}`);
-        } finally {
-            setLoading(false);
+        if (isReturn) {
+            setPendingReason(reason);
+            setReturnActionType('to_returned');
+            setIsReturnPhotoModalOpen(true);
+            return;
         }
-    };
 
-    const handleUnReturn = async () => {
-        if (!window.confirm("តើអ្នកពិតជាចង់លុបចោលការ Return និងប្តូរទៅ Pending វិញមែនទេ? (Un-Return and reset to Pending?)")) return;
-
+        const actionText = 'Cancel';
         setLoading(true);
         try {
             const session = await CacheService.get<{ token: string }>(CACHE_KEYS.SESSION);
@@ -440,25 +419,85 @@ const EditOrderPage: React.FC<EditOrderPageProps> = ({ order, onSaveSuccess, onC
                     team: formData.Team, 
                     userName: currentUser?.FullName || 'System',
                     newData: { 
-                        'Fulfillment Status': 'Pending',
-                        'Return Reason': '',
-                        'Return Photo': '',
-                        'Return Received By': '',
-                        'Return Received Time': ''
+                        'Fulfillment Status': 'Cancelled',
+                        'Cancel Reason': reason
                     }
                 })
             });
             const result = await response.json();
-            if (!response.ok || result.status !== 'success') throw new Error(result.message || 'Un-Return failed');
+            if (!response.ok || result.status !== 'success') throw new Error(result.message || 'Action failed');
             
-            await logUserActivity(currentUser?.UserName || 'Unknown', 'UNRETURN_ORDER', `Un-Returned Order #${formData['Order ID']}`);
+            await logUserActivity(currentUser?.UserName || 'Unknown', 'CANCEL_ORDER', `Cancelled Order #${formData['Order ID']} with reason: ${reason}`);
 
             await refreshData();
             onSaveSuccess();
         } catch (err: any) {
-            setError(`Un-Return មិនបានសម្រេច: ${err.message}`);
+            setError(`Cancel មិនបានសម្រេច: ${err.message}`);
         } finally {
             setLoading(false);
+        }
+    };
+
+    const handleUnReturn = async () => {
+        if (!window.confirm("តើអ្នកពិតជាចង់លុបចោលការ Return និងប្តូរទៅ Pending វិញមែនទេ? (Un-Return and reset to Pending?)")) return;
+        setReturnActionType('to_pending');
+        setPendingReason('');
+        setIsReturnPhotoModalOpen(true);
+    };
+
+    const handleConfirmReturnPhoto = async (photo: string) => {
+        setIsSubmittingReturn(true);
+        try {
+            const session = await CacheService.get<{ token: string }>(CACHE_KEYS.SESSION);
+            const token = session?.token;
+            const headers: HeadersInit = { 'Content-Type': 'application/json' };
+            if (token) headers['Authorization'] = `Bearer ${token}`;
+
+            const isToPending = returnActionType === 'to_pending';
+            
+            const newData: any = { 
+                'Fulfillment Status': isToPending ? 'Pending' : 'Returned',
+                'Return Photo': photo,
+                'Return Received By': currentUser?.FullName || 'Admin',
+                'Return Received Time': new Date().toISOString().slice(0, 19).replace('T', ' ')
+            };
+
+            if (isToPending) {
+                // When moving back to pending, we might want to keep the photo as proof of return condition
+                // but clear the reason if it's no longer considered "returned" in a negative sense.
+                // Or maybe the user wants to clear EVERYTHING?
+                // Re-reading previous requirement: "Un-Return and reset to Pending"
+                // I will clear reasons but keep the new photo as proof.
+                newData['Return Reason'] = '(Un-Returned to Stock)';
+            } else {
+                newData['Return Reason'] = pendingReason;
+            }
+
+            const response = await fetch(`${WEB_APP_URL}/api/admin/update-order`, {
+                method: 'POST',
+                headers,
+                body: JSON.stringify({ 
+                    orderId: formData['Order ID'], 
+                    team: formData.Team, 
+                    userName: currentUser?.FullName || 'System',
+                    newData: newData
+                })
+            });
+            const result = await response.json();
+            if (!response.ok || result.status !== 'success') throw new Error(result.message || 'Action failed');
+            
+            const actionKey = isToPending ? 'UNRETURN_ORDER' : 'RETURN_ORDER';
+            const actionText = isToPending ? 'Un-Returned (to Stock)' : 'Returned';
+            await logUserActivity(currentUser?.UserName || 'Unknown', actionKey, `${actionText} Order #${formData['Order ID']}`);
+
+            setIsReturnPhotoModalOpen(false);
+            setReturnPhoto(null);
+            await refreshData();
+            onSaveSuccess();
+        } catch (err: any) {
+            alert(`បរាជ័យ: ${err.message}`);
+        } finally {
+            setIsSubmittingReturn(false);
         }
     };
 
@@ -825,6 +864,138 @@ const EditOrderPage: React.FC<EditOrderPageProps> = ({ order, onSaveSuccess, onC
                                 : ['អតិថិជនមិនទទួលឥវ៉ាន់', 'ឥវ៉ាន់មានបញ្ហា/ខូចខាត', 'ឥវ៉ាន់មិនត្រឹមត្រូវ/ផ្ញើខុស', 'ទាក់ទងមិនបានពេលដឹក', 'ដឹកយូរពេក អតិថិជនមិនចាំ']
                             }
                         />
+
+                        {isReturnPhotoModalOpen && (
+                            <Modal isOpen={true} onClose={() => { if (!isSubmittingReturn) { setIsReturnPhotoModalOpen(false); setReturnPhoto(null); } }} maxWidth="max-w-xl">
+                                <div className="bg-[#1E2329] border border-[#2B3139] overflow-hidden rounded-2xl shadow-2xl animate-fade-in">
+                                    {/* Header with Order Info */}
+                                    <div className="p-5 border-b border-[#2B3139] bg-[#0B0E11] flex items-center justify-between">
+                                        <div className="flex items-center gap-3">
+                                            <div className="w-10 h-10 rounded-full bg-purple-500/10 flex items-center justify-center border border-purple-500/20">
+                                                <svg className="w-5 h-5 text-purple-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" /></svg>
+                                            </div>
+                                            <div className="min-w-0">
+                                                <h3 className="text-sm font-black text-[#EAECEF] uppercase tracking-wider truncate">
+                                                    {returnActionType === 'to_pending' ? 'បញ្ជាក់ការទទួលឥវ៉ាន់ចូលស្តុក' : 'បញ្ជាក់ការទទួល Return'}
+                                                </h3>
+                                                <p className="text-[10px] font-mono text-[#FCD535] mt-0.5">#{formData['Order ID']}</p>
+                                            </div>
+                                        </div>
+                                        <div className="text-right hidden sm:block">
+                                            <p className="text-[9px] font-black text-[#848E9C] uppercase tracking-widest">អតិថិជន (Customer)</p>
+                                            <p className="text-xs font-bold text-[#EAECEF] truncate max-w-[150px]">{formData['Customer Name']}</p>
+                                        </div>
+                                    </div>
+
+                                    <div className="p-6 space-y-6">
+                                        {/* Capture Area */}
+                                        <div className="relative group">
+                                            <div className="aspect-[4/3] sm:aspect-video bg-black rounded-xl overflow-hidden border-2 border-[#2B3139] relative shadow-inner flex items-center justify-center">
+                                                {returnPhoto ? (
+                                                    <div className="relative w-full h-full animate-in zoom-in-95 duration-300">
+                                                        <img src={returnPhoto} className="w-full h-full object-cover" alt="Return Proof" />
+                                                        <div className="absolute inset-0 bg-black/20 pointer-events-none"></div>
+                                                    </div>
+                                                ) : (
+                                                    <div className="flex flex-col items-center justify-center space-y-4 text-center px-4">
+                                                        <div className="w-24 h-24 rounded-full bg-white/5 border border-white/10 flex items-center justify-center relative group-hover:scale-110 transition-transform duration-500">
+                                                            <div className="absolute inset-0 rounded-full border-2 border-dashed border-[#FCD535]/30 animate-[spin_10s_linear_infinite]"></div>
+                                                            <svg className="w-10 h-10 text-gray-500 group-hover:text-[#FCD535] transition-colors" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M3 9a2 2 0 012-2h.93a2 2 0 001.664-.89l.812-1.22A2 2 0 0110.07 4h3.86a2 2 0 011.664.89l.812 1.22A2 2 0 0018.07 7H19a2 2 0 012 2v9a2 2 0 01-2 2H5a2 2 0 01-2-2V9z" />
+                                                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M15 13a3 3 0 11-6 0 3 3 0 016 0z" />
+                                                            </svg>
+                                                        </div>
+                                                        <div>
+                                                            <p className="text-sm font-black text-[#EAECEF] uppercase tracking-widest">ថតរូបបញ្ជាក់ (Take Photo)</p>
+                                                            <p className="text-[10px] text-[#848E9C] mt-1 font-bold">ចុចទីនេះដើម្បីថតរូបកញ្ចប់ឥវ៉ាន់</p>
+                                                        </div>
+                                                        <input 
+                                                            type="file" 
+                                                            accept="image/*" 
+                                                            capture="environment" 
+                                                            onChange={async (e) => { 
+                                                                const file = e.target.files?.[0]; 
+                                                                if (file) { 
+                                                                    const compressed = await compressImage(file, 'balanced'); 
+                                                                    const dataUrl = await fileToDataUrl(compressed); 
+                                                                    setReturnPhoto(dataUrl); 
+                                                                } 
+                                                            }} 
+                                                            className="absolute inset-0 opacity-0 cursor-pointer z-10" 
+                                                        />
+                                                    </div>
+                                                )}
+
+                                                {/* Viewfinder Corners (Decorative) */}
+                                                {!returnPhoto && (
+                                                    <>
+                                                        <div className="absolute top-4 left-4 w-6 h-6 border-t-2 border-l-2 border-[#FCD535]/40 rounded-tl-sm pointer-events-none"></div>
+                                                        <div className="absolute top-4 right-4 w-6 h-6 border-t-2 border-r-2 border-[#FCD535]/40 rounded-tr-sm pointer-events-none"></div>
+                                                        <div className="absolute bottom-4 left-4 w-6 h-6 border-b-2 border-l-2 border-[#FCD535]/40 rounded-bl-sm pointer-events-none"></div>
+                                                        <div className="absolute bottom-4 right-4 w-6 h-6 border-b-2 border-r-2 border-[#FCD535]/40 rounded-br-sm pointer-events-none"></div>
+                                                    </>
+                                                )}
+                                            </div>
+                                            
+                                            {returnPhoto && (
+                                                <button 
+                                                    onClick={() => setReturnPhoto(null)} 
+                                                    className="absolute -top-3 -right-3 w-10 h-10 bg-[#F6465D] text-white rounded-full shadow-2xl flex items-center justify-center border-4 border-[#1E2329] active:scale-90 transition-all z-20"
+                                                    title="Retake Photo"
+                                                >
+                                                    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M6 18L18 6M6 6l12 12" /></svg>
+                                                </button>
+                                            )}
+                                        </div>
+
+                                        {/* Info Banner */}
+                                        <div className="bg-[#0B0E11] p-4 rounded-xl border border-[#2B3139] flex items-start gap-4">
+                                            <div className="w-8 h-8 rounded-lg bg-orange-500/10 flex items-center justify-center flex-shrink-0 text-lg">💡</div>
+                                            <div className="min-w-0">
+                                                <p className="text-[10px] font-black text-gray-500 uppercase tracking-widest">Instruction</p>
+                                                <p className="text-xs text-[#848E9C] font-bold mt-0.5 leading-relaxed">
+                                                    {returnActionType === 'to_pending' 
+                                                        ? 'សូមថតរូបទំនិញដែលបានត្រឡប់ចូលស្តុកវិញ ដើម្បីទុកជាភស្តុតាងនៃស្ថានភាពទំនិញ។'
+                                                        : 'សូមថតរូបឱ្យឃើញ លេខកូដ (Order ID) ឬ ឈ្មោះអតិថិជន ដែលមាននៅលើកញ្ចប់ឱ្យបានច្បាស់។'}
+                                                </p>
+                                            </div>
+                                        </div>
+
+                                        {/* Actions */}
+                                        <div className="flex flex-col sm:flex-row gap-3">
+                                            <button 
+                                                onClick={() => { setIsReturnPhotoModalOpen(false); setReturnPhoto(null); }} 
+                                                disabled={isSubmittingReturn}
+                                                className="flex-1 py-4 bg-[#2B3139] hover:bg-[#3B424A] text-[#848E9C] hover:text-[#EAECEF] font-black text-xs uppercase tracking-[0.2em] rounded-xl transition-all active:scale-95 disabled:opacity-50"
+                                            >
+                                                បោះបង់ (Cancel)
+                                            </button>
+                                            <button 
+                                                onClick={() => handleConfirmReturnPhoto(returnPhoto || '')} 
+                                                disabled={!returnPhoto || isSubmittingReturn} 
+                                                className={`flex-[2] py-4 rounded-xl font-black text-xs uppercase tracking-[0.2em] transition-all shadow-xl flex items-center justify-center gap-3 active:scale-[0.98] disabled:opacity-40 disabled:cursor-not-allowed ${
+                                                    returnPhoto 
+                                                    ? 'bg-[#0ECB81] text-[#0B0E11] shadow-[#0ECB81]/10' 
+                                                    : 'bg-[#2B3139] text-[#474D57]'
+                                                }`}
+                                            >
+                                                {isSubmittingReturn ? (
+                                                    <>
+                                                        <Spinner size="sm" />
+                                                        <span>កំពុងបញ្ជាក់...</span>
+                                                    </>
+                                                ) : (
+                                                    <>
+                                                        <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={3}><path d="M5 13l4 4L19 7" /></svg>
+                                                        {returnActionType === 'to_pending' ? 'បញ្ជាក់ការចូលស្តុក' : 'បញ្ជាក់ការទទួល (Confirm)'}
+                                                    </>
+                                                )}
+                                            </button>
+                                        </div>
+                                    </div>
+                                </div>
+                            </Modal>
+                        )}
                     </div>
                 </div>
             </div>
