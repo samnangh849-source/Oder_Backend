@@ -62,6 +62,7 @@ function doPost(e) {
     let contents;
     try {
       contents = JSON.parse(e.postData.contents);
+      console.log("📦 [doPost] Action: " + contents.action + " | Keys: " + Object.keys(contents).join(", "));
     } catch (parseErr) {
       return createJsonResponse({ status: 'error', message: 'JSON Invalid: ' + parseErr.message }, 400);
     }
@@ -129,6 +130,36 @@ function doPost(e) {
 
       case 'uploadImage':
         console.log("📤 [uploadImage] Request received: fileName=" + contents.fileName + " mimeType=" + contents.mimeType);
+        
+        // --- 1. VERIFY ONE-TIME TOKEN WITH GO BACKEND ---
+        const vToken = contents.token || contents.Token; // Robust casing
+        if (!vToken) return createJsonResponse({ status: "error", message: "Missing upload token (one-time use required)" }, 401);
+
+        try {
+          // Point to your Render backend
+          const verifyUrl = "https://oder-backend-2.onrender.com/api/internal/verify-upload-token?token=" + vToken;
+          const verifyResp = UrlFetchApp.fetch(verifyUrl, {
+            method: "get",
+            headers: { "X-Internal-Secret": SCRIPT_SECRET_KEY },
+            muteHttpExceptions: true
+          });
+
+          const verifyResult = JSON.parse(verifyResp.getContentText());
+          if (verifyResult.status !== "success") {
+            return createJsonResponse({ status: "error", message: "Token Verification Failed: " + (verifyResult.message || "Invalid or Expired") }, 401);
+          }
+          
+          // Ensure OrderID matches if provided in payload
+          const vOrderId = contents.orderId || contents.orderID;
+          if (vOrderId && verifyResult.orderId !== vOrderId) {
+             return createJsonResponse({ status: "error", message: "Token mismatch for this OrderID" }, 403);
+          }
+          console.log("✅ [uploadImage] Token verified for Order: " + verifyResult.orderId);
+        } catch (err) {
+          console.error("❌ [uploadImage] Backend verification error: " + err.message);
+          return createJsonResponse({ status: "error", message: "Backend verification unavailable" }, 503);
+        }
+
         try {
           // Release lock BEFORE Drive upload — Drive upload is slow (~10-30s) and doesn't
           // touch the spreadsheet. Holding the script lock during upload blocks all other
@@ -136,7 +167,7 @@ function doPost(e) {
           // The finally block's releaseLock() is a safe no-op if already released.
           lock.releaseLock();
 
-          // 1. Upload to Drive
+          // 2. Upload to Drive
           const upRes = uploadImageToDrive(contents.fileData, contents.fileName, contents.mimeType, contents.uploadFolderID, contents.userName);
           if (!upRes || !upRes.url) {
             console.error("❌ [uploadImage] Drive upload failed, no URL returned.");
@@ -144,7 +175,7 @@ function doPost(e) {
           }
           console.log("📤 [uploadImage] Upload success: " + upRes.url);
 
-          // 2. Metadata Updates (Sync to Sheets)
+          // 3. Metadata Updates (Sync to Sheets)
           const orderId = contents.orderId || contents.orderID;
           if (orderId) {
              console.log("✅ [uploadImage] Order Drive upload done, updating Sheet for Order: " + orderId);

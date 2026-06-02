@@ -462,28 +462,64 @@ const PackagingView: React.FC<{ orders?: ParsedOrder[], onExit?: () => void }> =
         setIsSubmittingReturn(true);
         try {
             const session = await CacheService.get<{ token: string }>(CACHE_KEYS.SESSION);
-            const token = session?.token || '';
-            const res = await fetch(`${WEB_APP_URL}/api/admin/update-order`, {
+            const authToken = session?.token;
+            if (!authToken) throw new Error("Session expired");
+
+            // 1. GET ONE-TIME UPLOAD TOKEN FROM GO BACKEND
+            const tokenRes = await fetch(`${WEB_APP_URL}/api/admin/generate-upload-token?orderId=${returningOrder['Order ID']}`, {
+                headers: { 'Authorization': `Bearer ${authToken}` }
+            });
+            const tokenData = await tokenRes.json();
+            if (!tokenRes.ok || !tokenData.token) throw new Error("Failed to get upload token");
+
+            // 2. PREPARE METADATA
+            const metadata = {
+                'Fulfillment Status': 'Returned',
+                'Return Received By': currentUser?.FullName || 'Staff',
+                'Return Received Time': new Date().toISOString().slice(0, 19).replace('T', ' ')
+            };
+
+            // 3. DIRECT UPLOAD TO APPS SCRIPT (Bypass Server Render)
+            const APPS_SCRIPT_URL = appData.settings?.find((s: any) => s.Key === 'APPS_SCRIPT_URL')?.Value;
+            const APPS_SCRIPT_SECRET = appData.settings?.find((s: any) => s.Key === 'APPS_SCRIPT_SECRET')?.Value;
+
+            if (!APPS_SCRIPT_URL) throw new Error("Apps Script URL not configured");
+
+            await fetch(APPS_SCRIPT_URL, {
                 method: 'POST',
-                headers: { 'Content-Type': 'application/json', ...(token ? { 'Authorization': `Bearer ${token}` } : {}) },
-                body: JSON.stringify({ 
-                    orderId: returningOrder['Order ID'], team: returningOrder.Team, userName: currentUser?.FullName || 'System', 
-                    newData: { 
-                        'Fulfillment Status': 'Returned', 'Return Photo': photo,
-                        'Return Received By': currentUser?.FullName || 'Staff',
-                        'Return Received Time': new Date().toISOString().slice(0, 19).replace('T', ' ')
-                    } 
+                mode: 'no-cors',
+                body: JSON.stringify({
+                    action: "uploadImage",
+                    secret: APPS_SCRIPT_SECRET,
+                    token: tokenData.token, // Secure One-Time Token
+                    orderId: returningOrder['Order ID'],
+                    team: returningOrder.Team,
+                    userName: currentUser?.UserName || 'System',
+                    fileData: photo, // Base64
+                    fileName: `return_${returningOrder['Order ID']}_${Date.now()}`,
+                    mimeType: "image/webp",
+                    targetColumn: "Return Photo",
+                    newData: metadata
                 })
             });
-            const data = await res.json();
-            if (data.status === 'success') {
-                setIsReturnPhotoModalOpen(false);
-                setReturningOrder(null);
-                setReturnPhoto(null);
-                refreshData();
-                alert("បានបញ្ជាក់ការទទួលឥវ៉ាន់ Return រួចរាល់!");
-            } else { alert(data.message || "មិនអាចបញ្ជាក់បានទេ"); }
-        } catch (error) { alert("មានបញ្ហាពេលបញ្ជាក់ការទទួល"); } finally { setIsSubmittingReturn(false); }
+
+            // Note: with 'no-cors', we can't confirm body response. 
+            // We'll proceed and refresh later.
+            setIsReturnPhotoModalOpen(false);
+            setReturningOrder(null);
+            setReturnPhoto(null);
+            
+            alert("កំពុងបញ្ជាក់ការទទួល... (Direct Sync Active)");
+            
+            setTimeout(async () => {
+                await refreshData();
+                setIsSubmittingReturn(false);
+            }, 3000);
+
+        } catch (error: any) { 
+            alert("មានបញ្ហាពេលបញ្ជាក់ការទទួល: " + error.message); 
+            setIsSubmittingReturn(false);
+        }
     };
 
     // 5. Early Return for Store Selection

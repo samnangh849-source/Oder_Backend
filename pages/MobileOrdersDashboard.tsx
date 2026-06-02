@@ -15,6 +15,7 @@ import { translations } from '../translations';
 import { useSoundEffects } from '../hooks/useSoundEffects';
 import { FilterState } from '../components/orders/OrderFilters';
 import { useUI } from '../context/UIContext';
+import Spinner from '../components/common/Spinner';
 
 interface MobileOrdersDashboardProps {
     onBack: () => void;
@@ -23,7 +24,7 @@ interface MobileOrdersDashboardProps {
 
 const MobileOrdersDashboard: React.FC<MobileOrdersDashboardProps> = ({ onBack, initialFilters }) => {
     const { 
-        appData, refreshData, orders, isOrdersLoading, language, isSyncing
+        appData, refreshData, fetchOrders, orders, isOrdersLoading, language, isSyncing
     } = useContext(AppContext);
     const { setIsBottomNavHidden } = useUI();
     
@@ -31,12 +32,17 @@ const MobileOrdersDashboard: React.FC<MobileOrdersDashboardProps> = ({ onBack, i
     const t = useMemo(() => translations[language || 'km'] || translations['km'], [language]);
 
     const [editingOrderId, setEditingOrderId] = useUrlState<string>('editOrder', '');
-    const [viewingOrder, setViewingOrder] = useState<ParsedOrder | null>(null);
+    const [viewingOrderId, setViewingOrderId] = useState<string | null>(null);
     const optimisticUpdateRef = useRef<((ids: string[], status: string) => void) | null>(null);
     const [sortBy, setSortBy] = useState<string>('date');
     const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>('desc');
     const [viewMode, setViewMode] = useUrlState<'card' | 'list'>('viewMode', 'card');
     
+    // Server-side Pagination States
+    const [currentPage, setCurrentPage] = useState(1);
+    const [pageSize, setPageSize] = useState(50); // Smaller for mobile
+    const [totalCount, setTotalCount] = useState(0);
+
     const [isFilterModalOpen, setIsFilterModalOpen] = useState(false);
     const [isPdfModalOpen, setIsPdfModalOpen] = useState(false);
     const [searchQuery, setSearchQuery] = useState('');
@@ -91,6 +97,32 @@ const MobileOrdersDashboard: React.FC<MobileOrdersDashboardProps> = ({ onBack, i
         };
     });
 
+    // Optimized Fetch
+    useEffect(() => {
+        const fetchPaginated = async () => {
+            const params: any = {
+                limit: pageSize,
+                offset: (currentPage - 1) * pageSize,
+                view: 'compact'
+            };
+
+            if (filters.datePreset !== 'all') {
+                params.datePreset = filters.datePreset;
+                if (filters.startDate) params.startDate = filters.startDate;
+                if (filters.endDate) params.endDate = filters.endDate;
+            } else {
+                params.datePreset = 'all';
+            }
+
+            const result: any = await fetchOrders(false, params);
+            if (result) {
+                setTotalCount(result.total);
+            }
+        };
+
+        fetchPaginated();
+    }, [filters.datePreset, filters.startDate, filters.endDate, currentPage, pageSize, fetchOrders]);
+
     const getOrderTimestamp = (order: any) => {
         const ts = order.Timestamp;
         if (!ts) return 0;
@@ -99,19 +131,6 @@ const MobileOrdersDashboard: React.FC<MobileOrdersDashboardProps> = ({ onBack, i
         const d = new Date(ts);
         return isNaN(d.getTime()) ? 0 : d.getTime();
     };
-
-    // Sync with URL
-    const [, setUrlTeam] = useUrlState('teamFilter', '');
-    const [, setUrlDate] = useUrlState('dateFilter', 'this_month');
-    const [, setUrlLocation] = useUrlState('locationFilter', '');
-    const [, setUrlStore] = useUrlState('storeFilter', '');
-
-    useEffect(() => {
-        setUrlTeam(filters.team);
-        setUrlDate(filters.datePreset);
-        setUrlLocation(filters.location);
-        setUrlStore(filters.fulfillmentStore);
-    }, [filters, setUrlTeam, setUrlDate, setUrlLocation, setUrlStore]);
 
     const enrichedOrders = useMemo(() => {
         return orders.map(order => {
@@ -130,30 +149,6 @@ const MobileOrdersDashboard: React.FC<MobileOrdersDashboardProps> = ({ onBack, i
 
     const filteredOrders = useMemo(() => {
         const base = enrichedOrders.filter(order => {
-            // 1. Date Filtering
-            if (filters.datePreset !== 'all') {
-                const ts = getOrderTimestamp(order);
-                const orderDate = new Date(ts);
-                const now = new Date();
-                const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
-                let start: Date | null = null;
-                let end: Date | null = null;
-
-                switch (filters.datePreset) {
-                    case 'today': start = today; end = new Date(today); end.setHours(23, 59, 59, 999); break;
-                    case 'yesterday': start = new Date(today); start.setDate(today.getDate() - 1); end = new Date(today); end.setMilliseconds(-1); break;
-                    case 'this_week': const day = now.getDay(); start = new Date(today); start.setDate(today.getDate() - (day === 0 ? 6 : day - 1)); break;
-                    case 'this_month': start = new Date(now.getFullYear(), now.getMonth(), 1); break;
-                    case 'custom':
-                        if (filters.startDate) start = new Date(filters.startDate + 'T00:00:00');
-                        if (filters.endDate) end = new Date(filters.endDate + 'T23:59:59');
-                        break;
-                }
-                if (start && orderDate < start) return false;
-                if (end && orderDate > end) return false;
-            }
-
-            // 2. Helper for multi-value filters
             const isMatch = (filterValue: string, orderValue: string) => {
                 if (!filterValue || filterValue === 'all') return true;
                 const filterItems = filterValue.split(',').map(v => v.trim().toLowerCase());
@@ -161,7 +156,6 @@ const MobileOrdersDashboard: React.FC<MobileOrdersDashboardProps> = ({ onBack, i
                 return filterItems.includes(val);
             };
 
-            // 3. Apply individual filters
             if (!isMatch(filters.team, order.Team)) return false;
             if (!isMatch(filters.fulfillmentStore, order['Fulfillment Store'] || 'Unassigned')) return false;
             if (!isMatch(filters.paymentStatus, order['Payment Status'])) return false;
@@ -187,7 +181,6 @@ const MobileOrdersDashboard: React.FC<MobileOrdersDashboardProps> = ({ onBack, i
                 if (filters.isVerified === 'Unverified' && isV) return false;
             }
 
-            // 4. Search Query
             if (searchQuery.trim()) {
                 const q = searchQuery.toLowerCase();
                 return (
@@ -211,6 +204,13 @@ const MobileOrdersDashboard: React.FC<MobileOrdersDashboardProps> = ({ onBack, i
             return sortOrder === 'desc' ? vB - vA : vA - vB;
         });
     }, [enrichedOrders, filters, searchQuery, sortBy, sortOrder]);
+
+    const viewingOrder = useMemo(() => {
+        if (!viewingOrderId) return null;
+        return enrichedOrders.find(o => o['Order ID'] === viewingOrderId) || null;
+    }, [viewingOrderId, enrichedOrders]);
+
+    const totalPages = Math.ceil(totalCount / pageSize);
 
     const calculatedRange = useMemo(() => {
         const now = new Date();
@@ -254,6 +254,14 @@ const MobileOrdersDashboard: React.FC<MobileOrdersDashboardProps> = ({ onBack, i
                     </div>
                 </div>
                 <div className="flex items-center gap-2">
+                    {/* Mini Pagination for Mobile Header */}
+                    {totalPages > 1 && (
+                        <div className="flex items-center bg-white/5 border border-white/10 rounded-lg p-0.5">
+                             <button onClick={() => setCurrentPage(p => Math.max(1, p - 1))} disabled={currentPage === 1} className="p-1 disabled:opacity-20"><svg className="w-4 h-4 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path d="M15 19l-7-7 7-7" strokeWidth={3}/></svg></button>
+                             <span className="text-[9px] font-black text-[#FCD535] px-1.5">{currentPage}/{totalPages}</span>
+                             <button onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))} disabled={currentPage === totalPages} className="p-1 disabled:opacity-20"><svg className="w-4 h-4 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path d="M9 5l7 7-7 7" strokeWidth={3}/></svg></button>
+                        </div>
+                    )}
                     <button onClick={() => setIsFilterModalOpen(true)} className="p-2.5 bg-blue-600/10 text-blue-400 border border-blue-500/20 rounded-xl relative">
                         <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path d="M3 4a1 1 0 011-1h16a1 1 0 011 1v2.586a1 1 0 01-.293.707l-6.414 6.414a1 1 0 00-.293.707V17l-4 4v-6.586a1 1 0 00-.293-.707L3.293 7.293A1 1 0 013 6.586V4z" strokeWidth={2}/></svg>
                         {Object.values(filters).some(v => v && v !== 'all' && v !== 'this_month') && <span className="absolute top-1 right-1 w-2 h-2 bg-blue-500 rounded-full border-2 border-[#0f172a]"></span>}
@@ -328,7 +336,7 @@ const MobileOrdersDashboard: React.FC<MobileOrdersDashboardProps> = ({ onBack, i
                         { id: 'this_week', icon: '📅', label: 'Week' },
                         { id: 'this_month', icon: '🗓️', label: 'Month' }
                     ].map(p => (
-                        <button key={p.id} onClick={() => setFilters(prev => ({ ...prev, datePreset: p.id as any }))} className={`flex-shrink-0 flex items-center gap-2 px-4 py-2 rounded-2xl text-[10px] font-black uppercase tracking-widest border transition-all ${filters.datePreset === p.id ? 'bg-blue-600/10 border-blue-500/30 text-blue-400' : 'bg-white/5 border-white/5 text-gray-500'}`}>
+                        <button key={p.id} onClick={() => { setFilters(prev => ({ ...prev, datePreset: p.id as any })); setCurrentPage(1); }} className={`flex-shrink-0 flex items-center gap-2 px-4 py-2 rounded-2xl text-[10px] font-black uppercase tracking-widest border transition-all ${filters.datePreset === p.id ? 'bg-blue-600/10 border-blue-500/30 text-blue-400' : 'bg-white/5 border-white/5 text-gray-500'}`}>
                             <span className="text-sm">{p.icon}</span> {p.label}
                         </button>
                     ))}
@@ -336,7 +344,13 @@ const MobileOrdersDashboard: React.FC<MobileOrdersDashboardProps> = ({ onBack, i
             </div>
 
             {/* Orders Content */}
-            <div className="flex-1 overflow-y-auto custom-scrollbar px-4 pb-32">
+            <div className="flex-1 overflow-y-auto custom-scrollbar px-4 pb-32 relative">
+                {isOrdersLoading && orders.length > 0 && (
+                    <div className="absolute inset-0 z-50 bg-black/10 backdrop-blur-[1px] flex items-center justify-center">
+                        <Spinner size="sm" />
+                    </div>
+                )}
+                
                 {isOrdersLoading && orders.length === 0 ? <div className="py-20 flex justify-center"><Spinner size="lg" /></div> : filteredOrders.length === 0 ? (
                     <div className="flex flex-col items-center justify-center py-20 opacity-30 text-center">
                         <svg className="w-16 h-16 mb-4 mx-auto" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" strokeWidth={1.5}/></svg>
@@ -346,7 +360,7 @@ const MobileOrdersDashboard: React.FC<MobileOrdersDashboardProps> = ({ onBack, i
                     <OrdersList 
                         orders={filteredOrders} 
                         onEdit={o => setEditingOrderId(o['Order ID'])} 
-                        onView={o => setViewingOrder(o)} 
+                        onView={o => setViewingOrderId(o['Order ID'])} 
                         showActions={true} 
                         selectedIds={selectedIds} 
                         onToggleSelect={id => setSelectedIds(prev => {
@@ -377,14 +391,14 @@ const MobileOrdersDashboard: React.FC<MobileOrdersDashboardProps> = ({ onBack, i
                         usersList={appData.users || []} 
                         appData={appData} 
                         calculatedRange={calculatedRange}
-                        onApply={() => setIsFilterModalOpen(false)}
+                        onApply={() => { setIsFilterModalOpen(false); setCurrentPage(1); }}
                     />
                 </FilterPanel>
             )}
 
 
             {isPdfModalOpen && <PdfExportModal isOpen={true} onClose={() => setIsPdfModalOpen(false)} orders={filteredOrders} appData={appData} />}
-            {viewingOrder && <OrderDetailModal order={viewingOrder} onClose={() => setViewingOrder(null)} />}
+            {viewingOrderId && <OrderDetailModal order={viewingOrder!} onClose={() => setViewingOrderId(null)} />}
         </div>
     );
 };

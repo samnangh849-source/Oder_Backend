@@ -14,6 +14,7 @@ import DriverDeliveryView from './DriverDeliveryView';
 import InventoryManagement from '../components/admin/InventoryManagement';
 import EditProfileModal from '../components/common/EditProfileModal';
 import AdvancedSettingsModal from '../components/common/AdvancedSettingsModal';
+import AuditLogDashboard from './AuditLogDashboard';
 import IncentivesDashboard from './IncentivesDashboard';
 import IncentiveProjectDetails from './IncentiveProjectDetails';
 import IncentiveExecutionView from '../components/incentives/IncentiveExecutionView';
@@ -21,7 +22,7 @@ import { getIncentiveProjects } from '../services/incentiveService';
 import { useUrlState } from '../hooks/useUrlState';
 import { ParsedOrder } from '../types';
 
-type ActiveDashboard = 'admin' | 'orders' | 'reports' | 'settings' | 'fulfillment' | 'packaging' | 'delivery' | 'inventory' | 'incentives';
+type ActiveDashboard = 'admin' | 'orders' | 'reports' | 'settings' | 'fulfillment' | 'packaging' | 'delivery' | 'inventory' | 'incentives' | 'audit';
 type AdminView = 'dashboard' | 'performance';
 type ReportType = 'overview' | 'performance' | 'profitability' | 'forecasting' | 'shipping' | 'sales_team' | 'sales_page';
 
@@ -266,6 +267,7 @@ const MobileAdminDashboard: React.FC = () => {
             case 'reports': 
                 return <ReportDashboard activeReport={activeReport} onBack={() => setActiveDashboard('admin')} onNavigate={handleNavigateWithFilters} />;
             case 'settings': return <SettingsDashboard onBack={() => setActiveDashboard('admin')} />;
+            case 'audit': return <AuditLogDashboard onBack={() => setActiveDashboard('admin')} />;
             case 'fulfillment': return <FulfillmentDashboard orders={orders} />;
             case 'packaging': return <PackagingView orders={orders} onExit={() => setActiveDashboard('admin')} />;
             case 'delivery': return <DriverDeliveryView />;

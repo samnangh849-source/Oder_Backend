@@ -70,6 +70,7 @@ const Sidebar: React.FC<SidebarProps> = ({
             title: t.system || 'System',
             items: [
                 { id: 'incentives', component: 'incentives', label: t.incentives || 'Incentives', icon: <i className="fa-solid fa-award"></i> },
+                { id: 'audit', component: 'audit', label: t.audit || 'Audit Logs', icon: <i className="fa-solid fa-shield-halved"></i> },
                 { id: 'settings', component: 'settings', label: t.settings, icon: <i className="fa-solid fa-gears"></i> },
             ]
         }

@@ -204,8 +204,8 @@ type ReturnItem struct {
 	Timestamp   string  `gorm:"index;column:timestamp" json:"Timestamp"`
 	OrderID     string  `gorm:"index;column:order_id" json:"OrderID"`
 	StoreName   string  `gorm:"column:store_name" json:"StoreName"`
-	Barcode     string  `gorm:"column:barcode" json:"Barcode"`
-	ProductName string  `gorm:"column:product_name" json:"ProductName"`
+	Barcode     string  `gorm:"index;column:barcode" json:"Barcode"`
+	ProductName string  `gorm:"index;column:product_name" json:"ProductName"`
 	Quantity    float64 `gorm:"column:quantity" json:"Quantity"`
 	Reason      string  `gorm:"column:reason" json:"Reason"`
 	HandledBy   string  `gorm:"column:handled_by" json:"HandledBy"`
@@ -213,6 +213,13 @@ type ReturnItem struct {
 }
 
 func (ReturnItem) TableName() string { return "returns" }
+
+type UploadToken struct {
+	Token     string    `gorm:"primaryKey"`
+	OrderID   string    `gorm:"index"`
+	CreatedAt time.Time `gorm:"index"`
+	ExpiresAt time.Time `gorm:"index"`
+}
 
 type Order struct {
 	OrderID                 string  `gorm:"primaryKey;column:order_id" json:"Order ID"`

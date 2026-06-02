@@ -95,7 +95,7 @@ export const OrderProvider: React.FC<{ children: React.ReactNode }> = ({ childre
         return null;
     }, [handleUnauthorized]);
 
-    const fetchOrders = useCallback(async (force = false) => {
+    const fetchOrders = useCallback(async (force = false, params: Record<string, string | number> = {}) => {
         if (!force) setIsOrdersLoading(true);
         else setIsSyncing(true);
 
@@ -103,7 +103,17 @@ export const OrderProvider: React.FC<{ children: React.ReactNode }> = ({ childre
             const token = localStorage.getItem('token');
             if (!token) return;
             const headers: HeadersInit = { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` };
-            const endpoint = `${WEB_APP_URL}/api/admin/orders`;
+            
+            // Build Query String
+            const queryParams = new URLSearchParams();
+            Object.entries(params).forEach(([key, val]) => {
+                if (val !== undefined && val !== null && val !== '') {
+                    queryParams.append(key, String(val));
+                }
+            });
+            
+            const queryString = queryParams.toString();
+            const endpoint = `${WEB_APP_URL}/api/admin/orders${queryString ? `?${queryString}` : ''}`;
             const response = await fetch(endpoint, { headers });
 
             if (response.status === 401) {
@@ -143,9 +153,19 @@ export const OrderProvider: React.FC<{ children: React.ReactNode }> = ({ childre
                             IsVerified: String(o.IsVerified).toUpperCase() === 'TRUE' || o.IsVerified === 'A'
                         };
                     });
+                    
+                    // If it's a paginated response, we might not want to overwrite EVERYTHING 
+                    // depending on how the UI uses it. For now, we overwrite.
                     setOrders(parsedOrders);
                     setOrdersFetchError(null);
                     setRefreshTimestamp(Date.now());
+                    
+                    return {
+                        orders: parsedOrders,
+                        total: result.total || parsedOrders.length,
+                        limit: result.limit,
+                        offset: result.offset
+                    };
                 }
             } else {
                 setOrdersFetchError('network_error');

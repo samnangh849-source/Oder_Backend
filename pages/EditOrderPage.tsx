@@ -439,7 +439,16 @@ const EditOrderPage: React.FC<EditOrderPageProps> = ({ order, onSaveSuccess, onC
     };
 
     const handleUnReturn = async () => {
-        if (!window.confirm("តើអ្នកពិតជាចង់លុបចោលការ Return និងប្តូរទៅ Pending វិញមែនទេ? (Un-Return and reset to Pending?)")) return;
+        let suggestedStatus = 'Pending';
+        if (formData['Delivered Time'] && String(formData['Delivered Time']).trim() !== '') {
+            suggestedStatus = 'Delivered';
+        } else if (formData['Dispatched Time'] && String(formData['Dispatched Time']).trim() !== '') {
+            suggestedStatus = 'Shipped';
+        } else if (formData['Packed Time'] && String(formData['Packed Time']).trim() !== '') {
+            suggestedStatus = 'Ready to Ship';
+        }
+
+        if (!window.confirm(`តើអ្នកពិតជាចង់លុបចោលការ Return និងប្តូរទៅស្ថានភាព ${suggestedStatus} វិញមែនទេ?`)) return;
         setReturnActionType('to_pending');
         setPendingReason('');
         setIsReturnPhotoModalOpen(true);
@@ -450,53 +459,88 @@ const EditOrderPage: React.FC<EditOrderPageProps> = ({ order, onSaveSuccess, onC
         try {
             const session = await CacheService.get<{ token: string }>(CACHE_KEYS.SESSION);
             const token = session?.token;
-            const headers: HeadersInit = { 'Content-Type': 'application/json' };
-            if (token) headers['Authorization'] = `Bearer ${token}`;
+            if (!token) throw new Error("Session expired");
 
-            const isToPending = returnActionType === 'to_pending';
+            const isUnReturn = returnActionType === 'to_pending';
             
-            const newData: any = { 
-                'Fulfillment Status': isToPending ? 'Pending' : 'Returned',
-                'Return Photo': photo,
+            // 1. Determine target status
+            let targetStatus = 'Returned';
+            if (isUnReturn) {
+                if (formData['Delivered Time'] && String(formData['Delivered Time']).trim() !== '') {
+                    targetStatus = 'Delivered';
+                } else if (formData['Dispatched Time'] && String(formData['Dispatched Time']).trim() !== '') {
+                    targetStatus = 'Shipped';
+                } else if (formData['Packed Time'] && String(formData['Packed Time']).trim() !== '') {
+                    targetStatus = 'Ready to Ship';
+                } else {
+                    targetStatus = 'Pending';
+                }
+            }
+
+            // 2. GET ONE-TIME UPLOAD TOKEN FROM BACKEND
+            const tokenRes = await fetch(`${WEB_APP_URL}/api/admin/generate-upload-token?orderId=${formData['Order ID']}`, {
+                headers: { 'Authorization': `Bearer ${token}` }
+            });
+            const tokenData = await tokenRes.json();
+            if (!tokenRes.ok || !tokenData.token) throw new Error("Failed to get upload token");
+
+            // 3. PREPARE METADATA
+            const additionalData: any = { 
+                'Fulfillment Status': targetStatus,
                 'Return Received By': currentUser?.FullName || 'Admin',
                 'Return Received Time': new Date().toISOString().slice(0, 19).replace('T', ' ')
             };
 
-            if (isToPending) {
-                // When moving back to pending, we might want to keep the photo as proof of return condition
-                // but clear the reason if it's no longer considered "returned" in a negative sense.
-                // Or maybe the user wants to clear EVERYTHING?
-                // Re-reading previous requirement: "Un-Return and reset to Pending"
-                // I will clear reasons but keep the new photo as proof.
-                newData['Return Reason'] = '(Un-Returned to Stock)';
+            if (isUnReturn) {
+                additionalData['Return Reason'] = '(Un-Returned to ' + targetStatus + ')';
             } else {
-                newData['Return Reason'] = pendingReason;
+                additionalData['Return Reason'] = pendingReason;
             }
 
-            const response = await fetch(`${WEB_APP_URL}/api/admin/update-order`, {
+            // 4. DIRECT UPLOAD TO APPS SCRIPT (Bypass Server Render)
+            const APPS_SCRIPT_URL = appData.settings?.find((s: any) => s.Key === 'APPS_SCRIPT_URL')?.Value;
+            const APPS_SCRIPT_SECRET = appData.settings?.find((s: any) => s.Key === 'APPS_SCRIPT_SECRET')?.Value;
+
+            if (!APPS_SCRIPT_URL) throw new Error("Apps Script URL not configured");
+
+            const uploadRes = await fetch(APPS_SCRIPT_URL, {
                 method: 'POST',
-                headers,
-                body: JSON.stringify({ 
-                    orderId: formData['Order ID'], 
-                    team: formData.Team, 
-                    userName: currentUser?.FullName || 'System',
-                    newData: newData
+                mode: 'no-cors', // Important for Apps Script cross-origin
+                body: JSON.stringify({
+                    action: "uploadImage",
+                    secret: APPS_SCRIPT_SECRET,
+                    token: tokenData.token, // Secure One-Time Token
+                    orderId: formData['Order ID'],
+                    team: formData.Team,
+                    userName: currentUser?.UserName || 'System',
+                    fileData: photo, // Base64
+                    fileName: `return_${formData['Order ID']}_${Date.now()}`,
+                    mimeType: "image/webp",
+                    targetColumn: "Return Photo",
+                    newData: additionalData
                 })
             });
-            const result = await response.json();
-            if (!response.ok || result.status !== 'success') throw new Error(result.message || 'Action failed');
-            
-            const actionKey = isToPending ? 'UNRETURN_ORDER' : 'RETURN_ORDER';
-            const actionText = isToPending ? 'Un-Returned (to Stock)' : 'Returned';
-            await logUserActivity(currentUser?.UserName || 'Unknown', actionKey, `${actionText} Order #${formData['Order ID']}`);
+
+            // Note: with 'no-cors', we can't read the response body. 
+            // We assume success if the request was sent without throwing.
+            // For a better UX, we'll wait a moment and then refresh from DB.
+
+            const actionKey = isUnReturn ? 'UNRETURN_ORDER' : 'RETURN_ORDER';
+            const actionText = isUnReturn ? `Un-Returned (to ${targetStatus})` : 'Returned';
+            await logUserActivity(currentUser?.UserName || 'Unknown', actionKey, `${actionText} Order #${formData['Order ID']} (Direct Upload)`);
 
             setIsReturnPhotoModalOpen(false);
             setReturnPhoto(null);
-            await refreshData();
-            onSaveSuccess();
+            
+            // Give Apps Script time to finish writing to Drive & Sheet
+            setTimeout(async () => {
+                await refreshData();
+                onSaveSuccess();
+                setIsSubmittingReturn(false);
+            }, 3000);
+
         } catch (err: any) {
             alert(`បរាជ័យ: ${err.message}`);
-        } finally {
             setIsSubmittingReturn(false);
         }
     };

@@ -3,7 +3,9 @@ package main
 import (
 	"bytes"
 	"context"
+	crand "crypto/rand"
 	"crypto/subtle"
+	"encoding/hex"
 	"encoding/json"
 	"fmt"
 	"image"
@@ -34,6 +36,71 @@ import (
 	// Import GORM
 	"gorm.io/gorm"
 )
+
+// GenerateSecureToken creates a cryptographically secure random token
+func GenerateSecureToken(length int) string {
+	b := make([]byte, length)
+	if _, err := io.ReadFull(crand.Reader, b); err != nil {
+		return ""
+	}
+	return hex.EncodeToString(b)
+}
+
+// generateUploadTokenInternal is the shared logic for creating one-time upload tokens
+func generateUploadTokenInternal(orderID string) string {
+	token := GenerateSecureToken(16)
+	uploadToken := backend.UploadToken{
+		Token:     token,
+		OrderID:   orderID,
+		CreatedAt: time.Now(),
+		ExpiresAt: time.Now().Add(10 * time.Minute),
+	}
+
+	if err := backend.DB.Create(&uploadToken).Error; err != nil {
+		log.Printf("❌ Failed to create upload token: %v", err)
+		return ""
+	}
+	log.Printf("🔑 [Token Gen] Successfully created token %s for OrderID %s", token, orderID)
+	return token
+}
+
+func handleGenerateUploadToken(c *gin.Context) {
+	orderID := c.Query("orderId")
+	if orderID == "" {
+		c.JSON(400, gin.H{"status": "error", "message": "Missing orderId"})
+		return
+	}
+
+	token := generateUploadTokenInternal(orderID)
+	if token == "" {
+		c.JSON(500, gin.H{"status": "error", "message": "Failed to create token"})
+		return
+	}
+
+	c.JSON(200, gin.H{"status": "success", "token": token})
+}
+
+func handleVerifyUploadToken(c *gin.Context) {
+	token := c.Query("token")
+	secret := c.GetHeader("X-Internal-Secret")
+
+	// Apps Script must provide the shared secret
+	if secret != backend.AppsScriptSecret {
+		c.JSON(401, gin.H{"status": "error", "message": "Unauthorized internal call"})
+		return
+	}
+
+	var uploadToken backend.UploadToken
+	if err := backend.DB.Where("token = ? AND expires_at > ?", token, time.Now()).First(&uploadToken).Error; err != nil {
+		c.JSON(404, gin.H{"status": "error", "message": "Invalid or expired token"})
+		return
+	}
+
+	// Token is valid! Now DELETE it so it can't be used again (One-time use)
+	backend.DB.Delete(&uploadToken)
+
+	c.JSON(200, gin.H{"status": "success", "orderId": uploadToken.OrderID})
+}
 
 // --- Configuration ---
 var (
@@ -92,6 +159,8 @@ var calculatePayout = backend.CalculatePayout
 // =========================================================================
 func initDB() {
 	backend.InitDB()
+	// Migrate new tables
+	backend.DB.AutoMigrate(&backend.UploadToken{})
 }
 
 // =========================================================================
@@ -994,8 +1063,40 @@ func handleGetUsers(c *gin.Context) {
 
 func handleGetAllOrders(c *gin.Context) {
 	var orders []Order
+	
+	// 1. Pagination Params
+	limitStr := c.DefaultQuery("limit", "100")
+	offsetStr := c.DefaultQuery("offset", "0")
+	limit, _ := strconv.Atoi(limitStr)
+	offset, _ := strconv.Atoi(offsetStr)
+	
+	// 2. Date Filter Params
+	startDate := c.Query("startDate")
+	endDate := c.Query("endDate")
+	datePreset := c.Query("datePreset") // Optional: to explicitly request 'all'
+	
+	// 3. View mode (compact vs full)
+	view := c.Query("view")
+
 	query := backend.DB.Order("timestamp desc")
 	countQuery := backend.DB.Model(&Order{})
+
+	// Default date filter (7 days) if none provided and not explicitly 'all'
+	if startDate == "" && endDate == "" && datePreset != "all" {
+		sevenDaysAgo := time.Now().AddDate(0, 0, -7).Format("2006-01-02")
+		query = query.Where("timestamp >= ?", sevenDaysAgo)
+		countQuery = countQuery.Where("timestamp >= ?", sevenDaysAgo)
+	} else {
+		if startDate != "" {
+			query = query.Where("timestamp >= ?", startDate)
+			countQuery = countQuery.Where("timestamp >= ?", startDate)
+		}
+		if endDate != "" {
+			// Include full day of endDate
+			query = query.Where("timestamp <= ?", endDate+" 23:59:59")
+			countQuery = countQuery.Where("timestamp <= ?", endDate+" 23:59:59")
+		}
+	}
 
 	role, _ := c.Get("role")
 	team, _ := c.Get("team")
@@ -1012,7 +1113,6 @@ func handleGetAllOrders(c *gin.Context) {
 		}
 	}
 
-	// NEW: Check for 'view_global_orders' permission to bypass team filtering
 	hasGlobalView := isAdmin || hasPermissionInternal(roleString, (isSystemAdmin != nil && isSystemAdmin.(bool)), "view_global_orders")
 
 	if !hasGlobalView && team != nil {
@@ -1033,13 +1133,29 @@ func handleGetAllOrders(c *gin.Context) {
 		}
 	}
 
+	// Field Selection
+	if view == "compact" {
+		query = query.Select("order_id, timestamp, user, page, telegram_value, customer_name, customer_phone, location, subtotal, grand_total, fulfillment_status, is_verified, team, fulfillment_store, payment_status, payment_info")
+	}
+
+	// Apply Pagination
+	if limit > 0 {
+		query = query.Limit(limit).Offset(offset)
+	}
+
 	if err := query.Find(&orders).Error; err != nil {
 		c.Error(err)
 		return
 	}
 	var total int64
 	countQuery.Count(&total)
-	c.JSON(200, gin.H{"status": "success", "data": orders, "total": total})
+	c.JSON(200, gin.H{
+		"status": "success", 
+		"data":   orders, 
+		"total":  total,
+		"limit":  limit,
+		"offset": offset,
+	})
 }
 
 func handleSubmitOrder(c *gin.Context) {
@@ -1220,7 +1336,7 @@ func handleAdminUpdateOrder(c *gin.Context) {
 			"Ready to Ship": {"Shipped", "Pending", "Cancelled"},
 			"Shipped":       {"Delivered", "Ready to Ship", "Returned"},
 			"Delivered":     {"Returned"},
-			"Returned":      {"Delivered", "Pending"},
+			"Returned":      {"Delivered", "Shipped", "Ready to Ship", "Pending"},
 			"Cancelled":     {"Pending", "Scheduled"},
 		}
 
@@ -2889,7 +3005,8 @@ func main() {
 
 	// ── Wire Upload-package injectable dependencies ──────────────────────────
 	backend.UploadGenerateIDFunc = generateShortID
-	backend.UploadMapToDBColumnFunc = func(key string) string { return mapToDBColumn(key, "") }
+	backend.UploadGenerateTokenFunc = generateUploadTokenInternal // Inject this
+	backend.UploadMapToDBColumnFunc = func(k string) string { return mapToDBColumn(k, "") }
 	backend.UploadGetTableNameFunc = getTableName
 	backend.UploadIsValidOrderColumnFunc = isValidOrderColumn
 
@@ -2962,6 +3079,7 @@ func main() {
 	api.POST("/webhook/sheets-sync", handleSheetsWebhook)
 	api.GET("/order-metadata/:id", handleGetOrderMetadata)
 	api.POST("/telegram/webhook/:token", handleTelegramWebhook)
+	api.GET("/internal/verify-upload-token", handleVerifyUploadToken) // New for Apps Script
 
 	protected := api.Group("/")
 	protected.Use(AuthMiddleware())
@@ -2971,6 +3089,7 @@ func main() {
 		protected.GET("/users", handleGetUsers)
 		protected.GET("/static-data", handleGetStaticData)
 		protected.POST("/submit-order", RequirePermission("create_order"), handleSubmitOrder)
+		protected.GET("/generate-upload-token", handleGenerateUploadToken) // New for Admin
 		protected.POST("/upload-image", backend.HandleImageUploadProxy)
 		protected.GET("/proxy-image", backend.HandleProxyImage)
 		protected.GET("/permissions", handleGetUserPermissions)

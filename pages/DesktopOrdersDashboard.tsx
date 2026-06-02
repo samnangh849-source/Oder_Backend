@@ -22,7 +22,7 @@ interface DesktopOrdersDashboardProps {
 
 const DesktopOrdersDashboard: React.FC<DesktopOrdersDashboardProps> = ({ onBack, initialFilters }) => {
     const {
-        appData, refreshData, refreshTimestamp, currentUser,
+        appData, refreshData, fetchOrders, refreshTimestamp, currentUser,
         orders, isOrdersLoading, language, isSyncing, advancedSettings
     } = useContext(AppContext);
 
@@ -32,13 +32,18 @@ const DesktopOrdersDashboard: React.FC<DesktopOrdersDashboardProps> = ({ onBack,
     const t = useMemo(() => translations[language || 'km'] || translations['km'], [language]);
 
     const [editingOrderId, setEditingOrderId] = useUrlState<string>('editOrder', '');
-    const [viewingOrder, setViewingOrder] = useState<ParsedOrder | null>(null);
+    const [viewingOrderId, setViewingOrderId] = useState<string | null>(null);
     const [sortBy, setSortBy] = useState<string>('date');
     const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>('desc');
     const [groupBy, setGroupBy] = useState<string>('none');
     const optimisticUpdateRef = useRef<((ids: string[], status: string) => void) | null>(null);
     const [viewMode, setViewMode] = useUrlState<'card' | 'list'>('viewMode', 'list');
     
+    // Server-side Pagination States
+    const [currentPage, setCurrentPage] = useState(1);
+    const [pageSize, setPageSize] = useState(100);
+    const [totalCount, setTotalCount] = useState(0);
+
     const [visibleColumns, setVisibleColumns] = useState<Set<string>>(() => {
         const defaults = availableColumns || [];
         return new Set(
@@ -86,6 +91,32 @@ const DesktopOrdersDashboard: React.FC<DesktopOrdersDashboardProps> = ({ onBack,
         };
     });
 
+    // Trigger optimized fetch when filters or pagination change
+    useEffect(() => {
+        const fetchPaginated = async () => {
+            const params: any = {
+                limit: pageSize,
+                offset: (currentPage - 1) * pageSize,
+                view: 'compact'
+            };
+
+            if (filters.datePreset !== 'all') {
+                params.datePreset = filters.datePreset;
+                if (filters.startDate) params.startDate = filters.startDate;
+                if (filters.endDate) params.endDate = filters.endDate;
+            } else {
+                params.datePreset = 'all';
+            }
+
+            const result: any = await fetchOrders(false, params);
+            if (result) {
+                setTotalCount(result.total);
+            }
+        };
+
+        fetchPaginated();
+    }, [filters.datePreset, filters.startDate, filters.endDate, currentPage, pageSize, fetchOrders]);
+
     const getOrderTimestamp = (order: any) => {
         const ts = order.Timestamp;
         if (!ts) return 0;
@@ -95,7 +126,7 @@ const DesktopOrdersDashboard: React.FC<DesktopOrdersDashboardProps> = ({ onBack,
         return isNaN(d.getTime()) ? 0 : d.getTime();
     };
 
-    // Data Processing
+    // Data Processing (Client-side secondary filtering)
     const enrichedOrders = useMemo(() => {
         return orders.map(order => {
             let team = (order.Team || '').trim();
@@ -113,29 +144,6 @@ const DesktopOrdersDashboard: React.FC<DesktopOrdersDashboardProps> = ({ onBack,
 
     const filteredOrders = useMemo(() => {
         const base = enrichedOrders.filter(order => {
-            if (filters.datePreset !== 'all') {
-                const ts = getOrderTimestamp(order);
-                const orderDate = new Date(ts);
-                const now = new Date();
-                const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
-                let start: Date | null = null;
-                let end: Date | null = null;
-                switch (filters.datePreset) {
-                    case 'today': start = today; end = new Date(today); end.setHours(23, 59, 59, 999); break;
-                    case 'yesterday': start = new Date(today); start.setDate(today.getDate() - 1); end = new Date(today); end.setMilliseconds(-1); break;
-                    case 'this_week': const day = now.getDay(); start = new Date(today); start.setDate(today.getDate() - (day === 0 ? 6 : day - 1)); break;
-                    case 'last_week': start = new Date(today); start.setDate(today.getDate() - now.getDay() - 6); end = new Date(start); end.setDate(start.getDate() + 6); end.setHours(23, 59, 59); break;
-                    case 'this_month': start = new Date(now.getFullYear(), now.getMonth(), 1); break;
-                    case 'last_month': start = new Date(now.getFullYear(), now.getMonth() - 1, 1); end = new Date(now.getFullYear(), now.getMonth(), 0, 23, 59, 59); break;
-                    case 'this_year': start = new Date(now.getFullYear(), 0, 1); break;
-                    case 'custom':
-                        if (filters.startDate) start = new Date(filters.startDate + 'T00:00:00');
-                        if (filters.endDate) end = new Date(filters.endDate + 'T23:59:59');
-                        break;
-                }
-                if (start && orderDate < start) return false;
-                if (end && orderDate > end) return false;
-            }
             const isMatch = (fV: string, oV: string, p = false) => {
                 if (!fV) return true;
                 const sV = fV.split(',').map(v => v.trim().toLowerCase());
@@ -192,7 +200,14 @@ const DesktopOrdersDashboard: React.FC<DesktopOrdersDashboardProps> = ({ onBack,
             if (vA > vB) return sortOrder === 'asc' ? 1 : -1;
             return 0;
         });
-    }, [enrichedOrders, filters, searchQuery, appData.pages, sortBy, sortOrder]);
+    }, [enrichedOrders, filters, searchQuery, sortBy, sortOrder]);
+
+    const viewingOrder = useMemo(() => {
+        if (!viewingOrderId) return null;
+        return enrichedOrders.find(o => o['Order ID'] === viewingOrderId) || null;
+    }, [viewingOrderId, enrichedOrders]);
+
+    const totalPages = Math.ceil(totalCount / pageSize);
 
     const toggleColumn = (key: string) => {
         setVisibleColumns(prev => {
@@ -269,6 +284,29 @@ const DesktopOrdersDashboard: React.FC<DesktopOrdersDashboardProps> = ({ onBack,
                     </div>
 
                     <div className="flex items-center gap-2">
+                        {/* Pagination Control (Mini) */}
+                        {totalPages > 1 && (
+                            <div className="flex items-center bg-[#1E2329] border border-[#2B3139] p-0.5 rounded-lg mr-2">
+                                <button 
+                                    onClick={() => setCurrentPage(p => Math.max(1, p - 1))}
+                                    disabled={currentPage === 1}
+                                    className="p-1.5 text-gray-500 hover:text-white disabled:opacity-30 transition-colors"
+                                >
+                                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path d="M15 19l-7-7 7-7" strokeWidth={3}/></svg>
+                                </button>
+                                <span className="text-[10px] font-black text-[#FCD535] px-2 tabular-nums">
+                                    {currentPage} / {totalPages}
+                                </span>
+                                <button 
+                                    onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))}
+                                    disabled={currentPage === totalPages}
+                                    className="p-1.5 text-gray-500 hover:text-white disabled:opacity-30 transition-colors"
+                                >
+                                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path d="M9 5l7 7-7 7" strokeWidth={3}/></svg>
+                                </button>
+                            </div>
+                        )}
+
                         {/* Search */}
                         <div className="relative group">
                             <input 
@@ -314,7 +352,10 @@ const DesktopOrdersDashboard: React.FC<DesktopOrdersDashboardProps> = ({ onBack,
                         ].map(p => (
                             <button
                                 key={p.id}
-                                onClick={() => setFilters(prev => ({ ...prev, datePreset: p.id as any, startDate: '', endDate: '' }))}
+                                onClick={() => {
+                                    setFilters(prev => ({ ...prev, datePreset: p.id as any, startDate: '', endDate: '' }));
+                                    setCurrentPage(1); // Reset to page 1 when date changes
+                                }}
                                 className={`px-4 py-2 text-[10px] font-bold uppercase tracking-wider transition-all border-b-2 ${
                                     isBinance
                                     ? (filters.datePreset === p.id
@@ -382,16 +423,22 @@ const DesktopOrdersDashboard: React.FC<DesktopOrdersDashboardProps> = ({ onBack,
                         })}
                     </div>
                     <div className={`ml-auto text-[10px] ${isBinance ? 'text-[#848E9C]' : 'text-gray-500'} tabular-nums font-medium`}>
-                        <span className={isBinance ? 'text-[#EAECEF]' : 'text-white'}>{filteredOrders.length}</span> {language === 'km' ? 'ការកម្មង់' : 'orders'}
+                        <span className={isBinance ? 'text-[#EAECEF]' : 'text-white'}>{totalCount}</span> {language === 'km' ? 'ការកម្មង់សរុប' : 'total orders'}
                     </div>
                 </div>
             </div>
 
-            <div className={`flex-1 overflow-hidden ${isBinance ? 'px-3 pb-3' : 'px-6 pb-6'}`}>
+            <div className={`flex-1 overflow-hidden ${isBinance ? 'px-3 pb-3' : 'px-6 pb-6'} relative`}>
+                {isOrdersLoading && orders.length > 0 && (
+                    <div className="absolute inset-0 z-50 bg-black/10 backdrop-blur-[1px] flex items-center justify-center">
+                        <Spinner size="sm" />
+                    </div>
+                )}
+                
                 <OrdersList 
                     orders={filteredOrders} 
                     onEdit={o => setEditingOrderId(o['Order ID'])} 
-                    onView={o => setViewingOrder(o)} 
+                    onView={o => setViewingOrderId(o['Order ID'])} 
                     showActions={true} 
                     visibleColumns={visibleColumns} 
                     selectedIds={selectedIds} 
@@ -416,7 +463,7 @@ const DesktopOrdersDashboard: React.FC<DesktopOrdersDashboardProps> = ({ onBack,
                 onOptimisticUpdate={(ids, status) => optimisticUpdateRef.current?.(ids, status)}
             />
             {isPdfModalOpen && <PdfExportModal isOpen={true} onClose={() => setIsPdfModalOpen(false)} orders={filteredOrders} appData={appData} />}
-            {viewingOrder && <OrderDetailModal order={viewingOrder} onClose={() => setViewingOrder(null)} />}
+            {viewingOrderId && <OrderDetailModal order={viewingOrder!} onClose={() => setViewingOrderId(null)} />}
         </div>
     );
 };
