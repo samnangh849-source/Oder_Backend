@@ -1194,8 +1194,8 @@ func handleGetAllOrders(c *gin.Context) {
 
 	// Field Selection
 	if view == "compact" {
-		// Select all columns except the heavy products_json
-		query = query.Select("order_id, timestamp, user, page, telegram_value, customer_name, customer_phone, location, address_details, note, shipping_fee_customer, subtotal, grand_total, internal_shipping_method, internal_shipping_details, internal_cost, payment_status, payment_info, discount_usd, delivery_unpaid, delivery_paid, total_product_cost, telegram_message_id1, telegram_message_id2, telegram_message_id3, scheduled_time, fulfillment_store, team, is_verified, fulfillment_status, packed_by, packed_time, package_photo_url, driver_name, tracking_number, dispatched_time, dispatched_by, delivered_time, delivery_photo_url")
+		// Include products_json as it's needed for the dashboard display
+		query = query.Select("order_id, timestamp, user, page, telegram_value, customer_name, customer_phone, location, address_details, note, shipping_fee_customer, subtotal, grand_total, internal_shipping_method, internal_shipping_details, internal_cost, payment_status, payment_info, discount_usd, delivery_unpaid, delivery_paid, total_product_cost, telegram_message_id1, telegram_message_id2, telegram_message_id3, scheduled_time, fulfillment_store, team, is_verified, fulfillment_status, packed_by, packed_time, package_photo_url, driver_name, tracking_number, dispatched_time, dispatched_by, delivered_time, delivery_photo_url, products_json")
 	}
 
 	// Apply Pagination
