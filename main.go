@@ -1101,6 +1101,12 @@ func handleGetAllOrders(c *gin.Context) {
 			weekday := int(now.Weekday())
 			if weekday == 0 { weekday = 7 }
 			startDate = now.AddDate(0, 0, -weekday+1).Format("2006-01-02")
+		case "last_week":
+			weekday := int(now.Weekday())
+			if weekday == 0 { weekday = 7 }
+			mondayThisWeek := now.AddDate(0, 0, -weekday+1)
+			startDate = mondayThisWeek.AddDate(0, 0, -7).Format("2006-01-02")
+			endDate = mondayThisWeek.AddDate(0, 0, -1).Format("2006-01-02")
 		case "this_month":
 			startDate = time.Date(now.Year(), now.Month(), 1, 0, 0, 0, 0, now.Location()).Format("2006-01-02")
 		case "last_month":
@@ -1108,6 +1114,11 @@ func handleGetAllOrders(c *gin.Context) {
 			lastMonth := firstOfThisMonth.AddDate(0, -1, 0)
 			startDate = lastMonth.Format("2006-01-02")
 			endDate = firstOfThisMonth.AddDate(0, 0, -1).Format("2006-01-02")
+		case "this_year":
+			startDate = time.Date(now.Year(), 1, 1, 0, 0, 0, 0, now.Location()).Format("2006-01-02")
+		case "last_year":
+			startDate = time.Date(now.Year()-1, 1, 1, 0, 0, 0, 0, now.Location()).Format("2006-01-02")
+			endDate = time.Date(now.Year()-1, 12, 31, 0, 0, 0, 0, now.Location()).Format("2006-01-02")
 		case "all":
 			// No date filter
 		}
