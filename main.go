@@ -1070,32 +1070,54 @@ func handleGetAllOrders(c *gin.Context) {
 	limit, _ := strconv.Atoi(limitStr)
 	offset, _ := strconv.Atoi(offsetStr)
 	
-	// 2. Date Filter Params
+	// 2. Filter Params
 	startDate := c.Query("startDate")
 	endDate := c.Query("endDate")
-	datePreset := c.Query("datePreset") // Optional: to explicitly request 'all'
-	
-	// 3. View mode (compact vs full)
+	datePreset := c.Query("datePreset") 
 	view := c.Query("view")
 
 	query := backend.DB.Order("timestamp desc")
 	countQuery := backend.DB.Model(&Order{})
 
-	// Default date filter (7 days) if none provided and not explicitly 'all'
-	if startDate == "" && endDate == "" && datePreset != "all" {
-		sevenDaysAgo := time.Now().AddDate(0, 0, -7).Format("2006-01-02")
-		query = query.Where("timestamp >= ?", sevenDaysAgo)
-		countQuery = countQuery.Where("timestamp >= ?", sevenDaysAgo)
-	} else {
-		if startDate != "" {
-			query = query.Where("timestamp >= ?", startDate)
-			countQuery = countQuery.Where("timestamp >= ?", startDate)
+	// Handle Date Presets if startDate/endDate are not provided
+	if startDate == "" && endDate == "" {
+		now := time.Now()
+		// Default to 'this_month' if no preset or custom range is provided
+		if datePreset == "" {
+			datePreset = "this_month"
 		}
-		if endDate != "" {
-			// Include full day of endDate
-			query = query.Where("timestamp <= ?", endDate+" 23:59:59")
-			countQuery = countQuery.Where("timestamp <= ?", endDate+" 23:59:59")
+
+		switch datePreset {
+		case "today":
+			startDate = now.Format("2006-01-02")
+		case "yesterday":
+			startDate = now.AddDate(0, 0, -1).Format("2006-01-02")
+			endDate = startDate
+		case "this_week":
+			// Monday of current week
+			weekday := int(now.Weekday())
+			if weekday == 0 { weekday = 7 } // Sunday = 7
+			startDate = now.AddDate(0, 0, -weekday+1).Format("2006-01-02")
+		case "this_month":
+			startDate = time.Date(now.Year(), now.Month(), 1, 0, 0, 0, 0, now.Location()).Format("2006-01-02")
+		case "last_month":
+			firstOfThisMonth := time.Date(now.Year(), now.Month(), 1, 0, 0, 0, 0, now.Location())
+			lastMonth := firstOfThisMonth.AddDate(0, -1, 0)
+			startDate = lastMonth.Format("2006-01-02")
+			endDate = firstOfThisMonth.AddDate(0, 0, -1).Format("2006-01-02")
+		case "all":
+			// No filter
 		}
+	}
+
+	if startDate != "" {
+		query = query.Where("timestamp >= ?", startDate)
+		countQuery = countQuery.Where("timestamp >= ?", startDate)
+	}
+	if endDate != "" {
+		// Include full day of endDate
+		query = query.Where("timestamp <= ?", endDate+" 23:59:59")
+		countQuery = countQuery.Where("timestamp <= ?", endDate+" 23:59:59")
 	}
 
 	role, _ := c.Get("role")
@@ -1135,7 +1157,8 @@ func handleGetAllOrders(c *gin.Context) {
 
 	// Field Selection
 	if view == "compact" {
-		query = query.Select("order_id, timestamp, user, page, telegram_value, customer_name, customer_phone, location, subtotal, grand_total, fulfillment_status, is_verified, team, fulfillment_store, payment_status, payment_info")
+		// Select all columns except the heavy products_json
+		query = query.Select("order_id, timestamp, user, page, telegram_value, customer_name, customer_phone, location, address_details, note, shipping_fee_customer, subtotal, grand_total, internal_shipping_method, internal_shipping_details, internal_cost, payment_status, payment_info, discount_usd, delivery_unpaid, delivery_paid, total_product_cost, telegram_message_id1, telegram_message_id2, telegram_message_id3, scheduled_time, fulfillment_store, team, is_verified, fulfillment_status, packed_by, packed_time, package_photo_url, driver_name, tracking_number, dispatched_time, dispatched_by, delivered_time, delivery_photo_url")
 	}
 
 	// Apply Pagination
