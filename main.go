@@ -1996,9 +1996,8 @@ func handleAdminUpdateSheet(c *gin.Context) {
 			lowerS := strings.ToLower(s)
 			if lowerS == "true" || lowerS == "false" {
 				v = (lowerS == "true")
-			} else if i, err := strconv.Atoi(s); err == nil {
-				v = i
 			}
+			// REMOVED: auto-conversion of numeric strings to int, as it causes issues with Postgres text columns
 		}
 
 		// Hashing password if updating users table
@@ -2156,9 +2155,8 @@ func handleAdminAddRow(c *gin.Context) {
 				lowerS := strings.ToLower(s)
 				if lowerS == "true" || lowerS == "false" {
 					v = (lowerS == "true")
-				} else if i, err := strconv.Atoi(s); err == nil {
-					v = i
 				}
+				// REMOVED: auto-conversion of numeric strings to int, as it causes issues with Postgres text columns
 			}
 
 			// Hashing password if adding to users table
