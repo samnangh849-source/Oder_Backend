@@ -1484,10 +1484,12 @@ func handleAdminUpdateOrder(c *gin.Context) {
 	// ✅ Validate Return Receipt - If confirming receipt, require photo (unless it's just unpacking a Cancelled order)
 	if _, hasReceivedBy := r.NewData["Return Received By"]; hasReceivedBy {
 		// Determine the target status
+		/*
 		targetStatus := originalOrder.FulfillmentStatus
 		if s, ok := r.NewData["Fulfillment Status"]; ok {
 			targetStatus = strings.TrimSpace(fmt.Sprintf("%v", s))
 		}
+		*/
 
 		// Return Photo is now optional as per user request
 		/*

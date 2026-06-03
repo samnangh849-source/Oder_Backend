@@ -448,9 +448,46 @@ const EditOrderPage: React.FC<EditOrderPageProps> = ({ order, onSaveSuccess, onC
         }
 
         if (!window.confirm(`តើអ្នកពិតជាចង់លុបចោលការ Return និងប្តូរទៅស្ថានភាព ${suggestedStatus} វិញមែនទេ?`)) return;
-        setReturnActionType('to_pending');
-        setPendingReason('');
-        setIsReturnPhotoModalOpen(true);
+        
+        setLoading(true);
+        try {
+            const session = await CacheService.get<{ token: string }>(CACHE_KEYS.SESSION);
+            const token = session?.token;
+            if (!token) throw new Error("Session expired");
+
+            const response = await fetch(`${WEB_APP_URL}/api/admin/update-order`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Authorization': `Bearer ${token}`
+                },
+                body: JSON.stringify({
+                    orderId: formData['Order ID'],
+                    team: formData.Team,
+                    newData: {
+                        'Fulfillment Status': suggestedStatus,
+                        'Return Reason': '',
+                        'Return Photo': '',
+                        'Return Received By': '',
+                        'Return Received Time': ''
+                    }
+                })
+            });
+
+            if (!response.ok) {
+                const err = await response.json();
+                throw new Error(err.message || "Failed to update order");
+            }
+
+            await logUserActivity(currentUser?.UserName || 'Unknown', 'UNRETURN_ORDER', `Un-Returned Order #${formData['Order ID']} to ${suggestedStatus}`);
+            
+            await refreshData();
+            onSaveSuccess();
+        } catch (err: any) {
+            setError(`Un-Return មិនបានសម្រេច: ${err.message}`);
+        } finally {
+            setLoading(false);
+        }
     };
 
     const handleConfirmReturnPhoto = async (photo: string) => {
@@ -460,49 +497,28 @@ const EditOrderPage: React.FC<EditOrderPageProps> = ({ order, onSaveSuccess, onC
             const token = session?.token;
             if (!token) throw new Error("Session expired");
 
-            const isUnReturn = returnActionType === 'to_pending';
-            
-            // 1. Determine target status
-            let targetStatus = 'Returned';
-            if (isUnReturn) {
-                if (formData['Delivered Time'] && String(formData['Delivered Time']).trim() !== '') {
-                    targetStatus = 'Delivered';
-                } else if (formData['Dispatched Time'] && String(formData['Dispatched Time']).trim() !== '') {
-                    targetStatus = 'Shipped';
-                } else if (formData['Packed Time'] && String(formData['Packed Time']).trim() !== '') {
-                    targetStatus = 'Ready to Ship';
-                } else {
-                    targetStatus = 'Pending';
-                }
-            }
-
-            // 2. GET ONE-TIME UPLOAD TOKEN FROM BACKEND
+            // 1. GET ONE-TIME UPLOAD TOKEN FROM BACKEND
             const tokenRes = await fetch(`${WEB_APP_URL}/api/admin/generate-upload-token?orderId=${formData['Order ID']}`, {
                 headers: { 'Authorization': `Bearer ${token}` }
             });
             const tokenData = await tokenRes.json();
             if (!tokenRes.ok || !tokenData.token) throw new Error("Failed to get upload token");
 
-            // 3. PREPARE METADATA
+            // 2. PREPARE METADATA
             const additionalData: any = { 
-                'Fulfillment Status': targetStatus,
+                'Fulfillment Status': 'Returned',
                 'Return Received By': currentUser?.FullName || 'Admin',
-                'Return Received Time': new Date().toISOString().slice(0, 19).replace('T', ' ')
+                'Return Received Time': new Date().toISOString().slice(0, 19).replace('T', ' '),
+                'Return Reason': pendingReason
             };
 
-            if (isUnReturn) {
-                additionalData['Return Reason'] = '(Un-Returned to ' + targetStatus + ')';
-            } else {
-                additionalData['Return Reason'] = pendingReason;
-            }
-
-            // 4. DIRECT UPLOAD TO APPS SCRIPT (Bypass Server Render)
+            // 3. DIRECT UPLOAD TO APPS SCRIPT (Bypass Server Render)
             const APPS_SCRIPT_URL = appData.settings?.find((s: any) => s.Key === 'APPS_SCRIPT_URL')?.Value;
             const APPS_SCRIPT_SECRET = appData.settings?.find((s: any) => s.Key === 'APPS_SCRIPT_SECRET')?.Value;
 
             if (!APPS_SCRIPT_URL) throw new Error("Apps Script URL not configured");
 
-            const uploadRes = await fetch(APPS_SCRIPT_URL, {
+            await fetch(APPS_SCRIPT_URL, {
                 method: 'POST',
                 mode: 'no-cors', // Important for Apps Script cross-origin
                 body: JSON.stringify({
@@ -520,13 +536,7 @@ const EditOrderPage: React.FC<EditOrderPageProps> = ({ order, onSaveSuccess, onC
                 })
             });
 
-            // Note: with 'no-cors', we can't read the response body. 
-            // We assume success if the request was sent without throwing.
-            // For a better UX, we'll wait a moment and then refresh from DB.
-
-            const actionKey = isUnReturn ? 'UNRETURN_ORDER' : 'RETURN_ORDER';
-            const actionText = isUnReturn ? `Un-Returned (to ${targetStatus})` : 'Returned';
-            await logUserActivity(currentUser?.UserName || 'Unknown', actionKey, `${actionText} Order #${formData['Order ID']} (Direct Upload)`);
+            await logUserActivity(currentUser?.UserName || 'Unknown', 'RETURN_ORDER', `Returned Order #${formData['Order ID']} (Direct Upload)`);
 
             setIsReturnPhotoModalOpen(false);
             setReturnPhoto(null);
@@ -539,7 +549,7 @@ const EditOrderPage: React.FC<EditOrderPageProps> = ({ order, onSaveSuccess, onC
             }, 3000);
 
         } catch (err: any) {
-            alert(`បរាជ័យ: ${err.message}`);
+            setError(`Confirm Return មិនបានសម្រេច: ${err.message}`);
             setIsSubmittingReturn(false);
         }
     };
