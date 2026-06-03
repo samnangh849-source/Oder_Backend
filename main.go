@@ -1079,9 +1079,18 @@ func handleGetAllOrders(c *gin.Context) {
 	userQuery := c.Query("user")
 	storeQuery := c.Query("fulfillmentStore")
 	statusQuery := c.Query("fulfillmentStatus")
+	searchQuery := c.Query("search")
 
 	query := backend.DB.Order("timestamp desc")
 	countQuery := backend.DB.Model(&Order{})
+
+	// Handle search across multiple fields
+	if searchQuery != "" {
+		s := "%" + strings.ToLower(searchQuery) + "%"
+		searchCondition := "(LOWER(order_id) LIKE ? OR LOWER(customer_name) LIKE ? OR customer_phone LIKE ?)"
+		query = query.Where(searchCondition, s, s, s)
+		countQuery = countQuery.Where(searchCondition, s, s, s)
+	}
 
 	// Handle Date Presets if startDate/endDate are not provided
 	if startDate == "" && endDate == "" {
@@ -1996,9 +2005,8 @@ func handleAdminUpdateSheet(c *gin.Context) {
 			lowerS := strings.ToLower(s)
 			if lowerS == "true" || lowerS == "false" {
 				v = (lowerS == "true")
-			} else if i, err := strconv.Atoi(s); err == nil {
-				v = i
 			}
+			// REMOVED: auto-conversion of numeric strings to int, as it causes issues with Postgres text columns
 		}
 
 		// Hashing password if updating users table
@@ -2156,9 +2164,8 @@ func handleAdminAddRow(c *gin.Context) {
 				lowerS := strings.ToLower(s)
 				if lowerS == "true" || lowerS == "false" {
 					v = (lowerS == "true")
-				} else if i, err := strconv.Atoi(s); err == nil {
-					v = i
 				}
+				// REMOVED: auto-conversion of numeric strings to int, as it causes issues with Postgres text columns
 			}
 
 			// Hashing password if adding to users table
