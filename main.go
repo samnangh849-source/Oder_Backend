@@ -1484,12 +1484,15 @@ func handleAdminUpdateOrder(c *gin.Context) {
 	// ✅ Validate Return Receipt - If confirming receipt, require photo (unless it's just unpacking a Cancelled order)
 	if _, hasReceivedBy := r.NewData["Return Received By"]; hasReceivedBy {
 		// Determine the target status
+		/*
 		targetStatus := originalOrder.FulfillmentStatus
 		if s, ok := r.NewData["Fulfillment Status"]; ok {
 			targetStatus = strings.TrimSpace(fmt.Sprintf("%v", s))
 		}
+		*/
 
-		// Only require photo if we are NOT in Cancelled status
+		// Return Photo is now optional as per user request
+		/*
 		if targetStatus != "Cancelled" {
 			photo, hasPhoto := r.NewData["Return Photo"]
 			if (!hasPhoto || strings.TrimSpace(fmt.Sprintf("%v", photo)) == "") && strings.TrimSpace(originalOrder.ReturnPhotoURL) == "" {
@@ -1497,6 +1500,7 @@ func handleAdminUpdateOrder(c *gin.Context) {
 				return
 			}
 		}
+		*/
 		// Auto-set received time if not provided
 		if _, hasTime := r.NewData["Return Received Time"]; !hasTime {
 			r.NewData["Return Received Time"] = time.Now().Format("2006-01-02 15:04:05")
