@@ -563,12 +563,19 @@ const ShippingReport: React.FC<ShippingReportProps> = ({ orders, appData, dateFi
                         {/* Title & Brand */}
                         <div className="flex items-center gap-5">
                             {onBack && (
-                                <button onClick={onBack} className={`w-12 h-12 flex items-center justify-center transition-all active:scale-90 ${styles.buttonSecondary} rounded-2xl shadow-xl border hover:border-${styles.accent}/50`}>
+                                <button 
+                                    onClick={onBack} 
+                                    className={`w-12 h-12 flex items-center justify-center transition-all active:scale-90 ${styles.buttonSecondary} rounded-2xl shadow-xl border`}
+                                    style={{ borderColor: dateFilter === 'all' ? 'transparent' : `${styles.accent}50` }}
+                                >
                                     <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={3}><path d="M15 19l-7-7 7-7" /></svg>
                                 </button>
                             )}
                             <div className="flex items-center gap-4">
-                                <div className={`w-2 h-12 ${styles.indicator} rounded-full shadow-[0_0_15px_${styles.accent}]`}></div>
+                                <div 
+                                    className={`w-2 h-12 ${styles.indicator} rounded-full`}
+                                    style={{ boxShadow: `0 0 15px ${styles.accent}` }}
+                                ></div>
                                 <div>
                                     <h2 className={`text-2xl font-black ${styles.primaryText} uppercase tracking-tighter italic leading-none`}>របាយការណ៍ដឹកជញ្ជូន</h2>
                                     <div className="flex items-center gap-2 mt-2">
@@ -581,7 +588,7 @@ const ShippingReport: React.FC<ShippingReportProps> = ({ orders, appData, dateFi
                         {/* Unified Filter Station */}
                         <div className="flex flex-wrap items-center gap-4 bg-black/10 p-2 rounded-[2rem] border border-white/5 shadow-inner">
                             {/* Store Selector */}
-                            <div className={`flex items-center ${styles.innerBg} rounded-[1.5rem] px-4 py-1.5 border ${styles.tableBorder} group/store hover:border-${styles.accent}/30 transition-all`}>
+                            <div className={`flex items-center ${styles.innerBg} rounded-[1.5rem] px-4 py-1.5 border ${styles.tableBorder} group/store transition-all`}>
                                 <div className={`w-7 h-7 rounded-full flex items-center justify-center text-[11px] font-black ${styles.secondaryText} bg-white/5 mr-2`}>
                                     <i className="fa-solid fa-server"></i>
                                 </div>
@@ -693,7 +700,7 @@ const ShippingReport: React.FC<ShippingReportProps> = ({ orders, appData, dateFi
                                         type="date" 
                                         value={startDate} 
                                         onChange={e => handleCustomDateChange('start', e.target.value)} 
-                                        className={`w-full bg-black/20 border ${styles.tableBorder} px-5 py-3 ${styles.primaryText} text-xs font-black focus:ring-2 focus:ring-${styles.accent}/20 focus:border-${styles.accent}/50 outline-none rounded-2xl transition-all shadow-inner`}
+                                        className={`w-full bg-black/20 border ${styles.tableBorder} px-5 py-3 ${styles.primaryText} text-xs font-black focus:ring-2 outline-none rounded-2xl transition-all shadow-inner`}
                                     />
                                 </div>
                                 <div className="hidden md:flex items-center justify-center pt-6">
@@ -710,7 +717,7 @@ const ShippingReport: React.FC<ShippingReportProps> = ({ orders, appData, dateFi
                                         type="date" 
                                         value={endDate} 
                                         onChange={e => handleCustomDateChange('end', e.target.value)} 
-                                        className={`w-full bg-black/20 border ${styles.tableBorder} px-5 py-3 ${styles.primaryText} text-xs font-black focus:ring-2 focus:ring-${styles.accent}/20 focus:border-${styles.accent}/50 outline-none rounded-2xl transition-all shadow-inner`}
+                                        className={`w-full bg-black/20 border ${styles.tableBorder} px-5 py-3 ${styles.primaryText} text-xs font-black focus:ring-2 focus:border-blue-500/50 outline-none rounded-2xl transition-all shadow-inner`}
                                     />
                                 </div>
                             </div>
@@ -778,7 +785,7 @@ const ShippingReport: React.FC<ShippingReportProps> = ({ orders, appData, dateFi
                                                     <span className="text-[10px] uppercase tracking-wider">{m.name}</span>
                                                 </td>
                                                 <td 
-                                                    className={`px-3 py-2.5 text-center font-black text-[${styles.accent}] cursor-pointer hover:underline transition-colors tabular-nums text-xs`}
+                                                    className={`px-3 py-2.5 text-center font-black cursor-pointer hover:underline transition-colors tabular-nums text-xs`}
                                                     style={{ color: styles.accent }}
                                                     onClick={() => handleDrilldown(`${language === 'km' ? 'ក្រុមហ៊ុន៖' : 'Carrier:'} ${m.name}`, 'shippingFilter', m.name)}
                                                 >
@@ -792,7 +799,7 @@ const ShippingReport: React.FC<ShippingReportProps> = ({ orders, appData, dateFi
                                                 </td>
                                                 <td className="px-3 py-2.5">
                                                     <div className="flex items-center gap-2">
-                                                        <div className="flex-1 h-1.5 ${styles.innerBg}" style={{ backgroundColor: uiTheme === 'binance' ? '#2B3139' : 'rgba(255,255,255,0.05)', borderRadius: '2px' }}>
+                                                        <div className="flex-1 h-1.5" style={{ backgroundColor: uiTheme === 'binance' ? '#2B3139' : 'rgba(255,255,255,0.05)', borderRadius: '2px' }}>
                                                             <div className="h-full transition-all" style={{ width: `${pct}%`, backgroundColor: styles.accent, borderRadius: '2px' }}></div>
                                                         </div>
                                                         <span className={`text-[9px] font-bold ${styles.secondaryText} tabular-nums w-10 text-right`}>{pct.toFixed(1)}%</span>
