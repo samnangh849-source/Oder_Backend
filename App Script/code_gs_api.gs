@@ -167,25 +167,32 @@ function doPost(e) {
           // The finally block's releaseLock() is a safe no-op if already released.
           lock.releaseLock();
 
-          // 2. Upload to Drive
-          const upRes = uploadImageToDrive(contents.fileData, contents.fileName, contents.mimeType, contents.uploadFolderID, contents.userName);
-          if (!upRes || !upRes.url) {
-            console.error("❌ [uploadImage] Drive upload failed, no URL returned.");
-            return createJsonResponse({ status: 'error', message: 'ការបង្ហោះរូបភាពទៅ Drive បរាជ័យ' }, 500);
+          // 2. Upload to Drive (Only if fileData is present)
+          let upRes = { url: "", fileID: "" };
+          if (contents.fileData && contents.fileData.trim() !== "") {
+            upRes = uploadImageToDrive(contents.fileData, contents.fileName, contents.mimeType, contents.uploadFolderID, contents.userName);
+            if (!upRes || !upRes.url) {
+              console.error("❌ [uploadImage] Drive upload failed, no URL returned.");
+              return createJsonResponse({ status: 'error', message: 'ការបង្ហោះរូបភាពទៅ Drive បរាជ័យ' }, 500);
+            }
+            console.log("📤 [uploadImage] Upload success: " + upRes.url);
+          } else {
+            console.log("ℹ️ [uploadImage] No fileData provided, skipping Drive upload.");
           }
-          console.log("📤 [uploadImage] Upload success: " + upRes.url);
 
           // 3. Metadata Updates (Sync to Sheets)
           const orderId = contents.orderId || contents.orderID;
           if (orderId) {
-             console.log("✅ [uploadImage] Order Drive upload done, updating Sheet for Order: " + orderId);
+             console.log("✅ [uploadImage] Order update, syncing Sheet for Order: " + orderId);
              
              // Combine photo URL with other metadata (Status, Packed By, etc.)
              const updateData = contents.newData || {};
-             if (contents.targetColumn) {
-               updateData[contents.targetColumn] = upRes.url;
-             } else {
-               updateData["Package Photo"] = upRes.url;
+             if (upRes.url) {
+               if (contents.targetColumn) {
+                 updateData[contents.targetColumn] = upRes.url;
+               } else {
+                 updateData["Package Photo"] = upRes.url;
+               }
              }
 
              try {
