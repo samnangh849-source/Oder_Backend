@@ -366,3 +366,6 @@
 
 
 ហេតុអ្វីនៅពេល Search Order មួយ ក្នុង Order Dashboard បែជាមិនឃើញស្ថិតក្នុង Page 1 បែជាមើលឃើញនៅ Page 2 ទៅវិញចឹង?
+
+
+Improve ផ្នែក (Manage product list, prices, and barcodes) ជាពិសេសការ Add new Product គឺអាចបញ្ចូលរូបភាពដោយ Image URL បាន

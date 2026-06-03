@@ -26,7 +26,8 @@ const ProductManagementMatrix: React.FC<ProductManagementMatrixProps> = ({ produ
         Barcode: '',
         Price: 0,
         Cost: 0,
-        Tags: ''
+        Tags: '',
+        ImageURL: ''
     });
 
     const handleAddNewProduct = async () => {
@@ -58,7 +59,8 @@ const ProductManagementMatrix: React.FC<ProductManagementMatrixProps> = ({ produ
                     Barcode: '',
                     Price: 0,
                     Cost: 0,
-                    Tags: ''
+                    Tags: '',
+                    ImageURL: ''
                 });
                 await refreshData();
                 onRefresh();
@@ -316,23 +318,24 @@ const ProductManagementMatrix: React.FC<ProductManagementMatrixProps> = ({ produ
                         <tr className="bg-[#fcd535]/5 border-b-2 border-[#fcd535]/20">
                             <td className="px-4 py-3 text-center text-[#fcd535] font-black">+</td>
                             <td className="px-4 py-3">
-                                <div className="w-10 h-10 bg-[#181a20] rounded-sm border border-dashed border-[#fcd535]/40 flex items-center justify-center text-[#fcd535]/40 cursor-pointer hover:bg-[#fcd535]/10 transition-all" onClick={() => document.getElementById('new-product-img')?.click()}>
+                                <div 
+                                    className="w-10 h-10 bg-[#181a20] rounded-sm border border-dashed border-[#fcd535]/40 flex items-center justify-center text-[#fcd535]/40 cursor-pointer hover:bg-[#fcd535]/10 transition-all relative group" 
+                                    onClick={() => {
+                                        const url = window.prompt("Enter Image URL", newProduct.ImageURL || "");
+                                        if (url !== null) {
+                                            setNewProduct(prev => ({ ...prev, ImageURL: url.trim() }));
+                                        }
+                                    }}
+                                    title="Click to add Image URL"
+                                >
                                     {newProduct.ImageURL ? (
-                                        <img src={convertGoogleDriveUrl(newProduct.ImageURL)} className="w-full h-full object-cover" alt="" />
+                                        <img src={convertGoogleDriveUrl(newProduct.ImageURL)} className="w-full h-full object-cover rounded-sm" alt="" />
                                     ) : (
                                         <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h14a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z"/></svg>
                                     )}
-                                    <input 
-                                        type="file" 
-                                        id="new-product-img" 
-                                        className="hidden" 
-                                        accept="image/*"
-                                        onChange={async (e) => {
-                                            const file = e.target.files?.[0];
-                                            if (!file) return;
-                                            showNotification?.(t.loading, 'info');
-                                        }}
-                                    />
+                                    <div className="absolute inset-0 bg-black/60 opacity-0 group-hover:opacity-100 flex items-center justify-center transition-all rounded-sm">
+                                        <svg className="w-4 h-4 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13.828 10.172a4 4 0 00-5.656 0l-4 4a4 4 0 105.656 5.656l1.102-1.101m-.758-4.899a4 4 0 005.656 0l4-4a4 4 0 00-5.656-5.656l-1.1 1.1" /></svg>
+                                    </div>
                                 </div>
                             </td>
                             <td className="px-4 py-3">
@@ -407,9 +410,9 @@ const ProductManagementMatrix: React.FC<ProductManagementMatrixProps> = ({ produ
                                     <td className="px-4 py-3 text-xs font-bold text-[#5e6673] text-center">{idx + 1}</td>
                                     <td className="px-4 py-3">
                                         <div className="relative group/img w-10 h-10 bg-[#181a20] rounded-sm border border-[#2b3139] overflow-hidden">
-                                            {product.ImageURL ? (
+                                            {(changes.ImageURL !== undefined ? changes.ImageURL : product.ImageURL) ? (
                                                 <img 
-                                                    src={convertGoogleDriveUrl(product.ImageURL)} 
+                                                    src={convertGoogleDriveUrl(changes.ImageURL !== undefined ? changes.ImageURL : product.ImageURL)} 
                                                     alt="" 
                                                     className="w-full h-full object-cover"
                                                 />
@@ -420,11 +423,26 @@ const ProductManagementMatrix: React.FC<ProductManagementMatrixProps> = ({ produ
                                             )}
                                             
                                             {/* Upload Overlay */}
-                                            <div 
-                                                className="absolute inset-0 bg-black/60 flex items-center justify-center opacity-0 group-hover/img:opacity-100 transition-opacity cursor-pointer"
-                                                onClick={() => document.getElementById(`upload-${product.ProductName}`)?.click()}
-                                            >
-                                                <svg className="w-4 h-4 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12"/></svg>
+                                            <div className="absolute inset-0 bg-black/60 flex items-center justify-center gap-1 opacity-0 group-hover/img:opacity-100 transition-opacity">
+                                                <button 
+                                                    className="p-1 hover:text-[#fcd535] text-white transition-colors"
+                                                    title="Upload Image"
+                                                    onClick={() => document.getElementById(`upload-${product.ProductName}`)?.click()}
+                                                >
+                                                    <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12"/></svg>
+                                                </button>
+                                                <button 
+                                                    className="p-1 hover:text-[#fcd535] text-white transition-colors"
+                                                    title="Set Image URL"
+                                                    onClick={() => {
+                                                        const url = window.prompt("Enter Image URL", changes.ImageURL !== undefined ? changes.ImageURL : (product.ImageURL || ""));
+                                                        if (url !== null) {
+                                                            handleFieldChange(product.ProductName, 'ImageURL', url.trim());
+                                                        }
+                                                    }}
+                                                >
+                                                    <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M13.828 10.172a4 4 0 00-5.656 0l-4 4a4 4 0 105.656 5.656l1.102-1.101m-.758-4.899a4 4 0 005.656 0l4-4a4 4 0 00-5.656-5.656l-1.1 1.1" /></svg>
+                                                </button>
                                             </div>
                                             <input 
                                                 type="file" 
