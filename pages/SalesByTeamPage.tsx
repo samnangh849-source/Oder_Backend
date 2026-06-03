@@ -7,6 +7,7 @@ import SimpleBarChart from '../components/admin/SimpleBarChart';
 import StatCard from '../components/performance/StatCard';
 import { jsPDF } from 'jspdf';
 import 'jspdf-autotable';
+import { safeParseDate } from '../utils/dateUtils';
 import Spinner from '../components/common/Spinner';
 
 interface SalesByTeamPageProps {
@@ -52,10 +53,12 @@ const SalesByTeamPage: React.FC<SalesByTeamPageProps> = ({ orders, onBack }) => 
             stats[teamName].orders += 1;
             if (order.User) stats[teamName].members.add(order.User);
             if (order.Timestamp) {
-                const d = new Date(order.Timestamp);
-                const mName = MONTHS[d.getMonth()];
-                stats[teamName][`rev_${mName}`] += rev;
-                stats[teamName][`prof_${mName}`] += (rev - cost);
+                const d = safeParseDate(order.Timestamp);
+                if (d && !isNaN(d.getTime())) {
+                    const mName = MONTHS[d.getMonth()];
+                    stats[teamName][`rev_${mName}`] += rev;
+                    stats[teamName][`prof_${mName}`] += (rev - cost);
+                }
             }
         });
 

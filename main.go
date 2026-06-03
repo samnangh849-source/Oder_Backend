@@ -1075,6 +1075,10 @@ func handleGetAllOrders(c *gin.Context) {
 	endDate := c.Query("endDate")
 	datePreset := c.Query("datePreset") 
 	view := c.Query("view")
+	teamQuery := c.Query("team")
+	userQuery := c.Query("user")
+	storeQuery := c.Query("fulfillmentStore")
+	statusQuery := c.Query("fulfillmentStatus")
 
 	query := backend.DB.Order("timestamp desc")
 	countQuery := backend.DB.Model(&Order{})
@@ -1094,9 +1098,8 @@ func handleGetAllOrders(c *gin.Context) {
 			startDate = now.AddDate(0, 0, -1).Format("2006-01-02")
 			endDate = startDate
 		case "this_week":
-			// Monday of current week
 			weekday := int(now.Weekday())
-			if weekday == 0 { weekday = 7 } // Sunday = 7
+			if weekday == 0 { weekday = 7 }
 			startDate = now.AddDate(0, 0, -weekday+1).Format("2006-01-02")
 		case "this_month":
 			startDate = time.Date(now.Year(), now.Month(), 1, 0, 0, 0, 0, now.Location()).Format("2006-01-02")
@@ -1106,22 +1109,24 @@ func handleGetAllOrders(c *gin.Context) {
 			startDate = lastMonth.Format("2006-01-02")
 			endDate = firstOfThisMonth.AddDate(0, 0, -1).Format("2006-01-02")
 		case "all":
-			// No filter
+			// No date filter
 		}
 	}
 
 	if startDate != "" {
+		// Use T00:00:00 to be safe with string comparisons against ISO timestamps
 		query = query.Where("timestamp >= ?", startDate)
 		countQuery = countQuery.Where("timestamp >= ?", startDate)
 	}
 	if endDate != "" {
-		// Include full day of endDate
-		query = query.Where("timestamp <= ?", endDate+" 23:59:59")
-		countQuery = countQuery.Where("timestamp <= ?", endDate+" 23:59:59")
+		// Use 23:59:59 to include full day. Use both space and T variants to be safe.
+		query = query.Where("timestamp <= ? OR timestamp <= ?", endDate+" 23:59:59", endDate+"T23:59:59")
+		countQuery = countQuery.Where("timestamp <= ? OR timestamp <= ?", endDate+" 23:59:59", endDate+"T23:59:59")
 	}
 
+	// 3. User Identity & RBAC
 	role, _ := c.Get("role")
-	team, _ := c.Get("team")
+	userTeam, _ := c.Get("team")
 	isSystemAdmin, _ := c.Get("isSystemAdmin")
 
 	roleString := fmt.Sprintf("%v", role)
@@ -1137,8 +1142,15 @@ func handleGetAllOrders(c *gin.Context) {
 
 	hasGlobalView := isAdmin || hasPermissionInternal(roleString, (isSystemAdmin != nil && isSystemAdmin.(bool)), "view_global_orders")
 
-	if !hasGlobalView && team != nil {
-		teams := strings.Split(fmt.Sprintf("%v", team), ",")
+	// Apply Team Filter
+	finalTeamFilter := teamQuery
+	if !hasGlobalView {
+		// Non-admins are locked to their own team(s)
+		finalTeamFilter = fmt.Sprintf("%v", userTeam)
+	}
+
+	if finalTeamFilter != "" {
+		teams := strings.Split(finalTeamFilter, ",")
 		var teamConditions []string
 		var teamArgs []interface{}
 		for _, t := range teams {
@@ -1149,10 +1161,24 @@ func handleGetAllOrders(c *gin.Context) {
 			}
 		}
 		if len(teamConditions) > 0 {
-			condition := strings.Join(teamConditions, " OR ")
+			condition := "(" + strings.Join(teamConditions, " OR ") + ")"
 			query = query.Where(condition, teamArgs...)
 			countQuery = countQuery.Where(condition, teamArgs...)
 		}
+	}
+
+	// Other Filters from Query
+	if userQuery != "" {
+		query = query.Where("LOWER(user) = LOWER(?)", userQuery)
+		countQuery = countQuery.Where("LOWER(user) = LOWER(?)", userQuery)
+	}
+	if storeQuery != "" {
+		query = query.Where("LOWER(fulfillment_store) = LOWER(?)", storeQuery)
+		countQuery = countQuery.Where("LOWER(fulfillment_store) = LOWER(?)", storeQuery)
+	}
+	if statusQuery != "" {
+		query = query.Where("LOWER(fulfillment_status) = LOWER(?)", statusQuery)
+		countQuery = countQuery.Where("LOWER(fulfillment_status) = LOWER(?)", statusQuery)
 	}
 
 	// Field Selection

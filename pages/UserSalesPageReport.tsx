@@ -9,7 +9,8 @@ import SimpleBarChart from '../components/admin/SimpleBarChart';
 import { safeParseDate } from '../utils/dateUtils';
 import { ChevronLeft, Download, BarChart3, TrendingUp, Package, Layout, Terminal, Activity, Cpu, DollarSign, Layers, Zap } from 'lucide-react';
 import SalesStatisticModal from '../components/reports/SalesStatisticModal';
-import { FilterState } from '../components/orders/OrderFilters';
+import OrderFilters, { FilterState } from '../components/orders/OrderFilters';
+import Modal from '../components/common/Modal';
 
 // Import separate view components
 import SalesByPageDesktop from '../components/reports/SalesByPageDesktop';
@@ -45,24 +46,65 @@ const UserSalesPageReport: React.FC<UserSalesPageReportProps> = ({
     const [showAllPages, setShowAllPages] = useState(true); 
     const [isExporting, setIsExporting] = useState(false);
     const [isStatisticOpen, setIsStatisticOpen] = useState(false);
+    const [isFilterOpen, setIsFilterOpen] = useState(false);
     const [sortConfig, setSortConfig] = useState<{ key: SortKey, direction: 'asc' | 'desc' }>({ key: 'revenue', direction: 'desc' });
 
-    // Local filter state to allow shortcuts to work without navigating away
+    // Filter State
+    const [filters, setFilters] = useState<FilterState>({
+        datePreset: (initialDateFilter as any) || 'all',
+        startDate: initialStart || '',
+        endDate: initialEnd || '',
+        team: team,
+        user: '',
+        paymentStatus: '',
+        shippingService: '',
+        driver: '',
+        product: '',
+        bank: '',
+        fulfillmentStore: '',
+        store: '',
+        page: '',
+        location: '',
+        internalCost: '',
+        customerName: '',
+        telegramStatus: '',
+        fulfillmentStatus: '',
+    });
+
+    // Local state for UI display consistency
     const [activeDateFilter, setActiveDateFilter] = useState(initialDateFilter || 'all');
     const [activeStart, setActiveStart] = useState(initialStart || '');
     const [activeEnd, setActiveEnd] = useState(initialEnd || '');
 
     // Sync from parent props
     useEffect(() => {
-        if (initialDateFilter) setActiveDateFilter(initialDateFilter);
-        if (initialStart) setActiveStart(initialStart);
-        if (initialEnd) setActiveEnd(initialEnd);
+        if (initialDateFilter) {
+            setActiveDateFilter(initialDateFilter);
+            setFilters(prev => ({ ...prev, datePreset: initialDateFilter as any }));
+        }
+        if (initialStart) {
+            setActiveStart(initialStart);
+            setFilters(prev => ({ ...prev, startDate: initialStart }));
+        }
+        if (initialEnd) {
+            setActiveEnd(initialEnd);
+            setFilters(prev => ({ ...prev, endDate: initialEnd }));
+        }
     }, [initialDateFilter, initialStart, initialEnd]);
 
     const handleDateShortcut = (id: string) => {
         setActiveDateFilter(id);
+        const newFilters = { datePreset: id as any, startDate: '', endDate: '' };
+        setFilters(prev => ({ ...prev, ...newFilters }));
         if (onFilterChange) {
-            onFilterChange({ datePreset: id as any, startDate: '', endDate: '' });
+            onFilterChange(newFilters);
+        }
+    };
+
+    const handleApplyFilters = () => {
+        setIsFilterOpen(false);
+        if (onFilterChange) {
+            onFilterChange(filters);
         }
     };
 
@@ -116,6 +158,11 @@ const UserSalesPageReport: React.FC<UserSalesPageReportProps> = ({
                 const d = now.getDay();
                 start = new Date(today); start.setDate(today.getDate() - (d === 0 ? 6 : d - 1));
                 end = endOfToday; break;
+            }
+            case 'last_week': {
+                start = new Date(today); start.setDate(today.getDate() - now.getDay() - 6);
+                end = new Date(start); end.setDate(start.getDate() + 6);
+                end.setHours(23, 59, 59, 999); break;
             }
             case 'this_month': start = new Date(now.getFullYear(), now.getMonth(), 1); end = endOfToday; break;
             case 'last_month':
@@ -203,6 +250,42 @@ const UserSalesPageReport: React.FC<UserSalesPageReportProps> = ({
         };
         return labels[activeDateFilter || 'all'] || 'ALL TIME';
     }, [activeDateFilter, activeStart, activeEnd]);
+
+    const calculatedRange = useMemo(() => {
+        const now = new Date();
+        const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+        let start: Date | null = null;
+        let end: Date | null = new Date();
+        end.setHours(23, 59, 59, 999);
+        
+        switch (filters.datePreset) {
+            case 'today': start = today; break;
+            case 'yesterday': 
+                start = new Date(today); start.setDate(today.getDate() - 1); 
+                end = new Date(today); end.setMilliseconds(-1); break;
+            case 'this_week': 
+                const d = now.getDay(); start = new Date(today); 
+                start.setDate(today.getDate() - (d === 0 ? 6 : d - 1)); break;
+            case 'last_week':
+                start = new Date(today); start.setDate(today.getDate() - now.getDay() - 6);
+                end = new Date(start); end.setDate(start.getDate() + 6);
+                end.setHours(23, 59, 59, 999); break;
+            case 'this_month': start = new Date(now.getFullYear(), now.getMonth(), 1); break;
+            case 'last_month':
+                start = new Date(now.getFullYear(), now.getMonth() - 1, 1);
+                end = new Date(now.getFullYear(), now.getMonth(), 0, 23, 59, 59, 999); break;
+            case 'this_year': start = new Date(now.getFullYear(), 0, 1); break;
+            case 'last_year':
+                start = new Date(now.getFullYear() - 1, 0, 1);
+                end = new Date(now.getFullYear() - 1, 11, 31, 23, 59, 59, 999); break;
+            case 'all': return 'All time data';
+            case 'custom': return `${filters.startDate || '...'} to ${filters.endDate || '...'}`;
+            default: start = today;
+        }
+        const formatDate = (d: Date) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+        return start ? `${formatDate(start)} to ${formatDate(end)}` : 'All time data';
+    }, [filters.datePreset, filters.startDate, filters.endDate]);
+
     const handleExportPDF = () => {
         setIsExporting(true);
         setTimeout(() => {
@@ -225,6 +308,8 @@ const UserSalesPageReport: React.FC<UserSalesPageReportProps> = ({
     const topPagesChartData = useMemo(() => {
         return [...pageStats].sort((a, b) => b.revenue - a.revenue).slice(0, 5).map(p => ({ label: p.pageName, value: p.revenue, imageUrl: p.logoUrl }));
     }, [pageStats]);
+
+    const activeFilterCount = Object.values(filters).filter(v => v !== '' && v !== 'all' && v !== team).length;
 
     return (
         <div className="fixed inset-0 z-[150] bg-[#0B0E11] overflow-hidden flex flex-col font-sans select-none animate-fade-in">
@@ -280,6 +365,18 @@ const UserSalesPageReport: React.FC<UserSalesPageReportProps> = ({
                     </div>
                 </div>
                 <div className="flex items-center gap-2">
+                    <button 
+                        onClick={() => setIsFilterOpen(true)}
+                        className="group relative flex items-center gap-2 px-6 py-3 bg-[#1E2329] hover:bg-[#2B3139] text-[#848E9C] hover:text-white text-[10px] font-black uppercase tracking-[0.2em] rounded-xl transition-all active:scale-[0.98] shadow-xl border border-[#2B3139]"
+                    >
+                        <Layers size={14} className="text-blue-500" />
+                        Filters
+                        {activeFilterCount > 0 && (
+                            <div className="absolute -top-1 -right-1 w-5 h-5 bg-blue-600 text-white text-[8px] font-black rounded-full flex items-center justify-center border-2 border-[#0B0E11] shadow-lg shadow-blue-900/40">
+                                {activeFilterCount}
+                            </div>
+                        )}
+                    </button>
                     <button 
                         onClick={() => setIsStatisticOpen(true)}
                         className="group relative flex items-center gap-2 px-6 py-3 bg-gradient-to-r from-blue-700 to-indigo-600 hover:from-blue-600 hover:to-indigo-500 text-white text-[10px] font-black uppercase tracking-[0.2em] rounded-xl transition-all active:scale-[0.98] shadow-xl shadow-blue-500/20 border border-white/10"
@@ -408,6 +505,42 @@ const UserSalesPageReport: React.FC<UserSalesPageReportProps> = ({
                 title={language === 'km' ? 'ស្ថិតិលក់តាមផេក' : 'PAGE SALES STATS'}
                 subtitle={`TEAM: ${team} | ${filterLabel}`}
             />
+
+            {/* Advanced Custom Filter Modal */}
+            <Modal isOpen={isFilterOpen} onClose={() => setIsFilterOpen(false)} maxWidth="max-w-5xl">
+                <div className="p-8 bg-[#0B0E11] rounded-md border border-[#2B3139] overflow-hidden relative flex flex-col h-full">
+                    <div className="flex justify-between items-center mb-8 relative z-10">
+                        <div className="flex items-center gap-4">
+                            <div className={`w-1.5 h-10 bg-[#FCD535] rounded-full shadow-[0_0_15px_rgba(252,213,53,0.4)]`}></div>
+                            <div>
+                                <h2 className="text-2xl font-black text-white uppercase tracking-tighter italic leading-none">Filter Engine</h2>
+                                <p className="text-[9px] text-[#848E9C] font-bold uppercase tracking-[0.3em] mt-1.5 ml-0.5">Quantum Analysis Node</p>
+                            </div>
+                        </div>
+                        <button onClick={() => setIsFilterOpen(false)} className="w-10 h-10 bg-white/5 rounded-lg flex items-center justify-center text-gray-500 hover:text-white transition-all active:scale-90 border border-white/5 hover:bg-white/10 shadow-xl">&times;</button>
+                    </div>
+                    
+                    <div className="overflow-y-auto custom-scrollbar pr-4 relative z-10 flex-grow" style={{ maxHeight: 'calc(85vh - 250px)' }}>
+                        <OrderFilters 
+                            filters={filters} 
+                            setFilters={setFilters} 
+                            orders={sourceOrders} 
+                            usersList={appData.users || []} 
+                            appData={appData} 
+                            calculatedRange={calculatedRange} 
+                        />
+                    </div>
+                    
+                    <div className={`mt-10 flex justify-center relative z-10 border-t border-[#2B3139] pt-8`}>
+                        <button 
+                            onClick={handleApplyFilters} 
+                            className="bg-[#FCD535] text-[#1E2329] hover:bg-[#f0c51d] w-full max-w-md py-4 text-[11px] font-black uppercase tracking-[0.2em] rounded-md active:scale-[0.98] transition-all shadow-lg"
+                        >
+                            Execute Parameters
+                        </button>
+                    </div>
+                </div>
+            </Modal>
         </div>
     );
 };

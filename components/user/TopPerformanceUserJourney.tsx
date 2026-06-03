@@ -47,6 +47,19 @@ const TopPerformanceUserJourney: React.FC<TopPerformanceUserJourneyProps> = ({ o
             } else if (period === 'year') {
                 return orderDate.getFullYear() === now.getFullYear() &&
                        orderDate <= endOfToday;
+            } else if ((period as string) === 'last_month') {
+                const start = new Date(now.getFullYear(), now.getMonth() - 1, 1);
+                const end = new Date(now.getFullYear(), now.getMonth(), 0, 23, 59, 59, 999);
+                return orderDate >= start && orderDate <= end;
+            } else if ((period as string) === 'last_week') {
+                const start = new Date(today); start.setDate(today.getDate() - now.getDay() - 6);
+                const end = new Date(start); end.setDate(start.getDate() + 6);
+                end.setHours(23, 59, 59, 999);
+                return orderDate >= start && orderDate <= end;
+            } else if ((period as string) === 'last_year') {
+                const start = new Date(now.getFullYear() - 1, 0, 1);
+                const end = new Date(now.getFullYear() - 1, 11, 31, 23, 59, 59, 999);
+                return orderDate >= start && orderDate <= end;
             }
             return true;
         });

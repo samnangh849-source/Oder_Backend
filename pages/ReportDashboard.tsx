@@ -2,6 +2,7 @@
 import React, { useState, useContext, useMemo, useEffect } from 'react';
 import { AppContext } from '../context/AppContext';
 import { ParsedOrder, User } from '../types';
+import { safeParseDate } from '../utils/dateUtils';
 import ReportsView from '../components/admin/ReportsView';
 import Spinner from '../components/common/Spinner';
 import { WEB_APP_URL } from '../constants';
@@ -123,6 +124,8 @@ const ReportDashboard: React.FC<ReportDashboardProps> = ({ activeReport, onBack,
         location: urlLocation || '',
         internalCost: urlCost || '',
         customerName: urlCustomer || '',
+        telegramStatus: '',
+        fulfillmentStatus: '',
     });
 
     // Trigger optimized fetch when filters change specifically for the report context
@@ -143,14 +146,17 @@ const ReportDashboard: React.FC<ReportDashboardProps> = ({ activeReport, onBack,
                 params.datePreset = 'all';
             }
 
-            // Include team if filtered to reduce payload size
+            // Include specific filters to reduce payload size
             if (filters.team) params.team = filters.team;
+            if (filters.user) params.user = filters.user;
+            if (filters.fulfillmentStore) params.fulfillmentStore = filters.fulfillmentStore;
+            if (filters.fulfillmentStatus) params.fulfillmentStatus = filters.fulfillmentStatus;
 
             await fetchOrders(false, params);
         };
 
         fetchReportData();
-    }, [filters.datePreset, filters.startDate, filters.endDate, filters.team, fetchOrders]);
+    }, [filters.datePreset, filters.startDate, filters.endDate, filters.team, filters.user, filters.fulfillmentStore, filters.fulfillmentStatus, fetchOrders]);
 
     // Update URL when filter changes
     useEffect(() => {
@@ -214,24 +220,50 @@ const ReportDashboard: React.FC<ReportDashboardProps> = ({ activeReport, onBack,
     const filteredOrders = useMemo(() => {
         return orders.filter(o => {
             if (filters.datePreset !== 'all') {
-                const d = new Date(o.Timestamp);
+                const d = safeParseDate(o.Timestamp);
+                if (!d || isNaN(d.getTime())) return false;
+                
                 const now = new Date();
                 const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
                 let start: Date | null = null, end: Date | null = new Date();
+                end.setHours(23, 59, 59, 999);
 
                 switch (filters.datePreset) {
                     case 'today': 
                         start = today; 
+                        break;
+                    case 'yesterday': 
+                        start = new Date(today); 
+                        start.setDate(today.getDate() - 1); 
                         end = new Date(today); 
+                        end.setMilliseconds(-1); 
+                        break;
+                    case 'this_week': 
+                        const day = now.getDay(); 
+                        start = new Date(today); 
+                        start.setDate(today.getDate() - (day === 0 ? 6 : day - 1)); 
+                        break;
+                    case 'last_week': 
+                        start = new Date(today); 
+                        start.setDate(today.getDate() - now.getDay() - 6); 
+                        end = new Date(start); 
+                        end.setDate(start.getDate() + 6); 
                         end.setHours(23, 59, 59, 999); 
                         break;
-                    case 'yesterday': start = new Date(today); start.setDate(today.getDate() - 1); end = new Date(today); end.setMilliseconds(-1); break;
-                    case 'this_week': const day = now.getDay(); start = new Date(today); start.setDate(today.getDate() - (day === 0 ? 6 : day - 1)); break;
-                    case 'last_week': start = new Date(today); start.setDate(today.getDate() - now.getDay() - 6); end = new Date(start); end.setDate(start.getDate() + 6); end.setHours(23, 59, 59); break;
-                    case 'this_month': start = new Date(now.getFullYear(), now.getMonth(), 1); break;
-                    case 'last_month': start = new Date(now.getFullYear(), now.getMonth() - 1, 1); end = new Date(now.getFullYear(), now.getMonth(), 0, 23, 59, 59); break;
-                    case 'this_year': start = new Date(now.getFullYear(), 0, 1); break;
-                    case 'last_year': start = new Date(now.getFullYear() - 1, 0, 1); end = new Date(now.getFullYear() - 1, 11, 31, 23, 59, 59); break;
+                    case 'this_month': 
+                        start = new Date(now.getFullYear(), now.getMonth(), 1); 
+                        break;
+                    case 'last_month': 
+                        start = new Date(now.getFullYear(), now.getMonth() - 1, 1); 
+                        end = new Date(now.getFullYear(), now.getMonth(), 0, 23, 59, 59, 999); 
+                        break;
+                    case 'this_year': 
+                        start = new Date(now.getFullYear(), 0, 1); 
+                        break;
+                    case 'last_year': 
+                        start = new Date(now.getFullYear() - 1, 0, 1); 
+                        end = new Date(now.getFullYear() - 1, 11, 31, 23, 59, 59, 999); 
+                        break;
                     case 'custom':
                         if (filters.startDate) start = new Date(filters.startDate + 'T00:00:00');
                         if (filters.endDate) end = new Date(filters.endDate + 'T23:59:59');

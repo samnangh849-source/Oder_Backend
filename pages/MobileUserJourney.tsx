@@ -94,6 +94,23 @@ const MobileUserJourney: React.FC<MobileUserJourneyProps> = ({ onBackToRoleSelec
                 const startOfYear = new Date(now.getFullYear(), 0, 1);
                 return date >= startOfYear && date <= endOfToday;
             }
+            // Add support for extended presets if passed from URL or state
+            if ((dateFilter as string) === 'last_month') {
+                const start = new Date(now.getFullYear(), now.getMonth() - 1, 1);
+                const end = new Date(now.getFullYear(), now.getMonth(), 0, 23, 59, 59, 999);
+                return date >= start && date <= end;
+            }
+            if ((dateFilter as string) === 'last_week') {
+                const start = new Date(today); start.setDate(today.getDate() - now.getDay() - 6);
+                const end = new Date(start); end.setDate(start.getDate() + 6);
+                end.setHours(23, 59, 59, 999);
+                return date >= start && date <= end;
+            }
+            if ((dateFilter as string) === 'last_year') {
+                const start = new Date(now.getFullYear() - 1, 0, 1);
+                const end = new Date(now.getFullYear() - 1, 11, 31, 23, 59, 59, 999);
+                return date >= start && date <= end;
+            }
             if (dateFilter === 'custom') {
                 const start = customStart ? new Date(customStart + 'T00:00:00') : null;
                 const end = customEnd ? new Date(customEnd + 'T23:59:59') : null;

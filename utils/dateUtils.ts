@@ -20,6 +20,24 @@ export const safeParseDate = (dateStr: string | null | undefined): Date | null =
         if (!isNaN(d.getTime())) return d;
     }
 
+    // 1.5 Handle "DD/MM/YYYY" or "DD-MM-YYYY" (Common from Google Sheets/Excel)
+    const matchDMY = dateStr.match(/^(\d{1,2})[\/\-](\d{1,2})[\/\-](\d{4})/);
+    if (matchDMY) {
+        const d = new Date(
+            parseInt(matchDMY[3]),
+            parseInt(matchDMY[2]) - 1,
+            parseInt(matchDMY[1])
+        );
+        // If there's time info as well
+        const timeMatch = dateStr.match(/\s(\d{1,2}):(\d{2})(:(\d{2}))?/);
+        if (timeMatch) {
+            d.setHours(parseInt(timeMatch[1]));
+            d.setMinutes(parseInt(timeMatch[2]));
+            if (timeMatch[4]) d.setSeconds(parseInt(timeMatch[4]));
+        }
+        if (!isNaN(d.getTime())) return d;
+    }
+
     // 2. Try Standard Parsing
     const d = new Date(dateStr);
     if (!isNaN(d.getTime())) return d;
