@@ -21,6 +21,8 @@ const ProductManagementMatrix: React.FC<ProductManagementMatrixProps> = ({ produ
     const [editData, setEditData] = useState<Record<string, Partial<MasterProduct>>>({});
     const [isSavingAll, setIsSavingAll] = useState(false);
     const [isAddingNew, setIsAddingNew] = useState(false);
+    const [newProductFile, setNewProductFile] = useState<File | null>(null);
+    const [newProductImagePreview, setNewProductImagePreview] = useState<string | null>(null);
     const [newProduct, setNewProduct] = useState<Partial<MasterProduct>>({
         ProductName: '',
         Barcode: '',
@@ -53,6 +55,41 @@ const ProductManagementMatrix: React.FC<ProductManagementMatrixProps> = ({ produ
 
             const result = await res.json();
             if (res.ok && result.status === 'success') {
+                if (newProductFile) {
+                    try {
+                        showNotification?.('កំពុងបញ្ជូនរូបភាព...', 'info');
+                        const reader = new FileReader();
+                        const uploadPromise = new Promise<void>((resolve, reject) => {
+                            reader.onload = async () => {
+                                try {
+                                    const base64Data = (reader.result as string).split(',')[1];
+                                    const uploadRes = await fetch(`${WEB_APP_URL}/api/upload-image`, {
+                                        method: 'POST',
+                                        headers: {
+                                            'Content-Type': 'application/json',
+                                            'Authorization': `Bearer ${token}`
+                                        },
+                                        body: JSON.stringify({
+                                            fileData: base64Data,
+                                            fileName: `Product_${newProduct.ProductName}_${Date.now()}.webp`,
+                                            mimeType: newProductFile.type || 'image/webp',
+                                            sheetName: 'Products',
+                                            primaryKey: { ProductName: newProduct.ProductName },
+                                            targetColumn: 'ImageURL'
+                                        })
+                                    });
+                                    if (uploadRes.ok) resolve(); else reject(new Error('Image upload failed'));
+                                } catch (e) { reject(e); }
+                            };
+                            reader.onerror = () => reject(new Error('File read error'));
+                            reader.readAsDataURL(newProductFile);
+                        });
+                        await uploadPromise;
+                    } catch (e: any) {
+                        showNotification?.(`Product added, but image upload failed: ${e.message}`, 'warning');
+                    }
+                }
+
                 showNotification?.('បន្ថែមផលិតផលថ្មីជោគជ័យ', 'success');
                 setNewProduct({
                     ProductName: '',
@@ -62,6 +99,8 @@ const ProductManagementMatrix: React.FC<ProductManagementMatrixProps> = ({ produ
                     Tags: '',
                     ImageURL: ''
                 });
+                setNewProductFile(null);
+                setNewProductImagePreview(null);
                 await refreshData();
                 onRefresh();
             } else {
@@ -318,24 +357,49 @@ const ProductManagementMatrix: React.FC<ProductManagementMatrixProps> = ({ produ
                         <tr className="bg-[#fcd535]/5 border-b-2 border-[#fcd535]/20">
                             <td className="px-4 py-3 text-center text-[#fcd535] font-black">+</td>
                             <td className="px-4 py-3">
-                                <div 
-                                    className="w-10 h-10 bg-[#181a20] rounded-sm border border-dashed border-[#fcd535]/40 flex items-center justify-center text-[#fcd535]/40 cursor-pointer hover:bg-[#fcd535]/10 transition-all relative group" 
-                                    onClick={() => {
-                                        const url = window.prompt("Enter Image URL", newProduct.ImageURL || "");
-                                        if (url !== null) {
-                                            setNewProduct(prev => ({ ...prev, ImageURL: url.trim() }));
-                                        }
-                                    }}
-                                    title="Click to add Image URL"
-                                >
-                                    {newProduct.ImageURL ? (
-                                        <img src={convertGoogleDriveUrl(newProduct.ImageURL)} className="w-full h-full object-cover rounded-sm" alt="" />
+                                <div className="relative group/newimg w-10 h-10 bg-[#181a20] rounded-sm border border-dashed border-[#fcd535]/40 flex items-center justify-center text-[#fcd535]/40 transition-all overflow-hidden">
+                                    {(newProductImagePreview || newProduct.ImageURL) ? (
+                                        <img src={newProductImagePreview || convertGoogleDriveUrl(newProduct.ImageURL!)} className="w-full h-full object-cover rounded-sm" alt="" />
                                     ) : (
                                         <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h14a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z"/></svg>
                                     )}
-                                    <div className="absolute inset-0 bg-black/60 opacity-0 group-hover:opacity-100 flex items-center justify-center transition-all rounded-sm">
-                                        <svg className="w-4 h-4 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13.828 10.172a4 4 0 00-5.656 0l-4 4a4 4 0 105.656 5.656l1.102-1.101m-.758-4.899a4 4 0 005.656 0l4-4a4 4 0 00-5.656-5.656l-1.1 1.1" /></svg>
+                                    <div className="absolute inset-0 bg-black/60 flex items-center justify-center gap-1 opacity-0 group-hover/newimg:opacity-100 transition-opacity">
+                                        <button 
+                                            className="p-1 hover:text-[#fcd535] text-white transition-colors"
+                                            title="Upload File"
+                                            onClick={() => document.getElementById('new-product-upload')?.click()}
+                                        >
+                                            <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12"/></svg>
+                                        </button>
+                                        <button 
+                                            className="p-1 hover:text-[#fcd535] text-white transition-colors"
+                                            title="Set Image URL"
+                                            onClick={() => {
+                                                const url = window.prompt("Enter Image URL", newProduct.ImageURL || "");
+                                                if (url !== null) {
+                                                    setNewProduct(prev => ({ ...prev, ImageURL: url.trim() }));
+                                                    setNewProductImagePreview(null);
+                                                    setNewProductFile(null);
+                                                }
+                                            }}
+                                        >
+                                            <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M13.828 10.172a4 4 0 00-5.656 0l-4 4a4 4 0 105.656 5.656l1.102-1.101m-.758-4.899a4 4 0 005.656 0l4-4a4 4 0 00-5.656-5.656l-1.1 1.1" /></svg>
+                                        </button>
                                     </div>
+                                    <input 
+                                        type="file" 
+                                        id="new-product-upload" 
+                                        className="hidden" 
+                                        accept="image/*"
+                                        onChange={(e) => {
+                                            const file = e.target.files?.[0];
+                                            if (!file) return;
+                                            setNewProductFile(file);
+                                            setNewProduct(prev => ({ ...prev, ImageURL: '' }));
+                                            const url = URL.createObjectURL(file);
+                                            setNewProductImagePreview(url);
+                                        }}
+                                    />
                                 </div>
                             </td>
                             <td className="px-4 py-3">
