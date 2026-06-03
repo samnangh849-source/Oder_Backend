@@ -546,7 +546,15 @@ export const translations = {
     search_placeholder_editor: "ស្វែងរកឈ្មោះ ឬ អត្តសញ្ញាណ...",
     confirm_lock_payout: "តើអ្នកចង់ចាក់សោររបាយការណ៍ខែនេះមែនទេ? បន្ទាប់ពីចាក់សោរ អ្នកមិនអាចកែប្រែទិន្នន័យបានឡើយ។",
     confirm_clear_column: "តើអ្នកចង់លុបទិន្នន័យទាំងអស់ក្នុងកឡោននេះមែនទេ?",
-    confirm_clear_row: "តើអ្នកចង់លុបទិន្នន័យជួរដេកនេះមែនទេ?"
+    confirm_clear_row: "តើអ្នកចង់លុបទិន្នន័យជួរដេកនេះមែនទេ?",
+    product_matrix_title: "Product Management Matrix",
+    save_all: "រក្សាទុកទាំងអស់",
+    product_image: "រូបភាព",
+    tags: "Tags",
+    add_success: "បន្ថែមបានជោគជ័យ",
+    save_success: "រក្សាទុកបានជោគជ័យ",
+    delete_success: "លុបបានជោគជ័យ",
+    upload_success: "ប្តូររូបភាពបានជោគជ័យ"
   },
   en: {
     // Auth & General
@@ -1042,6 +1050,14 @@ export const translations = {
     confirm_lock_payout: "Are you sure you want to lock this month's report? Once locked, you cannot modify data.",
     confirm_clear_column: "Are you sure you want to clear all data in this column?",
     confirm_clear_row: "Are you sure you want to clear all data in this row?",
+    product_matrix_title: "Product Management Matrix",
+    save_all: "Save All",
+    product_image: "Image",
+    tags: "Tags",
+    add_success: "Added successfully",
+    save_success: "Saved successfully",
+    delete_success: "Deleted successfully",
+    upload_success: "Image updated successfully",
     col_telegram: "Telegram Status",
     btn_cancel_order: "Cancel Order",
     btn_return_order: "Return Order",

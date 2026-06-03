@@ -62,6 +62,10 @@ const DesktopOrdersDashboard: React.FC<DesktopOrdersDashboardProps> = ({ onBack,
     const [isFilterModalOpen, setIsFilterModalOpen] = useState(false);
     const [isPdfModalOpen, setIsPdfModalOpen] = useState(false);
     const [searchQuery, setSearchQuery] = useState('');
+    useEffect(() => {
+        setCurrentPage(1);
+    }, [searchQuery]);
+
     const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
     const [showBorders, setShowBorders] = useState(true);
 
@@ -100,6 +104,10 @@ const DesktopOrdersDashboard: React.FC<DesktopOrdersDashboardProps> = ({ onBack,
                 view: 'compact'
             };
 
+            if (searchQuery.trim()) {
+                params.search = searchQuery.trim();
+            }
+
             if (filters.datePreset !== 'all') {
                 params.datePreset = filters.datePreset;
                 if (filters.startDate) params.startDate = filters.startDate;
@@ -115,7 +123,7 @@ const DesktopOrdersDashboard: React.FC<DesktopOrdersDashboardProps> = ({ onBack,
         };
 
         fetchPaginated();
-    }, [filters.datePreset, filters.startDate, filters.endDate, currentPage, pageSize, fetchOrders]);
+    }, [filters.datePreset, filters.startDate, filters.endDate, currentPage, pageSize, searchQuery, fetchOrders]);
 
     const getOrderTimestamp = (order: any) => {
         const ts = order.Timestamp;
