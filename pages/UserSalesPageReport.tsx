@@ -1,4 +1,4 @@
-import React, { useState, useMemo, useContext } from 'react';
+import React, { useState, useMemo, useContext, useEffect } from 'react';
 import { AppContext } from '../context/AppContext';
 import { ParsedOrder } from '../types';
 import StatCard from '../components/performance/StatCard';
@@ -9,10 +9,13 @@ import SimpleBarChart from '../components/admin/SimpleBarChart';
 import { safeParseDate } from '../utils/dateUtils';
 import { ChevronLeft, Download, BarChart3, TrendingUp, Package, Layout, Terminal, Activity, Cpu, DollarSign, Layers, Zap } from 'lucide-react';
 import SalesStatisticModal from '../components/reports/SalesStatisticModal';
+import { FilterState } from '../components/orders/OrderFilters';
+
 // Import separate view components
 import SalesByPageDesktop from '../components/reports/SalesByPageDesktop';
 import SalesByPageTablet from '../components/reports/SalesByPageTablet';
 import SalesByPageMobile from '../components/reports/SalesByPageMobile';
+
 interface UserSalesPageReportProps {
     orders: ParsedOrder[];
     onBack: () => void;
@@ -21,9 +24,13 @@ interface UserSalesPageReportProps {
     dateFilter?: string;
     customStart?: string;
     customEnd?: string;
+    onFilterChange?: (filters: Partial<FilterState>) => void;
 }
+
 type SortKey = 'revenue' | 'pageName';
+
 const MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+
 const UserSalesPageReport: React.FC<UserSalesPageReportProps> = ({
     orders: sourceOrders,
     onBack,
@@ -32,16 +39,33 @@ const UserSalesPageReport: React.FC<UserSalesPageReportProps> = ({
     dateFilter: initialDateFilter,
     customStart: initialStart,
     customEnd: initialEnd,
+    onFilterChange
 }) => {
     const { appData, previewImage, language, advancedSettings } = useContext(AppContext);
     const [showAllPages, setShowAllPages] = useState(true); 
     const [isExporting, setIsExporting] = useState(false);
     const [isStatisticOpen, setIsStatisticOpen] = useState(false);
     const [sortConfig, setSortConfig] = useState<{ key: SortKey, direction: 'asc' | 'desc' }>({ key: 'revenue', direction: 'desc' });
+
     // Local filter state to allow shortcuts to work without navigating away
     const [activeDateFilter, setActiveDateFilter] = useState(initialDateFilter || 'all');
     const [activeStart, setActiveStart] = useState(initialStart || '');
     const [activeEnd, setActiveEnd] = useState(initialEnd || '');
+
+    // Sync from parent props
+    useEffect(() => {
+        if (initialDateFilter) setActiveDateFilter(initialDateFilter);
+        if (initialStart) setActiveStart(initialStart);
+        if (initialEnd) setActiveEnd(initialEnd);
+    }, [initialDateFilter, initialStart, initialEnd]);
+
+    const handleDateShortcut = (id: string) => {
+        setActiveDateFilter(id);
+        if (onFilterChange) {
+            onFilterChange({ datePreset: id as any, startDate: '', endDate: '' });
+        }
+    };
+
     const toggleSort = (key: SortKey) => {
         setSortConfig(prev => ({
             key,
@@ -58,14 +82,15 @@ const UserSalesPageReport: React.FC<UserSalesPageReportProps> = ({
     const handleMonthClick = (pageName: string, monthIndex: number) => {
         if (onNavigate) {
             const year = new Date().getFullYear();
+            const targetYear = activeDateFilter === 'last_year' ? year - 1 : year;
             const fmt = (d: Date) => {
                 const y = d.getFullYear();
                 const m = String(d.getMonth() + 1).padStart(2, '0');
                 const day = String(d.getDate()).padStart(2, '0');
                 return `${y}-${m}-${day}`;
             };
-            const monthStart = new Date(year, monthIndex, 1);
-            const monthEnd = new Date(year, monthIndex + 1, 0, 23, 59, 59);
+            const monthStart = new Date(targetYear, monthIndex, 1);
+            const monthEnd = new Date(targetYear, monthIndex + 1, 0, 23, 59, 59);
             onNavigate({ team, page: pageName, datePreset: 'custom', customStart: fmt(monthStart), customEnd: fmt(monthEnd), isMonthlyDrilldown: true });
         }
     };
@@ -114,7 +139,8 @@ const UserSalesPageReport: React.FC<UserSalesPageReportProps> = ({
             if (end && d > end) return false;
             return true;
         });
-    }, [sourceOrders, team, activeDateFilter, activeStart, activeEnd]);
+    }, [teamOrders, activeDateFilter, activeStart, activeEnd]);
+
     const pageStats = useMemo(() => {
         const stats: Record<string, any> = {};
         if (appData.pages) {
@@ -199,6 +225,7 @@ const UserSalesPageReport: React.FC<UserSalesPageReportProps> = ({
     const topPagesChartData = useMemo(() => {
         return [...pageStats].sort((a, b) => b.revenue - a.revenue).slice(0, 5).map(p => ({ label: p.pageName, value: p.revenue, imageUrl: p.logoUrl }));
     }, [pageStats]);
+
     return (
         <div className="fixed inset-0 z-[150] bg-[#0B0E11] overflow-hidden flex flex-col font-sans select-none animate-fade-in">
             {/* Header - Packaging View Style */}
@@ -240,7 +267,7 @@ const UserSalesPageReport: React.FC<UserSalesPageReportProps> = ({
                         ].map((range) => (
                             <button
                                 key={range.id}
-                                onClick={() => setActiveDateFilter(range.id as any)}
+                                onClick={() => handleDateShortcut(range.id)}
                                 className={`px-4 py-2 rounded-xl text-[10px] font-black uppercase tracking-widest whitespace-nowrap transition-all ${
                                     activeDateFilter === range.id
                                         ? 'bg-blue-600 text-white shadow-lg shadow-blue-500/20'

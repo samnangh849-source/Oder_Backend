@@ -20,7 +20,7 @@ interface ReportDashboardProps {
 }
 
 const ReportDashboard: React.FC<ReportDashboardProps> = ({ activeReport, onBack, onNavigate }) => {
-    const { appData, refreshTimestamp, setMobilePageTitle, orders, isOrdersLoading, advancedSettings } = useContext(AppContext);
+    const { appData, refreshTimestamp, setMobilePageTitle, orders, isOrdersLoading, fetchOrders, advancedSettings } = useContext(AppContext);
     const [usersList, setUsersList] = useState<User[]>([]);
     const [isFilterOpen, setIsFilterOpen] = useState(false);
     
@@ -125,6 +125,33 @@ const ReportDashboard: React.FC<ReportDashboardProps> = ({ activeReport, onBack,
         customerName: urlCustomer || '',
     });
 
+    // Trigger optimized fetch when filters change specifically for the report context
+    // We fetch a larger limit for reports to ensure accuracy (e.g., 10,000)
+    useEffect(() => {
+        const fetchReportData = async () => {
+            const params: any = {
+                limit: 10000, // Large limit for reports to capture historical data
+                offset: 0,
+                view: 'compact'
+            };
+
+            if (filters.datePreset !== 'all') {
+                params.datePreset = filters.datePreset;
+                if (filters.startDate) params.startDate = filters.startDate;
+                if (filters.endDate) params.endDate = filters.endDate;
+            } else {
+                params.datePreset = 'all';
+            }
+
+            // Include team if filtered to reduce payload size
+            if (filters.team) params.team = filters.team;
+
+            await fetchOrders(false, params);
+        };
+
+        fetchReportData();
+    }, [filters.datePreset, filters.startDate, filters.endDate, filters.team, fetchOrders]);
+
     // Update URL when filter changes
     useEffect(() => {
         if (filters.datePreset !== urlDate) setUrlDate(filters.datePreset);
@@ -174,7 +201,6 @@ const ReportDashboard: React.FC<ReportDashboardProps> = ({ activeReport, onBack,
             case 'custom': return `${filters.startDate || '...'} to ${filters.endDate || '...'}`;
         }
 
-        // Use local date parts to construct string to avoid timezone shifts
         const formatDate = (d: Date) => {
             const year = d.getFullYear();
             const month = String(d.getMonth() + 1).padStart(2, '0');
@@ -215,14 +241,11 @@ const ReportDashboard: React.FC<ReportDashboardProps> = ({ activeReport, onBack,
                 if (end && d > end) return false;
             }
 
-            // Helper for multi-select checking
             const isMatch = (filterValue: string, orderValue: string, partial = false) => {
                 if (!filterValue) return true;
                 const selectedValues = filterValue.split(',').map(v => v.trim().toLowerCase());
                 const val = (orderValue || '').trim().toLowerCase();
-                if (partial) {
-                    return selectedValues.some(sv => val.includes(sv));
-                }
+                if (partial) return selectedValues.some(sv => val.includes(sv));
                 return selectedValues.includes(val);
             };
 
@@ -234,23 +257,20 @@ const ReportDashboard: React.FC<ReportDashboardProps> = ({ activeReport, onBack,
             if (!isMatch(filters.bank, o['Payment Info'])) return false;
             if (!isMatch(filters.fulfillmentStore, o['Fulfillment Store'])) return false;
             if (!isMatch(filters.page, o.Page)) return false;
-            if (!isMatch(filters.location, o.Location, true)) return false; // Partial match for Location
+            if (!isMatch(filters.location, o.Location, true)) return false;
             if (!isMatch(filters.internalCost, String(o['Internal Cost']))) return false;
 
-            // Product Filter (Multi-select support)
             if (filters.product) {
                 const selectedProducts = filters.product.split(',').map(v => v.trim().toLowerCase());
                 if (!o.Products.some(p => selectedProducts.includes((p.name || '').toLowerCase()))) return false;
             }
 
-            // Store (Brand) Filter (Multi)
             if (filters.store) {
                const pageConfig = appData.pages?.find(p => p.PageName === o.Page);
                const orderStore = pageConfig ? pageConfig.DefaultStore : null;
                if (!isMatch(filters.store, orderStore || '')) return false;
             }
 
-            // Customer Name Filter (Multi-Select Logic)
             if (!isMatch(filters.customerName, o['Customer Name'])) return false;
 
             return true;

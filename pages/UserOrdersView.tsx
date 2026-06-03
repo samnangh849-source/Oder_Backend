@@ -11,17 +11,74 @@ import { safeParseDate, getValidDate, getTimestamp } from '../utils/dateUtils';
 
 
 const UserOrdersView: React.FC<{ team: string; onAdd: () => void }> = ({ team, onAdd }) => {
-    const { currentUser, refreshData, appData, orders, isOrdersLoading, hasPermission } = useContext(AppContext);
+    const { currentUser, refreshData, appData, orders, isOrdersLoading, fetchOrders, hasPermission } = useContext(AppContext);
     
+    const [reportFilters, setReportFilters] = useState<FilterState>({
+        datePreset: 'this_month',
+        startDate: '',
+        endDate: '',
+        team: team // Pre-set team for Sales view
+    });
+
+    // Trigger server-side fetch when report filters change
+    useEffect(() => {
+        if (showReport || showShippingReport) {
+            const params: any = {
+                limit: 5000, // Sufficient for team-level reports
+                datePreset: reportFilters.datePreset,
+                team: team,
+                view: 'compact'
+            };
+            if (reportFilters.startDate) params.startDate = reportFilters.startDate;
+            if (reportFilters.endDate) params.endDate = reportFilters.endDate;
+
+            fetchOrders(false, params);
+        }
+    }, [reportFilters, showReport, showShippingReport, team, fetchOrders]);
+
     const permittedOrders = useMemo(() => {
         if (!currentUser) return [];
         const isInternalAdmin = currentUser.IsSystemAdmin || (currentUser.Role || '').toLowerCase() === 'admin';
-        if (isInternalAdmin) return orders;
-        const userAllowedTeams = (currentUser.Team || '').split(',').map(t => t.trim().toLowerCase());
-        const requestedTeam = (team || '').trim().toLowerCase();
-        if (!userAllowedTeams.includes(requestedTeam)) return [];
-        return orders.filter(o => (o.Team || '').trim().toLowerCase() === requestedTeam);
-    }, [orders, team, currentUser]);
+        
+        // Base orders filtered by team for security
+        let base = orders;
+        if (!isInternalAdmin) {
+            const userAllowedTeams = (currentUser.Team || '').split(',').map(t => t.trim().toLowerCase());
+            const requestedTeam = (team || '').trim().toLowerCase();
+            if (!userAllowedTeams.includes(requestedTeam)) return [];
+            base = orders.filter(o => (o.Team || '').trim().toLowerCase() === requestedTeam);
+        }
+        
+        // Secondary filtering for the active report range (since orders array might contain more)
+        return base.filter(o => {
+            if (reportFilters.datePreset === 'all') return true;
+            if (!o.Timestamp) return false;
+            
+            const d = safeParseDate(o.Timestamp);
+            if (!d) return false;
+            
+            // Calculate range (Simplified version of logic in components)
+            const now = new Date();
+            const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+            let start: Date | null = null;
+            let end: Date | null = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 23, 59, 59);
+
+            switch (reportFilters.datePreset) {
+                case 'today': start = today; break;
+                case 'yesterday': start = new Date(today); start.setDate(today.getDate() - 1); end = new Date(today); end.setMilliseconds(-1); break;
+                case 'this_week': const dw = now.getDay(); start = new Date(today); start.setDate(today.getDate() - (dw === 0 ? 6 : dw - 1)); break;
+                case 'this_month': start = new Date(now.getFullYear(), now.getMonth(), 1); break;
+                case 'last_month': start = new Date(now.getFullYear(), now.getMonth() - 1, 1); end = new Date(now.getFullYear(), now.getMonth(), 0, 23, 59, 59); break;
+                case 'custom':
+                    if (reportFilters.startDate) start = new Date(reportFilters.startDate + 'T00:00:00');
+                    if (reportFilters.endDate) end = new Date(reportFilters.endDate + 'T23:59:59');
+                    break;
+            }
+            if (start && d < start) return false;
+            if (end && d > end) return false;
+            return true;
+        });
+    }, [orders, team, currentUser, reportFilters]);
 
     const [drilldownFilters, setDrilldownFilters] = useState<any>(null);
     const [drilldownData, setDrilldownData] = useState<ParsedOrder[]>([]);
@@ -31,6 +88,10 @@ const UserOrdersView: React.FC<{ team: string; onAdd: () => void }> = ({ team, o
     const [showReport, setShowReport] = useState(false);
     const [showShippingReport, setShowShippingReport] = useState(false);
     const [isDeliveryModalOpen, setIsDeliveryModalOpen] = useState(false);
+
+    const handleFilterChange = (newFilters: Partial<FilterState>) => {
+        setReportFilters(prev => ({ ...prev, ...newFilters }));
+    };
 
     const userVisibleColumns = useMemo(() => new Set([
         'index', 'orderId', 'customerName', 'productInfo', 'location', 'pageInfo', 'total', 'shippingService', 'status', 'date', 'print', 'actions'
@@ -136,9 +197,9 @@ const UserOrdersView: React.FC<{ team: string; onAdd: () => void }> = ({ team, o
         </div>
     );
 
-    if (showReport) return <div className="animate-fade-in h-full overflow-auto"><UserSalesPageReport orders={permittedOrders} onBack={() => setShowReport(false)} team={team} onNavigate={(filters) => setDrilldownFilters(filters)} /></div>;
+    if (showReport) return <div className="animate-fade-in h-full overflow-auto"><UserSalesPageReport orders={permittedOrders} onBack={() => setShowReport(false)} team={team} onNavigate={(filters) => setDrilldownFilters(filters)} onFilterChange={handleFilterChange} dateFilter={reportFilters.datePreset} startDate={reportFilters.startDate} endDate={reportFilters.endDate} /></div>;
 
-    if (showShippingReport) return <div className="animate-fade-in h-full overflow-auto"><ShippingReport orders={permittedOrders} appData={appData} dateFilter="all" startDate="" endDate="" onNavigate={(filters) => { setDrilldownFilters(filters); setShowShippingReport(false); }} onBack={() => setShowShippingReport(false)} /></div>;
+    if (showShippingReport) return <div className="animate-fade-in h-full overflow-auto"><ShippingReport orders={permittedOrders} appData={appData} dateFilter={reportFilters.datePreset} startDate={reportFilters.startDate} endDate={reportFilters.endDate} onNavigate={(filters) => { setDrilldownFilters(filters); setShowShippingReport(false); }} onBack={() => setShowShippingReport(false)} onFilterChange={handleFilterChange} /></div>;
 
     return (
         <div className="flex flex-col space-y-4 pb-32">

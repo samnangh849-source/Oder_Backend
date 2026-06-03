@@ -24,6 +24,7 @@ interface SalesByPageReportProps {
     dateFilter?: string;
     startDate?: string;
     endDate?: string;
+    onFilterChange?: (filters: Partial<FilterState>) => void;
 }
 
 type SortKey = 'revenue' | 'profit' | 'teamName' | 'pageName';
@@ -31,10 +32,11 @@ type SortKey = 'revenue' | 'profit' | 'teamName' | 'pageName';
 const MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
 
 const SalesByPageReport: React.FC<SalesByPageReportProps> = ({ 
-    orders: sourceOrders, onBack, onNavigate, contextFilters, dateFilter, startDate, endDate 
+    orders: sourceOrders, onBack, onNavigate, contextFilters, dateFilter, startDate, endDate, onFilterChange 
 }) => {
     const { appData, previewImage, language, advancedSettings } = useContext(AppContext);
     const [showAllPages, setShowAllPages] = useState(true); 
+    const [onlyTelegram, setOnlyTelegram] = useState(false); // Added missing state
     const [isExporting, setIsExporting] = useState(false);
     const [isStatisticOpen, setIsStatisticOpen] = useState(false);
     const [sortConfig, setSortConfig] = useState<{ key: SortKey, direction: 'asc' | 'desc' }>({ key: 'revenue', direction: 'desc' });
@@ -43,6 +45,20 @@ const SalesByPageReport: React.FC<SalesByPageReportProps> = ({
     const [activeDateFilter, setActiveDateFilter] = useState(dateFilter || 'all');
     const [activeStart, setActiveStart] = useState(startDate || '');
     const [activeEnd, setActiveEnd] = useState(endDate || '');
+
+    // Sync local state with props from parent
+    useEffect(() => {
+        if (dateFilter) setActiveDateFilter(dateFilter);
+        if (startDate) setActiveStart(startDate);
+        if (endDate) setActiveEnd(endDate);
+    }, [dateFilter, startDate, endDate]);
+
+    const handleDateShortcut = (id: string) => {
+        setActiveDateFilter(id);
+        if (onFilterChange) {
+            onFilterChange({ datePreset: id as any, startDate: '', endDate: '' });
+        }
+    };
 
     const toggleSort = (key: SortKey) => {
         setSortConfig(prev => ({
@@ -280,7 +296,7 @@ const SalesByPageReport: React.FC<SalesByPageReportProps> = ({
                         ].map((range) => (
                             <button
                                 key={range.id}
-                                onClick={() => setActiveDateFilter(range.id as any)}
+                                onClick={() => handleDateShortcut(range.id)}
                                 className={`px-4 py-2 rounded-xl text-[10px] font-black uppercase tracking-widest whitespace-nowrap transition-all ${
                                     activeDateFilter === range.id
                                         ? 'bg-blue-600 text-white shadow-lg shadow-blue-500/20 border border-blue-400/50'
