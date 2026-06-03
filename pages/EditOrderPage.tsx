@@ -406,9 +406,7 @@ const EditOrderPage: React.FC<EditOrderPageProps> = ({ order, onSaveSuccess, onC
             const newData: any = isReturn ? {
                 'Fulfillment Status': 'Returned',
                 'Return Reason': reason,
-                'Return Received By': currentUser?.FullName || 'Admin',
-                'Return Received Time': new Date().toISOString().slice(0, 19).replace('T', ' ')
-            } : { 
+            } : {
                 'Fulfillment Status': 'Cancelled',
                 'Cancel Reason': reason
             };
@@ -901,7 +899,7 @@ const EditOrderPage: React.FC<EditOrderPageProps> = ({ order, onSaveSuccess, onC
                             onCancelOrder={handleCancelOrderClick}
                             onUnReturn={handleUnReturn}
                             onConfirmReturn={handleConfirmReturnClick}
-                            hasReturnPhoto={!!formData['Return Photo'] && formData['Return Photo'] !== ''}
+                            hasReturnPhoto={(!!formData['Return Photo'] && formData['Return Photo'] !== '') || (!!formData['Return Received By'] && formData['Return Received By'] !== '')}
                             fulfillmentStatus={formData.FulfillmentStatus}
                             loading={loading}
                         />
@@ -1025,9 +1023,9 @@ const EditOrderPage: React.FC<EditOrderPageProps> = ({ order, onSaveSuccess, onC
                                             </button>
                                             <button 
                                                 onClick={() => handleConfirmReturnPhoto(returnPhoto || '')} 
-                                                disabled={!returnPhoto || isSubmittingReturn} 
+                                                disabled={isSubmittingReturn} 
                                                 className={`flex-[2] py-4 rounded-xl font-black text-xs uppercase tracking-[0.2em] transition-all shadow-xl flex items-center justify-center gap-3 active:scale-[0.98] disabled:opacity-40 disabled:cursor-not-allowed ${
-                                                    returnPhoto 
+                                                    returnPhoto || true
                                                     ? 'bg-[#0ECB81] text-[#0B0E11] shadow-[#0ECB81]/10' 
                                                     : 'bg-[#2B3139] text-[#474D57]'
                                                 }`}

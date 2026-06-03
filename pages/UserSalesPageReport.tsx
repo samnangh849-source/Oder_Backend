@@ -93,6 +93,10 @@ const UserSalesPageReport: React.FC<UserSalesPageReportProps> = ({
     }, [initialDateFilter, initialStart, initialEnd]);
 
     const handleDateShortcut = (id: string) => {
+        if (id === 'custom') {
+            setIsFilterOpen(true);
+            return;
+        }
         setActiveDateFilter(id);
         const newFilters = { datePreset: id as any, startDate: '', endDate: '' };
         setFilters(prev => ({ ...prev, ...newFilters }));
@@ -329,7 +333,7 @@ const UserSalesPageReport: React.FC<UserSalesPageReportProps> = ({
                                 <div className="w-2 h-2 rounded-full bg-[#3B82F6] animate-pulse shadow-[0_0_10px_#3B82F6]"></div>
                                 <h1 className="text-xl font-black text-white uppercase tracking-tighter flex items-center gap-3">
                                     <Cpu size={22} className="text-blue-500" />
-                                    {language === 'km' ? 'មជ្ឈមណ្ឌលបញ្ញាលក់' : 'Sales Intelligence Hub'}
+                                    {language === 'km' ? 'ទិន្នន័យលក់អនឡាញ' : 'Sales Online Data'}
                                     <span className="ml-2 px-2 py-0.5 bg-blue-600/20 text-blue-400 text-[8px] rounded-lg border border-blue-500/30 font-black tracking-widest italic">QUANTUM v2.5</span>
                                 </h1>
                             </div>
@@ -352,7 +356,8 @@ const UserSalesPageReport: React.FC<UserSalesPageReportProps> = ({
                             { id: 'this_year', label: 'This Year', km: 'ឆ្នាំនេះ' },
                             { id: 'last_year', label: 'Last Year', km: 'ឆ្នាំមុន' },
                             { id: 'all', label: 'All Time', km: 'ទាំងអស់' },
-                        ].map((range) => (
+                            { id: 'custom', label: 'Custom', km: 'កំណត់ខ្លួនឯង' },
+                            ].map((range) => (
                             <button
                                 key={range.id}
                                 onClick={() => handleDateShortcut(range.id)}
@@ -385,7 +390,7 @@ const UserSalesPageReport: React.FC<UserSalesPageReportProps> = ({
                         className="group relative flex items-center gap-2 px-6 py-3 bg-gradient-to-r from-blue-700 to-indigo-600 hover:from-blue-600 hover:to-indigo-500 text-white text-[10px] font-black uppercase tracking-[0.2em] rounded-xl transition-all active:scale-[0.98] shadow-xl shadow-blue-500/20 border border-white/10"
                     >
                         <Cpu size={14} className="group-hover:rotate-90 transition-transform duration-500" />
-                        Intelligence Hub
+                        Online Data
                         <div className="absolute -top-1 -right-1 w-3 h-3 bg-red-500 rounded-full border-2 border-[#0B0E11] animate-pulse"></div>
                     </button>
                     <button 
@@ -505,7 +510,7 @@ const UserSalesPageReport: React.FC<UserSalesPageReportProps> = ({
                 isOpen={isStatisticOpen}
                 onClose={() => setIsStatisticOpen(false)}
                 orders={teamOrders} initialDateFilter={activeDateFilter} initialStart={activeStart} initialEnd={activeEnd}
-                title={language === 'km' ? 'ស្ថិតិលក់តាមផេក' : 'PAGE SALES STATS'}
+                title={language === 'km' ? 'ទិន្នន័យលក់អនឡាញ' : 'Sales Online Data'}
                 subtitle={`TEAM: ${team} | ${filterLabel}`}
             />
 

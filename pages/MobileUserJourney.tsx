@@ -17,19 +17,16 @@ interface MobileUserJourneyProps {
 
 const MobileUserJourney: React.FC<MobileUserJourneyProps> = ({ onBackToRoleSelect, userTeams }) => {
     const {
-        language,
+        language: appLanguage,
         setAppState,
         selectedTeam,
-        setSelectedTeam,
         hasPermission,
     } = useContext(AppContext);
 
-    const { orders } = useOrder();
-
-    const [localLanguage, setLocalLanguage] = useState<'km' | 'en'>(language);
+    const { language: localLanguage, currentUser, appData, orders, fetchOrders } = useOrder();
     const t = translations[localLanguage];
     const [teamStats, setTeamStats] = useState({ revenue: 0, cost: 0, paid: 0, unpaid: 0, count: 0 });
-    const [dateFilter, setDateFilter] = useState<'today' | 'week' | 'month' | 'year' | 'custom'>('today');
+    const [dateFilter, setDateFilter] = useState<'today' | 'yesterday' | 'week' | 'last_week' | 'month' | 'last_month' | 'year' | 'last_year' | 'custom'>('today');
     const [customStart, setCustomStart] = useState(() => new Date().toISOString().split('T')[0]);
     const [customEnd, setCustomEnd] = useState(() => new Date().toISOString().split('T')[0]);
 
@@ -38,6 +35,19 @@ const MobileUserJourney: React.FC<MobileUserJourneyProps> = ({ onBackToRoleSelec
             setTeamStats({ revenue: 0, cost: 0, paid: 0, unpaid: 0, count: 0 });
         }
     }, [selectedTeam]);
+
+    useEffect(() => {
+        const fetchForJourney = async () => {
+            const params: any = { limit: 5000, offset: 0, view: 'compact' };
+            params.datePreset = dateFilter;
+            if (dateFilter === 'custom') {
+                params.startDate = customStart;
+                params.endDate = customEnd;
+            }
+            await fetchOrders(false, params);
+        };
+        fetchForJourney();
+    }, [dateFilter, customStart, customEnd, fetchOrders]);
 
     const themeVars: React.CSSProperties = {
         '--cm-bg': '#0B0E11',

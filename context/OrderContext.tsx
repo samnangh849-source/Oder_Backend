@@ -18,7 +18,7 @@ interface OrderContextType {
     refreshTimestamp: number;
     setRefreshTimestamp: React.Dispatch<React.SetStateAction<number>>;
     fetchData: (force?: boolean) => Promise<Record<string, any> | null>;
-    fetchOrders: (force?: boolean) => Promise<void>;
+    fetchOrders: (force?: boolean, params?: Record<string, string | number>) => Promise<any>;
     fetchPromotions: () => Promise<void>;
     refreshData: () => Promise<Record<string, any> | null>;
 }
@@ -40,6 +40,7 @@ export const OrderProvider: React.FC<{ children: React.ReactNode }> = ({ childre
     const [isGlobalLoading, setIsGlobalLoading] = useState(true);
     const [refreshTimestamp, setRefreshTimestamp] = useState<number>(Date.now());
     const [ordersFetchError, setOrdersFetchError] = useState<'permission_denied' | 'network_error' | null>(null);
+    const lastFetchParams = React.useRef<Record<string, string | number>>({});
 
     const handleUnauthorized = useCallback(() => {
         localStorage.removeItem('token');
@@ -95,9 +96,15 @@ export const OrderProvider: React.FC<{ children: React.ReactNode }> = ({ childre
         return null;
     }, [handleUnauthorized]);
 
-    const fetchOrders = useCallback(async (force = false, params: Record<string, string | number> = {}) => {
+    const fetchOrders = useCallback(async (force = false, params?: Record<string, string | number>) => {
         if (!force) setIsOrdersLoading(true);
         else setIsSyncing(true);
+
+        // Remember params if provided, otherwise reuse last ones
+        if (params !== undefined) {
+            lastFetchParams.current = params;
+        }
+        const activeParams = lastFetchParams.current;
 
         try {
             const token = localStorage.getItem('token');
@@ -106,7 +113,7 @@ export const OrderProvider: React.FC<{ children: React.ReactNode }> = ({ childre
             
             // Build Query String
             const queryParams = new URLSearchParams();
-            Object.entries(params).forEach(([key, val]) => {
+            Object.entries(activeParams).forEach(([key, val]) => {
                 if (val !== undefined && val !== null && val !== '') {
                     queryParams.append(key, String(val));
                 }

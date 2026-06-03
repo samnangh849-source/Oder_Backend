@@ -181,7 +181,7 @@ isOpen, onClose, orders, title, subtitle,
     const [activePieIndex, setActivePieIndex] = useState(0);
     const [isPieMaximized, setIsPieMaximized] = useState(false);
     const [zoomScale, setZoomScale] = useState(1);
-    const [activeDateRange, setActiveDateRange] = useState<'all' | 'today' | 'this_week' | 'this_month' | 'custom'>('all');
+    const [activeDateRange, setActiveDateRange] = useState<'all' | 'today' | 'this_week' | 'this_month' | 'last_month' | 'custom'>('all');
     const [customStart, setCustomStart] = useState('');
     const [customEnd, setCustomEnd] = useState('');
     const [selectedVelocityPages, setSelectedVelocityPages] = useState<string[]>([]);
@@ -263,6 +263,11 @@ isOpen, onClose, orders, title, subtitle,
             if (activeDateRange === 'this_month') {
                 const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
                 return d >= startOfMonth;
+            }
+            if (activeDateRange === 'last_month') {
+                const start = new Date(now.getFullYear(), now.getMonth() - 1, 1);
+                const end = new Date(now.getFullYear(), now.getMonth(), 0, 23, 59, 59, 999);
+                return d >= start && d <= end;
             }
             if (activeDateRange === 'custom') {
                 if (customStart) {
@@ -498,7 +503,7 @@ isOpen, onClose, orders, title, subtitle,
                         </div>
                         <div>
                             <div className="flex items-center gap-3">
-                                <h2 className="text-3xl font-black text-gray-900 tracking-tighter uppercase">Sales Intelligence Hub</h2>
+                                <h2 className="text-3xl font-black text-gray-900 tracking-tighter uppercase">Sales Online Data</h2>
                                 <span className="px-3 py-1 bg-gradient-to-r from-blue-600 to-indigo-600 text-white text-[10px] rounded-full font-black tracking-[0.2em] shadow-lg shadow-blue-500/20">QUANTUM v2.5</span>
                             </div>
                             <p className="text-[11px] text-gray-400 font-bold uppercase tracking-[0.4em] mt-1 flex items-center gap-2">
@@ -515,6 +520,7 @@ isOpen, onClose, orders, title, subtitle,
                                 { id: 'today', label: 'Today', km: 'ថ្ងៃនេះ' },
                                 { id: 'this_week', label: 'This Week', km: 'សប្តាហ៍នេះ' },
                                 { id: 'this_month', label: 'This Month', km: 'ខែនេះ' },
+                                { id: 'last_month', label: 'Last Month', km: 'ខែមុន' },
                                 { id: 'custom', label: 'Custom', km: 'កំណត់ខ្លួនឯង' },
                             ].map((range) => (
                                 <button
