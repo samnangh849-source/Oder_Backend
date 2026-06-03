@@ -14,6 +14,8 @@ interface EditOrderSummaryProps {
     onDelete: () => void;
     onCancelOrder: () => void;
     onUnReturn?: () => void;
+    onConfirmReturn?: () => void;
+    hasReturnPhoto?: boolean;
     fulfillmentStatus: string;
     loading: boolean;
 }
@@ -21,7 +23,7 @@ interface EditOrderSummaryProps {
 const EditOrderSummary: React.FC<EditOrderSummaryProps> = ({
     subtotal, grandTotal, shippingFee, onShippingFeeChange, 
     orderDiscount, onOrderDiscountChange,
-    onSave, onDelete, onCancelOrder, onUnReturn, fulfillmentStatus, loading
+    onSave, onDelete, onCancelOrder, onUnReturn, onConfirmReturn, hasReturnPhoto, fulfillmentStatus, loading
 }) => {
     const { hasPermission } = useContext(AppContext);
 
@@ -100,17 +102,34 @@ const EditOrderSummary: React.FC<EditOrderSummaryProps> = ({
                             <span className="text-[10px]">{isShipped ? 'REQUEST RETURN' : 'REQUEST CANCEL'}</span>
                         </div>
                     </button>
-                ) : fulfillmentStatus === 'Returned' && onUnReturn && (
-                    <button 
-                        type="button" 
-                        onClick={onUnReturn} 
-                        disabled={loading}
-                        className="flex-1 lg:flex-none px-4 lg:px-6 py-2.5 bg-orange-500/10 text-orange-500 border-orange-500/40 hover:bg-orange-500/20 hover:border-orange-500 rounded-none font-black uppercase text-[10px] tracking-widest transition-all border-2 active:translate-y-[2px] flex items-center justify-center gap-2"
-                        title="Restore order from Returned status"
-                    >
-                        <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" strokeWidth="3" strokeLinecap="round" /></svg> 
-                        UN RETURN
-                    </button>
+                ) : (
+                    <div className="flex flex-row gap-2.5">
+                        {fulfillmentStatus === 'Returned' && onUnReturn && (
+                            <button 
+                                type="button" 
+                                onClick={onUnReturn} 
+                                disabled={loading}
+                                className="flex-1 lg:flex-none px-4 lg:px-6 py-2.5 bg-orange-500/10 text-orange-500 border-orange-500/40 hover:bg-orange-500/20 hover:border-orange-500 rounded-none font-black uppercase text-[10px] tracking-widest transition-all border-2 active:translate-y-[2px] flex items-center justify-center gap-2"
+                                title="Restore order from Returned status"
+                            >
+                                <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" strokeWidth="3" strokeLinecap="round" /></svg> 
+                                UN RETURN
+                            </button>
+                        )}
+                        
+                        {fulfillmentStatus === 'Returned' && !hasReturnPhoto && onConfirmReturn && (
+                            <button 
+                                type="button" 
+                                onClick={onConfirmReturn} 
+                                disabled={loading}
+                                className="flex-1 lg:flex-none px-4 lg:px-6 py-2.5 bg-[#0ECB81]/10 text-[#0ECB81] border-[#0ECB81]/40 hover:bg-[#0ECB81]/20 hover:border-[#0ECB81] rounded-none font-black uppercase text-[10px] tracking-widest transition-all border-2 active:translate-y-[2px] flex items-center justify-center gap-2"
+                                title="Add return photo and confirm receipt"
+                            >
+                                <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path d="M3 9a2 2 0 012-2h.93a2 2 0 001.664-.89l.812-1.22A2 2 0 0110.07 4h3.86a2 2 0 011.664.89l.812 1.22A2 2 0 0018.07 7H19a2 2 0 012 2v9a2 2 0 01-2 2H5a2 2 0 01-2-2V9z" strokeWidth="3" strokeLinecap="round" /><path d="M15 13a3 3 0 11-6 0 3 3 0 016 0z" strokeWidth="3" strokeLinecap="round" /></svg> 
+                                CONFIRM RETURN
+                            </button>
+                        )}
+                    </div>
                 )}
 
                 {/* Delete Button - Hidden if no permission */}

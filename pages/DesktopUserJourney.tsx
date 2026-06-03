@@ -207,7 +207,7 @@ const DesktopUserJourney: React.FC<DesktopUserJourneyProps> = ({ onBackToRoleSel
 
             {/* Date Selection Options - Always Visible */}
             <div className="ml-auto flex items-center px-4 gap-1 border-l border-[var(--cm-border)]">
-                {(['today', 'week', 'month', 'year', 'custom'] as const).map((f) => (
+                {(['today', 'yesterday', 'week', 'last_week', 'month', 'last_month', 'year', 'last_year', 'custom'] as const).map((f) => (
                     <button
                         key={f}
                         onClick={() => setDateFilter(f)}
@@ -218,9 +218,13 @@ const DesktopUserJourney: React.FC<DesktopUserJourneyProps> = ({ onBackToRoleSel
                         }`}
                     >
                         {f === 'today' ? (language === 'km' ? 'ថ្ងៃនេះ' : 'Today') :
+                            f === 'yesterday' ? (language === 'km' ? 'ម្សិលមិញ' : 'Yesterday') :
                             f === 'week' ? (language === 'km' ? 'សប្តាហ៍នេះ' : 'This Week') :
+                            f === 'last_week' ? (language === 'km' ? 'សប្តាហ៍មុន' : 'Last Week') :
                             f === 'month' ? (language === 'km' ? 'ខែនេះ' : 'Month') :
+                            f === 'last_month' ? (language === 'km' ? 'ខែមុន' : 'Last Month') :
                             f === 'year' ? (language === 'km' ? 'ឆ្នាំនេះ' : 'Year') :
+                            f === 'last_year' ? (language === 'km' ? 'ឆ្នាំមុន' : 'Last Year') :
                             (language === 'km' ? 'កំណត់' : 'Custom')}
                     </button>
                 ))}

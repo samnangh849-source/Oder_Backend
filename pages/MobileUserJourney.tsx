@@ -181,7 +181,7 @@ const MobileUserJourney: React.FC<MobileUserJourneyProps> = ({ onBackToRoleSelec
             {/* Global Date Filter for Mobile - Always Visible */}
             <div className="flex-shrink-0 border-b border-[var(--cm-border)] bg-[var(--cm-card-bg)]">
                 <div className="flex overflow-x-auto gap-1 px-4 py-2.5 no-scrollbar">
-                    {(['today', 'week', 'month', 'year', 'custom'] as const).map((f) => (
+                    {(['today', 'yesterday', 'week', 'last_week', 'month', 'last_month', 'year', 'last_year', 'custom'] as const).map((f) => (
                         <button
                             key={f}
                             onClick={() => setDateFilter(f)}
@@ -192,9 +192,13 @@ const MobileUserJourney: React.FC<MobileUserJourneyProps> = ({ onBackToRoleSelec
                             }`}
                         >
                             {f === 'today' ? (language === 'km' ? 'ថ្ងៃនេះ' : 'Today') :
+                            f === 'yesterday' ? (language === 'km' ? 'ម្សិលមិញ' : 'Yesterday') :
                             f === 'week' ? (language === 'km' ? 'សប្តាហ៍នេះ' : 'This Week') :
+                            f === 'last_week' ? (language === 'km' ? 'សប្តាហ៍មុន' : 'Last Week') :
                             f === 'month' ? (language === 'km' ? 'ខែនេះ' : 'Month') :
+                            f === 'last_month' ? (language === 'km' ? 'ខែមុន' : 'Last Month') :
                             f === 'year' ? (language === 'km' ? 'ឆ្នាំនេះ' : 'Year') :
+                            f === 'last_year' ? (language === 'km' ? 'ឆ្នាំមុន' : 'Last Year') :
                             (language === 'km' ? 'កំណត់' : 'Custom')}
                         </button>
                     ))}

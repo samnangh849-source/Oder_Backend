@@ -289,9 +289,11 @@ const SalesByPageReport: React.FC<SalesByPageReportProps> = ({
                             { id: 'today', label: 'Today', km: 'ថ្ងៃនេះ' },
                             { id: 'yesterday', label: 'Yesterday', km: 'ម្សិលមិញ' },
                             { id: 'this_week', label: 'This Week', km: 'សប្តាហ៍នេះ' },
+                            { id: 'last_week', label: 'Last Week', km: 'សប្តាហ៍មុន' },
                             { id: 'this_month', label: 'This Month', km: 'ខែនេះ' },
                             { id: 'last_month', label: 'Last Month', km: 'ខែមុន' },
                             { id: 'this_year', label: 'This Year', km: 'ឆ្នាំនេះ' },
+                            { id: 'last_year', label: 'Last Year', km: 'ឆ្នាំមុន' },
                             { id: 'all', label: 'All Time', km: 'ទាំងអស់' },
                         ].map((range) => (
                             <button

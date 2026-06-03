@@ -396,20 +396,22 @@ const EditOrderPage: React.FC<EditOrderPageProps> = ({ order, onSaveSuccess, onC
         setIsActionModalOpen(false);
         const isReturn = actionModalType === 'return';
         
-        if (isReturn) {
-            setPendingReason(reason);
-            setReturnActionType('to_returned');
-            setIsReturnPhotoModalOpen(true);
-            return;
-        }
-
-        const actionText = 'Cancel';
         setLoading(true);
         try {
             const session = await CacheService.get<{ token: string }>(CACHE_KEYS.SESSION);
             const token = session?.token;
             const headers: HeadersInit = { 'Content-Type': 'application/json' };
             if (token) headers['Authorization'] = `Bearer ${token}`;
+
+            const newData: any = isReturn ? {
+                'Fulfillment Status': 'Returned',
+                'Return Reason': reason,
+                'Return Received By': currentUser?.FullName || 'Admin',
+                'Return Received Time': new Date().toISOString().slice(0, 19).replace('T', ' ')
+            } : { 
+                'Fulfillment Status': 'Cancelled',
+                'Cancel Reason': reason
+            };
 
             const response = await fetch(`${WEB_APP_URL}/api/admin/update-order`, {
                 method: 'POST',
@@ -418,21 +420,20 @@ const EditOrderPage: React.FC<EditOrderPageProps> = ({ order, onSaveSuccess, onC
                     orderId: formData['Order ID'], 
                     team: formData.Team, 
                     userName: currentUser?.FullName || 'System',
-                    newData: { 
-                        'Fulfillment Status': 'Cancelled',
-                        'Cancel Reason': reason
-                    }
+                    newData
                 })
             });
             const result = await response.json();
             if (!response.ok || result.status !== 'success') throw new Error(result.message || 'Action failed');
             
-            await logUserActivity(currentUser?.UserName || 'Unknown', 'CANCEL_ORDER', `Cancelled Order #${formData['Order ID']} with reason: ${reason}`);
+            const actionKey = isReturn ? 'RETURN_ORDER' : 'CANCEL_ORDER';
+            const actionLabel = isReturn ? 'Returned (Requested)' : 'Cancelled';
+            await logUserActivity(currentUser?.UserName || 'Unknown', actionKey, `${actionLabel} Order #${formData['Order ID']} with reason: ${reason}`);
 
             await refreshData();
             onSaveSuccess();
         } catch (err: any) {
-            setError(`Cancel មិនបានសម្រេច: ${err.message}`);
+            setError(`${actionModalType === 'return' ? 'Return' : 'Cancel'} មិនបានសម្រេច: ${err.message}`);
         } finally {
             setLoading(false);
         }
@@ -543,6 +544,12 @@ const EditOrderPage: React.FC<EditOrderPageProps> = ({ order, onSaveSuccess, onC
             alert(`បរាជ័យ: ${err.message}`);
             setIsSubmittingReturn(false);
         }
+    };
+
+    const handleConfirmReturnClick = () => {
+        setReturnActionType('to_returned');
+        setPendingReason(formData['Return Reason'] || '');
+        setIsReturnPhotoModalOpen(true);
     };
 
     const handleSubmit = async (e: React.FormEvent) => {
@@ -893,6 +900,8 @@ const EditOrderPage: React.FC<EditOrderPageProps> = ({ order, onSaveSuccess, onC
                             onDelete={handleDelete}
                             onCancelOrder={handleCancelOrderClick}
                             onUnReturn={handleUnReturn}
+                            onConfirmReturn={handleConfirmReturnClick}
+                            hasReturnPhoto={!!formData['Return Photo'] && formData['Return Photo'] !== ''}
                             fulfillmentStatus={formData.FulfillmentStatus}
                             loading={loading}
                         />

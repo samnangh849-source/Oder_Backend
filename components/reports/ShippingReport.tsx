@@ -175,6 +175,15 @@ const ShippingReport: React.FC<ShippingReportProps> = ({ orders, appData, dateFi
             case 'this_week': const d = now.getDay(); startBound = new Date(today); startBound.setDate(today.getDate() - (d === 0 ? 6 : d - 1)); endBound = new Date(startBound); endBound.setDate(startBound.getDate() + 6); endBound.setHours(23, 59, 59, 999); break;
             case 'this_month': startBound = new Date(now.getFullYear(), now.getMonth(), 1); break;
             case 'last_month': startBound = new Date(now.getFullYear(), now.getMonth() - 1, 1); endBound = new Date(now.getFullYear(), now.getMonth(), 0, 23, 59, 59, 999); break;
+            case 'last_week': {
+                startBound = new Date(today); startBound.setDate(today.getDate() - now.getDay() - 6);
+                endBound = new Date(startBound); endBound.setDate(startBound.getDate() + 6);
+                endBound.setHours(23, 59, 59, 999); break;
+            }
+            case 'last_year': {
+                startBound = new Date(now.getFullYear() - 1, 0, 1);
+                endBound = new Date(now.getFullYear() - 1, 11, 31, 23, 59, 59, 999); break;
+            }
             case 'all': startBound = null; endBound = null; break;
             case 'custom': if (startDate) startBound = getValidDate(startDate + 'T00:00:00'); if (endDate) endBound = getValidDate(endDate + 'T23:59:59'); break;
         }
@@ -646,8 +655,10 @@ const ShippingReport: React.FC<ShippingReportProps> = ({ orders, appData, dateFi
                                     { id: 'today', icon: 'fa-bolt' },
                                     { id: 'yesterday', icon: 'fa-rotate-left' },
                                     { id: 'this_week', icon: 'fa-calendar-week' },
+                                    { id: 'last_week', icon: 'fa-calendar-day' },
                                     { id: 'this_month', icon: 'fa-calendar-days' },
                                     { id: 'last_month', icon: 'fa-history' },
+                                    { id: 'last_year', icon: 'fa-calendar-check' },
                                     { id: 'all', icon: 'fa-layer-group' }
                                 ].map(preset => (
                                     <button
