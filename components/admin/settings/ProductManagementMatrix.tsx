@@ -6,6 +6,7 @@ import Spinner from '../../common/Spinner';
 import { WEB_APP_URL } from '../../../constants';
 import { convertGoogleDriveUrl } from '../../../utils/fileUtils';
 import { getValueCaseInsensitive } from '../../../constants/settingsConfig';
+import { translations } from '../../../translations';
 
 interface ProductManagementMatrixProps {
     products: MasterProduct[];
