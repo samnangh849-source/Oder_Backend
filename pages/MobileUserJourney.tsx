@@ -17,14 +17,16 @@ interface MobileUserJourneyProps {
 
 const MobileUserJourney: React.FC<MobileUserJourneyProps> = ({ onBackToRoleSelect, userTeams }) => {
     const {
-        language: appLanguage,
+        language,
+        setLanguage,
         setAppState,
         selectedTeam,
+        setSelectedTeam,
         hasPermission,
     } = useContext(AppContext);
 
-    const { language: localLanguage, currentUser, appData, orders, fetchOrders } = useOrder();
-    const t = translations[localLanguage];
+    const { currentUser, appData, orders, fetchOrders } = useOrder();
+    const t = translations[language];
     const [teamStats, setTeamStats] = useState({ revenue: 0, cost: 0, paid: 0, unpaid: 0, count: 0 });
     const [dateFilter, setDateFilter] = useState<'today' | 'yesterday' | 'week' | 'last_week' | 'month' | 'last_month' | 'year' | 'last_year' | 'custom'>('today');
     const [customStart, setCustomStart] = useState(() => new Date().toISOString().split('T')[0]);
@@ -182,7 +184,7 @@ const MobileUserJourney: React.FC<MobileUserJourneyProps> = ({ onBackToRoleSelec
                 </div>
 
                 <div className="flex items-center gap-1">
-                    <button className="cm-icon-btn-mobile font-bold text-[11px]" onClick={() => setLocalLanguage(language === 'km' ? 'en' : 'km')}>
+                    <button className="cm-icon-btn-mobile font-bold text-[11px]" onClick={() => setLanguage(language === 'km' ? 'en' : 'km')}>
                         {language === 'km' ? 'EN' : 'ខ្មែរ'}
                     </button>
                 </div>
@@ -301,7 +303,7 @@ const MobileUserJourney: React.FC<MobileUserJourneyProps> = ({ onBackToRoleSelec
                     </div>
 
                     <div className="px-4">
-                        <TopPerformanceUserJourney orders={orders} language={localLanguage} period={dateFilter as any} />
+                        <TopPerformanceUserJourney orders={orders} language={language} period={dateFilter as any} />
                     </div>
                 </div>
             )}
