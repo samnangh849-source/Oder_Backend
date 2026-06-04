@@ -62,15 +62,14 @@ const DesktopOrdersDashboard: React.FC<DesktopOrdersDashboardProps> = ({ onBack,
     const [isFilterModalOpen, setIsFilterModalOpen] = useState(false);
     const [isPdfModalOpen, setIsPdfModalOpen] = useState(false);
     const [searchQuery, setSearchQuery] = useState('');
-    useEffect(() => {
-        setCurrentPage(1);
-    }, [searchQuery]);
 
     const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
     const [showBorders, setShowBorders] = useState(true);
 
     // Filter State
     const [filters, setFilters] = useState<FilterState>(() => {
+// ... (omitting for brevity in thought, but I will include it in the tool call)
+
         const searchParams = new URLSearchParams(window.location.search);
         return {
             datePreset: (initialFilters?.datePreset || searchParams.get('dateFilter') as any) || 'this_month',
@@ -97,11 +96,16 @@ const DesktopOrdersDashboard: React.FC<DesktopOrdersDashboardProps> = ({ onBack,
 
     // Trigger optimized fetch when filters or pagination change
     useEffect(() => {
+        let ignore = false;
         const fetchPaginated = async () => {
             const params: any = {
                 limit: pageSize,
                 offset: (currentPage - 1) * pageSize,
-                view: 'compact'
+                view: 'compact',
+                team: filters.team,
+                user: filters.user,
+                fulfillmentStore: filters.fulfillmentStore,
+                fulfillmentStatus: filters.fulfillmentStatus
             };
 
             if (searchQuery.trim()) {
@@ -117,13 +121,14 @@ const DesktopOrdersDashboard: React.FC<DesktopOrdersDashboardProps> = ({ onBack,
             }
 
             const result: any = await fetchOrders(false, params);
-            if (result) {
+            if (!ignore && result) {
                 setTotalCount(result.total);
             }
         };
 
         fetchPaginated();
-    }, [filters.datePreset, filters.startDate, filters.endDate, currentPage, pageSize, searchQuery, fetchOrders]);
+        return () => { ignore = true; };
+    }, [filters.datePreset, filters.startDate, filters.endDate, filters.team, filters.user, filters.fulfillmentStore, filters.fulfillmentStatus, currentPage, pageSize, searchQuery, fetchOrders]);
 
     const getOrderTimestamp = (order: any) => {
         const ts = order.Timestamp;
@@ -265,7 +270,7 @@ const DesktopOrdersDashboard: React.FC<DesktopOrdersDashboardProps> = ({ onBack,
                         <OrderFilters filters={filters} setFilters={setFilters} orders={enrichedOrders} usersList={appData.users || []} appData={appData} calculatedRange={calculatedRange} />
                     </div>
                     <div className={`mt-6 border-t ${isBinance ? 'border-[#2B3139]' : 'border-white/5'} pt-6`}>
-                        <button onClick={() => setIsFilterModalOpen(false)} className={`w-full py-4 ${isBinance ? 'bg-[#FCD535] hover:bg-[#f0c51d] text-[#181A20]' : 'bg-blue-600 hover:bg-blue-500 text-white shadow-[0_20px_50px_rgba(37,99,235,0.3)] rounded-2xl'} text-[13px] font-black uppercase tracking-[0.25em]`} style={isBinance ? { borderRadius: '2px' } : undefined}>{t.apply_config}</button>
+                        <button onClick={() => { setIsFilterModalOpen(false); setCurrentPage(1); }} className={`w-full py-4 ${isBinance ? 'bg-[#FCD535] hover:bg-[#f0c51d] text-[#181A20]' : 'bg-blue-600 hover:bg-blue-500 text-white shadow-[0_20px_50px_rgba(37,99,235,0.3)] rounded-2xl'} text-[13px] font-black uppercase tracking-[0.25em]`} style={isBinance ? { borderRadius: '2px' } : undefined}>{t.apply_config}</button>
                     </div>
                 </div>
             </Modal>
@@ -321,7 +326,7 @@ const DesktopOrdersDashboard: React.FC<DesktopOrdersDashboardProps> = ({ onBack,
                                 type="text" 
                                 placeholder={t.search_placeholder} 
                                 value={searchQuery} 
-                                onChange={e => setSearchQuery(e.target.value)} 
+                                onChange={e => { setSearchQuery(e.target.value); setCurrentPage(1); }} 
                                 className={`w-[240px] ${isBinance ? 'bg-[#0B0E11] border-[#2B3139] text-[#EAECEF] focus:border-[#FCD535] placeholder-[#848E9C]' : 'bg-white/[0.03] border-white/5 text-white focus:bg-white/10 rounded-2xl'} border py-2 pl-9 pr-3 text-xs font-medium outline-none transition-all`} 
                                 style={isBinance ? { borderRadius: '4px' } : undefined} 
                             />
@@ -415,6 +420,7 @@ const DesktopOrdersDashboard: React.FC<DesktopOrdersDashboardProps> = ({ onBack,
                                         const cur = filters.fulfillmentStore.split(',').map(v => v.trim()).filter(v => v);
                                         const nxt = sel ? cur.filter(v => v.toLowerCase() !== s.toLowerCase()) : [...cur, s];
                                         setFilters(prev => ({...prev, fulfillmentStore: nxt.join(',')}));
+                                        setCurrentPage(1);
                                     }}
                                     className={`px-3 py-1.5 text-[9px] font-bold uppercase transition-all whitespace-nowrap ${
                                         isBinance

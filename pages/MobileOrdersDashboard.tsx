@@ -46,15 +46,14 @@ const MobileOrdersDashboard: React.FC<MobileOrdersDashboardProps> = ({ onBack, i
     const [isFilterModalOpen, setIsFilterModalOpen] = useState(false);
     const [isPdfModalOpen, setIsPdfModalOpen] = useState(false);
     const [searchQuery, setSearchQuery] = useState('');
-    useEffect(() => {
-        setCurrentPage(1);
-    }, [searchQuery]);
-    
+
     const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
     const [isSelectionMode, setIsSelectionMode] = useState(false);
 
-    // Hide Bottom Nav when items are selected
-    useEffect(() => {
+    // Filter State
+    const [filters, setFilters] = useState<FilterState>(() => {
+    // ...
+
         const hasSelection = selectedIds.size > 0;
         setIsBottomNavHidden(hasSelection);
         return () => setIsBottomNavHidden(false); // Clean up on unmount
@@ -103,11 +102,16 @@ const MobileOrdersDashboard: React.FC<MobileOrdersDashboardProps> = ({ onBack, i
 
     // Optimized Fetch
     useEffect(() => {
+        let ignore = false;
         const fetchPaginated = async () => {
             const params: any = {
                 limit: pageSize,
                 offset: (currentPage - 1) * pageSize,
-                view: 'compact'
+                view: 'compact',
+                team: filters.team,
+                user: filters.user,
+                fulfillmentStore: filters.fulfillmentStore,
+                fulfillmentStatus: filters.fulfillmentStatus
             };
 
             if (searchQuery.trim()) {
@@ -123,13 +127,14 @@ const MobileOrdersDashboard: React.FC<MobileOrdersDashboardProps> = ({ onBack, i
             }
 
             const result: any = await fetchOrders(false, params);
-            if (result) {
+            if (!ignore && result) {
                 setTotalCount(result.total);
             }
         };
 
         fetchPaginated();
-    }, [filters.datePreset, filters.startDate, filters.endDate, currentPage, pageSize, searchQuery, fetchOrders]);
+        return () => { ignore = true; };
+    }, [filters.datePreset, filters.startDate, filters.endDate, filters.team, filters.user, filters.fulfillmentStore, filters.fulfillmentStatus, currentPage, pageSize, searchQuery, fetchOrders]);
 
     const getOrderTimestamp = (order: any) => {
         const ts = order.Timestamp;
@@ -284,7 +289,7 @@ const MobileOrdersDashboard: React.FC<MobileOrdersDashboardProps> = ({ onBack, i
                         type="text" 
                         placeholder={t.search_placeholder} 
                         value={searchQuery} 
-                        onChange={e => setSearchQuery(e.target.value)}
+                        onChange={e => { setSearchQuery(e.target.value); setCurrentPage(1); }}
                         className="w-full bg-white/[0.03] border border-white/5 rounded-2xl py-3.5 pl-11 pr-4 text-sm font-bold text-white placeholder:text-gray-600 focus:bg-white/10 transition-all outline-none"
                     />
                     <div className="absolute left-4 top-0 bottom-0 flex items-center justify-center pointer-events-none text-gray-600 group-focus-within:text-blue-500 transition-colors">
@@ -344,7 +349,7 @@ const MobileOrdersDashboard: React.FC<MobileOrdersDashboardProps> = ({ onBack, i
                         { id: 'this_week', icon: '📅', label: 'Week' },
                         { id: 'this_month', icon: '🗓️', label: 'Month' }
                     ].map(p => (
-                        <button key={p.id} onClick={() => { setFilters(prev => ({ ...prev, datePreset: p.id as any })); setCurrentPage(1); }} className={`flex-shrink-0 flex items-center gap-2 px-4 py-2 rounded-2xl text-[10px] font-black uppercase tracking-widest border transition-all ${filters.datePreset === p.id ? 'bg-blue-600/10 border-blue-500/30 text-blue-400' : 'bg-white/5 border-white/5 text-gray-500'}`}>
+                        <button key={p.id} onClick={() => { setFilters(prev => ({ ...prev, datePreset: p.id as any, startDate: '', endDate: '' })); setCurrentPage(1); }} className={`flex-shrink-0 flex items-center gap-2 px-4 py-2 rounded-2xl text-[10px] font-black uppercase tracking-widest border transition-all ${filters.datePreset === p.id ? 'bg-blue-600/10 border-blue-500/30 text-blue-400' : 'bg-white/5 border-white/5 text-gray-500'}`}>
                             <span className="text-sm">{p.icon}</span> {p.label}
                         </button>
                     ))}

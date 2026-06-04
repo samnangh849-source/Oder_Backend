@@ -41,6 +41,7 @@ export const OrderProvider: React.FC<{ children: React.ReactNode }> = ({ childre
     const [refreshTimestamp, setRefreshTimestamp] = useState<number>(Date.now());
     const [ordersFetchError, setOrdersFetchError] = useState<'permission_denied' | 'network_error' | null>(null);
     const lastFetchParams = React.useRef<Record<string, string | number>>({});
+    const lastRequestId = React.useRef<number>(0);
 
     const handleUnauthorized = useCallback(() => {
         localStorage.removeItem('token');
@@ -100,6 +101,8 @@ export const OrderProvider: React.FC<{ children: React.ReactNode }> = ({ childre
         if (!force) setIsOrdersLoading(true);
         else setIsSyncing(true);
 
+        const requestId = ++lastRequestId.current;
+
         // Remember params if provided, otherwise reuse last ones
         if (params !== undefined) {
             lastFetchParams.current = params;
@@ -122,6 +125,8 @@ export const OrderProvider: React.FC<{ children: React.ReactNode }> = ({ childre
             const queryString = queryParams.toString();
             const endpoint = `${WEB_APP_URL}/api/admin/orders${queryString ? `?${queryString}` : ''}`;
             const response = await fetch(endpoint, { headers });
+
+            if (requestId !== lastRequestId.current) return;
 
             if (response.status === 401) {
                 handleUnauthorized();
@@ -161,6 +166,8 @@ export const OrderProvider: React.FC<{ children: React.ReactNode }> = ({ childre
                         };
                     });
                     
+                    if (requestId !== lastRequestId.current) return;
+
                     // If it's a paginated response, we might not want to overwrite EVERYTHING 
                     // depending on how the UI uses it. For now, we overwrite.
                     setOrders(parsedOrders);
@@ -178,11 +185,15 @@ export const OrderProvider: React.FC<{ children: React.ReactNode }> = ({ childre
                 setOrdersFetchError('network_error');
             }
         } catch (e) {
-            setOrdersFetchError('network_error');
+            if (requestId === lastRequestId.current) {
+                setOrdersFetchError('network_error');
+            }
         } finally {
-            setIsOrdersLoading(false);
-            setIsSyncing(false);
-            setIsGlobalLoading(false);
+            if (requestId === lastRequestId.current) {
+                setIsOrdersLoading(false);
+                setIsSyncing(false);
+                setIsGlobalLoading(false);
+            }
         }
     }, [handleUnauthorized, fetchData]);
 

@@ -1171,34 +1171,73 @@ func handleGetAllOrders(c *gin.Context) {
 
 	if finalTeamFilter != "" {
 		teams := strings.Split(finalTeamFilter, ",")
-		var teamConditions []string
-		var teamArgs []interface{}
+		var conditions []string
+		var args []interface{}
 		for _, t := range teams {
 			t = strings.TrimSpace(t)
 			if t != "" {
-				teamConditions = append(teamConditions, "LOWER(team) = LOWER(?)")
-				teamArgs = append(teamArgs, t)
+				conditions = append(conditions, "LOWER(team) = LOWER(?)")
+				args = append(args, t)
 			}
 		}
-		if len(teamConditions) > 0 {
-			condition := "(" + strings.Join(teamConditions, " OR ") + ")"
-			query = query.Where(condition, teamArgs...)
-			countQuery = countQuery.Where(condition, teamArgs...)
+		if len(conditions) > 0 {
+			condition := "(" + strings.Join(conditions, " OR ") + ")"
+			query = query.Where(condition, args...)
+			countQuery = countQuery.Where(condition, args...)
 		}
 	}
 
 	// Other Filters from Query
 	if userQuery != "" {
-		query = query.Where("LOWER(user) = LOWER(?)", userQuery)
-		countQuery = countQuery.Where("LOWER(user) = LOWER(?)", userQuery)
+		users := strings.Split(userQuery, ",")
+		var conditions []string
+		var args []interface{}
+		for _, u := range users {
+			u = strings.TrimSpace(u)
+			if u != "" {
+				conditions = append(conditions, "LOWER(user) = LOWER(?)")
+				args = append(args, u)
+			}
+		}
+		if len(conditions) > 0 {
+			condition := "(" + strings.Join(conditions, " OR ") + ")"
+			query = query.Where(condition, args...)
+			countQuery = countQuery.Where(condition, args...)
+		}
 	}
 	if storeQuery != "" {
-		query = query.Where("LOWER(fulfillment_store) = LOWER(?)", storeQuery)
-		countQuery = countQuery.Where("LOWER(fulfillment_store) = LOWER(?)", storeQuery)
+		stores := strings.Split(storeQuery, ",")
+		var conditions []string
+		var args []interface{}
+		for _, s := range stores {
+			s = strings.TrimSpace(s)
+			if s != "" {
+				conditions = append(conditions, "LOWER(fulfillment_store) = LOWER(?)")
+				args = append(args, s)
+			}
+		}
+		if len(conditions) > 0 {
+			condition := "(" + strings.Join(conditions, " OR ") + ")"
+			query = query.Where(condition, args...)
+			countQuery = countQuery.Where(condition, args...)
+		}
 	}
 	if statusQuery != "" {
-		query = query.Where("LOWER(fulfillment_status) = LOWER(?)", statusQuery)
-		countQuery = countQuery.Where("LOWER(fulfillment_status) = LOWER(?)", statusQuery)
+		statuses := strings.Split(statusQuery, ",")
+		var conditions []string
+		var args []interface{}
+		for _, s := range statuses {
+			s = strings.TrimSpace(s)
+			if s != "" {
+				conditions = append(conditions, "LOWER(fulfillment_status) = LOWER(?)")
+				args = append(args, s)
+			}
+		}
+		if len(conditions) > 0 {
+			condition := "(" + strings.Join(conditions, " OR ") + ")"
+			query = query.Where(condition, args...)
+			countQuery = countQuery.Where(condition, args...)
+		}
 	}
 
 	// Field Selection
