@@ -9,7 +9,7 @@ import SimpleBarChart from '../components/admin/SimpleBarChart';
 import { safeParseDate } from '../utils/dateUtils';
 import { ChevronLeft, Download, BarChart3, TrendingUp, Package, Layout, Terminal, Activity, Cpu, DollarSign, Layers, Zap } from 'lucide-react';
 import SalesStatisticModal from '../components/reports/SalesStatisticModal';
-import OrderFilters, { FilterState } from '../components/orders/OrderFilters';
+import OrderFilters, { FilterState, initialFilterState } from '../components/orders/OrderFilters';
 import Modal from '../components/common/Modal';
 
 // Import separate view components

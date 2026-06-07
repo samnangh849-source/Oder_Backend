@@ -13,7 +13,8 @@ import { FilterPanel } from '../components/orders/FilterPanel';
 import OrderDetailModal from '../components/orders/OrderDetailModal';
 import { translations } from '../translations';
 import { useSoundEffects } from '../hooks/useSoundEffects';
-import { FilterState } from '../components/orders/OrderFilters';
+import { FilterState, initialFilterState } from '../components/orders/OrderFilters';
+import { useFilterEngine } from '../hooks/useFilterEngine';
 import { useUI } from '../context/UIContext';
 import Spinner from '../components/common/Spinner';
 
