@@ -43,6 +43,8 @@ const MobileOrdersDashboard: React.FC<MobileOrdersDashboardProps> = ({ onBack, i
     const [pageSize, setPageSize] = useState(50); // Smaller for mobile
     const [totalCount, setTotalCount] = useState(0);
 
+    const { uniqueValues, filterOrders } = useFilterEngine(orders, appData);
+
     const [isFilterModalOpen, setIsFilterModalOpen] = useState(false);
     const [isPdfModalOpen, setIsPdfModalOpen] = useState(false);
     const [searchQuery, setSearchQuery] = useState('');
@@ -52,32 +54,9 @@ const MobileOrdersDashboard: React.FC<MobileOrdersDashboardProps> = ({ onBack, i
 
     // Filter State
     const [filters, setFilters] = useState<FilterState>(() => {
-    // ...
-
-        const hasSelection = selectedIds.size > 0;
-        setIsBottomNavHidden(hasSelection);
-        return () => setIsBottomNavHidden(false); // Clean up on unmount
-    }, [selectedIds.size, setIsBottomNavHidden]);
-
-    const toggleSelectionMode = () => {
-        if (isSelectionMode) {
-            setSelectedIds(new Set());
-        }
-        setIsSelectionMode(!isSelectionMode);
-    };
-
-    const handleSelectAll = () => {
-        if (selectedIds.size === filteredOrders.length) {
-            setSelectedIds(new Set());
-        } else {
-            setSelectedIds(new Set(filteredOrders.map(o => o['Order ID'])));
-        }
-    };
-
-    // Filter State
-    const [filters, setFilters] = useState<FilterState>(() => {
         const searchParams = new URLSearchParams(window.location.search);
         return {
+            ...initialFilterState,
             datePreset: (initialFilters?.datePreset || searchParams.get('dateFilter') as any) || 'this_month',
             startDate: initialFilters?.startDate || searchParams.get('startDate') || '',
             endDate: initialFilters?.endDate || searchParams.get('endDate') || '',
@@ -95,8 +74,8 @@ const MobileOrdersDashboard: React.FC<MobileOrdersDashboardProps> = ({ onBack, i
             product: initialFilters?.product || searchParams.get('productFilter') || '',
             customerSearch: initialFilters?.customerSearch || searchParams.get('customerFilter') || '',
             fulfillmentStatus: initialFilters?.fulfillmentStatus || searchParams.get('fulfillmentFilter') || '',
-            isVerified: 'All',
-            telegramStatus: ''
+            isVerified: (initialFilters?.isVerified as any) || 'All',
+            telegramStatus: initialFilters?.telegramStatus || ''
         };
     });
 
@@ -161,50 +140,7 @@ const MobileOrdersDashboard: React.FC<MobileOrdersDashboardProps> = ({ onBack, i
     }, [orders, appData.users, appData.pages]);
 
     const filteredOrders = useMemo(() => {
-        const base = enrichedOrders.filter(order => {
-            const isMatch = (filterValue: string, orderValue: string) => {
-                if (!filterValue || filterValue === 'all') return true;
-                const filterItems = filterValue.split(',').map(v => v.trim().toLowerCase());
-                const val = (orderValue || '').trim().toLowerCase();
-                return filterItems.includes(val);
-            };
-
-            if (!isMatch(filters.team, order.Team)) return false;
-            if (!isMatch(filters.fulfillmentStore, order['Fulfillment Store'] || 'Unassigned')) return false;
-            if (!isMatch(filters.paymentStatus, order['Payment Status'])) return false;
-            if (!isMatch(filters.user, order.User)) return false;
-            if (!isMatch(filters.page, order.Page)) return false;
-            if (!isMatch(filters.shippingService, order['Internal Shipping Method'])) return false;
-            if (!isMatch(filters.driver, order['Internal Shipping Details'])) return false;
-            if (!isMatch(filters.bank, order['Payment Info'])) return false;
-            if (!isMatch(filters.fulfillmentStatus, order.FulfillmentStatus)) return false;
-
-            if (filters.telegramStatus) {
-                const id1 = order['Telegram Message ID 1'];
-                const id2 = order['Telegram Message ID 2'];
-                const isSent = (id1 && id2) && id1 !== 'CHECKING';
-                const s = filters.telegramStatus.split(',').map(v => v.trim());
-                if (s.includes('Sent') && !isSent) return false;
-                if (s.includes('Not Sent') && isSent) return false;
-            }
-
-            if (filters.isVerified !== 'All') {
-                const isV = order.IsVerified === true || String(order.IsVerified).toUpperCase() === 'TRUE' || order.IsVerified === 'A';
-                if (filters.isVerified === 'Verified' && !isV) return false;
-                if (filters.isVerified === 'Unverified' && isV) return false;
-            }
-
-            if (searchQuery.trim()) {
-                const q = searchQuery.toLowerCase();
-                return (
-                    order['Order ID'].toLowerCase().includes(q) || 
-                    (order['Customer Name'] || '').toLowerCase().includes(q) ||
-                    (order['Customer Phone'] || '').toLowerCase().includes(q)
-                );
-            }
-
-            return true;
-        });
+        const base = filterOrders(enrichedOrders, filters, searchQuery);
 
         return base.sort((a, b) => {
             let vA: any, vB: any;
@@ -216,7 +152,7 @@ const MobileOrdersDashboard: React.FC<MobileOrdersDashboardProps> = ({ onBack, i
             }
             return sortOrder === 'desc' ? vB - vA : vA - vB;
         });
-    }, [enrichedOrders, filters, searchQuery, sortBy, sortOrder]);
+    }, [enrichedOrders, filters, searchQuery, sortBy, sortOrder, filterOrders]);
 
     const viewingOrder = useMemo(() => {
         if (!viewingOrderId) return null;

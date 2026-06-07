@@ -369,3 +369,6 @@
 
 
 Improve UI ផ្នែក (Manage product list, prices, and barcodes) ជាពិសេសការ Add new Product ហើយគឺអាចបញ្ចូលរូបភាពដោយ Image URL ក៏បាន ឬUpload File ក៏បាន
+
+
+Please fix all problem and Improve UI of (Filter Engine) in Order Dashboard

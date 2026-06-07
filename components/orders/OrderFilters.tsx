@@ -1,32 +1,19 @@
 
-import React, { useMemo } from 'react';
+import React, { useMemo, useContext } from 'react';
 import { ParsedOrder, User, AppData } from '../../types';
 import SearchableProductDropdown from '../common/SearchableProductDropdown';
 import DateWindowFilter from './filters/DateWindowFilter';
 import SelectFilter from './filters/SelectFilter';
-
-export type DateRangePreset = 'all' | 'today' | 'yesterday' | 'this_week' | 'last_week' | 'this_month' | 'last_month' | 'this_year' | 'last_year' | 'custom';
-
-export interface FilterState {
-    datePreset: DateRangePreset;
-    startDate: string;
-    endDate: string;
-    team: string;
-    user: string;
-    paymentStatus: string;
-    shippingService: string;
-    driver: string;
-    product: string;
-    bank: string;
-    fulfillmentStore: string;
-    store: string;
-    page: string;
-    location: string;
-    internalCost: string;
-    customerName: string; // New Field
-    telegramStatus: string; // Added field
-    fulfillmentStatus: string; // Added field
-}
+import { useFilterEngine, FilterState, initialFilterState, DateRangePreset } from '../../hooks/useFilterEngine';
+export type { FilterState, DateRangePreset };
+export { initialFilterState };
+import { AppContext } from '../../context/AppContext';
+import { 
+    Calendar, Users, Building2, Truck, CreditCard, 
+    Warehouse, MapPin, Package, Hash, UserCircle,
+    LayoutDashboard, History, CheckCircle2, AlertCircle,
+    Tag, Search, RotateCcw
+} from 'lucide-react';
 
 interface OrderFiltersProps {
     filters: FilterState;
@@ -40,250 +27,280 @@ interface OrderFiltersProps {
 const OrderFilters: React.FC<OrderFiltersProps> = ({ 
     filters, setFilters, orders, usersList, appData, calculatedRange 
 }) => {
+    const { language } = useContext(AppContext);
+    const { uniqueValues } = useFilterEngine(orders, appData);
     
-    // Extract Unique Values
-    const uniqueValues = useMemo(() => {
-        const pages = new Set<string>();
-        const locations = new Set<string>();
-        const shippingMethods = new Set<string>();
-        const drivers = new Set<string>();
-        const fulfillmentStores = new Set<string>();
-        const banks = new Set<string>();
-        const costs = new Set<string>();
-        const teams = new Set<string>();
-        
-        // Map to store unique customer Name -> Phone relation
-        // We use Map to handle duplicate names (though filter usually works on value). 
-        // Here we want to present a list. If "Sokha" appears twice with different phones, 
-        // this simple logic might merge them if we only key by Name. 
-        // Ideally, we'd key by Name, but display "Name (Phone)". 
-        const customerMap = new Map<string, string>();
-
-        orders.forEach(o => {
-            if (o.Page) pages.add(o.Page);
-            if (o.Location) locations.add(o.Location);
-            if (o['Internal Shipping Method']) shippingMethods.add(o['Internal Shipping Method']);
-            if (o['Internal Shipping Details']) drivers.add(o['Internal Shipping Details']);
-            if (o['Fulfillment Store']) fulfillmentStores.add(o['Fulfillment Store']);
-            if (o['Payment Info']) banks.add(o['Payment Info']);
-            if (o['Internal Cost'] !== undefined) costs.add(String(o['Internal Cost']));
-            if (o.Team) teams.add(o.Team);
-            
-            if (o['Customer Name']) {
-                // We store the last phone number seen for this name. 
-                // This isn't perfect for duplicate names, but fits the current string-based filter architecture.
-                customerMap.set(o['Customer Name'], o['Customer Phone'] || '');
-            }
-        });
-
-        // Convert customer map to options array
-        const customerOptions = Array.from(customerMap.entries())
-            .sort((a, b) => a[0].localeCompare(b[0]))
-            .map(([name, phone]) => ({
-                label: `${name} ${phone ? `(${phone})` : ''}`,
-                value: name
-            }));
-
-        return {
-            pages: Array.from(pages).sort(),
-            locations: Array.from(locations).sort(),
-            shippingMethods: Array.from(shippingMethods).sort(),
-            drivers: Array.from(drivers).sort(),
-            fulfillmentStores: Array.from(fulfillmentStores).sort(),
-            banks: Array.from(banks).sort(),
-            costs: Array.from(costs).sort((a, b) => Number(a) - Number(b)),
-            teams: Array.from(teams).sort(),
-            customerOptions // Use this instead of just names
-        };
-    }, [orders]);
-
     const handleReset = () => {
-        setFilters({
-            datePreset: 'this_month', startDate: '', endDate: '', team: '', user: '',
-            paymentStatus: '', shippingService: '', driver: '', product: '', bank: '',
-            fulfillmentStore: '', store: '', page: '', location: '', internalCost: '',
-            customerName: '', telegramStatus: '', fulfillmentStatus: ''
-        });
+        setFilters(initialFilterState);
     };
 
     const updateFilter = (key: keyof FilterState, value: string) => {
         setFilters({ ...filters, [key]: value });
     };
 
+    const getActiveCount = (key: keyof FilterState) => {
+        const val = filters[key];
+        if (!val || val === 'all' || val === 'All') return 0;
+        if (key === 'datePreset' && val === 'this_month') return 0;
+        return String(val).split(',').filter(v => v).length;
+    };
+
+    const SectionHeader = ({ icon: Icon, title, count }: { icon: any, title: string, count: number }) => (
+        <div className="flex items-center justify-between mb-6 pb-2 border-b border-[#2B3139]">
+            <div className="flex items-center gap-2.5">
+                <div className="w-8 h-8 rounded-sm bg-[#2B3139] flex items-center justify-center text-[#FCD535]">
+                    <Icon size={18} />
+                </div>
+                <h3 className="text-[11px] font-black text-[#EAECEF] uppercase tracking-[0.15em]">{title}</h3>
+            </div>
+            {count > 0 && (
+                <span className="px-2 py-0.5 bg-[#FCD535] text-[#181A20] text-[10px] font-black rounded-sm shadow-lg shadow-[#FCD535]/10 animate-bounce-subtle">
+                    {count} ACTIVE
+                </span>
+            )}
+        </div>
+    );
+
+    const timeActive = getActiveCount('datePreset');
+    const identityActive = getActiveCount('customerName') + getActiveCount('customerSearch');
+    const opsActive = getActiveCount('fulfillmentStatus') + getActiveCount('telegramStatus') + getActiveCount('paymentStatus') + getActiveCount('isVerified');
+    const teamActive = getActiveCount('team') + getActiveCount('user') + getActiveCount('store') + getActiveCount('page');
+    const logisticsActive = getActiveCount('fulfillmentStore') + getActiveCount('location') + getActiveCount('shippingService') + getActiveCount('driver');
+    const productActive = getActiveCount('product') + getActiveCount('internalCost') + getActiveCount('bank');
+
     return (
-        <div className="space-y-10">
-            <DateWindowFilter 
-                datePreset={filters.datePreset}
-                setDatePreset={(v) => setFilters({ ...filters, datePreset: v })}
-                startDate={filters.startDate}
-                setStartDate={(v) => updateFilter('startDate', v)}
-                endDate={filters.endDate}
-                setEndDate={(v) => updateFilter('endDate', v)}
-                calculatedRange={calculatedRange}
-            />
-
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-x-6 gap-y-8 px-1">
-                
-                {/* Customer Name Select Filter (Searchable by Name OR Phone) */}
-                <SelectFilter 
-                    label="Customer Name (ឈ្មោះអតិថិជន)" 
-                    value={filters.customerName} 
-                    onChange={(v) => updateFilter('customerName', v)}
-                    options={uniqueValues.customerOptions}
-                    placeholder="Search by Name or Phone..."
-                    multiple={true}
-                    searchable={true}
-                />
-
-                <SelectFilter 
-                    label="Fulfillment Status (ស្ថានភាពបញ្ជាទិញ)" 
-                    value={filters.fulfillmentStatus} 
-                    onChange={(v) => updateFilter('fulfillmentStatus', v)}
-                    options={[
-                        { label: 'Pending (រង់ចាំ)', value: 'Pending' },
-                        { label: 'Scheduled (បានកំណត់ពេល)', value: 'Scheduled' },
-                        { label: 'Processing (កំពុងរៀបចំ)', value: 'Processing' },
-                        { label: 'Ready to Ship (រួចរាល់សម្រាប់ផ្ញើ)', value: 'Ready to Ship' },
-                        { label: 'Shipped (បានផ្ញើចេញ)', value: 'Shipped' },
-                        { label: 'Delivered (បានប្រគល់)', value: 'Delivered' },
-                        { label: 'Cancelled (បានបោះបង់)', value: 'Cancelled' },
-                        { label: 'Returned (បានបង្វិលវិញ)', value: 'Returned' }
-                    ]}
-                    placeholder="All Fulfillment Status"
-                    multiple={true}
-                />
-
-                <SelectFilter 
-                    label="Telegram Status" 
-                    value={filters.telegramStatus} 
-                    onChange={(v) => updateFilter('telegramStatus', v)}
-                    options={[
-                        { label: 'Sent (បានផ្ញើរ)', value: 'Sent' }, 
-                        { label: 'Not Sent (មិនទាន់ផ្ញើរ)', value: 'Not Sent' }
-                    ]}
-                    placeholder="All Telegram Status"
-                    multiple={true}
-                />
-
-                <SelectFilter 
-                    label="Payment Status" 
-                    value={filters.paymentStatus} 
-                    onChange={(v) => updateFilter('paymentStatus', v)}
-                    options={[{ label: 'Paid (រួចរាល់)', value: 'Paid' }, { label: 'Unpaid (COD)', value: 'Unpaid' }]}
-                    placeholder="All Statuses"
-                    variant="payment"
-                    multiple={true}
-                />
-
-                <SelectFilter 
-                    label="Store (Brand/Sales)" 
-                    value={filters.store} 
-                    onChange={(v) => updateFilter('store', v)}
-                    options={appData.stores?.map(s => s.StoreName) || []}
-                    placeholder="All Stores (Brands)"
-                    multiple={true}
-                />
-
-                <SelectFilter 
-                    label="Team Allocation" 
-                    value={filters.team} 
-                    onChange={(v) => updateFilter('team', v)}
-                    options={uniqueValues.teams}
-                    placeholder="All Operational Teams"
-                    multiple={true}
-                />
-
-                <SelectFilter 
-                    label="Source Page" 
-                    value={filters.page} 
-                    onChange={(v) => updateFilter('page', v)}
-                    options={uniqueValues.pages}
-                    placeholder="All Pages"
-                    multiple={true}
-                />
-
-                <SelectFilter 
-                    label="Fulfillment Store (Stock)" 
-                    value={filters.fulfillmentStore} 
-                    onChange={(v) => updateFilter('fulfillmentStore', v)}
-                    options={uniqueValues.fulfillmentStores}
-                    placeholder="All Fulfillment Centers"
-                    multiple={true}
-                />
-
-                <SelectFilter 
-                    label="Geography (Location)" 
-                    value={filters.location} 
-                    onChange={(v) => updateFilter('location', v)}
-                    options={uniqueValues.locations}
-                    placeholder="All Regions"
-                    multiple={true}
-                />
-
-                <SelectFilter 
-                    label="Logistics Method" 
-                    value={filters.shippingService} 
-                    onChange={(v) => updateFilter('shippingService', v)}
-                    options={uniqueValues.shippingMethods}
-                    placeholder="All Shipping Methods"
-                    multiple={true}
-                />
-
-                <SelectFilter 
-                    label="Logistics Driver" 
-                    value={filters.driver} 
-                    onChange={(v) => updateFilter('driver', v)}
-                    options={uniqueValues.drivers}
-                    placeholder="All Drivers / Details"
-                    multiple={true}
-                />
-
-                <SelectFilter 
-                    label="Merchant Team (User)" 
-                    value={filters.user} 
-                    onChange={(v) => updateFilter('user', v)}
-                    options={(usersList || []).map(u => ({ label: u.FullName, value: u.UserName }))}
-                    placeholder="All Registered Users"
-                    multiple={true}
-                />
-
-                <SelectFilter 
-                    label="Exp. Cost (Internal)" 
-                    value={filters.internalCost} 
-                    onChange={(v) => updateFilter('internalCost', v)}
-                    options={uniqueValues.costs.map(c => ({ label: `$${c}`, value: c }))}
-                    placeholder="All Costs"
-                    multiple={true}
-                />
-
-                <SelectFilter 
-                    label="គណនីធនាគារ (Bank)" 
-                    value={filters.bank} 
-                    onChange={(v) => updateFilter('bank', v)}
-                    options={uniqueValues.banks}
-                    placeholder="All Bank Accounts"
-                    multiple={true}
-                />
-
-                <div className="sm:col-span-2 xl:col-span-3">
-                    <label className="text-[10px] font-black text-gray-500 mb-2 uppercase tracking-widest flex items-center gap-2">Asset Selection (Product)</label>
-                    <SearchableProductDropdown 
-                        products={appData.products} 
-                        selectedProductName={filters.product} 
-                        onSelect={val => updateFilter('product', val)} 
-                        showTagEditor={false} 
+        <div className="space-y-12 pb-10">
+            {/* Time Window Section */}
+            <div>
+                <SectionHeader icon={Calendar} title={language === 'km' ? 'កាលបរិច្ឆេទ និងពេលវេលា' : 'Time & Temporal Context'} count={timeActive} />
+                <div className="px-1">
+                    <DateWindowFilter 
+                        datePreset={filters.datePreset}
+                        setDatePreset={(v) => setFilters({ ...filters, datePreset: v })}
+                        startDate={filters.startDate}
+                        setStartDate={(v) => updateFilter('startDate', v)}
+                        endDate={filters.endDate}
+                        setEndDate={(v) => updateFilter('endDate', v)}
+                        calculatedRange={calculatedRange}
                     />
                 </div>
             </div>
 
-            <div className="pt-4">
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-x-12 gap-y-12">
+                {/* Identity Section */}
+                <div>
+                    <SectionHeader icon={UserCircle} title={language === 'km' ? 'អត្តសញ្ញាណអតិថិជន' : 'Customer Identity'} count={identityActive} />
+                    <div className="space-y-6 px-1">
+                        <SelectFilter 
+                            label="Customer (ស្វែងរកអតិថិជន)" 
+                            value={filters.customerName} 
+                            onChange={(v) => updateFilter('customerName', v)}
+                            options={uniqueValues.customerOptions}
+                            placeholder="Search by Name or Phone..."
+                            multiple={true}
+                            searchable={true}
+                        />
+                        <div className="relative">
+                            <label className="text-[10px] font-black text-[#707A8A] mb-2 uppercase tracking-widest block">Text Search (ស្វែងរកអត្ថបទ)</label>
+                            <div className="relative group">
+                                <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-600 group-focus-within:text-[#FCD535] transition-colors" />
+                                <input 
+                                    type="text"
+                                    value={filters.customerSearch}
+                                    onChange={(e) => updateFilter('customerSearch', e.target.value)}
+                                    placeholder="Order ID, Name, Phone..."
+                                    className="w-full bg-[#0B0E11] border border-[#2B3139] rounded-sm py-3 pl-11 pr-4 text-sm text-white focus:border-[#FCD535] outline-none transition-all placeholder:text-gray-600"
+                                />
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                {/* Operations Section */}
+                <div>
+                    <SectionHeader icon={LayoutDashboard} title={language === 'km' ? 'ស្ថានភាពប្រតិបត្តិការ' : 'Operational Status'} count={opsActive} />
+                    <div className="grid grid-cols-2 gap-4 px-1">
+                        <SelectFilter 
+                            label="Fulfillment Status" 
+                            value={filters.fulfillmentStatus} 
+                            onChange={(v) => updateFilter('fulfillmentStatus', v)}
+                            options={[
+                                { label: 'Pending (រង់ចាំ)', value: 'Pending' },
+                                { label: 'Scheduled (បានកំណត់ពេល)', value: 'Scheduled' },
+                                { label: 'Processing (កំពុងរៀបចំ)', value: 'Processing' },
+                                { label: 'Ready to Ship (រួចរាល់សម្រាប់ផ្ញើ)', value: 'Ready to Ship' },
+                                { label: 'Shipped (បានផ្ញើចេញ)', value: 'Shipped' },
+                                { label: 'Delivered (បានប្រគល់)', value: 'Delivered' },
+                                { label: 'Cancelled (បានបោះបង់)', value: 'Cancelled' },
+                                { label: 'Returned (បានបង្វិលវិញ)', value: 'Returned' }
+                            ]}
+                            placeholder="All Status"
+                            multiple={true}
+                        />
+                        <SelectFilter 
+                            label="Payment Status" 
+                            value={filters.paymentStatus} 
+                            onChange={(v) => updateFilter('paymentStatus', v)}
+                            options={[{ label: 'Paid (រួចរាល់)', value: 'Paid' }, { label: 'Unpaid (COD)', value: 'Unpaid' }]}
+                            placeholder="All Payments"
+                            variant="payment"
+                            multiple={true}
+                        />
+                        <SelectFilter 
+                            label="Telegram" 
+                            value={filters.telegramStatus} 
+                            onChange={(v) => updateFilter('telegramStatus', v)}
+                            options={[
+                                { label: 'Sent (បានផ្ញើរ)', value: 'Sent' }, 
+                                { label: 'Not Sent (មិនទាន់ផ្ញើរ)', value: 'Not Sent' }
+                            ]}
+                            placeholder="All Messages"
+                            multiple={true}
+                        />
+                        <SelectFilter 
+                            label="Verification" 
+                            value={filters.isVerified} 
+                            onChange={(v) => updateFilter('isVerified', v)}
+                            options={[
+                                { label: 'All (ទាំងអស់)', value: 'All' },
+                                { label: 'Verified (បានផ្ទៀងផ្ទាត់)', value: 'Verified' },
+                                { label: 'Unverified (មិនទាន់ផ្ទៀងផ្ទាត់)', value: 'Unverified' }
+                            ]}
+                            placeholder="All Verification"
+                        />
+                    </div>
+                </div>
+
+                {/* Team & Source Section */}
+                <div>
+                    <SectionHeader icon={Users} title={language === 'km' ? 'ក្រុម និងប្រភព' : 'Team & Source Context'} count={teamActive} />
+                    <div className="grid grid-cols-2 gap-4 px-1">
+                        <SelectFilter 
+                            label="Operational Team" 
+                            value={filters.team} 
+                            onChange={(v) => updateFilter('team', v)}
+                            options={uniqueValues.teams}
+                            placeholder="All Teams"
+                            multiple={true}
+                        />
+                        <SelectFilter 
+                            label="Registered User" 
+                            value={filters.user} 
+                            onChange={(v) => updateFilter('user', v)}
+                            options={(usersList || []).map(u => ({ label: u.FullName, value: u.UserName }))}
+                            placeholder="All Users"
+                            multiple={true}
+                        />
+                        <SelectFilter 
+                            label="Brand / Store" 
+                            value={filters.store} 
+                            onChange={(v) => updateFilter('store', v)}
+                            options={appData.stores?.map(s => s.StoreName) || []}
+                            placeholder="All Brands"
+                            multiple={true}
+                        />
+                        <SelectFilter 
+                            label="Source Page" 
+                            value={filters.page} 
+                            onChange={(v) => updateFilter('page', v)}
+                            options={uniqueValues.pages}
+                            placeholder="All Pages"
+                            multiple={true}
+                        />
+                    </div>
+                </div>
+
+                {/* Logistics Section */}
+                <div>
+                    <SectionHeader icon={Truck} title={language === 'km' ? 'ការដឹកជញ្ជូន និងឃ្លាំង' : 'Logistics & Infrastructure'} count={logisticsActive} />
+                    <div className="grid grid-cols-2 gap-4 px-1">
+                        <SelectFilter 
+                            label="Fulfillment Stock" 
+                            value={filters.fulfillmentStore} 
+                            onChange={(v) => updateFilter('fulfillmentStore', v)}
+                            options={uniqueValues.fulfillmentStores}
+                            placeholder="All Centers"
+                            multiple={true}
+                        />
+                        <SelectFilter 
+                            label="Region / Location" 
+                            value={filters.location} 
+                            onChange={(v) => updateFilter('location', v)}
+                            options={uniqueValues.locations}
+                            placeholder="All Regions"
+                            multiple={true}
+                        />
+                        <SelectFilter 
+                            label="Shipping Method" 
+                            value={filters.shippingService} 
+                            onChange={(v) => updateFilter('shippingService', v)}
+                            options={uniqueValues.shippingMethods}
+                            placeholder="All Methods"
+                            multiple={true}
+                        />
+                        <SelectFilter 
+                            label="Delivery Driver" 
+                            value={filters.driver} 
+                            onChange={(v) => updateFilter('driver', v)}
+                            options={uniqueValues.drivers}
+                            placeholder="All Drivers"
+                            multiple={true}
+                        />
+                    </div>
+                </div>
+            </div>
+
+            {/* Product & Assets Section */}
+            <div>
+                <SectionHeader icon={Package} title={language === 'km' ? 'ព័ត៌មានទំនិញ' : 'Asset & Financial Context'} count={productActive} />
+                <div className="grid grid-cols-1 xl:grid-cols-3 gap-6 px-1">
+                    <div className="xl:col-span-1 space-y-4">
+                        <SelectFilter 
+                            label="Bank Account" 
+                            value={filters.bank} 
+                            onChange={(v) => updateFilter('bank', v)}
+                            options={uniqueValues.banks}
+                            placeholder="All Accounts"
+                            multiple={true}
+                        />
+                        <SelectFilter 
+                            label="Internal Cost" 
+                            value={filters.internalCost} 
+                            onChange={(v) => updateFilter('internalCost', v)}
+                            options={uniqueValues.costs.map(c => ({ label: `$${c}`, value: c }))}
+                            placeholder="All Costs"
+                            multiple={true}
+                        />
+                    </div>
+                    <div className="xl:col-span-2">
+                        <label className="text-[10px] font-black text-[#707A8A] mb-2 uppercase tracking-widest flex items-center gap-2">Asset Selection (Product)</label>
+                        <SearchableProductDropdown 
+                            products={appData.products} 
+                            selectedProductName={filters.product} 
+                            onSelect={val => updateFilter('product', val)} 
+                            showTagEditor={false} 
+                        />
+                    </div>
+                </div>
+            </div>
+
+            <div className="pt-8 border-t border-[#2B3139]">
                 <button 
                     onClick={handleReset}
-                    className="w-full py-3 text-[11px] font-bold text-gray-400 uppercase tracking-widest hover:text-[#F6465D] border border-transparent bg-[#181A20] rounded-sm transition-all hover:bg-[#F6465D]/10 hover:border-[#F6465D]/30"
+                    className="w-full py-4 bg-[#1E2329] text-[11px] font-black text-[#707A8A] uppercase tracking-[0.25em] hover:text-[#F6465D] border border-[#2B3139] rounded-sm transition-all hover:bg-[#F6465D]/10 hover:border-[#F6465D]/30 flex items-center justify-center gap-3 active:scale-[0.99]"
                 >
-                    Reset All Configurations
+                    <RotateCcw size={16} />
+                    Reset All Engine Configurations
                 </button>
             </div>
+            
+            <style>{`
+                @keyframes bounce-subtle {
+                    0%, 100% { transform: translateY(0); }
+                    50% { transform: translateY(-2px); }
+                }
+                .animate-bounce-subtle { animation: bounce-subtle 2s ease-in-out infinite; }
+            `}</style>
         </div>
     );
 };

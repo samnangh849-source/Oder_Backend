@@ -1,5 +1,6 @@
 
 import React, { useState, useRef, useEffect, useMemo } from 'react';
+import { Check, Search, X, ChevronDown, CheckSquare, Square, RotateCcw } from 'lucide-react';
 
 interface SelectFilterProps {
     label: string;
@@ -50,7 +51,7 @@ const SelectFilter: React.FC<SelectFilterProps> = ({
     }, [isOpen, searchable]);
 
     // Parse current values
-    const selectedValues = useMemo(() => value ? value.split(',') : [], [value]);
+    const selectedValues = useMemo(() => value ? value.split(',').filter(v => v) : [], [value]);
 
     // Helper to get label/value
     const getOptionLabel = (opt: string | { label: string; value: string }) => {
@@ -91,7 +92,13 @@ const SelectFilter: React.FC<SelectFilterProps> = ({
         }
     };
 
-    const handleClear = (e: React.MouseEvent) => {
+    const handleSelectAll = (e: React.MouseEvent) => {
+        e.stopPropagation();
+        const allValues = options.map(opt => getOptionValue(opt));
+        onChange(allValues.join(','));
+    };
+
+    const handleClearAll = (e: React.MouseEvent) => {
         e.stopPropagation();
         onChange('');
         if (!multiple && !isInline) setIsOpen(false);
@@ -99,20 +106,39 @@ const SelectFilter: React.FC<SelectFilterProps> = ({
 
     if (isInline) {
         return (
-            <div className="w-full flex flex-col space-y-3">
-                {searchable && (
-                    <div className="relative group px-1">
-                        <svg className="absolute left-4 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-600 group-focus-within:text-[#FCD535] transition-colors" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" strokeWidth={2.5}/></svg>
-                        <input
-                            type="text"
-                            className="w-full bg-[#0B0E11] border border-[#2B3139] rounded-sm pl-11 pr-4 py-3 text-sm text-white focus:border-[#FCD535] outline-none transition-all"
-                            placeholder="Type to search..."
-                            value={searchTerm}
-                            onChange={(e) => setSearchTerm(e.target.value)}
-                        />
-                    </div>
-                )}
-                <div className="max-h-[320px] overflow-y-auto custom-scrollbar space-y-1 py-1">
+            <div className="w-full flex flex-col space-y-4">
+                <div className="flex items-center justify-between px-1">
+                    {searchable && (
+                        <div className="relative flex-grow mr-4">
+                            <Search className="absolute left-4 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-600 transition-colors" />
+                            <input
+                                type="text"
+                                className="w-full bg-[#0B0E11] border border-[#2B3139] rounded-sm pl-11 pr-4 py-3 text-sm text-white focus:border-[#FCD535] outline-none transition-all"
+                                placeholder="ស្វែងរក..."
+                                value={searchTerm}
+                                onChange={(e) => setSearchTerm(e.target.value)}
+                            />
+                        </div>
+                    )}
+                    {multiple && (
+                        <div className="flex gap-2">
+                            <button 
+                                onClick={handleSelectAll}
+                                className="px-3 py-2 bg-[#FCD535]/10 text-[#FCD535] text-[10px] font-black uppercase rounded-sm border border-[#FCD535]/20 hover:bg-[#FCD535]/20 transition-all flex items-center gap-1.5"
+                            >
+                                <CheckSquare size={14} /> All
+                            </button>
+                            <button 
+                                onClick={handleClearAll}
+                                className="px-3 py-2 bg-[#F6465D]/10 text-[#F6465D] text-[10px] font-black uppercase rounded-sm border border-[#F6465D]/20 hover:bg-[#F6465D]/20 transition-all flex items-center gap-1.5"
+                            >
+                                <RotateCcw size={14} /> Clear
+                            </button>
+                        </div>
+                    )}
+                </div>
+                
+                <div className="max-h-[400px] overflow-y-auto custom-scrollbar space-y-1 px-1">
                     {filteredOptions.length > 0 ? filteredOptions.map((opt, idx) => {
                         const optValue = getOptionValue(opt);
                         const optLabel = getOptionLabel(opt);
@@ -121,22 +147,22 @@ const SelectFilter: React.FC<SelectFilterProps> = ({
                             <div 
                                 key={`${optValue}-${idx}`}
                                 onClick={() => handleSelect(optValue)}
-                                className={`px-4 py-3.5 flex items-center justify-between cursor-pointer rounded-sm transition-all ${isSelected ? 'bg-[#FCD535]/10 text-[#FCD535] border border-[#FCD535]/50' : 'bg-transparent text-gray-400 hover:bg-[#2B3139] border border-transparent'}`}
+                                className={`px-4 py-3.5 flex items-center justify-between cursor-pointer rounded-sm transition-all ${isSelected ? 'bg-[#FCD535]/10 text-[#FCD535] border border-[#FCD535]/30' : 'bg-[#1e2329] text-gray-400 hover:bg-[#2B3139] border border-transparent'}`}
                             >
                                 <span className={`text-[13px] font-bold tracking-tight ${isSelected ? 'text-[#FCD535]' : ''}`}>{optLabel}</span>
                                 {isSelected ? (
                                     <div className="w-5.5 h-5.5 bg-[#FCD535] rounded-sm flex items-center justify-center shrink-0">
-                                        <svg className="w-4 h-4 text-black" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={4}><path d="M5 13l4 4L19 7" /></svg>
+                                        <Check className="w-4 h-4 text-black" strokeWidth={4} />
                                     </div>
                                 ) : multiple && (
-                                    <div className="w-5.5 h-5.5 rounded-sm border border-[#2B3139] shrink-0"></div>
+                                    <div className="w-5.5 h-5.5 rounded-sm border border-[#474D57] shrink-0"></div>
                                 )}
                             </div>
                         );
                     }) : (
                         <div className="py-14 text-center flex flex-col items-center gap-3 opacity-30 border-2 border-dashed border-[#2B3139] rounded-sm">
                             <div className="w-12 h-12 bg-white/5 rounded-sm flex items-center justify-center">
-                                <svg className="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" strokeWidth={2}/></svg>
+                                <Search className="w-6 h-6" />
                             </div>
                             <span className="text-[10px] font-black uppercase tracking-[0.2em]">No Matches Found</span>
                         </div>
@@ -148,7 +174,7 @@ const SelectFilter: React.FC<SelectFilterProps> = ({
 
     // ── variant-aware style tokens ──────────────────────────────────────────
     const isModal = variant === 'modal';
-    const r = isModal ? 'rounded-xl' : 'rounded-sm';             // corner radius token
+    const r = isModal ? 'rounded-xl' : 'rounded-sm';
     const rItem = isModal ? 'rounded-lg' : 'rounded-sm';
     const bgTrigger = isModal ? 'bg-[#1e2329]' : 'bg-[#0B0E11]';
     const bgHover   = isModal ? 'hover:bg-[#252a33]' : 'hover:bg-[#181A20]';
@@ -156,7 +182,6 @@ const SelectFilter: React.FC<SelectFilterProps> = ({
     const bgSearch  = isModal ? 'bg-[#181a20]'   : 'bg-[#0B0E11]';
     const borderFocus = isModal ? 'focus:border-[#fcd535]/50' : 'focus:border-[#FCD535]';
 
-    // Display Text Logic for dropdown mode
     let displayText = placeholder;
     if (selectedValues.length > 0) {
         if (selectedValues.length === 1) {
@@ -167,7 +192,6 @@ const SelectFilter: React.FC<SelectFilterProps> = ({
         }
     }
 
-    // Style logic for dropdown mode
     let baseClass = `relative w-full cursor-pointer ${bgTrigger} border border-[#2B3139] py-3 px-4 ${r} font-bold transition-all ${bgHover} flex justify-between items-center group/select`;
     let textClass = isModal ? 'text-[#848e9c]' : 'text-gray-400';
 
@@ -179,65 +203,74 @@ const SelectFilter: React.FC<SelectFilterProps> = ({
             baseClass += " !border-[#F6465D]/50 !bg-[#F6465D]/10";
             textClass = "text-[#F6465D]";
         }
-    } else {
-        if (selectedValues.length > 0) {
-            textClass = "text-[#FCD535]";
-            baseClass += " !border-[#FCD535]/40 !bg-[#FCD535]/8";
-        }
+    } else if (selectedValues.length > 0) {
+        textClass = "text-[#FCD535]";
+        baseClass += " !border-[#FCD535]/40 !bg-[#FCD535]/8";
     }
 
     if (isOpen) baseClass += isModal ? " !border-[#fcd535]/50" : " border-[#FCD535] bg-[#181A20]";
 
     return (
         <div className={`w-full transition-all ${isOpen ? 'relative z-[60]' : 'relative z-10'}`} ref={dropdownRef}>
-            {/* Only render label row when label has text OR when NOT modal (to show MULTI badge elsewhere) */}
             {(label || (!isModal && multiple)) && (
-                <label className="text-[10px] font-black text-gray-500 mb-2 uppercase tracking-widest flex items-center gap-2">
-                    {label}
+                <label className="text-[10px] font-black text-[#707A8A] mb-2 uppercase tracking-widest flex items-center justify-between">
+                    <span>{label}</span>
                     {multiple && <span className="text-[8px] font-black text-[#FCD535] bg-[#FCD535]/10 px-2 py-0.5 rounded-sm border border-[#FCD535]/20">MULTI</span>}
                 </label>
             )}
 
-            <div
-                className={baseClass}
-                onClick={() => setIsOpen(!isOpen)}
-            >
+            <div className={baseClass} onClick={() => setIsOpen(!isOpen)}>
                 <span className={`truncate mr-2 text-sm ${textClass}`}>{displayText}</span>
-
                 <div className="flex items-center gap-1.5">
                     {selectedValues.length > 0 && (
                         <button
-                            onClick={handleClear}
+                            onClick={handleClearAll}
                             className={`p-1.5 hover:bg-white/10 ${rItem} text-gray-500 hover:text-white transition-all active:scale-90`}
                         >
-                            <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M6 18L18 6M6 6l12 12" /></svg>
+                            <X className="w-3 h-3" strokeWidth={3} />
                         </button>
                     )}
-                    <svg className={`w-4 h-4 transition-transform duration-300 ${isOpen ? 'rotate-180 text-[#fcd535]' : 'text-[#5e6673] group-hover/select:text-gray-300'}`} fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M19 9l-7 7-7-7" /></svg>
+                    <ChevronDown className={`w-4 h-4 transition-transform duration-300 ${isOpen ? 'rotate-180 text-[#fcd535]' : 'text-[#5e6673] group-hover/select:text-gray-300'}`} strokeWidth={2.5} />
                 </div>
 
-                {/* Dropdown Menu */}
                 {isOpen && (
-                    <div className={`absolute top-full left-0 w-full mt-1.5 ${bgMenu} border border-[#2B3139] ${r} shadow-2xl z-50 overflow-hidden animate-dropdown-in max-h-[280px] flex flex-col`}>
-                        {/* Search Bar */}
-                        {searchable && (
-                            <div className="p-2 border-b border-[#2B3139] sticky top-0 z-10" style={{ background: 'inherit' }}>
-                                <div className="relative">
-                                    <svg className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-[#5e6673]" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" /></svg>
-                                    <input
-                                        ref={searchInputRef}
-                                        type="text"
-                                        className={`w-full ${bgSearch} border border-[#2B3139] ${rItem} pl-9 pr-4 py-2 text-xs font-bold text-white ${borderFocus} outline-none transition-all placeholder:text-[#5e6673]`}
-                                        placeholder="ស្វែងរក..."
-                                        value={searchTerm}
-                                        onChange={(e) => setSearchTerm(e.target.value)}
-                                        onClick={(e) => e.stopPropagation()}
-                                    />
-                                </div>
+                    <div className={`absolute top-full left-0 w-full mt-1.5 ${bgMenu} border border-[#2B3139] ${r} shadow-2xl z-50 overflow-hidden animate-dropdown-in max-h-[350px] flex flex-col`}>
+                        <div className="p-2 border-b border-[#2B3139] sticky top-0 z-10" style={{ background: 'inherit' }}>
+                            <div className="flex items-center gap-2 mb-2">
+                                {searchable && (
+                                    <div className="relative flex-grow">
+                                        <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-[#5e6673]" />
+                                        <input
+                                            ref={searchInputRef}
+                                            type="text"
+                                            className={`w-full ${bgSearch} border border-[#2B3139] ${rItem} pl-9 pr-4 py-2 text-xs font-bold text-white ${borderFocus} outline-none transition-all placeholder:text-[#5e6673]`}
+                                            placeholder="ស្វែងរក..."
+                                            value={searchTerm}
+                                            onChange={(e) => setSearchTerm(e.target.value)}
+                                            onClick={(e) => e.stopPropagation()}
+                                        />
+                                    </div>
+                                )}
                             </div>
-                        )}
+                            {multiple && (
+                                <div className="flex gap-2 px-1 pb-1">
+                                    <button 
+                                        onClick={handleSelectAll}
+                                        className="flex-1 py-1.5 bg-[#2B3139] hover:bg-[#FCD535]/10 hover:text-[#FCD535] text-[9px] font-black uppercase rounded-sm transition-all flex items-center justify-center gap-1.5 text-gray-400"
+                                    >
+                                        <CheckSquare size={12} /> Select All
+                                    </button>
+                                    <button 
+                                        onClick={handleClearAll}
+                                        className="flex-1 py-1.5 bg-[#2B3139] hover:bg-[#F6465D]/10 hover:text-[#F6465D] text-[9px] font-black uppercase rounded-sm transition-all flex items-center justify-center gap-1.5 text-gray-400"
+                                    >
+                                        <RotateCcw size={12} /> Clear
+                                    </button>
+                                </div>
+                            )}
+                        </div>
 
-                        <div className="overflow-y-auto no-scrollbar flex-grow py-1">
+                        <div className="overflow-y-auto custom-scrollbar flex-grow py-1">
                             {filteredOptions.length > 0 ? (
                                 filteredOptions.map((opt, idx) => {
                                     const optValue = getOptionValue(opt);
@@ -255,7 +288,7 @@ const SelectFilter: React.FC<SelectFilterProps> = ({
                                             </span>
                                             {isSelected ? (
                                                 <div className={`w-4 h-4 bg-[#FCD535] ${rItem} flex items-center justify-center flex-shrink-0 ml-2`}>
-                                                    <svg className="w-2.5 h-2.5 text-black" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3.5} d="M5 13l4 4L19 7" /></svg>
+                                                    <Check className="w-2.5 h-2.5 text-black" strokeWidth={4} />
                                                 </div>
                                             ) : multiple && (
                                                 <div className={`w-4 h-4 ${rItem} border border-[#3d4451] flex-shrink-0 ml-2`}></div>
@@ -266,7 +299,7 @@ const SelectFilter: React.FC<SelectFilterProps> = ({
                             ) : (
                                 <div className="p-6 text-center flex flex-col items-center gap-2">
                                     <div className={`w-9 h-9 bg-[#2B3139] ${rItem} flex items-center justify-center text-[#5e6673]`}>
-                                        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" /></svg>
+                                        <Search className="w-4 h-4" />
                                     </div>
                                     <div className="text-[10px] text-[#5e6673] font-bold uppercase tracking-widest">រកមិនឃើញ</div>
                                 </div>

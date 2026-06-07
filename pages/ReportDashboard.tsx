@@ -9,8 +9,9 @@ import { WEB_APP_URL } from '../constants';
 import SalesByTeamPage from './SalesByTeamPage';
 import SalesByPageReport from './SalesByPageReport';
 import Modal from '../components/common/Modal';
-import OrderFilters, { FilterState } from '../components/orders/OrderFilters';
+import OrderFilters, { FilterState, initialFilterState } from '../components/orders/OrderFilters';
 import { useUrlState } from '../hooks/useUrlState';
+import { useFilterEngine } from '../hooks/useFilterEngine';
 
 type ReportType = 'overview' | 'performance' | 'profitability' | 'forecasting' | 'shipping' | 'sales_team' | 'sales_page';
 
@@ -107,33 +108,36 @@ const ReportDashboard: React.FC<ReportDashboardProps> = ({ activeReport, onBack,
     const [urlLocation, setUrlLocation] = useUrlState<string>('locationFilter', '');
     const [urlCost, setUrlCost] = useUrlState<string>('costFilter', '');
 
-    const [filters, setFilters] = useState<FilterState>({
-        datePreset: (urlDate as any) || 'this_month',
-        startDate: urlStart || '',
-        endDate: urlEnd || '',
-        team: urlTeam || '',
-        user: urlUser || '',
-        paymentStatus: urlPayment || '',
-        shippingService: urlShipping || '',
-        driver: urlDriver || '',
-        product: urlProduct || '',
-        bank: urlBank || '',
-        fulfillmentStore: urlFulfillment || '',
-        store: urlStore || '',
-        page: urlPage || '',
-        location: urlLocation || '',
-        internalCost: urlCost || '',
-        customerName: urlCustomer || '',
-        telegramStatus: '',
-        fulfillmentStatus: '',
+    const [filters, setFilters] = useState<FilterState>(() => {
+        const searchParams = new URLSearchParams(window.location.search);
+        return {
+            ...initialFilterState,
+            datePreset: (urlDate as any) || 'this_month',
+            startDate: urlStart || '',
+            endDate: urlEnd || '',
+            team: urlTeam || '',
+            user: urlUser || '',
+            paymentStatus: urlPayment || '',
+            shippingService: urlShipping || '',
+            driver: urlDriver || '',
+            product: urlProduct || '',
+            bank: urlBank || '',
+            fulfillmentStore: urlFulfillment || '',
+            store: urlStore || '',
+            page: urlPage || '',
+            location: urlLocation || '',
+            internalCost: urlCost || '',
+            customerName: urlCustomer || '',
+        };
     });
 
+    const { filterOrders } = useFilterEngine(orders, appData);
+
     // Trigger optimized fetch when filters change specifically for the report context
-    // We fetch a larger limit for reports to ensure accuracy (e.g., 10,000)
     useEffect(() => {
         const fetchReportData = async () => {
             const params: any = {
-                limit: 10000, // Large limit for reports to capture historical data
+                limit: 10000, 
                 offset: 0,
                 view: 'compact'
             };
@@ -146,7 +150,6 @@ const ReportDashboard: React.FC<ReportDashboardProps> = ({ activeReport, onBack,
                 params.datePreset = 'all';
             }
 
-            // Include specific filters to reduce payload size
             if (filters.team) params.team = filters.team;
             if (filters.user) params.user = filters.user;
             if (filters.fulfillmentStore) params.fulfillmentStore = filters.fulfillmentStore;
@@ -218,100 +221,25 @@ const ReportDashboard: React.FC<ReportDashboardProps> = ({ activeReport, onBack,
     }, [filters.datePreset, filters.startDate, filters.endDate]);
 
     const filteredOrders = useMemo(() => {
-        return orders.filter(o => {
-            if (filters.datePreset !== 'all') {
-                const d = safeParseDate(o.Timestamp);
-                if (!d || isNaN(d.getTime())) return false;
-                
-                const now = new Date();
-                const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
-                let start: Date | null = null, end: Date | null = new Date();
-                end.setHours(23, 59, 59, 999);
-
-                switch (filters.datePreset) {
-                    case 'today': 
-                        start = today; 
-                        break;
-                    case 'yesterday': 
-                        start = new Date(today); 
-                        start.setDate(today.getDate() - 1); 
-                        end = new Date(today); 
-                        end.setMilliseconds(-1); 
-                        break;
-                    case 'this_week': 
-                        const day = now.getDay(); 
-                        start = new Date(today); 
-                        start.setDate(today.getDate() - (day === 0 ? 6 : day - 1)); 
-                        break;
-                    case 'last_week': 
-                        start = new Date(today); 
-                        start.setDate(today.getDate() - now.getDay() - 6); 
-                        end = new Date(start); 
-                        end.setDate(start.getDate() + 6); 
-                        end.setHours(23, 59, 59, 999); 
-                        break;
-                    case 'this_month': 
-                        start = new Date(now.getFullYear(), now.getMonth(), 1); 
-                        break;
-                    case 'last_month': 
-                        start = new Date(now.getFullYear(), now.getMonth() - 1, 1); 
-                        end = new Date(now.getFullYear(), now.getMonth(), 0, 23, 59, 59, 999); 
-                        break;
-                    case 'this_year': 
-                        start = new Date(now.getFullYear(), 0, 1); 
-                        break;
-                    case 'last_year': 
-                        start = new Date(now.getFullYear() - 1, 0, 1); 
-                        end = new Date(now.getFullYear() - 1, 11, 31, 23, 59, 59, 999); 
-                        break;
-                    case 'custom':
-                        if (filters.startDate) start = new Date(filters.startDate + 'T00:00:00');
-                        if (filters.endDate) end = new Date(filters.endDate + 'T23:59:59');
-                        break;
+        const enriched = orders.map(o => {
+            let team = (o.Team || '').trim();
+            if (!team) {
+                const u = appData.users?.find(user => user.UserName === o.User);
+                if (u?.Team) team = u.Team.split(',')[0].trim();
+                else {
+                    const p = appData.pages?.find(pg => pg.PageName === o.Page);
+                    if (p?.Team) team = p.Team;
                 }
-                if (start && d < start) return false;
-                if (end && d > end) return false;
             }
-
-            const isMatch = (filterValue: string, orderValue: string, partial = false) => {
-                if (!filterValue) return true;
-                const selectedValues = filterValue.split(',').map(v => v.trim().toLowerCase());
-                const val = (orderValue || '').trim().toLowerCase();
-                if (partial) return selectedValues.some(sv => val.includes(sv));
-                return selectedValues.includes(val);
-            };
-
-            if (!isMatch(filters.team, o.Team)) return false;
-            if (!isMatch(filters.user, o.User || '')) return false;
-            if (!isMatch(filters.paymentStatus, o['Payment Status'])) return false;
-            if (!isMatch(filters.shippingService, o['Internal Shipping Method'])) return false;
-            if (!isMatch(filters.driver, o['Internal Shipping Details'])) return false;
-            if (!isMatch(filters.bank, o['Payment Info'])) return false;
-            if (!isMatch(filters.fulfillmentStore, o['Fulfillment Store'])) return false;
-            if (!isMatch(filters.page, o.Page)) return false;
-            if (!isMatch(filters.location, o.Location, true)) return false;
-            if (!isMatch(filters.internalCost, String(o['Internal Cost']))) return false;
-
-            if (filters.product) {
-                const selectedProducts = filters.product.split(',').map(v => v.trim().toLowerCase());
-                if (!o.Products.some(p => selectedProducts.includes((p.name || '').toLowerCase()))) return false;
-            }
-
-            if (filters.store) {
-               const pageConfig = appData.pages?.find(p => p.PageName === o.Page);
-               const orderStore = pageConfig ? pageConfig.DefaultStore : null;
-               if (!isMatch(filters.store, orderStore || '')) return false;
-            }
-
-            if (!isMatch(filters.customerName, o['Customer Name'])) return false;
-
-            return true;
+            return { ...o, Team: team || 'Unassigned' };
         });
-    }, [orders, filters, appData.pages]);
+
+        return filterOrders(enriched, filters);
+    }, [orders, filters, appData.users, appData.pages, filterOrders]);
 
     if (isOrdersLoading && orders.length === 0) return <div className={`flex h-screen items-center justify-center ${uiTheme === 'binance' ? 'bg-[#0B0E11]' : 'bg-gray-950'}`}><Spinner size="lg" /></div>;
 
-    const activeFilterCount = Object.values(filters).filter(v => v !== '' && v !== 'this_month' && v !== 'all').length;
+    const activeFilterCount = Object.values(filters).filter(v => v !== '' && v !== 'this_month' && v !== 'all' && v !== 'All').length;
 
     const handleFilterChange = (newFilters: Partial<FilterState>) => {
         setFilters(prev => ({ ...prev, ...newFilters }));

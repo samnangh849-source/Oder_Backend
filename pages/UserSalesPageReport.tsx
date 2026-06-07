@@ -51,24 +51,11 @@ const UserSalesPageReport: React.FC<UserSalesPageReportProps> = ({
 
     // Filter State
     const [filters, setFilters] = useState<FilterState>({
+        ...initialFilterState,
         datePreset: (initialDateFilter as any) || 'all',
         startDate: initialStart || '',
         endDate: initialEnd || '',
         team: team,
-        user: '',
-        paymentStatus: '',
-        shippingService: '',
-        driver: '',
-        product: '',
-        bank: '',
-        fulfillmentStore: '',
-        store: '',
-        page: '',
-        location: '',
-        internalCost: '',
-        customerName: '',
-        telegramStatus: '',
-        fulfillmentStatus: '',
     });
 
     // Local state for UI display consistency
