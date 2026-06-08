@@ -2335,6 +2335,32 @@ func handleGetRevenueSummary(c *gin.Context) {
 	c.JSON(200, gin.H{"status": "success", "data": revs})
 }
 
+// handleGetProductsOnly returns a read-only list of products for external developers.
+// It supports optional API Key authentication via 'X-API-Key' header.
+func handleGetProductsOnly(c *gin.Context) {
+	// Simple API Key check for external developers
+	apiKey := c.GetHeader("X-API-Key")
+	expectedKey := os.Getenv("EXTERNAL_PRODUCT_API_KEY")
+
+	// If EXTERNAL_PRODUCT_API_KEY is not set, we require standard Auth or allow public if desired.
+	// For now, if expectedKey is set, we strictly enforce it.
+	if expectedKey != "" && apiKey != expectedKey {
+		c.JSON(http.StatusUnauthorized, gin.H{"status": "error", "message": "លេខកូដសម្ងាត់ API មិនត្រឹមត្រូវ (Invalid API Key)"})
+		return
+	}
+
+	var products []Product
+	if err := backend.DB.Find(&products).Error; err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"status": "error", "message": "បរាជ័យក្នុងការទាញទិន្នន័យផលិតផល: " + err.Error()})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{
+		"status": "success",
+		"data":   products,
+	})
+}
+
 func handleGetSyncStatus(c *gin.Context) {
 	var count int64
 	backend.DB.Model(&backend.PendingSync{}).Where("status = 'pending' OR status = 'processing'").Count(&count)
@@ -3190,6 +3216,7 @@ func main() {
 	api.GET("/order-metadata/:id", handleGetOrderMetadata)
 	api.POST("/telegram/webhook/:token", handleTelegramWebhook)
 	api.GET("/internal/verify-upload-token", handleVerifyUploadToken) // New for Apps Script
+	api.GET("/products", handleGetProductsOnly)                        // Read-only Product API for Developers
 
 	protected := api.Group("/")
 	protected.Use(AuthMiddleware())
