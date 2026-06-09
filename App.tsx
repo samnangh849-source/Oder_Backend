@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useCallback, Suspense, useMemo, useRef } from 'react';
 import { User, AppData, ParsedOrder } from './types';
 import { convertGoogleDriveUrl } from './utils/fileUtils';
-import { WEB_APP_URL } from './constants';
+import { WEB_APP_URL, SOUND_URLS } from './constants';
 import { useUrlState } from './hooks/useUrlState';
 import { CacheService, CACHE_KEYS } from './services/cacheService';
 import { useOrderNotifications } from './hooks/useOrderNotifications';

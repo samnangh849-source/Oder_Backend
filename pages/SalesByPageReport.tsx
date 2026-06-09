@@ -15,6 +15,7 @@ import SalesStatisticModal from '../components/reports/SalesStatisticModal';
 import SalesByPageDesktop from '../components/reports/SalesByPageDesktop';
 import SalesByPageTablet from '../components/reports/SalesByPageTablet';
 import SalesByPageMobile from '../components/reports/SalesByPageMobile';
+import { safeParseDate } from '../utils/dateUtils';
 
 interface SalesByPageReportProps {
     orders: ParsedOrder[];
@@ -55,7 +56,7 @@ const SalesByPageReport: React.FC<SalesByPageReportProps> = ({
 
     const handleDateShortcut = (id: string) => {
         if (id === 'custom') {
-            setIsFilterOpen(true);
+            setIsStatisticOpen(true);
             return;
         }
         setActiveDateFilter(id);

@@ -8,11 +8,15 @@ import UserSalesPageReport from './UserSalesPageReport';
 import DeliveryListGeneratorModal from '../components/orders/DeliveryListGeneratorModal';
 import ShippingReport from '../components/reports/ShippingReport';
 import { safeParseDate, getValidDate, getTimestamp } from '../utils/dateUtils';
+import { FilterState } from '../components/orders/OrderFilters';
 
 
 const UserOrdersView: React.FC<{ team: string; onAdd: () => void }> = ({ team, onAdd }) => {
     const { currentUser, refreshData, appData, orders, isOrdersLoading, fetchOrders, hasPermission } = useContext(AppContext);
     
+    const [showReport, setShowReport] = useState(false);
+    const [showShippingReport, setShowShippingReport] = useState(false);
+
     const [reportFilters, setReportFilters] = useState<FilterState>({
         datePreset: 'this_month',
         startDate: '',
@@ -85,8 +89,6 @@ const UserOrdersView: React.FC<{ team: string; onAdd: () => void }> = ({ team, o
     const [editingOrder, setEditingOrder] = useState<ParsedOrder | null>(null);
     const [processing, setProcessing] = useState(false);
     const [searchQuery, setSearchQuery] = useState('');
-    const [showReport, setShowReport] = useState(false);
-    const [showShippingReport, setShowShippingReport] = useState(false);
     const [isDeliveryModalOpen, setIsDeliveryModalOpen] = useState(false);
 
     const handleFilterChange = (newFilters: Partial<FilterState>) => {

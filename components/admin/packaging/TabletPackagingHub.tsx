@@ -523,10 +523,10 @@ const TabletPackagingHub: React.FC<TabletPackagingHubProps> = ({
                                                                             </div>
                                                                             <button 
                                                                                 onClick={(e) => { e.stopPropagation(); handleDeleteFromDeliveryTelegram(order); }}
-                                                                                disabled={isSendingTelegram || !getCanSendToDriver(order)}
+                                                                                disabled={(sendingOrderId === order['Order ID']) || !getCanSendToDriver(order)}
                                                                                 className={`w-6 h-6 flex items-center justify-center ${!getCanSendToDriver(order) ? 'bg-[#2B3139] text-gray-600' : 'bg-red-500/10 hover:bg-red-500/20 text-red-500'} rounded-sm border border-red-500/20 transition-all disabled:opacity-50`}
                                                                             >
-                                                                                {isSendingTelegram ? <Spinner size="xs" /> : <Trash size={10} />}
+                                                                                {(sendingOrderId === order['Order ID']) ? <Spinner size="xs" /> : <Trash size={10} />}
                                                                             </button>
                                                                         </div>
                                                                     ) : (

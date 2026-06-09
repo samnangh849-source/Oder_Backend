@@ -160,6 +160,19 @@ const MobileOrdersDashboard: React.FC<MobileOrdersDashboardProps> = ({ onBack, i
         return enrichedOrders.find(o => o['Order ID'] === viewingOrderId) || null;
     }, [viewingOrderId, enrichedOrders]);
 
+    const toggleSelectionMode = () => {
+        setIsSelectionMode(!isSelectionMode);
+        if (isSelectionMode) setSelectedIds(new Set());
+    };
+
+    const handleSelectAll = () => {
+        if (selectedIds.size === filteredOrders.length) {
+            setSelectedIds(new Set());
+        } else {
+            setSelectedIds(new Set(filteredOrders.map(o => o['Order ID'])));
+        }
+    };
+
     const totalPages = Math.ceil(totalCount / pageSize);
 
     const calculatedRange = useMemo(() => {

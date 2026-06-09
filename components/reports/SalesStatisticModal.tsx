@@ -1,6 +1,6 @@
 import React, { useMemo, useState, useEffect, useContext, useRef } from 'react';
 import Modal from '../common/Modal';
-import { ParsedOrder } from '../../types';
+import { ParsedOrder, Product } from '../../types';
 import { AppContext } from '../../context/AppContext';
 import { convertGoogleDriveUrl } from '../../utils/fileUtils';
 import { 
