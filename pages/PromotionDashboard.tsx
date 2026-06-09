@@ -37,6 +37,7 @@ const PromotionDashboard: React.FC<PromotionDashboardProps> = ({ onBack }) => {
     const [isDeleting, setIsDeleting] = useState<number | null>(null);
     const [promotionToDelete, setPromotionToDelete] = useState<Promotion | null>(null);
     const [previewImage, setPreviewImage] = useState<string | null>(null);
+    const [isZoomed, setIsZoomed] = useState(false);
 
     // Form state
     const [title, setTitle] = useState('');
@@ -954,35 +955,41 @@ const PromotionDashboard: React.FC<PromotionDashboardProps> = ({ onBack }) => {
             {/* Fullscreen Preview */}
             {previewImage && (
                 <div 
-                    className="fixed inset-0 z-[100] bg-[#181A20] flex flex-col items-center justify-center p-4 sm:p-8 animate-fade-in"
-                    onClick={() => setPreviewImage(null)}
+                    className="fixed inset-0 z-[100] bg-[#181A20] flex flex-col items-center justify-center animate-fade-in"
+                    onClick={() => { setPreviewImage(null); setIsZoomed(false); }}
                 >
+                    {/* Close Button */}
                     <button 
-                        className="absolute top-6 right-6 w-12 h-12 bg-white/5 hover:bg-white/10 rounded-full flex items-center justify-center text-white transition-all active:scale-90"
-                        onClick={() => setPreviewImage(null)}
+                        className="absolute top-6 right-6 w-12 h-12 bg-black/40 hover:bg-black/60 rounded-full flex items-center justify-center text-white transition-all active:scale-90 z-[120] backdrop-blur-md border border-white/10"
+                        onClick={(e) => { e.stopPropagation(); setPreviewImage(null); setIsZoomed(false); }}
                     >
-                        <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path d="M6 18L18 6M6 6l12 12" strokeWidth={2} /></svg>
+                        <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path d="M6 18L18 6M6 6l12 12" strokeWidth={2.5} /></svg>
                     </button>
                     
-                    <div className="w-full h-full max-w-[95vw] max-h-[95vh] relative flex items-center justify-center" onClick={(e) => e.stopPropagation()}>
+                    {/* Image Container */}
+                    <div 
+                        className={`w-full h-full relative flex items-center justify-center ${isZoomed ? 'overflow-auto items-start justify-start' : 'p-4 sm:p-8'}`} 
+                        onClick={(e) => e.stopPropagation()}
+                    >
                         <img 
                             src={convertGoogleDriveUrl(previewImage)} 
                             alt="Full Preview" 
-                            className="w-full h-full object-contain rounded-xl shadow-2xl animate-scale-in"
+                            onClick={(e) => { e.stopPropagation(); setIsZoomed(!isZoomed); }}
+                            className={`${isZoomed ? 'w-[200vw] max-w-none sm:w-[150vw] cursor-zoom-out' : 'w-full h-full object-contain rounded-xl shadow-2xl cursor-zoom-in'} animate-scale-in transition-all duration-300`}
                         />
                     </div>
 
-                    <div className="absolute bottom-8 flex gap-4 animate-fade-in-up">
+                    <div className="absolute bottom-8 flex gap-4 animate-fade-in-up z-[110]">
                         <button 
                             onClick={(e) => { e.stopPropagation(); handleDownload(previewImage, 'promotion.jpg'); }}
-                            className="px-6 py-3 bg-[#FCD535] text-[#181A20] rounded-xl font-black uppercase italic text-sm flex items-center gap-2 hover:bg-[#EAB308] transition-all"
+                            className="px-6 py-3 bg-[#FCD535] text-[#181A20] rounded-xl font-black uppercase italic text-sm flex items-center gap-2 hover:bg-[#EAB308] transition-all shadow-xl"
                         >
                             <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" strokeWidth={2.5} /></svg>
                             Download
                         </button>
                         <button 
                             onClick={(e) => { e.stopPropagation(); handleCopyImage(previewImage); }}
-                            className="px-6 py-3 bg-[#2B3139] text-[#EAECEF] rounded-xl font-black uppercase italic text-sm flex items-center gap-2 hover:bg-[#474D57] transition-all"
+                            className="px-6 py-3 bg-[#2B3139] text-[#EAECEF] rounded-xl font-black uppercase italic text-sm flex items-center gap-2 hover:bg-[#474D57] transition-all shadow-xl"
                         >
                             <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z" strokeWidth={2} /></svg>
                             Copy Link
