@@ -62,11 +62,58 @@ const TelegramScheduler: React.FC<TelegramSchedulerProps> = ({ schedule, time, o
                     {/* Quick Select Buttons */}
                     <div className="flex flex-wrap gap-2">
                         {[
-                            { label: '+1 ម៉ោង', getValue: () => { const d = new Date(); d.setHours(d.getHours() + 1); return d.toISOString().slice(0, 16); } },
-                            { label: '+2 ម៉ោង', getValue: () => { const d = new Date(); d.setHours(d.getHours() + 2); return d.toISOString().slice(0, 16); } },
-                            { label: '+4 ម៉ោង', getValue: () => { const d = new Date(); d.setHours(d.getHours() + 4); return d.toISOString().slice(0, 16); } },
-                            { label: 'ស្អែក 8AM', getValue: () => { const d = new Date(); d.setDate(d.getDate() + 1); d.setHours(8, 0, 0, 0); return d.toISOString().slice(0, 16); } },
-                            { label: 'ស្អែក 1PM', getValue: () => { const d = new Date(); d.setDate(d.getDate() + 1); d.setHours(13, 0, 0, 0); return d.toISOString().slice(0, 16); } },
+                            { label: '+1 ម៉ោង', getValue: () => { 
+                                const d = new Date(); 
+                                d.setHours(d.getHours() + 1); 
+                                const Y = d.getFullYear();
+                                const M = String(d.getMonth() + 1).padStart(2, '0');
+                                const D = String(d.getDate()).padStart(2, '0');
+                                const H = String(d.getHours()).padStart(2, '0');
+                                const min = String(d.getMinutes()).padStart(2, '0');
+                                return `${Y}-${M}-${D}T${H}:${min}`;
+                            } },
+                            { label: '+2 ម៉ោង', getValue: () => { 
+                                const d = new Date(); 
+                                d.setHours(d.getHours() + 2); 
+                                const Y = d.getFullYear();
+                                const M = String(d.getMonth() + 1).padStart(2, '0');
+                                const D = String(d.getDate()).padStart(2, '0');
+                                const H = String(d.getHours()).padStart(2, '0');
+                                const min = String(d.getMinutes()).padStart(2, '0');
+                                return `${Y}-${M}-${D}T${H}:${min}`;
+                            } },
+                            { label: '+4 ម៉ោង', getValue: () => { 
+                                const d = new Date(); 
+                                d.setHours(d.getHours() + 4); 
+                                const Y = d.getFullYear();
+                                const M = String(d.getMonth() + 1).padStart(2, '0');
+                                const D = String(d.getDate()).padStart(2, '0');
+                                const H = String(d.getHours()).padStart(2, '0');
+                                const min = String(d.getMinutes()).padStart(2, '0');
+                                return `${Y}-${M}-${D}T${H}:${min}`;
+                            } },
+                            { label: 'ស្អែក 8AM', getValue: () => { 
+                                const d = new Date(); 
+                                d.setDate(d.getDate() + 1); 
+                                d.setHours(8, 0, 0, 0); 
+                                const Y = d.getFullYear();
+                                const M = String(d.getMonth() + 1).padStart(2, '0');
+                                const D = String(d.getDate()).padStart(2, '0');
+                                const H = String(d.getHours()).padStart(2, '0');
+                                const min = String(d.getMinutes()).padStart(2, '0');
+                                return `${Y}-${M}-${D}T${H}:${min}`;
+                            } },
+                            { label: 'ស្អែក 1PM', getValue: () => { 
+                                const d = new Date(); 
+                                d.setDate(d.getDate() + 1); 
+                                d.setHours(13, 0, 0, 0); 
+                                const Y = d.getFullYear();
+                                const M = String(d.getMonth() + 1).padStart(2, '0');
+                                const D = String(d.getDate()).padStart(2, '0');
+                                const H = String(d.getHours()).padStart(2, '0');
+                                const min = String(d.getMinutes()).padStart(2, '0');
+                                return `${Y}-${M}-${D}T${H}:${min}`;
+                            } },
                         ].map((opt, idx) => (
                             <button
                                 key={idx}

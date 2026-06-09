@@ -182,68 +182,68 @@ func broadcastToAll(payload interface{}) {
 
 func mapToDBColumn(key string, sheetName string) string {
 	specialCases := map[string]string{
-		"Order ID":                "order_id",
-		"Discount ($)":            "discount_usd",
-		"Total Product Cost ($)":  "total_product_cost",
-		"Shipping Fee (Customer)": "shipping_fee_customer",
-		"Products":                "products_json",
-		"Products (JSON)":         "products_json",
-		"Telegram Message ID 1":   "telegram_message_id1",
-		"Telegram Message ID 2":   "telegram_message_id2",
-		"Telegram Message ID 3":   "telegram_message_id3",
-		"Customer Name":           "customer_name",
-		"Customer Phone":          "customer_phone",
-		"Location":                "location",
-		"Address Details":         "address_details",
-		"Fulfillment Status":      "fulfillment_status",
-		"fulfillmentStatus":       "fulfillment_status",
-		"FulfillmentStatus":       "fulfillment_status",
-		"Fulfillment Store":       "fulfillment_store",
-		"fulfillmentStore":        "fulfillment_store",
-		"FulfillmentStore":        "fulfillment_store",
-		"Package Photo":           "package_photo_url",
-		"packagePhoto":            "package_photo_url",
-		"PackagePhoto":            "package_photo_url",
-		"Delivery Photo URL":      "delivery_photo_url",
-		"deliveryPhoto":           "delivery_photo_url",
-		"DeliveryPhoto":           "delivery_photo_url",
-		"Cancel Reason":           "cancel_reason",
-		"Return Reason":           "return_reason",
-		"Return Photo":            "return_photo_url",
-		"Return Received By":      "return_received_by",
-		"Return Received Time":    "return_received_time",
-		"Delivery Photo Sent Count": "delivery_photo_sent_count",
+		"Order ID":                     "order_id",
+		"Discount ($)":                 "discount_usd",
+		"Total Product Cost ($)":       "total_product_cost",
+		"Shipping Fee (Customer)":      "shipping_fee_customer",
+		"Products":                     "products_json",
+		"Products (JSON)":              "products_json",
+		"Telegram Message ID 1":        "telegram_message_id1",
+		"Telegram Message ID 2":        "telegram_message_id2",
+		"Telegram Message ID 3":        "telegram_message_id3",
+		"Customer Name":                "customer_name",
+		"Customer Phone":               "customer_phone",
+		"Location":                     "location",
+		"Address Details":              "address_details",
+		"Fulfillment Status":           "fulfillment_status",
+		"fulfillmentStatus":            "fulfillment_status",
+		"FulfillmentStatus":            "fulfillment_status",
+		"Fulfillment Store":            "fulfillment_store",
+		"fulfillmentStore":             "fulfillment_store",
+		"FulfillmentStore":             "fulfillment_store",
+		"Package Photo":                "package_photo_url",
+		"packagePhoto":                 "package_photo_url",
+		"PackagePhoto":                 "package_photo_url",
+		"Delivery Photo URL":           "delivery_photo_url",
+		"deliveryPhoto":                "delivery_photo_url",
+		"DeliveryPhoto":                "delivery_photo_url",
+		"Cancel Reason":                "cancel_reason",
+		"Return Reason":                "return_reason",
+		"Return Photo":                 "return_photo_url",
+		"Return Received By":           "return_received_by",
+		"Return Received Time":         "return_received_time",
+		"Delivery Photo Sent Count":    "delivery_photo_sent_count",
 		"Delivery Telegram Message ID": "delivery_telegram_message_id",
-		"Delivery Daily Sequence":   "delivery_daily_sequence",
-		"Delivery Telegram Date":     "delivery_telegram_date",
-		"Driver Name":             "driver_name",
-		"Tracking Number":         "tracking_number",
-		"Dispatched Time":         "dispatched_time",
-		"Dispatched By":           "dispatched_by",
-		"Delivered Time":          "delivered_time",
-		"Packed By":               "packed_by",
-		"Packed Time":             "packed_time",
-		"IsVerified":              "is_verified",
-		"UserName":                "user_name",
-		"FullName":                "full_name",
-		"ProfilePictureURL":       "profile_picture_url",
-		"IsSystemAdmin":           "is_system_admin",
-		"TelegramUsername":        "telegram_username",
-		"ImageURL":                "image_url",
-		"Image URL":               "image_url",
-		"LogosURL":                "logo_url",
-		"Logos URL":               "logo_url",
-		"LogoURL":                 "logo_url",
-		"Thumbnail":               "thumbnail",
-		"Thumbnail URL":           "thumbnail",
-		"ID":                      "id",
-		"id":                      "id",
-		"status":                  "status",
-		"Status":                  "status",
-		"Description":             "description",
-		"TelegramGroupID":         "telegram_group_id",
-		"TelegramTopicID":          "telegram_topic_id",
-		"CODAlertGroupID":         "cod_alert_group_id",
+		"Delivery Daily Sequence":      "delivery_daily_sequence",
+		"Delivery Telegram Date":       "delivery_telegram_date",
+		"Driver Name":                  "driver_name",
+		"Tracking Number":              "tracking_number",
+		"Dispatched Time":              "dispatched_time",
+		"Dispatched By":                "dispatched_by",
+		"Delivered Time":               "delivered_time",
+		"Packed By":                    "packed_by",
+		"Packed Time":                  "packed_time",
+		"IsVerified":                   "is_verified",
+		"UserName":                     "user_name",
+		"FullName":                     "full_name",
+		"ProfilePictureURL":            "profile_picture_url",
+		"IsSystemAdmin":                "is_system_admin",
+		"TelegramUsername":             "telegram_username",
+		"ImageURL":                     "image_url",
+		"Image URL":                    "image_url",
+		"LogosURL":                     "logo_url",
+		"Logos URL":                    "logo_url",
+		"LogoURL":                      "logo_url",
+		"Thumbnail":                    "thumbnail",
+		"Thumbnail URL":                "thumbnail",
+		"ID":                           "id",
+		"id":                           "id",
+		"status":                       "status",
+		"Status":                       "status",
+		"Description":                  "description",
+		"TelegramGroupID":              "telegram_group_id",
+		"TelegramTopicID":              "telegram_topic_id",
+		"CODAlertGroupID":              "cod_alert_group_id",
 		// Incentive System Mappings
 		"projectId":              "project_id",
 		"ProjectID":              "project_id",
@@ -854,7 +854,13 @@ func handleGetStaticData(c *gin.Context) {
 		func() { var d []Driver; backend.DB.Find(&d); mu.Lock(); result["drivers"] = d; mu.Unlock() },
 		func() { var d []BankAccount; backend.DB.Find(&d); mu.Lock(); result["bankAccounts"] = d; mu.Unlock() },
 		func() { var d []PhoneCarrier; backend.DB.Find(&d); mu.Lock(); result["phoneCarriers"] = d; mu.Unlock() },
-		func() { var d []DeliveryGroup; backend.DB.Find(&d); mu.Lock(); result["deliveryGroups"] = d; mu.Unlock() },
+		func() {
+			var d []DeliveryGroup
+			backend.DB.Find(&d)
+			mu.Lock()
+			result["deliveryGroups"] = d
+			mu.Unlock()
+		},
 		func() { var d []Inventory; backend.DB.Find(&d); mu.Lock(); result["inventory"] = d; mu.Unlock() },
 		func() {
 			var d []StockTransfer
@@ -1063,17 +1069,17 @@ func handleGetUsers(c *gin.Context) {
 
 func handleGetAllOrders(c *gin.Context) {
 	var orders []Order
-	
+
 	// 1. Pagination Params
 	limitStr := c.DefaultQuery("limit", "100")
 	offsetStr := c.DefaultQuery("offset", "0")
 	limit, _ := strconv.Atoi(limitStr)
 	offset, _ := strconv.Atoi(offsetStr)
-	
+
 	// 2. Filter Params
 	startDate := c.Query("startDate")
 	endDate := c.Query("endDate")
-	datePreset := c.Query("datePreset") 
+	datePreset := c.Query("datePreset")
 	view := c.Query("view")
 	teamQuery := c.Query("team")
 	userQuery := c.Query("user")
@@ -1108,11 +1114,15 @@ func handleGetAllOrders(c *gin.Context) {
 			endDate = startDate
 		case "this_week":
 			weekday := int(now.Weekday())
-			if weekday == 0 { weekday = 7 }
+			if weekday == 0 {
+				weekday = 7
+			}
 			startDate = now.AddDate(0, 0, -weekday+1).Format("2006-01-02")
 		case "last_week":
 			weekday := int(now.Weekday())
-			if weekday == 0 { weekday = 7 }
+			if weekday == 0 {
+				weekday = 7
+			}
 			mondayThisWeek := now.AddDate(0, 0, -weekday+1)
 			startDate = mondayThisWeek.AddDate(0, 0, -7).Format("2006-01-02")
 			endDate = mondayThisWeek.AddDate(0, 0, -1).Format("2006-01-02")
@@ -1258,8 +1268,8 @@ func handleGetAllOrders(c *gin.Context) {
 	var total int64
 	countQuery.Count(&total)
 	c.JSON(200, gin.H{
-		"status": "success", 
-		"data":   orders, 
+		"status": "success",
+		"data":   orders,
 		"total":  total,
 		"limit":  limit,
 		"offset": offset,
@@ -1324,14 +1334,20 @@ func handleSubmitOrder(c *gin.Context) {
 	}
 
 	orderID := generateShortID()
-	
-	// Default timestamp is NOW
-	timestamp := time.Now().UTC().Format(time.RFC3339)
-	
-	// If ScheduledTime is provided, use it as the primary timestamp (Drop Order Time)
-	// to ensure consistency between the UI, Sheet, and Telegram message.
+
+	// Default timestamp is NOW in Cambodia Time (ICT)
+	ict := time.FixedZone("ICT", 7*3600)
+	timestamp := time.Now().In(ict).Format("2006-01-02 15:04:05")
+
+	// If ScheduledTime is provided, parse it and format as local time for the Sheet
 	if orderRequest.ScheduledTime != "" {
-		timestamp = orderRequest.ScheduledTime
+		if t, err := time.Parse(time.RFC3339, orderRequest.ScheduledTime); err == nil {
+			timestamp = t.In(ict).Format("2006-01-02 15:04:05")
+		} else if t, err := time.Parse("2006-01-02 15:04", orderRequest.ScheduledTime); err == nil {
+			timestamp = t.Format("2006-01-02 15:04:05")
+		} else {
+			timestamp = orderRequest.ScheduledTime
+		}
 	}
 
 	custName, _ := orderRequest.Customer["name"].(string)
@@ -1360,7 +1376,7 @@ func handleSubmitOrder(c *gin.Context) {
 	if orderRequest.ScheduledTime != "" {
 		var st time.Time
 		var err error
-		
+
 		// Use flexible parsing to match the timestamp logic above
 		// Prioritize RFC3339 as the frontend now sends UTC ISO strings
 		if t, e := time.Parse(time.RFC3339, orderRequest.ScheduledTime); e == nil {
@@ -1371,7 +1387,7 @@ func handleSubmitOrder(c *gin.Context) {
 			err = e
 		}
 
-		if err == nil && st.After(time.Now().Add(1 * time.Minute)) {
+		if err == nil && st.After(time.Now().Add(1*time.Minute)) {
 			fulfillmentStatus = "Scheduled"
 		}
 	}
@@ -1388,7 +1404,7 @@ func handleSubmitOrder(c *gin.Context) {
 		OrderID: orderID, Timestamp: timestamp, User: orderRequest.CurrentUser.UserName, Team: finalTeam,
 		Page: orderRequest.Page, CustomerName: custName, CustomerPhone: custPhone, Subtotal: orderRequest.Subtotal,
 		GrandTotal: orderRequest.GrandTotal, ProductsJSON: string(productsJSON), Note: orderRequest.Note,
-		FulfillmentStore: orderRequest.FulfillmentStore, ScheduledTime: orderRequest.ScheduledTime, FulfillmentStatus: fulfillmentStatus,
+		FulfillmentStore: orderRequest.FulfillmentStore, ScheduledTime: timestamp, FulfillmentStatus: fulfillmentStatus,
 		PaymentStatus: paymentStatus, PaymentInfo: paymentInfo, InternalCost: shippingCost, DiscountUSD: totalDiscount,
 		TotalProductCost: totalProductCost, Location: strings.Join(locationParts, ", "), AddressDetails: addLocation,
 		ShippingFeeCustomer: shipFeeCustomer, InternalShippingMethod: internalShipMethod, InternalShippingDetails: internalShipDetails,
@@ -1402,7 +1418,7 @@ func handleSubmitOrder(c *gin.Context) {
 	eventBytes, _ := json.Marshal(map[string]interface{}{"type": "new_order", "data": newOrder})
 	hub.Broadcast <- eventBytes
 
-	orderChannel <- OrderJob{JobID: fmt.Sprintf("job_%d", time.Now().UnixNano()), OrderID: orderID, UserName: orderRequest.CurrentUser.UserName, OrderData: map[string]interface{}{"orderId": orderID, "timestamp": timestamp, "totalDiscount": totalDiscount, "totalProductCost": totalProductCost, "fullLocation": strings.Join(locationParts, ", "), "productsJSON": string(productsJSON), "shippingCost": shippingCost, "originalRequest": orderRequest, "scheduledTime": orderRequest.ScheduledTime}}
+	orderChannel <- OrderJob{JobID: fmt.Sprintf("job_%d", time.Now().UnixNano()), OrderID: orderID, UserName: orderRequest.CurrentUser.UserName, OrderData: map[string]interface{}{"orderId": orderID, "timestamp": timestamp, "totalDiscount": totalDiscount, "totalProductCost": totalProductCost, "fullLocation": strings.Join(locationParts, ", "), "productsJSON": string(productsJSON), "shippingCost": shippingCost, "originalRequest": orderRequest, "scheduledTime": timestamp}}
 	c.JSON(200, gin.H{"status": "success", "orderId": orderID})
 }
 
@@ -1509,7 +1525,7 @@ func handleAdminUpdateOrder(c *gin.Context) {
 		case "Delivered":
 			_, hasDriver := r.NewData["Driver Name"]
 			_, hasShippingDetails := r.NewData["Internal Shipping Details"]
-			
+
 			driverValid := hasDriver || strings.TrimSpace(originalOrder.DriverName) != ""
 			detailsValid := hasShippingDetails || strings.TrimSpace(originalOrder.InternalShippingDetails) != ""
 
@@ -1533,21 +1549,21 @@ func handleAdminUpdateOrder(c *gin.Context) {
 	if _, hasReceivedBy := r.NewData["Return Received By"]; hasReceivedBy {
 		// Determine the target status
 		/*
-		targetStatus := originalOrder.FulfillmentStatus
-		if s, ok := r.NewData["Fulfillment Status"]; ok {
-			targetStatus = strings.TrimSpace(fmt.Sprintf("%v", s))
-		}
+			targetStatus := originalOrder.FulfillmentStatus
+			if s, ok := r.NewData["Fulfillment Status"]; ok {
+				targetStatus = strings.TrimSpace(fmt.Sprintf("%v", s))
+			}
 		*/
 
 		// Return Photo is now optional as per user request
 		/*
-		if targetStatus != "Cancelled" {
-			photo, hasPhoto := r.NewData["Return Photo"]
-			if (!hasPhoto || strings.TrimSpace(fmt.Sprintf("%v", photo)) == "") && strings.TrimSpace(originalOrder.ReturnPhotoURL) == "" {
-				c.JSON(http.StatusBadRequest, gin.H{"status": "error", "message": "ត្រូវការរូបភាពកញ្ចប់ឥវ៉ាន់ដែល Return (Return Photo)"})
-				return
+			if targetStatus != "Cancelled" {
+				photo, hasPhoto := r.NewData["Return Photo"]
+				if (!hasPhoto || strings.TrimSpace(fmt.Sprintf("%v", photo)) == "") && strings.TrimSpace(originalOrder.ReturnPhotoURL) == "" {
+					c.JSON(http.StatusBadRequest, gin.H{"status": "error", "message": "ត្រូវការរូបភាពកញ្ចប់ឥវ៉ាន់ដែល Return (Return Photo)"})
+					return
+				}
 			}
-		}
 		*/
 		// Auto-set received time if not provided
 		if _, hasTime := r.NewData["Return Received Time"]; !hasTime {
@@ -2335,6 +2351,32 @@ func handleGetRevenueSummary(c *gin.Context) {
 	c.JSON(200, gin.H{"status": "success", "data": revs})
 }
 
+// handleGetProductsOnly returns a read-only list of products for external developers.
+// It supports optional API Key authentication via 'X-API-Key' header.
+func handleGetProductsOnly(c *gin.Context) {
+	// Simple API Key check for external developers
+	apiKey := c.GetHeader("X-API-Key")
+	expectedKey := os.Getenv("EXTERNAL_PRODUCT_API_KEY")
+
+	// If EXTERNAL_PRODUCT_API_KEY is not set, we require standard Auth or allow public if desired.
+	// For now, if expectedKey is set, we strictly enforce it.
+	if expectedKey != "" && apiKey != expectedKey {
+		c.JSON(http.StatusUnauthorized, gin.H{"status": "error", "message": "លេខកូដសម្ងាត់ API មិនត្រឹមត្រូវ (Invalid API Key)"})
+		return
+	}
+
+	var products []Product
+	if err := backend.DB.Find(&products).Error; err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"status": "error", "message": "បរាជ័យក្នុងការទាញទិន្នន័យផលិតផល: " + err.Error()})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{
+		"status": "success",
+		"data":   products,
+	})
+}
+
 func handleGetSyncStatus(c *gin.Context) {
 	var count int64
 	backend.DB.Model(&backend.PendingSync{}).Where("status = 'pending' OR status = 'processing'").Count(&count)
@@ -2428,6 +2470,7 @@ func handleHealthCheck(c *gin.Context) {
 		},
 	})
 }
+
 // ─── Telegram Bot Webhook Handlers ───
 
 func handleRegisterTelegramWebhook(c *gin.Context) {
@@ -2456,7 +2499,7 @@ func handleRegisterTelegramWebhook(c *gin.Context) {
 			protocol = "http"
 		}
 	}
-	
+
 	webhookURL := fmt.Sprintf("%s://%s/api/telegram/webhook/%s", protocol, c.Request.Host, r.Token)
 	apiURL := fmt.Sprintf("https://api.telegram.org/bot%s/setWebhook?url=%s", r.Token, webhookURL)
 
@@ -2502,13 +2545,13 @@ func handleTelegramWebhook(c *gin.Context) {
 	if strings.HasPrefix(text, "/id") {
 		chatID := update.Message.Chat.ID
 		threadID := update.Message.MessageThreadID
-		
+
 		go func(t string, cid int64, tid int) {
 			response := fmt.Sprintf("🆔 *Chat Information*\n\n🔹 *Group ID:* `%d`", cid)
 			if tid != 0 {
 				response += fmt.Sprintf("\n🔹 *Thread ID:* `%d`", tid)
 			}
-			
+
 			payload := map[string]interface{}{
 				"chat_id":    cid,
 				"text":       response,
@@ -3190,6 +3233,7 @@ func main() {
 	api.GET("/order-metadata/:id", handleGetOrderMetadata)
 	api.POST("/telegram/webhook/:token", handleTelegramWebhook)
 	api.GET("/internal/verify-upload-token", handleVerifyUploadToken) // New for Apps Script
+	api.GET("/products", handleGetProductsOnly)                       // Read-only Product API for Developers
 
 	protected := api.Group("/")
 	protected.Use(AuthMiddleware())
@@ -3406,12 +3450,14 @@ func handleCloseShift(c *gin.Context) {
 		pendingSummary = "\n\n⚠️ *បញ្ជីអីវ៉ាន់មិនទាន់បញ្ជូនចេញ (Packed but not Dispatched):*"
 		for i, o := range pendingOrders {
 			phone := o.CustomerPhone
-			if phone == "" { phone = "N/A" }
+			if phone == "" {
+				phone = "N/A"
+			}
 			if !strings.HasPrefix(phone, "0") && phone != "N/A" && len(phone) >= 8 {
 				phone = "0" + phone
 			}
-			
-			pendingSummary += fmt.Sprintf("\n%d. 📱 %s | 🆔 `%s` | 📍 %s | 👥 %s", 
+
+			pendingSummary += fmt.Sprintf("\n%d. 📱 %s | 🆔 `%s` | 📍 %s | 👥 %s",
 				i+1, phone, o.OrderID, o.Location, o.Team)
 		}
 	}
@@ -3568,7 +3614,7 @@ func handleSendDeliveryTelegram(c *gin.Context) {
 
 	jsonData, _ := json.Marshal(payload)
 	log.Printf("📤 [Telegram Delivery] Sending photo for order %s to chat %v (thread: %v)", order.OrderID, payload["chat_id"], payload["message_thread_id"])
-	
+
 	resp, err := http.Post(apiURL, "application/json", bytes.NewBuffer(jsonData))
 	if err != nil {
 		log.Printf("❌ [Telegram Delivery] HTTP Error for order %s, chat %v: %v", order.OrderID, chatID, err)
@@ -3621,7 +3667,7 @@ func handleSendDeliveryTelegram(c *gin.Context) {
 
 	// Trigger WebSocket Broadcast - Use the standard structure
 	eventBytes, _ := json.Marshal(map[string]interface{}{
-		"type": "update_order",
+		"type":    "update_order",
 		"orderId": order.OrderID,
 		"newData": map[string]interface{}{
 			"Delivery Photo Sent Count":    newCount,
@@ -3786,7 +3832,7 @@ func AddWatermarkAndEditTelegramMedia(order Order, newStatus string) {
 	if fontSize < 20 {
 		fontSize = 20
 	}
-	
+
 	fontLoaded := false
 	fontPaths := []string{"Font/DOMEG.ttf", "../Font/DOMEG.ttf", "Font/DOMKH.ttf", "../Font/DOMKH.ttf"}
 	for _, path := range fontPaths {
@@ -3911,9 +3957,9 @@ func AddWatermarkAndEditTelegramMedia(order Order, newStatus string) {
 	} else {
 		log.Printf("✅ Successfully updated delivery telegram photo for %s with %s in chat %v", order.OrderID, newStatus, chatID)
 	}
-	}
+}
 
-	func getDeliveryTelegramCaption(order Order, sequence int, statusOverride string) string {
+func getDeliveryTelegramCaption(order Order, sequence int, statusOverride string) string {
 	statusIndicator := ""
 	if statusOverride == "Cancelled" {
 		statusIndicator = "❌ *ការកម្មង់ត្រូវបានលុបចោល (CANCELLED)* ❌\n\n"
@@ -3944,8 +3990,8 @@ func AddWatermarkAndEditTelegramMedia(order Order, newStatus string) {
 	text += fmt.Sprintf("\n🏠 អាស័យដ្ឋាន: _%s_", address)
 
 	return text
-	}
-	func handleDeleteDeliveryTelegram(c *gin.Context) {
+}
+func handleDeleteDeliveryTelegram(c *gin.Context) {
 	var r struct {
 		OrderID string `json:"orderId"`
 	}
@@ -4023,7 +4069,7 @@ func AddWatermarkAndEditTelegramMedia(order Order, newStatus string) {
 
 	// Broadcast update
 	eventBytes, _ := json.Marshal(map[string]interface{}{
-		"type": "update_order",
+		"type":    "update_order",
 		"orderId": order.OrderID,
 		"newData": map[string]interface{}{
 			"Delivery Telegram Message ID": "",
@@ -4082,7 +4128,7 @@ func AddWatermarkAndEditTelegramMedia(order Order, newStatus string) {
 
 			// Broadcast
 			subEvent, _ := json.Marshal(map[string]interface{}{
-				"type": "update_order",
+				"type":    "update_order",
 				"orderId": subOrder.OrderID,
 				"newData": map[string]interface{}{
 					"Delivery Daily Sequence": newSeq,
@@ -4093,4 +4139,4 @@ func AddWatermarkAndEditTelegramMedia(order Order, newStatus string) {
 	}
 
 	c.JSON(http.StatusOK, gin.H{"status": "success", "message": "លុបចេញពី Telegram និងតម្រៀបលេខរៀងឡើងវិញជោគជ័យ!"})
-	}
+}

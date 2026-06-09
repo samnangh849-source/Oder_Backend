@@ -372,3 +372,121 @@ Improve UI ផ្នែក (Manage product list, prices, and barcodes) ជាព
 
 
 Please fix all problem and Improve UI of (Filter Engine) in Order Dashboard
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+ បាទ! ខ្ញុំបានបង្កើត API សម្រាប់ទាញយកទិន្នន័យផលិតផល (Product Only) រួចរាល់ហើយ ដែលត្រូវបានកំណត់ឱ្យមានសិទ្ធិត្រឹមតែ Read Only សម្រាប់ Developer ផ្សេងទៀតយកទៅប្រើប្រាស់។
+
+  ១. របៀបប្រើប្រាស់ (Usage)
+  Developer អាចប្រើប្រាស់ Endpoint ខាងក្រោម៖
+   - URL: GET /api/products
+   - សិទ្ធិ (Permission): Read Only (ត្រឹមតែទាញយកទិន្នន័យ មិនអាចកែប្រែបានទេ)
+
+  ២. ការកំណត់សុវត្ថិភាព (Security Setup)
+  ដើម្បីការពារកុំឱ្យអ្នកដទៃទាញយកទិន្នន័យដោយគ្មានការអនុញ្ញាត អ្នកអាចកំណត់លេខកូដសម្ងាត់ (API Key) ដូចខាងក្រោម៖
+
+   1. ចូលទៅកាន់ការកំណត់ Environment Variables នៅក្នុង Server របស់អ្នក (ឧទាហរណ៍៖ Render, Heroku ឬ VPS)។
+   2. បង្កើត Variable ថ្មីមួយឈ្មោះ៖ EXTERNAL_PRODUCT_API_KEY រួចដាក់តម្លៃ (Value) ដែលអ្នកចង់បាន (ឧទាហរណ៍៖ my-secret-key-123)។
+   3. បន្ទាប់មក Developer ត្រូវផ្ញើ Header មកជាមួយរាល់ពេលហៅ API៖
+      - Header Key: X-API-Key
+      - Header Value: លេខកូដសម្ងាត់ដែលអ្នកបានកំណត់
+
+  ៣. ឧទាហរណ៍នៃការហៅ API (Example Request)
+
+   1 GET https://your-domain.com/api/products
+   2 X-API-Key: my-secret-key-123
+
+  ទិន្នន័យដែលទទួលបាន (JSON Response):
+
+    1 {
+    2   "status": "success",
+    3   "data": [
+    4     {
+    5       "Barcode": "12345678",
+    6       "ProductName": "ផលិតផលគំរូ",
+    7       "Price": 10.5,
+    8       "Cost": 8.0,
+    9       "ImageURL": "https://example.com/image.jpg",
+   10       "Tags": "CategoryA, New"
+   11     }
+   12   ]
+   13 }
+
+  សម្គាល់៖ ប្រសិនបើអ្នកមិនបានកំណត់ EXTERNAL_PRODUCT_API_KEY ទេ នោះ API នេះនឹងអាចប្រើប្រាស់បានជាសាធារណៈ (Public) ដោយមិនចាំបាច់ប្រើ API Key ឡើយ។
+
+  Product API Completed: Finalizing the Product API implementation and providing usage instructions.
+
+
+✦  Khmer: បាទ! ខ្ញុំបានបង្កើត API សម្រាប់ទាញយកទិន្នន័យផលិតផល (Product Only) រួចរាល់ហើយ ដែលត្រូវបានកំណត់ឱ្យមានសិទ្ធិត្រឹមតែ Read Only សម្រាប់ Developer ផ្សេងទៀតយកទៅប្រើប្រាស់។
+
+  ១. របៀបប្រើប្រាស់ (Usage)
+  Developer អាចប្រើប្រាស់ Endpoint ខាងក្រោម៖
+   - URL: GET /api/products
+   - សិទ្ធិ (Permission): Read Only (ត្រឹមតែទាញយកទិន្នន័យ មិនអាចកែប្រែបានទេ)
+
+  ២. ការកំណត់សុវត្ថិភាព (Security Setup)
+  ដើម្បីការពារកុំឱ្យអ្នកដទៃទាញយកទិន្នន័យដោយគ្មានការអនុញ្ញាត អ្នកអាចកំណត់លេខកូដសម្ងាត់ (API Key) ដូចខាងក្រោម៖
+
+   1. ចូលទៅកាន់ការកំណត់ Environment Variables នៅក្នុង Server របស់អ្នក (ឧទាហរណ៍៖ Render, Heroku ឬ VPS)។
+   2. បង្កើត Variable ថ្មីមួយឈ្មោះ៖ EXTERNAL_PRODUCT_API_KEY រួចដាក់តម្លៃ (Value) ដែលអ្នកចង់បាន (ឧទាហរណ៍៖ my-secret-key-123)។
+   3. បន្ទាប់មក Developer ត្រូវផ្ញើ Header មកជាមួយរាល់ពេលហៅ API៖
+      - Header Key: X-API-Key
+      - Header Value: លេខកូដសម្ងាត់ដែលអ្នកបានកំណត់
+
+  ###Store/៣. ឧទាហរណ៍នៃការហៅ API (Example Request)
+
+   1 GET https://oder-backend-2.onrender.com/api/products
+   2 X-API-Key: my-secret-key-ChanRas-123
+
+  ទិន្នន័យដែលទទួលបាន (JSON Response):
+
+    1 {
+    2   "status": "success",
+    3   "data": [
+    4     {
+    5       "Barcode": "12345678",
+    6       "ProductName": "ផលិតផលគំរូ",
+    7       "Price": 10.5,
+    8       "Cost": 8.0,
+    9       "ImageURL": "https://example.com/image.jpg",
+   10       "Tags": "CategoryA, New"
+   11     }
+   12   ]
+   13 }
+
+  សម្គាល់៖ ប្រសិនបើអ្នកមិនបានកំណត់ EXTERNAL_PRODUCT_API_KEY ទេ នោះ API នេះនឹងអាចប្រើប្រាស់បានជាសាធារណៈ (Public) ដោយមិនចាំបាច់ប្រើ API Key ឡើយ។
+
+តើក្នុងផ្នែកវេចខ្ចប់ស្គាល់ Time ដែលមានទម្រង់បែបនេះទេ (2026-06-09T00:50:00.000Z)?
+
+
+
+
+
+បាទ ក្នុងផ្នែកវេចខ្ចប់ (Packaging) ប្រព័ន្ធអាចស្គាល់ និងបង្ហាញទម្រង់ Time បែបនេះបាន (ISO 8601) ប៉ុន្តែមានចំណុចខ្លះដែលត្រូវប្រុងប្រយ័ត្ន៖
+
+  ១. ការបង្ហាញ (Display): ក្នុងបញ្ជីការកុម្ម៉ង់ (Order List) និងក្នុងផ្ទាំងលម្អិត (Order Details) ប្រព័ន្ធនឹងយក Time នេះទៅបំប្លែងជាទម្រង់ខ្មែរបានយ៉ាងត្រឹមត្រូវ (ឧទាហរណ៍៖ 00:50 ឬ 12:50 AM) ព្រោះវាប្រើមុខងារ safeParseDate ដើម្បីអាន។
+
+  ២. ការបែងចែកក្រុម (Grouping): ការរៀបការកុម្ម៉ង់តាមថ្ងៃនីមួយៗ ក៏នឹងដំណើរការត្រឹមត្រូវដែរ។
+
+  ៣. បញ្ហាដែលអាចកើតមាន (Potential Issue): មានផ្នែកមួយចំនួនតូចដែលប្រើការផ្ទៀងផ្ទាត់បែបសាមញ្ញ (String Matching) អាចនឹងមិនរាប់បញ្ចូលទិន្នន័យនេះក្នុងស្ថិតិប្រចាំថ្ងៃ៖
+      - Progress Stats: ចំនួនដែលបង្ហាញថាអ្នកវេចខ្ចប់បានប៉ុន្មានកញ្ចប់នៅថ្ងៃនេះ (Packed Today) អាចនឹងបង្ហាញលេខ 0 ប្រសិនបើ Time ជាទម្រង់ ISO នេះ ព្រោះវាស្វែងរកតែទម្រង់ថ្ងៃខែបែបខ្មែរ (DD/MM/YYYY)។
+      - Close Shift: នៅពេលបិទវេន (Close Shift) សរុបចំនួនកញ្ចប់ដែលវេចខ្ចប់បានក្នុងថ្ងៃនោះ ក៏អាចនឹងរាប់មិនឃើញដូចគ្នា។
+
+  សរុបមក៖ ប្រព័ន្ធស្គាល់ និងបង្ហាញបាន ប៉ុន្តែអាចប៉ះពាល់ដល់ការរាប់ចំនួនស្ថិតិ "ថ្ងៃនេះ" (Today's Stats) នៅក្នុងកម្មវិធី។ ប្រសិនបើអាច អ្នកគួរប្រើទម្រង់ដែលប្រព័ន្ធបង្កើតឱ្យស្រាប់គឺ YYYY-MM-DD HH:mm:ss (គ្មាន T និង Z) ឬទម្រង់ថ្ងៃខែធម្មតាវិញទើបល្អបំ
+  សរុបមក៖ ប្រព័ន្ធស្គាល់ និងបង្ហាញបាន ប៉ុន្តែអាចប៉ះពាល់ដល់ការរាប់ចំនួនស្ថិតិ "ថ្ងៃនេះ" (Today's Stats) នៅក្នុងកម្មវិធី។ ប្រសិនបើអាច អ្នកគួរប្រើទម្រង់ដែលប្រព័ន្ធបង្កើតឱ្យស្រាប់គឺ YYYY-MM-DD HH:mm:ss (គ្មាន T និង Z) ឬទម្រង់ថ្ងៃខែធម្មតាវិញទើបល្អបំ
+  សរុបមក៖ ប្រព័ន្ធស្គាល់ និងបង្ហាញបាន ប៉ុន្តែអាចប៉ះពាល់ដល់ការរាប់ចំនួនស្ថិតិ "ថ្ងៃនេះ" (Today's Stats) នៅក្នុងកម្មវិធី។ ប្រសិនបើអាច អ្នកគួរប្រើទម្រង់ដែលប្រព័ន្ធបង្កើតឱ្យស្រាប់គឺ YYYY-MM-DD HH:mm:ss (គ្មាន T និង Z) ឬទម្រង់ថ្ងៃខែធម្មតាវិញទើបល្អបំផុត។
+
+
+ដោយសារនៅពេល Create Order ដោយកំណត់ពេលវេលាទម្លាក់ ហើយឃើញថា time រក្សារក្នុង Sheet មានទម្រង់បែបនោះ ហើយមានបញ្ហាមិនឃើញ Order នោះក្នុងផ្ទាំង រង់ចាំវេចខ្ចប់

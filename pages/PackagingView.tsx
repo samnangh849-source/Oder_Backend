@@ -117,7 +117,7 @@ const PackagingView: React.FC<{ orders?: ParsedOrder[], onExit?: () => void }> =
             const isPacked = !!(o['Packed By'] || o['Packed Time']);
             const isUnpacked = !!o['Return Received By'];
             if (activeTab === 'Cancelled') return fs === 'Cancelled' && isUnpacked;
-            if (fs === activeTab) return true;
+            if (fs === activeTab || (activeTab === 'Pending' && fs === 'Scheduled')) return true;
             if (fs === 'Cancelled' && !isUnpacked) {
                 if (activeTab === 'Pending' && !isPacked) return true;
                 if (activeTab === 'Ready to Ship' && isPacked) return true;
@@ -138,7 +138,7 @@ const PackagingView: React.FC<{ orders?: ParsedOrder[], onExit?: () => void }> =
             const isPacked = !!(o['Packed By'] || o['Packed Time']);
             const isUnpacked = !!o['Return Received By'];
 
-            if (fs === 'Pending') counts.pending++;
+            if (fs === 'Pending' || fs === 'Scheduled') counts.pending++;
             else if (fs === 'Ready to Ship') counts.ready++;
             else if (fs === 'Shipped') counts.shipped++;
             else if (fs === 'Returned') counts.returned++;
