@@ -37,12 +37,12 @@ const PromotionDashboard: React.FC<PromotionDashboardProps> = ({ onBack }) => {
     const [isDeleting, setIsDeleting] = useState<number | null>(null);
     const [promotionToDelete, setPromotionToDelete] = useState<Promotion | null>(null);
     const [previewImage, setPreviewImage] = useState<string | null>(null);
-    
-    // Zoom & Pan state
-    const [scale, setScale] = useState(1);
-    const [position, setPosition] = useState({ x: 0, y: 0 });
-    const [isDragging, setIsDragging] = useState(false);
-    const [dragStart, setDragStart] = useState({ x: 0, y: 0 });
+    const [zoomScaleUI, setZoomScaleUI] = useState(1); // Only for UI buttons
+
+    // Zoom & Pan Refs
+    const imgContainerRef = useRef<HTMLDivElement>(null);
+    const imgRef = useRef<HTMLImageElement>(null);
+
 
     // Form state
     const [title, setTitle] = useState('');
@@ -373,46 +373,145 @@ const PromotionDashboard: React.FC<PromotionDashboardProps> = ({ onBack }) => {
         showNotification('កំពុងទាញយក...', 'info');
     };
 
-    // Zoom & Pan Handlers
-    const handleZoomIn = () => setScale(prev => Math.min(prev + 0.5, 4));
-    const handleZoomOut = () => {
-        setScale(prev => {
-            const newScale = Math.max(prev - 0.5, 1);
-            if (newScale === 1) setPosition({ x: 0, y: 0 });
-            return newScale;
-        });
-    };
-    
-    const handleWheel = (e: React.WheelEvent) => {
-        e.preventDefault();
-        if (e.deltaY < 0) {
-            handleZoomIn();
-        } else {
-            handleZoomOut();
-        }
-    };
+    // Zoom & Pan High-Performance Handlers
+    useEffect(() => {
+        const container = imgContainerRef.current;
+        const img = imgRef.current;
+        if (!container || !img || !previewImage) return;
 
-    const handleMouseDown = (e: React.MouseEvent | React.TouchEvent) => {
-        if (scale === 1) return;
-        setIsDragging(true);
-        const clientX = 'touches' in e ? e.touches[0].clientX : (e as React.MouseEvent).clientX;
-        const clientY = 'touches' in e ? e.touches[0].clientY : (e as React.MouseEvent).clientY;
-        setDragStart({ x: clientX - position.x, y: clientY - position.y });
-    };
+        let currentScale = 1;
+        let pointX = 0;
+        let pointY = 0;
+        let startX = 0;
+        let startY = 0;
+        let isPanning = false;
+        let initialPinchDistance: number | null = null;
+        let initialScale = 1;
 
-    const handleMouseMove = (e: React.MouseEvent | React.TouchEvent) => {
-        if (!isDragging || scale === 1) return;
-        const clientX = 'touches' in e ? e.touches[0].clientX : (e as React.MouseEvent).clientX;
-        const clientY = 'touches' in e ? e.touches[0].clientY : (e as React.MouseEvent).clientY;
-        setPosition({
-            x: clientX - dragStart.x,
-            y: clientY - dragStart.y
-        });
-    };
+        const updateTransform = (smooth = false) => {
+            img.style.transform = `translate(${pointX}px, ${pointY}px) scale(${currentScale})`;
+            img.style.transition = smooth ? 'transform 0.2s cubic-bezier(0.2, 0, 0, 1)' : 'none';
+            setZoomScaleUI(currentScale);
+        };
 
-    const handleMouseUp = () => {
-        setIsDragging(false);
-    };
+        const handleWheel = (e: WheelEvent) => {
+            e.preventDefault();
+            const xs = (e.clientX - pointX) / currentScale;
+            const ys = (e.clientY - pointY) / currentScale;
+            const delta = e.deltaY > 0 ? -0.1 : 0.1;
+            currentScale = Math.max(1, Math.min(currentScale + delta, 5));
+            if (currentScale === 1) {
+                pointX = 0;
+                pointY = 0;
+            } else {
+                pointX = e.clientX - xs * currentScale;
+                pointY = e.clientY - ys * currentScale;
+            }
+            updateTransform(true);
+        };
+
+        const handlePointerDown = (e: PointerEvent) => {
+            if (currentScale === 1) return;
+            isPanning = true;
+            startX = e.clientX - pointX;
+            startY = e.clientY - pointY;
+            img.style.cursor = 'grabbing';
+        };
+
+        const handlePointerMove = (e: PointerEvent) => {
+            if (!isPanning) return;
+            e.preventDefault();
+            pointX = e.clientX - startX;
+            pointY = e.clientY - startY;
+            updateTransform(false);
+        };
+
+        const handlePointerUp = () => {
+            isPanning = false;
+            if (currentScale > 1) img.style.cursor = 'grab';
+        };
+
+        const handleTouchStart = (e: TouchEvent) => {
+            if (e.touches.length === 2) {
+                e.preventDefault();
+                isPanning = false;
+                initialPinchDistance = Math.hypot(
+                    e.touches[0].clientX - e.touches[1].clientX,
+                    e.touches[0].clientY - e.touches[1].clientY
+                );
+                initialScale = currentScale;
+            } else if (e.touches.length === 1 && currentScale > 1) {
+                isPanning = true;
+                startX = e.touches[0].clientX - pointX;
+                startY = e.touches[0].clientY - pointY;
+            }
+        };
+
+        const handleTouchMove = (e: TouchEvent) => {
+            if (e.touches.length === 2 && initialPinchDistance) {
+                e.preventDefault();
+                const currentDistance = Math.hypot(
+                    e.touches[0].clientX - e.touches[1].clientX,
+                    e.touches[0].clientY - e.touches[1].clientY
+                );
+                currentScale = Math.max(1, Math.min(initialScale * (currentDistance / initialPinchDistance), 5));
+                if (currentScale === 1) { pointX = 0; pointY = 0; }
+                updateTransform(false);
+            } else if (e.touches.length === 1 && isPanning) {
+                e.preventDefault();
+                pointX = e.touches[0].clientX - startX;
+                pointY = e.touches[0].clientY - startY;
+                updateTransform(false);
+            }
+        };
+
+        const handleTouchEnd = (e: TouchEvent) => {
+            if (e.touches.length < 2) initialPinchDistance = null;
+            if (e.touches.length === 0) isPanning = false;
+        };
+
+        // Attach native events with { passive: false } to allow e.preventDefault()
+        container.addEventListener('wheel', handleWheel, { passive: false });
+        container.addEventListener('touchstart', handleTouchStart, { passive: false });
+        container.addEventListener('touchmove', handleTouchMove, { passive: false });
+        container.addEventListener('touchend', handleTouchEnd);
+        container.addEventListener('touchcancel', handleTouchEnd);
+        img.addEventListener('pointerdown', handlePointerDown);
+        window.addEventListener('pointermove', handlePointerMove, { passive: false });
+        window.addEventListener('pointerup', handlePointerUp);
+
+        // Expose controls for buttons
+        (container as any)._zoomIn = () => {
+            currentScale = Math.min(currentScale + 0.5, 4);
+            updateTransform(true);
+        };
+        (container as any)._zoomOut = () => {
+            currentScale = Math.max(currentScale - 0.5, 1);
+            if (currentScale === 1) { pointX = 0; pointY = 0; }
+            updateTransform(true);
+        };
+        (container as any)._resetZoom = () => {
+            currentScale = 1;
+            pointX = 0;
+            pointY = 0;
+            updateTransform(true);
+        };
+
+        return () => {
+            container.removeEventListener('wheel', handleWheel);
+            container.removeEventListener('touchstart', handleTouchStart);
+            container.removeEventListener('touchmove', handleTouchMove);
+            container.removeEventListener('touchend', handleTouchEnd);
+            container.removeEventListener('touchcancel', handleTouchEnd);
+            img.removeEventListener('pointerdown', handlePointerDown);
+            window.removeEventListener('pointermove', handlePointerMove);
+            window.removeEventListener('pointerup', handlePointerUp);
+            delete (container as any)._zoomIn;
+            delete (container as any)._zoomOut;
+            delete (container as any)._resetZoom;
+        };
+    }, [previewImage]);
+
 
     const handleImageFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
         const file = e.target.files?.[0];
@@ -1002,52 +1101,42 @@ const PromotionDashboard: React.FC<PromotionDashboardProps> = ({ onBack }) => {
             {previewImage && (
                 <div 
                     className="fixed inset-0 z-[100] bg-[#181A20] flex flex-col items-center justify-center animate-fade-in"
-                    onClick={() => { setPreviewImage(null); setScale(1); setPosition({ x: 0, y: 0 }); }}
+                    onClick={() => { setPreviewImage(null); setZoomScaleUI(1); }}
                 >
                     {/* Close Button */}
                     <button 
                         className="absolute top-6 right-6 w-12 h-12 bg-black/40 hover:bg-black/60 rounded-full flex items-center justify-center text-white transition-all active:scale-90 z-[120] backdrop-blur-md border border-white/10"
-                        onClick={(e) => { e.stopPropagation(); setPreviewImage(null); setScale(1); setPosition({ x: 0, y: 0 }); }}
+                        onClick={(e) => { e.stopPropagation(); setPreviewImage(null); setZoomScaleUI(1); }}
                     >
                         <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path d="M6 18L18 6M6 6l12 12" strokeWidth={2.5} /></svg>
                     </button>
                     
-                    {/* Image Container with Zoom & Pan */}
+                    {/* Image Container with High-Performance Zoom & Pan */}
                     <div 
+                        ref={imgContainerRef}
                         className="w-full h-full relative flex items-center justify-center overflow-hidden touch-none" 
                         onClick={(e) => e.stopPropagation()}
-                        onWheel={handleWheel}
-                        onMouseDown={handleMouseDown}
-                        onMouseMove={handleMouseMove}
-                        onMouseUp={handleMouseUp}
-                        onMouseLeave={handleMouseUp}
-                        onTouchStart={handleMouseDown}
-                        onTouchMove={handleMouseMove}
-                        onTouchEnd={handleMouseUp}
                     >
                         <img 
+                            ref={imgRef}
                             src={convertGoogleDriveUrl(previewImage)} 
                             alt="Full Preview" 
-                            style={{ 
-                                transform: `translate(${position.x}px, ${position.y}px) scale(${scale})`,
-                                transition: isDragging ? 'none' : 'transform 0.2s cubic-bezier(0.2, 0, 0, 1)'
-                            }}
-                            className={`${scale > 1 ? 'cursor-grab active:cursor-grabbing' : 'cursor-zoom-in'} w-full h-full max-w-[95vw] max-h-[95vh] object-contain rounded-xl shadow-2xl animate-scale-in select-none`}
+                            className={`${zoomScaleUI > 1 ? 'cursor-grab' : 'cursor-zoom-in'} w-full h-full max-w-[95vw] max-h-[95vh] object-contain rounded-xl shadow-2xl animate-scale-in select-none`}
                             draggable={false}
                             onClick={(e) => { 
                                 e.stopPropagation(); 
-                                if (scale === 1) handleZoomIn(); 
+                                if (zoomScaleUI === 1 && imgContainerRef.current) (imgContainerRef.current as any)._zoomIn?.(); 
                             }}
                         />
                     </div>
 
                     {/* Zoom Controls */}
                     <div className="absolute right-6 bottom-32 md:bottom-1/2 md:translate-y-1/2 flex flex-col gap-2 z-[110]">
-                        <button onClick={(e) => { e.stopPropagation(); handleZoomIn(); }} className="w-10 h-10 bg-black/40 hover:bg-black/60 backdrop-blur-md border border-white/10 rounded-full text-white flex items-center justify-center shadow-lg"><svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path d="M12 4v16m8-8H4" strokeWidth={2.5} /></svg></button>
-                        {scale > 1 && (
-                            <button onClick={(e) => { e.stopPropagation(); setScale(1); setPosition({ x: 0, y: 0 }); }} className="w-10 h-10 bg-black/40 hover:bg-black/60 backdrop-blur-md border border-white/10 rounded-full text-white flex items-center justify-center shadow-lg"><svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path d="M4 4h16M4 20h16M4 12h16" strokeWidth={2} /></svg></button>
+                        <button onClick={(e) => { e.stopPropagation(); if (imgContainerRef.current) (imgContainerRef.current as any)._zoomIn?.(); }} className="w-10 h-10 bg-black/40 hover:bg-black/60 backdrop-blur-md border border-white/10 rounded-full text-white flex items-center justify-center shadow-lg"><svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path d="M12 4v16m8-8H4" strokeWidth={2.5} /></svg></button>
+                        {zoomScaleUI > 1 && (
+                            <button onClick={(e) => { e.stopPropagation(); if (imgContainerRef.current) (imgContainerRef.current as any)._resetZoom?.(); }} className="w-10 h-10 bg-black/40 hover:bg-black/60 backdrop-blur-md border border-white/10 rounded-full text-white flex items-center justify-center shadow-lg"><svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path d="M4 4h16M4 20h16M4 12h16" strokeWidth={2} /></svg></button>
                         )}
-                        <button onClick={(e) => { e.stopPropagation(); handleZoomOut(); }} className="w-10 h-10 bg-black/40 hover:bg-black/60 backdrop-blur-md border border-white/10 rounded-full text-white flex items-center justify-center shadow-lg"><svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path d="M20 12H4" strokeWidth={2.5} /></svg></button>
+                        <button onClick={(e) => { e.stopPropagation(); if (imgContainerRef.current) (imgContainerRef.current as any)._zoomOut?.(); }} className="w-10 h-10 bg-black/40 hover:bg-black/60 backdrop-blur-md border border-white/10 rounded-full text-white flex items-center justify-center shadow-lg"><svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path d="M20 12H4" strokeWidth={2.5} /></svg></button>
                     </div>
 
                     <div className="absolute bottom-8 flex gap-4 animate-fade-in-up z-[110]">
