@@ -62,7 +62,7 @@ const SYSTEM_STRUCTURE = {
   "Movies": ["ID", "Title", "Description", "Thumbnail", "VideoURL", "Type", "Language", "Country", "Category", "SeriesKey", "AddedAt"],
 
   // ប្រព័ន្ធប្រូម៉ូសិន (Promotions)
-  "Promotions": ["ID", "Title", "ImageURL", "Category", "Description", "UpdatedAt", "UpdatedBy"],
+  "Promotions": ["ID", "Barcode", "Title", "ImageURL", "Category", "Description", "UpdatedAt", "UpdatedBy"],
 
   // ឯកសារយោង និង Chat
   "ChatMessages": ["ID", "Timestamp", "UserName", "Receiver", "MessageType", "Content", "FileID"],

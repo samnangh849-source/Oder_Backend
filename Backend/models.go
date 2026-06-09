@@ -25,6 +25,7 @@ type User struct {
 
 type Promotion struct {
 	ID          uint   `gorm:"primaryKey;autoIncrement;column:id" json:"ID"`
+	Barcode     string `gorm:"column:barcode" json:"Barcode"`
 	Title       string `gorm:"column:title" json:"Title"`
 	ImageURL    string `gorm:"column:image_url" json:"ImageURL"`
 	Category    string `gorm:"column:category;index" json:"Category"`

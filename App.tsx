@@ -523,17 +523,17 @@ const AppContent: React.FC = () => {
     }, []);
 
     const shouldShowHeader = useMemo(() => {
-        if (appState === 'login' || appState === 'user_journey' || appState === 'admin_dashboard' || appState === 'confirm_delivery' || appState === 'entertainment' || appState === 'watch' || appState === 'series_player' || appState === 'long_player' || appState === 'short_player' || appState === 'cambodia_map' || appState === 'print_label' || appState === 'fulfillment' || appState === 'order_metadata') return false;
+        if (appState === 'login' || appState === 'user_journey' || appState === 'admin_dashboard' || appState === 'confirm_delivery' || appState === 'entertainment' || appState === 'watch' || appState === 'series_player' || appState === 'long_player' || appState === 'short_player' || appState === 'cambodia_map' || appState === 'print_label' || appState === 'fulfillment' || appState === 'order_metadata' || appState === 'promotions') return false;
         return true;
     }, [appState]);
 
     const containerClass = useMemo(() => {
-        if (appState === 'entertainment' || appState === 'watch' || appState === 'series_player' || appState === 'long_player' || appState === 'short_player' || appState === 'cambodia_map' || appState === 'print_label' || appState === 'fulfillment' || appState === 'order_metadata') return 'w-full';
+        if (appState === 'entertainment' || appState === 'watch' || appState === 'series_player' || appState === 'long_player' || appState === 'short_player' || appState === 'cambodia_map' || appState === 'print_label' || appState === 'fulfillment' || appState === 'order_metadata' || appState === 'promotions') return 'w-full';
         return (appState === 'admin_dashboard' || appState === 'role_selection' || appState === 'user_journey') ? 'w-full' : 'w-full px-2 sm:px-6';
     }, [appState, selectedTeam]);
 
     const paddingClass = useMemo(() => {
-        if (appState === 'login' || appState === 'confirm_delivery' || appState === 'entertainment' || appState === 'watch' || appState === 'series_player' || appState === 'long_player' || appState === 'short_player' || appState === 'cambodia_map' || appState === 'print_label' || appState === 'fulfillment' || appState === 'order_metadata') return 'pt-0 pb-0';
+        if (appState === 'login' || appState === 'confirm_delivery' || appState === 'entertainment' || appState === 'watch' || appState === 'series_player' || appState === 'long_player' || appState === 'short_player' || appState === 'cambodia_map' || appState === 'print_label' || appState === 'fulfillment' || appState === 'order_metadata' || appState === 'promotions') return 'pt-0 pb-0';
         
         // Base header padding
         let topPadding = isMobile ? 'pt-16' : 'pt-20';

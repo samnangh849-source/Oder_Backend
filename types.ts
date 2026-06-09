@@ -271,6 +271,7 @@ export interface Notification {
 
 export interface Promotion {
     ID: number;
+    Barcode?: string;
     Title: string;
     ImageURL: string;
     Category: string;

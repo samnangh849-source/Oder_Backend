@@ -371,6 +371,7 @@ func PerformDataMigration() {
 	tx.Session(&gorm.Session{AllowGlobalUpdate: true}).Delete(&Role{})
 	tx.Session(&gorm.Session{AllowGlobalUpdate: true}).Delete(&RolePermission{})
 	tx.Session(&gorm.Session{AllowGlobalUpdate: true}).Delete(&IncentiveCustomPayout{})
+	tx.Session(&gorm.Session{AllowGlobalUpdate: true}).Delete(&Promotion{})
 	tx.Session(&gorm.Session{AllowGlobalUpdate: true}).Delete(&IncentiveManualData{})
 	tx.Session(&gorm.Session{AllowGlobalUpdate: true}).Delete(&IncentiveResult{})
 	tx.Session(&gorm.Session{AllowGlobalUpdate: true}).Delete(&IncentiveCalculator{})
@@ -1062,9 +1063,36 @@ func PerformDataMigration() {
 	} else {
 		log.Println("⚠️ AllOrders: No valid rows found to save")
 	}
-	broadcastFullSyncProgress(24, totalSteps, "កំពុងទាញ Movies...", len(validOrders), time.Since(startTime).Seconds())
+	broadcastFullSyncProgress(24, totalSteps, "កំពុងទាញ Promotions...", len(validOrders), time.Since(startTime).Seconds())
 
-	// ── Movies ──
+	// ── Promotions ──
+	var promos []Promotion
+	if err := FetchSheetDataToStruct("Promotions", &promos); err != nil {
+		tx.Rollback()
+		log.Println("❌ Migration failed for Promotions:", err)
+		broadcastFullSyncComplete(false, "Failed to fetch Promotions: "+err.Error(), time.Since(startTime).Seconds())
+		return
+	}
+	var validPromos []Promotion
+	seenPromoIDs := make(map[uint]bool)
+	for _, x := range promos {
+		if !seenPromoIDs[x.ID] {
+			if x.ID != 0 {
+				seenPromoIDs[x.ID] = true
+			}
+			validPromos = append(validPromos, x)
+		}
+	}
+	if len(validPromos) > 0 {
+		if err := tx.CreateInBatches(validPromos, 100).Error; err != nil {
+			tx.Rollback()
+			log.Println("❌ Migration failed to save Promotions:", err)
+			broadcastFullSyncComplete(false, "Failed to save Promotions: "+err.Error(), time.Since(startTime).Seconds())
+			return
+		}
+	}
+
+	broadcastFullSyncProgress(25, totalSteps, "កំពុងទាញ Movies...", len(validPromos), time.Since(startTime).Seconds())
 	var movies []Movie
 	if err := FetchSheetDataToStruct("Movies", &movies); err != nil {
 		tx.Rollback()
