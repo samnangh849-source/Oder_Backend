@@ -19,7 +19,7 @@ interface OrderContextType {
     setRefreshTimestamp: React.Dispatch<React.SetStateAction<number>>;
     fetchData: (force?: boolean) => Promise<Record<string, any> | null>;
     fetchOrders: (force?: boolean, params?: Record<string, string | number>) => Promise<any>;
-    fetchPromotions: () => Promise<void>;
+    fetchPromotions: (force?: boolean) => Promise<void>;
     refreshData: () => Promise<Record<string, any> | null>;
 }
 
@@ -197,12 +197,15 @@ export const OrderProvider: React.FC<{ children: React.ReactNode }> = ({ childre
         }
     }, [handleUnauthorized, fetchData]);
 
-    const fetchPromotions = useCallback(async () => {
+    const fetchPromotions = useCallback(async (force = false) => {
         try {
             const token = localStorage.getItem('token');
             if (!token) return;
             const headers: HeadersInit = { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` };
-            const response = await fetch(`${WEB_APP_URL}/api/promotions`, { headers });
+            const url = force
+                ? `${WEB_APP_URL}/api/promotions?_t=${Date.now()}`
+                : `${WEB_APP_URL}/api/promotions`;
+            const response = await fetch(url, { headers, cache: 'no-store' });
             if (response.ok) {
                 const result = await response.json();
                 if (result.status === 'success') {
@@ -215,7 +218,7 @@ export const OrderProvider: React.FC<{ children: React.ReactNode }> = ({ childre
     }, []);
 
     const refreshData = useCallback(async (): Promise<Record<string, any> | null> => {
-        const [staticData] = await Promise.all([fetchData(true), fetchOrders(true), fetchPromotions()]);
+        const [staticData] = await Promise.all([fetchData(true), fetchOrders(true), fetchPromotions(true)]);
         return staticData;
     }, [fetchData, fetchOrders, fetchPromotions]);
 

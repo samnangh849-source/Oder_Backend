@@ -66,7 +66,7 @@ const PromotionDashboard: React.FC<PromotionDashboardProps> = ({ onBack }) => {
     // Handle real-time updates
     useEffect(() => {
         if (lastMessage && lastMessage.type === 'promotion_updated') {
-            fetchPromotions();
+            fetchPromotions(true);
             if (lastMessage.action === 'create' && lastMessage.data?.UpdatedBy !== currentUser?.FullName) {
                 showNotification(`មានប្រូម៉ូសិនថ្មី៖ ${lastMessage.data?.Title}`, 'info', 'បច្ចុប្បន្នភាពប្រូម៉ូសិន');
             }
@@ -147,7 +147,7 @@ const PromotionDashboard: React.FC<PromotionDashboardProps> = ({ onBack }) => {
                 setIsUploadModalOpen(false);
                 setEditingPromotion(null);
                 resetForm();
-                fetchPromotions();
+                fetchPromotions(true);
             } else {
                 showNotification('មានបញ្ហាក្នុងការរក្សាទុក', 'error');
             }
@@ -169,7 +169,7 @@ const PromotionDashboard: React.FC<PromotionDashboardProps> = ({ onBack }) => {
 
             if (response.ok) {
                 showNotification('លុបជោគជ័យ', 'success');
-                fetchPromotions();
+                fetchPromotions(true);
             } else {
                 showNotification('លុបមិនបានសម្រេច', 'error');
             }
