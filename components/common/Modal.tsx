@@ -41,10 +41,10 @@ const Modal: React.FC<ModalProps> = ({ isOpen, onClose, children, maxWidth = 'ma
             onClick={handleOverlayClick}
         >
             <div
-                className={`${fullScreen ? 'w-screen h-screen max-w-none max-h-none' : `page-card w-full ${maxWidth} rounded-sm shadow-2xl border border-[#2B3139] max-h-[95vh] flex flex-col my-auto`} bg-[#181A20] transform transition-all duration-300 scale-100 opacity-100 animate-modal-in overflow-hidden font-sans text-gray-300`}
+                className={`${fullScreen ? 'w-full h-[100dvh] max-w-none max-h-none flex flex-col' : `page-card w-full ${maxWidth} rounded-sm shadow-2xl border border-[#2B3139] max-h-[95vh] flex flex-col my-auto`} bg-[#181A20] transform transition-all duration-300 scale-100 opacity-100 animate-modal-in overflow-hidden font-sans text-gray-300`}
                 onClick={(e) => e.stopPropagation()}
             >
-                <div className="flex-grow overflow-y-auto overscroll-contain no-scrollbar scroll-smooth">
+                <div className={`flex-grow ${fullScreen ? 'overflow-hidden flex flex-col' : 'overflow-y-auto overscroll-contain no-scrollbar scroll-smooth'}`}>
                     {children}
                 </div>
             </div>

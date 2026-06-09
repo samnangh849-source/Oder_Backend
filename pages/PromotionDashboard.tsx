@@ -632,7 +632,7 @@ const PromotionDashboard: React.FC<PromotionDashboardProps> = ({ onBack }) => {
 
             {/* Upload/Edit Modal (Full Screen) */}
             <Modal isOpen={isUploadModalOpen} onClose={() => setIsUploadModalOpen(false)} fullScreen={true}>
-                <div className="flex flex-col h-full bg-[#181A20] font-['Kantumruy_Pro']">
+                <div className="flex flex-col flex-grow overflow-hidden bg-[#181A20] font-['Kantumruy_Pro']">
                     {/* Modal Header */}
                     <div className="flex items-center justify-between p-4 sm:p-6 border-b border-[#2B3139] bg-[#1E2329]/50 backdrop-blur-xl sticky top-0 z-50">
                         <div className="flex items-center gap-4">
