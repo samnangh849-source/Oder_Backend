@@ -29,7 +29,7 @@ const TopPerformanceUserJourney: React.FC<TopPerformanceUserJourneyProps> = ({ o
         const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
         const endOfToday = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 23, 59, 59, 999);
 
-        return orders.filter(o => {
+        return (orders || []).filter(o => {
             const orderDate = safeParseDate(o.Timestamp);
             if (!orderDate) return false;
 

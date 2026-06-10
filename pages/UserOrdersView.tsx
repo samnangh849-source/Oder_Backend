@@ -40,21 +40,23 @@ const UserOrdersView: React.FC<{ team: string; onAdd: () => void }> = ({ team, o
         }
     }, [reportFilters, showReport, showShippingReport, team, fetchOrders]);
 
-    const permittedOrders = useMemo(() => {
+    const teamBaseOrders = useMemo(() => {
         if (!currentUser) return [];
         const isInternalAdmin = currentUser.IsSystemAdmin || (currentUser.Role || '').toLowerCase() === 'admin';
         
         // Base orders filtered by team for security
-        let base = orders;
         if (!isInternalAdmin) {
             const userAllowedTeams = (currentUser.Team || '').split(',').map(t => t.trim().toLowerCase());
             const requestedTeam = (team || '').trim().toLowerCase();
             if (!userAllowedTeams.includes(requestedTeam)) return [];
-            base = orders.filter(o => (o.Team || '').trim().toLowerCase() === requestedTeam);
+            return orders.filter(o => (o.Team || '').trim().toLowerCase() === requestedTeam);
         }
-        
+        return orders;
+    }, [orders, team, currentUser]);
+
+    const permittedOrders = useMemo(() => {
         // Secondary filtering for the active report range (since orders array might contain more)
-        return base.filter(o => {
+        return teamBaseOrders.filter(o => {
             if (reportFilters.datePreset === 'all') return true;
             if (!o.Timestamp) return false;
             
@@ -65,14 +67,27 @@ const UserOrdersView: React.FC<{ team: string; onAdd: () => void }> = ({ team, o
             const now = new Date();
             const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
             let start: Date | null = null;
-            let end: Date | null = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 23, 59, 59);
+            let end: Date | null = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 23, 59, 59, 999);
 
             switch (reportFilters.datePreset) {
                 case 'today': start = today; break;
                 case 'yesterday': start = new Date(today); start.setDate(today.getDate() - 1); end = new Date(today); end.setMilliseconds(-1); break;
                 case 'this_week': const dw = now.getDay(); start = new Date(today); start.setDate(today.getDate() - (dw === 0 ? 6 : dw - 1)); break;
+                case 'last_week': {
+                    const d = now.getDay();
+                    const startOfThisWeek = new Date(today);
+                    startOfThisWeek.setDate(today.getDate() - (d === 0 ? 6 : d - 1));
+                    start = new Date(startOfThisWeek);
+                    start.setDate(startOfThisWeek.getDate() - 7);
+                    end = new Date(start);
+                    end.setDate(start.getDate() + 6);
+                    end.setHours(23, 59, 59, 999);
+                    break;
+                }
                 case 'this_month': start = new Date(now.getFullYear(), now.getMonth(), 1); break;
                 case 'last_month': start = new Date(now.getFullYear(), now.getMonth() - 1, 1); end = new Date(now.getFullYear(), now.getMonth(), 0, 23, 59, 59); break;
+                case 'this_year': start = new Date(now.getFullYear(), 0, 1); break;
+                case 'last_year': start = new Date(now.getFullYear() - 1, 0, 1); end = new Date(now.getFullYear() - 1, 11, 31, 23, 59, 59); break;
                 case 'custom':
                     if (reportFilters.startDate) start = new Date(reportFilters.startDate + 'T00:00:00');
                     if (reportFilters.endDate) end = new Date(reportFilters.endDate + 'T23:59:59');
@@ -82,7 +97,7 @@ const UserOrdersView: React.FC<{ team: string; onAdd: () => void }> = ({ team, o
             if (end && d > end) return false;
             return true;
         });
-    }, [orders, team, currentUser, reportFilters]);
+    }, [teamBaseOrders, reportFilters]);
 
     const [drilldownFilters, setDrilldownFilters] = useState<any>(null);
     const [drilldownData, setDrilldownData] = useState<ParsedOrder[]>([]);
@@ -199,7 +214,7 @@ const UserOrdersView: React.FC<{ team: string; onAdd: () => void }> = ({ team, o
         </div>
     );
 
-    if (showReport) return <div className="animate-fade-in h-full overflow-auto"><UserSalesPageReport orders={permittedOrders} onBack={() => setShowReport(false)} team={team} onNavigate={(filters) => setDrilldownFilters(filters)} onFilterChange={handleFilterChange} dateFilter={reportFilters.datePreset} startDate={reportFilters.startDate} endDate={reportFilters.endDate} /></div>;
+    if (showReport) return <div className="animate-fade-in h-full overflow-auto"><UserSalesPageReport orders={permittedOrders} allOrders={teamBaseOrders} onBack={() => setShowReport(false)} team={team} onNavigate={(filters) => setDrilldownFilters(filters)} onFilterChange={handleFilterChange} dateFilter={reportFilters.datePreset} startDate={reportFilters.startDate} endDate={reportFilters.endDate} /></div>;
 
     if (showShippingReport) return <div className="animate-fade-in h-full overflow-auto"><ShippingReport orders={permittedOrders} appData={appData} dateFilter={reportFilters.datePreset} startDate={reportFilters.startDate} endDate={reportFilters.endDate} onNavigate={(filters) => { setDrilldownFilters(filters); setShowShippingReport(false); }} onBack={() => setShowShippingReport(false)} onFilterChange={handleFilterChange} /></div>;
 

@@ -10,6 +10,8 @@ import {
 } from 'recharts';
 import { X, BarChart3, TrendingUp, Package, Activity, Zap, DollarSign, Plus, Edit2, Maximize2, Minimize2, Cpu, Globe, Layers, Search, MousePointer2, RefreshCw, Filter } from 'lucide-react';
 import { safeParseDate } from '../../utils/dateUtils';
+import { useFilterEngine, FilterState, initialFilterState } from '../../hooks/useFilterEngine';
+
 interface SalesStatisticModalProps {
     initialDateFilter?: string;
     initialStart?: string;
@@ -19,6 +21,7 @@ interface SalesStatisticModalProps {
     orders: ParsedOrder[];
     title: string;
     subtitle: string;
+    contextFilters?: FilterState;
 }
 const COLORS = ['#3B82F6', '#6366F1', '#8B5CF6', '#EC4899', '#F43F5E', '#F97316', '#EAB308', '#10B981'];
 const renderActiveShape = (props: any) => {
@@ -169,9 +172,10 @@ const renderPieLabel = (props: any) => {
 
 const SalesStatisticModal: React.FC<SalesStatisticModalProps> = ({
 isOpen, onClose, orders, title, subtitle,
-    initialDateFilter, initialStart, initialEnd
+    initialDateFilter, initialStart, initialEnd, contextFilters
 }) => {
     const { appData, language } = useContext(AppContext);
+    const { filterOrders } = useFilterEngine(orders, appData);
     const [offlineSale, setOfflineSale] = useState<number>(() => {
         const saved = localStorage.getItem('global_offline_sale_value');
         return saved ? parseFloat(saved) : 0;
@@ -181,10 +185,14 @@ isOpen, onClose, orders, title, subtitle,
     const [activePieIndex, setActivePieIndex] = useState(0);
     const [isPieMaximized, setIsPieMaximized] = useState(false);
     const [zoomScale, setZoomScale] = useState(1);
-    const [activeDateRange, setActiveDateRange] = useState<'all' | 'today' | 'this_week' | 'this_month' | 'last_month' | 'custom'>('all');
+    const [activeDateRange, setActiveDateRange] = useState<'all' | 'today' | 'yesterday' | 'this_week' | 'last_week' | 'this_month' | 'last_month' | 'this_year' | 'last_year' | 'custom'>('all');
     const [customStart, setCustomStart] = useState('');
     const [customEnd, setCustomEnd] = useState('');
+    const [nodeSortBy, setNodeSortBy] = useState<'revenue' | 'growth' | 'volume' | 'name'>('revenue');
+    const [hideEmptyNodes, setHideEmptyNodes] = useState(false);
+    const [nodeTimeFrame, setNodeTimeFrame] = useState<'current' | '3months'>('3months');
     const [selectedVelocityPages, setSelectedVelocityPages] = useState<string[]>([]);
+
     const [productSearchQueries, setProductSearchQueries] = useState<Record<string, string>>({});
     const [openProductSelector, setOpenProductSelector] = useState<string | null>(null);
     const [pageProductMapping, setPageProductMapping] = useState<Record<string, string[]>>(() => {
@@ -246,46 +254,28 @@ isOpen, onClose, orders, title, subtitle,
         setIsEditingOffline(false);
     };
 
+    const baseFilteredOrders = useMemo(() => {
+        // Technical Upgrade: Filter by context (Page, Team, User, etc.) but ignore modal's local date selection
+        const filters = {
+            ...(contextFilters || initialFilterState),
+            datePreset: 'all' as const // We handle dates separately for the "Previous Period" comparison
+        };
+        return filterOrders(orders, filters);
+    }, [orders, contextFilters, filterOrders]);
+
     const filteredOrders = useMemo(() => {
-        if (activeDateRange === 'all') return orders;
-        const now = new Date();
-        const startOfToday = new Date(now.getFullYear(), now.getMonth(), now.getDate());
-        return orders.filter(o => {
-            const d = safeParseDate(o.Timestamp);
-            if (!d) return false;
-            if (activeDateRange === 'today') return d >= startOfToday;
-            if (activeDateRange === 'this_week') {
-                const day = now.getDay();
-                const startOfWeek = new Date(startOfToday);
-                startOfWeek.setDate(startOfToday.getDate() - (day === 0 ? 6 : day - 1));
-                return d >= startOfWeek;
-            }
-            if (activeDateRange === 'this_month') {
-                const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
-                return d >= startOfMonth;
-            }
-            if (activeDateRange === 'last_month') {
-                const start = new Date(now.getFullYear(), now.getMonth() - 1, 1);
-                const end = new Date(now.getFullYear(), now.getMonth(), 0, 23, 59, 59, 999);
-                return d >= start && d <= end;
-            }
-            if (activeDateRange === 'custom') {
-                if (customStart) {
-                    const start = new Date(customStart + 'T00:00:00');
-                    if (d < start) return false;
-                }
-                if (customEnd) {
-                    const end = new Date(customEnd + 'T23:59:59');
-                    if (d > end) return false;
-                }
-                return true;
-            }
-            return true;
-        });
-    }, [orders, activeDateRange, customStart, customEnd]);
+        // Technical Upgrade: Full filtering including the modal's active temporal window
+        const filters = {
+            ...(contextFilters || initialFilterState),
+            datePreset: activeDateRange,
+            startDate: customStart,
+            endDate: customEnd
+        };
+        return filterOrders(orders, filters);
+    }, [orders, contextFilters, activeDateRange, customStart, customEnd, filterOrders]);
 
     const stats = useMemo(() => {
-        const parsedOrders: ParsedOrder[] = orders.map(o => {
+        const parsedOrders: ParsedOrder[] = baseFilteredOrders.map(o => {
             let p: Product[] = [];
             try {
                 p = JSON.parse(o["Products (JSON)"] || '[]');
@@ -344,7 +334,7 @@ isOpen, onClose, orders, title, subtitle,
         const barChartData = (() => {
             const currentTotal = filteredOrders.reduce((sum, o) => sum + (Number(o['Grand Total']) || 0), 0);
             
-            // Calculate the same period in the previous month
+            // Calculate the same period in the previous month/week/day
             let prevTotal = 0;
             let currentLabel = language === 'km' ? 'បច្ចុប្បន្ន' : 'Current';
             let prevLabel = language === 'km' ? 'មុន' : 'Previous';
@@ -353,16 +343,39 @@ isOpen, onClose, orders, title, subtitle,
                 let filterStart: Date | null = null;
                 let filterEnd: Date | null = null;
 
+                const now = new Date();
+                const startOfToday = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+                const endOfToday = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 23, 59, 59, 999);
+
                 if (activeDateRange === 'today') {
-                    filterStart = new Date(now.getFullYear(), now.getMonth(), now.getDate());
-                    filterEnd = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 23, 59, 59);
+                    filterStart = startOfToday;
+                    filterEnd = endOfToday;
+                } else if (activeDateRange === 'yesterday') {
+                    filterStart = new Date(startOfToday); filterStart.setDate(filterStart.getDate() - 1);
+                    filterEnd = new Date(endOfToday); filterEnd.setDate(filterEnd.getDate() - 1);
                 } else if (activeDateRange === 'this_week') {
-                    const day = now.getDay();
-                    filterStart = new Date(now.getFullYear(), now.getMonth(), now.getDate() - (day === 0 ? 6 : day - 1));
-                    filterEnd = new Date(now);
+                    const d = now.getDay();
+                    filterStart = new Date(startOfToday); filterStart.setDate(startOfToday.getDate() - (d === 0 ? 6 : d - 1));
+                    filterEnd = endOfToday;
+                } else if (activeDateRange === 'last_week') {
+                    const d = now.getDay();
+                    const startOfThisWeek = new Date(startOfToday);
+                    startOfThisWeek.setDate(startOfToday.getDate() - (d === 0 ? 6 : d - 1));
+                    filterStart = new Date(startOfThisWeek); filterStart.setDate(startOfThisWeek.getDate() - 7);
+                    filterEnd = new Date(filterStart); filterEnd.setDate(filterStart.getDate() + 6);
+                    filterEnd.setHours(23, 59, 59, 999);
                 } else if (activeDateRange === 'this_month') {
                     filterStart = new Date(now.getFullYear(), now.getMonth(), 1);
-                    filterEnd = new Date(now);
+                    filterEnd = endOfToday;
+                } else if (activeDateRange === 'last_month') {
+                    filterStart = new Date(now.getFullYear(), now.getMonth() - 1, 1);
+                    filterEnd = new Date(now.getFullYear(), now.getMonth(), 0, 23, 59, 59, 999);
+                } else if (activeDateRange === 'this_year') {
+                    filterStart = new Date(now.getFullYear(), 0, 1);
+                    filterEnd = endOfToday;
+                } else if (activeDateRange === 'last_year') {
+                    filterStart = new Date(now.getFullYear() - 1, 0, 1);
+                    filterEnd = new Date(now.getFullYear() - 1, 11, 31, 23, 59, 59, 999);
                 } else if (activeDateRange === 'custom') {
                     if (customStart) filterStart = new Date(customStart + 'T00:00:00');
                     if (customEnd) filterEnd = new Date(customEnd + 'T23:59:59');
@@ -384,17 +397,30 @@ isOpen, onClose, orders, title, subtitle,
                     const actualEnd = filterEnd || new Date();
                     currentLabel = formatLabel(filterStart, actualEnd);
 
-                    const prevMonthStart = new Date(filterStart);
-                    prevMonthStart.setMonth(filterStart.getMonth() - 1);
+                    const prevPeriodStart = new Date(filterStart);
+                    const prevPeriodEnd = new Date(actualEnd);
                     
-                    const prevMonthEnd = new Date(actualEnd);
-                    prevMonthEnd.setMonth(actualEnd.getMonth() - 1);
+                    if (activeDateRange === 'this_month' || activeDateRange === 'last_month') {
+                        prevPeriodStart.setMonth(filterStart.getMonth() - 1);
+                        prevPeriodEnd.setMonth(actualEnd.getMonth() - 1);
+                    } else if (activeDateRange === 'this_year' || activeDateRange === 'last_year') {
+                        prevPeriodStart.setFullYear(filterStart.getFullYear() - 1);
+                        prevPeriodEnd.setFullYear(actualEnd.getFullYear() - 1);
+                    } else if (activeDateRange === 'today' || activeDateRange === 'yesterday') {
+                        prevPeriodStart.setDate(filterStart.getDate() - 1);
+                        prevPeriodEnd.setDate(actualEnd.getDate() - 1);
+                    } else {
+                        // For weeks and custom, subtract 7 days or same duration
+                        const duration = actualEnd.getTime() - filterStart.getTime();
+                        prevPeriodStart.setTime(filterStart.getTime() - duration - 1000);
+                        prevPeriodEnd.setTime(filterStart.getTime() - 1000);
+                    }
                     
-                    prevLabel = formatLabel(prevMonthStart, prevMonthEnd);
+                    prevLabel = formatLabel(prevPeriodStart, prevPeriodEnd);
 
-                    orders.forEach(o => {
+                    baseFilteredOrders.forEach(o => {
                         const od = safeParseDate(o.Timestamp);
-                        if (od && od >= prevMonthStart && od <= prevMonthEnd) {
+                        if (od && od >= prevPeriodStart && od <= prevPeriodEnd) {
                             prevTotal += (Number(o['Grand Total']) || 0);
                         }
                     });
@@ -415,21 +441,31 @@ isOpen, onClose, orders, title, subtitle,
             };
         });
 
-        const bottomCharts = sortedPages.map((p, idx) => {
+        let bottomCharts = sortedPages.map((p, idx) => {
             const mData: Record<string, number> = {};
             const mOrders: Record<string, number> = {};
             const pMapping = pageProductMapping[p] || [];
             const productPerformance: Record<string, { revenue: number, quantity: number }> = {};
             pMapping.forEach(prod => productPerformance[prod] = { revenue: 0, quantity: 0 });
 
-            // Initialize with 0s for the last 3 months
+            // Initialize with 0s for the target time frame
+            let targetMonths = last3Months;
+            if (nodeTimeFrame === 'current' && activeDateRange !== 'all') {
+                // If current period is selected, we might want to show weeks or days if the range is small, 
+                // but for simplicity let's stick to the selected filtered orders but grouped.
+                // However, the current logic for bottomCharts expects a monthly breakdown.
+                // Let's keep it as is for now or improve it if needed.
+            }
+
             last3Months.forEach(m => {
                 mData[m.key] = 0;
                 mOrders[m.key] = 0;
             });
 
-            // Use the full orders pool instead of filteredOrders to always show 3 month history
-            parsedOrders.filter(o => (o.Page || 'Unknown') === p).forEach(o => {
+            // If nodeTimeFrame is 'current', only use filteredOrders. Otherwise use full parsedOrders for 3-month history.
+            const sourcePool = nodeTimeFrame === 'current' ? filteredOrders : parsedOrders;
+
+            sourcePool.filter(o => (o.Page || 'Unknown') === p).forEach(o => {
                 const d = safeParseDate(o.Timestamp);
                 if (d) { 
                     const key = `ខែ ${String(d.getMonth() + 1).padStart(2, '0')}`;
@@ -437,7 +473,7 @@ isOpen, onClose, orders, title, subtitle,
                         mData[key] = (mData[key] || 0) + (Number(o['Grand Total']) || 0); 
                         mOrders[key] = (mOrders[key] || 0) + 1;
 
-                        // Last 3 months product performance
+                        // product performance
                         o.Products.forEach(prod => {
                             if (pMapping.includes(prod.name)) {
                                 productPerformance[prod.name].revenue += prod.total;
@@ -457,6 +493,7 @@ isOpen, onClose, orders, title, subtitle,
 
             const pageInfo = appData.pages?.find(page => page.PageName === p);
             const totalOrders = Object.values(mOrders).reduce((a, b) => a + b, 0);
+            const totalRevenue = Object.values(mData).reduce((a, b) => a + b, 0);
 
             return { 
                 page: p, 
@@ -464,6 +501,7 @@ isOpen, onClose, orders, title, subtitle,
                 color: COLORS[idx % COLORS.length], 
                 growth,
                 totalOrders,
+                totalRevenue,
                 productPerformance,
                 data: last3Months.map(m => ({ 
                     name: m.label, 
@@ -472,6 +510,19 @@ isOpen, onClose, orders, title, subtitle,
                 }))
             };
         });
+
+        // Apply Hide Empty and Sorting
+        if (hideEmptyNodes) {
+            bottomCharts = bottomCharts.filter(item => item.totalRevenue > 0);
+        }
+
+        bottomCharts.sort((a, b) => {
+            if (nodeSortBy === 'revenue') return b.totalRevenue - a.totalRevenue;
+            if (nodeSortBy === 'growth') return b.growth - a.growth;
+            if (nodeSortBy === 'volume') return b.totalOrders - a.totalOrders;
+            return a.page.localeCompare(b.page);
+        });
+
         return { 
             onlineTotal, 
             total: onlineTotal + offlineSale, 
@@ -484,7 +535,7 @@ isOpen, onClose, orders, title, subtitle,
             bottomCharts, 
             sortedPages 
         };
-    }, [filteredOrders, offlineSale, appData.pages, language, activeDateRange, customStart, customEnd, orders, pageProductMapping]);
+    }, [filteredOrders, offlineSale, appData.pages, language, activeDateRange, customStart, customEnd, orders, pageProductMapping, nodeSortBy, hideEmptyNodes, nodeTimeFrame]);
 
 
     useEffect(() => {
@@ -518,9 +569,13 @@ isOpen, onClose, orders, title, subtitle,
                             {[
                                 { id: 'all', label: 'All Time', km: 'ទាំងអស់' },
                                 { id: 'today', label: 'Today', km: 'ថ្ងៃនេះ' },
+                                { id: 'yesterday', label: 'Yesterday', km: 'ម្សិលមិញ' },
                                 { id: 'this_week', label: 'This Week', km: 'សប្តាហ៍នេះ' },
+                                { id: 'last_week', label: 'Last Week', km: 'សប្តាហ៍មុន' },
                                 { id: 'this_month', label: 'This Month', km: 'ខែនេះ' },
                                 { id: 'last_month', label: 'Last Month', km: 'ខែមុន' },
+                                { id: 'this_year', label: 'This Year', km: 'ឆ្នាំនេះ' },
+                                { id: 'last_year', label: 'Last Year', km: 'ឆ្នាំមុន' },
                                 { id: 'custom', label: 'Custom', km: 'កំណត់ខ្លួនឯង' },
                             ].map((range) => (
                                 <button
@@ -1038,15 +1093,82 @@ isOpen, onClose, orders, title, subtitle,
                         {/* Decorative background grid for tech feel */}
                         <div className="absolute inset-0 pointer-events-none opacity-[0.015] bg-[url('https://www.transparenttextures.com/patterns/carbon-fibre.png')]"></div>
                         
-                        <div className="flex flex-col md:flex-row md:items-end justify-between gap-6 relative z-10">
-                            <div>
-                                <div className="flex items-center gap-3 mb-2">
-                                    <div className="w-10 h-10 bg-blue-600 rounded-xl flex items-center justify-center text-white shadow-lg shadow-blue-500/40">
-                                        <Layers size={20} />
+                        <div className="flex flex-col xl:flex-row xl:items-end justify-between gap-6 relative z-10">
+                            <div className="flex flex-col md:flex-row md:items-end gap-6">
+                                <div>
+                                    <div className="flex items-center gap-3 mb-2">
+                                        <div className="w-10 h-10 bg-blue-600 rounded-xl flex items-center justify-center text-white shadow-lg shadow-blue-500/40">
+                                            <Layers size={20} />
+                                        </div>
+                                        <h4 className="text-sm font-black text-gray-900 uppercase tracking-[0.4em]">Decentralized Node Performance</h4>
                                     </div>
-                                    <h4 className="text-sm font-black text-gray-900 uppercase tracking-[0.4em]">Decentralized Node Performance</h4>
+                                    <p className="text-xs font-bold text-gray-400 ml-13">Cross-node valuation & velocity benchmarks</p>
                                 </div>
-                                <p className="text-xs font-bold text-gray-400 ml-13">Cross-node valuation & velocity benchmarks (Last 3 Months)</p>
+                                
+                                {/* Node Search & Filters */}
+                                <div className="flex flex-wrap items-center gap-4 ml-0 md:ml-4">
+                                    <div className="flex items-center gap-1.5 bg-gray-100 p-1 rounded-xl border border-gray-200">
+                                        {(['revenue', 'growth', 'volume', 'name'] as const).map((sort) => (
+                                            <button
+                                                key={sort}
+                                                onClick={() => setNodeSortBy(sort)}
+                                                className={`px-3 py-1.5 rounded-lg text-[8px] font-black uppercase tracking-widest transition-all ${
+                                                    nodeSortBy === sort
+                                                        ? 'bg-white text-blue-600 shadow-sm'
+                                                        : 'text-gray-400 hover:text-gray-600'
+                                                }`}
+                                            >
+                                                {sort}
+                                            </button>
+                                        ))}
+                                    </div>
+
+                                    <button 
+                                        onClick={() => setHideEmptyNodes(!hideEmptyNodes)}
+                                        className={`px-3 py-2 rounded-xl text-[9px] font-black uppercase tracking-widest border transition-all ${
+                                            hideEmptyNodes 
+                                                ? 'bg-amber-50 border-amber-200 text-amber-600 shadow-sm' 
+                                                : 'bg-white border-gray-200 text-gray-400 hover:border-blue-200 hover:text-blue-500'
+                                        }`}
+                                    >
+                                        {hideEmptyNodes ? 'Showing Active' : 'Show All'}
+                                    </button>
+
+                                    <div className="flex items-center gap-1.5 bg-indigo-50 p-1 rounded-xl border border-indigo-100">
+                                        <button
+                                            onClick={() => setNodeTimeFrame('3months')}
+                                            className={`px-3 py-1.5 rounded-lg text-[8px] font-black uppercase tracking-widest transition-all ${
+                                                nodeTimeFrame === '3months'
+                                                    ? 'bg-white text-indigo-600 shadow-sm'
+                                                    : 'text-indigo-300 hover:text-indigo-400'
+                                            }`}
+                                        >
+                                            3-Month Hist
+                                        </button>
+                                        <button
+                                            onClick={() => setNodeTimeFrame('current')}
+                                            className={`px-3 py-1.5 rounded-lg text-[8px] font-black uppercase tracking-widest transition-all ${
+                                                nodeTimeFrame === 'current'
+                                                    ? 'bg-white text-indigo-600 shadow-sm'
+                                                    : 'text-indigo-300 hover:text-indigo-400'
+                                            }`}
+                                        >
+                                            Cur Window
+                                        </button>
+                                    </div>
+
+                                    <button 
+                                        onClick={() => {
+                                            setNodeSortBy('revenue');
+                                            setHideEmptyNodes(false);
+                                            setNodeTimeFrame('3months');
+                                        }}
+                                        className="p-2 hover:bg-gray-100 rounded-xl text-gray-400 hover:text-red-500 transition-all border border-transparent hover:border-gray-200"
+                                        title="Reset Node Filters"
+                                    >
+                                        <RefreshCw size={14} />
+                                    </button>
+                                </div>
                             </div>
                             <div className="flex items-center gap-4">
                                 <div className="flex -space-x-3">

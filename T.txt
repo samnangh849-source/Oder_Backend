@@ -490,3 +490,9 @@ Please fix all problem and Improve UI of (Filter Engine) in Order Dashboard
 
 
 ដោយសារនៅពេល Create Order ដោយកំណត់ពេលវេលាទម្លាក់ ហើយឃើញថា time រក្សារក្នុង Sheet មានទម្រង់បែបនោះ ហើយមានបញ្ហាមិនឃើញ Order នោះក្នុងផ្ទាំង រង់ចាំវេចខ្ចប់
+
+
+
+
+
+សូម Improve ដំណើរការ Filters នៃផ្នែក (Sales Online Data) ព្រោះថាមានបញ្ហា Filter មិនទទួលបានទិន្នន័យ ដូចផ្នែកជ្រើសរើស Team ឡើយ

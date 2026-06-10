@@ -3,7 +3,6 @@ import { AppContext } from '../context/AppContext';
 import { translations } from '../translations';
 import UserOrdersView from '../components/user/UserOrdersView';
 import TopPerformanceUserJourney from '../components/user/TopPerformanceUserJourney';
-import { useOrder } from '../context/OrderContext';
 import { 
     Activity, Server, LogOut, ChevronLeft, BarChart3, 
     Layers, Plus, ChevronRight, DollarSign, ListChecks
@@ -23,9 +22,12 @@ const MobileUserJourney: React.FC<MobileUserJourneyProps> = ({ onBackToRoleSelec
         selectedTeam,
         setSelectedTeam,
         hasPermission,
+        currentUser,
+        appData,
+        orders,
+        fetchOrders
     } = useContext(AppContext);
 
-    const { currentUser, appData, orders, fetchOrders } = useOrder();
     const t = translations[language];
     const [teamStats, setTeamStats] = useState({ revenue: 0, cost: 0, paid: 0, unpaid: 0, count: 0 });
     const [dateFilter, setDateFilter] = useState<'today' | 'yesterday' | 'week' | 'last_week' | 'month' | 'last_month' | 'year' | 'last_year' | 'custom'>('today');
@@ -83,7 +85,7 @@ const MobileUserJourney: React.FC<MobileUserJourneyProps> = ({ onBackToRoleSelec
         const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
         const endOfToday = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 23, 59, 59, 999);
         
-        const filtered = orders.filter(o => {
+        const filtered = (orders || []).filter(o => {
             const orderId = (o['Order ID'] || '').toString();
             if (orderId.includes('Opening_Balance') || orderId.includes('Opening Balance')) return false;
 
@@ -294,7 +296,7 @@ const MobileUserJourney: React.FC<MobileUserJourneyProps> = ({ onBackToRoleSelec
 
                     <div className="cm-team-list-mobile">
                         <div className="cm-list-header">{language === 'km' ? 'ជ្រើសរើសក្រុម' : 'Select a Team'}</div>
-                        {userTeams.map((team: string) => (
+                        {(userTeams || []).map((team: string) => (
                             <div key={team} className="cm-team-item-mobile active:bg-[var(--cm-border)] transition-colors" onClick={() => handleTeamSelect(team)}>
                                 <span className="cm-team-item-name-mobile">{team}</span>
                                 <ChevronRight size={18} style={{color: 'var(--cm-text-muted)'}} />

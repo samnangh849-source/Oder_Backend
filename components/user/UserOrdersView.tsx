@@ -135,6 +135,17 @@ const UserOrdersView: React.FC<UserOrdersViewProps> = ({ onAdd, onStatsUpdate, s
                 start.setDate(today.getDate() - (d === 0 ? 6 : d - 1)); 
                 end = endOfToday; 
                 break;
+            case 'last_week': {
+                const d = now.getDay();
+                const startOfThisWeek = new Date(today);
+                startOfThisWeek.setDate(today.getDate() - (d === 0 ? 6 : d - 1));
+                start = new Date(startOfThisWeek);
+                start.setDate(startOfThisWeek.getDate() - 7);
+                end = new Date(start);
+                end.setDate(start.getDate() + 6);
+                end.setHours(23, 59, 59, 999);
+                break;
+            }
             case 'this_month': 
                 start = new Date(now.getFullYear(), now.getMonth(), 1); 
                 end = endOfToday; 
@@ -165,7 +176,7 @@ const UserOrdersView: React.FC<UserOrdersViewProps> = ({ onAdd, onStatsUpdate, s
 
     const enrichedOrders = useMemo(() => {
         if (!currentUser) return [];
-        return orders.map(o => {
+        return (orders || []).map(o => {
             let orderTeam = (o.Team || '').toString().trim();
             if (!orderTeam) {
                 const userMatch = appData.users?.find(u => u.UserName === o.User);
@@ -363,7 +374,7 @@ const UserOrdersView: React.FC<UserOrdersViewProps> = ({ onAdd, onStatsUpdate, s
 
     if (editingOrder) return <div className="fixed inset-0 z-[100] bg-[#0B0E11] animate-reveal overflow-y-auto"><EditOrderPage order={editingOrder} onSaveSuccess={handleSaveEdit} onCancel={() => setEditingOrder(null)} /></div>;
 
-    if (showReport) return <div className="animate-fade-in h-full overflow-auto bg-[var(--cm-bg)]"><UserSalesPageReport orders={permittedOrders} onBack={() => setShowReport(false)} team={selectedTeam || ''} dateFilter={dateRange} customStart={advancedFilters.startDate} customEnd={advancedFilters.endDate} /></div>;
+    if (showReport) return <div className="animate-fade-in h-full overflow-auto bg-[var(--cm-bg)]"><UserSalesPageReport orders={permittedOrders} allOrders={permittedOrders} onBack={() => setShowReport(false)} team={selectedTeam || ''} dateFilter={dateRange} customStart={advancedFilters.startDate} customEnd={advancedFilters.endDate} /></div>;
 
     if (showShippingReport) return <div className="animate-fade-in h-full overflow-auto bg-[var(--cm-bg)]"><ShippingReport orders={permittedOrders} appData={appData} dateFilter={dateRange} onBack={() => setShowShippingReport(false)} /></div>;
 

@@ -7,7 +7,7 @@ import StatCard from '../components/performance/StatCard';
 import { jsPDF } from 'jspdf';
 import 'jspdf-autotable';
 import Spinner from '../components/common/Spinner';
-import { FilterState } from '../components/orders/OrderFilters';
+import { FilterState, initialFilterState } from '../components/orders/OrderFilters';
 import { ChevronLeft, Download, BarChart3, TrendingUp, Terminal, Filter, Activity, Cpu, DollarSign, Layers, Zap } from 'lucide-react';
 import SalesStatisticModal from '../components/reports/SalesStatisticModal';
 
@@ -16,9 +16,11 @@ import SalesByPageDesktop from '../components/reports/SalesByPageDesktop';
 import SalesByPageTablet from '../components/reports/SalesByPageTablet';
 import SalesByPageMobile from '../components/reports/SalesByPageMobile';
 import { safeParseDate } from '../utils/dateUtils';
+import { useFilterEngine, isMatch } from '../hooks/useFilterEngine';
 
 interface SalesByPageReportProps {
     orders: ParsedOrder[];
+    allOrders?: ParsedOrder[];
     onBack: () => void;
     onNavigate?: (filters: any) => void;
     contextFilters?: FilterState;
@@ -33,11 +35,15 @@ type SortKey = 'revenue' | 'profit' | 'teamName' | 'pageName';
 const MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
 
 const SalesByPageReport: React.FC<SalesByPageReportProps> = ({ 
-    orders: sourceOrders, onBack, onNavigate, contextFilters, dateFilter, startDate, endDate, onFilterChange 
+    orders: sourceOrders, allOrders, onBack, onNavigate, contextFilters, dateFilter, startDate, endDate, onFilterChange 
 }) => {
     const { appData, previewImage, language, advancedSettings } = useContext(AppContext);
+    
+    // Technical Upgrade: Using allOrders as base to allow local date preset overrides
+    const baseOrders = useMemo(() => allOrders || sourceOrders, [allOrders, sourceOrders]);
+    const { filterOrders } = useFilterEngine(baseOrders, appData);
     const [showAllPages, setShowAllPages] = useState(true); 
-    const [onlyTelegram, setOnlyTelegram] = useState(false); // Added missing state
+    const [onlyTelegram, setOnlyTelegram] = useState(false);
     const [isExporting, setIsExporting] = useState(false);
     const [isStatisticOpen, setIsStatisticOpen] = useState(false);
     const [sortConfig, setSortConfig] = useState<{ key: SortKey, direction: 'asc' | 'desc' }>({ key: 'revenue', direction: 'desc' });
@@ -92,96 +98,66 @@ const SalesByPageReport: React.FC<SalesByPageReportProps> = ({
     };
 
     const handleFilterNavigation = (key: string, value: string) => {
-        if (onNavigate) {
+        const newFilters: any = {};
+        if (key === 'page') newFilters.page = value;
+        if (key === 'team') newFilters.team = value;
+        newFilters.datePreset = activeDateFilter;
+        newFilters.startDate = activeStart;
+        newFilters.endDate = activeEnd;
+
+        if (onFilterChange) {
+            onFilterChange(newFilters);
+        } else if (onNavigate) {
             const filters = getBaseFilters();
-            if (key === 'page') filters.page = value;
-            if (key === 'team') filters.team = value;
-            filters.datePreset = activeDateFilter;
-            filters.startDate = activeStart;
-            filters.endDate = activeEnd;
+            Object.assign(filters, newFilters);
             onNavigate(filters);
         }
     };
 
     const handleMonthClick = (pageName: string, monthIndex: number) => {
-        if (onNavigate) {
-            const filters = getBaseFilters();
-            const currentYear = new Date().getFullYear();
-            const targetYear = activeDateFilter === 'last_year' ? currentYear - 1 : currentYear;
-            const start = new Date(targetYear, monthIndex, 1);
-            const end = new Date(targetYear, monthIndex + 1, 0, 23, 59, 59);
-            const fmt = (d: Date) => {
-                const year = d.getFullYear();
-                const month = String(d.getMonth() + 1).padStart(2, '0');
-                const day = String(d.getDate()).padStart(2, '0');
-                return `${year}-${month}-${day}`;
-            };
-            const newFilters = { 
-                ...contextFilters,
-                ...filters,
-                page: pageName,
-                datePreset: 'custom' as const,
-                startDate: fmt(start),
-                endDate: fmt(end)
-            };
-            onNavigate(newFilters);
+        const currentYear = new Date().getFullYear();
+        const targetYear = activeDateFilter === 'last_year' ? currentYear - 1 : currentYear;
+        const start = new Date(targetYear, monthIndex, 1);
+        const end = new Date(targetYear, monthIndex + 1, 0, 23, 59, 59);
+        const fmt = (d: Date) => {
+            const year = d.getFullYear();
+            const month = String(d.getMonth() + 1).padStart(2, '0');
+            const day = String(d.getDate()).padStart(2, '0');
+            return `${year}-${month}-${day}`;
+        };
+        
+        const targetFilters = { 
+            ...getBaseFilters(),
+            page: pageName,
+            datePreset: 'custom' as const,
+            startDate: fmt(start),
+            endDate: fmt(end)
+        };
+
+        if (onFilterChange) {
+            onFilterChange(targetFilters);
+        } else if (onNavigate) {
+            onNavigate(targetFilters);
         }
     };
 
     const filteredOrders = useMemo(() => {
-        if (!activeDateFilter || activeDateFilter === 'all') return sourceOrders;
-
-        const now = new Date();
-        const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
-        const endOfToday = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 23, 59, 59, 999);
-        let start: Date | null = null;
-        let end: Date | null = endOfToday;
-
-        switch (activeDateFilter) {
-            case 'today': start = today; end = endOfToday; break;
-            case 'yesterday':
-                start = new Date(today); start.setDate(today.getDate() - 1);
-                end = new Date(today); end.setMilliseconds(-1); break;
-            case 'this_week': {
-                const d = now.getDay();
-                start = new Date(today); start.setDate(today.getDate() - (d === 0 ? 6 : d - 1));
-                end = endOfToday; break;
-            }
-            case 'this_month': start = new Date(now.getFullYear(), now.getMonth(), 1); end = endOfToday; break;
-            case 'last_month':
-                start = new Date(now.getFullYear(), now.getMonth() - 1, 1);
-                end = new Date(now.getFullYear(), now.getMonth(), 0, 23, 59, 59, 999); break;
-            case 'this_year': start = new Date(now.getFullYear(), 0, 1); end = endOfToday; break;
-            case 'last_year':
-                start = new Date(now.getFullYear() - 1, 0, 1);
-                end = new Date(now.getFullYear() - 1, 11, 31, 23, 59, 59, 999); break;
-            case 'custom':
-                if (activeStart) start = new Date(activeStart + 'T00:00:00');
-                if (activeEnd) end = new Date(activeEnd + 'T23:59:59');
-                break;
-            default: return sourceOrders;
-        }
-
-        return sourceOrders.filter(o => {
-            if (!o.Timestamp) return false;
-            const d = safeParseDate(o.Timestamp);
-            if (!d || isNaN(d.getTime())) return false;
-            if (start && d < start) return false;
-            if (end && d > end) return false;
-            return true;
-        });
-    }, [sourceOrders, activeDateFilter, activeStart, activeEnd]);
+        // Technical Upgrade: Delegating all filtering logic (Temporal + Contextual) to the centralized engine
+        const filters = {
+            ...(contextFilters || initialFilterState),
+            datePreset: activeDateFilter as any,
+            startDate: activeStart,
+            endDate: activeEnd
+        };
+        return filterOrders(baseOrders, filters);
+    }, [baseOrders, activeDateFilter, activeStart, activeEnd, contextFilters, filterOrders]);
 
     const pageStats = useMemo(() => {
         const stats: Record<string, any> = {};
         const matchesFilters = (pName: string, pTeam: string) => {
-            if (contextFilters?.team) {
-                const selectedTeams = contextFilters.team.split(',').map(t => t.trim().toLowerCase());
-                if (!selectedTeams.includes((pTeam || '').toLowerCase())) return false;
-            }
-            if (contextFilters?.page) {
-                const selectedPages = contextFilters.page.split(',').map(p => p.trim().toLowerCase());
-                if (!selectedPages.includes((pName || '').toLowerCase())) return false;
+            // Technical Upgrade: Syncing page visibility with active team filters
+            if (contextFilters?.team && contextFilters.team !== 'all' && contextFilters.team !== 'All') {
+                if (!isMatch(contextFilters.team, pTeam)) return false;
             }
             if (onlyTelegram) {
                 if (!(pName || '').toLowerCase().startsWith('telegram')) return false;
@@ -202,6 +178,11 @@ const SalesByPageReport: React.FC<SalesByPageReportProps> = ({
             const fs = o.FulfillmentStatus || o['Fulfillment Status'] || 'Pending';
             if (fs === 'Cancelled' || fs === 'Returned') return;
             const page = o.Page || 'Unknown';
+            if (!stats[page]) {
+                const info = appData.pages?.find(p => p.PageName === page);
+                stats[page] = { pageName: page, teamName: o.Team || 'Unassigned', logoUrl: info?.PageLogoURL || '', revenue: 0, profit: 0, orderCount: 0 };
+                MONTHS.forEach(m => { stats[page][`rev_${m}`] = 0; stats[page][`prof_${m}`] = 0; });
+            }
             if (stats[page]) {
                 const rev = Number(o['Grand Total']) || 0;
                 const cost = (Number(o['Total Product Cost ($)']) || 0) + (Number(o['Internal Cost']) || 0);
@@ -474,9 +455,10 @@ const SalesByPageReport: React.FC<SalesByPageReportProps> = ({
             <SalesStatisticModal 
                 isOpen={isStatisticOpen}
                 onClose={() => setIsStatisticOpen(false)}
-                orders={sourceOrders} initialDateFilter={activeDateFilter} initialStart={activeStart} initialEnd={activeEnd}
+                orders={allOrders || sourceOrders} initialDateFilter={activeDateFilter} initialStart={activeStart} initialEnd={activeEnd}
                 title={language === 'km' ? 'ទិន្នន័យលក់អនឡាញ' : 'Sales Online Data'}
                 subtitle={`CONTEXT: ${contextFilters?.team || 'Global View'}`}
+                contextFilters={contextFilters}
             />
         </div>
     );

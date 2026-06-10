@@ -1,6 +1,7 @@
 
 import { useMemo } from 'react';
 import { ParsedOrder, User, AppData, FulfillmentStatus } from '../types';
+import { safeParseDate } from '../utils/dateUtils';
 
 export type DateRangePreset = 'all' | 'today' | 'yesterday' | 'this_week' | 'last_week' | 'this_month' | 'last_month' | 'this_year' | 'last_year' | 'custom';
 
@@ -50,6 +51,13 @@ export const initialFilterState: FilterState = {
     isVerified: 'All'
 };
 
+export const isMatch = (fV: string, oV: string, partial = false) => {
+    if (!fV || fV === 'all' || fV === 'All') return true;
+    const sV = fV.split(',').map(v => v.trim().toLowerCase());
+    const v = (oV || '').trim().toLowerCase();
+    return partial ? sV.some(sv => v.includes(sv)) : sV.includes(v);
+};
+
 export const useFilterEngine = (orders: ParsedOrder[], appData: AppData) => {
     
     const uniqueValues = useMemo(() => {
@@ -63,7 +71,7 @@ export const useFilterEngine = (orders: ParsedOrder[], appData: AppData) => {
         const teams = new Set<string>();
         const customerMap = new Map<string, string>();
 
-        orders.forEach(o => {
+        (orders || []).forEach(o => {
             if (o.Page) pages.add(o.Page);
             if (o.Location) locations.add(o.Location);
             if (o['Internal Shipping Method']) shippingMethods.add(o['Internal Shipping Method']);
@@ -99,13 +107,73 @@ export const useFilterEngine = (orders: ParsedOrder[], appData: AppData) => {
     }, [orders]);
 
     const filterOrders = (ordersToFilter: ParsedOrder[], filters: FilterState, searchQuery: string = '') => {
-        return ordersToFilter.filter(order => {
-            const isMatch = (fV: string, oV: string, partial = false) => {
-                if (!fV || fV === 'all') return true;
-                const sV = fV.split(',').map(v => v.trim().toLowerCase());
-                const v = (oV || '').trim().toLowerCase();
-                return partial ? sV.some(sv => v.includes(sv)) : sV.includes(v);
-            };
+        // Technical Upgrade: Centralized Date Filtering
+        let dateStart: Date | null = null;
+        let dateEnd: Date | null = null;
+
+        if (filters.datePreset && filters.datePreset !== 'all') {
+            const now = new Date();
+            const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+            const endOfToday = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 23, 59, 59, 999);
+            dateEnd = endOfToday;
+
+            switch (filters.datePreset) {
+                case 'today': 
+                    dateStart = today; 
+                    break;
+                case 'yesterday':
+                    dateStart = new Date(today); 
+                    dateStart.setDate(today.getDate() - 1);
+                    dateEnd = new Date(today); 
+                    dateEnd.setMilliseconds(-1); 
+                    break;
+                case 'this_week': {
+                    const d = now.getDay();
+                    dateStart = new Date(today); 
+                    dateStart.setDate(today.getDate() - (d === 0 ? 6 : d - 1));
+                    break;
+                }
+                case 'last_week': {
+                    const d = now.getDay();
+                    const startOfThisWeek = new Date(today);
+                    startOfThisWeek.setDate(today.getDate() - (d === 0 ? 6 : d - 1));
+                    dateStart = new Date(startOfThisWeek);
+                    dateStart.setDate(startOfThisWeek.getDate() - 7);
+                    dateEnd = new Date(dateStart);
+                    dateEnd.setDate(dateStart.getDate() + 6);
+                    dateEnd.setHours(23, 59, 59, 999);
+                    break;
+                }
+                case 'this_month': 
+                    dateStart = new Date(now.getFullYear(), now.getMonth(), 1); 
+                    break;
+                case 'last_month':
+                    dateStart = new Date(now.getFullYear(), now.getMonth() - 1, 1);
+                    dateEnd = new Date(now.getFullYear(), now.getMonth(), 0, 23, 59, 59, 999); 
+                    break;
+                case 'this_year': 
+                    dateStart = new Date(now.getFullYear(), 0, 1); 
+                    break;
+                case 'last_year':
+                    dateStart = new Date(now.getFullYear() - 1, 0, 1);
+                    dateEnd = new Date(now.getFullYear() - 1, 11, 31, 23, 59, 59, 999); 
+                    break;
+                case 'custom':
+                    if (filters.startDate) dateStart = new Date(filters.startDate + 'T00:00:00');
+                    if (filters.endDate) dateEnd = new Date(filters.endDate + 'T23:59:59');
+                    break;
+            }
+        }
+
+        return (ordersToFilter || []).filter(order => {
+            // Date Consistency Check
+            if (dateStart || dateEnd) {
+                if (!order.Timestamp) return false;
+                const d = safeParseDate(order.Timestamp);
+                if (!d || isNaN(d.getTime())) return false;
+                if (dateStart && d < dateStart) return false;
+                if (dateEnd && d > dateEnd) return false;
+            }
 
             if (!isMatch(filters.fulfillmentStore, order['Fulfillment Store'] || 'Unassigned')) return false;
             if (filters.store) {

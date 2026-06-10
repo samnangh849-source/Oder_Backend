@@ -3,7 +3,6 @@ import { AppContext } from '../context/AppContext';
 import { translations } from '../translations';
 import UserOrdersView from '../components/user/UserOrdersView';
 import TopPerformanceUserJourney from '../components/user/TopPerformanceUserJourney';
-import { useOrder } from '../context/OrderContext';
 import { 
     Activity, Server, LogOut, ChevronLeft, BarChart3, 
     Layers, Search, ChevronRight, Plus, DollarSign, ListChecks, AlertCircle
@@ -22,14 +21,11 @@ const DesktopUserJourney: React.FC<DesktopUserJourneyProps> = ({ onBackToRoleSel
         selectedTeam,
         setSelectedTeam,
         hasPermission,
-    } = useContext(AppContext);
-    
-    const { 
-        orders, 
-        fetchOrders,
         currentUser,
-        appData
-    } = useOrder();
+        orders,
+        appData,
+        fetchOrders
+    } = useContext(AppContext);
 
     const [localLanguage, setLocalLanguage] = useState<'km' | 'en'>(language);
     const t = translations[localLanguage];
@@ -88,9 +84,10 @@ const DesktopUserJourney: React.FC<DesktopUserJourneyProps> = ({ onBackToRoleSel
     };
 
     const filteredTeams = useMemo(() => {
-        if (!searchQuery.trim()) return userTeams;
+        const teams = userTeams || [];
+        if (!searchQuery.trim()) return teams;
         const q = searchQuery.toLowerCase();
-        return userTeams.filter((team: string) => team.toLowerCase().includes(q));
+        return teams.filter((team: string) => team.toLowerCase().includes(q));
     }, [searchQuery, userTeams]);
 
     const globalKpiStats = useMemo(() => {
@@ -98,7 +95,7 @@ const DesktopUserJourney: React.FC<DesktopUserJourneyProps> = ({ onBackToRoleSel
         const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
         const endOfToday = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 23, 59, 59, 999);
         
-        const filtered = orders.filter(o => {
+        const filtered = (orders || []).filter(o => {
             const orderId = (o['Order ID'] || '').toString();
             if (orderId.includes('Opening_Balance') || orderId.includes('Opening Balance')) return false;
 

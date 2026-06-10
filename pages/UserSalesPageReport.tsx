@@ -10,6 +10,7 @@ import { safeParseDate } from '../utils/dateUtils';
 import { ChevronLeft, Download, BarChart3, TrendingUp, Package, Layout, Terminal, Activity, Cpu, DollarSign, Layers, Zap } from 'lucide-react';
 import SalesStatisticModal from '../components/reports/SalesStatisticModal';
 import OrderFilters, { FilterState, initialFilterState } from '../components/orders/OrderFilters';
+import { useFilterEngine } from '../hooks/useFilterEngine';
 import Modal from '../components/common/Modal';
 
 // Import separate view components
@@ -19,6 +20,7 @@ import SalesByPageMobile from '../components/reports/SalesByPageMobile';
 
 interface UserSalesPageReportProps {
     orders: ParsedOrder[];
+    allOrders?: ParsedOrder[];
     onBack: () => void;
     team: string;
     onNavigate?: (filters: any) => void;
@@ -34,6 +36,7 @@ const MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "
 
 const UserSalesPageReport: React.FC<UserSalesPageReportProps> = ({
     orders: sourceOrders,
+    allOrders,
     onBack,
     team,
     onNavigate,
@@ -43,6 +46,10 @@ const UserSalesPageReport: React.FC<UserSalesPageReportProps> = ({
     onFilterChange
 }) => {
     const { appData, previewImage, language, advancedSettings } = useContext(AppContext);
+    
+    // Technical Upgrade: Using allOrders as base to allow local date preset overrides
+    const baseOrders = useMemo(() => allOrders || sourceOrders, [allOrders, sourceOrders]);
+    const { filterOrders } = useFilterEngine(baseOrders, appData);
     const [showAllPages, setShowAllPages] = useState(true); 
     const [isExporting, setIsExporting] = useState(false);
     const [isStatisticOpen, setIsStatisticOpen] = useState(false);
@@ -94,6 +101,9 @@ const UserSalesPageReport: React.FC<UserSalesPageReportProps> = ({
 
     const handleApplyFilters = () => {
         setIsFilterOpen(false);
+        setActiveDateFilter(filters.datePreset);
+        setActiveStart(filters.startDate);
+        setActiveEnd(filters.endDate);
         if (onFilterChange) {
             onFilterChange(filters);
         }
@@ -106,85 +116,57 @@ const UserSalesPageReport: React.FC<UserSalesPageReportProps> = ({
         }));
     };
     const handleNavigate = (key: string, value: string) => {
-        if (onNavigate) {
-            const filters: any = { team };
-            if (key === 'page') filters.page = value;
-            onNavigate(filters);
+        const newFilters: any = { team };
+        if (key === 'page') newFilters.page = value;
+
+        if (onFilterChange) {
+            onFilterChange(newFilters);
+        } else if (onNavigate) {
+            onNavigate(newFilters);
         }
     };
     const handleMonthClick = (pageName: string, monthIndex: number) => {
-        if (onNavigate) {
-            const year = new Date().getFullYear();
-            const targetYear = activeDateFilter === 'last_year' ? year - 1 : year;
-            const fmt = (d: Date) => {
-                const y = d.getFullYear();
-                const m = String(d.getMonth() + 1).padStart(2, '0');
-                const day = String(d.getDate()).padStart(2, '0');
-                return `${y}-${m}-${day}`;
-            };
-            const monthStart = new Date(targetYear, monthIndex, 1);
-            const monthEnd = new Date(targetYear, monthIndex + 1, 0, 23, 59, 59);
-            onNavigate({ team, page: pageName, datePreset: 'custom', customStart: fmt(monthStart), customEnd: fmt(monthEnd), isMonthlyDrilldown: true });
+        const year = new Date().getFullYear();
+        const targetYear = activeDateFilter === 'last_year' ? year - 1 : year;
+        const fmt = (d: Date) => {
+            const y = d.getFullYear();
+            const m = String(d.getMonth() + 1).padStart(2, '0');
+            const day = String(d.getDate()).padStart(2, '0');
+            return `${y}-${m}-${day}`;
+        };
+        const monthStart = new Date(targetYear, monthIndex, 1);
+        const monthEnd = new Date(targetYear, monthIndex + 1, 0, 23, 59, 59);
+        
+        const targetFilters = { 
+            team, 
+            page: pageName, 
+            datePreset: 'custom' as const, 
+            startDate: fmt(monthStart), 
+            endDate: fmt(monthEnd), 
+            isMonthlyDrilldown: true 
+        };
+
+        if (onFilterChange) {
+            onFilterChange(targetFilters);
+        } else if (onNavigate) {
+            onNavigate(targetFilters);
         }
     };
-    const teamOrders = useMemo(() => {
-        return sourceOrders.filter(o =>
-            (o.Team || '').trim().toLowerCase() === team.trim().toLowerCase()
-        );
-    }, [sourceOrders, team]);
-
     const filteredOrders = useMemo(() => {
-        if (!activeDateFilter || activeDateFilter === 'all') return teamOrders;
-        const now = new Date();
-        const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
-        const endOfToday = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 23, 59, 59, 999);
-        let start: Date | null = null;
-        let end: Date | null = endOfToday;
-        switch (activeDateFilter) {
-            case 'today': start = today; end = endOfToday; break;
-            case 'yesterday':
-                start = new Date(today); start.setDate(today.getDate() - 1);
-                end = new Date(today); end.setMilliseconds(-1); break;
-            case 'this_week': {
-                const d = now.getDay();
-                start = new Date(today); start.setDate(today.getDate() - (d === 0 ? 6 : d - 1));
-                end = endOfToday; break;
-            }
-            case 'last_week': {
-                start = new Date(today); start.setDate(today.getDate() - now.getDay() - 6);
-                end = new Date(start); end.setDate(start.getDate() + 6);
-                end.setHours(23, 59, 59, 999); break;
-            }
-            case 'this_month': start = new Date(now.getFullYear(), now.getMonth(), 1); end = endOfToday; break;
-            case 'last_month':
-                start = new Date(now.getFullYear(), now.getMonth() - 1, 1);
-                end = new Date(now.getFullYear(), now.getMonth(), 0, 23, 59, 59, 999); break;
-            case 'this_year': start = new Date(now.getFullYear(), 0, 1); end = endOfToday; break;
-            case 'last_year':
-                start = new Date(now.getFullYear() - 1, 0, 1);
-                end = new Date(now.getFullYear() - 1, 11, 31, 23, 59, 59, 999); break;
-            case 'custom':
-                if (activeStart) start = new Date(activeStart + 'T00:00:00');
-                if (activeEnd) end = new Date(activeEnd + 'T23:59:59');
-                break;
-            default: return teamOrders;
-        }
-        return teamOrders.filter(o => {
-            if (!o.Timestamp) return false;
-            const d = safeParseDate(o.Timestamp);
-            if (!d || isNaN(d.getTime())) return false;
-            if (start && d < start) return false;
-            if (end && d > end) return false;
-            return true;
-        });
-    }, [teamOrders, activeDateFilter, activeStart, activeEnd]);
+        // Technical Upgrade: Relying on the centralized filter engine for all parameters including dates
+        return filterOrders(baseOrders, filters);
+    }, [baseOrders, filters, filterOrders]);
 
     const pageStats = useMemo(() => {
         const stats: Record<string, any> = {};
+        const activeTeam = filters.team;
         if (appData.pages) {
-            const teamPages = appData.pages.filter(p => (p.Team || '').trim() === team);
+            const teamPages = (!activeTeam || activeTeam === 'all' || activeTeam === 'All Teams') 
+                ? appData.pages 
+                : appData.pages.filter(p => (p.Team || '').trim() === activeTeam);
+            
             teamPages.forEach(p => {
-                stats[p.PageName] = { pageName: p.PageName, teamName: team, logoUrl: p.PageLogoURL || '', revenue: 0, profit: 0, orderCount: 0 };
+                stats[p.PageName] = { pageName: p.PageName, teamName: p.Team || 'Unassigned', logoUrl: p.PageLogoURL || '', revenue: 0, profit: 0, orderCount: 0 };
                 MONTHS.forEach(m => { stats[p.PageName][`rev_${m}`] = 0; stats[p.PageName][`prof_${m}`] = 0; });
             });
         }
@@ -194,7 +176,7 @@ const UserSalesPageReport: React.FC<UserSalesPageReportProps> = ({
             const page = o.Page || 'Unknown';
             if (!stats[page]) {
                 const info = appData.pages?.find(p => p.PageName === page);
-                stats[page] = { pageName: page, teamName: team, logoUrl: info?.PageLogoURL || '', revenue: 0, profit: 0, orderCount: 0 };
+                stats[page] = { pageName: page, teamName: o.Team || 'Unassigned', logoUrl: info?.PageLogoURL || '', revenue: 0, profit: 0, orderCount: 0 };
                 MONTHS.forEach(m => { stats[page][`rev_${m}`] = 0; stats[page][`prof_${m}`] = 0; });
             }
             const rev = Number(o['Grand Total']) || 0;
@@ -496,9 +478,10 @@ const UserSalesPageReport: React.FC<UserSalesPageReportProps> = ({
             <SalesStatisticModal 
                 isOpen={isStatisticOpen}
                 onClose={() => setIsStatisticOpen(false)}
-                orders={teamOrders} initialDateFilter={activeDateFilter} initialStart={activeStart} initialEnd={activeEnd}
+                orders={sourceOrders} initialDateFilter={activeDateFilter} initialStart={activeStart} initialEnd={activeEnd}
                 title={language === 'km' ? 'ទិន្នន័យលក់អនឡាញ' : 'Sales Online Data'}
                 subtitle={`TEAM: ${team} | ${filterLabel}`}
+                contextFilters={filters}
             />
 
             {/* Advanced Custom Filter Modal */}

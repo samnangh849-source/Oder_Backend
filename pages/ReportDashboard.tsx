@@ -131,7 +131,22 @@ const ReportDashboard: React.FC<ReportDashboardProps> = ({ activeReport, onBack,
         };
     });
 
-    const { filterOrders } = useFilterEngine(orders, appData);
+    const enrichedOrders = useMemo(() => {
+        return orders.map(o => {
+            let team = (o.Team || '').trim();
+            if (!team) {
+                const u = appData.users?.find(user => user.UserName === o.User);
+                if (u?.Team) team = u.Team.split(',')[0].trim();
+                else {
+                    const p = appData.pages?.find(pg => pg.PageName === o.Page);
+                    if (p?.Team) team = p.Team;
+                }
+            }
+            return { ...o, Team: team || 'Unassigned' };
+        });
+    }, [orders, appData.users, appData.pages]);
+
+    const { filterOrders, uniqueValues } = useFilterEngine(enrichedOrders, appData);
 
     // Trigger optimized fetch when filters change specifically for the report context
     useEffect(() => {
@@ -221,21 +236,8 @@ const ReportDashboard: React.FC<ReportDashboardProps> = ({ activeReport, onBack,
     }, [filters.datePreset, filters.startDate, filters.endDate]);
 
     const filteredOrders = useMemo(() => {
-        const enriched = orders.map(o => {
-            let team = (o.Team || '').trim();
-            if (!team) {
-                const u = appData.users?.find(user => user.UserName === o.User);
-                if (u?.Team) team = u.Team.split(',')[0].trim();
-                else {
-                    const p = appData.pages?.find(pg => pg.PageName === o.Page);
-                    if (p?.Team) team = p.Team;
-                }
-            }
-            return { ...o, Team: team || 'Unassigned' };
-        });
-
-        return filterOrders(enriched, filters);
-    }, [orders, filters, appData.users, appData.pages, filterOrders]);
+        return filterOrders(enrichedOrders, filters);
+    }, [enrichedOrders, filters, filterOrders]);
 
     if (isOrdersLoading && orders.length === 0) return <div className={`flex h-screen items-center justify-center ${uiTheme === 'binance' ? 'bg-[#0B0E11]' : 'bg-gray-950'}`}><Spinner size="lg" /></div>;
 
@@ -277,6 +279,7 @@ const ReportDashboard: React.FC<ReportDashboardProps> = ({ activeReport, onBack,
                 {activeReport === 'sales_page' && (
                     <SalesByPageReport 
                         orders={filteredOrders} 
+                        allOrders={orders}
                         onBack={onBack} 
                         onNavigate={onNavigate}
                         contextFilters={filters}
