@@ -17,6 +17,7 @@ import SalesByPageTablet from '../components/reports/SalesByPageTablet';
 import SalesByPageMobile from '../components/reports/SalesByPageMobile';
 import { safeParseDate } from '../utils/dateUtils';
 import { useFilterEngine, isMatch } from '../hooks/useFilterEngine';
+import { useSalesPageStats } from '../hooks/useSalesPageStats';
 
 interface SalesByPageReportProps {
     orders: ParsedOrder[];
@@ -59,6 +60,13 @@ const SalesByPageReport: React.FC<SalesByPageReportProps> = ({
         if (startDate) setActiveStart(startDate);
         if (endDate) setActiveEnd(endDate);
     }, [dateFilter, startDate, endDate]);
+
+    // Local filter state sync for drilldowns or URL changes
+    useEffect(() => {
+        if (contextFilters?.datePreset) setActiveDateFilter(contextFilters.datePreset);
+        if (contextFilters?.startDate) setActiveStart(contextFilters.startDate);
+        if (contextFilters?.endDate) setActiveEnd(contextFilters.endDate);
+    }, [contextFilters]);
 
     const handleDateShortcut = (id: string) => {
         if (id === 'custom') {
@@ -152,75 +160,14 @@ const SalesByPageReport: React.FC<SalesByPageReportProps> = ({
         return filterOrders(baseOrders, filters);
     }, [baseOrders, activeDateFilter, activeStart, activeEnd, contextFilters, filterOrders]);
 
-    const pageStats = useMemo(() => {
-        const stats: Record<string, any> = {};
-        const matchesFilters = (pName: string, pTeam: string) => {
-            // Technical Upgrade: Syncing page visibility with active team filters
-            if (contextFilters?.team && contextFilters.team !== 'all' && contextFilters.team !== 'All') {
-                if (!isMatch(contextFilters.team, pTeam)) return false;
-            }
-            if (onlyTelegram) {
-                if (!(pName || '').toLowerCase().startsWith('telegram')) return false;
-            }
-            return true;
-        };
-
-        if (appData.pages) {
-            appData.pages.forEach(p => {
-                if (matchesFilters(p.PageName, p.Team || '')) {
-                    stats[p.PageName] = { pageName: p.PageName, teamName: p.Team || 'Unassigned', logoUrl: p.PageLogoURL || '', revenue: 0, profit: 0, orderCount: 0 };
-                    MONTHS.forEach(m => { stats[p.PageName][`rev_${m}`] = 0; stats[p.PageName][`prof_${m}`] = 0; });
-                }
-            });
-        }
-
-        filteredOrders.forEach(o => {
-            const fs = o.FulfillmentStatus || o['Fulfillment Status'] || 'Pending';
-            if (fs === 'Cancelled' || fs === 'Returned') return;
-            const page = o.Page || 'Unknown';
-            if (!stats[page]) {
-                const info = appData.pages?.find(p => p.PageName === page);
-                stats[page] = { pageName: page, teamName: o.Team || 'Unassigned', logoUrl: info?.PageLogoURL || '', revenue: 0, profit: 0, orderCount: 0 };
-                MONTHS.forEach(m => { stats[page][`rev_${m}`] = 0; stats[page][`prof_${m}`] = 0; });
-            }
-            if (stats[page]) {
-                const rev = Number(o['Grand Total']) || 0;
-                const cost = (Number(o['Total Product Cost ($)']) || 0) + (Number(o['Internal Cost']) || 0);
-                stats[page].revenue += rev;
-                stats[page].profit += (rev - cost);
-                stats[page].orderCount += 1;
-                if (o.Timestamp) { 
-                    const d = safeParseDate(o.Timestamp); 
-                    if (d) {
-                        const monthName = MONTHS[d.getMonth()];
-                        stats[page][`rev_${monthName}`] += rev; 
-                        stats[page][`prof_${monthName}`] += (rev - cost); 
-                    }
-                }
-            }
-        });
-
-        let result = Object.values(stats);
-        if (!showAllPages) result = result.filter(item => item.revenue > 0);
-
-        return result.sort((a: any, b: any) => {
-            const mult = sortConfig.direction === 'asc' ? 1 : -1;
-            const valA = a[sortConfig.key];
-            const valB = b[sortConfig.key];
-            if (typeof valA === 'string') return valA.localeCompare(valB) * mult;
-            return (valA - valB) * mult;
-        });
-    }, [filteredOrders, sortConfig, appData.pages, showAllPages, contextFilters, onlyTelegram]);
-
-    const grandTotals = useMemo(() => {
-        const totals: any = { revenue: 0, profit: 0, pagesCount: pageStats.length };
-        MONTHS.forEach(m => { totals[`rev_${m}`] = 0; totals[`prof_${m}`] = 0; });
-        pageStats.forEach((s: any) => { 
-            totals.revenue += s.revenue; totals.profit += s.profit; 
-            MONTHS.forEach(m => { totals[`rev_${m}`] += s[`rev_${m}`]; totals[`prof_${m}`] += s[`prof_${m}`]; }); 
-        });
-        return totals;
-    }, [pageStats]);
+    const { pageStats, grandTotals, topPagesChartData } = useSalesPageStats({
+        orders: filteredOrders,
+        appData,
+        showAllPages,
+        onlyTelegram,
+        sortConfig,
+        contextFilters,
+    });
 
     const handleExportPDF = () => {
         setIsExporting(true);
@@ -234,10 +181,6 @@ const SalesByPageReport: React.FC<SalesByPageReportProps> = ({
             } catch (err) { console.error(err); alert("Export failed"); } finally { setIsExporting(false); }
         }, 100);
     };
-
-    const topPagesChartData = useMemo(() => {
-        return [...pageStats].sort((a, b) => b.revenue - a.revenue).slice(0, 5).map(p => ({ label: p.pageName, value: p.revenue, imageUrl: p.logoUrl }));
-    }, [pageStats]);
 
     return (
         <div className="w-full bg-[#0B0E11] min-h-screen font-sans select-none animate-fade-in pb-12">

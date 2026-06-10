@@ -163,31 +163,37 @@ const AppContent: React.FC = () => {
                 };
 
                 ws.onclose = (event) => {
-                    console.log(`🔴 [WS] Disconnected (Code: ${event.code})`);
-                    ws = null;
                     if (!isDisposed) {
+                        console.log(`🔴 [WS] Disconnected (Code: ${event.code})`);
+                        ws = null;
                         scheduleReconnect();
                     }
                 };
 
                 ws.onerror = (error) => {
-                    console.error("⚠️ [WS] Connection Error:", error);
+                    if (!isDisposed) {
+                        console.error("⚠️ [WS] Connection Error:", error);
+                    }
                     // Error will trigger onclose, which handles reconnect
                 };
             } catch (e) {
-                console.error("❌ [WS] Failed to initialize:", e);
-                if (!isDisposed) scheduleReconnect();
+                if (!isDisposed) {
+                    console.error("❌ [WS] Failed to initialize:", e);
+                    scheduleReconnect();
+                }
             }
         };
 
         connect();
 
         return () => {
-            console.log("🛑 [WS] Cleaning up connection...");
             isDisposed = true;
             if (ws) {
+                console.log("🛑 [WS] Cleaning up connection...");
                 ws.onclose = null; // Prevent reconnect loop
+                ws.onerror = null;
                 ws.close();
+                ws = null;
             }
             if (reconnectTimeout) clearTimeout(reconnectTimeout);
         };

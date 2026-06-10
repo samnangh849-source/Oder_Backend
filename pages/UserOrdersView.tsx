@@ -30,11 +30,18 @@ const UserOrdersView: React.FC<{ team: string; onAdd: () => void }> = ({ team, o
             const params: any = {
                 limit: 5000, // Sufficient for team-level reports
                 datePreset: reportFilters.datePreset,
-                team: team,
+                team: reportFilters.team || team,
                 view: 'compact'
             };
             if (reportFilters.startDate) params.startDate = reportFilters.startDate;
             if (reportFilters.endDate) params.endDate = reportFilters.endDate;
+            
+            // Add other contextual filters to server fetch
+            if (reportFilters.user) params.user = reportFilters.user;
+            if (reportFilters.store) params.store = reportFilters.store;
+            if (reportFilters.fulfillmentStore) params.fulfillmentStore = reportFilters.fulfillmentStore;
+            if (reportFilters.paymentStatus) params.paymentStatus = reportFilters.paymentStatus;
+            if (reportFilters.fulfillmentStatus) params.fulfillmentStatus = reportFilters.fulfillmentStatus;
 
             fetchOrders(false, params);
         }

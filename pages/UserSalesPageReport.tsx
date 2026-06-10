@@ -10,7 +10,8 @@ import { safeParseDate } from '../utils/dateUtils';
 import { ChevronLeft, Download, BarChart3, TrendingUp, Package, Layout, Terminal, Activity, Cpu, DollarSign, Layers, Zap } from 'lucide-react';
 import SalesStatisticModal from '../components/reports/SalesStatisticModal';
 import OrderFilters, { FilterState, initialFilterState } from '../components/orders/OrderFilters';
-import { useFilterEngine } from '../hooks/useFilterEngine';
+import { useFilterEngine, isMatch } from '../hooks/useFilterEngine';
+import { useSalesPageStats } from '../hooks/useSalesPageStats';
 import Modal from '../components/common/Modal';
 
 // Import separate view components
@@ -45,7 +46,7 @@ const UserSalesPageReport: React.FC<UserSalesPageReportProps> = ({
     customEnd: initialEnd,
     onFilterChange
 }) => {
-    const { appData, previewImage, language, advancedSettings } = useContext(AppContext);
+    const { appData, previewImage, language, advancedSettings, isOrdersLoading } = useContext(AppContext);
     
     // Technical Upgrade: Using allOrders as base to allow local date preset overrides
     const baseOrders = useMemo(() => allOrders || sourceOrders, [allOrders, sourceOrders]);
@@ -157,62 +158,14 @@ const UserSalesPageReport: React.FC<UserSalesPageReportProps> = ({
         return filterOrders(baseOrders, filters);
     }, [baseOrders, filters, filterOrders]);
 
-    const pageStats = useMemo(() => {
-        const stats: Record<string, any> = {};
-        const activeTeam = filters.team;
-        if (appData.pages) {
-            const teamPages = (!activeTeam || activeTeam === 'all' || activeTeam === 'All Teams') 
-                ? appData.pages 
-                : appData.pages.filter(p => (p.Team || '').trim() === activeTeam);
-            
-            teamPages.forEach(p => {
-                stats[p.PageName] = { pageName: p.PageName, teamName: p.Team || 'Unassigned', logoUrl: p.PageLogoURL || '', revenue: 0, profit: 0, orderCount: 0 };
-                MONTHS.forEach(m => { stats[p.PageName][`rev_${m}`] = 0; stats[p.PageName][`prof_${m}`] = 0; });
-            });
-        }
-        filteredOrders.forEach(o => {
-            const fs = o.FulfillmentStatus || o['Fulfillment Status'] || 'Pending';
-            if (fs === 'Cancelled' || fs === 'Returned') return;
-            const page = o.Page || 'Unknown';
-            if (!stats[page]) {
-                const info = appData.pages?.find(p => p.PageName === page);
-                stats[page] = { pageName: page, teamName: o.Team || 'Unassigned', logoUrl: info?.PageLogoURL || '', revenue: 0, profit: 0, orderCount: 0 };
-                MONTHS.forEach(m => { stats[page][`rev_${m}`] = 0; stats[page][`prof_${m}`] = 0; });
-            }
-            const rev = Number(o['Grand Total']) || 0;
-            const cost = (Number(o['Total Product Cost ($)']) || 0) + (Number(o['Internal Cost']) || 0);
-            const profit = rev - cost;
-            stats[page].revenue += rev;
-            stats[page].profit += profit;
-            stats[page].orderCount += 1;
-            if (o.Timestamp) {
-                const d = safeParseDate(o.Timestamp);
-                if (d) {
-                    const mName = MONTHS[d.getMonth()];
-                    stats[page][`rev_${mName}`] += rev;
-                    stats[page][`prof_${mName}`] += profit;
-                }
-            }
-        });
-        let result = Object.values(stats);
-        if (!showAllPages) result = result.filter(item => item.revenue > 0);
-        return result.sort((a: any, b: any) => {
-            const mult = sortConfig.direction === 'asc' ? 1 : -1;
-            const valA = a[sortConfig.key];
-            const valB = b[sortConfig.key];
-            if (typeof valA === 'string') return valA.localeCompare(valB) * mult;
-            return (valA - valB) * mult;
-        });
-    }, [filteredOrders, sortConfig, appData.pages, showAllPages, team]);
-    const grandTotals = useMemo(() => {
-        const totals: any = { revenue: 0, profit: 0, pagesCount: pageStats.length, orders: 0 };
-        MONTHS.forEach(m => { totals[`rev_${m}`] = 0; totals[`prof_${m}`] = 0; });
-        pageStats.forEach((s: any) => { 
-            totals.revenue += s.revenue; totals.profit += s.profit; totals.orders += s.orderCount;
-            MONTHS.forEach(m => { totals[`rev_${m}`] += s[`rev_${m}`]; totals[`prof_${m}`] += s[`prof_${m}`]; });
-        });
-        return totals;
-    }, [pageStats]);
+    const { pageStats, grandTotals, topPagesChartData } = useSalesPageStats({
+        orders: filteredOrders,
+        appData,
+        team,
+        showAllPages,
+        sortConfig: sortConfig as any,
+    });
+
     const filterLabel = useMemo(() => {
         const labels: Record<string, string> = {
             today: 'TODAY', yesterday: 'YESTERDAY', this_week: 'THIS WEEK',
@@ -279,11 +232,9 @@ const UserSalesPageReport: React.FC<UserSalesPageReportProps> = ({
             } catch (err) { console.error(err); alert("Export failed"); } finally { setIsExporting(false); }
         }, 100);
     };
-    const topPagesChartData = useMemo(() => {
-        return [...pageStats].sort((a, b) => b.revenue - a.revenue).slice(0, 5).map(p => ({ label: p.pageName, value: p.revenue, imageUrl: p.logoUrl }));
-    }, [pageStats]);
 
     const activeFilterCount = Object.values(filters).filter(v => v !== '' && v !== 'all' && v !== team).length;
+
 
     return (
         <div className="fixed inset-0 z-[150] bg-[#0B0E11] overflow-hidden flex flex-col font-sans select-none animate-fade-in">
@@ -372,7 +323,18 @@ const UserSalesPageReport: React.FC<UserSalesPageReportProps> = ({
                     </button>
                 </div>
             </header>
-            <main className="flex-1 overflow-y-auto custom-scrollbar bg-[#0B0E11] p-4 space-y-6">
+            <main className="flex-1 overflow-y-auto custom-scrollbar bg-[#0B0E11] p-4 space-y-6 relative">
+                {isOrdersLoading && (
+                    <div className="absolute inset-0 z-50 flex items-center justify-center bg-[#0B0E11]/60 backdrop-blur-[2px]">
+                        <div className="flex flex-col items-center gap-4 p-8 rounded-3xl bg-[#1E2329] border border-[#2B3139] shadow-2xl animate-reveal">
+                            <Spinner size="lg" />
+                            <div className="flex flex-col items-center">
+                                <p className="text-xs font-black text-white uppercase tracking-[0.2em]">{language === 'km' ? 'កំពុងធ្វើបច្ចុប្បន្នភាព' : 'Refreshing Data'}</p>
+                                <p className="text-[9px] text-[#848E9C] font-bold uppercase tracking-[0.3em] mt-1 italic">Quantum Node Syncing...</p>
+                            </div>
+                        </div>
+                    </div>
+                )}
                 {/* Financial KPIs - Packaging View Card Style */}
                 <div className="grid grid-cols-2 lg:grid-cols-4 gap-6">
                     <div className="bg-[#1E2329] border border-[#2B3139] p-6 rounded-[2rem] relative overflow-hidden group hover:border-blue-500/50 transition-all shadow-xl">

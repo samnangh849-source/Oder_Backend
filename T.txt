@@ -496,3 +496,14 @@ Please fix all problem and Improve UI of (Filter Engine) in Order Dashboard
 
 
 សូម Improve ដំណើរការ Filters នៃផ្នែក (Sales Online Data) ព្រោះថាមានបញ្ហា Filter មិនទទួលបានទិន្នន័យ ដូចផ្នែកជ្រើសរើស Team ឡើយ
+
+
+Filters នៃផ្នែក (Sales Online Data) មានបញ្ហា (ឧ.This Year តែមិនឃើញទិន្នន័យ This Year ទាល់តែ Back មក Filter នៅកន្លែង Selection Team វិញ)
+
+
+ត្រូវប្រាកដថា ផ្នែក Filter គ្រប់ផ្នែកដូចជា UserSalesPageReport.tsx និង(Sales Online Data) ដំណើរការដូចផ្នែក (view=user_journey)​ដែលមិនទាន់ចុចចូល(Sales Online Data)
+
+
+
+
+បញ្ហា: នៅពេលចូល (UserJourney.tsx) ហើយ Filter ដាក់ (this Month) ហើយក៏ចូល Page Report ហើយ Filter ដាក់ (Last Month) បែរជាទិន្នន័យបង្ហាញថា​0​ទាំងអស់

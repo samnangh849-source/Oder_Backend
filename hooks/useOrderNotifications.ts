@@ -15,9 +15,8 @@ export const useOrderNotifications = () => {
         if (!currentUser) return;
 
         const checkUpdates = async () => {
+            if (document.hidden) return; // Skip if tab is not active
             try {
-                console.log(`[Notification] Checking for updates. isShiftOpener: ${isShiftOpener}, activeStore: ${activeShiftStore}`);
-                
                 const token = localStorage.getItem('token');
                 const headers: HeadersInit = { 'Content-Type': 'application/json' };
                 if (token) headers['Authorization'] = `Bearer ${token}`;

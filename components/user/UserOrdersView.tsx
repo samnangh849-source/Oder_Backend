@@ -14,12 +14,6 @@ import { useOrder } from '../../context/OrderContext';
 
 type DateRangePreset = 'today' | 'yesterday' | 'this_week' | 'this_month' | 'last_month' | 'this_year' | 'last_year' | 'all' | 'custom';
 
-interface ReportFilterState {
-    datePreset: DateRangePreset;
-    customStart: string;
-    customEnd: string;
-}
-
 interface UserOrdersViewProps {
   onAdd: () => void;
   onStatsUpdate: (stats: { revenue: number; cost: number; paid: number; unpaid: number, count: number }) => void;
@@ -65,12 +59,6 @@ const UserOrdersView: React.FC<UserOrdersViewProps> = ({ onAdd, onStatsUpdate, s
     const [visibleColumns, setVisibleColumns] = useState<Set<string>>(new Set([
         'index', 'customerName', 'productInfo', 'location', 'total', 'status', 'date', 'actions'
     ]));
-
-    const [reportFilters, setReportFilters] = useState<ReportFilterState>({
-        datePreset: 'this_month',
-        customStart: new Date().toISOString().split('T')[0],
-        customEnd: new Date().toISOString().split('T')[0]
-    });
 
     const allColumns = [
         { key: 'index', label: language === 'km' ? 'លេខរៀង' : 'Index' },
@@ -293,6 +281,37 @@ const UserOrdersView: React.FC<UserOrdersViewProps> = ({ onAdd, onStatsUpdate, s
         setDateRange('this_month');
     };
 
+    // Technical Upgrade: Handle Filter synchronization for Reports
+    const [reportFilters, setReportFilters] = useState<Partial<FilterState>>({
+        datePreset: 'this_month',
+        startDate: '',
+        endDate: '',
+    });
+
+    const handleReportFilterChange = (newFilters: Partial<FilterState>) => {
+        setReportFilters(prev => ({ ...prev, ...newFilters }));
+    };
+
+    useEffect(() => {
+        if (showReport || showShippingReport) {
+            const params: any = {
+                limit: 5000,
+                datePreset: reportFilters.datePreset || dateRange,
+                team: selectedTeam,
+                view: 'compact'
+            };
+            if (reportFilters.startDate) params.startDate = reportFilters.startDate;
+            if (reportFilters.endDate) params.endDate = reportFilters.endDate;
+            
+            // Contextual filters
+            if (reportFilters.user) params.user = reportFilters.user;
+            if (reportFilters.store) params.store = reportFilters.store;
+            if (reportFilters.fulfillmentStore) params.fulfillmentStore = reportFilters.fulfillmentStore;
+
+            fetchOrders(false, params);
+        }
+    }, [reportFilters, showReport, showShippingReport, selectedTeam, fetchOrders, dateRange]);
+
     const handleSaveEdit = () => { setEditingOrder(null); refreshData(); };
 
     const isFrontendDenied = !hasPermission('view_order_list');
@@ -374,9 +393,9 @@ const UserOrdersView: React.FC<UserOrdersViewProps> = ({ onAdd, onStatsUpdate, s
 
     if (editingOrder) return <div className="fixed inset-0 z-[100] bg-[#0B0E11] animate-reveal overflow-y-auto"><EditOrderPage order={editingOrder} onSaveSuccess={handleSaveEdit} onCancel={() => setEditingOrder(null)} /></div>;
 
-    if (showReport) return <div className="animate-fade-in h-full overflow-auto bg-[var(--cm-bg)]"><UserSalesPageReport orders={permittedOrders} allOrders={permittedOrders} onBack={() => setShowReport(false)} team={selectedTeam || ''} dateFilter={dateRange} customStart={advancedFilters.startDate} customEnd={advancedFilters.endDate} /></div>;
+    if (showReport) return <div className="animate-fade-in h-full overflow-auto bg-[var(--cm-bg)]"><UserSalesPageReport orders={permittedOrders} allOrders={permittedOrders} onBack={() => setShowReport(false)} team={selectedTeam || ''} onFilterChange={handleReportFilterChange} dateFilter={reportFilters.datePreset || dateRange} customStart={reportFilters.startDate || advancedFilters.startDate} customEnd={reportFilters.endDate || advancedFilters.endDate} /></div>;
 
-    if (showShippingReport) return <div className="animate-fade-in h-full overflow-auto bg-[var(--cm-bg)]"><ShippingReport orders={permittedOrders} appData={appData} dateFilter={dateRange} onBack={() => setShowShippingReport(false)} /></div>;
+    if (showShippingReport) return <div className="animate-fade-in h-full overflow-auto bg-[var(--cm-bg)]"><ShippingReport orders={permittedOrders} appData={appData} onBack={() => setShowShippingReport(false)} onFilterChange={handleReportFilterChange} dateFilter={reportFilters.datePreset || dateRange} startDate={reportFilters.startDate || advancedFilters.startDate} endDate={reportFilters.endDate || advancedFilters.endDate} /></div>;
 
     return (
         <div className="flex flex-col h-full">

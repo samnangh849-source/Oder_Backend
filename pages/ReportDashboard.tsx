@@ -90,7 +90,7 @@ const ReportDashboard: React.FC<ReportDashboardProps> = ({ activeReport, onBack,
         return () => setMobilePageTitle(null);
     }, [activeReport, setMobilePageTitle]);
     
-    // Sync All Filters with URL
+    // Sync All Filters with URL — initialize from URL consistently
     const [urlDate, setUrlDate] = useUrlState<string>('dateFilter', 'this_month');
     const [urlStart, setUrlStart] = useUrlState<string>('startDate', '');
     const [urlEnd, setUrlEnd] = useUrlState<string>('endDate', '');
@@ -108,10 +108,30 @@ const ReportDashboard: React.FC<ReportDashboardProps> = ({ activeReport, onBack,
     const [urlLocation, setUrlLocation] = useUrlState<string>('locationFilter', '');
     const [urlCost, setUrlCost] = useUrlState<string>('costFilter', '');
 
-    const [filters, setFilters] = useState<FilterState>(() => {
-        const searchParams = new URLSearchParams(window.location.search);
-        return {
-            ...initialFilterState,
+    const [filters, setFilters] = useState<FilterState>(() => ({
+        ...initialFilterState,
+        datePreset: (urlDate as any) || 'this_month',
+        startDate: urlStart || '',
+        endDate: urlEnd || '',
+        team: urlTeam || '',
+        user: urlUser || '',
+        paymentStatus: urlPayment || '',
+        shippingService: urlShipping || '',
+        driver: urlDriver || '',
+        product: urlProduct || '',
+        bank: urlBank || '',
+        fulfillmentStore: urlFulfillment || '',
+        store: urlStore || '',
+        page: urlPage || '',
+        location: urlLocation || '',
+        internalCost: urlCost || '',
+        customerName: urlCustomer || '',
+    }));
+
+    // Technical Upgrade: Sync filters state when URL state changes externally (e.g. Back button or Drilldown)
+    useEffect(() => {
+        setFilters(prev => ({
+            ...prev,
             datePreset: (urlDate as any) || 'this_month',
             startDate: urlStart || '',
             endDate: urlEnd || '',
@@ -128,8 +148,8 @@ const ReportDashboard: React.FC<ReportDashboardProps> = ({ activeReport, onBack,
             location: urlLocation || '',
             internalCost: urlCost || '',
             customerName: urlCustomer || '',
-        };
-    });
+        }));
+    }, [urlDate, urlStart, urlEnd, urlCustomer, urlTeam, urlUser, urlPayment, urlShipping, urlDriver, urlProduct, urlBank, urlFulfillment, urlStore, urlPage, urlLocation, urlCost]);
 
     const enrichedOrders = useMemo(() => {
         return orders.map(o => {
