@@ -3486,6 +3486,16 @@ func convertDriveURLToDirect(url string) string {
 	return url
 }
 
+func extractMapLink(text string) string {
+	if text == "" {
+		return ""
+	}
+	// Supports standard google.com/maps, maps.app.goo.gl, and goo.gl/maps formats.
+	re := regexp.MustCompile(`(?i)https?://(?:www\.)?(?:google\.com/maps|maps\.app\.goo\.gl|goo\.gl/maps)/[^\s"']+`)
+	match := re.FindString(text)
+	return match
+}
+
 func handleSendDeliveryTelegram(c *gin.Context) {
 	var r struct {
 		OrderID string `json:"orderId"`
@@ -3575,20 +3585,33 @@ func handleSendDeliveryTelegram(c *gin.Context) {
 	text += fmt.Sprintf("\n📍 ទីតាំង: *%s*", location)
 	text += fmt.Sprintf("\n🏠 អាស័យដ្ឋាន: _%s_", address)
 
-	// Build inline keyboard for contact
-	var replyMarkup map[string]interface{}
+	// Build inline keyboard
+	var inlineKeyboard [][]map[string]interface{}
+	
+	// 1. Map Link Button (Top Priority)
+	mapLink := extractMapLink(order.Location + " " + order.AddressDetails + " " + order.Note)
+	if mapLink != "" {
+		inlineKeyboard = append(inlineKeyboard, []map[string]interface{}{
+			{"text": "📍 បើក Google Map", "url": mapLink},
+		})
+	}
+
+	// 2. Contact Customer Button
 	if phoneNumber != "N/A" {
 		re := regexp.MustCompile(`\D`)
 		cleanPhone := re.ReplaceAllString(phoneNumber, "")
 		cleanPhone = strings.TrimPrefix(cleanPhone, "0")
 		if cleanPhone != "" {
-			replyMarkup = map[string]interface{}{
-				"inline_keyboard": [][]map[string]interface{}{
-					{
-						{"text": "💬 ទាក់ទងអតិថិជន", "url": "https://t.me/+855" + cleanPhone},
-					},
-				},
-			}
+			inlineKeyboard = append(inlineKeyboard, []map[string]interface{}{
+				{"text": "💬 ទាក់ទងអតិថិជន", "url": "https://t.me/+855" + cleanPhone},
+			})
+		}
+	}
+
+	var replyMarkup map[string]interface{}
+	if len(inlineKeyboard) > 0 {
+		replyMarkup = map[string]interface{}{
+			"inline_keyboard": inlineKeyboard,
 		}
 	}
 
