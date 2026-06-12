@@ -49,6 +49,13 @@ function normalizeKey(str) {
   return String(str).toLowerCase().replace(/[^a-z0-9]/g, "");
 }
 
+function extractMapLink(text) {
+  if (!text) return null;
+  const mapRegex = /https?:\/\/(?:www\.)?(?:google\.com\/maps|maps\.app\.goo\.gl|goo\.gl\/maps)\/[^\s"']+/i;
+  const match = String(text).match(mapRegex);
+  return match ? match[0] : null;
+}
+
 /**
  * មុខងារចម្បងសម្រាប់ទទួល Request ពី Backend (Golang)
  */
@@ -1215,6 +1222,11 @@ function sendTelegramMessage(settings, data, templates) {
       + (settings.labelPrinterURL.indexOf("?") === -1 ? "?" : "&")
       + qs;
     buttonsRow.push({ text: "🖨️ ព្រីន Label", url: labelUrl });
+  }
+
+  const mapLink = extractMapLink((data["Address Details"] || "") + " " + (data["Note"] || ""));
+  if (mapLink) {
+    buttonsRow.push({ text: "📍 មើលទីតាំង", url: mapLink });
   }
 
   if (vars.customerPhone) {

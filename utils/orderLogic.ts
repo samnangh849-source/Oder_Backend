@@ -98,3 +98,15 @@ export const generateAuditLog = (oldData: ParsedOrder, newData: ParsedOrder): Ch
 
     return changes;
 };
+
+/**
+ * Extracts a Google Maps link from a given text string.
+ * Supports standard google.com/maps, maps.app.goo.gl, and goo.gl/maps formats.
+ */
+export const extractMapLink = (text: string | null | undefined): string | null => {
+    if (!text) return null;
+    const mapRegex = /https?:\/\/(?:www\.)?(?:google\.com\/maps|maps\.app\.goo\.gl|goo\.gl\/maps)\/[^\s"']+/i;
+    const match = text.match(mapRegex);
+    return match ? match[0] : null;
+};
+

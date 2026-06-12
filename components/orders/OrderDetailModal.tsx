@@ -3,6 +3,7 @@ import { AppContext } from '../../context/AppContext';
 import { ParsedOrder, EditLog, UserActivityLog } from '../../types';
 import { safeParseDate } from '../../utils/dateUtils';
 import { convertGoogleDriveUrl, getOptimisticPackagePhoto } from '../../utils/fileUtils';
+import { extractMapLink } from '../../utils/orderLogic';
 import { WEB_APP_URL } from '../../constants';
 import { CacheService, CACHE_KEYS } from '../../services/cacheService';
 import { fetchAuditLogs } from '../../services/auditService';
@@ -463,19 +464,36 @@ const OrderDetailModal: React.FC<OrderDetailModalProps> = ({ order, onClose, inl
                                     <label className="text-[9px] sm:text-[10px] font-black text-[#848E9C] uppercase tracking-widest ml-1 flex items-center gap-2">
                                         <MapPin size={10} className="sm:w-3 sm:h-3" /> Shipping Destination (អាសយដ្ឋាន)
                                     </label>
-                                    <div 
-                                        onClick={() => handleCopy(`${order.Location} ${order['Address Details'] || ''}`, 'address')}
-                                        className="bg-[#0B0E11] border border-[#2B3139] p-4 sm:p-5 rounded-xl group hover:border-[#FCD535]/50 transition-all cursor-pointer relative overflow-hidden"
-                                    >
+                                    <div className="bg-[#0B0E11] border border-[#2B3139] p-4 sm:p-5 rounded-xl group hover:border-[#FCD535]/50 transition-all relative overflow-hidden">
                                         <div className="flex justify-between items-start gap-4">
-                                            <div className="min-w-0">
+                                            <div className="min-w-0 flex-grow cursor-pointer" onClick={() => handleCopy(`${order.Location} ${order['Address Details'] || ''}`, 'address')}>
                                                 <p className="text-xs sm:text-sm font-bold text-[#EAECEF] leading-relaxed uppercase tracking-wide">{order.Location}</p>
                                                 <p className="text-[10px] sm:text-xs text-[#848E9C] mt-1 sm:mt-2 italic font-medium">{order['Address Details'] || 'NO ADDITIONAL ANNOTATIONS'}</p>
                                             </div>
-                                            {copiedField === 'address' ? <Check size={16} className="text-[#0ECB81] shrink-0 mt-0.5 sm:mt-1" /> : <Copy size={16} className="text-[#848E9C] opacity-0 group-hover:opacity-100 transition-opacity shrink-0 mt-0.5 sm:mt-1" />}
+                                            <div className="flex flex-col gap-2 shrink-0 items-end">
+                                                {extractMapLink((order['Address Details'] || '') + ' ' + (order.Note || '')) && (
+                                                    <a 
+                                                        href={extractMapLink((order['Address Details'] || '') + ' ' + (order.Note || ''))!} 
+                                                        target="_blank" 
+                                                        rel="noopener noreferrer"
+                                                        className="p-2 bg-[#FCD535]/10 hover:bg-[#FCD535]/20 text-[#FCD535] rounded-lg border border-[#FCD535]/20 transition-all flex items-center justify-center group/map"
+                                                        title="Open in Google Maps"
+                                                        onClick={(e) => e.stopPropagation()}
+                                                    >
+                                                        <MapPin size={16} className="group-hover/map:scale-110 transition-transform" />
+                                                    </a>
+                                                )}
+                                                <button 
+                                                    onClick={() => handleCopy(`${order.Location} ${order['Address Details'] || ''}`, 'address')}
+                                                    className="p-2 hover:bg-white/5 rounded-lg text-[#848E9C] hover:text-[#FCD535] transition-all"
+                                                >
+                                                    {copiedField === 'address' ? <Check size={16} className="text-[#0ECB81]" /> : <Copy size={16} />}
+                                                </button>
+                                            </div>
                                         </div>
                                         <div className="absolute bottom-0 left-0 h-0.5 bg-[#FCD535] transition-all w-0 group-hover:w-full"></div>
                                     </div>
+
                                 </div>
 
                                 {order.Note && (

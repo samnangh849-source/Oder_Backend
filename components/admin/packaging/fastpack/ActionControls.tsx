@@ -12,13 +12,14 @@ interface ActionControlsProps {
     packagePhoto: string | null;
     uploading: boolean;
     undoTimer: number | null;
+    mapLink?: string | null;
     onClose: () => void;
     setStep: (step: PackStep) => void;
     handleSubmit: () => void;
 }
 
 const ActionControls: React.FC<ActionControlsProps> = ({
-    step, isOrderVerified, hasGeneratedLabel, packagePhoto, uploading, undoTimer, onClose, setStep, handleSubmit
+    step, isOrderVerified, hasGeneratedLabel, packagePhoto, uploading, undoTimer, mapLink, onClose, setStep, handleSubmit
 }) => {
     const { language } = useContext(AppContext);
     const t = translations[language as 'km' | 'en'];
@@ -31,8 +32,8 @@ const ActionControls: React.FC<ActionControlsProps> = ({
 
     return (
         <footer className="relative z-30 px-6 py-4 flex flex-col sm:flex-row gap-4 flex-shrink-0 justify-between items-center bg-[#181A20] border-t border-[#2B3139] shadow-[0_-10px_40px_rgba(0,0,0,0.4)]">
-            {/* Back Control */}
-            <div className="order-2 sm:order-1 flex w-full sm:w-auto">
+            {/* Back & Map Controls */}
+            <div className="order-2 sm:order-1 flex w-full sm:w-auto gap-3">
                 <button 
                     onClick={handleBack} 
                     disabled={uploading} 
@@ -41,7 +42,20 @@ const ActionControls: React.FC<ActionControlsProps> = ({
                     <svg className="w-4 h-4 group-hover:-translate-x-1 transition-transform text-[#848E9C]" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2.5}><path strokeLinecap="round" strokeLinejoin="round" d="M6.75 15.75L3 12m0 0l3.75-3.75M3 12h18" /></svg>
                     {step === 'VERIFYING' ? 'Abort Terminal' : step === 'LABELING' ? 'Back' : 'Back'}
                 </button>
+
+                {mapLink && (
+                    <a 
+                        href={mapLink} 
+                        target="_blank" 
+                        rel="noopener noreferrer"
+                        className="w-full sm:w-auto px-6 py-3 bg-[#1e3a8a]/40 hover:bg-[#1e3a8a]/60 text-blue-400 border border-blue-500/30 rounded font-bold text-sm uppercase tracking-wider transition-all flex items-center justify-center gap-3 active:scale-95 group"
+                    >
+                        <svg className="w-4 h-4 group-hover:scale-110 transition-transform" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2.5}><path strokeLinecap="round" strokeLinejoin="round" d="M15 10.5a3 3 0 11-6 0 3 3 0 016 0z" /><path strokeLinecap="round" strokeLinejoin="round" d="M19.5 10.5c0 7.142-7.5 11.25-7.5 11.25S4.5 17.642 4.5 10.5a7.5 7.5 0 1115 0z" /></svg>
+                        <span>View Location</span>
+                    </a>
+                )}
             </div>
+
 
             {/* Primary Action Control */}
             <div className="order-1 sm:order-2 flex w-full sm:w-auto min-w-[280px]">

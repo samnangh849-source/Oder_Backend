@@ -6,6 +6,7 @@ import { WEB_APP_URL } from '@/constants';
 import Spinner from '@/components/common/Spinner';
 import { ParsedOrder } from '@/types';
 import { fileToDataUrl, convertGoogleDriveUrl } from '@/utils/fileUtils';
+import { extractMapLink } from '@/utils/orderLogic';
 import { compressImage } from '@/utils/imageCompressor';
 import { CacheService, CACHE_KEYS } from '@/services/cacheService';
 import OrderGracePeriod from '@/components/orders/OrderGracePeriod';
@@ -1201,7 +1202,18 @@ const FastPackTerminal: React.FC<FastPackTerminalProps> = ({ order, onClose, onS
                 </div>
             </main>
 
-            <ActionControls step={step} isOrderVerified={isOrderVerified} hasGeneratedLabel={hasGeneratedLabel} packagePhoto={packagePhoto} uploading={uploading} undoTimer={undoTimer} onClose={onClose} setStep={setStep} handleSubmit={handleSubmit} />
+            <ActionControls 
+                step={step} 
+                isOrderVerified={isOrderVerified} 
+                hasGeneratedLabel={hasGeneratedLabel} 
+                packagePhoto={packagePhoto} 
+                uploading={uploading} 
+                undoTimer={undoTimer} 
+                mapLink={extractMapLink((order?.['Address Details'] || '') + ' ' + (order?.Note || ''))}
+                onClose={onClose} 
+                setStep={setStep} 
+                handleSubmit={handleSubmit} 
+            />
             {undoTimer !== null && (
                 <OrderGracePeriod timer={undoTimer} maxTimer={maxUndoTimer} onUndo={handleUndo} isUndoing={isUndoing} accentColor="yellow" title="SECURITY BROADCAST IN PROGRESS..." subtitle="Metadata is being permanently committed. Use UNDO to abort immediately." />
             )}
