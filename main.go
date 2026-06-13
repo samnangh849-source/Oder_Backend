@@ -2605,7 +2605,7 @@ func handleTelegramWebhook(c *gin.Context) {
 			backend.EnqueueSync("updateSheet", map[string]interface{}{
 				"Dispatched By":   driverName + " (" + driverUser + ")",
 				"Dispatched Time": now,
-			}, backend.CONFIG.ALL_ORDERS_SHEET, map[string]string{"Order ID": orderID})
+			}, "AllOrders", map[string]string{"Order ID": orderID})
 
 			if order.Team != "" {
 				backend.EnqueueSync("updateSheet", map[string]interface{}{
@@ -3736,27 +3736,6 @@ func handleSendDeliveryTelegram(c *gin.Context) {
 	if replyMarkup != nil {
 		payload["reply_markup"] = replyMarkup
 	}
-
-	if delGroup.TelegramTopicID != "" {
-		topicID := strings.TrimSpace(delGroup.TelegramTopicID)
-		if threadID, err := strconv.Atoi(topicID); err == nil && threadID != 0 {
-			payload["message_thread_id"] = threadID
-		}
-	}
-
-	jsonData, _ := json.Marshal(payload)
-	log.Printf("📤 [Telegram Delivery] Sending photo for order %s to chat %v (thread: %v)", order.OrderID, payload["chat_id"], payload["message_thread_id"])
-
-	resp, err := http.Post(apiURL, "application/json", bytes.NewBuffer(jsonData))
-	if err != nil {
-		log.Printf("❌ [Telegram Delivery] HTTP Error for order %s, chat %v: %v", order.OrderID, chatID, err)
-		c.JSON(http.StatusInternalServerError, gin.H{"status": "error", "message": "Failed to call Telegram API: " + err.Error()})
-		return
-	}
-	defer resp.Body.Close()
-
-	var resData map[string]interface{}
-	if err := json.NewDecoder(resp.Body).Decode(&resData); err != nil {
 
 	if delGroup.TelegramTopicID != "" {
 		topicID := strings.TrimSpace(delGroup.TelegramTopicID)
