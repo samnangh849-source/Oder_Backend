@@ -2529,47 +2529,114 @@ func handleTelegramWebhook(c *gin.Context) {
 			Text            string `json:"text"`
 			MessageThreadID int    `json:"message_thread_id"`
 		} `json:"message"`
+		CallbackQuery struct {
+			ID   string `json:"id"`
+			From struct {
+				ID        int64  `json:"id"`
+				FirstName string `json:"first_name"`
+				LastName  string `json:"last_name"`
+				Username  string `json:"username"`
+			} `json:"from"`
+			Message struct {
+				MessageID int `json:"message_id"`
+				Chat      struct {
+					ID int64 `json:"id"`
+				} `json:"chat"`
+				Caption string `json:"caption"`
+			} `json:"message"`
+			Data string `json:"data"`
+		} `json:"callback_query"`
 	}
 
 	if err := c.ShouldBindJSON(&update); err != nil {
-		// Just log and return 200 to Telegram to stop retries
 		return
 	}
 
-	if update.Message.Text == "" {
-		c.JSON(200, gin.H{"status": "ok"})
-		return
+	// 1. Handle Messages (Existing logic)
+	if update.Message.Text != "" {
+		text := strings.TrimSpace(update.Message.Text)
+		if strings.HasPrefix(text, "/id") {
+			chatID := update.Message.Chat.ID
+			threadID := update.Message.MessageThreadID
+			go func(t string, cid int64, tid int) {
+				response := fmt.Sprintf("🆔 *Chat Information*\n\n🔹 *Group ID:* `%d`", cid)
+				if tid != 0 {
+					response += fmt.Sprintf("\n🔹 *Thread ID:* `%d`", tid)
+				}
+				payload := map[string]interface{}{
+					"chat_id":    cid,
+					"text":       response,
+					"parse_mode": "Markdown",
+				}
+				if tid != 0 {
+					payload["message_thread_id"] = tid
+				}
+				apiURL := fmt.Sprintf("https://api.telegram.org/bot%s/sendMessage", t)
+				jsonData, _ := json.Marshal(payload)
+				http.Post(apiURL, "application/json", bytes.NewBuffer(jsonData))
+			}(token, chatID, threadID)
+		}
 	}
 
-	text := strings.TrimSpace(update.Message.Text)
-	if strings.HasPrefix(text, "/id") {
-		chatID := update.Message.Chat.ID
-		threadID := update.Message.MessageThreadID
+	// 2. Handle Callback Queries (Pick Up Logic)
+	if update.CallbackQuery.ID != "" && strings.HasPrefix(update.CallbackQuery.Data, "pickup_") {
+		orderID := strings.TrimPrefix(update.CallbackQuery.Data, "pickup_")
+		driverName := strings.TrimSpace(update.CallbackQuery.From.FirstName + " " + update.CallbackQuery.From.LastName)
+		driverUser := update.CallbackQuery.From.Username
+		if driverUser != "" {
+			driverUser = "@" + driverUser
+		} else {
+			driverUser = fmt.Sprintf("ID:%d", update.CallbackQuery.From.ID)
+		}
 
-		go func(t string, cid int64, tid int) {
-			response := fmt.Sprintf("🆔 *Chat Information*\n\n🔹 *Group ID:* `%d`", cid)
-			if tid != 0 {
-				response += fmt.Sprintf("\n🔹 *Thread ID:* `%d`", tid)
+		ict := time.FixedZone("ICT", 7*3600)
+		now := time.Now().In(ict).Format("15:04:05")
+
+		// Update DB
+		var order Order
+		if err := backend.DB.Where("order_id = ?", orderID).First(&order).Error; err == nil {
+			// Update locally
+			backend.DB.Model(&Order{}).Where("order_id = ?", orderID).Updates(map[string]interface{}{
+				"dispatched_by":   driverName + " (" + driverUser + ")",
+				"dispatched_time": now,
+			})
+
+			// Sync to Sheets
+			backend.EnqueueSync("updateSheet", map[string]interface{}{
+				"Dispatched By":   driverName + " (" + driverUser + ")",
+				"Dispatched Time": now,
+			}, backend.CONFIG.ALL_ORDERS_SHEET, map[string]string{"Order ID": orderID})
+
+			if order.Team != "" {
+				backend.EnqueueSync("updateSheet", map[string]interface{}{
+					"Dispatched By":   driverName + " (" + driverUser + ")",
+					"Dispatched Time": now,
+				}, "Orders_"+order.Team, map[string]string{"Order ID": orderID})
 			}
 
-			payload := map[string]interface{}{
-				"chat_id":    cid,
-				"text":       response,
+			// Edit Message Caption
+			newCaption := update.CallbackQuery.Message.Caption + fmt.Sprintf("\n\n✅ *បានមកយកដោយ:* %s\n👤 អ្នកដឹក: %s\n⏰ ម៉ោង: %s", driverName, driverUser, now)
+			
+			// Answer callback first to stop loading
+			answerURL := fmt.Sprintf("https://api.telegram.org/bot%s/answerCallbackQuery", token)
+			answerPayload := map[string]interface{}{
+				"callback_query_id": update.CallbackQuery.ID,
+				"text":              "✅ បានកត់ត្រាការ Pick Up",
+			}
+			ajson, _ := json.Marshal(answerPayload)
+			http.Post(answerURL, "application/json", bytes.NewBuffer(ajson))
+
+			// Edit Caption (Remove button by not sending reply_markup)
+			editURL := fmt.Sprintf("https://api.telegram.org/bot%s/editMessageCaption", token)
+			editPayload := map[string]interface{}{
+				"chat_id":    update.CallbackQuery.Message.Chat.ID,
+				"message_id": update.CallbackQuery.Message.MessageID,
+				"caption":    newCaption,
 				"parse_mode": "Markdown",
 			}
-			if tid != 0 {
-				payload["message_thread_id"] = tid
-			}
-
-			apiURL := fmt.Sprintf("https://api.telegram.org/bot%s/sendMessage", t)
-			jsonData, _ := json.Marshal(payload)
-			resp, err := http.Post(apiURL, "application/json", bytes.NewBuffer(jsonData))
-			if err != nil {
-				log.Printf("❌ [Telegram Bot] Failed to send /id response: %v", err)
-				return
-			}
-			defer resp.Body.Close()
-		}(token, chatID, threadID)
+			ejson, _ := json.Marshal(editPayload)
+			http.Post(editURL, "application/json", bytes.NewBuffer(ejson))
+		}
 	}
 
 	c.JSON(200, gin.H{"status": "ok"})
@@ -3496,6 +3563,23 @@ func extractMapLink(text string) string {
 	return match
 }
 
+var (
+	deliveryMutexMap = make(map[string]*sync.Mutex)
+	deliveryMapLock  sync.Mutex
+)
+
+func getDeliveryMutex(storeName, method string) *sync.Mutex {
+	deliveryMapLock.Lock()
+	defer deliveryMapLock.Unlock()
+	key := storeName + ":" + method
+	if m, ok := deliveryMutexMap[key]; ok {
+		return m
+	}
+	m := &sync.Mutex{}
+	deliveryMutexMap[key] = m
+	return m
+}
+
 func handleSendDeliveryTelegram(c *gin.Context) {
 	var r struct {
 		OrderID string `json:"orderId"`
@@ -3505,14 +3589,26 @@ func handleSendDeliveryTelegram(c *gin.Context) {
 		return
 	}
 
+	// 1. Fetch Order and Base Info (Read-only)
 	var order Order
 	if err := backend.DB.Where("order_id = ?", r.OrderID).First(&order).Error; err != nil {
 		c.JSON(http.StatusNotFound, gin.H{"status": "error", "message": "Order not found"})
 		return
 	}
 
-	if order.FulfillmentStore == "" {
-		c.JSON(http.StatusBadRequest, gin.H{"status": "error", "message": "Order has no fulfillment store"})
+	if order.FulfillmentStore == "" || order.InternalShippingMethod == "" {
+		c.JSON(http.StatusBadRequest, gin.H{"status": "error", "message": "Order missing store or shipping method"})
+		return
+	}
+
+	// 2. Acquire Lock for this specific Store+Method to ensure sequential processing
+	mu := getDeliveryMutex(order.FulfillmentStore, order.InternalShippingMethod)
+	mu.Lock()
+	defer mu.Unlock()
+
+	// 3. Re-fetch order within lock to get latest sequence if already processed
+	if err := backend.DB.Where("order_id = ?", r.OrderID).First(&order).Error; err != nil {
+		c.JSON(http.StatusNotFound, gin.H{"status": "error", "message": "Order re-fetch failed"})
 		return
 	}
 
@@ -3522,43 +3618,51 @@ func handleSendDeliveryTelegram(c *gin.Context) {
 		return
 	}
 
-	if order.InternalShippingMethod == "" {
-		c.JSON(http.StatusBadRequest, gin.H{"status": "error", "message": "Order has no shipping method assigned"})
-		return
-	}
-
 	var delGroup DeliveryGroup
 	if err := backend.DB.Where("store_name = ? AND shipping_method = ?", order.FulfillmentStore, order.InternalShippingMethod).First(&delGroup).Error; err != nil {
-		c.JSON(http.StatusNotFound, gin.H{"status": "error", "message": "Telegram group not defined for this branch and shipping method"})
+		c.JSON(http.StatusNotFound, gin.H{"status": "error", "message": "Telegram group not defined"})
 		return
 	}
 
 	if store.TelegramBotToken == "" || delGroup.TelegramGroupID == "" {
-		c.JSON(http.StatusBadRequest, gin.H{"status": "error", "message": "Telegram settings missing for this branch and shipping method"})
+		c.JSON(http.StatusBadRequest, gin.H{"status": "error", "message": "Telegram settings missing"})
 		return
 	}
 
 	if order.PackagePhotoURL == "" {
-		c.JSON(http.StatusBadRequest, gin.H{"status": "error", "message": "No package photo found for this order"})
+		c.JSON(http.StatusBadRequest, gin.H{"status": "error", "message": "No package photo found"})
 		return
 	}
 
-	// 1. Determine daily sequence number
+	// 4. Atomic Sequence Generation
 	ict := time.FixedZone("ICT", 7*3600)
 	todayStr := time.Now().In(ict).Format("2006-01-02")
 	var dailySeq int
 
 	if order.DeliveryDailySequence > 0 && order.DeliveryTelegramDate == todayStr {
-		// If already has a sequence for today, use it (case for resending)
 		dailySeq = order.DeliveryDailySequence
 	} else {
-		// Count orders shipped today with this method AND this store to get next sequence
-		var count int64
-		backend.DB.Model(&Order{}).
-			Where("fulfillment_store = ? AND internal_shipping_method = ? AND delivery_telegram_date = ? AND delivery_daily_sequence > 0",
-				order.FulfillmentStore, order.InternalShippingMethod, todayStr).
-			Count(&count)
-		dailySeq = int(count) + 1
+		// Use transaction to ensure absolute uniqueness
+		txErr := backend.DB.Transaction(func(tx *gorm.DB) error {
+			var count int64
+			if err := tx.Model(&Order{}).
+				Where("fulfillment_store = ? AND internal_shipping_method = ? AND delivery_telegram_date = ? AND delivery_daily_sequence > 0",
+					order.FulfillmentStore, order.InternalShippingMethod, todayStr).
+				Count(&count).Error; err != nil {
+				return err
+			}
+			dailySeq = int(count) + 1
+			
+			// Mark sequence immediately to prevent others from taking it
+			return tx.Model(&Order{}).Where("order_id = ?", order.OrderID).Updates(map[string]interface{}{
+				"delivery_daily_sequence": dailySeq,
+				"delivery_telegram_date":   todayStr,
+			}).Error
+		})
+		if txErr != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"status": "error", "message": "Sequence generation failed"})
+			return
+		}
 	}
 
 	// Prepare message details
@@ -3608,6 +3712,11 @@ func handleSendDeliveryTelegram(c *gin.Context) {
 		}
 	}
 
+	// 3. Pick Up Button (Action Button)
+	inlineKeyboard = append(inlineKeyboard, []map[string]interface{}{
+		{"text": "✅ បាន Pick Up", "callback_data": "pickup_" + order.OrderID},
+	})
+
 	var replyMarkup map[string]interface{}
 	if len(inlineKeyboard) > 0 {
 		replyMarkup = map[string]interface{}{
@@ -3627,6 +3736,27 @@ func handleSendDeliveryTelegram(c *gin.Context) {
 	if replyMarkup != nil {
 		payload["reply_markup"] = replyMarkup
 	}
+
+	if delGroup.TelegramTopicID != "" {
+		topicID := strings.TrimSpace(delGroup.TelegramTopicID)
+		if threadID, err := strconv.Atoi(topicID); err == nil && threadID != 0 {
+			payload["message_thread_id"] = threadID
+		}
+	}
+
+	jsonData, _ := json.Marshal(payload)
+	log.Printf("📤 [Telegram Delivery] Sending photo for order %s to chat %v (thread: %v)", order.OrderID, payload["chat_id"], payload["message_thread_id"])
+
+	resp, err := http.Post(apiURL, "application/json", bytes.NewBuffer(jsonData))
+	if err != nil {
+		log.Printf("❌ [Telegram Delivery] HTTP Error for order %s, chat %v: %v", order.OrderID, chatID, err)
+		c.JSON(http.StatusInternalServerError, gin.H{"status": "error", "message": "Failed to call Telegram API: " + err.Error()})
+		return
+	}
+	defer resp.Body.Close()
+
+	var resData map[string]interface{}
+	if err := json.NewDecoder(resp.Body).Decode(&resData); err != nil {
 
 	if delGroup.TelegramTopicID != "" {
 		topicID := strings.TrimSpace(delGroup.TelegramTopicID)
