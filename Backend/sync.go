@@ -30,7 +30,7 @@ type AppsScriptRequest struct {
 	NewName        string                 `json:"newName,omitempty"` // Added for renameFile compatibility
 	MimeType       string                 `json:"mimeType,omitempty"`
 	UserName       string                 `json:"userName,omitempty"`
-	OrderData      interface{}            `json:"orderData"`
+	OrderData      interface{}            `json:"orderData,omitempty"`
 	OrderID        string                 `json:"orderId,omitempty"`
 	Team           string                 `json:"team,omitempty"`
 	MovieID        string                 `json:"movieId,omitempty"`
@@ -172,13 +172,19 @@ func CallAppsScriptPOST(requestData AppsScriptRequest) (AppsScriptResponse, erro
 		if len(bodyPreview) > 500 {
 			bodyPreview = bodyPreview[:500]
 		}
+		log.Printf("❌ [AppsScript] HTTP %d. Payload sent: %s", resp.StatusCode, jsonData)
 		return AppsScriptResponse{}, fmt.Errorf("apps script returned HTTP %d: %s", resp.StatusCode, bodyPreview)
 	}
 	var scriptResponse AppsScriptResponse
 	if err := json.Unmarshal(body, &scriptResponse); err != nil {
-		log.Printf("❌ [AppsScript] JSON parse error: %v, body: %.500s", err, bodyStr)
+		log.Printf("❌ [AppsScript] JSON parse error: %v, body: %.500s. Payload sent: %s", err, bodyStr, jsonData)
 		return AppsScriptResponse{}, fmt.Errorf("invalid response from apps script (not valid JSON): %v", err)
 	}
+
+	if scriptResponse.Status == "error" {
+		log.Printf("⚠️ [AppsScript] Script returned ERROR: %s. Payload sent: %s", scriptResponse.Message, jsonData)
+	}
+
 	log.Printf("✅ [AppsScript] Parsed: status=%s url=%s fileID=%s", scriptResponse.Status, scriptResponse.URL, scriptResponse.FileID)
 	return scriptResponse, nil
 }
@@ -394,10 +400,30 @@ func processPersistentTask(workerID int, task *SyncTask) {
 }
 
 func processStuckTasks(workerID int) {
+	if DB == nil {
+		return
+	}
 	// 1. Handle addRow batching (Efficient for logs)
 	var batchRecords []PendingSync
-	// Find all pending addRow tasks (Using LIKE for cross-DB compatibility with TEXT columns)
-	DB.Where("status = 'pending' AND payload LIKE '%\"action\":\"addRow\"%'").Find(&batchRecords)
+	
+	// Transactional fetch and mark as processing to avoid race conditions between multiple workers
+	err := DB.Transaction(func(tx *gorm.DB) error {
+		if err := tx.Where("status = 'pending' AND payload LIKE '%\"action\":\"addRow\"%'").Limit(100).Find(&batchRecords).Error; err != nil {
+			return err
+		}
+		if len(batchRecords) > 1 {
+			var ids []uint
+			for _, r := range batchRecords {
+				ids = append(ids, r.ID)
+			}
+			return tx.Model(&PendingSync{}).Where("id IN ?", ids).Update("status", "processing").Error
+		}
+		return nil
+	})
+
+	if err != nil {
+		log.Printf("❌ SyncManager: Failed to transactional fetch batch records: %v", err)
+	}
 	
 	if len(batchRecords) > 1 {
 		// Group by sheetName
@@ -409,6 +435,14 @@ func processStuckTasks(workerID int) {
 		}
 
 		for sheetName, records := range sheetBatches {
+			if sheetName == "" {
+				log.Printf("⚠️ SyncManager: Worker %d found %d records with empty sheetName, skipping batching", workerID, len(records))
+				// Revert to pending since we skipped them
+				var ids []uint
+				for _, r := range records { ids = append(ids, r.ID) }
+				DB.Model(&PendingSync{}).Where("id IN ?", ids).Update("status", "pending")
+				continue
+			}
 			if len(records) > 1 {
 				log.Printf("📦 SyncManager: Worker %d batching %d rows for %s", workerID, len(records), sheetName)
 				
@@ -417,28 +451,52 @@ func processStuckTasks(workerID int) {
 				for _, r := range records {
 					var req AppsScriptRequest
 					json.Unmarshal([]byte(r.Payload), &req)
-					rows = append(rows, req.NewData)
-					recordIDs = append(recordIDs, r.ID)
-					// Mark as processing immediately
-					DB.Model(&r).Update("status", "processing")
+					
+					// Use NewData if available, fallback to OrderData
+					rowData := req.NewData
+					if rowData == nil {
+						if od, ok := req.OrderData.(map[string]interface{}); ok {
+							rowData = od
+						}
+					}
+					
+					if rowData != nil {
+						rows = append(rows, rowData)
+						recordIDs = append(recordIDs, r.ID)
+					}
 				}
 
-				batchReq := AppsScriptRequest{
-					Action:    "batchAddRows",
-					SheetName: sheetName,
-					Rows:      rows,
-				}
+				if len(rows) > 1 {
+					batchReq := AppsScriptRequest{
+						Action:    "batchAddRows",
+						SheetName: sheetName,
+						Rows:      rows,
+					}
 
-				resp, err := CallAppsScriptPOST(batchReq)
-				if err == nil && resp.Status == "success" {
-					DB.Where("id IN ?", recordIDs).Delete(&PendingSync{})
-					log.Printf("✅ SyncManager: Batch success for %s (%d rows)", sheetName, len(records))
-					continue // Move to next sheet
+					resp, err := CallAppsScriptPOST(batchReq)
+					if err == nil && resp.Status == "success" {
+						DB.Where("id IN ?", recordIDs).Delete(&PendingSync{})
+						log.Printf("✅ SyncManager: Batch success for %s (%d rows)", sheetName, len(records))
+						continue // Move to next sheet
+					} else {
+						// Fallback: mark back as pending for individual retry or next batch
+						errMsg := "Batch failed"
+						if err != nil { errMsg = err.Error() } else if resp.Message != "" { errMsg = resp.Message }
+						log.Printf("⚠️ SyncManager: Batch failed for %s (%s), reverting to individual processing", sheetName, errMsg)
+						DB.Model(&PendingSync{}).Where("id IN ?", recordIDs).Updates(map[string]interface{}{
+							"status": "pending",
+							"last_error_message": errMsg,
+						})
+					}
 				} else {
-					// Fallback: mark back as pending for individual retry or next batch
-					log.Printf("⚠️ SyncManager: Batch failed for %s, reverting to individual processing", sheetName)
-					DB.Where("id IN ?", recordIDs).Update("status", "pending")
+					// If only 1 row had data after all, revert to pending for individual processing
+					var ids []uint
+					for _, r := range records { ids = append(ids, r.ID) }
+					DB.Model(&PendingSync{}).Where("id IN ?", ids).Update("status", "pending")
 				}
+			} else if len(records) == 1 {
+				// Revert single record to pending
+				DB.Model(&PendingSync{}).Where("id = ?", records[0].ID).Update("status", "pending")
 			}
 		}
 	}
