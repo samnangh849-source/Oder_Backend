@@ -344,6 +344,7 @@ function handleAddRow(data) {
 
 function handleBatchAddRows(data) {
   if (!data.sheetName || !data.rows || !Array.isArray(data.rows)) {
+    console.error("❌ [BatchAddRows] Invalid payload: sheetName=" + data.sheetName + " hasRows=" + (!!data.rows) + " isArray=" + Array.isArray(data.rows));
     return createJsonResponse({ status: "error", message: "sheetName and rows array required" }, 400);
   }
   const ss = SpreadsheetApp.getActiveSpreadsheet();
@@ -431,14 +432,19 @@ function handleUpdateSheet(data) {
     const pkKeys = Object.keys(data.primaryKey);
     let rowIndex = -1;
 
-    // 1. Try to find by 'ID' first if it exists in primaryKey, as it's the most reliable and fastest
-    const idKey = pkKeys.find(k => normalizeKey(k) === "id");
+    // 1. Try to find by 'ID' or 'OrderID' first if it exists in primaryKey, as it's the most reliable and fastest
+    const idKey = pkKeys.find(k => {
+      const nk = normalizeKey(k);
+      return nk === "id" || nk === "orderid";
+    });
+
     if (idKey) {
-      const idVal = data.primaryKey[idKey];
-      const idColIdx = normalizedHeaders.indexOf("id");
-      if (idColIdx !== -1) {
+      const idVal = String(data.primaryKey[idKey]).trim();
+      const idColIdx = normalizedHeaders.indexOf(normalizeKey(idKey));
+      
+      if (idColIdx !== -1 && idVal) {
         const searchRange = sheet.getRange(1, idColIdx + 1, sheet.getLastRow(), 1);
-        const finder = searchRange.createTextFinder(String(idVal).trim()).matchEntireCell(true);
+        const finder = searchRange.createTextFinder(idVal).matchEntireCell(true);
         const match = finder.findNext();
         if (match) {
           rowIndex = match.getRow();
@@ -450,12 +456,12 @@ function handleUpdateSheet(data) {
     // 2. Optimized Row Lookup using TextFinder (single-key PK only, if ID not found)
     if (rowIndex === -1 && pkKeys.length === 1) {
       const pkColName = pkKeys[0];
-      const pkValue = data.primaryKey[pkColName];
+      const pkValue = String(data.primaryKey[pkColName]).trim();
       const pkIdx = normalizedHeaders.indexOf(normalizeKey(pkColName));
 
       if (pkIdx !== -1) {
         const searchRange = sheet.getRange(1, pkIdx + 1, sheet.getLastRow(), 1);
-        const finder = searchRange.createTextFinder(String(pkValue).trim()).matchEntireCell(true);
+        const finder = searchRange.createTextFinder(pkValue).matchEntireCell(true);
         const match = finder.findNext();
         if (match) {
           rowIndex = match.getRow();
@@ -466,7 +472,7 @@ function handleUpdateSheet(data) {
 
     // 3. Fallback to manual scan if TextFinder fails, composite PK, or column not found
     if (rowIndex === -1) {
-      console.log("🔍 [UpdateSheet] Using full scan for PK matching...");
+      console.log("🔍 [UpdateSheet] Using full scan for PK matching: " + JSON.stringify(data.primaryKey));
       const values = sheet.getDataRange().getValues();
       const targetPkVals = {};
       for (const [k, v] of Object.entries(data.primaryKey)) { 
@@ -505,7 +511,7 @@ function handleUpdateSheet(data) {
         const upsertData = Object.assign({}, data.primaryKey, data.newData);
         return handleAddRow({ sheetName: data.sheetName, newData: upsertData });
       }
-      console.error("❌ [UpdateSheet] Row not found for PK: " + JSON.stringify(data.primaryKey));
+      console.error("❌ [UpdateSheet] Row not found for PK: " + JSON.stringify(data.primaryKey) + " in sheet: " + data.sheetName);
       return createJsonResponse({ status: "error", message: "រកមិនឃើញជួរទិន្នន័យដើម្បីកែប្រែ" }, 404);
     }
 
@@ -1224,22 +1230,21 @@ function sendTelegramMessage(settings, data, templates) {
     buttonsRow.push({ text: "🖨️ ព្រីន Label", url: labelUrl });
   }
 
-  const mapLink = extractMapLink((data["Address Details"] || "") + " " + (data["Note"] || ""));
-  if (mapLink) {
-    buttonsRow.push({ text: "📍 មើលទីតាំង", url: mapLink });
-  }
-
+  const mapLink = extractMapLink((data["Address Details"] || "") + " " + (data["Note"] || "") + " " + (data["Location"] || ""));
+  
+  var inline_keyboard = [];
+  if (buttonsRow.length > 0) inline_keyboard.push(buttonsRow);
+  if (mapLink) inline_keyboard.push([{ text: "📍 បើក Google Map", url: mapLink }]);
+  
   if (vars.customerPhone) {
     var cleanPhone = String(vars.customerPhone).replace(/\D/g, '').replace(/^0+/, '');
     if (cleanPhone) {
-      buttonsRow.push({ text: "💬 ទាក់ទងអតិថិជន", url: "https://t.me/+855" + cleanPhone });
+      inline_keyboard.push([{ text: "💬 ទាក់ទងអតិថិជន", url: "https://t.me/+855" + cleanPhone }]);
     }
   }
 
-  if (buttonsRow.length > 0) {
-    inlineKeyboard = {
-      inline_keyboard: [buttonsRow]
-    };
+  if (inline_keyboard.length > 0) {
+    inlineKeyboard = { inline_keyboard: inline_keyboard };
   }
 
   // --- Get Part templates ---
@@ -1257,9 +1262,9 @@ function sendTelegramMessage(settings, data, templates) {
 
   if (part1Tpl) {
     if (msgId1Existing) {
-      editSingleTelegramMsg(settings, msgId1Existing, applyTemplate(part1Tpl));
+      editSingleTelegramMsg(settings, msgId1Existing, applyTemplate(part1Tpl), inlineKeyboard);
     } else {
-      msgId1 = sendSingleTelegramMsg(settings, applyTemplate(part1Tpl));
+      msgId1 = sendSingleTelegramMsg(settings, applyTemplate(part1Tpl), inlineKeyboard);
     }
   }
   if (part2Tpl) {
@@ -1414,9 +1419,12 @@ function fetchOrderDataFromSheet(orderId, team) {
   const idIdx = normalizedHeaders.indexOf(normalizeKey("Order ID"));
   if (idIdx === -1) return null;
 
+  const idVal = String(orderId).trim();
+  if (!idVal) return null;
+
   // Fast lookup via TextFinder — avoids loading the entire sheet into memory
   const idColRange = sheet.getRange(2, idIdx + 1, lastRow - 1, 1);
-  const match = idColRange.createTextFinder(String(orderId).trim()).matchEntireCell(true).findNext();
+  const match = idColRange.createTextFinder(idVal).matchEntireCell(true).findNext();
   if (!match) return null;
 
   const rowValues = sheet.getRange(match.getRow(), 1, 1, lastCol).getValues()[0];

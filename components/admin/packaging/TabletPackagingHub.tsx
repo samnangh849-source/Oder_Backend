@@ -500,6 +500,9 @@ const TabletPackagingHub: React.FC<TabletPackagingHubProps> = ({
                                                 <div className="mt-2.5 flex flex-col gap-1 mb-2.5">
                                                     <p className={`text-sm font-bold ${B_TEXT_PRIMARY} truncate`}>{order.Location}</p>
                                                     <p className={`text-xs ${B_TEXT_SECONDARY} font-medium truncate`} title={order['Address Details']}>{order['Address Details']}</p>
+                                                    {order.Note && (
+                                                        <p className="text-[10px] text-[#FCD535] font-black italic truncate mt-0.5">Note: {order.Note}</p>
+                                                    )}
                                                 </div>
                                                 <div className={`flex justify-between items-center mt-2 pt-2 border-t ${B_BORDER}`}>
                                                     <div className="flex flex-col">

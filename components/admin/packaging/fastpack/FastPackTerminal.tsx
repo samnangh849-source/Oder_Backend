@@ -760,6 +760,21 @@ const FastPackTerminal: React.FC<FastPackTerminalProps> = ({ order, onClose, onS
                                                     </div>
                                                 </div>
 
+                                                {/* 2.6 NOTE / SPECIAL INSTRUCTION ROW */}
+                                                {order.Note && (
+                                                    <div className="flex items-center gap-4 px-4 py-5 bg-[#FCD535]/5 hover:bg-[#FCD535]/10 transition-colors border-b border-[#FCD535]/20">
+                                                        <div className="w-12 h-12 shrink-0 bg-[#FCD535]/10 rounded-full flex items-center justify-center border border-[#FCD535]/20">
+                                                            <Edit3 className="w-6 h-6 text-[#FCD535]" />
+                                                        </div>
+                                                        <div className="flex-grow min-w-0">
+                                                            <span className="text-[10px] font-black text-[#FCD535] uppercase tracking-[0.2em]">Special Instruction | ចំណាំ</span>
+                                                            <p className="text-lg font-bold text-[#EAECEF] mt-1 leading-relaxed italic">
+                                                                "{order.Note}"
+                                                            </p>
+                                                        </div>
+                                                    </div>
+                                                )}
+
                                                 {/* 3. LOGISTICS & DISPATCH PROTOCOL */}
                                                 <div className="border border-white/5 bg-[#1E2329]/30 rounded-none overflow-hidden mt-2">
                                                     <div className="flex flex-col lg:flex-row items-stretch gap-0 border-b border-white/5">

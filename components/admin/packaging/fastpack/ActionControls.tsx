@@ -51,7 +51,7 @@ const ActionControls: React.FC<ActionControlsProps> = ({
                         className="w-full sm:w-auto px-6 py-3 bg-[#1e3a8a]/40 hover:bg-[#1e3a8a]/60 text-blue-400 border border-blue-500/30 rounded font-bold text-sm uppercase tracking-wider transition-all flex items-center justify-center gap-3 active:scale-95 group"
                     >
                         <svg className="w-4 h-4 group-hover:scale-110 transition-transform" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2.5}><path strokeLinecap="round" strokeLinejoin="round" d="M15 10.5a3 3 0 11-6 0 3 3 0 016 0z" /><path strokeLinecap="round" strokeLinejoin="round" d="M19.5 10.5c0 7.142-7.5 11.25-7.5 11.25S4.5 17.642 4.5 10.5a7.5 7.5 0 1115 0z" /></svg>
-                        <span>View Location</span>
+                        <span>{t.view_google_map || 'View Google Map'}</span>
                     </a>
                 )}
             </div>
@@ -65,7 +65,7 @@ const ActionControls: React.FC<ActionControlsProps> = ({
                         disabled={!isOrderVerified} 
                         className={`w-full px-8 py-3.5 rounded font-bold text-base uppercase tracking-tight transition-all flex items-center justify-center gap-4 active:scale-[0.98] group ${!isOrderVerified ? 'bg-[#2B3139] text-[#5E6673] cursor-not-allowed' : 'bg-[#FCD535] text-[#181A20] hover:bg-[#FCD535]/90 shadow-lg shadow-[#FCD535]/10'}`}
                     >
-                        <span>Confirm & Label</span>
+                        <span>{t.proceed_to_label || 'Confirm & Label'}</span>
                         <svg className="w-5 h-5 group-hover:translate-x-1 transition-transform" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2.5}><path strokeLinecap="round" strokeLinejoin="round" d="M13.5 4.5L21 12m0 0l-7.5 7.5M21 12H3" /></svg>
                     </button>
                 )}
@@ -76,7 +76,7 @@ const ActionControls: React.FC<ActionControlsProps> = ({
                         disabled={!hasGeneratedLabel} 
                         className={`w-full px-8 py-3.5 rounded font-bold text-base uppercase tracking-tight transition-all flex items-center justify-center gap-4 active:scale-[0.98] group ${!hasGeneratedLabel ? 'bg-[#2B3139] text-[#5E6673] cursor-not-allowed' : 'bg-[#FCD535] text-[#181A20] hover:bg-[#FCD535]/90 shadow-lg shadow-[#FCD535]/10'}`}
                     >
-                        <span>Initialize Vision</span>
+                        <span>{t.initialize_camera || 'Initialize Vision'}</span>
                         <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2.5}><path strokeLinecap="round" strokeLinejoin="round" d="M6.827 6.175A2.31 2.31 0 015.186 7.23c-.38.054-.757.112-1.134.175C2.999 7.58 2.25 8.507 2.25 9.574V18a2.25 2.25 0 002.25 2.25h15a2.25 2.25 0 002.25-2.25V9.574c0-1.067-.75-1.994-1.802-2.169a47.865 47.865 0 00-1.134-.175 2.31 2.31 0 01-1.64-1.055l-.822-1.316a2.192 2.192 0 00-1.736-1.039 48.774 48.774 0 00-5.232 0 2.192 2.192 0 00-1.736 1.039l-.821 1.316z" /><path strokeLinecap="round" strokeLinejoin="round" d="M16.5 12.75a4.5 4.5 0 11-9 0 4.5 4.5 0 019 0zM18.75 10.5h.008v.008h-.008V10.5z" /></svg>
                     </button>
                 )}
@@ -91,7 +91,7 @@ const ActionControls: React.FC<ActionControlsProps> = ({
                             <div className="w-6 h-6 border-3 border-white/20 border-t-white rounded-full animate-spin"></div>
                         ) : (
                             <>
-                                <span>Commit Order</span>
+                                <span>{t.finalize_packing || 'Commit Order'}</span>
                                 <svg className="w-6 h-6 group-hover:scale-110 transition-transform" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={3}><path strokeLinecap="round" strokeLinejoin="round" d="M9 12.75L11.25 15 15 9.75M21 12a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
                             </>
                         )}

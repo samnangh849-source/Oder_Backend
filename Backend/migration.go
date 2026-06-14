@@ -75,6 +75,7 @@ var SheetRanges = map[string]string{
 	"DriverRecommendations":  "DriverRecommendations!A:Z",
 	"IncentiveResults":       "IncentiveResults!A:Z",
 	"Movies":                 "Movies!A:Z",
+	"Promotions":             "Promotions!A:Z",
 	"IncentiveProjects":      "IncentiveProjects!A:Z",
 	"IncentiveCalculators":   "IncentiveCalculators!A:Z",
 	"IncentiveManualData":    "IncentiveManualData!A:Z",
@@ -1116,7 +1117,7 @@ func PerformDataMigration() {
 			return
 		}
 	}
-	broadcastFullSyncProgress(25, totalSteps, "កំពុងទាញ IncentiveProjects...", len(validMovies), time.Since(startTime).Seconds())
+	broadcastFullSyncProgress(26, totalSteps, "កំពុងទាញ IncentiveProjects...", len(validMovies), time.Since(startTime).Seconds())
 
 	// ── Incentive Sheets ──
 	var incProjects []IncentiveProject
@@ -1134,7 +1135,7 @@ func PerformDataMigration() {
 			return
 		}
 	}
-	broadcastFullSyncProgress(26, totalSteps, "កំពុងទាញ IncentiveCalculators...", len(incProjects), time.Since(startTime).Seconds())
+	broadcastFullSyncProgress(27, totalSteps, "កំពុងទាញ IncentiveCalculators...", len(incProjects), time.Since(startTime).Seconds())
 
 	var incCalcs []IncentiveCalculator
 	if err := FetchSheetDataToStruct("IncentiveCalculators", &incCalcs); err != nil {
@@ -1151,7 +1152,7 @@ func PerformDataMigration() {
 			return
 		}
 	}
-	broadcastFullSyncProgress(27, totalSteps, "កំពុងទាញ IncentiveResults...", len(incCalcs), time.Since(startTime).Seconds())
+	broadcastFullSyncProgress(28, totalSteps, "កំពុងទាញ IncentiveResults...", len(incCalcs), time.Since(startTime).Seconds())
 
 	var incResults []IncentiveResult
 	if err := FetchSheetDataToStruct("IncentiveResults", &incResults); err != nil {
@@ -1168,7 +1169,7 @@ func PerformDataMigration() {
 			return
 		}
 	}
-	broadcastFullSyncProgress(28, totalSteps, "កំពុងទាញ IncentiveManualData...", len(incResults), time.Since(startTime).Seconds())
+	broadcastFullSyncProgress(29, totalSteps, "កំពុងទាញ IncentiveManualData...", len(incResults), time.Since(startTime).Seconds())
 
 	var incManual []IncentiveManualData
 	if err := FetchSheetDataToStruct("IncentiveManualData", &incManual); err != nil {
@@ -1185,7 +1186,7 @@ func PerformDataMigration() {
 			return
 		}
 	}
-	broadcastFullSyncProgress(29, totalSteps, "កំពុងទាញ IncentiveCustomPayouts...", len(incManual), time.Since(startTime).Seconds())
+	broadcastFullSyncProgress(30, totalSteps, "កំពុងទាញ IncentiveCustomPayouts...", len(incManual), time.Since(startTime).Seconds())
 
 	var incCustom []IncentiveCustomPayout
 	if err := FetchSheetDataToStruct("IncentiveCustomPayouts", &incCustom); err != nil {
@@ -1202,7 +1203,7 @@ func PerformDataMigration() {
 			return
 		}
 	}
-	broadcastFullSyncProgress(30, totalSteps, "កំពុង Commit និង Seed ទិន្នន័យ...", len(incCustom), time.Since(startTime).Seconds())
+	broadcastFullSyncProgress(31, totalSteps, "កំពុង Commit និង Seed ទិន្នន័យ...", len(incCustom), time.Since(startTime).Seconds())
 
 	if err := tx.Commit().Error; err != nil {
 		log.Println("❌ Migration failed on commit:", err)

@@ -764,6 +764,9 @@ const DesktopPackagingHub: React.FC<DesktopPackagingHubProps> = ({
                                                     <div className="col-span-2 min-w-0">
                                                         <p className={`text-sm font-bold ${B_TEXT_PRIMARY} truncate`}>{order.Location}</p>
                                                         <p className={`text-xs ${B_TEXT_SECONDARY} font-medium truncate`} title={order['Address Details']}>{order['Address Details']}</p>
+                                                        {order.Note && (
+                                                            <p className="text-[10px] text-[#FCD535] font-black italic truncate mt-1" title={order.Note}>Note: {order.Note}</p>
+                                                        )}
                                                         <div className="flex items-center gap-2 mt-1.5">
                                                             <p className={`text-[10px] ${B_TEXT_SECONDARY} uppercase font-bold`}>{order.Team} Team</p>
                                                             {(activeTab === 'Ready to Ship' || activeTab === 'Shipped') && (

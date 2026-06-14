@@ -509,4 +509,4 @@ Filters នៃផ្នែក (Sales Online Data) មានបញ្ហា (ឧ.
 បញ្ហា: នៅពេលចូល (UserJourney.tsx) ហើយ Filter ដាក់ (this Month) ហើយក៏ចូល Page Report ហើយ Filter ដាក់ (Last Month) បែរជាទិន្នន័យបង្ហាញថា​0​ទាំងអស់
 
 
-នៅពេល Order ណាដែលមានបញ្ចូល link នៃ Google map គឺនៅពេលបញ្ជូនរូបភាពកញ្ចប់ឥវ៉ាន់ គួរតែភ្ជាប់ជាមួយ Button បើក Linkនៃ Google map នោះ
+ប្រសិនបើមាន Order ណាដែលមានបញ្ចូល link នៃ Google map គឺនៅពេលអ្នកបើកវេនវេចខ្ចប់ ចុចបញ្ជូនរូបភាពកញ្ចប់ឥវ៉ាន់ ទៅកាន់ Group អ្នកដឹក គួរតែភ្ជាប់ជាមួយ Button បើក Linkនៃ Google map នោះ

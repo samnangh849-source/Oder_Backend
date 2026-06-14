@@ -94,6 +94,7 @@ export const translations = {
     msg_sent: "បានផ្ញើររួចហើយ",
     btn_send_telegram: "ផ្ញើរទៅ Telegram",
     view_global_orders: "មើលការកម្មង់គ្រប់ក្រុម (Global)",
+    view_google_map: "មើលទីតាំង Google Map",
 
     // Sorting & Grouping
     sort_date: "កាលបរិច្ឆេទ",
@@ -1065,6 +1066,7 @@ export const translations = {
     msg_not_sent: "Not sent yet",
     msg_sent: "Sent",
     btn_send_telegram: "Send to Telegram",
-    view_global_orders: "View Global Orders"
+    view_global_orders: "View Global Orders",
+    view_google_map: "View Google Map",
   }
 };
