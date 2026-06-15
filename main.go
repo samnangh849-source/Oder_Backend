@@ -35,7 +35,8 @@ import (
 
 	// Import GORM
 	"gorm.io/gorm"
-)
+	"gorm.io/gorm/clause"
+	)
 
 // GenerateSecureToken creates a cryptographically secure random token
 func GenerateSecureToken(length int) string {
@@ -2239,11 +2240,12 @@ func handleAdminAddRow(c *gin.Context) {
 			dbQuery = backend.DB.Model(modelInstance)
 		}
 
-		if err := dbQuery.Create(mappedData).Error; err != nil {
+		// Use OnConflict to handle duplicate keys (like Product barcode)
+		if err := dbQuery.Clauses(clause.OnConflict{UpdateAll: true}).Create(mappedData).Error; err != nil {
 			log.Printf("[ERROR] handleAdminAddRow (Table: %s): %v", tableName, err)
 			c.JSON(http.StatusInternalServerError, gin.H{
 				"status":  "error",
-				"message": fmt.Sprintf("Database creation failed for %s: %v", req.SheetName, err),
+				"message": fmt.Sprintf("Database update/creation failed for %s: %v", req.SheetName, err),
 			})
 			return
 		}
