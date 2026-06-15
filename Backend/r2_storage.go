@@ -76,11 +76,8 @@ func UploadToR2(data []byte, fileName string, mimeType string) (string, error) {
 		return "", fmt.Errorf("failed to upload to R2: %v", err)
 	}
 
-	// 5. Construct Public URL
-	publicURLBase := strings.TrimSpace(os.Getenv("R2_PUBLIC_URL"))
-	if publicURLBase == "" {
-		publicURLBase = fmt.Sprintf("https://%s.r2.cloudflarestorage.com", accountID)
-	}
+	// 5. Construct URL (Using S3 endpoint)
+	publicURLBase := fmt.Sprintf("https://%s.r2.cloudflarestorage.com", accountID)
 
 	publicURLBase = strings.TrimSuffix(publicURLBase, "/")
 	if !strings.Contains(publicURLBase, "/"+bucketName) {
