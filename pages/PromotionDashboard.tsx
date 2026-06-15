@@ -325,7 +325,7 @@ const PromotionDashboard: React.FC<PromotionDashboardProps> = ({ onBack }) => {
             
             await new Promise((resolve, reject) => {
                 img.onload = resolve;
-                img.onerror = reject;
+                img.onerror = () => reject(new Error("Image Load Error"));
                 img.src = objectUrl;
             });
             
@@ -339,30 +339,34 @@ const PromotionDashboard: React.FC<PromotionDashboardProps> = ({ onBack }) => {
             const pngBlob = await new Promise<Blob | null>(res => canvas.toBlob(res, 'image/png'));
             URL.revokeObjectURL(objectUrl);
             
-            if (pngBlob) {
-                await navigator.clipboard.write([
-                    new ClipboardItem({ [pngBlob.type]: pngBlob })
-                ]);
-                showNotification('Copy រូបភាពជោគជ័យ', 'success');
-                return;
-            }
+            if (!pngBlob) throw new Error("PNG Blob Creation Failed");
+
+            // 3. Write to Clipboard
+            await navigator.clipboard.write([
+                new ClipboardItem({ [pngBlob.type]: pngBlob })
+            ]);
+            
+            showNotification('Copy រូបភាពជោគជ័យ (RAM)', 'success');
+            return;
+            
         } catch (err) {
             console.warn("Advanced image copy failed, using fallback:", err);
-        }
-
-        // Fallback: Copy the processed URL text if blob copy fails
-        try {
-            await navigator.clipboard.writeText(driveUrl);
-            showNotification('បាន Copy Link រូបភាព', 'success');
-        } catch (err) {
-            console.error("All copy methods failed:", err);
-            showNotification('បរាជ័យក្នុងការ Copy', 'error');
+            
+            // Fallback: Try copying the URL text if blob copy fails
+            try {
+                await navigator.clipboard.writeText(driveUrl);
+                showNotification('បាន Copy Link រូបភាព (Fallback)', 'success');
+            } catch (fallbackErr) {
+                console.error("All copy methods failed:", fallbackErr);
+                showNotification('បរាជ័យក្នុងការ Copy', 'error');
+            }
         }
     };
 
     const handleDownload = (url: string, fileName: string) => {
+        const driveUrl = convertGoogleDriveUrl(url);
         const link = document.createElement('a');
-        link.href = url;
+        link.href = driveUrl;
         link.download = fileName || 'promotion.jpg';
         document.body.appendChild(link);
         link.click();
