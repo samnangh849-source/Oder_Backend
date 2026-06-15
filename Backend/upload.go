@@ -309,12 +309,13 @@ func processImageUploadInternal(req AppsScriptRequest, data string) (string, str
 					}
 
 					validTransitions := map[string][]string{
-						"Scheduled":     {"Pending", "Cancelled"},
+						"Scheduled":     {"Pending", "Processing", "Ready to Ship", "Cancelled"},
 						"Pending":       {"Processing", "Ready to Ship", "Cancelled"},
 						"Processing":    {"Ready to Ship", "Pending", "Cancelled"},
 						"Ready to Ship": {"Shipped", "Pending", "Cancelled"},
-						"Shipped":       {"Delivered", "Ready to Ship", "Cancelled"},
-						"Delivered":     {},
+						"Shipped":       {"Delivered", "Ready to Ship", "Returned", "Cancelled"},
+						"Delivered":     {"Returned"},
+						"Returned":      {"Delivered", "Shipped", "Ready to Ship", "Pending"},
 						"Cancelled":     {"Pending", "Scheduled"},
 					}
 
