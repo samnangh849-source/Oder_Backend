@@ -1454,7 +1454,7 @@ func handleAdminUpdateOrder(c *gin.Context) {
 		}
 
 		validTransitions := map[string][]string{
-			"Scheduled":     {"Pending", "Cancelled"},
+			"Scheduled":     {"Pending", "Processing", "Ready to Ship", "Cancelled"},
 			"Pending":       {"Processing", "Ready to Ship", "Cancelled"},
 			"Processing":    {"Ready to Ship", "Pending", "Cancelled"},
 			"Ready to Ship": {"Shipped", "Pending", "Cancelled"},
@@ -2020,11 +2020,9 @@ func handleAdminUpdateSheet(c *gin.Context) {
 
 	pkCol := ""
 	var pkVal interface{}
-	originalPKKey := ""
 	for k, v := range req.PrimaryKey {
 		pkCol = mapToDBColumn(k, req.SheetName)
 		pkVal = v
-		originalPKKey = k
 	}
 
 	// Smart type conversion for known numeric primary keys
@@ -2152,15 +2150,18 @@ func handleAdminUpdateSheet(c *gin.Context) {
 	}
 
 	go func() {
-		sheetPKKey := originalPKKey
-		if req.SheetName == "Roles" && strings.ToLower(originalPKKey) == "id" {
-			sheetPKKey = "ID"
+		// Prepare PK map for sync
+		syncPK := make(map[string]interface{})
+		for k, v := range req.PrimaryKey {
+			key := k
+			if (req.SheetName == "Roles" || req.SheetName == "RolePermissions") && strings.ToLower(k) == "id" {
+				key = "ID"
+			}
+			syncPK[key] = v
 		}
-		if req.SheetName == "RolePermissions" && strings.ToLower(originalPKKey) == "id" {
-			sheetPKKey = "ID"
-		}
+
 		// Sync with Google Sheets via managed queue
-		enqueueSync("updateSheet", req.NewData, req.SheetName, map[string]string{sheetPKKey: fmt.Sprintf("%v", pkVal)})
+		enqueueSync("updateSheet", req.NewData, req.SheetName, syncPK)
 
 		// If updating an Order row, also notify Telegram to keep message in sync
 		if req.SheetName == "AllOrders" {
