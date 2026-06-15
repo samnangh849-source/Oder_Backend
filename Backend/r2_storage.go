@@ -4,7 +4,9 @@ import (
 	"bytes"
 	"context"
 	"fmt"
+	"io"
 	"log"
+	"net/http"
 	"os"
 	"strings"
 	"time"
@@ -13,11 +15,11 @@ import (
 	"github.com/aws/aws-sdk-go-v2/config"
 	"github.com/aws/aws-sdk-go-v2/credentials"
 	"github.com/aws/aws-sdk-go-v2/service/s3"
+	"github.com/gin-gonic/gin"
 )
 
-// UploadToR2 uploads data to Cloudflare R2 and returns the public URL.
-func UploadToR2(data []byte, fileName string, mimeType string) (string, error) {
-	// 1. Resolve Credentials
+// getR2Client initializes and returns an S3 client for Cloudflare R2
+func getR2Client() (*s3.Client, string, error) {
 	accountID := os.Getenv("R2_ACCOUNT_ID")
 	if accountID == "" {
 		accountID = "8f4611ace3d8278c742730a7fe8e4c30" // User provided default
@@ -26,14 +28,13 @@ func UploadToR2(data []byte, fileName string, mimeType string) (string, error) {
 	accessKeySecret := os.Getenv("R2_SECRET_ACCESS_KEY")
 	bucketName := strings.TrimSpace(os.Getenv("R2_BUCKET_NAME"))
 	if bucketName == "" {
-		bucketName = "maffmedia"
+		bucketName = "maff-media"
 	}
 
 	if accessKeyID == "" || accessKeySecret == "" {
-		return "", fmt.Errorf("R2_ACCESS_KEY_ID or R2_SECRET_ACCESS_KEY not set in environment")
+		return nil, bucketName, fmt.Errorf("R2_ACCESS_KEY_ID or R2_SECRET_ACCESS_KEY not set")
 	}
 
-	// 2. Configure R2 Resolver
 	r2Resolver := aws.EndpointResolverWithOptionsFunc(func(service, region string, options ...interface{}) (aws.Endpoint, error) {
 		return aws.Endpoint{
 			URL:           fmt.Sprintf("https://%s.r2.cloudflarestorage.com", accountID),
@@ -47,10 +48,18 @@ func UploadToR2(data []byte, fileName string, mimeType string) (string, error) {
 		config.WithRegion("auto"),
 	)
 	if err != nil {
-		return "", fmt.Errorf("failed to load R2 config: %v", err)
+		return nil, bucketName, fmt.Errorf("failed to load R2 config: %v", err)
 	}
 
-	client := s3.NewFromConfig(cfg)
+	return s3.NewFromConfig(cfg), bucketName, nil
+}
+
+// UploadToR2 uploads data to Cloudflare R2 and returns a special r2:// URL.
+func UploadToR2(data []byte, fileName string, mimeType string) (string, error) {
+	client, bucketName, err := getR2Client()
+	if err != nil {
+		return "", err
+	}
 
 	// 3. Generate FileName if missing
 	if fileName == "" {
@@ -76,16 +85,43 @@ func UploadToR2(data []byte, fileName string, mimeType string) (string, error) {
 		return "", fmt.Errorf("failed to upload to R2: %v", err)
 	}
 
-	// 5. Construct Public URL
-	publicURLBase := strings.TrimSpace(os.Getenv("R2_PUBLIC_URL"))
-	if publicURLBase == "" {
-		publicURLBase = fmt.Sprintf("https://%s.r2.cloudflarestorage.com", accountID)
+	// Return a custom r2 prefix so the frontend can route it to our proxy
+	return fmt.Sprintf("r2://%s", key), nil
+}
+
+// HandleR2Proxy fetches an image from R2 using internal credentials and returns it to the client.
+// GET /api/r2-proxy?key=<encoded-r2-key>
+func HandleR2Proxy(c *gin.Context) {
+	key := c.Query("key")
+	if key == "" {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "key parameter required"})
+		return
 	}
 
-	publicURLBase = strings.TrimSuffix(publicURLBase, "/")
-	if !strings.Contains(publicURLBase, "/"+bucketName) {
-		publicURLBase = fmt.Sprintf("%s/%s", publicURLBase, bucketName)
+	client, bucketName, err := getR2Client()
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "R2 not configured"})
+		return
 	}
 
-	return fmt.Sprintf("%s/%s", publicURLBase, key), nil
+	out, err := client.GetObject(context.TODO(), &s3.GetObjectInput{
+		Bucket: aws.String(bucketName),
+		Key:    aws.String(key),
+	})
+	if err != nil {
+		log.Printf("❌ [R2 Proxy] GetObject failed for key %s: %v", key, err)
+		c.JSON(http.StatusNotFound, gin.H{"error": "file not found"})
+		return
+	}
+	defer out.Body.Close()
+
+	contentType := "application/octet-stream"
+	if out.ContentType != nil {
+		contentType = *out.ContentType
+	}
+	c.Header("Content-Type", contentType)
+	c.Header("Cache-Control", "public, max-age=3600")
+
+	// Stream the body to the client
+	io.Copy(c.Writer, out.Body)
 }

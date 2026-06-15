@@ -1,3 +1,4 @@
+import { WEB_APP_URL } from '../constants';
 
 /**
  * Converts a Blob (like a File) into a Base64 encoded string, without the data URI prefix.
@@ -47,6 +48,12 @@ export const convertGoogleDriveUrl = (url?: string, type: 'image' | 'audio' | 'p
     }
 
     const trimmedUrl = url.trim();
+
+    // 0. Handle R2 URLs
+    if (trimmedUrl.startsWith('r2://')) {
+        const key = trimmedUrl.substring(5);
+        return `${WEB_APP_URL}/api/r2-proxy?key=${encodeURIComponent(key)}`;
+    }
 
     // 1. Handle direct content URLs
     if (trimmedUrl.includes('lh3.googleusercontent.com') || trimmedUrl.includes('googleusercontent.com/d/')) {
