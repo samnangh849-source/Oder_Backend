@@ -24,9 +24,9 @@ func UploadToR2(data []byte, fileName string, mimeType string) (string, error) {
 	}
 	accessKeyID := os.Getenv("R2_ACCESS_KEY_ID")
 	accessKeySecret := os.Getenv("R2_SECRET_ACCESS_KEY")
-	bucketName := os.Getenv("R2_BUCKET_NAME")
+	bucketName := strings.TrimSpace(os.Getenv("R2_BUCKET_NAME"))
 	if bucketName == "" {
-		bucketName = "maff-media" // User provided default
+		bucketName = "maffmedia"
 	}
 
 	if accessKeyID == "" || accessKeySecret == "" {
@@ -77,12 +77,15 @@ func UploadToR2(data []byte, fileName string, mimeType string) (string, error) {
 	}
 
 	// 5. Construct Public URL
-	publicURLBase := os.Getenv("R2_PUBLIC_URL")
+	publicURLBase := strings.TrimSpace(os.Getenv("R2_PUBLIC_URL"))
 	if publicURLBase == "" {
-		// Default to a structure that often works if public access is enabled via R2 dev URL or similar
-		// But note: most R2 buckets require a custom domain for public access.
-		return fmt.Sprintf("https://%s.r2.cloudflarestorage.com/%s/%s", accountID, bucketName, key), nil
+		publicURLBase = fmt.Sprintf("https://%s.r2.cloudflarestorage.com", accountID)
 	}
 
-	return fmt.Sprintf("%s/%s", strings.TrimSuffix(publicURLBase, "/"), key), nil
+	publicURLBase = strings.TrimSuffix(publicURLBase, "/")
+	if !strings.Contains(publicURLBase, "/"+bucketName) {
+		publicURLBase = fmt.Sprintf("%s/%s", publicURLBase, bucketName)
+	}
+
+	return fmt.Sprintf("%s/%s", publicURLBase, key), nil
 }

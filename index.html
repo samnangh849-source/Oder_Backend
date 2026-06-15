@@ -24,8 +24,8 @@
       // Service Worker Registration
       if ('serviceWorker' in navigator) {
         window.addEventListener('load', () => {
-          // Use relative path for SW registration
-          navigator.serviceWorker.register('sw.js')
+          const swUrl = new URL('/Order_System/sw.js', window.location.origin).toString();
+          navigator.serviceWorker.register(swUrl, { scope: '/Order_System/' })
             .then(reg => console.log('SW Registered', reg.scope))
             .catch(err => console.error('SW Registration Failed:', err));
         });
