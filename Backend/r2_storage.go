@@ -115,13 +115,35 @@ func HandleR2Proxy(c *gin.Context) {
 	}
 	defer out.Body.Close()
 
+	// Stream the body to the client
+	// Determine content type dynamically if it's generic
 	contentType := "application/octet-stream"
 	if out.ContentType != nil {
 		contentType = *out.ContentType
 	}
+
+	// Read a small chunk to detect content type if necessary
+	buffer := make([]byte, 512)
+	n, err := out.Body.Read(buffer)
+	if err != nil && err != io.EOF {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to read file"})
+		return
+	}
+
+	if contentType == "application/octet-stream" || contentType == "image/jpeg" {
+		// Use http.DetectContentType to infer the correct type (e.g. image/webp)
+		detectedType := http.DetectContentType(buffer[:n])
+		if detectedType != "application/octet-stream" {
+			contentType = detectedType
+		}
+	}
+
 	c.Header("Content-Type", contentType)
 	c.Header("Cache-Control", "public, max-age=3600")
 
-	// Stream the body to the client
+	// Write the initial chunk
+	c.Writer.Write(buffer[:n])
+
+	// Stream the rest
 	io.Copy(c.Writer, out.Body)
 }
