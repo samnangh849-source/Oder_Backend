@@ -103,6 +103,12 @@ func DBMiddleware() gin.HandlerFunc {
 
 func AuthMiddleware() gin.HandlerFunc {
 	return func(c *gin.Context) {
+		// Allow OPTIONS requests for CORS preflight
+		if c.Request.Method == "OPTIONS" {
+			c.Next()
+			return
+		}
+
 		var tokenString string
 
 		// 1. Try to get token from Authorization header
