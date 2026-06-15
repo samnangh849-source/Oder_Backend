@@ -307,59 +307,72 @@ const PromotionDashboard: React.FC<PromotionDashboardProps> = ({ onBack }) => {
     const handleCopyImage = async (url: string) => {
         try {
             const driveUrl = convertGoogleDriveUrl(url);
+            const token = localStorage.getItem('token');
             
-            // Try fetching as Blob first (works in modern desktop browsers)
-            const response = await fetch(driveUrl);
-            const blob = await response.blob();
-            await navigator.clipboard.write([
-                new ClipboardItem({ [blob.type]: blob })
-            ]);
-            showNotification('Copy រូបភាពជោគជ័យ', 'success');
-        } catch (err) {
-            console.error("Clipboard blob write failed, trying canvas fallback:", err);
-            try {
-                // Fallback: Use Canvas to draw the image and convert to PNG Blob
-                // This sometimes bypasses strict CORS blob fetching issues on some devices
-                const driveUrl = convertGoogleDriveUrl(url);
-                const img = new Image();
-                img.crossOrigin = "anonymous";
-                img.src = driveUrl;
-                
-                await new Promise((resolve, reject) => {
-                    img.onload = resolve;
-                    img.onerror = reject;
-                });
-
-                const canvas = document.createElement('canvas');
-                canvas.width = img.width;
-                canvas.height = img.height;
-                const ctx = canvas.getContext('2d');
-                if (!ctx) throw new Error("Could not get canvas context");
-                ctx.drawImage(img, 0, 0);
-
-                canvas.toBlob(async (blob) => {
-                    if (!blob) throw new Error("Could not create blob from canvas");
-                    try {
-                        await navigator.clipboard.write([
-                            new ClipboardItem({ 'image/png': blob })
-                        ]);
-                        showNotification('Copy រូបភាពជោគជ័យ', 'success');
-                    } catch (clipboardErr) {
-                        throw clipboardErr;
-                    }
-                }, 'image/png');
-
-            } catch (fallbackErr) {
-                console.error("Canvas fallback failed, copying URL instead:", fallbackErr);
-                // Ultimate fallback: just copy the URL text
-                const textArea = document.createElement("textarea");
-                textArea.value = convertGoogleDriveUrl(url);
-                document.body.appendChild(textArea);
-                textArea.select();
-                document.execCommand("copy");
-                document.body.removeChild(textArea);
-                showNotification('Copy URL ជោគជ័យ', 'success');
+            // Fetch the image with Authorization header to ensure access
+            const response = await fetch(driveUrl, {
+                headers: {
+                    ...(token ? { 'Authorization': `Bearer ${token}` } : {})
+                }
+            });
+            
+            if (!response.ok) {
+                throw new Error(`HTTP Error: ${response.status}`);
             }
+            
+            const blob = await response.blob();
+            
+            // The Clipboard API generally requires 'image/png' on most operating systems.
+            // If the fetched image is already a PNG, try writing it directly.
+            if (blob.type === 'image/png') {
+                try {
+                    await navigator.clipboard.write([
+                        new ClipboardItem({ 'image/png': blob })
+                    ]);
+                    showNotification('Copy រូបភាពជោគជ័យ', 'success');
+                    return;
+                } catch (e) {
+                    console.warn("Direct PNG copy failed, falling back to canvas conversion", e);
+                }
+            }
+            
+            // If it's not a PNG (e.g., JPEG, WEBP) or direct copy failed, convert it via Canvas
+            const img = new Image();
+            img.crossOrigin = "anonymous";
+            // Use Object URL from the fetched blob to avoid a second network request and CORS issues
+            const objectUrl = URL.createObjectURL(blob);
+            img.src = objectUrl;
+            
+            await new Promise((resolve, reject) => {
+                img.onload = resolve;
+                img.onerror = reject;
+            });
+            
+            const canvas = document.createElement('canvas');
+            canvas.width = img.width;
+            canvas.height = img.height;
+            const ctx = canvas.getContext('2d');
+            if (!ctx) throw new Error("Could not get canvas context");
+            ctx.drawImage(img, 0, 0);
+            
+            canvas.toBlob(async (pngBlob) => {
+                URL.revokeObjectURL(objectUrl);
+                if (!pngBlob) throw new Error("Could not create PNG blob from canvas");
+                
+                try {
+                    await navigator.clipboard.write([
+                        new ClipboardItem({ 'image/png': pngBlob })
+                    ]);
+                    showNotification('Copy រូបភាពជោគជ័យ', 'success');
+                } catch (clipboardErr) {
+                    console.error("Clipboard write failed:", clipboardErr);
+                    showNotification('បរាជ័យក្នុងការ Copy រូបភាព', 'error');
+                }
+            }, 'image/png');
+            
+        } catch (err) {
+            console.error("Image fetch or copy failed:", err);
+            showNotification('បរាជ័យក្នុងការ Copy រូបភាព', 'error');
         }
     };
 
