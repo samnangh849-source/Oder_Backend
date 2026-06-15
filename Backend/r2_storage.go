@@ -140,6 +140,9 @@ func HandleR2Proxy(c *gin.Context) {
 
 	c.Header("Content-Type", contentType)
 	c.Header("Cache-Control", "public, max-age=3600")
+	if out.ContentLength != nil {
+		c.Header("Content-Length", fmt.Sprintf("%d", *out.ContentLength))
+	}
 
 	// Write the initial chunk
 	c.Writer.Write(buffer[:n])
