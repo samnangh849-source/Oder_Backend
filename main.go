@@ -3302,11 +3302,11 @@ func main() {
 	api.POST("/telegram/webhook/:token", handleTelegramWebhook)
 	api.GET("/internal/verify-upload-token", handleVerifyUploadToken) // New for Apps Script
 	api.GET("/products", handleGetProductsOnly)                       // Read-only Product API for Developers
-	api.GET("/r2-proxy", backend.HandleR2Proxy)                       // Public proxy for R2 images
 
 	protected := api.Group("/")
 	protected.Use(AuthMiddleware())
 	{
+		protected.GET("/r2-proxy", backend.HandleR2Proxy) // Secure proxy for R2 images
 		protected.POST("/setup-bot-webhook", handleRegisterTelegramWebhook)
 		protected.POST("/test-telegram", handleTestTelegram)
 		protected.GET("/users", handleGetUsers)

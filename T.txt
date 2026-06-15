@@ -520,3 +520,78 @@ Filters នៃផ្នែក (Sales Online Data) មានបញ្ហា (ឧ.
   តែមិនដាក់វាជា Public ។
 
   តើអ្នកចង់ឲ្យខ្ញុំជួយត្រួតពិនិត្យ ឬកែសម្រួលផ្នែកណាផ្សេងទៀតទេ?
+
+
+
+
+
+
+  ១. ចាក់សោរ R2 Proxy Endpoint (/api/r2-proxy)៖ ខ្ញុំបានផ្លាស់ទី Endpoint នេះចូលទៅក្នុងតំបន់ដែលការពារដោយប្រព័ន្ធ AuthMiddleware របស់ Go Backend។ មានន័យថា ទាល់តែអ្នកប្រើប្រាស់បាន Log
+  in ចូលក្នុងប្រព័ន្ធទើបមានសិទ្ធិអាចទាញយករូបភាពមកមើលបាន។ អ្នកដែលគ្មានគណនី ទោះបីជាមាន Link ក៏មិនអាចមើលឃើញដែរ។
+  ២. ភ្ជាប់ Token ដោយស្វ័យប្រវត្តិ៖ ខ្ញុំបានកែសម្រួលកូដ Frontend (utils/fileUtils.ts) ឲ្យវាទាញយក token ពីក្នុងប្រព័ន្ធ ហើយភ្ជាប់វាទៅជាមួយ Link រូបភាពរាល់ពេលដែលវាត្រូវការទាញយករូបភាពពី R2
+  មកបង្ហាញ។
+
+  ការធ្វើបែបនេះនឹងជួយឱ្យ៖
+  ការធ្វើបែបនេះនឹងជួយឱ្យ៖
+  ការធ្វើបែបនេះនឹងជួយឱ្យ៖
+  ការធ្វើបែបនេះនឹងជួយឱ្យ៖
+  ការធ្វើបែបនេះនឹងជួយឱ្យ៖
+   - Cloudflare Bucket របស់អ្នកនៅតែ Private ១០០% គ្មាននរណាម្នាក់អាចចូលមើលតាមរយៈ AWS/R2 URLs ផ្ទាល់បានឡើយ។
+   - សុវត្ថិភាពកម្រិតខ្ពស់ (Zero Trust)៖ សូម្បីតែ Link Proxy (/api/r2-proxy?key=...) ក៏ត្រូវបានការពារដោយប្រព័ន្ធ Login ផ្ទៃក្នុងរបស់អ្នកដែរ ធានាថារូបភាពឃើញតែក្នុងរង្វង់បុគ្គលិកប៉ុណ្ណោះ។
+
+  សូមធ្វើការ Deploy Backend (Go) ម្តងទៀតដើម្បីឲ្យប្រព័ន្ធសុវត្ថិភាពនេះដំណើរការពេញលេញ។ 🛡️🚀 តើលោកអ្នកចង់ឲ្យខ្ញុំត្រួតពិនិត្យលើចំណុចណាផ្សេងទៀតទេ?
+
+
+
+
+
+
+
+
+
+
+  តាមរយៈ Log នៃ Error ដែលអ្នកផ្ញើមក r2-proxy:1 Failed to load resource: the server responded with a status of 401 () គឺមានន័យថា Browser នៅតែមិនអាចបញ្ជូន Token
+  ទៅកាន់ប្រព័ន្ធ Proxy បានត្រឹមត្រូវ ដែលធ្វើឲ្យប្រព័ន្ធការពារ (AuthMiddleware) បដិសេធមិនឲ្យឆ្លងកាត់។
+
+  ដោយសារតែ utils/fileUtils.ts ត្រូវបានកែប្រែរួចហើយ (បញ្ជូល ?token=... ទៅក្នុង Link) តែនៅតែមិនឃើញមានប្រសិទ្ធភាពនៅលើ Server ពិត វាអាចបណ្ដាលមកពី៖
+
+  ១. Frontend មិនទាន់ត្រូវបាន Deploy: ទោះបីជាអ្នកបាន Deploy Backend (កូដ Go) ក៏ដោយ ប្រសិនបើ Frontend (React) មិនទាន់ត្រូវបាន Build និង Push ឡើងទៅកាន់ Github/R
+  ១. Frontend មិនទាន់ត្រូវបាន Deploy: ទោះបីជាអ្នកបាន Deploy Backend (កូដ Go) ក៏ដោយ ប្រសិនបើ Frontend (React) មិនទាន់ត្រូវបាន Build និង Push ឡើងទៅកាន់ Github/R
+  ១. Frontend មិនទាន់ត្រូវបាន Deploy: ទោះបីជាអ្នកបាន Deploy Backend (កូដ Go) ក៏ដោយ ប្រសិនបើ Frontend (React) មិនទាន់ត្រូវបាន Build និង Push ឡើងទៅកាន់ Github/R
+  ១. Frontend មិនទាន់ត្រូវបាន Deploy: ទោះបីជាអ្នកបាន Deploy Backend (កូដ Go) ក៏ដោយ ប្រសិនបើ Frontend (React) មិនទាន់ត្រូវបាន Build និង Push ឡើងទៅកាន់ Github/R
+  ១. Frontend មិនទាន់ត្រូវបាន Deploy: ទោះបីជាអ្នកបាន Deploy Backend (កូដ Go) ក៏ដោយ ប្រសិនបើ Frontend (React) មិនទាន់ត្រូវបាន Build និង Push ឡើងទៅកាន់ Github/R
+  ១. Frontend មិនទាន់ត្រូវបាន Deploy: ទោះបីជាអ្នកបាន Deploy Backend (កូដ Go) ក៏ដោយ ប្រសិនបើ Frontend (React) មិនទាន់ត្រូវបាន Build និង Push ឡើងទៅកាន់ Github/R
+  ១. Frontend មិនទាន់ត្រូវបាន Deploy: ទោះបីជាអ្នកបាន Deploy Backend (កូដ Go) ក៏ដោយ ប្រសិនបើ Frontend (React) មិនទាន់ត្រូវបាន Build និង Push ឡើងទៅកាន់ Github/R
+  ១. Frontend មិនទាន់ត្រូវបាន Deploy: ទោះបីជាអ្នកបាន Deploy Backend (កូដ Go) ក៏ដោយ ប្រសិនបើ Frontend (React) មិនទាន់ត្រូវបាន Build និង Push ឡើងទៅកាន់ Github/R
+  ១. Frontend មិនទាន់ត្រូវបាន Deploy: ទោះបីជាអ្នកបាន Deploy Backend (កូដ Go) ក៏ដោយ ប្រសិនបើ Frontend (React) មិនទាន់ត្រូវបាន Build និង Push ឡើងទៅកាន់ Github/R
+  ១. Frontend មិនទាន់ត្រូវបាន Deploy: ទោះបីជាអ្នកបាន Deploy Backend (កូដ Go) ក៏ដោយ ប្រសិនបើ Frontend (React) មិនទាន់ត្រូវបាន Build និង Push ឡើងទៅកាន់ Github/R
+  ១. Frontend មិនទាន់ត្រូវបាន Deploy: ទោះបីជាអ្នកបាន Deploy Backend (កូដ Go) ក៏ដោយ ប្រសិនបើ Frontend (React) មិនទាន់ត្រូវបាន Build និង Push ឡើងទៅកាន់ Github/R
+  ១. Frontend មិនទាន់ត្រូវបាន Deploy: ទោះបីជាអ្នកបាន Deploy Backend (កូដ Go) ក៏ដោយ ប្រសិនបើ Frontend (React) មិនទាន់ត្រូវបាន Build និង Push ឡើងទៅកាន់ Github/R
+  ១. Frontend មិនទាន់ត្រូវបាន Deploy: ទោះបីជាអ្នកបាន Deploy Backend (កូដ Go) ក៏ដោយ ប្រសិនបើ Frontend (React) មិនទាន់ត្រូវបាន Build និង Push ឡើងទៅកាន់ Github/R
+  ១. Frontend មិនទាន់ត្រូវបាន Deploy: ទោះបីជាអ្នកបាន Deploy Backend (កូដ Go) ក៏ដោយ ប្រសិនបើ Frontend (React) មិនទាន់ត្រូវបាន Build និង Push ឡើងទៅកាន់ Github/R
+  ១. Frontend មិនទាន់ត្រូវបាន Deploy: ទោះបីជាអ្នកបាន Deploy Backend (កូដ Go) ក៏ដោយ ប្រសិនបើ Frontend (React) មិនទាន់ត្រូវបាន Build និង Push ឡើងទៅកាន់ Github/R
+  ១. Frontend មិនទាន់ត្រូវបាន Deploy: ទោះបីជាអ្នកបាន Deploy Backend (កូដ Go) ក៏ដោយ ប្រសិនបើ Frontend (React) មិនទាន់ត្រូវបាន Build និង Push ឡើងទៅកាន់ Github/R
+  ១. Frontend មិនទាន់ត្រូវបាន Deploy: ទោះបីជាអ្នកបាន Deploy Backend (កូដ Go) ក៏ដោយ ប្រសិនបើ Frontend (React) មិនទាន់ត្រូវបាន Build និង Push ឡើងទៅកាន់ Github/R
+  ១. Frontend មិនទាន់ត្រូវបាន Deploy: ទោះបីជាអ្នកបាន Deploy Backend (កូដ Go) ក៏ដោយ ប្រសិនបើ Frontend (React) មិនទាន់ត្រូវបាន Build និង Push ឡើងទៅកាន់ Github/R
+  ១. Frontend មិនទាន់ត្រូវបាន Deploy: ទោះបីជាអ្នកបាន Deploy Backend (កូដ Go) ក៏ដោយ ប្រសិនបើ Frontend (React) មិនទាន់ត្រូវបាន Build និង Push ឡើងទៅកាន់ Github/R
+  ១. Frontend មិនទាន់ត្រូវបាន Deploy: ទោះបីជាអ្នកបាន Deploy Backend (កូដ Go) ក៏ដោយ ប្រសិនបើ Frontend (React) មិនទាន់ត្រូវបាន Build និង Push ឡើងទៅកាន់ Github/R
+  ១. Frontend មិនទាន់ត្រូវបាន Deploy: ទោះបីជាអ្នកបាន Deploy Backend (កូដ Go) ក៏ដោយ ប្រសិនបើ Frontend (React) មិនទាន់ត្រូវបាន Build និង Push ឡើងទៅកាន់ Github/Render ទេ នោះ
+  Website ពិតប្រាកដវានៅតែប្រើកូដចាស់ ដែលអត់មានភ្ជាប់ token នៅពីក្រោយ Link Proxy ។
+  ២. Browser Cache: ជួនកាល Browser របស់អ្នកនៅចងចាំ (Cache) សាច់កូដចាស់ៗនៃ Website ទោះបីជាអ្នក Deploy ថ្មីក៏ដោយ។
+
+  សូមសាកល្បងជំហានខាងក្រោមដើម្បីជួសជុល៖
+
+   1. Commit និង Push កូដថ្មីនេះឡើងទៅកាន់ Github: ដោយសារខ្ញុំឃើញថា File មួយចំនួនរួមទាំង utils/fileUtils.ts និង main.go គឺ "modified" តែមិនទាន់ត្រូវបាន Commit។ សូមអ្នកអនុវត្ត
+      Command ខាងក្រោមនៅក្នុង Terminal:
+
+   1    git add .
+   2    git commit -m "feat: secure R2 proxy with token and fix jpg preview"
+   3    git push origin main
+   2. រង់ចាំរហូតដល់ប្រព័ន្ធ Render ធ្វើការ Deploy ចប់សព្វគ្រប់ទាំង Backend និង Frontend។
+   3. ចូលទៅកាន់ប្រព័ន្ធរបស់អ្នក រួចធ្វើការ Hard Refresh (ចុច Ctrl + Shift + R សម្រាប់ Windows ឬ Cmd + Shift + R សម្រាប់ Mac) ដើម្បីសម្អាត Cache ចាស់ៗចេញ។
+
+  ពេល Frontend ទទួលបានកូដថ្មី Link រូបភាពនឹងលោតចេញជាទម្រង់ /api/r2-proxy?key=promotions/xxx.jpg&token=eyJ... ដែលប្រព័ន្ធនឹងអនុញ្ញាតឲ្យបង្ហាញរូបភាពបាន ១០០%។
+
+  តើអ្នកចង់ឲ្យខ្ញុំជួយអ្នកធ្វើការ Commit និង Push កូដនេះឡើងទៅ Github ទេ?
+
+

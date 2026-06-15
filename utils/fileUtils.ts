@@ -52,7 +52,8 @@ export const convertGoogleDriveUrl = (url?: string, type: 'image' | 'audio' | 'p
     // 0. Handle R2 URLs
     if (trimmedUrl.startsWith('r2://')) {
         const key = trimmedUrl.substring(5);
-        return `${WEB_APP_URL}/api/r2-proxy?key=${encodeURIComponent(key)}`;
+        const token = localStorage.getItem('token');
+        return `${WEB_APP_URL}/api/r2-proxy?key=${encodeURIComponent(key)}${token ? `&token=${token}` : ''}`;
     }
 
     // 1. Handle direct content URLs
