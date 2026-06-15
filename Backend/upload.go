@@ -240,9 +240,28 @@ func processImageUploadInternal(req AppsScriptRequest, data string) (string, str
 	var driveURL, fileID string
 	var err error
 
-	// ── 0. Route Upload ──────────
-	log.Printf("📤 [Upload Internal] Uploading to Drive for file=%q", req.FileName)
-	driveURL, fileID, err = UploadToGoogleDriveDirectly(data, req.FileName, req.MimeType, &req)
+	// ── 0. Route Upload (R2 for Promotions, Drive for others) ──────────
+	if strings.EqualFold(req.SheetName, "Promotions") {
+		log.Printf("☁️ [Upload Internal] Routing to Cloudflare R2 (Promotions section)")
+		decoded, decodeErr := ParseBase64(data)
+		if decodeErr == nil {
+			r2URL, r2Err := UploadToR2(decoded, req.FileName, req.MimeType)
+			if r2Err == nil {
+				driveURL = r2URL
+				fileID = "r2_" + req.FileName
+				log.Printf("✅ [Upload Internal] R2 Upload SUCCESS: %s", driveURL)
+			} else {
+				log.Printf("⚠️ [Upload Internal] R2 Upload failed, falling back to Drive: %v", r2Err)
+				driveURL, fileID, err = UploadToGoogleDriveDirectly(data, req.FileName, req.MimeType, &req)
+			}
+		} else {
+			log.Printf("⚠️ [Upload Internal] Base64 decode failed for R2, falling back to Drive: %v", decodeErr)
+			driveURL, fileID, err = UploadToGoogleDriveDirectly(data, req.FileName, req.MimeType, &req)
+		}
+	} else {
+		log.Printf("📤 [Upload Internal] Uploading to Drive for file=%q", req.FileName)
+		driveURL, fileID, err = UploadToGoogleDriveDirectly(data, req.FileName, req.MimeType, &req)
+	}
 
 	if err != nil {
 		return "", "", err
