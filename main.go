@@ -3306,6 +3306,7 @@ func main() {
 	protected := api.Group("/")
 	protected.Use(AuthMiddleware())
 	{
+		protected.GET("/r2-proxy", backend.HandleR2Proxy) // Secure proxy for R2 images
 		protected.POST("/setup-bot-webhook", handleRegisterTelegramWebhook)
 		protected.POST("/test-telegram", handleTestTelegram)
 		protected.GET("/users", handleGetUsers)
