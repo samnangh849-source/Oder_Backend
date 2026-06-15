@@ -8,6 +8,7 @@ import (
 	"log"
 	"net/http"
 	"os"
+	"path/filepath"
 	"strings"
 	"time"
 
@@ -115,26 +116,24 @@ func HandleR2Proxy(c *gin.Context) {
 	}
 	defer out.Body.Close()
 
-	// Stream the body to the client
-	// Determine content type dynamically if it's generic
+	// Determine content type
 	contentType := "application/octet-stream"
 	if out.ContentType != nil {
 		contentType = *out.ContentType
 	}
 
-	// Read a small chunk to detect content type if necessary
-	buffer := make([]byte, 512)
-	n, err := out.Body.Read(buffer)
-	if err != nil && err != io.EOF {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to read file"})
-		return
-	}
-
-	if contentType == "application/octet-stream" || contentType == "image/jpeg" {
-		// Use http.DetectContentType to infer the correct type (e.g. image/webp)
-		detectedType := http.DetectContentType(buffer[:n])
-		if detectedType != "application/octet-stream" {
-			contentType = detectedType
+	// If content type is generic, infer from extension
+	if contentType == "application/octet-stream" || contentType == "binary/octet-stream" {
+		ext := strings.ToLower(filepath.Ext(key))
+		switch ext {
+		case ".jpg", ".jpeg":
+			contentType = "image/jpeg"
+		case ".png":
+			contentType = "image/png"
+		case ".webp":
+			contentType = "image/webp"
+		case ".gif":
+			contentType = "image/gif"
 		}
 	}
 
@@ -144,9 +143,6 @@ func HandleR2Proxy(c *gin.Context) {
 		c.Header("Content-Length", fmt.Sprintf("%d", *out.ContentLength))
 	}
 
-	// Write the initial chunk
-	c.Writer.Write(buffer[:n])
-
-	// Stream the rest
+	// Stream the body directly to the client
 	io.Copy(c.Writer, out.Body)
 }
