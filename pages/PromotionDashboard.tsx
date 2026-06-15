@@ -305,74 +305,58 @@ const PromotionDashboard: React.FC<PromotionDashboardProps> = ({ onBack }) => {
     };
 
     const handleCopyImage = async (url: string) => {
+        const driveUrl = convertGoogleDriveUrl(url);
         try {
-            const driveUrl = convertGoogleDriveUrl(url);
             const token = localStorage.getItem('token');
+            const isR2 = url.startsWith('r2://');
             
-            // Fetch the image with Authorization header to ensure access
+            // 1. Fetch image blob. R2 proxy already includes token in query string.
             const response = await fetch(driveUrl, {
-                headers: {
-                    ...(token ? { 'Authorization': `Bearer ${token}` } : {})
-                }
+                headers: (!isR2 && token) ? { 'Authorization': `Bearer ${token}` } : {}
             });
             
-            if (!response.ok) {
-                throw new Error(`HTTP Error: ${response.status}`);
-            }
-            
+            if (!response.ok) throw new Error(`HTTP ${response.status}`);
             const blob = await response.blob();
             
-            // The Clipboard API generally requires 'image/png' on most operating systems.
-            // If the fetched image is already a PNG, try writing it directly.
-            if (blob.type === 'image/png') {
-                try {
-                    await navigator.clipboard.write([
-                        new ClipboardItem({ 'image/png': blob })
-                    ]);
-                    showNotification('Copy រូបភាពជោគជ័យ', 'success');
-                    return;
-                } catch (e) {
-                    console.warn("Direct PNG copy failed, falling back to canvas conversion", e);
-                }
-            }
-            
-            // If it's not a PNG (e.g., JPEG, WEBP) or direct copy failed, convert it via Canvas
+            // 2. Convert to PNG for Clipboard compatibility (most OS only support PNG on clipboard)
             const img = new Image();
             img.crossOrigin = "anonymous";
-            // Use Object URL from the fetched blob to avoid a second network request and CORS issues
             const objectUrl = URL.createObjectURL(blob);
-            img.src = objectUrl;
             
             await new Promise((resolve, reject) => {
                 img.onload = resolve;
                 img.onerror = reject;
+                img.src = objectUrl;
             });
             
             const canvas = document.createElement('canvas');
             canvas.width = img.width;
             canvas.height = img.height;
             const ctx = canvas.getContext('2d');
-            if (!ctx) throw new Error("Could not get canvas context");
+            if (!ctx) throw new Error("Canvas Context Error");
             ctx.drawImage(img, 0, 0);
             
-            canvas.toBlob(async (pngBlob) => {
-                URL.revokeObjectURL(objectUrl);
-                if (!pngBlob) throw new Error("Could not create PNG blob from canvas");
-                
-                try {
-                    await navigator.clipboard.write([
-                        new ClipboardItem({ 'image/png': pngBlob })
-                    ]);
-                    showNotification('Copy រូបភាពជោគជ័យ', 'success');
-                } catch (clipboardErr) {
-                    console.error("Clipboard write failed:", clipboardErr);
-                    showNotification('បរាជ័យក្នុងការ Copy រូបភាព', 'error');
-                }
-            }, 'image/png');
+            const pngBlob = await new Promise<Blob | null>(res => canvas.toBlob(res, 'image/png'));
+            URL.revokeObjectURL(objectUrl);
             
+            if (pngBlob) {
+                await navigator.clipboard.write([
+                    new ClipboardItem({ [pngBlob.type]: pngBlob })
+                ]);
+                showNotification('Copy រូបភាពជោគជ័យ', 'success');
+                return;
+            }
         } catch (err) {
-            console.error("Image fetch or copy failed:", err);
-            showNotification('បរាជ័យក្នុងការ Copy រូបភាព', 'error');
+            console.warn("Advanced image copy failed, using fallback:", err);
+        }
+
+        // Fallback: Copy the processed URL text if blob copy fails
+        try {
+            await navigator.clipboard.writeText(driveUrl);
+            showNotification('បាន Copy Link រូបភាព', 'success');
+        } catch (err) {
+            console.error("All copy methods failed:", err);
+            showNotification('បរាជ័យក្នុងការ Copy', 'error');
         }
     };
 
