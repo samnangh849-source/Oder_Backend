@@ -1454,7 +1454,7 @@ func handleAdminUpdateOrder(c *gin.Context) {
 		}
 
 		validTransitions := map[string][]string{
-			"Scheduled":     {"Pending", "Cancelled"},
+			"Scheduled":     {"Pending", "Processing", "Ready to Ship", "Cancelled"},
 			"Pending":       {"Processing", "Ready to Ship", "Cancelled"},
 			"Processing":    {"Ready to Ship", "Pending", "Cancelled"},
 			"Ready to Ship": {"Shipped", "Pending", "Cancelled"},

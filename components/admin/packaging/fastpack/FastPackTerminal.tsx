@@ -105,6 +105,7 @@ const FastPackTerminal: React.FC<FastPackTerminalProps> = ({ order, onClose, onS
     
     const [undoTimer, setUndoTimer] = useState<number | null>(null);
     const [isUndoing, setIsUndoing] = useState(false);
+    const fileInputRef = useRef<HTMLInputElement>(null);
     const maxUndoTimer = advancedSettings.packagingGracePeriod || 2;
     const submitTimeoutRef = useRef<NodeJS.Timeout | null>(null);
     const submitIntervalRef = useRef<NodeJS.Timeout | null>(null);
@@ -268,6 +269,31 @@ const FastPackTerminal: React.FC<FastPackTerminalProps> = ({ order, onClose, onS
         window.addEventListener('print-success', handlePrintSuccess);
         return () => window.removeEventListener('print-success', handlePrintSuccess);
     }, [showLabelEditor]);
+
+    const handleImportPhoto = useCallback(async (event: React.ChangeEvent<HTMLInputElement>) => {
+        const file = event.target.files?.[0];
+        if (!file) return;
+
+        if (!file.type.startsWith('image/')) {
+            showNotification('Please choose an image file.', 'error');
+            event.target.value = '';
+            return;
+        }
+
+        try {
+            const compressed = await compressImage(file, 'high-detail');
+            const dataUrl = await fileToDataUrl(compressed);
+            setPackagePhoto(dataUrl);
+            if (order?.['Order ID']) {
+                localStorage.setItem(`package_photo_${order['Order ID']}`, dataUrl);
+            }
+        } catch (error) {
+            console.error('Import photo failed:', error);
+            showNotification('Unable to import image. Please try another file.', 'error');
+        } finally {
+            event.target.value = '';
+        }
+    }, [order, showNotification]);
 
     const capturePhotoFromStream = useCallback(async () => {
         const video = document.querySelector('#fastpack-scanner-container video') as HTMLVideoElement;
@@ -1174,7 +1200,16 @@ const FastPackTerminal: React.FC<FastPackTerminalProps> = ({ order, onClose, onS
                                             {/* CAMERA CONTROLS - Perfectly centered relative to the preview panel */}
                                             {!packagePhoto && !isScannerLoading && !isCapturing && (
                                                 <div className="absolute bottom-12 inset-x-0 flex justify-center z-40 pointer-events-auto">
-                                                    <div className="flex items-center gap-12 p-5 bg-black/60 backdrop-blur-3xl border border-white/10 rounded-none shadow-[0_40px_80px_rgba(0,0,0,0.8)] animate-in slide-in-from-bottom-10 duration-700 pointer-events-auto">
+                                                    <div className="flex items-center gap-3 p-4 bg-black/60 backdrop-blur-3xl border border-white/10 rounded-none shadow-[0_40px_80px_rgba(0,0,0,0.8)] animate-in slide-in-from-bottom-10 duration-700 pointer-events-auto">
+                                                        <button
+                                                            type="button"
+                                                            onClick={() => fileInputRef.current?.click()}
+                                                            className="min-w-[140px] h-14 px-4 rounded-none bg-white/8 hover:bg-white/12 text-white/90 hover:text-white border border-white/10 flex items-center justify-center gap-2 text-[11px] font-black uppercase tracking-[0.25em] transition-all"
+                                                        >
+                                                            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={1.8}><path strokeLinecap="round" strokeLinejoin="round" d="M4 16v1a2 2 0 002 2h12a2 2 0 002-2v-1M12 12V4m0 0L8 8m4-4l4 4" /></svg>
+                                                            <span>Import Image</span>
+                                                        </button>
+
                                                         {/* Switch Camera */}
                                                         <button onClick={switchCamera} className="w-14 h-14 rounded-none text-white/40 hover:text-white flex items-center justify-center transition-all hover:bg-white/5 group border border-white/5">
                                                             <svg className="w-7 h-7 group-hover:rotate-180 transition-transform duration-700" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={1.5}><path strokeLinecap="round" strokeLinejoin="round" d="M16.023 9.348h4.992v-.001M2.985 19.644v-4.992m0 0h4.992m-4.993 0l3.181 3.183a8.25 8.25 0 0013.803-3.7M4.031 9.865a8.25 8.25 0 0113.803-3.7l3.181 3.182m0-4.991v4.99" /></svg>
@@ -1199,6 +1234,14 @@ const FastPackTerminal: React.FC<FastPackTerminalProps> = ({ order, onClose, onS
                                                     </div>
                                                 </div>
                                             )}
+
+                                            <input
+                                                ref={fileInputRef}
+                                                type="file"
+                                                accept="image/*"
+                                                className="hidden"
+                                                onChange={handleImportPhoto}
+                                            />
 
                                             {/* RETAKE - Integrated into preview */}
                                             {packagePhoto && (
