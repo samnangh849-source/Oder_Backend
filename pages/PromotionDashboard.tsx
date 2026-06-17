@@ -306,13 +306,18 @@ const PromotionDashboard: React.FC<PromotionDashboardProps> = ({ onBack }) => {
 
     const handleCopyImage = async (url: string) => {
         let driveUrl = convertGoogleDriveUrl(url);
+        const isSecure = window.isSecureContext;
+
         try {
+            if (!isSecure) throw new Error("Not a secure context (HTTPS/Localhost required for Clipboard)");
+            if (!navigator.clipboard || !window.ClipboardItem) throw new Error("Clipboard API not supported");
+
             const token = localStorage.getItem('token');
             const isR2 = url.startsWith('r2://');
+            const isAlreadyProxied = driveUrl.includes('/api/r2-proxy') || driveUrl.includes('/api/proxy-image');
             
-            // Use server-side proxy for external images to bypass CORS
-            // R2 URLs are already proxied, but Google Drive thumbnails are not.
-            if (!isR2 && driveUrl.includes('google.com')) {
+            // Use server-side proxy for all external images to bypass CORS and ensure stability
+            if (!isR2 && !isAlreadyProxied && driveUrl.startsWith('http')) {
                 driveUrl = `${WEB_APP_URL}/api/proxy-image?url=${encodeURIComponent(driveUrl)}`;
             }
             
@@ -321,7 +326,7 @@ const PromotionDashboard: React.FC<PromotionDashboardProps> = ({ onBack }) => {
                 headers: token ? { 'Authorization': `Bearer ${token}` } : {}
             });
             
-            if (!response.ok) throw new Error(`HTTP ${response.status}`);
+            if (!response.ok) throw new Error(`Fetch Error: HTTP ${response.status}`);
             const blob = await response.blob();
             
             // 2. Convert to PNG for Clipboard compatibility (most OS only support PNG on clipboard)
@@ -330,8 +335,9 @@ const PromotionDashboard: React.FC<PromotionDashboardProps> = ({ onBack }) => {
             const objectUrl = URL.createObjectURL(blob);
             
             await new Promise((resolve, reject) => {
-                img.onload = resolve;
-                img.onerror = () => reject(new Error("Image Load Error"));
+                const timeout = setTimeout(() => reject(new Error("Image Load Timeout")), 10000);
+                img.onload = () => { clearTimeout(timeout); resolve(true); };
+                img.onerror = () => { clearTimeout(timeout); reject(new Error("Image Load Error")); };
                 img.src = objectUrl;
             });
             
@@ -349,20 +355,24 @@ const PromotionDashboard: React.FC<PromotionDashboardProps> = ({ onBack }) => {
 
             // 3. Write to Clipboard
             await navigator.clipboard.write([
-                new ClipboardItem({ [pngBlob.type]: pngBlob })
+                new ClipboardItem({ 'image/png': pngBlob })
             ]);
             
             showNotification('បាន Copy រូបភាពរួចរាល់ (Copy Image Success)', 'success');
             return;
             
-        } catch (err) {
-            console.warn("Advanced image copy failed, using fallback:", err);
+        } catch (err: any) {
+            console.warn("Advanced image copy failed:", err.message);
             
-            // Fallback: Try copying the URL text if blob copy fails
+            // Fallback: Try copying the URL text
             try {
                 const finalUrl = convertGoogleDriveUrl(url);
-                await navigator.clipboard.writeText(finalUrl);
-                showNotification('បាន Copy Link រូបភាព (Fallback)', 'success');
+                if (navigator.clipboard) {
+                    await navigator.clipboard.writeText(finalUrl);
+                    showNotification('បាន Copy Link រូបភាព (Fallback)', 'success');
+                } else {
+                    throw new Error("Clipboard API completely unavailable");
+                }
             } catch (fallbackErr) {
                 console.error("All copy methods failed:", fallbackErr);
                 showNotification('បរាជ័យក្នុងការ Copy', 'error');

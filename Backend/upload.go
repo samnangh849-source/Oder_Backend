@@ -506,6 +506,7 @@ func HandleProxyImage(c *gin.Context) {
 		ct = "image/png"
 	}
 	c.Header("Content-Type", ct)
+	c.Header("Access-Control-Allow-Origin", "*")
 	c.Header("Cache-Control", "public, max-age=3600")
 	io.Copy(c.Writer, resp.Body)
 }
