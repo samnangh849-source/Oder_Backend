@@ -1003,6 +1003,19 @@ func handleCreatePromotion(c *gin.Context) {
 		return
 	}
 
+	// Sync with Google Sheets
+	sheetData := map[string]interface{}{
+		"ID":          p.ID,
+		"Barcode":     p.Barcode,
+		"Title":       p.Title,
+		"ImageURL":    p.ImageURL,
+		"Category":    p.Category,
+		"Description": p.Description,
+		"UpdatedAt":   p.UpdatedAt,
+		"UpdatedBy":   p.UpdatedBy,
+	}
+	enqueueSync("addRow", sheetData, "Promotions", nil)
+
 	// Notify via WebSocket
 	broadcastToAll(gin.H{"type": "promotion_updated", "action": "create", "data": p})
 
@@ -1032,6 +1045,19 @@ func handleUpdatePromotion(c *gin.Context) {
 		return
 	}
 
+	// Sync with Google Sheets
+	sheetData := map[string]interface{}{
+		"ID":          p.ID,
+		"Barcode":     p.Barcode,
+		"Title":       p.Title,
+		"ImageURL":    p.ImageURL,
+		"Category":    p.Category,
+		"Description": p.Description,
+		"UpdatedAt":   p.UpdatedAt,
+		"UpdatedBy":   p.UpdatedBy,
+	}
+	enqueueSync("updateSheet", sheetData, "Promotions", map[string]interface{}{"ID": p.ID})
+
 	// Notify via WebSocket
 	broadcastToAll(gin.H{"type": "promotion_updated", "action": "update", "data": p})
 
@@ -1044,6 +1070,9 @@ func handleDeletePromotion(c *gin.Context) {
 		c.JSON(http.StatusInternalServerError, gin.H{"status": "error", "message": err.Error()})
 		return
 	}
+
+	// Sync with Google Sheets
+	enqueueSync("deleteRow", nil, "Promotions", map[string]interface{}{"ID": id})
 
 	// Notify via WebSocket
 	broadcastToAll(gin.H{"type": "promotion_updated", "action": "delete", "id": id})
