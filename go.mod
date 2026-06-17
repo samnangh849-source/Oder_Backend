@@ -1,4 +1,4 @@
-module github.com/samnangh849-source/Oder_Backend-2-
+module github.com/samnangh849-source/Oder_Backend
 
 go 1.25.0
 

@@ -31,7 +31,7 @@ import (
 	"github.com/gin-gonic/gin"
 	"golang.org/x/crypto/bcrypt"
 
-	backend "github.com/samnangh849-source/Oder_Backend-2-/Backend"
+	backend "github.com/samnangh849-source/Oder_Backend/Backend"
 
 	// Import GORM
 	"gorm.io/gorm"
