@@ -138,7 +138,6 @@ type EditLog = backend.EditLog
 type UserActivityLog = backend.UserActivityLog
 type Role = backend.Role
 type RolePermission = backend.RolePermission
-type Promotion = backend.Promotion
 type IncentiveCalculator = backend.IncentiveCalculator
 type IncentiveProject = backend.IncentiveProject
 type IncentiveResult = backend.IncentiveResult
@@ -977,7 +976,7 @@ func handleGetSettings(c *gin.Context) {
 // ── Promotion Handlers ──────────────────────────────────────────────────────
 
 func handleGetPromotions(c *gin.Context) {
-	var promotions []Promotion
+	var promotions []backend.Promotion
 	if err := backend.DB.Order("updated_at DESC").Find(&promotions).Error; err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"status": "error", "message": err.Error()})
 		return
@@ -987,7 +986,7 @@ func handleGetPromotions(c *gin.Context) {
 }
 
 func handleCreatePromotion(c *gin.Context) {
-	var p Promotion
+	var p backend.Promotion
 	if err := c.ShouldBindJSON(&p); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"status": "error", "message": "ទិន្នន័យមិនត្រឹមត្រូវ"})
 		return
@@ -1024,7 +1023,7 @@ func handleCreatePromotion(c *gin.Context) {
 
 func handleUpdatePromotion(c *gin.Context) {
 	id := c.Param("id")
-	var p Promotion
+	var p backend.Promotion
 	if err := backend.DB.First(&p, id).Error; err != nil {
 		c.JSON(http.StatusNotFound, gin.H{"status": "error", "message": "រកមិនឃើញប្រូម៉ូសិន"})
 		return
@@ -1066,7 +1065,7 @@ func handleUpdatePromotion(c *gin.Context) {
 
 func handleDeletePromotion(c *gin.Context) {
 	id := c.Param("id")
-	if err := backend.DB.Delete(&Promotion{}, id).Error; err != nil {
+	if err := backend.DB.Delete(&backend.Promotion{}, id).Error; err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"status": "error", "message": err.Error()})
 		return
 	}
