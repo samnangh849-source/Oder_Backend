@@ -1,0 +1,718 @@
+import React, { useContext, useMemo, useState } from 'react';
+import { AppContext } from '@/context/AppContext';
+import { ParsedOrder } from '@/types';
+import Spinner from '@/components/common/Spinner';
+import { convertGoogleDriveUrl, getOptimisticPackagePhoto } from '@/utils/fileUtils';
+import { safeParseDate } from '@/utils/dateUtils';
+import Modal from '@/components/common/Modal';
+import { Image as ImageIcon, Trash, Check } from 'lucide-react';
+import { WEB_APP_URL } from '@/constants';
+import { CacheService, CACHE_KEYS } from '@/services/cacheService';
+
+const B_BG_MAIN = 'bg-[#0B0E11]';
+const B_BG_PANEL = 'bg-[#181A20]';
+const B_BORDER = 'border-[#2B3139]';
+const B_TEXT_PRIMARY = 'text-[#EAECEF]';
+const B_TEXT_SECONDARY = 'text-[#848E9C]';
+const B_ACCENT = 'text-[#FCD535]';
+const B_GREEN = 'text-[#0ECB81]';
+
+interface MobilePackagingHubProps {
+    orders: ParsedOrder[];
+    activeTab: string;
+    setActiveTab: (tab: any) => void;
+    searchTerm: string;
+    setSearchTerm: (term: string) => void;
+    onPack: (order: ParsedOrder) => void;
+    onShip: (order: ParsedOrder) => void;
+    onDeliver: (order: ParsedOrder) => void;
+    onUndo: (order: ParsedOrder) => void;
+    onUndoShipped: (order: ParsedOrder) => void;
+    onUnpack: (order: ParsedOrder, skipConfirm?: boolean) => void;
+    onView: (order: ParsedOrder) => void;
+    onPrintManifest: () => void;
+    onSwitchHub: () => void;
+    onExit: () => void;
+    shippingFilter: string;
+    setShippingFilter: (filter: string) => void;
+    teamFilter: string;
+    setTeamFilter: (filter: string) => void;
+    shippingCounts?: { [key: string]: number };
+    selectedStore: string;
+    progressStats: { packedByUserToday: number, storeTotalToday: number, progressPercentage: number };
+    setIsFilterModalOpen: (open: boolean) => void;
+    loadingActionId: string | null;
+    tabCounts: { pending: number, ready: number, shipped: number, returned: number, cancelled: number };
+    selectedOrderIds: Set<string>;
+    toggleOrderSelection: (id: string) => void;
+    clearSelection: () => void;
+    onBulkShip: () => void;
+    isBulkProcessing: boolean;
+    onToggleSelectAll: (orders: ParsedOrder[]) => void;
+    onConfirmReturn?: (order: ParsedOrder) => void;
+    onCloseShift?: () => void;
+    isViewOnly?: boolean;
+    activeShift?: any;
+}
+
+const MobilePackagingHub: React.FC<MobilePackagingHubProps> = ({
+    orders, activeTab, setActiveTab, searchTerm, setSearchTerm,
+    onPack, onShip, onDeliver, onUndo, onUndoShipped, onView, onPrintManifest, onSwitchHub, onExit,
+    shippingFilter, setShippingFilter, teamFilter, setTeamFilter,
+    shippingCounts,
+    selectedStore,
+    progressStats, setIsFilterModalOpen, loadingActionId, tabCounts,
+    selectedOrderIds, toggleOrderSelection, clearSelection, onBulkShip, isBulkProcessing,
+    onToggleSelectAll, onConfirmReturn, onCloseShift, isViewOnly, activeShift, onUnpack
+}) => {
+    const { previewImage: showFullImage, appData, isShiftOpener, activeShiftStore, currentUser } = useContext(AppContext);
+    const [unpackTarget, setUnpackTarget] = useState<ParsedOrder | null>(null);
+    const [sendingOrderId, setSendingOrderId] = useState<string | null>(null);
+
+    const handleSendToDeliveryTelegram = async (order: ParsedOrder) => {
+        setSendingOrderId(order['Order ID']);
+        try {
+            const session = await CacheService.get<{ token: string }>(CACHE_KEYS.SESSION);
+            const token = session?.token || '';
+            const res = await fetch(`${WEB_APP_URL}/api/admin/send-delivery-telegram`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    ...(token ? { 'Authorization': `Bearer ${token}` } : {})
+                },
+                body: JSON.stringify({ orderId: order['Order ID'] })
+            });
+            const data = await res.json();
+            if (data.status !== 'success') {
+                alert('បញ្ជូនបរាជ័យ: ' + (data.message || 'Unknown error'));
+            }
+        } catch (err: any) {
+            alert('បញ្ជូនបរាជ័យ: ' + err.message);
+        } finally {
+            setSendingOrderId(null);
+        }
+    };
+
+    const handleDeleteFromDeliveryTelegram = async (order: ParsedOrder) => {
+        if (!window.confirm('តើអ្នកពិតជាចង់លុបរូបភាពចេញពី Telegram អ្នកដឹកមែនទេ?')) return;
+        setSendingOrderId(order['Order ID']);
+        try {
+            const session = await CacheService.get<{ token: string }>(CACHE_KEYS.SESSION);
+            const token = session?.token || '';
+            const res = await fetch(`${WEB_APP_URL}/api/admin/delete-delivery-telegram`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    ...(token ? { 'Authorization': `Bearer ${token}` } : {})
+                },
+                body: JSON.stringify({ orderId: order['Order ID'] })
+            });
+            const data = await res.json();
+            if (data.status !== 'success') {
+                alert('លុបបរាជ័យ: ' + (data.message || 'Unknown error'));
+            }
+        } catch (err: any) {
+            alert('លុបបរាជ័យ: ' + err.message);
+        } finally {
+            setSendingOrderId(null);
+        }
+    };
+
+    const isAnyFilterActive = !!(shippingFilter || teamFilter);
+
+    const getDeliveryGroup = (order: ParsedOrder) => {
+        if (!order['Internal Shipping Method'] || !order['Fulfillment Store']) return null;
+        return appData.deliveryGroups?.find(dg =>
+            dg.ShippingMethod === order['Internal Shipping Method'] &&
+            dg.StoreName === order['Fulfillment Store']
+        );
+    };
+
+    const getCanSendToDriver = (order: ParsedOrder) => {
+        const fs = (order as any).FulfillmentStatus || (order as any)['Fulfillment Status'] || 'Pending';
+        const isReadyForDispatch = fs === 'Ready to Ship';
+        if (!isReadyForDispatch) return false;
+        if (!currentUser) return false;
+        
+        const orderStore = (order['Fulfillment Store'] || '').trim().toLowerCase();
+        const myShiftStore = (activeShiftStore || '').trim().toLowerCase();
+        
+        // Strict: Only the person who opened the packaging shift for this store can send
+        return isShiftOpener && orderStore === myShiftStore;
+    };
+
+    const handleCopy = (text: string, label: string) => {
+        if (!text) return;
+        navigator.clipboard.writeText(text);
+        // Optional: you could add a toast here if available in context
+        console.log(`Copied ${label}: ${text}`);
+    };
+
+    const formatPhoneNumber = (phone: string) => {
+        if (!phone) return '';
+        let cleaned = phone.replace(/\D/g, '');
+        if (cleaned.startsWith('855')) {
+            cleaned = cleaned.substring(3);
+        }
+        if (!cleaned.startsWith('0')) {
+            cleaned = '0' + cleaned;
+        }
+        return cleaned;
+    };
+
+    const getCarrierLogo = (phone: string) => {
+        const formatted = formatPhoneNumber(phone);
+        if (!formatted) return null;
+        
+        // Check prefixes (2-3 digits after '0')
+        const prefix2 = formatted.substring(1, 3);
+        const prefix3 = formatted.substring(1, 4);
+        
+        const carrier = appData.phoneCarriers?.find(c => {
+            const prefixes = String(c.Prefixes || '').split(',').map(p => p.trim()).filter(Boolean);
+            return prefixes.includes(prefix2) || prefixes.includes(prefix3);
+        });
+        
+        return carrier?.CarrierLogoURL ? convertGoogleDriveUrl(carrier.CarrierLogoURL) : null;
+    };
+
+    const getBankLogo = (bankName: string) => {
+        const bank = appData.bankAccounts?.find(b => b.BankName === bankName);
+        return bank?.LogoURL ? convertGoogleDriveUrl(bank.LogoURL) : null;
+    };
+
+    const getShippingLogo = (methodName: string) => {
+        const method = appData.shippingMethods?.find(m => m.MethodName === methodName);
+        return method?.LogoURL ? convertGoogleDriveUrl(method.LogoURL) : null;
+    };
+
+    const getDriverImage = (driverName: string) => {
+        const driver = appData.drivers?.find(d => d.DriverName === driverName);
+        return driver?.ImageURL ? convertGoogleDriveUrl(driver.ImageURL) : null;
+    };
+
+    const extractTime = (dateStr: string) => {
+        if (!dateStr) return "";
+        const date = safeParseDate(dateStr);
+        if (date) {
+            return date.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', hour12: true });
+        }
+        const match = String(dateStr).match(/(\d{1,2}:\d{2})/);
+        return match ? match[1] : dateStr;
+    };
+
+    const getSafeDateObj = (dateStr: string) => {
+        if (!dateStr) return new Date();
+        const d = new Date(dateStr);
+        return isNaN(d.getTime()) ? new Date() : d;
+    };
+
+    const groups = useMemo(() => {
+        const getEffectiveDate = (order: ParsedOrder) => {
+            if (activeTab === 'Shipped') return order['Dispatched Time'] || order.Timestamp;
+            if (activeTab === 'Ready to Ship') return order['Packed Time'] || order.Timestamp;
+            return order.Timestamp;
+        };
+
+        const sorted = [...orders].sort((a, b) => 
+            getSafeDateObj(getEffectiveDate(b)).getTime() - getSafeDateObj(getEffectiveDate(a)).getTime()
+        );
+
+        const result: { [key: string]: ParsedOrder[] } = {};
+        sorted.forEach(order => {
+            const dateStr = getEffectiveDate(order);
+            const date = dateStr ? getSafeDateObj(dateStr).toLocaleDateString('km-KH', { year: 'numeric', month: 'short', day: 'numeric' }) : 'Recent';
+            if (!result[date]) result[date] = [];
+            result[date].push(order);
+        });
+        return result;
+    }, [orders, activeTab]);
+
+    return (
+        <div className={`flex flex-col h-screen ${B_BG_MAIN} font-sans`}>
+            {/* Minimal Mobile Header */}
+            <div className={`flex-shrink-0 border-b ${B_BORDER} ${B_BG_PANEL}`}>
+                <div className="flex items-center justify-between p-3">
+                    <div className="flex items-center gap-3">
+                        <div className="flex flex-col">
+                            <h2 className={`text-sm font-bold ${B_ACCENT}`}>HUB OPS</h2>
+                            <span className={`text-xs font-bold ${B_TEXT_SECONDARY} uppercase`}>{selectedStore}</span>
+                        </div>
+                        {activeShift && (
+                             <div className={`px-2 py-0.5 rounded-sm flex items-center gap-1.5 ${isViewOnly ? 'bg-blue-500/10 border border-blue-500/20' : 'bg-green-500/10 border border-green-500/20'}`}>
+                                <div className={`w-1.5 h-1.5 rounded-full ${isViewOnly ? 'bg-blue-400' : 'bg-green-400 animate-pulse'}`}></div>
+                                <span className={`text-[10px] font-bold ${isViewOnly ? 'text-blue-400' : 'text-green-400'}`}>
+                                    {isViewOnly ? 'VIEW ONLY' : 'ACTIVE'}
+                                </span>
+                             </div>
+                        )}
+                    </div>
+                    <div className="flex gap-2">
+                        {!isViewOnly && activeShift && (
+                            <button 
+                                onClick={onCloseShift} 
+                                className="flex items-center gap-1.5 px-3 py-1.5 bg-[#F6465D] hover:bg-[#F6465D]/90 text-white rounded-lg shadow-lg shadow-[#F6465D]/20 transition-all active:scale-95"
+                            >
+                                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path d="M10 14l2-2m0 0l2-2m-2 2l-2-2m2 2l2 2m7-2a9 9 0 11-18 0 9 9 0 0118 0z" strokeWidth={2.5}/>
+                                </svg>
+                                <span className="text-xs font-black uppercase tracking-wider">បិទវេន</span>
+                            </button>
+                        )}
+                        <button onClick={onSwitchHub} className={`p-1.5 ${B_BG_MAIN} border ${B_BORDER} rounded-sm text-[#848E9C]`}>
+                            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path d="M8 7h12m0 0l-4-4m4 4l-4 4m0 6H4m0 0l4 4m-4-4l4-4" strokeWidth={2}/></svg>
+                        </button>
+                        <button onClick={onExit} className={`p-1.5 bg-[#F6465D]/10 text-[#F6465D] border border-[#F6465D]/20 rounded-sm`}>
+                            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" strokeWidth={2}/></svg>
+                        </button>
+                    </div>
+                </div>
+
+                <div className="flex">
+                    {[
+                        { id: 'Pending', label: 'Pending', count: tabCounts.pending },
+                        { id: 'Ready to Ship', label: 'Ready', count: tabCounts.ready },
+                        { id: 'Shipped', label: 'Shipped', count: tabCounts.shipped },
+                        { id: 'Returned', label: 'Return', count: tabCounts.returned },
+                        { id: 'Cancelled', label: 'Canceled', count: tabCounts.cancelled }
+                    ].map(tab => (
+                        <button 
+                            key={tab.id}
+                            onClick={() => setActiveTab(tab.id)}
+                            className={`flex flex-col items-center justify-center flex-1 py-1 border-b-2 transition-colors ${activeTab === tab.id ? `border-[#FCD535] text-[#FCD535]` : `border-transparent ${B_TEXT_SECONDARY}`}`}
+                        >
+                            <span className="text-[10px] font-bold uppercase">{tab.label}</span>
+                            <span className={`text-[10px] font-mono mt-0.5 ${activeTab === tab.id ? 'text-[#FCD535]' : 'text-[#848E9C]'}`}>
+                                {tab.count}
+                            </span>
+                        </button>
+                    ))}
+                </div>
+            </div>
+
+            {/* Sticky Mobile Search/Filter */}
+            <div className={`flex-shrink-0 p-3 border-b ${B_BORDER} ${B_BG_MAIN} sticky z-20 shadow-md space-y-3`}>
+                <div className="flex gap-2">
+                    <div className="relative flex-1">
+                        <input 
+                            type="text" 
+                            placeholder="Search operations..." 
+                            value={searchTerm}
+                            onChange={(e) => setSearchTerm(e.target.value)}
+                            className={`w-full pl-8 pr-3 py-2 ${B_BG_PANEL} border ${B_BORDER} rounded-sm text-sm ${B_TEXT_PRIMARY} placeholder:text-[#848E9C] focus:border-[#FCD535] outline-none transition-colors`}
+                        />
+                        <div className={`absolute inset-y-0 left-0 flex items-center pl-2.5 pointer-events-none ${B_TEXT_SECONDARY}`}>
+                            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2.5}><path d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" /></svg>
+                        </div>
+                    </div>
+                    <button 
+                        onClick={() => setIsFilterModalOpen(true)} 
+                        className={`px-3 py-2 rounded-sm flex items-center justify-center transition-all border relative ${
+                            isAnyFilterActive 
+                                ? 'bg-[#FCD535]/10 border-[#FCD535] text-[#FCD535] shadow-[0_0_10px_rgba(252,213,53,0.1)]' 
+                                : `${B_BG_PANEL} border ${B_BORDER} ${B_TEXT_SECONDARY}`
+                        }`}
+                    >
+                        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2.5}><path d="M3 4a1 1 0 011-1h16a1 1 0 011 1v2.586a1 1 0 01-.293.707l-6.414 6.414a1 1 0 00-.293.707V17l-4 4v-6.586a1 1 0 00-.293-.707L3.293 7.293A1 1 0 013 6.586V4z" /></svg>
+                        {isAnyFilterActive && (
+                            <span className="absolute -top-1 -right-1 w-2 h-2 bg-[#FCD535] rounded-full animate-pulse shadow-[0_0_8px_rgba(252,213,53,0.5)]"></span>
+                        )}
+                    </button>
+                    {activeTab === 'Ready to Ship' && (
+                        <div className="flex items-center gap-2">
+                            <button onClick={onPrintManifest} className={`p-2 bg-[#181A20] border border-[#FCD535]/30 rounded-sm hover:border-[#FCD535] transition-all`}>
+                                <svg className="w-4 h-4 text-[#FCD535]" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 17h2a2 2 0 002-2v-4a2 2 0 00-2-2H5a2 2 0 00-2 2v4a2 2 0 002 2h2m2 4h6a2 2 0 002-2v-4a2 2 0 00-2-2H9a2 2 0 00-2 2v4a2 2 0 002 2zm8-12V5a2 2 0 00-2-2H9a2 2 0 00-2 2v4h10z" /></svg>
+                            </button>
+                        </div>
+                    )}
+                </div>
+
+                {activeTab === 'Ready to Ship' && (
+                    <div className="flex items-center gap-2 pt-1">
+                        {orders.length > 0 && (
+                            <button 
+                                onClick={() => onToggleSelectAll(orders)}
+                                className={`p-2 bg-[#181A20] border ${orders.every(o => selectedOrderIds.has(o['Order ID'])) ? 'border-[#FCD535] text-[#FCD535]' : 'border-[#2B3139] text-[#848E9C]'} rounded-sm flex items-center gap-1 transition-colors`}
+                            >
+                                <span className="text-[10px] font-bold uppercase">{orders.every(o => selectedOrderIds.has(o['Order ID'])) ? 'None' : 'All'}</span>
+                            </button>
+                        )}
+                        {selectedOrderIds.size > 0 && (
+                            <button 
+                                onClick={onBulkShip}
+                                disabled={isBulkProcessing}
+                                className={`flex-1 py-2 bg-[#0ECB81] hover:bg-[#0CA66B] text-[#0B0E11] text-xs font-bold rounded-sm flex items-center justify-center gap-2 transition-all animate-fade-in-down whitespace-nowrap`}
+                            >
+                                {isBulkProcessing ? <Spinner size="sm" /> : (
+                                    <>
+                                        <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 13l4 4L19 7" /></svg>
+                                        SHIP ({selectedOrderIds.size})
+                                    </>
+                                )}
+                            </button>
+                        )}
+                    </div>
+                )}
+            </div>
+
+            {/* Modern Shipping Method Shortcuts Bar (Mobile) - Positioned below Sticky Search */}
+            {(activeTab === 'Pending' || activeTab === 'Ready to Ship' || activeTab === 'Shipped') && (
+                <div className={`flex-shrink-0 px-3 py-2 border-b ${B_BORDER} bg-[#181A20] overflow-x-auto no-scrollbar flex items-center gap-2`}>
+                    <button 
+                        onClick={() => setShippingFilter('')}
+                        className={`px-4 py-1.5 rounded-lg text-[10px] font-black uppercase tracking-wider transition-all whitespace-nowrap flex items-center gap-2 ${!shippingFilter ? 'bg-[#FCD535] text-black shadow-lg shadow-[#FCD535]/10' : 'bg-[#0B0E11] border border-[#2B3139] text-[#848E9C]'}`}
+                    >
+                        <span>ALL</span>
+                        {shippingCounts && (
+                            <span className={`px-1.5 py-0.5 rounded-full text-[8px] font-bold ${!shippingFilter ? 'bg-black/20 text-black' : 'bg-[#2B3139] text-[#848E9C]'}`}>
+                                {shippingCounts['all']}
+                            </span>
+                        )}
+                    </button>
+                    {appData.shippingMethods?.filter((m: any) => m.Status !== 'Inactive').map((method: any) => {
+                        const count = shippingCounts?.[method.MethodName] || 0;
+                        const isActive = shippingFilter === method.MethodName;
+                        return (
+                            <button
+                                key={method.MethodName}
+                                onClick={() => setShippingFilter(isActive ? '' : method.MethodName)}
+                                className={`px-4 py-1.5 rounded-lg text-[10px] font-black uppercase tracking-wider transition-all whitespace-nowrap border flex items-center gap-2 ${isActive ? 'bg-[#FCD535]/10 border-[#FCD535]/40 text-[#FCD535]' : 'bg-[#0B0E11] border-[#2B3139] text-[#848E9C]'}`}
+                            >
+                                {method.LogoURL && <img src={convertGoogleDriveUrl(method.LogoURL)} alt="" className={`w-3.5 h-3.5 object-contain ${isActive ? 'filter brightness-110' : 'opacity-50 grayscale'}`} />}
+                                <span>{method.MethodName}</span>
+                                {count > 0 && (
+                                    <span className={`px-1.5 py-0.5 rounded-full text-[8px] font-bold ${isActive ? 'bg-[#FCD535] text-black' : 'bg-[#2B3139] text-[#848E9C]'}`}>
+                                        {count}
+                                    </span>
+                                )}
+                            </button>
+                        );
+                    })}
+                </div>
+            )}
+
+            {/* Scrollable Order List */}
+            <div className={`flex-1 overflow-y-auto custom-scrollbar p-3 relative z-10 space-y-4 pb-24`}>
+                {Object.entries(groups).map(([date, groupOrders]: [string, any]) => (
+                    <div key={date}>
+                        <h3 className={`text-xs font-bold ${B_TEXT_SECONDARY} uppercase border-b ${B_BORDER} pb-1 mb-2 px-1`}>{date}</h3>
+                        <div className="space-y-2">
+                            {groupOrders.map((order: ParsedOrder) => {
+                                const fs = order.FulfillmentStatus || order['Fulfillment Status'] || 'Pending';
+                                const isCancelled = fs === 'Cancelled';
+                                const isReturned = fs === 'Returned';
+                                
+                                return (
+                                <div 
+                                    key={order['Order ID']} 
+                                    className={`${B_BG_PANEL} border ${B_BORDER} flex flex-col relative transition-all ${selectedOrderIds.has(order['Order ID']) ? 'border-[#FCD535]/50 bg-[#FCD535]/5 shadow-[0_4px_12px_rgba(252,213,53,0.05)]' : ''} ${isCancelled ? 'bg-red-950/20 border-red-500/30' : isReturned ? 'bg-purple-950/20 border-purple-500/30' : ''}`}
+                                    onClick={() => onView(order)}
+                                >
+                                    {/* Watermark Overlay */}
+                                    {(isCancelled || isReturned) && (
+                                        <div className={`absolute inset-0 flex flex-col items-center justify-center pointer-events-none z-[100] overflow-hidden`}>
+                                            <div className={`rotate-[-12deg] font-black text-2xl tracking-[0.1em] whitespace-nowrap opacity-25 ${isCancelled ? 'text-red-500' : 'text-purple-400'}`}>
+                                                {isCancelled ? 'CANCELLED' : 'RETURNED'}
+                                            </div>
+                                            {(order['Cancel Reason'] || order['Return Reason']) && (
+                                                <div className={`text-[9px] font-black uppercase tracking-widest mt-1 px-2 py-0.5 rounded border opacity-40 ${isCancelled ? 'text-red-500 border-red-500/30' : 'text-purple-400 border-purple-400/30'}`}>
+                                                    {order['Cancel Reason'] || order['Return Reason']}
+                                                </div>
+                                            )}
+                                        </div>
+                                    )}
+                                    {loadingActionId === order['Order ID'] && (
+                                        <div className={`absolute inset-0 ${B_BG_MAIN}/80 z-50 flex items-center justify-center`}><Spinner size="sm" /></div>
+                                    )}
+                                    
+                                    {activeTab === 'Ready to Ship' && (
+                                        <div className="absolute top-3 left-3 z-10" onClick={(e) => { e.stopPropagation(); toggleOrderSelection(order['Order ID']); }}>
+                                            <div className={`w-5 h-5 border-2 rounded-sm transition-colors flex items-center justify-center ${selectedOrderIds.has(order['Order ID']) ? 'bg-[#FCD535] border-[#FCD535]' : 'border-gray-600 bg-black/20'}`}>
+                                                {selectedOrderIds.has(order['Order ID']) && (
+                                                    <svg className="w-3.5 h-3.5 text-black" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={4}><path d="M5 13l4 4L19 7" /></svg>
+                                                )}
+                                            </div>
+                                        </div>
+                                    )}
+
+                                    <div className={`px-3 py-1.5 border-b ${B_BORDER} flex justify-between items-center ${activeTab === 'Ready to Ship' ? 'pt-10' : ''}`}>
+                                        <span 
+                                            onClick={(e) => { e.stopPropagation(); handleCopy(order['Order ID'], 'ID'); }}
+                                            className={`text-sm font-mono font-medium ${B_TEXT_PRIMARY} cursor-pointer hover:text-[#FCD535] transition-colors`}
+                                        >
+                                            {order['Order ID'].substring(0, 10)}
+                                        </span>
+                                        <div className="flex items-center gap-2">
+                                            {activeTab === 'Pending' && (
+                                                <div className="flex items-center gap-1 bg-white/5 px-2 py-0.5 rounded-sm">
+                                                    <span className={`text-[8px] font-bold ${B_TEXT_SECONDARY} uppercase tracking-tight`}>Order: {extractTime(order.Timestamp)}</span>
+                                                </div>
+                                            )}
+                                            {activeTab === 'Ready to Ship' && order['Packed Time'] && (
+                                                <div className="flex items-center gap-1 bg-[#0ECB81]/5 px-2 py-0.5 rounded-sm border border-[#0ECB81]/10">
+                                                    <span className={`text-[8px] font-black text-[#0ECB81] uppercase tracking-tight`}>Packed: {extractTime(order['Packed Time'])}</span>
+                                                </div>
+                                            )}
+                                            {activeTab === 'Shipped' && order['Dispatched Time'] && (
+                                                <div className="flex items-center gap-1 bg-blue-500/5 px-2 py-0.5 rounded-sm border border-blue-500/10">
+                                                    <span className={`text-[8px] font-black text-blue-400 uppercase tracking-tight`}>Shipped: {extractTime(order['Dispatched Time'])}</span>
+                                                </div>
+                                            )}
+                                            {activeTab === 'Returned' && (
+                                                <div className="flex items-center gap-1 bg-purple-500/5 px-2 py-0.5 rounded-sm border border-purple-500/10">
+                                                    <span className={`text-[8px] font-black text-purple-400 uppercase tracking-tight`}>Returned</span>
+                                                </div>
+                                            )}
+                                            <div className="flex items-center gap-1.5">
+                                                {getShippingLogo(order['Internal Shipping Method']) && (
+                                                    <img src={getShippingLogo(order['Internal Shipping Method'])!} className="w-5 h-5 object-contain p-0.5 bg-white rounded-sm shadow-sm" alt="" />
+                                                )}
+                                                <span className={`text-[10px] uppercase font-bold px-1.5 py-0.5 rounded-sm border ${B_BORDER} ${B_TEXT_SECONDARY}`}>T-{order.Team}</span>
+                                            </div>
+                                        </div>
+                                    </div>
+
+                                    <div className="p-3">
+                                        <div className="flex gap-3">
+                                            <div className="flex flex-col flex-1 min-w-0">
+                                                <h4 
+                                                    onClick={(e) => { e.stopPropagation(); handleCopy(order['Customer Name'], 'Customer Name'); }}
+                                                    className={`text-sm font-bold ${B_TEXT_PRIMARY} truncate uppercase flex items-center gap-1 cursor-pointer hover:text-[#FCD535] transition-colors`}
+                                                >
+                                                    {order['Customer Name']}
+                                                    {getOptimisticPackagePhoto(order['Order ID'], order['Package Photo']) && <span title="Photo Verified" className="text-xs">📸</span>}
+                                                </h4>
+                                                <div className="flex justify-between items-center mt-0.5">
+                                                    <div 
+                                                        onClick={(e) => { e.stopPropagation(); handleCopy(formatPhoneNumber(order['Customer Phone']), 'Phone'); }}
+                                                        className="flex items-center gap-1.5 cursor-pointer hover:text-[#FCD535] transition-colors group"
+                                                    >
+                                                        {getCarrierLogo(order['Customer Phone']) && (
+                                                            <img src={getCarrierLogo(order['Customer Phone'])!} className="w-4 h-4 object-contain rounded-full bg-white/10" alt="" />
+                                                        )}
+                                                        <p className={`text-sm ${B_TEXT_PRIMARY} font-mono font-bold group-hover:text-[#FCD535]`}>{formatPhoneNumber(order['Customer Phone'])}</p>
+                                                    </div>
+                                                    {(activeTab === 'Ready to Ship' || activeTab === 'Shipped') && (
+                                                        <div className="flex flex-col items-end gap-1.5 max-w-[140px]">
+                                                            <div className="flex items-center gap-2 w-full justify-end">
+                                                                {order['Driver Name'] ? (
+                                                                    <>
+                                                                        {getDriverImage(order['Driver Name']) && (
+                                                                            <img src={getDriverImage(order['Driver Name'])!} className="w-4 h-4 object-cover rounded-full border border-white/10" alt="" />
+                                                                        )}
+                                                                        <p className={`text-xs ${B_ACCENT} font-black uppercase truncate`}>{order['Driver Name']}</p>
+                                                                    </>
+                                                                ) : order['Internal Shipping Details'] ? (
+                                                                    <p className={`text-[10px] ${B_TEXT_SECONDARY} font-black italic uppercase truncate`}>ដឹកដោយ: {order['Internal Shipping Details']}</p>
+                                                                ) : null}
+                                                            </div>
+                                                            <div className="bg-[#FCD535]/10 px-2.5 py-1 rounded-sm border border-[#FCD535]/20 shadow-sm">
+                                                                <p className={`text-xs font-black text-[#FCD535] uppercase truncate w-full text-right`}>P: {order['Packed By'] || 'N/A'}</p>
+                                                            </div>
+                                                        </div>
+                                                    )}
+                                                </div>
+                                                <div className="mt-2.5 flex flex-col gap-1">
+                                                    <p className={`text-sm font-bold ${B_TEXT_PRIMARY} truncate`}>{order.Location}</p>
+                                                    <p className={`text-xs ${B_TEXT_SECONDARY} font-medium truncate`}>{order['Address Details']}</p>
+                                                    {order.Note && (
+                                                        <p className="text-[10px] text-[#FCD535] font-black italic truncate mt-0.5">Note: {order.Note}</p>
+                                                    )}
+                                                </div>
+                                            </div>
+                                            <div className="text-right flex flex-col items-end">
+                                                <p className={`text-sm font-mono font-bold ${B_GREEN}`}>${(Number(order['Grand Total']) || 0).toFixed(2)}</p>
+                                                <div className="flex items-center gap-1.5 mt-1">
+                                                    {getBankLogo(order['Payment Info']) && (
+                                                        <img src={getBankLogo(order['Payment Info'])!} className="w-3.5 h-3.5 object-contain rounded-sm bg-white" alt="" />
+                                                    )}
+                                                    <span className={`text-[10px] font-bold uppercase rounded-sm border ${B_BORDER} px-1 text-center min-w-[50px]
+                                                        ${order['Payment Status']?.toLowerCase() === 'paid' ? 'text-[#0ECB81]' : 'text-[#FCD535]'}
+                                                    `}>
+                                                        {order['Payment Status'] || 'Unpaid'}
+                                                    </span>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </div>
+
+                                    <div className={`p-2 border-t ${B_BORDER} flex flex-col gap-2`}>
+                                        {!isCancelled && activeTab === 'Ready to Ship' ? (
+                                            <div className="space-y-2">
+                                                {/* Primary Ship Action */}
+                                                <button onClick={(e) => { e.stopPropagation(); onShip(order); }} className={`w-full py-2.5 bg-[#0ECB81] text-[#0B0E11] rounded-sm text-sm font-black uppercase tracking-widest flex items-center justify-center gap-2 shadow-lg shadow-[#0ECB81]/10`}>
+                                                    <Check size={16} strokeWidth={3} />
+                                                    Confirm Shipping (Ship)
+                                                </button>
+
+                                                {/* Photo Action */}
+                                                {getDeliveryGroup(order)?.TelegramGroupID && (
+                                                    <div className="w-full">
+                                                        {!!(order['Delivery Telegram Message ID'] || (order as any)['Delivery Telegram Message ID']) ? (
+                                                            <div className="flex items-center gap-2">
+                                                                <div className="flex-grow flex items-center justify-center gap-2 py-2 bg-[#0ECB81]/10 border border-[#0ECB81]/20 rounded-sm">
+                                                                    <Check size={12} className="text-[#0ECB81]" />
+                                                                    <span className="text-[10px] font-black text-[#0ECB81] uppercase tracking-widest">Photo Sent to Driver</span>
+                                                                </div>
+                                                                <button 
+                                                                    onClick={(e) => { e.stopPropagation(); handleDeleteFromDeliveryTelegram(order); }}
+                                                                    disabled={sendingOrderId === order['Order ID'] || !getCanSendToDriver(order)}
+                                                                    className={`w-10 h-10 flex items-center justify-center ${!getCanSendToDriver(order) ? 'bg-[#2B3139] text-gray-600' : 'bg-red-500/10 hover:bg-red-500/20 text-red-500'} rounded-sm border border-red-500/20 transition-all active:scale-95 disabled:opacity-50`}
+                                                                >
+                                                                    {sendingOrderId === order['Order ID'] ? <Spinner size="xs" /> : <Trash size={16} />}
+                                                                </button>
+                                                            </div>
+                                                        ) : (
+                                                            <button 
+                                                                onClick={(e) => { e.stopPropagation(); handleSendToDeliveryTelegram(order); }}
+                                                                disabled={sendingOrderId === order['Order ID'] || !getCanSendToDriver(order)}
+                                                                className={`w-full flex items-center justify-center gap-3 py-2 ${!getCanSendToDriver(order) ? 'bg-[#2B3139] text-gray-500 cursor-not-allowed' : 'bg-blue-600 hover:bg-blue-500 text-white'} rounded-sm text-[11px] font-black uppercase tracking-widest transition-all shadow-lg active:scale-95 disabled:opacity-50`}
+                                                            >
+                                                                {sendingOrderId === order['Order ID'] ? <Spinner size="xs" /> : <ImageIcon size={16} />}
+                                                                {sendingOrderId === order['Order ID'] ? 'Processing...' : 'បញ្ជូនរូបភាពកញ្ចប់ (Send Photo)'}
+                                                            </button>
+                                                        )}
+                                                    </div>
+                                                )}
+
+                                                {/* Secondary Utility Row */}
+                                                <div className="flex gap-2">
+                                                    <button onClick={(e) => { e.stopPropagation(); onView(order); }} className={`flex-1 py-1.5 bg-[#2B3139] text-[#EAECEF] rounded-sm text-xs font-bold uppercase`}>View Info</button>
+                                                    <button onClick={(e) => { e.stopPropagation(); onUndo(order); }} className={`w-24 py-1.5 bg-red-500/5 text-[#F6465D] rounded-sm text-xs font-bold uppercase border border-red-500/10`}>Undo Pack</button>
+                                                </div>
+                                            </div>
+                                        ) : (
+                                            <div className="flex gap-2 w-full">
+                                                <button onClick={(e) => { e.stopPropagation(); onView(order); }} className={`flex-1 py-1.5 bg-[#2B3139] text-[#EAECEF] rounded-sm text-sm font-medium`}>View Info</button>
+                                                {activeTab === 'Cancelled' && order['Return Received By'] && (
+                                                    <div className="flex-[1.5] flex items-center justify-center border border-[#FCD535]/20 bg-[#FCD535]/5 rounded-sm px-2 overflow-hidden">
+                                                        <span className="text-[9px] font-black text-[#FCD535] uppercase truncate" title={order['Return Received By']}>
+                                                            Confirm by: {order['Return Received By']}
+                                                        </span>
+                                                    </div>
+                                                )}
+                                                {!isCancelled && (
+                                                    <>
+                                                        {activeTab === 'Pending' && <button onClick={(e) => { e.stopPropagation(); onPack(order); }} className={`flex-1 py-1.5 bg-[#FCD535] text-[#0B0E11] rounded-sm text-sm font-bold uppercase`}>Pack Order</button>}
+                                                    </>
+                                                )}
+                                                {isCancelled && activeTab !== 'Cancelled' && (
+                                                    <button
+                                                        onClick={(e) => { e.stopPropagation(); setUnpackTarget(order); }}
+                                                        className={`flex-1 py-1.5 bg-red-600 text-white rounded-sm text-sm font-bold uppercase shadow-lg shadow-red-600/20`}
+                                                    >
+                                                        {!!(order['Packed By'] || order['Packed Time']) ? 'ហែកកញ្ចប់' : 'បញ្ជាក់ការបោះបង់'}
+                                                    </button>
+                                                )}
+                                                {activeTab === 'Shipped' && (
+                                                    <div className="flex gap-2 w-full">
+                                                        <button 
+                                                            onClick={(e) => { e.stopPropagation(); onDeliver(order); }} 
+                                                            className={`flex-1 py-1.5 bg-[#0ECB81] hover:bg-[#0CA66B] text-[#0B0E11] text-xs font-black uppercase transition-colors rounded-sm flex items-center justify-center gap-1.5 shadow-lg shadow-[#0ECB81]/10`}
+                                                        >
+                                                            <Check size={14} strokeWidth={3} />
+                                                            ដឹកជោគជ័យ (Done)
+                                                        </button>
+                                                        <button onClick={(e) => { e.stopPropagation(); onUndoShipped(order); }} className={`w-20 py-1.5 bg-[#F6465D]/10 text-[#F6465D] rounded-sm text-xs font-bold uppercase`}>Undo</button>
+                                                    </div>
+                                                )}
+                                                {activeTab === 'Returned' && (
+                                                    <button
+                                                        onClick={(e) => { e.stopPropagation(); onConfirmReturn?.(order); }}
+                                                        disabled={!!order['Return Received By']}
+                                                        className={`flex-1 py-1.5 ${order['Return Received By'] ? 'bg-gray-500/20 text-gray-500' : 'bg-purple-500 text-white font-bold'} rounded-sm text-sm uppercase`}
+                                                    >
+                                                        {order['Return Received By'] ? 'Received' : 'Confirm Receipt'}
+                                                    </button>
+                                                )}
+                                            </div>
+                                        )}
+                                    </div>
+
+                                </div>
+                                );
+                            })}
+                        </div>
+                    </div>
+                ))}
+            </div>
+
+            {/* Sticky Bottom Stats Nav */}
+            <div className={`fixed bottom-0 left-0 right-0 h-16 ${B_BG_PANEL} border-t ${B_BORDER} z-40 px-4 flex items-center justify-between`}>
+                <div className="flex flex-col">
+                    <span className={`text-xs font-bold ${B_TEXT_SECONDARY} uppercase`}>Packs Authored</span>
+                    <span className={`text-lg font-mono font-bold ${B_GREEN}`}>{progressStats.packedByUserToday}</span>
+                </div>
+                
+                <div className="flex flex-col items-end w-32 border-l border-[#2B3139] pl-3">
+                    <div className="flex justify-between w-full text-xs uppercase font-bold mb-1">
+                        <span className={B_TEXT_SECONDARY}>Hub Sync</span>
+                        <span className={B_GREEN}>{progressStats.progressPercentage}%</span>
+                    </div>
+                    <div className={`h-1.5 w-full ${B_BG_MAIN} overflow-hidden rounded-full`}>
+                        <div className="h-full bg-[#0ECB81] transition-all duration-1000" style={{ width: `${progressStats.progressPercentage}%` }}></div>
+                    </div>
+                </div>
+            </div>
+
+            {unpackTarget && (
+                <Modal isOpen={true} onClose={() => setUnpackTarget(null)} maxWidth="max-w-md">
+                    <div className={`${B_BG_PANEL} p-6 space-y-6 rounded-sm border ${B_BORDER} shadow-2xl mx-4`}>
+                        <div className="text-center space-y-4">
+                            <div className="w-16 h-16 bg-red-500/10 rounded-full flex items-center justify-center mx-auto border border-red-500/20">
+                                <svg className="w-8 h-8 text-red-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" /></svg>
+                            </div>
+                            <div>
+                                <h3 className="text-xl font-black text-white uppercase tracking-wider">
+                                    {!!(unpackTarget['Packed By'] || unpackTarget['Packed Time']) ? 'បញ្ជាក់ការហែកកញ្ចប់' : 'បញ្ជាក់ការបោះបង់'}
+                                </h3>
+                                <p className="text-[#848E9C] text-sm mt-2">
+                                    {!!(unpackTarget['Packed By'] || unpackTarget['Packed Time']) 
+                                        ? 'តើអ្នកប្រាកដថាបានហែកកញ្ចប់ និងទុកឥវ៉ាន់ចូលស្តុកវិញរួចរាល់ហើយមែនទេ?' 
+                                        : 'តើអ្នកប្រាកដថាចង់បោះបង់ការវេចខ្ចប់លើការកុម្ម៉ង់នេះមែនទេ?'}
+                                </p>
+                            </div>
+                        </div>
+
+                        <div className="bg-[#0B0E11]/50 p-4 rounded-sm border border-[#2B3139] space-y-3 text-left">
+                            <div className="flex justify-between items-center">
+                                <span className="text-xs text-[#848E9C] uppercase font-bold">Order ID</span>
+                                <span className="text-xs text-[#EAECEF] font-mono">{unpackTarget['Order ID'].substring(0, 12)}...</span>
+                            </div>
+                            <div className="flex justify-between items-center">
+                                <span className="text-xs text-[#848E9C] uppercase font-bold">Customer</span>
+                                <span className="text-xs text-[#EAECEF] font-bold">{unpackTarget['Customer Name']}</span>
+                            </div>
+                            {unpackTarget['Cancel Reason'] && (
+                                <div className="pt-2 border-t border-[#2B3139]">
+                                    <span className="text-[10px] text-red-400 uppercase font-black block mb-1">Reason for Cancellation</span>
+                                    <p className="text-sm text-red-400 font-bold">{unpackTarget['Cancel Reason']}</p>
+                                </div>
+                            )}
+                        </div>
+
+                        <div className="flex gap-3 pt-2">
+                            <button 
+                                onClick={() => setUnpackTarget(null)} 
+                                className="flex-1 py-3 bg-[#2B3139] text-[#EAECEF] font-bold rounded-sm hover:bg-[#3B424A] transition-all uppercase text-xs"
+                            >
+                                បោះបង់
+                            </button>
+                            <button
+                                onClick={() => {
+                                    onUnpack(unpackTarget, true);
+                                    setUnpackTarget(null);
+                                }}
+                                className="flex-[1.5] py-3 bg-red-600 text-white font-bold rounded-sm hover:bg-red-700 transition-all shadow-lg shadow-red-600/20 uppercase text-xs"
+                            >
+                                {!!(unpackTarget['Packed By'] || unpackTarget['Packed Time']) ? 'ហែកកញ្ចប់រួចរាល់' : 'បញ្ជាក់ការបោះបង់'}
+                            </button>
+                        </div>
+                    </div>
+                </Modal>
+            )}
+        </div>
+    );
+};
+
+export default MobilePackagingHub;

@@ -1,0 +1,100 @@
+
+<!DOCTYPE html>
+<html lang="km">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>កម្មវិធីទម្លាក់ការកម្មង់</title>
+    
+    <!-- PWA Manifest -->
+    <link rel="manifest" href="manifest.json">
+    
+    <!-- iOS Support for Standalone Mode -->
+    <meta name="mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <meta name="apple-mobile-web-app-title" content="O-System">
+    
+    <!-- Apple Touch Icons -->
+    <link rel="apple-touch-icon" href="https://lh3.googleusercontent.com/d/1vb9IG8wn31LDYtUKLurm6cMow0MI4Tee">
+    <link rel="apple-touch-icon" sizes="152x152" href="https://lh3.googleusercontent.com/d/1vb9IG8wn31LDYtUKLurm6cMow0MI4Tee">
+    <link rel="apple-touch-icon" sizes="180x180" href="https://lh3.googleusercontent.com/d/1vb9IG8wn31LDYtUKLurm6cMow0MI4Tee">
+    <link rel="apple-touch-icon" sizes="167x167" href="https://lh3.googleusercontent.com/d/1vb9IG8wn31LDYtUKLurm6cMow0MI4Tee">
+    
+    <script>
+      // Service Worker Registration
+      if ('serviceWorker' in navigator) {
+        window.addEventListener('load', () => {
+          const swUrl = new URL('/Order_System/sw.js', window.location.origin).toString();
+          navigator.serviceWorker.register(swUrl, { scope: '/Order_System/' })
+            .then(reg => console.log('SW Registered', reg.scope))
+            .catch(err => console.error('SW Registration Failed:', err));
+        });
+      }
+    </script>
+    
+    <!-- Theme Color for Browser Address Bar -->
+    <meta name="theme-color" content="#020617">
+
+    <!-- Icons Configuration for iOS & Android -->
+    <link rel="icon" type="image/png" href="https://lh3.googleusercontent.com/d/1vb9IG8wn31LDYtUKLurm6cMow0MI4Tee">
+
+    <!-- FontAwesome 6 for Icons -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+
+    <!-- MapLibre GL CSS & JS -->
+    <link href="https://unpkg.com/maplibre-gl@4.7.1/dist/maplibre-gl.css" rel="stylesheet" />
+    <script src="https://unpkg.com/maplibre-gl@4.7.1/dist/maplibre-gl.js"></script>
+
+    <script src="https://unpkg.com/html5-qrcode" type="text/javascript"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs-core@4.22.0"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs-converter@4.22.0"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs-backend-webgl@4.22.0"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@tensorflow-models/face-detection@1.0.2"></script>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Kantumruy+Pro:ital,wght@0,100..700;1,100..700&display=swap" rel="stylesheet">
+    
+    
+    <script>
+      window.onerror = function(message, source, lineno, colno, error) {
+        console.error("Global Error:", message, source, lineno, error);
+        
+        // Handle "Failed to fetch dynamically imported module" which usually happens
+        // when a new version is deployed and the browser tries to load old chunks.
+        if (message.indexOf('dynamically imported module') > -1 || message.indexOf('Importing a module script failed') > -1) {
+            console.warn("Dynamic import failed. Attempting to reload page...");
+            window.location.reload();
+            return;
+        }
+
+        const root = document.getElementById('root');
+        if (!root || root.innerHTML.trim() === '') {
+            const errorDiv = document.createElement('div');
+            errorDiv.style.cssText = 'position:fixed; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.9); color:red; padding:20px; z-index:9999; overflow:auto; font-family:monospace;';
+            errorDiv.innerHTML = '<h3>Startup Error</h3><p>' + message + '</p><p>' + (source || 'unknown') + ':' + (lineno || '0') + '</p>';
+            document.body.appendChild(errorDiv);
+        }
+      };
+
+      window.addEventListener('unhandledrejection', function(event) {
+        console.error('Unhandled rejection:', event.reason);
+        if (event.reason && (event.reason.message.indexOf('dynamically imported module') > -1 || event.reason.name === 'ChunkLoadError')) {
+            window.location.reload();
+        }
+      });
+      
+      (function() {
+        window.global = window;
+        window.process = window.process || {
+          env: { NODE_ENV: 'development', API_KEY: '' },
+          browser: true,
+          version: ''
+        };
+      })();
+    </script>
+</head>
+<body class="bg-gray-900 text-gray-200 antialiased overscroll-none">
+    <div id="root"></div>
+    <script type="module" src="index.tsx"></script>
+</body>
+</html>

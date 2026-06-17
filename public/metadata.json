@@ -1,0 +1,8 @@
+{
+  "name": "(2)Copy of React Order Management System",
+  "description": "A comprehensive order management application built with React, TypeScript, and Tailwind CSS. It features a dynamic user interface for placing orders, an administrative panel for system management and reporting, and integrates Gemini for AI-powered data analysis and content generation.",
+  "requestFramePermissions": [
+    "camera",
+    "microphone"
+  ]
+}

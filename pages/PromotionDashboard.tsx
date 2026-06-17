@@ -305,14 +305,20 @@ const PromotionDashboard: React.FC<PromotionDashboardProps> = ({ onBack }) => {
     };
 
     const handleCopyImage = async (url: string) => {
-        const driveUrl = convertGoogleDriveUrl(url);
+        let driveUrl = convertGoogleDriveUrl(url);
         try {
             const token = localStorage.getItem('token');
             const isR2 = url.startsWith('r2://');
             
-            // 1. Fetch image blob. R2 proxy already includes token in query string.
+            // Use server-side proxy for external images to bypass CORS
+            // R2 URLs are already proxied, but Google Drive thumbnails are not.
+            if (!isR2 && driveUrl.includes('google.com')) {
+                driveUrl = `${WEB_APP_URL}/api/proxy-image?url=${encodeURIComponent(driveUrl)}`;
+            }
+            
+            // 1. Fetch image blob.
             const response = await fetch(driveUrl, {
-                headers: (!isR2 && token) ? { 'Authorization': `Bearer ${token}` } : {}
+                headers: token ? { 'Authorization': `Bearer ${token}` } : {}
             });
             
             if (!response.ok) throw new Error(`HTTP ${response.status}`);
@@ -346,7 +352,7 @@ const PromotionDashboard: React.FC<PromotionDashboardProps> = ({ onBack }) => {
                 new ClipboardItem({ [pngBlob.type]: pngBlob })
             ]);
             
-            showNotification('Copy រូបភាពជោគជ័យ (RAM)', 'success');
+            showNotification('បាន Copy រូបភាពរួចរាល់ (Copy Image Success)', 'success');
             return;
             
         } catch (err) {
@@ -354,7 +360,8 @@ const PromotionDashboard: React.FC<PromotionDashboardProps> = ({ onBack }) => {
             
             // Fallback: Try copying the URL text if blob copy fails
             try {
-                await navigator.clipboard.writeText(driveUrl);
+                const finalUrl = convertGoogleDriveUrl(url);
+                await navigator.clipboard.writeText(finalUrl);
                 showNotification('បាន Copy Link រូបភាព (Fallback)', 'success');
             } catch (fallbackErr) {
                 console.error("All copy methods failed:", fallbackErr);
