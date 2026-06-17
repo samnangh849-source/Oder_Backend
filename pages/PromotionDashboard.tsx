@@ -305,60 +305,43 @@ const PromotionDashboard: React.FC<PromotionDashboardProps> = ({ onBack }) => {
     };
 
     const handleCopyImage = async (url: string) => {
-        let driveUrl = convertGoogleDriveUrl(url);
+        let fetchUrl = convertGoogleDriveUrl(url);
         const isSecure = window.isSecureContext;
         
-        console.log("📸 [CopyImage] Starting process for:", url);
-        console.log("📸 [CopyImage] Secure Context:", isSecure);
-        console.log("📸 [CopyImage] Clipboard API Support:", !!navigator.clipboard);
-        console.log("📸 [CopyImage] ClipboardItem Support:", !!window.ClipboardItem);
+        console.log("📸 [CopyImage] Starting process for R2/Cloudflare:", url);
 
         try {
-            if (!isSecure) {
-                const errorMsg = "Not a secure context (HTTPS/Localhost required for Clipboard)";
-                console.error("❌ [CopyImage]", errorMsg);
-                throw new Error(errorMsg);
-            }
-            if (!navigator.clipboard || !window.ClipboardItem) {
-                const errorMsg = "Clipboard API or ClipboardItem not supported in this browser";
-                console.error("❌ [CopyImage]", errorMsg);
-                throw new Error(errorMsg);
-            }
+            if (!isSecure) throw new Error("Not a secure context (HTTPS required)");
+            if (!navigator.clipboard || !window.ClipboardItem) throw new Error("Clipboard API not supported");
 
             const token = localStorage.getItem('token');
             const isR2 = url.startsWith('r2://');
-            const isAlreadyProxied = driveUrl.includes('/api/r2-proxy') || driveUrl.includes('/api/proxy-image');
             
-            // Force proxy for Google Drive to bypass CORS
-            if (!isR2 && !isAlreadyProxied && driveUrl.includes('google.com')) {
-                driveUrl = `${WEB_APP_URL}/api/proxy-image?url=${encodeURIComponent(driveUrl)}`;
-                console.log("📸 [CopyImage] Using Proxy URL:", driveUrl);
+            // If it's R2 or already a direct public Cloudflare/S3 URL, fetch directly.
+            // Only use proxy for Google Drive which has strict CORS.
+            if (!isR2 && fetchUrl.includes('google.com')) {
+                fetchUrl = `${WEB_APP_URL}/api/proxy-image?url=${encodeURIComponent(fetchUrl)}`;
+                console.log("📸 [CopyImage] Using Proxy for Google Drive:", fetchUrl);
             }
             
-            // 1. Fetch image blob.
-            console.log("📸 [CopyImage] Fetching blob...");
-            const response = await fetch(driveUrl, {
-                headers: token ? { 'Authorization': `Bearer ${token}` } : {}
+            // 1. Fetch image blob. 
+            // For R2, we use 'anonymous' mode to avoid CORS issues if the bucket is public
+            console.log("📸 [CopyImage] Fetching from:", fetchUrl);
+            const response = await fetch(fetchUrl, {
+                headers: (token && fetchUrl.includes(WEB_APP_URL)) ? { 'Authorization': `Bearer ${token}` } : {}
             });
             
-            if (!response.ok) {
-                const errorMsg = `Fetch Error: HTTP ${response.status} ${response.statusText}`;
-                console.error("❌ [CopyImage]", errorMsg);
-                throw new Error(errorMsg);
-            }
+            if (!response.ok) throw new Error(`HTTP ${response.status}`);
             const blob = await response.blob();
-            console.log("📸 [CopyImage] Blob fetched successfully. Type:", blob.type, "Size:", blob.size);
             
-            // 2. Convert to PNG for Clipboard compatibility
-            console.log("📸 [CopyImage] Converting to PNG...");
+            // 2. Convert to PNG
             const img = new Image();
             img.crossOrigin = "anonymous";
             const objectUrl = URL.createObjectURL(blob);
             
             await new Promise((resolve, reject) => {
-                const timeout = setTimeout(() => reject(new Error("Image Load Timeout (10s)")), 10000);
-                img.onload = () => { clearTimeout(timeout); resolve(true); };
-                img.onerror = () => { clearTimeout(timeout); reject(new Error("Image Load Error - Possible CORS issue on proxied image")); };
+                img.onload = resolve;
+                img.onerror = () => reject(new Error("Image Load Error"));
                 img.src = objectUrl;
             });
             
@@ -373,34 +356,24 @@ const PromotionDashboard: React.FC<PromotionDashboardProps> = ({ onBack }) => {
             URL.revokeObjectURL(objectUrl);
             
             if (!pngBlob) throw new Error("PNG Blob Creation Failed");
-            console.log("📸 [CopyImage] PNG conversion successful. Type:", pngBlob.type);
 
             // 3. Write to Clipboard
-            console.log("📸 [CopyImage] Writing to clipboard...");
             await navigator.clipboard.write([
                 new ClipboardItem({ 'image/png': pngBlob })
             ]);
             
-            console.log("✅ [CopyImage] SUCCESS!");
             showNotification('បាន Copy រូបភាពរួចរាល់ (Copy Image Success)', 'success');
             return;
             
         } catch (err: any) {
-            console.error("❌ [CopyImage] Advanced image copy failed:", err.message);
-            // alert("Copy Image Error: " + err.message); // Temporary alert for user to see on mobile
+            console.error("❌ [CopyImage] Error:", err.message);
             
-            // Fallback: Try copying the URL text
+            // Fallback: Copy URL
             try {
-                console.log("📸 [CopyImage] Attempting Fallback (Copy Link)...");
                 const finalUrl = convertGoogleDriveUrl(url);
-                if (navigator.clipboard) {
-                    await navigator.clipboard.writeText(finalUrl);
-                    showNotification('បាន Copy Link រូបភាព (Fallback)', 'success');
-                } else {
-                    throw new Error("Clipboard API completely unavailable");
-                }
+                await navigator.clipboard.writeText(finalUrl);
+                showNotification('បាន Copy Link រូបភាព (Fallback)', 'success');
             } catch (fallbackErr) {
-                console.error("❌ [CopyImage] All copy methods failed:", fallbackErr);
                 showNotification('បរាជ័យក្នុងការ Copy', 'error');
             }
         }
