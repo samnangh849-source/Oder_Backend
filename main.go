@@ -36,7 +36,7 @@ import (
 	// Import GORM
 	"gorm.io/gorm"
 	"gorm.io/gorm/clause"
-	)
+)
 
 // GenerateSecureToken creates a cryptographically secure random token
 func GenerateSecureToken(length int) string {
@@ -432,6 +432,53 @@ func ErrorHandlingMiddleware() gin.HandlerFunc {
 				})
 			}
 		}
+	}
+}
+
+func buildCORSConfig() cors.Config {
+	allowedOrigins := map[string]bool{
+		"https://dominic0607.github.io": true,
+		"http://localhost:3000":         true,
+		"http://localhost:4173":         true,
+		"http://localhost:5173":         true,
+		"http://127.0.0.1:3000":         true,
+		"http://127.0.0.1:4173":         true,
+		"http://127.0.0.1:5173":         true,
+	}
+
+	if envOrigins := os.Getenv("CORS_ALLOWED_ORIGINS"); envOrigins != "" {
+		allowedOrigins = map[string]bool{}
+		for _, origin := range strings.Split(envOrigins, ",") {
+			origin = strings.TrimSpace(origin)
+			if origin != "" {
+				allowedOrigins[origin] = true
+			}
+		}
+	}
+
+	return cors.Config{
+		AllowOriginFunc: func(origin string) bool {
+			if allowedOrigins["*"] {
+				return true
+			}
+			return allowedOrigins[origin]
+		},
+		AllowMethods: []string{"GET", "POST", "PUT", "DELETE", "OPTIONS", "PATCH"},
+		AllowHeaders: []string{
+			"Origin",
+			"Content-Type",
+			"Authorization",
+			"X-Requested-With",
+			"Accept",
+			"Cache-Control",
+			"Pragma",
+			"X-API-Key",
+			"X-Internal-Secret",
+		},
+		ExposeHeaders:             []string{"Content-Length"},
+		AllowCredentials:          true,
+		MaxAge:                    12 * time.Hour,
+		OptionsResponseStatusCode: http.StatusNoContent,
 	}
 }
 
@@ -2647,7 +2694,7 @@ func handleTelegramWebhook(c *gin.Context) {
 
 			// Edit Message Caption
 			newCaption := update.CallbackQuery.Message.Caption + fmt.Sprintf("\n\n✅ *បានមកយកដោយ:* %s\n👤 អ្នកដឹក: %s\n⏰ ម៉ោង: %s", driverName, driverUser, now)
-			
+
 			// Answer callback first to stop loading
 			answerURL := fmt.Sprintf("https://api.telegram.org/bot%s/answerCallbackQuery", token)
 			answerPayload := map[string]interface{}{
@@ -3299,20 +3346,13 @@ func main() {
 	}()
 
 	r := gin.Default()
+	r.Use(cors.New(buildCORSConfig()))
 	r.Use(gzip.Gzip(gzip.DefaultCompression))
 	r.Use(ErrorHandlingMiddleware())
 
-	// Enhanced CORS Configuration
-	r.Use(cors.New(cors.Config{
-		AllowOriginFunc: func(origin string) bool {
-			return true
-		},
-		AllowMethods:     []string{"GET", "POST", "PUT", "DELETE", "OPTIONS", "PATCH"},
-		AllowHeaders:     []string{"Origin", "Content-Type", "Authorization", "X-Requested-With", "Accept"},
-		ExposeHeaders:    []string{"Content-Length"},
-		AllowCredentials: true,
-		MaxAge:           12 * time.Hour,
-	}))
+	r.OPTIONS("/*path", func(c *gin.Context) {
+		c.Status(http.StatusNoContent)
+	})
 
 	r.GET("/ping", func(c *gin.Context) {
 		c.JSON(200, gin.H{"status": "ok", "message": "pong"})
@@ -3684,11 +3724,11 @@ func handleSendDeliveryTelegram(c *gin.Context) {
 				return err
 			}
 			dailySeq = int(count) + 1
-			
+
 			// Mark sequence immediately to prevent others from taking it
 			return tx.Model(&Order{}).Where("order_id = ?", order.OrderID).Updates(map[string]interface{}{
 				"delivery_daily_sequence": dailySeq,
-				"delivery_telegram_date":   todayStr,
+				"delivery_telegram_date":  todayStr,
 			}).Error
 		})
 		if txErr != nil {
@@ -3723,7 +3763,7 @@ func handleSendDeliveryTelegram(c *gin.Context) {
 
 	// Build inline keyboard
 	var inlineKeyboard [][]map[string]interface{}
-	
+
 	// 1. Map Link Button (Top Priority)
 	mapLink := extractMapLink(order.Location + " " + order.AddressDetails + " " + order.Note)
 	if mapLink != "" {
