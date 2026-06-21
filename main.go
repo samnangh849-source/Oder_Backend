@@ -144,6 +144,7 @@ type IncentiveResult = backend.IncentiveResult
 type IncentiveManualData = backend.IncentiveManualData
 type IncentiveCustomPayout = backend.IncentiveCustomPayout
 type DeleteOrderRequest = backend.DeleteOrderRequest
+type Promotion = backend.Promotion
 
 type IncentiveRules = backend.IncentiveRules
 type IncentiveTier = backend.IncentiveTier
@@ -2092,6 +2093,54 @@ func handleAdminUpdateSheet(c *gin.Context) {
 		modelInstance = &Order{}
 	case "Users":
 		modelInstance = &User{}
+	case "Products":
+		modelInstance = &Product{}
+	case "Stores":
+		modelInstance = &Store{}
+	case "Settings":
+		modelInstance = &Setting{}
+	case "TeamsPages":
+		modelInstance = &TeamPage{}
+	case "Locations":
+		modelInstance = &Location{}
+	case "ShippingMethods":
+		modelInstance = &ShippingMethod{}
+	case "DeliveryGroups":
+		modelInstance = &DeliveryGroup{}
+	case "Colors":
+		modelInstance = &Color{}
+	case "Drivers":
+		modelInstance = &Driver{}
+	case "BankAccounts":
+		modelInstance = &BankAccount{}
+	case "PhoneCarriers":
+		modelInstance = &PhoneCarrier{}
+	case "Inventory":
+		modelInstance = &Inventory{}
+	case "StockTransfers":
+		modelInstance = &StockTransfer{}
+	case "Returns":
+		modelInstance = &ReturnItem{}
+	case "Roles":
+		modelInstance = &Role{}
+	case "RolePermissions":
+		modelInstance = &RolePermission{}
+	case "DriverRecommendations":
+		modelInstance = &DriverRecommendation{}
+	case "Movies":
+		modelInstance = &Movie{}
+	case "Promotions":
+		modelInstance = &Promotion{}
+	case "RevenueDashboard":
+		modelInstance = &RevenueEntry{}
+	case "ChatMessages":
+		modelInstance = &ChatMessage{}
+	case "EditLogs":
+		modelInstance = &EditLog{}
+	case "UserActivityLogs":
+		modelInstance = &UserActivityLog{}
+	case "TelegramTemplates":
+		modelInstance = &TelegramTemplate{}
 	}
 
 	pkCol := ""
@@ -2276,6 +2325,54 @@ func handleAdminAddRow(c *gin.Context) {
 			modelInstance = &Order{}
 		case "Users":
 			modelInstance = &User{}
+		case "Products":
+			modelInstance = &Product{}
+		case "Stores":
+			modelInstance = &Store{}
+		case "Settings":
+			modelInstance = &Setting{}
+		case "TeamsPages":
+			modelInstance = &TeamPage{}
+		case "Locations":
+			modelInstance = &Location{}
+		case "ShippingMethods":
+			modelInstance = &ShippingMethod{}
+		case "DeliveryGroups":
+			modelInstance = &DeliveryGroup{}
+		case "Colors":
+			modelInstance = &Color{}
+		case "Drivers":
+			modelInstance = &Driver{}
+		case "BankAccounts":
+			modelInstance = &BankAccount{}
+		case "PhoneCarriers":
+			modelInstance = &PhoneCarrier{}
+		case "Inventory":
+			modelInstance = &Inventory{}
+		case "StockTransfers":
+			modelInstance = &StockTransfer{}
+		case "Returns":
+			modelInstance = &ReturnItem{}
+		case "Roles":
+			modelInstance = &Role{}
+		case "RolePermissions":
+			modelInstance = &RolePermission{}
+		case "DriverRecommendations":
+			modelInstance = &DriverRecommendation{}
+		case "Movies":
+			modelInstance = &Movie{}
+		case "Promotions":
+			modelInstance = &Promotion{}
+		case "RevenueDashboard":
+			modelInstance = &RevenueEntry{}
+		case "ChatMessages":
+			modelInstance = &ChatMessage{}
+		case "EditLogs":
+			modelInstance = &EditLog{}
+		case "UserActivityLogs":
+			modelInstance = &UserActivityLog{}
+		case "TelegramTemplates":
+			modelInstance = &TelegramTemplate{}
 		}
 
 		mappedData := make(map[string]interface{})
