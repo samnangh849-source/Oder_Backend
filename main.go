@@ -3321,38 +3321,10 @@ func main() {
 	backend.HubGlobal = hub
 	go hub.Run()
 
-	// Initialize backend.DB
-	initDB()
-
-	// Initialize background processes
-	go func() {
-		// Start Background Workers ONLY after backend.DB is ready
-		startSyncManager(2)
-		go startOrderWorker()
-		startScheduler()
-		backend.CreateGoogleAPIClient(context.Background())
-
-		// Auto-migrate if DB is empty
-		var userCount int64
-		if err := backend.DB.Model(&User{}).Count(&userCount).Error; err == nil && userCount == 0 {
-			log.Println("Empty database detected. Starting automatic data migration...")
-			backend.PerformDataMigration()
-		} else if os.Getenv("AUTO_MIGRATE") == "true" {
-			log.Println("🚀 Starting forced automatic data migration on startup...")
-			backend.PerformDataMigration()
-		} else {
-			log.Println("ℹ️ Automatic migration skipped (DB not empty). Set AUTO_MIGRATE=true if you want to wipe and re-sync.")
-		}
-	}()
-
 	r := gin.Default()
 	r.Use(cors.New(buildCORSConfig()))
 	r.Use(gzip.Gzip(gzip.DefaultCompression))
 	r.Use(ErrorHandlingMiddleware())
-
-	r.OPTIONS("/*path", func(c *gin.Context) {
-		c.Status(http.StatusNoContent)
-	})
 
 	r.GET("/ping", func(c *gin.Context) {
 		c.JSON(200, gin.H{"status": "ok", "message": "pong"})
@@ -3460,7 +3432,28 @@ func main() {
 	}
 	api.GET("/chat/ws", AuthMiddleware(), serveWs)
 	api.GET("/chat/audio/:fileID", backend.HandleGetAudioProxy)
+	go initializeDatabaseAndWorkers()
 	r.Run("0.0.0.0:" + port)
+}
+
+func initializeDatabaseAndWorkers() {
+	initDB()
+
+	startSyncManager(2)
+	go startOrderWorker()
+	startScheduler()
+	backend.CreateGoogleAPIClient(context.Background())
+
+	var userCount int64
+	if err := backend.DB.Model(&User{}).Count(&userCount).Error; err == nil && userCount == 0 {
+		log.Println("Empty database detected. Starting automatic data migration...")
+		backend.PerformDataMigration()
+	} else if os.Getenv("AUTO_MIGRATE") == "true" {
+		log.Println("🚀 Starting forced automatic data migration on startup...")
+		backend.PerformDataMigration()
+	} else {
+		log.Println("ℹ️ Automatic migration skipped (DB not empty). Set AUTO_MIGRATE=true if you want to wipe and re-sync.")
+	}
 }
 
 // ── Shift Management Handlers ──────────────────────────────────────────────
