@@ -1327,6 +1327,136 @@ func handleGetAllOrders(c *gin.Context) {
 		}
 	}
 
+
+	// 4. Calculate Shipping Counts (before applying the internalShippingMethod filter)
+	shippingCounts := make(map[string]int64)
+	if storeQuery != "" {
+		type ShippingCount struct {
+			Method string `gorm:"column:internal_shipping_method"`
+			Count  int64  `gorm:"column:count"`
+		}
+		var sCounts []ShippingCount
+		// Use a session clone to avoid mutating countQuery
+		countQuery.Session(&gorm.Session{}).
+			Select("internal_shipping_method, count(*) as count").
+			Group("internal_shipping_method").
+			Scan(&sCounts)
+
+		var totalCount int64 = 0
+		for _, sc := range sCounts {
+			method := sc.Method
+			if method == "" {
+				method = "Unassigned"
+			}
+			shippingCounts[method] = sc.Count
+			totalCount += sc.Count
+		}
+		shippingCounts["all"] = totalCount
+	}
+
+	// 5. Calculate Packaging Progress Stats & Tab Counts (if storeQuery is specified)
+	var packedByUserToday int64 = 0
+	var storeTotalToday int64 = 0
+	tabCounts := map[string]int64{
+		"pending":   0,
+		"ready":     0,
+		"shipped":   0,
+		"returned":  0,
+		"cancelled": 0,
+	}
+	if storeQuery != "" {
+		userName, _ := c.Get("userName")
+		var user User
+		fullName := ""
+		if err := backend.DB.Where("user_name = ?", userName).First(&user).Error; err == nil {
+			fullName = user.FullName
+		}
+
+		// Format today's date in Cambodia timezone (ICT)
+		loc := time.FixedZone("ICT", 7*3600)
+		now := time.Now().In(loc)
+		todayISO := now.Format("2006-01-02")
+		dStr1 := fmt.Sprintf("%d/%d/%d", now.Day(), int(now.Month()), now.Year())
+		dStr2 := fmt.Sprintf("%02d/%02d/%d", now.Day(), int(now.Month()), now.Year())
+
+		// Total store orders today
+		backend.DB.Model(&Order{}).
+			Where("LOWER(fulfillment_store) = LOWER(?) AND (timestamp LIKE ? OR timestamp LIKE ?)", 
+				storeQuery, todayISO+"%", todayISO+"T%").
+			Count(&storeTotalToday)
+
+		// Total packed by user today
+		if fullName != "" {
+			backend.DB.Model(&Order{}).
+				Where("LOWER(fulfillment_store) = LOWER(?) AND packed_by = ? AND (packed_time LIKE ? OR packed_time LIKE ?)", 
+					storeQuery, fullName, dStr1+"%", dStr2+"%").
+				Count(&packedByUserToday)
+		}
+
+		// Total counts per tab for the current store
+		var allStoreOrders []struct {
+			FulfillmentStatus string `gorm:"column:fulfillment_status"`
+			PackedBy          string `gorm:"column:packed_by"`
+			PackedTime        string `gorm:"column:packed_time"`
+			ReturnReceivedBy  string `gorm:"column:return_received_by"`
+		}
+		backend.DB.Model(&Order{}).
+			Select("fulfillment_status, packed_by, packed_time, return_received_by").
+			Where("LOWER(fulfillment_store) = LOWER(?)", storeQuery).
+			Scan(&allStoreOrders)
+
+		for _, o := range allStoreOrders {
+			fs := o.FulfillmentStatus
+			isPacked := o.PackedBy != "" || o.PackedTime != ""
+			isUnpacked := o.ReturnReceivedBy != ""
+
+			if fs == "Pending" || fs == "Scheduled" {
+				tabCounts["pending"]++
+			} else if fs == "Ready to Ship" {
+				tabCounts["ready"]++
+			} else if fs == "Shipped" {
+				tabCounts["shipped"]++
+			} else if fs == "Returned" {
+				tabCounts["returned"]++
+			} else if fs == "Cancelled" {
+				if isUnpacked {
+					tabCounts["cancelled"]++
+				} else {
+					if !isPacked {
+						tabCounts["pending"]++
+					} else {
+						tabCounts["ready"]++
+					}
+				}
+			}
+		}
+	}
+
+	// 6. Apply Internal Shipping Method Filter
+	shippingMethodQuery := c.Query("internalShippingMethod")
+	if shippingMethodQuery != "" {
+		methods := strings.Split(shippingMethodQuery, ",")
+		var conditions []string
+		var args []interface{}
+		for _, m := range methods {
+			m = strings.TrimSpace(m)
+			if m != "" {
+				if strings.EqualFold(m, "Unassigned") {
+					conditions = append(conditions, "internal_shipping_method = ? OR internal_shipping_method IS NULL")
+					args = append(args, "")
+				} else {
+					conditions = append(conditions, "LOWER(internal_shipping_method) = LOWER(?)")
+					args = append(args, m)
+				}
+			}
+		}
+		if len(conditions) > 0 {
+			condition := "(" + strings.Join(conditions, " OR ") + ")"
+			query = query.Where(condition, args...)
+			countQuery = countQuery.Where(condition, args...)
+		}
+	}
+
 	// Field Selection
 	if view == "compact" {
 		// Include products_json as it's needed for the dashboard display
@@ -1345,11 +1475,17 @@ func handleGetAllOrders(c *gin.Context) {
 	var total int64
 	countQuery.Count(&total)
 	c.JSON(200, gin.H{
-		"status": "success",
-		"data":   orders,
-		"total":  total,
-		"limit":  limit,
-		"offset": offset,
+		"status":         "success",
+		"data":           orders,
+		"total":          total,
+		"limit":          limit,
+		"offset":         offset,
+		"shippingCounts": shippingCounts,
+		"progressStats": gin.H{
+			"packedByUserToday": packedByUserToday,
+			"storeTotalToday":   storeTotalToday,
+		},
+		"tabCounts":      tabCounts,
 	})
 }
 
