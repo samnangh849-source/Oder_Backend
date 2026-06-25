@@ -1152,6 +1152,15 @@ func handleGetAllOrders(c *gin.Context) {
 	offsetStr := c.DefaultQuery("offset", "0")
 	limit, _ := strconv.Atoi(limitStr)
 	offset, _ := strconv.Atoi(offsetStr)
+	if limit < 0 {
+		limit = 0
+	}
+	if limit > 10000 {
+		limit = 10000
+	}
+	if offset < 0 {
+		offset = 0
+	}
 
 	// 2. Filter Params
 	startDate := c.Query("startDate")
@@ -1162,6 +1171,7 @@ func handleGetAllOrders(c *gin.Context) {
 	userQuery := c.Query("user")
 	storeQuery := c.Query("fulfillmentStore")
 	statusQuery := c.Query("fulfillmentStatus")
+	packagingTabQuery := c.Query("packagingTab")
 	searchQuery := c.Query("search")
 
 	query := backend.DB.Order("timestamp desc")
@@ -1309,7 +1319,27 @@ func handleGetAllOrders(c *gin.Context) {
 			countQuery = countQuery.Where(condition, args...)
 		}
 	}
-	if statusQuery != "" {
+	applyPackagingTabFilter := func(db *gorm.DB, tab string) *gorm.DB {
+		switch strings.ToLower(strings.TrimSpace(tab)) {
+		case "pending":
+			return db.Where("(fulfillment_status IN ? OR (fulfillment_status = ? AND (return_received_by IS NULL OR return_received_by = '') AND (packed_by IS NULL OR packed_by = '') AND (packed_time IS NULL OR packed_time = '')))", []string{"Pending", "Scheduled"}, "Cancelled")
+		case "ready", "ready to ship":
+			return db.Where("(fulfillment_status = ? OR (fulfillment_status = ? AND (return_received_by IS NULL OR return_received_by = '') AND ((packed_by IS NOT NULL AND packed_by != '') OR (packed_time IS NOT NULL AND packed_time != ''))))", "Ready to Ship", "Cancelled")
+		case "shipped":
+			return db.Where("fulfillment_status = ?", "Shipped")
+		case "returned":
+			return db.Where("fulfillment_status = ?", "Returned")
+		case "cancelled", "canceled":
+			return db.Where("fulfillment_status = ? AND return_received_by IS NOT NULL AND return_received_by != ''", "Cancelled")
+		default:
+			return db
+		}
+	}
+
+	if packagingTabQuery != "" {
+		query = applyPackagingTabFilter(query, packagingTabQuery)
+		countQuery = applyPackagingTabFilter(countQuery, packagingTabQuery)
+	} else if statusQuery != "" {
 		statuses := strings.Split(statusQuery, ",")
 		var conditions []string
 		var args []interface{}
@@ -1326,7 +1356,6 @@ func handleGetAllOrders(c *gin.Context) {
 			countQuery = countQuery.Where(condition, args...)
 		}
 	}
-
 
 	// 4. Calculate Shipping Counts (before applying the internalShippingMethod filter)
 	shippingCounts := make(map[string]int64)
@@ -1389,14 +1418,14 @@ func handleGetAllOrders(c *gin.Context) {
 
 		// Total store orders today
 		backend.DB.Model(&Order{}).
-			Where("fulfillment_store IN ? AND (timestamp LIKE ? OR timestamp LIKE ?)", 
+			Where("fulfillment_store IN ? AND (timestamp LIKE ? OR timestamp LIKE ?)",
 				storeList, todayISO+"%", todayISO+"T%").
 			Count(&storeTotalToday)
 
 		// Total packed by user today
 		if fullName != "" {
 			backend.DB.Model(&Order{}).
-				Where("fulfillment_store IN ? AND packed_by = ? AND (packed_time LIKE ? OR packed_time LIKE ?)", 
+				Where("fulfillment_store IN ? AND packed_by = ? AND (packed_time LIKE ? OR packed_time LIKE ?)",
 					storeList, fullName, dStr1+"%", dStr2+"%").
 				Count(&packedByUserToday)
 		}
@@ -1482,7 +1511,7 @@ func handleGetAllOrders(c *gin.Context) {
 			"packedByUserToday": packedByUserToday,
 			"storeTotalToday":   storeTotalToday,
 		},
-		"tabCounts":      tabCounts,
+		"tabCounts": tabCounts,
 	})
 }
 
