@@ -1263,7 +1263,7 @@ func handleGetAllOrders(c *gin.Context) {
 		for _, t := range teams {
 			t = strings.TrimSpace(t)
 			if t != "" {
-				conditions = append(conditions, "LOWER(team) = LOWER(?)")
+				conditions = append(conditions, "team = ?")
 				args = append(args, t)
 			}
 		}
@@ -1282,7 +1282,7 @@ func handleGetAllOrders(c *gin.Context) {
 		for _, u := range users {
 			u = strings.TrimSpace(u)
 			if u != "" {
-				conditions = append(conditions, "LOWER(user) = LOWER(?)")
+				conditions = append(conditions, "user = ?")
 				args = append(args, u)
 			}
 		}
@@ -1299,7 +1299,7 @@ func handleGetAllOrders(c *gin.Context) {
 		for _, s := range stores {
 			s = strings.TrimSpace(s)
 			if s != "" {
-				conditions = append(conditions, "LOWER(fulfillment_store) = LOWER(?)")
+				conditions = append(conditions, "fulfillment_store = ?")
 				args = append(args, s)
 			}
 		}
@@ -1316,7 +1316,7 @@ func handleGetAllOrders(c *gin.Context) {
 		for _, s := range statuses {
 			s = strings.TrimSpace(s)
 			if s != "" {
-				conditions = append(conditions, "LOWER(fulfillment_status) = LOWER(?)")
+				conditions = append(conditions, "fulfillment_status = ?")
 				args = append(args, s)
 			}
 		}
@@ -1379,56 +1379,53 @@ func handleGetAllOrders(c *gin.Context) {
 		dStr1 := fmt.Sprintf("%d/%d/%d", now.Day(), int(now.Month()), now.Year())
 		dStr2 := fmt.Sprintf("%02d/%02d/%d", now.Day(), int(now.Month()), now.Year())
 
+		var storeList []string
+		for _, s := range strings.Split(storeQuery, ",") {
+			s = strings.TrimSpace(s)
+			if s != "" {
+				storeList = append(storeList, s)
+			}
+		}
+
 		// Total store orders today
 		backend.DB.Model(&Order{}).
-			Where("LOWER(fulfillment_store) = LOWER(?) AND (timestamp LIKE ? OR timestamp LIKE ?)", 
-				storeQuery, todayISO+"%", todayISO+"T%").
+			Where("fulfillment_store IN ? AND (timestamp LIKE ? OR timestamp LIKE ?)", 
+				storeList, todayISO+"%", todayISO+"T%").
 			Count(&storeTotalToday)
 
 		// Total packed by user today
 		if fullName != "" {
 			backend.DB.Model(&Order{}).
-				Where("LOWER(fulfillment_store) = LOWER(?) AND packed_by = ? AND (packed_time LIKE ? OR packed_time LIKE ?)", 
-					storeQuery, fullName, dStr1+"%", dStr2+"%").
+				Where("fulfillment_store IN ? AND packed_by = ? AND (packed_time LIKE ? OR packed_time LIKE ?)", 
+					storeList, fullName, dStr1+"%", dStr2+"%").
 				Count(&packedByUserToday)
 		}
 
-		// Total counts per tab for the current store
-		var allStoreOrders []struct {
-			FulfillmentStatus string `gorm:"column:fulfillment_status"`
-			PackedBy          string `gorm:"column:packed_by"`
-			PackedTime        string `gorm:"column:packed_time"`
-			ReturnReceivedBy  string `gorm:"column:return_received_by"`
+		// Total counts per tab for the current store using database aggregation
+		type TabCountResult struct {
+			Pending   int64 `gorm:"column:pending"`
+			Ready     int64 `gorm:"column:ready"`
+			Shipped   int64 `gorm:"column:shipped"`
+			Returned  int64 `gorm:"column:returned"`
+			Cancelled int64 `gorm:"column:cancelled"`
 		}
-		backend.DB.Model(&Order{}).
-			Select("fulfillment_status, packed_by, packed_time, return_received_by").
-			Where("LOWER(fulfillment_store) = LOWER(?)", storeQuery).
-			Scan(&allStoreOrders)
-
-		for _, o := range allStoreOrders {
-			fs := o.FulfillmentStatus
-			isPacked := o.PackedBy != "" || o.PackedTime != ""
-			isUnpacked := o.ReturnReceivedBy != ""
-
-			if fs == "Pending" || fs == "Scheduled" {
-				tabCounts["pending"]++
-			} else if fs == "Ready to Ship" {
-				tabCounts["ready"]++
-			} else if fs == "Shipped" {
-				tabCounts["shipped"]++
-			} else if fs == "Returned" {
-				tabCounts["returned"]++
-			} else if fs == "Cancelled" {
-				if isUnpacked {
-					tabCounts["cancelled"]++
-				} else {
-					if !isPacked {
-						tabCounts["pending"]++
-					} else {
-						tabCounts["ready"]++
-					}
-				}
-			}
+		var tcResult TabCountResult
+		err := backend.DB.Model(&Order{}).
+			Select(`
+				COALESCE(SUM(CASE WHEN fulfillment_status IN ('Pending', 'Scheduled') OR (fulfillment_status = 'Cancelled' AND (return_received_by IS NULL OR return_received_by = '') AND (packed_by IS NULL OR packed_by = '') AND (packed_time IS NULL OR packed_time = '')) THEN 1 ELSE 0 END), 0) as pending,
+				COALESCE(SUM(CASE WHEN fulfillment_status = 'Ready to Ship' OR (fulfillment_status = 'Cancelled' AND (return_received_by IS NULL OR return_received_by = '') AND ((packed_by IS NOT NULL AND packed_by != '') OR (packed_time IS NOT NULL AND packed_time != ''))) THEN 1 ELSE 0 END), 0) as ready,
+				COALESCE(SUM(CASE WHEN fulfillment_status = 'Shipped' THEN 1 ELSE 0 END), 0) as shipped,
+				COALESCE(SUM(CASE WHEN fulfillment_status = 'Returned' THEN 1 ELSE 0 END), 0) as returned,
+				COALESCE(SUM(CASE WHEN fulfillment_status = 'Cancelled' AND return_received_by IS NOT NULL AND return_received_by != '' THEN 1 ELSE 0 END), 0) as cancelled
+			`).
+			Where("fulfillment_store IN ?", storeList).
+			Scan(&tcResult).Error
+		if err == nil {
+			tabCounts["pending"] = tcResult.Pending
+			tabCounts["ready"] = tcResult.Ready
+			tabCounts["shipped"] = tcResult.Shipped
+			tabCounts["returned"] = tcResult.Returned
+			tabCounts["cancelled"] = tcResult.Cancelled
 		}
 	}
 
