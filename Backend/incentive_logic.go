@@ -251,6 +251,32 @@ func (r *IncentiveRules) IsIncluded(u User) bool {
 	return false
 }
 
+func (r *IncentiveRules) IsExcludedForTeam(u User, teamName string) bool {
+	normalizedTeamName := NormalizeTeamKey(teamName)
+	for _, target := range r.ExcludeTargets {
+		if strings.HasPrefix(target, "Role:") && u.Role == strings.TrimPrefix(target, "Role:") {
+			return true
+		}
+		if strings.HasPrefix(target, "User:") && u.UserName == strings.TrimPrefix(target, "User:") {
+			return true
+		}
+		if strings.HasPrefix(target, "TeamUser:") {
+			parts := strings.SplitN(strings.TrimPrefix(target, "TeamUser:"), ":", 2)
+			if len(parts) == 2 {
+				tgtTeam := NormalizeTeamKey(parts[0])
+				tgtUser := parts[1]
+				if u.UserName == tgtUser && normalizedTeamName == tgtTeam {
+					return true
+				}
+			}
+		}
+		if target == u.UserName {
+			return true
+		}
+	}
+	return false
+}
+
 func (r *IncentiveRules) IsExcluded(u User) bool {
 	for _, target := range r.ExcludeTargets {
 		if strings.HasPrefix(target, "Role:") && u.Role == strings.TrimPrefix(target, "Role:") {
@@ -258,6 +284,21 @@ func (r *IncentiveRules) IsExcluded(u User) bool {
 		}
 		if strings.HasPrefix(target, "User:") && u.UserName == strings.TrimPrefix(target, "User:") {
 			return true
+		}
+		if strings.HasPrefix(target, "TeamUser:") {
+			parts := strings.SplitN(strings.TrimPrefix(target, "TeamUser:"), ":", 2)
+			if len(parts) == 2 {
+				tgtTeam := NormalizeTeamKey(parts[0])
+				tgtUser := parts[1]
+				if u.UserName == tgtUser {
+					userTeams := strings.Split(u.Team, ",")
+					for _, ut := range userTeams {
+						if NormalizeTeamKey(ut) == tgtTeam {
+							return true
+						}
+					}
+				}
+			}
 		}
 		if target == u.UserName {
 			return true
@@ -356,7 +397,7 @@ func ProcessIncentiveCalculation(db *gorm.DB, projectID uint, month string) ([]I
 						teamName := NormalizeTeamKey(ut)
 						if teamName != "" {
 							// For member count (used for division), only count those who can actually RECEIVE money
-							if !rules.IsExcluded(u) {
+							if !rules.IsExcludedForTeam(u, teamName) {
 								teamMemberCount[teamName]++
 							}
 						}
@@ -455,12 +496,14 @@ func ProcessIncentiveCalculation(db *gorm.DB, projectID uint, month string) ([]I
 				for _, ut := range userTeams {
 					teamName := NormalizeTeamKey(ut)
 					if teamName != "" {
-						if teamManualPerf[teamName] > 0 && teamMemberCount[teamName] > 0 {
-							val += teamManualPerf[teamName] / float64(teamMemberCount[teamName])
-						}
-						for sp, spVal := range teamManualSubPerf[teamName] {
-							if spVal > 0 && teamMemberCount[teamName] > 0 {
-								subMap[sp] += spVal / float64(teamMemberCount[teamName])
+						if !rules.IsExcludedForTeam(u, teamName) {
+							if teamManualPerf[teamName] > 0 && teamMemberCount[teamName] > 0 {
+								val += teamManualPerf[teamName] / float64(teamMemberCount[teamName])
+							}
+							for sp, spVal := range teamManualSubPerf[teamName] {
+								if spVal > 0 && teamMemberCount[teamName] > 0 {
+									subMap[sp] += spVal / float64(teamMemberCount[teamName])
+								}
 							}
 						}
 					}
@@ -525,7 +568,7 @@ func ProcessIncentiveCalculation(db *gorm.DB, projectID uint, month string) ([]I
 					// Count recipients in this group
 					eligibleCount := 0
 					for _, u := range groupUsers {
-						if !rules.IsExcluded(u) {
+						if !rules.IsExcludedForTeam(u, teamName) {
 							eligibleCount++
 						}
 					}
@@ -536,7 +579,7 @@ func ProcessIncentiveCalculation(db *gorm.DB, projectID uint, month string) ([]I
 					}
 
 					for _, u := range groupUsers {
-						if rules.IsExcluded(u) {
+						if rules.IsExcludedForTeam(u, teamName) {
 							continue
 						}
 						userRewards[u.UserName] += rewardPerPerson
@@ -551,7 +594,7 @@ func ProcessIncentiveCalculation(db *gorm.DB, projectID uint, month string) ([]I
 					}
 				} else if distMethod == DistPercentageAllocation {
 					for _, u := range groupUsers {
-						if rules.IsExcluded(u) {
+						if rules.IsExcludedForTeam(u, teamName) {
 							continue
 						}
 						for _, alloc := range rules.DistributionRule.Allocations {
