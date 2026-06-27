@@ -416,13 +416,22 @@ func processImageUploadInternal(req AppsScriptRequest, data string) (string, str
 	}
 
 	// ── 2. User Profile Update ───────────────────────────────────────────
-	// Only update profile if explicitly requested (no SheetName or SheetName is "Users")
-	if req.UserName != "" && (req.SheetName == "" || req.SheetName == "Users") {
-		DB.Model(&User{}).Where("user_name = ?", req.UserName).UpdateColumn("profile_picture_url", driveURL)
+	// Resolve userName: prefer explicit req.UserName, fallback to primaryKey["UserName"]
+	// (Admin Edit User modal sends primaryKey but not top-level userName)
+	resolvedUserName := req.UserName
+	if resolvedUserName == "" && req.PrimaryKey != nil && (req.SheetName == "" || req.SheetName == "Users") {
+		if pkVal, ok := req.PrimaryKey["UserName"]; ok {
+			resolvedUserName = fmt.Sprintf("%v", pkVal)
+		}
+	}
+
+	if resolvedUserName != "" && (req.SheetName == "" || req.SheetName == "Users") {
+		log.Printf("👤 [Upload Internal] Updating profile picture for user=%q", resolvedUserName)
+		DB.Model(&User{}).Where("user_name = ?", resolvedUserName).UpdateColumn("profile_picture_url", driveURL)
 		SafeBroadcastJSON(map[string]interface{}{
-			"type": "profile_image_ready", "userName": req.UserName, "url": driveURL,
+			"type": "profile_image_ready", "userName": resolvedUserName, "url": driveURL,
 		})
-		EnqueueSync("updateSheet", map[string]interface{}{"Profile Picture URL": driveURL}, "Users", map[string]string{"UserName": req.UserName})
+		EnqueueSync("updateSheet", map[string]interface{}{"Profile Picture URL": driveURL}, "Users", map[string]string{"UserName": resolvedUserName})
 	}
 
 	// ── 3. Movie Update ──────────────────────────────────────────────────
@@ -443,8 +452,11 @@ func processImageUploadInternal(req AppsScriptRequest, data string) (string, str
 	}
 
 	// ── 4. Generic Table/Sheet Update ────────────────────────────────────
+	// Skip Users sheet EnqueueSync here if Section 2 already handled it (avoids duplicate Sheets writes).
 	if req.SheetName != "" && req.PrimaryKey != nil && req.TargetColumn != "" && req.SheetName != "Movies" {
-		EnqueueSync("updateSheet", map[string]interface{}{req.TargetColumn: driveURL}, req.SheetName, req.PrimaryKey)
+		if !(req.SheetName == "Users" && resolvedUserName != "") {
+			EnqueueSync("updateSheet", map[string]interface{}{req.TargetColumn: driveURL}, req.SheetName, req.PrimaryKey)
+		}
 		tableName := UploadGetTableNameFunc(req.SheetName)
 		if tableName != "" {
 			dbCol := UploadMapToDBColumnFunc(req.TargetColumn)
