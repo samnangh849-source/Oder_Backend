@@ -13,6 +13,7 @@ import (
 	"image/jpeg"
 	"io"
 	"log"
+	"math"
 	"math/rand"
 	"mime/multipart"
 	"net/http"
@@ -1657,7 +1658,30 @@ func handleSubmitOrder(c *gin.Context) {
 	eventBytes, _ := json.Marshal(map[string]interface{}{"type": "new_order", "data": newOrder})
 	hub.Broadcast <- eventBytes
 
-	orderChannel <- OrderJob{JobID: fmt.Sprintf("job_%d", time.Now().UnixNano()), OrderID: orderID, UserName: orderRequest.CurrentUser.UserName, OrderData: map[string]interface{}{"orderId": orderID, "timestamp": timestamp, "totalDiscount": totalDiscount, "totalProductCost": totalProductCost, "fullLocation": strings.Join(locationParts, ", "), "productsJSON": string(productsJSON), "shippingCost": shippingCost, "originalRequest": orderRequest, "scheduledTime": timestamp}}
+	// 🔄 Transform paymentStatus for Telegram display only (DB keeps "Unpaid")
+	if paymentStatus == "Unpaid" {
+		orderRequest.Payment["status"] = "Unpaid (មិនទាន់បង់ប្រាក់ 💸)"
+	}
+
+	// 💲 Round all price fields to 2 decimal places for Telegram display only
+	round2 := func(v float64) float64 {
+		return math.Round(v*100) / 100
+	}
+	for _, p := range orderRequest.Products {
+		priceFields := []string{"originalPrice", "finalPrice", "cost", "price"}
+		for _, field := range priceFields {
+			if val, ok := p[field].(float64); ok {
+				p[field] = round2(val)
+			}
+		}
+	}
+	telegramShippingCost := round2(shippingCost)
+	telegramTotalDiscount := round2(totalDiscount)
+	telegramTotalProductCost := round2(totalProductCost)
+	orderRequest.Subtotal = round2(orderRequest.Subtotal)
+	orderRequest.GrandTotal = round2(orderRequest.GrandTotal)
+
+	orderChannel <- OrderJob{JobID: fmt.Sprintf("job_%d", time.Now().UnixNano()), OrderID: orderID, UserName: orderRequest.CurrentUser.UserName, OrderData: map[string]interface{}{"orderId": orderID, "timestamp": timestamp, "totalDiscount": telegramTotalDiscount, "totalProductCost": telegramTotalProductCost, "fullLocation": strings.Join(locationParts, ", "), "productsJSON": string(productsJSON), "shippingCost": telegramShippingCost, "originalRequest": orderRequest, "scheduledTime": timestamp}}
 	c.JSON(200, gin.H{"status": "success", "orderId": orderID})
 }
 
