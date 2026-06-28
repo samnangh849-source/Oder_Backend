@@ -555,9 +555,11 @@ func ProcessIncentiveCalculation(db *gorm.DB, projectID uint, month string) ([]I
 				groupSubPerfMap := make(map[string]float64)
 
 				for _, u := range groupUsers {
-					groupTotalPerf += individualPerfMap[u.UserName]
-					for sp, spVal := range individualSubPerfMap[u.UserName] {
-						groupSubPerfMap[sp] += spVal
+					if !rules.IsExcludedForTeam(u, teamName) {
+						groupTotalPerf += individualPerfMap[u.UserName]
+						for sp, spVal := range individualSubPerfMap[u.UserName] {
+							groupSubPerfMap[sp] += spVal
+						}
 					}
 				}
 				
@@ -566,6 +568,27 @@ func ProcessIncentiveCalculation(db *gorm.DB, projectID uint, month string) ([]I
 					groupTotalPerf += teamManualPerf[teamName]
 					for sp, spVal := range teamManualSubPerf[teamName] {
 						groupSubPerfMap[sp] += spVal
+					}
+				}
+
+				// Set display performance for team members to team's total performance (not divided)
+				mType := strings.ToLower(strings.TrimSpace(metricType))
+				for _, u := range groupUsers {
+					if !rules.IsExcludedForTeam(u, teamName) {
+						switch mType {
+						case "sales amount", "revenue":
+							if groupTotalPerf > userRevenue[u.UserName] {
+								userRevenue[u.UserName] = groupTotalPerf
+							}
+						case "profit":
+							if groupTotalPerf > userProfit[u.UserName] {
+								userProfit[u.UserName] = groupTotalPerf
+							}
+						case "orders", "order count", "number of orders":
+							if int(groupTotalPerf) > userOrders[u.UserName] {
+								userOrders[u.UserName] = int(groupTotalPerf)
+							}
+						}
 					}
 				}
 
@@ -661,23 +684,31 @@ func ProcessIncentiveCalculation(db *gorm.DB, projectID uint, month string) ([]I
 			mType := strings.ToLower(strings.TrimSpace(metricType))
 			for _, u := range targetedUsers {
 				uName := u.UserName
-				val := fullPerfMap[uName] // This val now includes distributed team data
-				switch mType {
-				case "sales amount", "revenue":
-					if val > userRevenue[uName] {
-						userRevenue[uName] = val
-					}
-				case "profit":
-					if val > userProfit[uName] {
-						userProfit[uName] = val
-					}
-				case "orders", "order count", "number of orders":
-					if int(val) > userOrders[uName] {
-						userOrders[uName] = int(val)
+				// Only overwrite with individual/distributed manual performance if it's an individual calculator
+				if distMethod != DistEqualSplit && distMethod != DistPercentageAllocation {
+					val := fullPerfMap[uName]
+					switch mType {
+					case "sales amount", "revenue":
+						if val > userRevenue[uName] {
+							userRevenue[uName] = val
+						}
+					case "profit":
+						if val > userProfit[uName] {
+							userProfit[uName] = val
+						}
+					case "orders", "order count", "number of orders":
+						if int(val) > userOrders[uName] {
+							userOrders[uName] = int(val)
+						}
 					}
 				}
 			}
 		}
+	}
+
+	userMap := make(map[string]User, len(allUsers))
+	for _, u := range allUsers {
+		userMap[u.UserName] = u
 	}
 
 	var results []IncentiveResult
@@ -696,6 +727,50 @@ func ProcessIncentiveCalculation(db *gorm.DB, projectID uint, month string) ([]I
 	}
 
 	for user := range uniqueUsers {
+		userObj, exists := userMap[user]
+		if !exists {
+			continue
+		}
+
+		// Check if user is excluded from all calculators in this project
+		isExcludedFromAll := true
+		hasApplicableCalc := false
+		for _, calc := range project.Calculators {
+			var rules IncentiveRules
+			if calc.RulesJSON != "" {
+				json.Unmarshal([]byte(calc.RulesJSON), &rules)
+			}
+			if rules.IsIncluded(userObj) {
+				hasApplicableCalc = true
+				if !rules.IsExcluded(userObj) {
+					// Check if they are excluded for all teams they belong to
+					if userObj.Team != "" {
+						userTeams := strings.Split(userObj.Team, ",")
+						teamExcludedCount := 0
+						applicableTeamCount := 0
+						for _, ut := range userTeams {
+							teamName := NormalizeTeamKey(ut)
+							if teamName != "" && rules.IsTeamApplicable(teamName) {
+								applicableTeamCount++
+								if rules.IsExcludedForTeam(userObj, teamName) {
+									teamExcludedCount++
+								}
+							}
+						}
+						if applicableTeamCount > 0 && teamExcludedCount < applicableTeamCount {
+							isExcludedFromAll = false
+						}
+					} else {
+						isExcludedFromAll = false
+					}
+				}
+			}
+		}
+
+		if hasApplicableCalc && isExcludedFromAll {
+			continue // Skip this user entirely from results as they are fully excluded
+		}
+
 		payout := userRewards[user]
 		isCustom := false
 		if customVal, exists := customPayoutMap[user]; exists {
