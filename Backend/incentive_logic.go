@@ -285,21 +285,6 @@ func (r *IncentiveRules) IsExcluded(u User) bool {
 		if strings.HasPrefix(target, "User:") && u.UserName == strings.TrimPrefix(target, "User:") {
 			return true
 		}
-		if strings.HasPrefix(target, "TeamUser:") {
-			parts := strings.SplitN(strings.TrimPrefix(target, "TeamUser:"), ":", 2)
-			if len(parts) == 2 {
-				tgtTeam := NormalizeTeamKey(parts[0])
-				tgtUser := parts[1]
-				if u.UserName == tgtUser {
-					userTeams := strings.Split(u.Team, ",")
-					for _, ut := range userTeams {
-						if NormalizeTeamKey(ut) == tgtTeam {
-							return true
-						}
-					}
-				}
-			}
-		}
 		if target == u.UserName {
 			return true
 		}
