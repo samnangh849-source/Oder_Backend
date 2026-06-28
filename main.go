@@ -820,6 +820,43 @@ func handleCalculateIncentive(c *gin.Context) {
 	c.JSON(200, gin.H{"status": "success", "data": results})
 }
 
+func handleNotifyIncentiveUser(c *gin.Context) {
+	var req struct {
+		UserName        string  `json:"userName"`
+		ProjectID       int     `json:"projectId"`
+		Month           string  `json:"month"`
+		ProjectName     string  `json:"projectName"`
+		CalculatedValue float64 `json:"calculatedValue"`
+		TotalRevenue    float64 `json:"totalRevenue"`
+		TotalOrders     int     `json:"totalOrders"`
+		BreakdownJson   string  `json:"breakdownJson"`
+	}
+	if err := c.ShouldBindJSON(&req); err != nil || req.UserName == "" {
+		c.JSON(400, gin.H{"status": "error", "message": "Invalid request payload"})
+		return
+	}
+
+	_, err := callAppsScriptPOST(AppsScriptRequest{
+		Action:   "notifyIncentiveUser",
+		UserName: req.UserName,
+		OrderData: map[string]interface{}{
+			"projectId":       req.ProjectID,
+			"month":           req.Month,
+			"projectName":     req.ProjectName,
+			"calculatedValue": req.CalculatedValue,
+			"totalRevenue":    req.TotalRevenue,
+			"totalOrders":     req.TotalOrders,
+			"breakdownJson":   req.BreakdownJson,
+		},
+	})
+	if err != nil {
+		log.Printf("❌ handleNotifyIncentiveUser: Apps Script error for %s: %v", req.UserName, err)
+		c.JSON(500, gin.H{"status": "error", "message": err.Error()})
+		return
+	}
+	c.JSON(200, gin.H{"status": "success", "message": "Notification sent"})
+}
+
 // =========================================================================
 // ប្រព័ន្ធ BACKGROUND QUEUE & SCHEDULER - Aliased to Backend package
 // =========================================================================
@@ -3753,6 +3790,7 @@ func main() {
 				restricted.GET("/incentive/custom-payout", handleGetIncentiveCustomPayouts)
 				restricted.POST("/incentive/custom-payout", handleSaveIncentiveCustomPayout)
 				restricted.POST("/incentive/lock", handleLockIncentivePayout)
+				restricted.POST("/incentive/notify", handleNotifyIncentiveUser)
 			}
 		}
 		profile := protected.Group("/profile")
