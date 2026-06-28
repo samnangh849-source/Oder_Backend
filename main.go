@@ -178,6 +178,46 @@ func generateShortID() string {
 	return string(b)
 }
 
+// cambodianCarrier returns the Cambodian carrier name for a given phone number.
+// It strips the +855 country code or leading zero before matching the 2-3 digit prefix.
+func cambodianCarrier(phone string) string {
+	// Normalise: strip spaces/dashes, remove +855 country code
+	p := strings.ReplaceAll(phone, " ", "")
+	p = strings.ReplaceAll(p, "-", "")
+	if strings.HasPrefix(p, "+855") {
+		p = "0" + p[4:]
+	} else if strings.HasPrefix(p, "855") {
+		p = "0" + p[3:]
+	}
+	if len(p) < 9 {
+		return ""
+	}
+	prefix3 := p[:3] // e.g. "070"
+	carrierMap := map[string]string{
+		// Smart
+		"010": "Smart", "015": "Smart", "016": "Smart",
+		"069": "Smart", "070": "Smart", "081": "Smart",
+		"086": "Smart", "087": "Smart", "093": "Smart",
+		"096": "Smart", "098": "Smart",
+		// Cellcard (Mobitel)
+		"011": "Cellcard", "012": "Cellcard", "017": "Cellcard",
+		"061": "Cellcard", "076": "Cellcard", "077": "Cellcard",
+		"078": "Cellcard", "079": "Cellcard", "085": "Cellcard",
+		"089": "Cellcard", "092": "Cellcard", "095": "Cellcard",
+		"099": "Cellcard",
+		// Metfone (Viettel)
+		"031": "Metfone", "038": "Metfone", "068": "Metfone",
+		"071": "Metfone", "088": "Metfone", "090": "Metfone",
+		"097": "Metfone",
+		// Seatel / qb
+		"013": "Seatel", "018": "Seatel",
+	}
+	if carrier, ok := carrierMap[prefix3]; ok {
+		return carrier
+	}
+	return ""
+}
+
 func broadcastToAll(payload interface{}) {
 	backend.SafeBroadcastJSON(payload)
 }
@@ -1661,6 +1701,11 @@ func handleSubmitOrder(c *gin.Context) {
 	// 🔄 Transform paymentStatus for Telegram display only (DB keeps "Unpaid")
 	if paymentStatus == "Unpaid" {
 		orderRequest.Payment["status"] = "Unpaid (មិនទាន់បង់ប្រាក់ 💸)"
+	}
+
+	// 📱 Append phone carrier for Telegram display only (DB keeps original phone)
+	if carrier := cambodianCarrier(custPhone); carrier != "" {
+		orderRequest.Customer["phone"] = custPhone + " (" + carrier + ")"
 	}
 
 	// 💲 Round all price fields to 2 decimal places for Telegram display only
