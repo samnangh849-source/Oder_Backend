@@ -102,37 +102,48 @@ func CalculatePayout(calc IncentiveCalculator, val float64, subPeriod string, ma
 			return 0.0
 		}
 		if metricTypeLower == "number of videos" || metricTypeLower == "videos" {
-			// Custom Video Logic
+			// Custom Video Logic (dynamically read from AchievementTiers if configured)
+			tiers := rules.AchievementTiers
+			if len(tiers) == 0 {
+				tiers = []IncentiveTier{
+					{Target: 10, RewardAmount: 5, FaceTarget: 0},
+					{Target: 15, RewardAmount: 10, FaceTarget: 0},
+					{Target: 15, RewardAmount: 15, FaceTarget: 5},
+				}
+			}
+
 			if (rules.IsMarathon || strings.EqualFold(rules.CalculationPeriod, "weekly")) && subPeriod == "" {
 				var total float64
 				for sp, totalVideos := range marathonValues {
 					faceVideos := faceVideosValues[sp]
-					var reward float64
-					if totalVideos >= 15 {
-						if faceVideos >= 5 {
-							reward = 15.0
-						} else {
-							reward = 10.0
+					var maxReward float64
+					for _, tier := range tiers {
+						if totalVideos >= tier.Target {
+							if tier.FaceTarget <= 0 || faceVideos >= tier.FaceTarget {
+								if tier.RewardAmount > maxReward {
+									maxReward = tier.RewardAmount
+								}
+							}
 						}
-					} else if totalVideos >= 10 {
-						reward = 5.0
 					}
-					total += reward
+					total += maxReward
 				}
 				return total
 			}
 
 			// Single period or fallback logic
 			faceVideos := faceVideosValues[subPeriod]
-			if val >= 15 {
-				if faceVideos >= 5 {
-					return 15.0
+			var maxReward float64
+			for _, tier := range tiers {
+				if val >= tier.Target {
+					if tier.FaceTarget <= 0 || faceVideos >= tier.FaceTarget {
+						if tier.RewardAmount > maxReward {
+							maxReward = tier.RewardAmount
+						}
+					}
 				}
-				return 10.0
-			} else if val >= 10 {
-				return 5.0
 			}
-			return 0.0
+			return maxReward
 		}
 
 		tiers := rules.AchievementTiers
