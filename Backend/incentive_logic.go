@@ -97,6 +97,10 @@ func CalculatePayout(calc IncentiveCalculator, val float64, subPeriod string, ma
 
 	if calc.Type == IncentiveTypeAchievement {
 		metricTypeLower := strings.ToLower(strings.TrimSpace(rules.MetricType))
+		if metricTypeLower == "face-showing videos" {
+			// Face-showing videos are calculated as part of the total videos calculator, so return 0 payout here
+			return 0.0
+		}
 		if metricTypeLower == "number of videos" || metricTypeLower == "videos" {
 			// Custom Video Logic
 			if rules.IsMarathon && subPeriod == "" {
