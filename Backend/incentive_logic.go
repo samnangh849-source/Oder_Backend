@@ -696,7 +696,12 @@ func ProcessIncentiveCalculation(db *gorm.DB, projectID uint, month string) ([]I
 						if val > userProfit[uName] {
 							userProfit[uName] = val
 						}
-					case "orders", "order count", "number of orders":
+					case "orders", "order count", "number of orders", "number of videos", "face-showing videos":
+						if int(val) > userOrders[uName] {
+							userOrders[uName] = int(val)
+						}
+					default:
+						// Default fallback for any custom integer/count metrics
 						if int(val) > userOrders[uName] {
 							userOrders[uName] = int(val)
 						}
