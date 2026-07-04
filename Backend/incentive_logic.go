@@ -103,7 +103,7 @@ func CalculatePayout(calc IncentiveCalculator, val float64, subPeriod string, ma
 		}
 		if metricTypeLower == "number of videos" || metricTypeLower == "videos" {
 			// Custom Video Logic
-			if rules.IsMarathon && subPeriod == "" {
+			if (rules.IsMarathon || strings.EqualFold(calc.CalculationPeriod, "weekly")) && subPeriod == "" {
 				var total float64
 				for sp, totalVideos := range marathonValues {
 					faceVideos := faceVideosValues[sp]
