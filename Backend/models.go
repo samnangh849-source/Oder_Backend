@@ -426,6 +426,7 @@ type IncentiveRules struct {
 	RequireApproval     bool             `json:"requireApproval"`
 	ExcludeRefunded     bool             `json:"excludeRefunded"`
 	IncludeTax          bool             `json:"includeTax"`
+	CalculationLevel    string           `json:"calculationLevel"`
 }
 
 type DistributionRule struct {
