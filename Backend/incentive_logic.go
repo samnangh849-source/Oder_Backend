@@ -86,7 +86,7 @@ func ResolveManualTarget(targetRaw string, userSet map[string]bool) (targetType 
 	return "team", NormalizeTeamKey(target)
 }
 
-func CalculatePayout(calc IncentiveCalculator, val float64, subPeriod string, marathonValues map[string]float64) float64 {
+func CalculatePayout(calc IncentiveCalculator, val float64, subPeriod string, marathonValues map[string]float64, faceVideosValues map[string]float64) float64 {
 	var rules IncentiveRules
 	if calc.RulesJSON != "" {
 		if err := json.Unmarshal([]byte(calc.RulesJSON), &rules); err != nil {
@@ -96,6 +96,41 @@ func CalculatePayout(calc IncentiveCalculator, val float64, subPeriod string, ma
 	}
 
 	if calc.Type == IncentiveTypeAchievement {
+		metricTypeLower := strings.ToLower(strings.TrimSpace(rules.MetricType))
+		if metricTypeLower == "number of videos" || metricTypeLower == "videos" {
+			// Custom Video Logic
+			if rules.IsMarathon && subPeriod == "" {
+				var total float64
+				for sp, totalVideos := range marathonValues {
+					faceVideos := faceVideosValues[sp]
+					var reward float64
+					if totalVideos >= 15 {
+						if faceVideos >= 5 {
+							reward = 15.0
+						} else {
+							reward = 10.0
+						}
+					} else if totalVideos >= 10 {
+						reward = 5.0
+					}
+					total += reward
+				}
+				return total
+			}
+
+			// Single period or fallback logic
+			faceVideos := faceVideosValues[subPeriod]
+			if val >= 15 {
+				if faceVideos >= 5 {
+					return 15.0
+				}
+				return 10.0
+			} else if val >= 10 {
+				return 5.0
+			}
+			return 0.0
+		}
+
 		tiers := rules.AchievementTiers
 
 		// Marathon logic: Sum highest reward achieved in EACH unique sub-period
@@ -375,6 +410,24 @@ func ProcessIncentiveCalculation(db *gorm.DB, projectID uint, month string) ([]I
 		userSet[u.UserName] = true
 	}
 
+	// Pre-build map of face-showing videos: username -> subperiod -> value
+	faceVideosSubPerf := make(map[string]map[string]float64)
+	for _, md := range manualData {
+		mdMetric := strings.ToLower(strings.TrimSpace(md.MetricType))
+		if mdMetric == "face-showing videos" {
+			period, targetRaw, ok := ParseManualDataKey(md.DataKey)
+			if ok {
+				targetType, targetID := ResolveManualTarget(targetRaw, userSet)
+				if targetType == "user" {
+					if faceVideosSubPerf[targetID] == nil {
+						faceVideosSubPerf[targetID] = make(map[string]float64)
+					}
+					faceVideosSubPerf[targetID][period] += md.Value
+				}
+			}
+		}
+	}
+
 	// Process each active calculator
 	for _, calc := range project.Calculators {
 		var rules IncentiveRules
@@ -593,7 +646,7 @@ func ProcessIncentiveCalculation(db *gorm.DB, projectID uint, month string) ([]I
 				}
 
 				// For group methods, calculate reward for this specific team group achievement
-				poolReward := CalculatePayout(calc, groupTotalPerf, "", groupSubPerfMap)
+				poolReward := CalculatePayout(calc, groupTotalPerf, "", groupSubPerfMap, nil)
 				if poolReward <= 0 {
 					continue
 				}
@@ -652,7 +705,7 @@ func ProcessIncentiveCalculation(db *gorm.DB, projectID uint, month string) ([]I
 		} else {
 			for _, u := range targetedUsers {
 				if rules.IsExcluded(u) { continue }
-				share := CalculatePayout(calc, fullPerfMap[u.UserName], "", fullSubPerfMap[u.UserName])
+				share := CalculatePayout(calc, fullPerfMap[u.UserName], "", fullSubPerfMap[u.UserName], faceVideosSubPerf[u.UserName])
 				userRewards[u.UserName] += share
 				
 				// Build detailed description for manual data & distribution
