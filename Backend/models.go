@@ -445,6 +445,7 @@ type IncentiveTier struct {
 	RewardAmount float64 `json:"rewardAmount"`
 	RewardType   string  `json:"rewardType"`
 	SubPeriod    string  `json:"subPeriod"`
+	FaceTarget   float64 `json:"faceTarget"`
 }
 
 type CommissionTier struct {
