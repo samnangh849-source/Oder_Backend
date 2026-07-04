@@ -2676,6 +2676,20 @@ func handleAdminAddRow(c *gin.Context) {
 			mappedData[colName] = v
 		}
 
+		// Auto-generate numeric ID if the model has a primary key "id" column to prevent sequence mismatch conflicts in Postgres
+		if backend.DB.Migrator().HasColumn(tableName, "id") {
+			if _, exists := mappedData["id"]; !exists || mappedData["id"] == nil || mappedData["id"] == 0 || mappedData["id"] == "" {
+				var maxID uint
+				row := backend.DB.Table(tableName).Select("COALESCE(MAX(id), 0)").Row()
+				if err := row.Scan(&maxID); err == nil {
+					mappedData["id"] = maxID + 1
+					if req.NewData != nil {
+						req.NewData["ID"] = maxID + 1
+					}
+				}
+			}
+		}
+
 		dbQuery := backend.DB.Table(tableName)
 		if modelInstance != nil {
 			dbQuery = backend.DB.Model(modelInstance)
