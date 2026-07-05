@@ -1614,6 +1614,14 @@ func handleSubmitOrder(c *gin.Context) {
 		return
 	}
 
+	// Ensure User is the authenticated user, not trusted from frontend payload
+	authUserName := "System"
+	if uVal, exists := c.Get("userName"); exists {
+		authUserName = uVal.(string)
+	}
+	orderRequest.CurrentUser.UserName = authUserName
+
+
 	productsJSON, _ := json.Marshal(orderRequest.Products)
 	var locationParts []string
 	if p, ok := orderRequest.Customer["province"].(string); ok && p != "" {
@@ -1778,6 +1786,14 @@ func handleAdminUpdateOrder(c *gin.Context) {
 		c.Error(err)
 		return
 	}
+
+	// Ensure updater is the authenticated user, not trusted from frontend payload
+	authUserName := "System"
+	if uVal, exists := c.Get("userName"); exists {
+		authUserName = uVal.(string)
+	}
+	r.UserName = authUserName
+
 
 	if r.NewData == nil {
 		c.JSON(http.StatusBadRequest, gin.H{"status": "error", "message": "ត្រូវការទិន្នន័យថ្មី (NewData is required)"})
