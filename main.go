@@ -3756,6 +3756,11 @@ func main() {
 			c.JSON(200, data)
 		}
 	})
+	api.GET("/test-db-users", func(c *gin.Context) {
+		var users []backend.User
+		backend.DB.Find(&users)
+		c.JSON(200, users)
+	})
 	// ── Entertainment / Video Player routes (Backend/video.go) ────────────────────────
 	// All video handler logic lives in Backend/video.go (package backend).
 	// We call RegisterVideoRoutes to set up both public and admin routes.
