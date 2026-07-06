@@ -897,7 +897,7 @@ func startOrderWorker() {
 			}()
 
 			log.Printf("☁️ Background Worker: Processing Order %s", job.OrderID)
-			reqBody := AppsScriptRequest{Action: "submitOrder", Secret: backend.AppsScriptSecret, OrderData: job.OrderData}
+			reqBody := AppsScriptRequest{Action: "submitOrder", Secret: backend.AppsScriptSecret, UserName: job.UserName, OrderData: job.OrderData}
 			jsonData, _ := json.Marshal(reqBody)
 
 			client := &http.Client{Timeout: 45 * time.Second}
@@ -1781,7 +1781,23 @@ func handleSubmitOrder(c *gin.Context) {
 	orderRequest.Subtotal = round2(orderRequest.Subtotal)
 	orderRequest.GrandTotal = round2(orderRequest.GrandTotal)
 
-	orderChannel <- OrderJob{JobID: fmt.Sprintf("job_%d", time.Now().UnixNano()), OrderID: orderID, UserName: orderRequest.CurrentUser.UserName, OrderData: map[string]interface{}{"orderId": orderID, "timestamp": timestamp, "totalDiscount": telegramTotalDiscount, "totalProductCost": telegramTotalProductCost, "fullLocation": strings.Join(locationParts, ", "), "productsJSON": string(productsJSON), "shippingCost": telegramShippingCost, "originalRequest": orderRequest, "scheduledTime": timestamp}}
+	orderChannel <- OrderJob{
+		JobID:    fmt.Sprintf("job_%d", time.Now().UnixNano()),
+		OrderID:  orderID,
+		UserName: orderRequest.CurrentUser.UserName,
+		OrderData: map[string]interface{}{
+			"orderId":          orderID,
+			"timestamp":        timestamp,
+			"totalDiscount":    telegramTotalDiscount,
+			"totalProductCost": telegramTotalProductCost,
+			"fullLocation":     strings.Join(locationParts, ", "),
+			"productsJSON":     string(productsJSON),
+			"shippingCost":     telegramShippingCost,
+			"originalRequest":  orderRequest,
+			"scheduledTime":    timestamp,
+			"userName":         orderRequest.CurrentUser.UserName,
+		},
+	}
 	c.JSON(200, gin.H{"status": "success", "orderId": orderID})
 }
 
