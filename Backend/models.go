@@ -225,7 +225,7 @@ type UploadToken struct {
 type Order struct {
 	OrderID                 string  `gorm:"primaryKey;column:order_id" json:"Order ID"`
 	Timestamp               string  `gorm:"index;column:timestamp" json:"Timestamp"`
-	User                    string  `gorm:"column:user" json:"User"`
+	User                    string  `gorm:"column:order_user" json:"User"`
 	Page                    string  `gorm:"column:page" json:"Page"`
 	TelegramValue           string  `gorm:"column:telegram_value" json:"TelegramValue"`
 	CustomerName            string  `gorm:"column:customer_name" json:"Customer Name"`
@@ -306,7 +306,7 @@ type EditLog struct {
 type UserActivityLog struct {
 	ID        uint   `gorm:"primaryKey;autoIncrement;column:id" json:"ID"`
 	Timestamp string `gorm:"index;column:timestamp" json:"Timestamp"`
-	User      string `gorm:"index;column:user" json:"User"`
+	User      string `gorm:"index;column:activity_user" json:"User"`
 	Action    string `gorm:"column:action" json:"Action"`
 	Details   string `gorm:"column:details" json:"Details"`
 }
