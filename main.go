@@ -3744,6 +3744,18 @@ func main() {
 		backend.DB.Table("orders").Select("order_id, order_user, timestamp").Order("timestamp desc").Limit(10).Find(&raw)
 		c.JSON(200, raw)
 	})
+	api.GET("/test-sheet-orders", func(c *gin.Context) {
+		data, err := backend.FetchSheetDataFromAPI("AllOrders")
+		if err != nil {
+			c.JSON(500, gin.H{"error": err.Error()})
+			return
+		}
+		if len(data) > 10 {
+			c.JSON(200, data[:10])
+		} else {
+			c.JSON(200, data)
+		}
+	})
 	// ── Entertainment / Video Player routes (Backend/video.go) ────────────────────────
 	// All video handler logic lives in Backend/video.go (package backend).
 	// We call RegisterVideoRoutes to set up both public and admin routes.
