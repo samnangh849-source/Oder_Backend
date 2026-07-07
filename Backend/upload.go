@@ -449,7 +449,7 @@ func processImageUploadInternal(req AppsScriptRequest, data string) (string, str
 		}
 	}
 
-	if resolvedUserName != "" && (req.SheetName == "" || req.SheetName == "Users") {
+	if resolvedUserName != "" && req.OrderID == "" && req.MovieID == "" && (req.SheetName == "" || req.SheetName == "Users") {
 		log.Printf("👤 [Upload Internal] Updating profile picture for user=%q", resolvedUserName)
 		DB.Model(&User{}).Where("user_name = ?", resolvedUserName).UpdateColumn("profile_picture_url", driveURL)
 		SafeBroadcastJSON(map[string]interface{}{
