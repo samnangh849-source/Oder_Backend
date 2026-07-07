@@ -10,6 +10,7 @@ package backend
 
 import (
 	"encoding/base64"
+	"encoding/json"
 	"fmt"
 	"io"
 	"log"
@@ -340,7 +341,6 @@ func processImageUploadInternal(req AppsScriptRequest, data string) (string, str
 					var currentOrder Order
 					if err := tx.Clauses(clause.Locking{Strength: "UPDATE"}).
 						Where("UPPER(TRIM(order_id)) = UPPER(TRIM(?))", req.OrderID).
-						Select("fulfillment_status").
 						First(&currentOrder).Error; err != nil {
 						return fmt.Errorf("រកមិនឃើញការកម្មង់ %s: %w", req.OrderID, err)
 					}
@@ -384,6 +384,62 @@ func processImageUploadInternal(req AppsScriptRequest, data string) (string, str
 					return fmt.Errorf("NOT_FOUND:%s", req.OrderID)
 				}
 				rowsAffected = res.RowsAffected
+
+				if newStatus, ok := dbUpdateMap["fulfillment_status"].(string); ok {
+					if newStatus == "Returned" {
+						var fullOrder Order
+						if err := tx.Where("UPPER(TRIM(order_id)) = UPPER(TRIM(?))", req.OrderID).First(&fullOrder).Error; err == nil {
+							var products []map[string]interface{}
+							if err := json.Unmarshal([]byte(fullOrder.ProductsJSON), &products); err == nil {
+								for _, p := range products {
+									name, _ := p["name"].(string)
+									qty, _ := p["quantity"].(float64)
+									if name != "" && qty > 0 {
+										reason := fullOrder.ReturnReason
+										if r, ok := dbUpdateMap["return_reason"].(string); ok && r != "" {
+											reason = r
+										}
+
+										barcode := ""
+										if b, ok := p["barcode"].(string); ok {
+											barcode = b
+										}
+
+										returnItem := ReturnItem{
+											Timestamp:   time.Now().Format("2006-01-02 15:04:05"),
+											OrderID:     fullOrder.OrderID,
+											StoreName:   fullOrder.FulfillmentStore,
+											Barcode:     barcode,
+											ProductName: name,
+											Quantity:    qty,
+											Reason:      reason,
+											HandledBy:   req.UserName,
+											Status:      "Pending Receipt",
+										}
+										var count int64
+										tx.Table("returns").Where("order_id = ? AND product_name = ?", fullOrder.OrderID, name).Count(&count)
+									if count == 0 {
+										if err := tx.Table("returns").Create(&returnItem).Error; err == nil {
+											go EnqueueSync("addRow", map[string]interface{}{
+												"Timestamp":   returnItem.Timestamp,
+												"OrderID":     returnItem.OrderID,
+												"StoreName":   returnItem.StoreName,
+												"Barcode":     returnItem.Barcode,
+												"ProductName": returnItem.ProductName,
+												"Quantity":    returnItem.Quantity,
+												"Reason":      returnItem.Reason,
+												"HandledBy":   returnItem.HandledBy,
+												"Status":      returnItem.Status,
+											}, "Returns", nil)
+										}
+									}
+								}
+							}
+						}
+					}
+				}
+			}
+
 				return nil
 			})
 
@@ -449,7 +505,7 @@ func processImageUploadInternal(req AppsScriptRequest, data string) (string, str
 		}
 	}
 
-	if resolvedUserName != "" && req.OrderID == "" && req.MovieID == "" && (req.SheetName == "" || req.SheetName == "Users") {
+	if resolvedUserName != "" && (req.TargetColumn == "ProfilePictureURL" || req.TargetColumn == "profile_picture_url") && req.OrderID == "" && req.MovieID == "" {
 		log.Printf("👤 [Upload Internal] Updating profile picture for user=%q", resolvedUserName)
 		DB.Model(&User{}).Where("user_name = ?", resolvedUserName).UpdateColumn("profile_picture_url", driveURL)
 		SafeBroadcastJSON(map[string]interface{}{
