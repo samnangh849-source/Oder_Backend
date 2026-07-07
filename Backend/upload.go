@@ -182,6 +182,15 @@ func HandleImageUploadProxy(c *gin.Context) {
 		return
 	}
 
+	// SECURITY FIX: Restrict target columns to prevent arbitrary DB writes
+	if req.TargetColumn != "" {
+		if !UploadIsValidOrderColumnFunc(UploadMapToDBColumnFunc(req.TargetColumn)) && req.TargetColumn != "ProfilePictureURL" && req.TargetColumn != "profile_picture_url" {
+			log.Printf("⚠️ Invalid target column requested: %s", req.TargetColumn)
+			c.JSON(400, gin.H{"status": "error", "message": "គោលដៅរូបភាពមិនត្រឹមត្រូវ (Invalid target column)"})
+			return
+		}
+	}
+
 	// Dynamically resolve BackendURL from incoming request if not provided
 	if req.BackendURL == "" {
 		scheme := "http"
@@ -194,6 +203,7 @@ func HandleImageUploadProxy(c *gin.Context) {
 		req.BackendURL = fmt.Sprintf("%s://%s", scheme, c.Request.Host)
 		log.Printf("🔗 [Upload Proxy] Dynamically resolved BackendURL: %s", req.BackendURL)
 	}
+
 
 	data := req.FileData
 	if data == "" {
@@ -416,6 +426,11 @@ func processImageUploadInternal(req AppsScriptRequest, data string) (string, str
 											HandledBy:   req.UserName,
 											Status:      "Pending Receipt",
 										}
+
+										if _, hasReceivedBy := dbUpdateMap["return_received_by"]; hasReceivedBy {
+											returnItem.Status = "Received"
+										}
+
 										var count int64
 										tx.Table("returns").Where("order_id = ? AND product_name = ?", fullOrder.OrderID, name).Count(&count)
 									if count == 0 {
@@ -431,6 +446,10 @@ func processImageUploadInternal(req AppsScriptRequest, data string) (string, str
 												"HandledBy":   returnItem.HandledBy,
 												"Status":      returnItem.Status,
 											}, "Returns", nil)
+										}
+									} else if returnItem.Status == "Received" {
+										if err := tx.Table("returns").Where("order_id = ? AND product_name = ?", fullOrder.OrderID, name).Update("status", "Received").Error; err == nil {
+											go EnqueueSync("updateSheet", map[string]interface{}{"Status": "Received"}, "Returns", map[string]interface{}{"OrderID": fullOrder.OrderID, "ProductName": name})
 										}
 									}
 								}
