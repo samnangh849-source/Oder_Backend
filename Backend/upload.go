@@ -154,6 +154,7 @@ func UploadToGoogleDriveDirectly(base64Data string, fileName string, mimeType st
 		req.NewData = originalReq.NewData
 		req.UserName = originalReq.UserName
 		req.MovieID = originalReq.MovieID
+		req.BackendURL = originalReq.BackendURL
 	}
 
 	log.Printf("🚀 [Drive Upload] Calling Apps Script uploadImage action...")
@@ -178,6 +179,19 @@ func HandleImageUploadProxy(c *gin.Context) {
 	if err := c.ShouldBindJSON(&req); err != nil {
 		c.Error(err)
 		return
+	}
+
+	// Dynamically resolve BackendURL from incoming request if not provided
+	if req.BackendURL == "" {
+		scheme := "http"
+		if c.Request.TLS != nil {
+			scheme = "https"
+		}
+		if proto := c.GetHeader("X-Forwarded-Proto"); proto != "" {
+			scheme = proto
+		}
+		req.BackendURL = fmt.Sprintf("%s://%s", scheme, c.Request.Host)
+		log.Printf("🔗 [Upload Proxy] Dynamically resolved BackendURL: %s", req.BackendURL)
 	}
 
 	data := req.FileData
@@ -211,6 +225,11 @@ func HandleImageUploadProxy(c *gin.Context) {
 
 		// Run the actual upload and DB logic in a goroutine
 		go func() {
+			defer func() {
+				if r := recover(); r != nil {
+					log.Printf("🔥 [Upload Goroutine Panic Recovery]: %v", r)
+				}
+			}()
 			// We don't need c.Copy() here because we are not using the context inside the goroutine anymore
 			// All data needed is already in 'req' and 'data'
 			processImageUploadInternal(req, data)
@@ -373,6 +392,11 @@ func processImageUploadInternal(req AppsScriptRequest, data string) (string, str
 
 				// Sync to Google Sheets & Telegram
 				go func(orderId string, bMap map[string]interface{}) {
+					defer func() {
+						if r := recover(); r != nil {
+							log.Printf("🔥 [Sync Goroutine Panic Recovery]: %v", r)
+						}
+					}()
 					var order Order
 					if err := DB.Where("UPPER(TRIM(order_id)) = UPPER(TRIM(?))", orderId).First(&order).Error; err == nil {
 						sheetData := make(map[string]interface{})
