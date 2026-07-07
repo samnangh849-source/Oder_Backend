@@ -2129,6 +2129,18 @@ func handleAdminUpdateOrder(c *gin.Context) {
 						}
 					}
 				}
+			} else if newStatusStr == "Cancelled" && originalOrder.FulfillmentStatus == "Returned" {
+				if err := backend.DB.Table("returns").Where("order_id = ?", originalOrder.OrderID).Update("status", "Restocked").Error; err == nil {
+					var products []map[string]interface{}
+					if err := json.Unmarshal([]byte(originalOrder.ProductsJSON), &products); err == nil {
+						for _, p := range products {
+							name, _ := p["name"].(string)
+							if name != "" {
+								go enqueueSync("updateSheet", map[string]interface{}{"Status": "Restocked"}, "Returns", map[string]interface{}{"OrderID": originalOrder.OrderID, "ProductName": name})
+							}
+						}
+					}
+				}
 			}
 		}
 
