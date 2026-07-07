@@ -211,6 +211,7 @@ type ReturnItem struct {
 	Reason      string  `gorm:"column:reason" json:"Reason"`
 	HandledBy   string  `gorm:"column:handled_by" json:"HandledBy"`
 	Status      string  `gorm:"column:status" json:"Status"`
+	PhotoURL    string  `gorm:"column:photo_url" json:"PhotoURL"` // URL of the return photo evidence
 }
 
 func (ReturnItem) TableName() string { return "returns" }
