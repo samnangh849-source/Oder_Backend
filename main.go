@@ -2152,14 +2152,28 @@ func handleAdminUpdateOrder(c *gin.Context) {
 			}
 		}
 
-		// ✅ Update ReturnItems status when received
+		// ✅ Update ReturnItems status & photo URL when received
 		if _, hasReceivedBy := r.NewData["Return Received By"]; hasReceivedBy {
-			backend.DB.Table("returns").Where("order_id = ?", r.OrderID).Update("status", "Received")
+			// Build update map: always set status, optionally set photo_url
+			returnUpdates := map[string]interface{}{"status": "Received"}
+			sheetUpdates := map[string]interface{}{"Status": "Received"}
+
+			if photoURL, hasPhoto := r.NewData["Return Photo"]; hasPhoto && photoURL != "" {
+				returnUpdates["photo_url"] = photoURL
+				sheetUpdates["PhotoURL"] = photoURL
+			} else {
+				// Try reading from DB in case it was saved by the upload handler
+				var existingOrder Order
+				if backend.DB.Where("UPPER(TRIM(order_id)) = UPPER(TRIM(?))", r.OrderID).First(&existingOrder).Error == nil && existingOrder.ReturnPhotoURL != "" {
+					returnUpdates["photo_url"] = existingOrder.ReturnPhotoURL
+					sheetUpdates["PhotoURL"] = existingOrder.ReturnPhotoURL
+				}
+			}
+
+			backend.DB.Table("returns").Where("order_id = ?", r.OrderID).Updates(returnUpdates)
 
 			// Sync with Google Sheets
-			go enqueueSync("updateSheet", map[string]interface{}{
-				"Status": "Received",
-			}, "Returns", map[string]string{"OrderID": r.OrderID})
+			go enqueueSync("updateSheet", sheetUpdates, "Returns", map[string]string{"OrderID": r.OrderID})
 		}
 
 		eventBytes, _ := json.Marshal(map[string]interface{}{"type": "update_order", "orderId": r.OrderID, "newData": r.NewData})
