@@ -534,6 +534,23 @@ func processImageUploadInternal(req AppsScriptRequest, data string) (string, str
 		}
 	}
 
+	// ── 1.5 Return Photo URL — save separately in returns table ─────────
+	// When a Return Photo is uploaded for an order, also persist the photo URL
+	// in the `returns` table rows for that order (so each ReturnItem has its own photo record).
+	if req.OrderID != "" && req.TargetColumn == "Return Photo" && driveURL != "" {
+		go func(orderId, photoURL string) {
+			if err := DB.Table("returns").
+				Where("order_id = ?", orderId).
+				Update("photo_url", photoURL).Error; err != nil {
+				log.Printf("⚠️ [Upload Internal] Failed to update photo_url in returns for order %s: %v", orderId, err)
+			} else {
+				log.Printf("📷 [Upload Internal] Saved return photo URL to returns table for order %s", orderId)
+				// Sync to Google Sheets — update PhotoURL column in Returns sheet
+				EnqueueSync("updateSheet", map[string]interface{}{"PhotoURL": photoURL}, "Returns", map[string]interface{}{"OrderID": orderId})
+			}
+		}(req.OrderID, driveURL)
+	}
+
 	// ── 2. User Profile Update ───────────────────────────────────────────
 	// Resolve userName: prefer explicit req.UserName, fallback to primaryKey["UserName"]
 	// (Admin Edit User modal sends primaryKey but not top-level userName)
