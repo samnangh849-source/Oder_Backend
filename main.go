@@ -1079,6 +1079,14 @@ func handleGetStaticData(c *gin.Context) {
 						backend.UploadFolderID = s.ConfigValue
 					}
 				}
+				if s.ConfigKey == "ReturnUploadFolderID" {
+					envVal := os.Getenv("RETURN_UPLOAD_FOLDER_ID")
+					if envVal != "" {
+						backend.ReturnUploadFolderID = envVal
+					} else {
+						backend.ReturnUploadFolderID = s.ConfigValue
+					}
+				}
 			}
 			mu.Lock()
 			result["settings"] = settingsObj
@@ -3743,6 +3751,7 @@ func main() {
 
 	// Pre-initialize UploadFolderID from environment for immediate use
 	backend.UploadFolderID = os.Getenv("UPLOAD_FOLDER_ID")
+	backend.ReturnUploadFolderID = os.Getenv("RETURN_UPLOAD_FOLDER_ID")
 
 	jwtSecretEnv := os.Getenv("JWT_SECRET")
 	if jwtSecretEnv == "" {
