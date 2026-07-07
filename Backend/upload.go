@@ -106,9 +106,29 @@ func UploadToGoogleDriveDirectly(base64Data string, fileName string, mimeType st
 		fileName = "upload_" + time.Now().Format("20060102_150405")
 	}
 
-	// Resolve target folder ID (env > DB setting exported from migration.go)
+	// Resolve target folder ID
+	// Return photos go to a dedicated folder (if configured), other uploads use the standard folder
+	isReturnPhoto := originalReq != nil && (originalReq.TargetColumn == "Return Photo" || originalReq.TargetColumn == "return_photo_url")
+
 	targetFolder := "root"
-	if envFolderID := os.Getenv("UPLOAD_FOLDER_ID"); envFolderID != "" {
+	if isReturnPhoto {
+		returnFolder := ReturnUploadFolderID
+		if envVal := os.Getenv("RETURN_UPLOAD_FOLDER_ID"); envVal != "" {
+			returnFolder = envVal
+		}
+		if returnFolder != "" && !strings.Contains(returnFolder, "Folder_Google_Drive") {
+			targetFolder = ExtractDriveFolderID(returnFolder)
+			log.Printf("📁 [Drive Upload] Return photo → using dedicated return folder: %q", targetFolder)
+		} else {
+			// Fallback to main upload folder
+			if envFolderID := os.Getenv("UPLOAD_FOLDER_ID"); envFolderID != "" {
+				targetFolder = ExtractDriveFolderID(envFolderID)
+			} else if UploadFolderID != "" && !strings.Contains(UploadFolderID, "Folder_Google_Drive") {
+				targetFolder = ExtractDriveFolderID(UploadFolderID)
+			}
+			log.Printf("📁 [Drive Upload] Return photo — no dedicated folder set, using main upload folder")
+		}
+	} else if envFolderID := os.Getenv("UPLOAD_FOLDER_ID"); envFolderID != "" {
 		targetFolder = ExtractDriveFolderID(envFolderID)
 		log.Printf("📁 [Drive Upload] Using folder from UPLOAD_FOLDER_ID env: %q", targetFolder)
 	} else if UploadFolderID != "" && !strings.Contains(UploadFolderID, "Folder_Google_Drive") {
