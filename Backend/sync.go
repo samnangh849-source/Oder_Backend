@@ -41,6 +41,7 @@ type AppsScriptRequest struct {
 	NewData        map[string]interface{} `json:"newData,omitempty"`
 	Token          string                 `json:"token,omitempty"`
 	IsAsync        bool                   `json:"isAsync,omitempty"`
+	BackendURL     string                 `json:"backendUrl,omitempty"`
 }
 
 type AppsScriptResponse struct {
