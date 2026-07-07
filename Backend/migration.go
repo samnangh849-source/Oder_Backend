@@ -39,10 +39,11 @@ import (
 // main.go reads these after CreateGoogleAPIClient() to wire them back.
 
 var (
-	SheetsService  *sheets.Service
-	DriveService   *drive.Service
-	SpreadsheetID  string
-	UploadFolderID string
+	SheetsService        *sheets.Service
+	DriveService         *drive.Service
+	SpreadsheetID        string
+	UploadFolderID       string
+	ReturnUploadFolderID string // Separate folder for Return package photos
 )
 
 // ── Sheet Ranges ──────────────────────────────────────────────────────────
@@ -490,6 +491,13 @@ func PerformDataMigration() {
 					UploadFolderID = envVal
 				} else {
 					UploadFolderID = s.ConfigValue
+				}
+			}
+			if s.ConfigKey == "ReturnUploadFolderID" {
+				if envVal := os.Getenv("RETURN_UPLOAD_FOLDER_ID"); envVal != "" {
+					ReturnUploadFolderID = envVal
+				} else {
+					ReturnUploadFolderID = s.ConfigValue
 				}
 			}
 		}
