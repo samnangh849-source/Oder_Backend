@@ -249,12 +249,16 @@ func checkPermission(role string, isSystemAdmin bool, feature string) bool {
 				return true
 			}
 
-			// If checking for view_order_list, also allow if they have create_order permission (strictly for sales/sale/seller roles)
-			if featureLower == "view_order_list" && (cr == "sale" || cr == "sales" || cr == "seller") {
-				var createPerm RolePermission
-				err2 := DB.Where("LOWER(TRIM(role)) = ? AND LOWER(TRIM(feature)) = 'create_order' AND is_enabled = true", cr).First(&createPerm).Error
-				if err2 == nil {
-					return true
+			// If checking for view_order_list, also allow if they have both access_sales_portal and create_order permissions enabled
+			if featureLower == "view_order_list" {
+				var portalPerm RolePermission
+				errPortal := DB.Where("LOWER(TRIM(role)) = ? AND LOWER(TRIM(feature)) = 'access_sales_portal' AND is_enabled = true", cr).First(&portalPerm).Error
+				if errPortal == nil {
+					var createPerm RolePermission
+					errCreate := DB.Where("LOWER(TRIM(role)) = ? AND LOWER(TRIM(feature)) = 'create_order' AND is_enabled = true", cr).First(&createPerm).Error
+					if errCreate == nil {
+						return true
+					}
 				}
 			}
 		}
