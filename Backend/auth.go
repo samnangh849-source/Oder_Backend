@@ -211,6 +211,11 @@ func checkPermission(role string, isSystemAdmin bool, feature string) bool {
 		return true
 	}
 
+	if DB == nil {
+		log.Printf("⚠️ [checkPermission] DB is nil, returning false (running in test?)")
+		return false
+	}
+
 	roles := strings.Split(role, ",")
 	featureLower := strings.ToLower(strings.TrimSpace(feature))
 
