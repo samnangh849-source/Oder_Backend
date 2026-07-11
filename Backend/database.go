@@ -326,6 +326,7 @@ func DefaultPermissions() []RolePermission {
 		"manage_roles", "manage_permissions", "view_revenue", "export_data", "migrate_data",
 		"manage_inventory", "stock_transfer", "view_team_leaderboard", "set_targets", "view_global_orders",
 		"view_promotions", "manage_promotions",
+		"access_problem_items_admin", "access_problem_items_user",
 	}
 
 	// Define standard templates
