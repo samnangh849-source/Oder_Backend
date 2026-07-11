@@ -221,10 +221,6 @@ func checkPermission(role string, isSystemAdmin bool, feature string) bool {
 
 	for _, r := range roles {
 		r = strings.TrimSpace(r)
-		if strings.EqualFold(r, "Admin") {
-			return true
-		}
-
 		rLower := strings.ToLower(r)
 		
 		// Map common aliases to their canonical versions to be more resilient
