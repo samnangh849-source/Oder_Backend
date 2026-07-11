@@ -204,8 +204,17 @@ func HandleImageUploadProxy(c *gin.Context) {
 
 	// SECURITY FIX: Restrict target columns to prevent arbitrary DB writes
 	if req.TargetColumn != "" {
-		if !UploadIsValidOrderColumnFunc(UploadMapToDBColumnFunc(req.TargetColumn)) && req.TargetColumn != "ProfilePictureURL" && req.TargetColumn != "profile_picture_url" {
-			log.Printf("⚠️ Invalid target column requested: %s", req.TargetColumn)
+		dbCol := UploadMapToDBColumnFunc(req.TargetColumn)
+		isValidCol := UploadIsValidOrderColumnFunc(dbCol) || 
+			dbCol == "profile_picture_url" ||
+			dbCol == "image_url" ||
+			dbCol == "logo_url" ||
+			dbCol == "page_logo_url" ||
+			dbCol == "carrier_logo_url" ||
+			dbCol == "thumbnail"
+
+		if !isValidCol {
+			log.Printf("⚠️ Invalid target column requested: %s (mapped: %s)", req.TargetColumn, dbCol)
 			c.JSON(400, gin.H{"status": "error", "message": "គោលដៅរូបភាពមិនត្រឹមត្រូវ (Invalid target column)"})
 			return
 		}
