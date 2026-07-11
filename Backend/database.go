@@ -277,8 +277,14 @@ func EnsureSeedData() {
 		}
 	}
 
+	// Clean up duplicate capitalized permissions created by historical seeding bug
+	DB.Exec("DELETE FROM role_permissions WHERE role != LOWER(role) OR feature != LOWER(feature)")
+
 	// Default permissions — only insert if not already present.
 	for _, p := range DefaultPermissions() {
+		p.Role = strings.ToLower(strings.TrimSpace(p.Role))
+		p.Feature = strings.ToLower(strings.TrimSpace(p.Feature))
+
 		var roleObj Role
 		roleID := uint(0)
 		if err := DB.Where("LOWER(role_name) = LOWER(?)", p.Role).First(&roleObj).Error; err == nil {
