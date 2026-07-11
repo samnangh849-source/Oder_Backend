@@ -231,8 +231,10 @@ func checkPermission(role string, isSystemAdmin bool, feature string) bool {
 		checkRoles := []string{rLower}
 		if rLower == "seller" {
 			checkRoles = append(checkRoles, "sale", "sales")
-		} else if rLower == "sale" || rLower == "sales" {
-			checkRoles = append(checkRoles, "seller")
+		} else if rLower == "sale" {
+			checkRoles = append(checkRoles, "seller", "sales")
+		} else if rLower == "sales" {
+			checkRoles = append(checkRoles, "seller", "sale")
 		} else if rLower == "dispatcher" {
 			checkRoles = append(checkRoles, "fulfillment")
 		} else if rLower == "fulfillment" {
