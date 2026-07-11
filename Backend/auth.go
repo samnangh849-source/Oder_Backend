@@ -249,8 +249,8 @@ func checkPermission(role string, isSystemAdmin bool, feature string) bool {
 				return true
 			}
 
-			// If checking for view_order_list, also allow if they have create_order permission
-			if featureLower == "view_order_list" {
+			// If checking for view_order_list, also allow if they have create_order permission (strictly for sales/sale/seller roles)
+			if featureLower == "view_order_list" && (cr == "sale" || cr == "sales" || cr == "seller") {
 				var createPerm RolePermission
 				err2 := DB.Where("LOWER(TRIM(role)) = ? AND LOWER(TRIM(feature)) = 'create_order' AND is_enabled = true", cr).First(&createPerm).Error
 				if err2 == nil {
