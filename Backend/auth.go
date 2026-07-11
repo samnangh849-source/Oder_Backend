@@ -248,6 +248,15 @@ func checkPermission(role string, isSystemAdmin bool, feature string) bool {
 			if err == nil {
 				return true
 			}
+
+			// If checking for view_order_list, also allow if they have create_order permission
+			if featureLower == "view_order_list" {
+				var createPerm RolePermission
+				err2 := DB.Where("LOWER(TRIM(role)) = ? AND LOWER(TRIM(feature)) = 'create_order' AND is_enabled = true", cr).First(&createPerm).Error
+				if err2 == nil {
+					return true
+				}
+			}
 		}
 		
 		log.Printf("🔍 [checkPermission] No match: JWT_role=%q (aliases=%v) feature=%q", r, checkRoles, featureLower)
