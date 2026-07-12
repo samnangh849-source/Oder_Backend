@@ -335,7 +335,7 @@ func DefaultPermissions() []RolePermission {
 		"manage_roles", "manage_permissions", "view_revenue", "export_data", "migrate_data",
 		"manage_inventory", "stock_transfer", "view_team_leaderboard", "set_targets", "view_global_orders",
 		"view_promotions", "manage_promotions",
-		"access_problem_items_admin", "access_problem_items_user",
+		"access_problem_items_admin", "access_problem_items_user", "view_map",
 	}
 
 	// Define standard templates
@@ -359,6 +359,7 @@ func DefaultPermissions() []RolePermission {
 			"stock_transfer":        true,
 			"view_team_leaderboard": true,
 			"set_targets":           true,
+			"view_map":              true,
 		},
 		"Sales": {
 			"view_order_list":       true,
@@ -367,6 +368,7 @@ func DefaultPermissions() []RolePermission {
 			"access_sales_portal":   true,
 			"view_entertainment":    true,
 			"view_team_leaderboard": true,
+			"view_map":              true,
 		},
 		"Fulfillment": {
 			"view_order_list":    true,
@@ -376,20 +378,24 @@ func DefaultPermissions() []RolePermission {
 			"view_entertainment": true,
 			"manage_inventory":   true,
 			"stock_transfer":     true,
+			"view_map":           true,
 		},
 		"Packer": {
 			"view_order_list":    true,
 			"access_fulfillment": true,
 			"view_entertainment": true,
+			"view_map":           true,
 		},
 		"Driver": {
 			"view_order_list":    true,
 			"access_fulfillment": true,
 			"view_entertainment": true,
+			"view_map":           true,
 		},
 		"Viewer": {
 			"view_order_list":    true,
 			"view_entertainment": true,
+			"view_map":           true,
 		},
 	}
 
