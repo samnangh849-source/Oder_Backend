@@ -82,6 +82,17 @@ func handleGenerateUploadToken(c *gin.Context) {
 	c.JSON(200, gin.H{"status": "success", "token": token})
 }
 
+func handleGetSystemVersion(c *gin.Context) {
+	version := os.Getenv("SYSTEM_VERSION")
+	if version == "" {
+		version = "1.1.0"
+	}
+	c.JSON(200, gin.H{
+		"status":  "success",
+		"version": version,
+	})
+}
+
 func handleVerifyUploadToken(c *gin.Context) {
 	token := c.Query("token")
 	secret := c.GetHeader("X-Internal-Secret")
@@ -3822,6 +3833,7 @@ func main() {
 	api.POST("/telegram/webhook/:token", handleTelegramWebhook)
 	api.GET("/internal/verify-upload-token", handleVerifyUploadToken) // New for Apps Script
 	api.GET("/products", handleGetProductsOnly)                       // Read-only Product API for Developers
+	api.GET("/system-version", handleGetSystemVersion)
 
 	protected := api.Group("/")
 	protected.Use(AuthMiddleware())
