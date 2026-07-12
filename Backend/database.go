@@ -258,7 +258,7 @@ func EnsureSeedData() {
 	defaultRoles := []Role{
 		{RoleName: "Admin", Description: "System Administrator - Full Access"},
 		{RoleName: "Manager", Description: "Store/Team Manager"},
-		{RoleName: "Sale", Description: "Sales representative"},
+		{RoleName: "Sales", Description: "Sales representative"},
 		{RoleName: "Fulfillment", Description: "Order packing & fulfillment staff"},
 		{RoleName: "Driver", Description: "Delivery driver"},
 		{RoleName: "Packer", Description: "Packaging team member"},
@@ -279,6 +279,9 @@ func EnsureSeedData() {
 
 	// Clean up duplicate capitalized permissions created by historical seeding bug
 	DB.Exec("DELETE FROM role_permissions WHERE role != LOWER(role) OR feature != LOWER(feature)")
+	// Clean up old singular 'sale' role and its permissions to prevent ghost permission issues
+	DB.Exec("DELETE FROM role_permissions WHERE LOWER(TRIM(role)) = 'sale'")
+	DB.Exec("DELETE FROM roles WHERE LOWER(TRIM(role_name)) = 'sale'")
 
 	// Default permissions — only insert if not already present.
 	for _, p := range DefaultPermissions() {
@@ -357,7 +360,7 @@ func DefaultPermissions() []RolePermission {
 			"view_team_leaderboard": true,
 			"set_targets":           true,
 		},
-		"Sale": {
+		"Sales": {
 			"view_order_list":       true,
 			"edit_order":            true,
 			"create_order":          true,
@@ -415,7 +418,7 @@ func DefaultPermissions() []RolePermission {
 		// Map actual role name to a template
 		if strings.Contains(rName, "admin") { templateName = "Admin" }
 		if strings.Contains(rName, "manager") { templateName = "Manager" }
-		if strings.Contains(rName, "sale") || strings.Contains(rName, "sell") { templateName = "Sale" }
+		if strings.Contains(rName, "sale") || strings.Contains(rName, "sell") { templateName = "Sales" }
 		if strings.Contains(rName, "fulfill") || strings.Contains(rName, "dispatch") { templateName = "Fulfillment" }
 		if strings.Contains(rName, "pack") { templateName = "Packer" }
 		if strings.Contains(rName, "driver") { templateName = "Driver" }
