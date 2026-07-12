@@ -186,4 +186,15 @@ func ServeWs(c *gin.Context) {
 	client.Hub.Register <- client
 	go client.WritePump()
 	go client.ReadPump()
+
+	// Send current system version immediately upon connection to check for updates
+	version := os.Getenv("SYSTEM_VERSION")
+	if version == "" {
+		version = "1.1.0"
+	}
+	sysInfo, _ := json.Marshal(map[string]interface{}{
+		"type":    "system_info",
+		"version": version,
+	})
+	client.Send <- sysInfo
 }
