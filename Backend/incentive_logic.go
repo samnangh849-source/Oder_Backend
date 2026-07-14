@@ -359,34 +359,12 @@ func (r *IncentiveRules) IsExcluded(u User) bool {
 				return true
 			}
 		}
-		if strings.HasPrefix(lowerTarget, "team:") {
-			targetTeam := target[5:]
-			userTeams := strings.Split(u.Team, ",")
-			for _, ut := range userTeams {
-				if strings.EqualFold(strings.TrimSpace(ut), strings.TrimSpace(targetTeam)) {
-					return true
-				}
-			}
-		}
+		// Note: We do NOT check "team:" exclusions here. Excluding a team excludes the team
+		// as a collective calculation unit, but does not exclude its members from individual calculations.
 		if strings.HasPrefix(lowerTarget, "user:") {
 			val := target[5:]
 			if strings.EqualFold(strings.TrimSpace(u.UserName), strings.TrimSpace(val)) {
 				return true
-			}
-		}
-		if strings.HasPrefix(lowerTarget, "teamuser:") {
-			parts := strings.SplitN(target[9:], ":", 2)
-			if len(parts) == 2 {
-				tgtTeam := NormalizeTeamKey(parts[0])
-				tgtUser := parts[1]
-				if strings.EqualFold(strings.TrimSpace(u.UserName), strings.TrimSpace(tgtUser)) {
-					userTeams := strings.Split(u.Team, ",")
-					for _, ut := range userTeams {
-						if NormalizeTeamKey(ut) == tgtTeam {
-							return true
-						}
-					}
-				}
 			}
 		}
 		if strings.EqualFold(strings.TrimSpace(target), strings.TrimSpace(u.UserName)) {
