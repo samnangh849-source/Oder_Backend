@@ -158,8 +158,8 @@ func CalculatePayout(calc IncentiveCalculator, val float64, subPeriod string, ma
 				for sp, spVal := range marathonValues {
 					maxReward := 0.0
 					for _, t := range tiers {
-						// Match tier to this sub-period or default
-						if t.SubPeriod == sp || (t.SubPeriod == "" && sp == defaultSubGroup) {
+						// Match tier to this sub-period or default (empty SubPeriod matches all sub-periods)
+						if t.SubPeriod == sp || t.SubPeriod == "" {
 							if spVal >= t.Target {
 								reward := t.RewardAmount
 								if t.RewardType == RewardTypePercentage {
