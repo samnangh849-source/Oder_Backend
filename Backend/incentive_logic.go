@@ -350,6 +350,39 @@ func (r *IncentiveRules) IsExcludedForTeam(u User, teamName string) bool {
 	return false
 }
 
+func (r *IncentiveRules) IsExcludedForTeamIndividually(u User, teamName string) bool {
+	normalizedTeamName := NormalizeTeamKey(teamName)
+	for _, target := range r.ExcludeTargets {
+		lowerTarget := strings.ToLower(target)
+		if strings.HasPrefix(lowerTarget, "role:") {
+			val := target[5:]
+			if strings.EqualFold(strings.TrimSpace(u.Role), strings.TrimSpace(val)) {
+				return true
+			}
+		}
+		if strings.HasPrefix(lowerTarget, "user:") {
+			val := target[5:]
+			if strings.EqualFold(strings.TrimSpace(u.UserName), strings.TrimSpace(val)) {
+				return true
+			}
+		}
+		if strings.HasPrefix(lowerTarget, "teamuser:") {
+			parts := strings.SplitN(target[9:], ":", 2)
+			if len(parts) == 2 {
+				tgtTeam := NormalizeTeamKey(parts[0])
+				tgtUser := parts[1]
+				if strings.EqualFold(strings.TrimSpace(u.UserName), strings.TrimSpace(tgtUser)) && normalizedTeamName == tgtTeam {
+					return true
+				}
+			}
+		}
+		if strings.EqualFold(strings.TrimSpace(target), strings.TrimSpace(u.UserName)) {
+			return true
+		}
+	}
+	return false
+}
+
 func (r *IncentiveRules) IsExcluded(u User) bool {
 	for _, target := range r.ExcludeTargets {
 		lowerTarget := strings.ToLower(target)
@@ -862,7 +895,7 @@ func ProcessIncentiveCalculation(db *gorm.DB, projectID uint, month string) ([]I
 							teamName := NormalizeTeamKey(ut)
 							if teamName != "" && rules.IsTeamApplicable(teamName) {
 								applicableTeamCount++
-								if rules.IsExcludedForTeam(userObj, teamName) {
+								if rules.IsExcludedForTeamIndividually(userObj, teamName) {
 									teamExcludedCount++
 								}
 							}
