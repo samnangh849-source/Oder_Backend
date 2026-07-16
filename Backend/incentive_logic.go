@@ -582,18 +582,53 @@ func ProcessIncentiveCalculation(db *gorm.DB, projectID uint, month string) ([]I
 				}
 				targetType, targetID := ResolveManualTarget(targetRaw, userSet)
 				if targetType == "user" {
-					userManualPerf[targetID] += md.Value
 					if userManualSubPerf[targetID] == nil {
 						userManualSubPerf[targetID] = make(map[string]float64)
 					}
 					userManualSubPerf[targetID][period] += md.Value
 				} else {
-					teamManualPerf[targetID] += md.Value
 					if teamManualSubPerf[targetID] == nil {
 						teamManualSubPerf[targetID] = make(map[string]float64)
 					}
 					teamManualSubPerf[targetID][period] += md.Value
 				}
+			}
+		}
+
+		// Calculate total manual performance based on Marathon status
+		if rules.IsMarathon {
+			for targetID, subMap := range userManualSubPerf {
+				maxVal := 0.0
+				for _, val := range subMap {
+					if val > maxVal {
+						maxVal = val
+					}
+				}
+				userManualPerf[targetID] = maxVal
+			}
+			for targetID, subMap := range teamManualSubPerf {
+				maxVal := 0.0
+				for _, val := range subMap {
+					if val > maxVal {
+						maxVal = val
+					}
+				}
+				teamManualPerf[targetID] = maxVal
+			}
+		} else {
+			for targetID, subMap := range userManualSubPerf {
+				sumVal := 0.0
+				for _, val := range subMap {
+					sumVal += val
+				}
+				userManualPerf[targetID] = sumVal
+			}
+			for targetID, subMap := range teamManualSubPerf {
+				sumVal := 0.0
+				for _, val := range subMap {
+					sumVal += val
+				}
+				teamManualPerf[targetID] = sumVal
 			}
 		}
 
