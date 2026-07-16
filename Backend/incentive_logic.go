@@ -196,9 +196,7 @@ func CalculatePayout(calc IncentiveCalculator, val float64, subPeriod string, ma
 
 			var total float64
 			for _, r := range subPeriodRewards {
-				if r > total {
-					total = r
-				}
+				total += r
 			}
 			return total
 		}
