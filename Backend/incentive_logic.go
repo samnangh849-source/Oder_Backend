@@ -155,15 +155,25 @@ func CalculatePayout(calc IncentiveCalculator, val float64, subPeriod string, ma
 
 			// If we have specific values per sub-period (Manual Data)
 			if len(marathonValues) > 0 {
-				for sp, spVal := range marathonValues {
+				for sp, _ := range marathonValues {
 					maxReward := 0.0
+
+					// Calculate cumulative value up to this sub-period 'sp'
+					cumVal := 0.0
+					spKeyLower := strings.ToLower(sp)
+					for otherSp, otherVal := range marathonValues {
+						if strings.ToLower(otherSp) <= spKeyLower {
+							cumVal += otherVal
+						}
+					}
+
 					for _, t := range tiers {
 						// Match tier to this sub-period or default (empty SubPeriod matches all sub-periods)
 						if t.SubPeriod == sp || t.SubPeriod == "" {
-							if spVal >= t.Target {
+							if cumVal >= t.Target {
 								reward := t.RewardAmount
 								if t.RewardType == RewardTypePercentage {
-									reward = spVal * (t.RewardAmount / 100.0)
+									reward = cumVal * (t.RewardAmount / 100.0)
 								}
 								if reward > maxReward {
 									maxReward = reward
@@ -580,53 +590,18 @@ func ProcessIncentiveCalculation(db *gorm.DB, projectID uint, month string) ([]I
 				}
 				targetType, targetID := ResolveManualTarget(targetRaw, userSet)
 				if targetType == "user" {
+					userManualPerf[targetID] += md.Value
 					if userManualSubPerf[targetID] == nil {
 						userManualSubPerf[targetID] = make(map[string]float64)
 					}
 					userManualSubPerf[targetID][period] += md.Value
 				} else {
+					teamManualPerf[targetID] += md.Value
 					if teamManualSubPerf[targetID] == nil {
 						teamManualSubPerf[targetID] = make(map[string]float64)
 					}
 					teamManualSubPerf[targetID][period] += md.Value
 				}
-			}
-		}
-
-		// Calculate total manual performance based on Marathon status
-		if rules.IsMarathon {
-			for targetID, subMap := range userManualSubPerf {
-				maxVal := 0.0
-				for _, val := range subMap {
-					if val > maxVal {
-						maxVal = val
-					}
-				}
-				userManualPerf[targetID] = maxVal
-			}
-			for targetID, subMap := range teamManualSubPerf {
-				maxVal := 0.0
-				for _, val := range subMap {
-					if val > maxVal {
-						maxVal = val
-					}
-				}
-				teamManualPerf[targetID] = maxVal
-			}
-		} else {
-			for targetID, subMap := range userManualSubPerf {
-				sumVal := 0.0
-				for _, val := range subMap {
-					sumVal += val
-				}
-				userManualPerf[targetID] = sumVal
-			}
-			for targetID, subMap := range teamManualSubPerf {
-				sumVal := 0.0
-				for _, val := range subMap {
-					sumVal += val
-				}
-				teamManualPerf[targetID] = sumVal
 			}
 		}
 
