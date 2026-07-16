@@ -746,6 +746,59 @@ func ProcessIncentiveCalculation(db *gorm.DB, projectID uint, month string) ([]I
 					continue
 				}
 
+				teamDesc := ""
+				if rules.IsMarathon {
+					var parts []string
+					var keys []string
+					for k := range groupSubPerfMap {
+						keys = append(keys, k)
+					}
+					sort.Strings(keys)
+
+					for _, sp := range keys {
+						cumVal := 0.0
+						spKeyLower := strings.ToLower(sp)
+						for otherSp, otherVal := range groupSubPerfMap {
+							if strings.ToLower(otherSp) <= spKeyLower {
+								cumVal += otherVal
+							}
+						}
+
+						var metTierName string
+						var metTierTarget float64
+						var metTierReward float64
+						
+						for _, t := range rules.AchievementTiers {
+							if t.SubPeriod == sp || t.SubPeriod == "" {
+								if cumVal >= t.Target && t.RewardAmount > metTierReward {
+									metTierName = t.Name
+									metTierTarget = t.Target
+									metTierReward = t.RewardAmount
+								}
+							}
+						}
+
+						if metTierReward > 0 {
+							var formula string
+							if spKeyLower == "w1" || spKeyLower == "week1" {
+								formula = fmt.Sprintf("%s ($%.0f)", sp, cumVal)
+							} else {
+								var sumParts []string
+								for _, k := range keys {
+									if strings.ToLower(k) <= spKeyLower {
+										sumParts = append(sumParts, k)
+									}
+								}
+								formula = fmt.Sprintf("%s ($%.0f)", strings.Join(sumParts, "+"), cumVal)
+							}
+							parts = append(parts, fmt.Sprintf("%s >= $%.0f (%s) -> +$%.0f", formula, metTierTarget, metTierName, metTierReward))
+						}
+					}
+					if len(parts) > 0 {
+						teamDesc = strings.Join(parts, " | ")
+					}
+				}
+
 				if distMethod == DistEqualSplit {
 					// Count recipients in this group
 					eligibleCount := 0
@@ -765,13 +818,17 @@ func ProcessIncentiveCalculation(db *gorm.DB, projectID uint, month string) ([]I
 							continue
 						}
 						userRewards[u.UserName] += rewardPerPerson
+						desc := fmt.Sprintf("Equal split of %s group pool among %d members (Total Perf: %.2f)", teamName, eligibleCount, groupTotalPerf)
+						if teamDesc != "" {
+							desc = fmt.Sprintf("Equal split: %s (Total Pool: $%.0f)", teamDesc, poolReward)
+						}
 						userBreakdown[u.UserName] = append(userBreakdown[u.UserName], PayoutResult{
 							CalculatorID:   calc.ID,
 							CalculatorName: calc.Name,
 							MetricType:     metricType,
 							MetricValue:    groupTotalPerf, // Group metric
 							Amount:         rewardPerPerson,
-							Description:    fmt.Sprintf("Equal split of %s group pool among %d members (Total Perf: %.2f)", teamName, eligibleCount, groupTotalPerf),
+							Description:    desc,
 						})
 					}
 				} else if distMethod == DistPercentageAllocation {
@@ -783,13 +840,17 @@ func ProcessIncentiveCalculation(db *gorm.DB, projectID uint, month string) ([]I
 							if alloc.MemberRoleOrName == u.UserName || alloc.MemberRoleOrName == u.Role {
 								share := poolReward * (alloc.Percentage / 100.0)
 								userRewards[u.UserName] += share
+								desc := fmt.Sprintf("%.1f%% allocation of %s group pool (Total Perf: %.2f)", alloc.Percentage, teamName, groupTotalPerf)
+								if teamDesc != "" {
+									desc = fmt.Sprintf("%.1f%% share of: %s (Total Pool: $%.0f)", alloc.Percentage, teamDesc, poolReward)
+								}
 								userBreakdown[u.UserName] = append(userBreakdown[u.UserName], PayoutResult{
 									CalculatorID:   calc.ID,
 									CalculatorName: calc.Name,
 									MetricType:     metricType,
 									MetricValue:    groupTotalPerf,
 									Amount:         share,
-									Description:    fmt.Sprintf("%.1f%% allocation of %s group pool (Total Perf: %.2f)", alloc.Percentage, teamName, groupTotalPerf),
+									Description:    desc,
 								})
 								break
 							}
@@ -812,6 +873,65 @@ func ProcessIncentiveCalculation(db *gorm.DB, projectID uint, month string) ([]I
 						desc = fmt.Sprintf("Personal: %.2f | Team Dist: %.2f (Total: %.2f)", personal, fromTeam, fullPerfMap[u.UserName])
 					} else {
 						desc = fmt.Sprintf("Manual Entry: %.2f", personal)
+					}
+				}
+
+				if rules.IsMarathon {
+					var parts []string
+					if len(fullSubPerfMap[u.UserName]) > 0 {
+						var keys []string
+						for k := range fullSubPerfMap[u.UserName] {
+							keys = append(keys, k)
+						}
+						sort.Strings(keys)
+
+						for _, sp := range keys {
+							spVal := fullSubPerfMap[u.UserName][sp]
+							if spVal <= 0 {
+								continue
+							}
+							
+							cumVal := 0.0
+							spKeyLower := strings.ToLower(sp)
+							for otherSp, otherVal := range fullSubPerfMap[u.UserName] {
+								if strings.ToLower(otherSp) <= spKeyLower {
+									cumVal += otherVal
+								}
+							}
+
+							var metTierName string
+							var metTierTarget float64
+							var metTierReward float64
+							
+							for _, t := range rules.AchievementTiers {
+								if t.SubPeriod == sp || t.SubPeriod == "" {
+									if cumVal >= t.Target && t.RewardAmount > metTierReward {
+										metTierName = t.Name
+										metTierTarget = t.Target
+										metTierReward = t.RewardAmount
+									}
+								}
+							}
+
+							if metTierReward > 0 {
+								var formula string
+								if spKeyLower == "w1" || spKeyLower == "week1" {
+									formula = fmt.Sprintf("%s ($%.0f)", sp, cumVal)
+								} else {
+									var sumParts []string
+									for _, k := range keys {
+										if strings.ToLower(k) <= spKeyLower {
+											sumParts = append(sumParts, k)
+										}
+									}
+									formula = fmt.Sprintf("%s ($%.0f)", strings.Join(sumParts, "+"), cumVal)
+								}
+								parts = append(parts, fmt.Sprintf("%s >= $%.0f (%s) -> +$%.0f", formula, metTierTarget, metTierName, metTierReward))
+							}
+						}
+					}
+					if len(parts) > 0 {
+						desc = strings.Join(parts, " | ")
 					}
 				}
 
