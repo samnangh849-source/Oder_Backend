@@ -1251,6 +1251,35 @@ func handleGetUsers(c *gin.Context) {
 	c.JSON(200, gin.H{"status": "success", "data": users})
 }
 
+func handleUpdateUserVersion(c *gin.Context) {
+	username, exists := c.Get("userName")
+	if !exists {
+		c.JSON(http.StatusUnauthorized, gin.H{"status": "error", "message": "Unauthorized"})
+		return
+	}
+	usernameStr := username.(string)
+
+	var req struct {
+		Version string `json:"version" binding:"required"`
+	}
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"status": "error", "message": "Invalid request"})
+		return
+	}
+
+	// Update in database
+	if err := backend.DB.Table("users").Where("user_name = ?", usernameStr).Update("system_version", req.Version).Error; err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"status": "error", "message": "Failed to update version"})
+		return
+	}
+
+	// Sync back to Google Sheets
+	enqueueSync("updateSheet", map[string]interface{}{"System Version": req.Version}, "Users", map[string]string{"UserName": usernameStr})
+
+	c.JSON(http.StatusOK, gin.H{"status": "success", "message": "System version updated successfully"})
+}
+
+
 func handleGetAllOrders(c *gin.Context) {
 	var orders []Order
 
@@ -3910,6 +3939,7 @@ func main() {
 		protected.POST("/setup-bot-webhook", handleRegisterTelegramWebhook)
 		protected.POST("/test-telegram", handleTestTelegram)
 		protected.GET("/users", handleGetUsers)
+		protected.POST("/users/update-version", handleUpdateUserVersion)
 		protected.GET("/static-data", handleGetStaticData)
 		protected.POST("/submit-order", RequirePermission("create_order"), handleSubmitOrder)
 		protected.GET("/generate-upload-token", handleGenerateUploadToken) // New for Admin
