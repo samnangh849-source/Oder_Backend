@@ -6,6 +6,7 @@ import (
 	"net/http"
 	"os"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/gin-gonic/gin"
@@ -27,9 +28,6 @@ const (
 func isOriginAllowed(r *http.Request) bool {
 	allowedOrigins := os.Getenv("ALLOWED_WS_ORIGINS")
 	if allowedOrigins == "" {
-		// For production on Render, we might want to be more specific,
-		// but 1006 errors are often caused by CheckOrigin failing due to proxy headers.
-		// Allowing all origins is the most compatible default for a multi-platform app.
 		return true
 	}
 	origin := r.Header.Get("Origin")
@@ -45,27 +43,33 @@ func isOriginAllowed(r *http.Request) bool {
 	return false
 }
 
+// Client represents a single WebSocket connection with an identified user.
 type Client struct {
-	Hub  *Hub
-	Conn *websocket.Conn
-	Send chan []byte
+	Hub      *Hub
+	Conn     *websocket.Conn
+	Send     chan []byte
+	Username string // The authenticated username for this connection
 }
 
+// Hub maintains a set of active clients and broadcasts messages.
 type Hub struct {
-	Clients    map[*Client]bool
-	Broadcast  chan []byte
-	Register   chan *Client
-	Unregister chan *Client
-	quit       chan struct{}
+	Clients     map[*Client]bool
+	UserClients map[string]*Client // username → active Client (for unicast signaling)
+	mu          sync.RWMutex       // protects UserClients
+	Broadcast   chan []byte
+	Register    chan *Client
+	Unregister  chan *Client
+	quit        chan struct{}
 }
 
 func NewHub() *Hub {
 	return &Hub{
-		Broadcast:  make(chan []byte, 4096), // Buffered to prevent blocking
-		Register:   make(chan *Client, 128),
-		Unregister: make(chan *Client, 128),
-		Clients:    make(map[*Client]bool),
-		quit:       make(chan struct{}),
+		Broadcast:   make(chan []byte, 4096), // Buffered to prevent blocking
+		Register:    make(chan *Client, 128),
+		Unregister:  make(chan *Client, 128),
+		Clients:     make(map[*Client]bool),
+		UserClients: make(map[string]*Client),
+		quit:        make(chan struct{}),
 	}
 }
 
@@ -75,12 +79,29 @@ func (h *Hub) Run() {
 		select {
 		case client := <-h.Register:
 			h.Clients[client] = true
-			log.Printf("🔌 Client connected. Total: %d", len(h.Clients))
+			if client.Username != "" {
+				h.mu.Lock()
+				h.UserClients[client.Username] = client
+				h.mu.Unlock()
+				log.Printf("🔌 Client connected: %s. Total: %d", client.Username, len(h.Clients))
+			} else {
+				log.Printf("🔌 Anonymous client connected. Total: %d", len(h.Clients))
+			}
 		case client := <-h.Unregister:
 			if _, ok := h.Clients[client]; ok {
 				delete(h.Clients, client)
 				close(client.Send)
-				log.Printf("🔌 Client disconnected. Total: %d", len(h.Clients))
+				if client.Username != "" {
+					h.mu.Lock()
+					// Only remove if this client is still the registered one
+					if h.UserClients[client.Username] == client {
+						delete(h.UserClients, client.Username)
+					}
+					h.mu.Unlock()
+					log.Printf("🔌 Client disconnected: %s. Total: %d", client.Username, len(h.Clients))
+				} else {
+					log.Printf("🔌 Anonymous client disconnected. Total: %d", len(h.Clients))
+				}
 			}
 		case message := <-h.Broadcast:
 			for client := range h.Clients {
@@ -106,7 +127,7 @@ func (h *Hub) Stop() {
 	close(h.quit)
 }
 
-// BroadcastJSON is a helper to broadcast structured data
+// BroadcastJSON is a helper to broadcast structured data to ALL connected clients.
 func (h *Hub) BroadcastJSON(v interface{}) {
 	if h == nil {
 		return
@@ -123,6 +144,53 @@ func SafeBroadcastJSON(v interface{}) {
 	if HubGlobal != nil {
 		HubGlobal.BroadcastJSON(v)
 	}
+}
+
+// SendToUser sends a message to a specific user by username.
+// Returns true if the user was found and the message was queued.
+func (h *Hub) SendToUser(username string, msg []byte) bool {
+	if h == nil || username == "" {
+		return false
+	}
+	h.mu.RLock()
+	client, ok := h.UserClients[username]
+	h.mu.RUnlock()
+	if !ok {
+		return false
+	}
+	select {
+	case client.Send <- msg:
+		return true
+	default:
+		// Channel full — client is too slow, disconnect it
+		h.mu.Lock()
+		if h.UserClients[username] == client {
+			delete(h.UserClients, username)
+		}
+		h.mu.Unlock()
+		close(client.Send)
+		delete(h.Clients, client)
+		return false
+	}
+}
+
+// signalingMessage represents a WebRTC signaling payload sent between clients.
+type signalingMessage struct {
+	Type    string          `json:"type"`
+	To      string          `json:"to"`
+	From    string          `json:"from"`
+	Payload json.RawMessage `json:"payload,omitempty"`
+}
+
+// signalingTypes lists all call-related message types that should be unicasted.
+var signalingTypes = map[string]bool{
+	"call_offer":     true,
+	"call_answer":    true,
+	"call_ice":       true,
+	"call_reject":    true,
+	"call_end":       true,
+	"call_busy":      true,
+	"call_cancelled": true,
 }
 
 func (c *Client) WritePump() {
@@ -164,13 +232,39 @@ func (c *Client) ReadPump() {
 		return nil
 	})
 	for {
-		_, _, err := c.Conn.ReadMessage()
+		_, rawMsg, err := c.Conn.ReadMessage()
 		if err != nil {
 			break
 		}
+
+		// Attempt to parse as a signaling message and route it
+		var sig signalingMessage
+		if jsonErr := json.Unmarshal(rawMsg, &sig); jsonErr == nil && signalingTypes[sig.Type] {
+			// Always stamp the real sender to prevent spoofing
+			sig.From = c.Username
+			stamped, marshalErr := json.Marshal(sig)
+			if marshalErr == nil && sig.To != "" {
+				if !c.Hub.SendToUser(sig.To, stamped) {
+					// Target user is offline — send a "not_available" response back to caller
+					notAvail, _ := json.Marshal(map[string]interface{}{
+						"type":    "call_not_available",
+						"from":    sig.To,
+						"payload": map[string]string{"reason": "User is offline"},
+					})
+					select {
+					case c.Send <- notAvail:
+					default:
+					}
+				}
+			}
+		}
+		// Non-signaling messages (regular chat) are NOT re-broadcast from here;
+		// the REST API handles chat message persistence and broadcasting.
 	}
 }
 
+// ServeWs upgrades the HTTP connection to WebSocket and registers the client.
+// It expects the gin context to already contain "userName" (set by AuthMiddleware).
 func ServeWs(c *gin.Context) {
 	if HubGlobal == nil {
 		c.JSON(http.StatusServiceUnavailable, gin.H{"status": "error", "message": "WebSocket service unavailable"})
@@ -182,7 +276,17 @@ func ServeWs(c *gin.Context) {
 		c.Error(err)
 		return
 	}
-	client := &Client{Hub: HubGlobal, Conn: conn, Send: make(chan []byte, 256)}
+
+	// Extract the authenticated username set by AuthMiddleware
+	username, _ := c.Get("userName")
+	usernameStr, _ := username.(string)
+
+	client := &Client{
+		Hub:      HubGlobal,
+		Conn:     conn,
+		Send:     make(chan []byte, 256),
+		Username: usernameStr,
+	}
 	client.Hub.Register <- client
 	go client.WritePump()
 	go client.ReadPump()
