@@ -241,13 +241,15 @@ type signalingMessage struct {
 
 // signalingTypes lists all call-related message types that should be unicasted.
 var signalingTypes = map[string]bool{
-	"call_offer":     true,
-	"call_answer":    true,
-	"call_ice":       true,
-	"call_reject":    true,
-	"call_end":       true,
-	"call_busy":      true,
-	"call_cancelled": true,
+	"call_offer":        true,
+	"call_answer":       true,
+	"call_ice":          true,
+	"call_reject":       true,
+	"call_end":          true,
+	"call_busy":         true,
+	"call_cancelled":    true,
+	"group_call_invite": true,
+	"group_call_joined": true,
 }
 
 func (c *Client) WritePump() {
@@ -304,7 +306,7 @@ func (c *Client) ReadPump() {
 				recipientOnline := c.Hub.SendToUser(sig.To, stamped)
 
 				// Track Active Calls & Trigger Web Push Notifications
-				if sig.Type == "call_offer" {
+				if sig.Type == "call_offer" || sig.Type == "group_call_invite" {
 					c.Hub.mu.Lock()
 					c.Hub.ActiveCalls[sig.To] = &ActiveCall{
 						Caller:    sig.From,
@@ -327,9 +329,9 @@ func (c *Client) ReadPump() {
 				}
 
 				if !recipientOnline {
-					// Target user is offline. If they are being called (call_offer), do NOT send "call_not_available"
+					// Target user is offline. If they are being called (call_offer / group_call_invite), do NOT send "call_not_available"
 					// immediately. We want the caller to wait for the Web Push Notification to wake the receiver up.
-					if sig.Type != "call_offer" {
+					if sig.Type != "call_offer" && sig.Type != "group_call_invite" {
 						notAvail, _ := json.Marshal(map[string]interface{}{
 							"type":    "call_not_available",
 							"from":    sig.To,
