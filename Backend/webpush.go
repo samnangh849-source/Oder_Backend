@@ -242,10 +242,17 @@ func triggerWebPushCallNotification(from, to, sigType string, payload json.RawMe
 
 	var pushPayload map[string]interface{}
 
-	if sigType == "call_offer" {
+	if sigType == "call_offer" || sigType == "group_call_invite" {
+		isGroup := sigType == "group_call_invite"
+		title := "Incoming Call"
+		body := "Incoming " + callType + " call from " + caller.FullName
+		if isGroup {
+			title = "Incoming Group Call"
+			body = "Incoming group " + callType + " call from " + caller.FullName
+		}
 		pushPayload = map[string]interface{}{
-			"title": "Incoming Call",
-			"body":  "Incoming " + callType + " call from " + caller.FullName,
+			"title": title,
+			"body":  body,
 			"icon":  caller.ProfilePictureURL,
 			"badge": "/Order_System/logo-192.png",
 			"tag":   "incoming_call_" + from,
@@ -258,6 +265,7 @@ func triggerWebPushCallNotification(from, to, sigType string, payload json.RawMe
 				"callerFullName": caller.FullName,
 				"callerAvatar":   caller.ProfilePictureURL,
 				"callType":       callType,
+				"isGroup":        isGroup,
 				"declineUrl":     "https://oder-backend-2.onrender.com/api/call/reject-push?caller=" + from + "&receiver=" + to,
 			},
 			"actions": []map[string]interface{}{
