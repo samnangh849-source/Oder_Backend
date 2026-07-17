@@ -85,7 +85,7 @@ func handleGenerateUploadToken(c *gin.Context) {
 func handleGetSystemVersion(c *gin.Context) {
 	version := os.Getenv("SYSTEM_VERSION")
 	if version == "" {
-		version = "1.1.0"
+		version = "1.1.1"
 	}
 	c.JSON(200, gin.H{
 		"status":  "success",
