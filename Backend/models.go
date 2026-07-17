@@ -515,3 +515,12 @@ type DeleteOrderRequest struct {
 	TelegramMessageID3 string `json:"telegramMessageId3"`
 	TelegramChatId     string `json:"telegramChatId"`
 }
+
+type PushSubscription struct {
+	ID        uint      `gorm:"primaryKey;autoIncrement;column:id" json:"id"`
+	UserName  string    `gorm:"index;column:user_name" json:"userName"`
+	Endpoint  string    `gorm:"uniqueIndex;column:endpoint" json:"endpoint"`
+	P256dh    string    `gorm:"column:p256dh" json:"p256dh"`
+	Auth      string    `gorm:"column:auth" json:"auth"`
+	CreatedAt time.Time `gorm:"column:created_at" json:"createdAt"`
+}
