@@ -327,15 +327,18 @@ func (c *Client) ReadPump() {
 				}
 
 				if !recipientOnline {
-					// Target user is offline — send a "not_available" response back to caller
-					notAvail, _ := json.Marshal(map[string]interface{}{
-						"type":    "call_not_available",
-						"from":    sig.To,
-						"payload": map[string]string{"reason": "User is offline"},
-					})
-					select {
-					case c.Send <- notAvail:
-					default:
+					// Target user is offline. If they are being called (call_offer), do NOT send "call_not_available"
+					// immediately. We want the caller to wait for the Web Push Notification to wake the receiver up.
+					if sig.Type != "call_offer" {
+						notAvail, _ := json.Marshal(map[string]interface{}{
+							"type":    "call_not_available",
+							"from":    sig.To,
+							"payload": map[string]string{"reason": "User is offline"},
+						})
+						select {
+						case c.Send <- notAvail:
+						default:
+						}
 					}
 				}
 			}
