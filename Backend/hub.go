@@ -51,11 +51,20 @@ type Client struct {
 	Username string // The authenticated username for this connection
 }
 
+type ActiveCall struct {
+	Caller    string          `json:"caller"`
+	Receiver  string          `json:"receiver"`
+	CallType  string          `json:"callType"`
+	SDPOffer  json.RawMessage `json:"sdpOffer"`
+	Timestamp time.Time       `json:"timestamp"`
+}
+
 // Hub maintains a set of active clients and broadcasts messages.
 type Hub struct {
 	Clients     map[*Client]bool
 	UserClients map[string]*Client // username → active Client (for unicast signaling)
-	mu          sync.RWMutex       // protects UserClients
+	ActiveCalls map[string]*ActiveCall // receiverUsername -> ActiveCall
+	mu          sync.RWMutex       // protects UserClients and ActiveCalls
 	Broadcast   chan []byte
 	Register    chan *Client
 	Unregister  chan *Client
@@ -69,6 +78,7 @@ func NewHub() *Hub {
 		Unregister:  make(chan *Client, 128),
 		Clients:     make(map[*Client]bool),
 		UserClients: make(map[string]*Client),
+		ActiveCalls: make(map[string]*ActiveCall),
 		quit:        make(chan struct{}),
 	}
 }
@@ -82,8 +92,37 @@ func (h *Hub) Run() {
 			if client.Username != "" {
 				h.mu.Lock()
 				h.UserClients[client.Username] = client
+
+				// Check for pending active calls
+				var pendingCall *ActiveCall
+				if call, ok := h.ActiveCalls[client.Username]; ok {
+					// Clean up if older than 60 seconds
+					if time.Since(call.Timestamp) > 60*time.Second {
+						delete(h.ActiveCalls, client.Username)
+					} else {
+						pendingCall = call
+					}
+				}
 				h.mu.Unlock()
+
 				log.Printf("🔌 Client connected: %s. Total: %d", client.Username, len(h.Clients))
+
+				// Send the pending call offer if receiver connects
+				if pendingCall != nil {
+					log.Printf("📞 Found pending call for %s from %s. Re-sending offer...", client.Username, pendingCall.Caller)
+					stamped, err := json.Marshal(map[string]interface{}{
+						"type":    "call_offer",
+						"from":    pendingCall.Caller,
+						"to":      client.Username,
+						"payload": pendingCall.SDPOffer,
+					})
+					if err == nil {
+						select {
+						case client.Send <- stamped:
+						default:
+						}
+					}
+				}
 			} else {
 				log.Printf("🔌 Anonymous client connected. Total: %d", len(h.Clients))
 			}
@@ -174,6 +213,18 @@ func (h *Hub) SendToUser(username string, msg []byte) bool {
 	}
 }
 
+// ClearActiveCall removes any active call involving the user.
+func (h *Hub) ClearActiveCall(username string) {
+	h.mu.Lock()
+	defer h.mu.Unlock()
+	delete(h.ActiveCalls, username)
+	for k, v := range h.ActiveCalls {
+		if v.Caller == username {
+			delete(h.ActiveCalls, k)
+		}
+	}
+}
+
 // signalingMessage represents a WebRTC signaling payload sent between clients.
 type signalingMessage struct {
 	Type    string          `json:"type"`
@@ -244,7 +295,32 @@ func (c *Client) ReadPump() {
 			sig.From = c.Username
 			stamped, marshalErr := json.Marshal(sig)
 			if marshalErr == nil && sig.To != "" {
-				if !c.Hub.SendToUser(sig.To, stamped) {
+				recipientOnline := c.Hub.SendToUser(sig.To, stamped)
+
+				// Track Active Calls & Trigger Web Push Notifications
+				if sig.Type == "call_offer" {
+					c.Hub.mu.Lock()
+					c.Hub.ActiveCalls[sig.To] = &ActiveCall{
+						Caller:    sig.From,
+						Receiver:  sig.To,
+						SDPOffer:  sig.Payload,
+						Timestamp: time.Now(),
+					}
+					c.Hub.mu.Unlock()
+
+					// Send push notification to target
+					go triggerWebPushCallNotification(sig.From, sig.To, sig.Type, sig.Payload)
+				} else if sig.Type == "call_cancelled" || sig.Type == "call_end" || sig.Type == "call_reject" || sig.Type == "call_busy" {
+					c.Hub.ClearActiveCall(sig.From)
+					c.Hub.ClearActiveCall(sig.To)
+
+					// If cancelled or ended by caller, send push to overwrite ringing banner with missed call
+					if sig.Type == "call_cancelled" || sig.Type == "call_end" {
+						go triggerWebPushCallNotification(sig.From, sig.To, sig.Type, sig.Payload)
+					}
+				}
+
+				if !recipientOnline {
 					// Target user is offline — send a "not_available" response back to caller
 					notAvail, _ := json.Marshal(map[string]interface{}{
 						"type":    "call_not_available",
