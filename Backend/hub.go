@@ -62,9 +62,9 @@ type ActiveCall struct {
 // Hub maintains a set of active clients and broadcasts messages.
 type Hub struct {
 	Clients     map[*Client]bool
-	UserClients map[string]*Client // username → active Client (for unicast signaling)
-	ActiveCalls map[string]*ActiveCall // receiverUsername -> ActiveCall
-	mu          sync.RWMutex       // protects UserClients and ActiveCalls
+	UserClients map[string]map[*Client]bool // username → active Client connections
+	ActiveCalls map[string]*ActiveCall      // receiverUsername -> ActiveCall
+	mu          sync.RWMutex                // protects UserClients and ActiveCalls
 	Broadcast   chan []byte
 	Register    chan *Client
 	Unregister  chan *Client
@@ -77,7 +77,7 @@ func NewHub() *Hub {
 		Register:    make(chan *Client, 128),
 		Unregister:  make(chan *Client, 128),
 		Clients:     make(map[*Client]bool),
-		UserClients: make(map[string]*Client),
+		UserClients: make(map[string]map[*Client]bool),
 		ActiveCalls: make(map[string]*ActiveCall),
 		quit:        make(chan struct{}),
 	}
@@ -91,7 +91,10 @@ func (h *Hub) Run() {
 			h.Clients[client] = true
 			if client.Username != "" {
 				h.mu.Lock()
-				h.UserClients[client.Username] = client
+				if h.UserClients[client.Username] == nil {
+					h.UserClients[client.Username] = make(map[*Client]bool)
+				}
+				h.UserClients[client.Username][client] = true
 
 				// Check for pending active calls
 				var pendingCall *ActiveCall
@@ -132,9 +135,11 @@ func (h *Hub) Run() {
 				close(client.Send)
 				if client.Username != "" {
 					h.mu.Lock()
-					// Only remove if this client is still the registered one
-					if h.UserClients[client.Username] == client {
-						delete(h.UserClients, client.Username)
+					if clients, ok := h.UserClients[client.Username]; ok {
+						delete(clients, client)
+						if len(clients) == 0 {
+							delete(h.UserClients, client.Username)
+						}
 					}
 					h.mu.Unlock()
 					log.Printf("🔌 Client disconnected: %s. Total: %d", client.Username, len(h.Clients))
@@ -191,26 +196,27 @@ func (h *Hub) SendToUser(username string, msg []byte) bool {
 	if h == nil || username == "" {
 		return false
 	}
-	h.mu.RLock()
-	client, ok := h.UserClients[username]
-	h.mu.RUnlock()
-	if !ok {
+	h.mu.Lock()
+	defer h.mu.Unlock()
+	clients, ok := h.UserClients[username]
+	if !ok || len(clients) == 0 {
 		return false
 	}
-	select {
-	case client.Send <- msg:
-		return true
-	default:
-		// Channel full — client is too slow, disconnect it
-		h.mu.Lock()
-		if h.UserClients[username] == client {
-			delete(h.UserClients, username)
+	sentAny := false
+	for client := range clients {
+		select {
+		case client.Send <- msg:
+			sentAny = true
+		default:
+			close(client.Send)
+			delete(h.Clients, client)
+			delete(clients, client)
+			if len(clients) == 0 {
+				delete(h.UserClients, username)
+			}
 		}
-		h.mu.Unlock()
-		close(client.Send)
-		delete(h.Clients, client)
-		return false
 	}
+	return sentAny
 }
 
 // ClearActiveCall removes any active call involving the user.
