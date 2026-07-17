@@ -3356,17 +3356,80 @@ func handleGetSingleChatMessage(c *gin.Context) {
 	}
 	c.JSON(200, gin.H{"status": "success", "data": msg})
 }
-
 func handleSendChatMessage(c *gin.Context) {
-	var msg ChatMessage
-	if err := c.ShouldBindJSON(&msg); err != nil {
+	var raw map[string]interface{}
+	if err := c.ShouldBindJSON(&raw); err != nil {
 		c.JSON(400, gin.H{"status": "error", "message": "Invalid format"})
 		return
 	}
-	if sender, exists := c.Get("userName"); exists {
+
+	var msg ChatMessage
+
+	// Bind ID if present
+	if idVal, ok := raw["ID"]; ok {
+		if idNum, err := strconv.ParseUint(fmt.Sprintf("%v", idVal), 10, 64); err == nil {
+			msg.ID = uint(idNum)
+		}
+	} else if idVal, ok := raw["id"]; ok {
+		if idNum, err := strconv.ParseUint(fmt.Sprintf("%v", idVal), 10, 64); err == nil {
+			msg.ID = uint(idNum)
+		}
+	}
+
+	// Bind Timestamp
+	if ts, ok := raw["Timestamp"]; ok && ts != "" {
+		msg.Timestamp = fmt.Sprintf("%v", ts)
+	} else if ts, ok := raw["timestamp"]; ok && ts != "" {
+		msg.Timestamp = fmt.Sprintf("%v", ts)
+	} else {
+		msg.Timestamp = time.Now().Format(time.RFC3339)
+	}
+
+	// Bind Sender
+	if sender, ok := raw["Sender"]; ok && sender != "" {
+		msg.Sender = fmt.Sprintf("%v", sender)
+	} else if userName, ok := raw["UserName"]; ok && userName != "" {
+		msg.Sender = fmt.Sprintf("%v", userName)
+	} else if userName, ok := raw["userName"]; ok && userName != "" {
+		msg.Sender = fmt.Sprintf("%v", userName)
+	}
+	if sender, exists := c.Get("userName"); exists && msg.Sender == "" {
 		msg.Sender = sender.(string)
 	}
-	msg.Timestamp = time.Now().Format(time.RFC3339)
+
+	// Bind Team
+	if team, ok := raw["Team"]; ok && team != "" {
+		msg.Team = fmt.Sprintf("%v", team)
+	} else if team, ok := raw["team"]; ok && team != "" {
+		msg.Team = fmt.Sprintf("%v", team)
+	}
+
+	// Bind Message (Content)
+	if message, ok := raw["Message"]; ok && message != "" {
+		msg.Message = fmt.Sprintf("%v", message)
+	} else if content, ok := raw["Content"]; ok && content != "" {
+		msg.Message = fmt.Sprintf("%v", content)
+	} else if content, ok := raw["content"]; ok && content != "" {
+		msg.Message = fmt.Sprintf("%v", content)
+	}
+
+	// Bind Type
+	if mtype, ok := raw["Type"]; ok && mtype != "" {
+		msg.Type = fmt.Sprintf("%v", mtype)
+	} else if mtype, ok := raw["MessageType"]; ok && mtype != "" {
+		msg.Type = fmt.Sprintf("%v", mtype)
+	} else if mtype, ok := raw["messageType"]; ok && mtype != "" {
+		msg.Type = fmt.Sprintf("%v", mtype)
+	}
+
+	// Bind FileURL
+	if fileURL, ok := raw["FileURL"]; ok && fileURL != "" {
+		msg.FileURL = fmt.Sprintf("%v", fileURL)
+	} else if fileID, ok := raw["FileID"]; ok && fileID != "" {
+		msg.FileURL = fmt.Sprintf("%v", fileID)
+	} else if fileID, ok := raw["fileID"]; ok && fileID != "" {
+		msg.FileURL = fmt.Sprintf("%v", fileID)
+	}
 
 	msgType := strings.ToLower(msg.Type)
 
@@ -3409,7 +3472,6 @@ func handleSendChatMessage(c *gin.Context) {
 	hub.Broadcast <- msgBytes
 	c.JSON(200, gin.H{"status": "success", "data": msg})
 }
-
 func handleDeleteChatMessage(c *gin.Context) {
 	var req struct {
 		ID       uint   `json:"id"`
