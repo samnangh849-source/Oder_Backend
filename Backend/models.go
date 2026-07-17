@@ -21,6 +21,7 @@ type User struct {
 	IsSystemAdmin     bool   `gorm:"column:is_system_admin" json:"IsSystemAdmin"`
 	TelegramUsername  string `gorm:"column:telegram_username" json:"TelegramUsername"`
 	TelegramStickerID string `gorm:"column:telegram_sticker_id" json:"TelegramStickerID"`
+	SystemVersion     string `gorm:"column:system_version" json:"SystemVersion"`
 }
 
 type Promotion struct {
