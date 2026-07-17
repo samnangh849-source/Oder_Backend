@@ -3897,10 +3897,16 @@ func main() {
 	api.GET("/products", handleGetProductsOnly)                       // Read-only Product API for Developers
 	api.GET("/system-version", handleGetSystemVersion)
 
+	// Web Push routes
+	api.GET("/push/vapid-public-key", backend.HandleGetVapidPublicKey)
+	api.POST("/call/reject-push", backend.HandleRejectCallPush)
+
 	protected := api.Group("/")
 	protected.Use(AuthMiddleware())
 	{
 		protected.GET("/r2-proxy", backend.HandleR2Proxy) // Secure proxy for R2 images
+		protected.POST("/push/subscribe", backend.HandleSubscribePush)
+		protected.POST("/push/unsubscribe", backend.HandleUnsubscribePush)
 		protected.POST("/setup-bot-webhook", handleRegisterTelegramWebhook)
 		protected.POST("/test-telegram", handleTestTelegram)
 		protected.GET("/users", handleGetUsers)
@@ -3991,6 +3997,7 @@ func main() {
 
 func initializeDatabaseAndWorkers() {
 	initDB()
+	backend.InitVAPID()
 
 	startSyncManager(2)
 	go startOrderWorker()
