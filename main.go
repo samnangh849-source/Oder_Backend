@@ -4031,10 +4031,26 @@ func main() {
 			return
 		}
 
+		// Ensure order has a store name
+		storeName := order.FulfillmentStore
+		if storeName == "" {
+			// Find the first store in the database to use as a fallback for testing
+			var firstStore Store
+			if err := backend.DB.First(&firstStore).Error; err == nil {
+				storeName = firstStore.StoreName
+			} else {
+				c.JSON(400, gin.H{"error": "Order has no Fulfillment Store, and no stores exist in the database to fallback on."})
+				return
+			}
+		}
+
 		ict := time.FixedZone("ICT", 7*3600)
 		testStartTime := time.Now().In(ict).Add(-35 * time.Minute).Format("2006-01-02 15:04:05")
 
+		// Force set status to Pending and updates columns
 		err := backend.DB.Model(&Order{}).Where("order_id = ?", order.OrderID).Updates(map[string]interface{}{
+			"fulfillment_status":           "Pending",
+			"fulfillment_store":            storeName,
 			"packing_start_time":           testStartTime,
 			"packed_by":                    "Test Packer",
 			"packed_time":                  "",
@@ -4046,10 +4062,87 @@ func main() {
 			return
 		}
 
+		// Refresh order state
+		backend.DB.Where("order_id = ?", order.OrderID).First(&order)
+
+		// ── Run Immediate Telegram Trigger for Diagnostics ──
+		var store backend.Store
+		err = backend.DB.Where("store_name = ?", order.FulfillmentStore).First(&store).Error
+		if err != nil {
+			c.JSON(400, gin.H{
+				"status": "error",
+				"message": fmt.Sprintf("Failed to load store '%s': %v", order.FulfillmentStore, err),
+				"order": order,
+			})
+			return
+		}
+
+		if store.TelegramBotToken == "" || store.TelegramGroupID == "" {
+			c.JSON(400, gin.H{
+				"status": "error",
+				"message": fmt.Sprintf("Store '%s' is missing Telegram bot configuration: BotToken or GroupID is empty.", store.StoreName),
+				"store": store,
+				"order": order,
+			})
+			return
+		}
+
+		// Look up User's TelegramUsername (if exists, else @Test_Packer)
+		var user backend.User
+		var telegramUsername string
+		err = backend.DB.Where("full_name = ? OR user_name = ?", order.PackedBy, order.PackedBy).First(&user).Error
+		if err == nil {
+			telegramUsername = user.TelegramUsername
+		}
+
+		mentionStr := order.PackedBy
+		if telegramUsername != "" {
+			telegramUsername = strings.TrimSpace(telegramUsername)
+			if !strings.HasPrefix(telegramUsername, "@") {
+				telegramUsername = "@" + telegramUsername
+			}
+			mentionStr = telegramUsername
+		} else {
+			mentionStr = "@" + strings.ReplaceAll(order.PackedBy, " ", "_")
+		}
+
+		msg := fmt.Sprintf("⚠️ *រំលឹកការវេចខ្ចប់យឺត (Packing Reminder - TEST)* ⚠️\n\nអ្នកវេចខ្ចប់៖ %s\nលេខ Order៖ `%s`\nស្ថានភាព៖ កំពុងវេចខ្ចប់យឺតរហូតដល់ *35 នាទី* ហើយ!\nសូមប្រញាប់វេចខ្ចប់ និងបញ្ចប់ការងារ។", mentionStr, order.OrderID)
+
+		payload := map[string]interface{}{
+			"chat_id":    strings.TrimSpace(store.TelegramGroupID),
+			"text":       msg,
+			"parse_mode": "Markdown",
+		}
+		if store.TelegramTopicID != "" {
+			topicID := strings.TrimSpace(store.TelegramTopicID)
+			if threadID, err := strconv.Atoi(topicID); err == nil && threadID != 0 {
+				payload["message_thread_id"] = threadID
+			}
+		}
+
+		apiURL := fmt.Sprintf("https://api.telegram.org/bot%s/sendMessage", store.TelegramBotToken)
+		jsonData, _ := json.Marshal(payload)
+		resp, err := http.Post(apiURL, "application/json", bytes.NewBuffer(jsonData))
+		if err != nil {
+			c.JSON(500, gin.H{
+				"status": "error",
+				"message": "Telegram API request failed: " + err.Error(),
+				"order": order,
+				"store": store,
+			})
+			return
+		}
+		defer resp.Body.Close()
+
+		var resData map[string]interface{}
+		json.NewDecoder(resp.Body).Decode(&resData)
+
 		c.JSON(200, gin.H{
-			"message": "Order updated successfully! Packing start time set to 35 mins ago. Background monitor will check it within 1 minute and trigger Telegram mention.",
-			"order_id": order.OrderID,
-			"packing_start_time": testStartTime,
+			"status": "success",
+			"message": "Order updated and dry-run Telegram notification triggered immediately!",
+			"order": order,
+			"store": store,
+			"telegram_api_response": resData,
 		})
 	})
 	api.GET("/test-db-orders", func(c *gin.Context) {
