@@ -4018,6 +4018,40 @@ func main() {
 	api := r.Group("/api", DBMiddleware())
 	api.POST("/login", handleLogin)
 	api.GET("/settings", handleGetSettings)
+	api.GET("/test/delay-reminder", func(c *gin.Context) {
+		orderID := c.Query("order_id")
+		if orderID == "" {
+			c.JSON(400, gin.H{"error": "Please provide ?order_id=..."})
+			return
+		}
+
+		var order Order
+		if err := backend.DB.Where("order_id = ?", orderID).First(&order).Error; err != nil {
+			c.JSON(404, gin.H{"error": "Order not found"})
+			return
+		}
+
+		ict := time.FixedZone("ICT", 7*3600)
+		testStartTime := time.Now().In(ict).Add(-35 * time.Minute).Format("2006-01-02 15:04:05")
+
+		err := backend.DB.Model(&Order{}).Where("order_id = ?", order.OrderID).Updates(map[string]interface{}{
+			"packing_start_time":           testStartTime,
+			"packed_by":                    "Test Packer",
+			"packed_time":                  "",
+			"last_telegram_reminder_time":  "",
+		}).Error
+
+		if err != nil {
+			c.JSON(500, gin.H{"error": "Failed to update order: " + err.Error()})
+			return
+		}
+
+		c.JSON(200, gin.H{
+			"message": "Order updated successfully! Packing start time set to 35 mins ago. Background monitor will check it within 1 minute and trigger Telegram mention.",
+			"order_id": order.OrderID,
+			"packing_start_time": testStartTime,
+		})
+	})
 	api.GET("/test-db-orders", func(c *gin.Context) {
 		var raw []map[string]interface{}
 		backend.DB.Table("orders").Select("order_id, order_user, timestamp").Order("timestamp desc").Limit(10).Find(&raw)
