@@ -1032,18 +1032,33 @@ func checkPackingDelaysLoop() {
 				}
 
 				if needReminder {
-					// 1. Look up User's TelegramUsername case-insensitively
+					// 1. Look up active open shift for this store to find the opener user
 					var user backend.User
 					var telegramUsername string
-					if order.PackedBy != "" {
-						err := backend.DB.Where("UPPER(TRIM(full_name)) = UPPER(TRIM(?)) OR UPPER(TRIM(user_name)) = UPPER(TRIM(?))", order.PackedBy, order.PackedBy).First(&user).Error
+					mentionStr := ""
+
+					var activeShift backend.Shift
+					err := backend.DB.Where("store_name = ? AND status = 'Open'", order.FulfillmentStore).First(&activeShift).Error
+					if err == nil && activeShift.OpenedBy != "" {
+						err = backend.DB.Where("UPPER(TRIM(full_name)) = UPPER(TRIM(?)) OR UPPER(TRIM(user_name)) = UPPER(TRIM(?))", activeShift.OpenedBy, activeShift.OpenedBy).First(&user).Error
 						if err == nil {
 							telegramUsername = user.TelegramUsername
+							mentionStr = activeShift.OpenedBy
+						}
+					}
+
+					// Fallback to PackedBy if no active shift found
+					if telegramUsername == "" && order.PackedBy != "" {
+						err = backend.DB.Where("UPPER(TRIM(full_name)) = UPPER(TRIM(?)) OR UPPER(TRIM(user_name)) = UPPER(TRIM(?))", order.PackedBy, order.PackedBy).First(&user).Error
+						if err == nil {
+							telegramUsername = user.TelegramUsername
+							mentionStr = order.PackedBy
+						} else {
+							mentionStr = order.PackedBy
 						}
 					}
 
 					// Format mention
-					mentionStr := order.PackedBy
 					if telegramUsername != "" {
 						telegramUsername = strings.TrimSpace(telegramUsername)
 						if !strings.HasPrefix(telegramUsername, "@") {
@@ -1051,7 +1066,11 @@ func checkPackingDelaysLoop() {
 						}
 						mentionStr = telegramUsername
 					} else {
-						mentionStr = "@" + strings.ReplaceAll(order.PackedBy, " ", "_")
+						if mentionStr == "" {
+							mentionStr = "@Test_Packer"
+						} else {
+							mentionStr = "@" + strings.ReplaceAll(mentionStr, " ", "_")
+						}
 					}
 
 					// Calculate total time since order was placed (Timestamp)
@@ -4118,15 +4137,33 @@ func main() {
 			return
 		}
 
-		// Look up User's TelegramUsername (if exists, else @Test_Packer)
+		// Look up active open shift for this store to find the opener user
 		var user backend.User
 		var telegramUsername string
-		err = backend.DB.Where("UPPER(TRIM(full_name)) = UPPER(TRIM(?)) OR UPPER(TRIM(user_name)) = UPPER(TRIM(?))", order.PackedBy, order.PackedBy).First(&user).Error
-		if err == nil {
-			telegramUsername = user.TelegramUsername
+		mentionStr := ""
+
+		var activeShift backend.Shift
+		err = backend.DB.Where("store_name = ? AND status = 'Open'", order.FulfillmentStore).First(&activeShift).Error
+		if err == nil && activeShift.OpenedBy != "" {
+			err = backend.DB.Where("UPPER(TRIM(full_name)) = UPPER(TRIM(?)) OR UPPER(TRIM(user_name)) = UPPER(TRIM(?))", activeShift.OpenedBy, activeShift.OpenedBy).First(&user).Error
+			if err == nil {
+				telegramUsername = user.TelegramUsername
+				mentionStr = activeShift.OpenedBy
+			}
 		}
 
-		mentionStr := order.PackedBy
+		// Fallback to PackedBy if no active shift found
+		if telegramUsername == "" && order.PackedBy != "" {
+			err = backend.DB.Where("UPPER(TRIM(full_name)) = UPPER(TRIM(?)) OR UPPER(TRIM(user_name)) = UPPER(TRIM(?))", order.PackedBy, order.PackedBy).First(&user).Error
+			if err == nil {
+				telegramUsername = user.TelegramUsername
+				mentionStr = order.PackedBy
+			} else {
+				mentionStr = order.PackedBy
+			}
+		}
+
+		// Format mention
 		if telegramUsername != "" {
 			telegramUsername = strings.TrimSpace(telegramUsername)
 			if !strings.HasPrefix(telegramUsername, "@") {
@@ -4134,7 +4171,11 @@ func main() {
 			}
 			mentionStr = telegramUsername
 		} else {
-			mentionStr = "@" + strings.ReplaceAll(order.PackedBy, " ", "_")
+			if mentionStr == "" {
+				mentionStr = "@Test_Packer"
+			} else {
+				mentionStr = "@" + strings.ReplaceAll(mentionStr, " ", "_")
+			}
 		}
 
 		// Calculate total minutes since order placed (Timestamp)
