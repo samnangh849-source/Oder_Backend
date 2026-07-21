@@ -4403,14 +4403,22 @@ func handleOpenShift(c *gin.Context) {
 		return
 	}
 
-	// 1. Verify User
-	var user User
-	if err := backend.DB.Where("user_name = ?", strings.TrimSpace(r.UserName)).First(&user).Error; err != nil {
-		c.JSON(http.StatusUnauthorized, gin.H{"status": "error", "message": "អ្នកប្រើប្រាស់មិនត្រឹមត្រូវ"})
+	// 1. Resolve logged in user from JWT context
+	authUserName := ""
+	if uVal, exists := c.Get("userName"); exists {
+		authUserName = uVal.(string)
+	}
+	if authUserName == "" {
+		authUserName = strings.TrimSpace(r.UserName)
+	}
+	if authUserName == "" {
+		c.JSON(http.StatusBadRequest, gin.H{"status": "error", "message": "មិនបានរកឃើញគណនីដែលត្រូវបើកវេនឡើយ"})
 		return
 	}
-	if err := bcrypt.CompareHashAndPassword([]byte(user.Password), []byte(strings.TrimSpace(r.Password))); err != nil {
-		c.JSON(http.StatusUnauthorized, gin.H{"status": "error", "message": "លេខសម្ងាត់មិនត្រឹមត្រូវ"})
+
+	var user User
+	if err := backend.DB.Where("user_name = ?", authUserName).First(&user).Error; err != nil {
+		c.JSON(http.StatusUnauthorized, gin.H{"status": "error", "message": "អ្នកប្រើប្រាស់មិនត្រឹមត្រូវ"})
 		return
 	}
 
