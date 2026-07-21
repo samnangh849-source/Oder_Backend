@@ -1466,9 +1466,9 @@ func handleGetAllOrders(c *gin.Context) {
 		case "shipped":
 			return db.Where("fulfillment_status = ?", "Shipped")
 		case "returned":
-			return db.Where("fulfillment_status = ? OR (fulfillment_status = ? AND return_received_by IS NOT NULL AND return_received_by != '')", "Returned", "Cancelled")
+			return db.Where("fulfillment_status = ?", "Returned")
 		case "cancelled", "canceled":
-			return db.Where("fulfillment_status = ? AND (return_received_by IS NULL OR return_received_by = '')", "Cancelled")
+			return db.Where("fulfillment_status = ?", "Cancelled")
 		default:
 			return db
 		}
@@ -1582,8 +1582,8 @@ func handleGetAllOrders(c *gin.Context) {
 				COALESCE(SUM(CASE WHEN fulfillment_status IN ('Pending', 'Scheduled') OR (fulfillment_status = 'Cancelled' AND (return_received_by IS NULL OR return_received_by = '') AND (packed_by IS NULL OR packed_by = '') AND (packed_time IS NULL OR packed_time = '')) THEN 1 ELSE 0 END), 0) as pending,
 				COALESCE(SUM(CASE WHEN fulfillment_status = 'Ready to Ship' OR (fulfillment_status = 'Cancelled' AND (return_received_by IS NULL OR return_received_by = '') AND ((packed_by IS NOT NULL AND packed_by != '') OR (packed_time IS NOT NULL AND packed_time != ''))) THEN 1 ELSE 0 END), 0) as ready,
 				COALESCE(SUM(CASE WHEN fulfillment_status = 'Shipped' THEN 1 ELSE 0 END), 0) as shipped,
-				COALESCE(SUM(CASE WHEN fulfillment_status = 'Returned' OR (fulfillment_status = 'Cancelled' AND return_received_by IS NOT NULL AND return_received_by != '') THEN 1 ELSE 0 END), 0) as returned,
-				COALESCE(SUM(CASE WHEN fulfillment_status = 'Cancelled' AND (return_received_by IS NULL OR return_received_by = '') THEN 1 ELSE 0 END), 0) as cancelled
+				COALESCE(SUM(CASE WHEN fulfillment_status = 'Returned' THEN 1 ELSE 0 END), 0) as returned,
+				COALESCE(SUM(CASE WHEN fulfillment_status = 'Cancelled' THEN 1 ELSE 0 END), 0) as cancelled
 			`).
 			Where("fulfillment_store IN ?", storeList).
 			Scan(&tcResult).Error
