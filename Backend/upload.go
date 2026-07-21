@@ -465,6 +465,7 @@ func processImageUploadInternal(req AppsScriptRequest, data string) (string, str
 									if count == 0 {
 										if err := tx.Table("returns").Create(&returnItem).Error; err == nil {
 											go EnqueueSync("addRow", map[string]interface{}{
+												"ReturnID":    returnItem.ID,
 												"Timestamp":   returnItem.Timestamp,
 												"OrderID":     returnItem.OrderID,
 												"StoreName":   returnItem.StoreName,
@@ -548,14 +549,18 @@ func processImageUploadInternal(req AppsScriptRequest, data string) (string, str
 	// in the `returns` table rows for that order (so each ReturnItem has its own photo record).
 	if req.OrderID != "" && req.TargetColumn == "Return Photo" && driveURL != "" {
 		go func(orderId, photoURL string) {
-			if err := DB.Table("returns").
-				Where("order_id = ?", orderId).
-				Update("photo_url", photoURL).Error; err != nil {
-				log.Printf("⚠️ [Upload Internal] Failed to update photo_url in returns for order %s: %v", orderId, err)
+			var returnItems []ReturnItem
+			if err := DB.Table("returns").Where("order_id = ?", orderId).Find(&returnItems).Error; err == nil {
+				for _, item := range returnItems {
+					// Update photo_url in DB
+					DB.Table("returns").Where("id = ?", item.ID).Update("photo_url", photoURL)
+					
+					// Sync to Google Sheets — update PhotoURL column in Returns sheet by ReturnID
+					EnqueueSync("updateSheet", map[string]interface{}{"PhotoURL": photoURL}, "Returns", map[string]interface{}{"ReturnID": item.ID})
+				}
+				log.Printf("📷 [Upload Internal] Saved return photo URL to returns table and enqueued sync for order %s", orderId)
 			} else {
-				log.Printf("📷 [Upload Internal] Saved return photo URL to returns table for order %s", orderId)
-				// Sync to Google Sheets — update PhotoURL column in Returns sheet
-				EnqueueSync("updateSheet", map[string]interface{}{"PhotoURL": photoURL}, "Returns", map[string]interface{}{"OrderID": orderId})
+				log.Printf("⚠️ [Upload Internal] Failed to find returns for order %s: %v", orderId, err)
 			}
 		}(req.OrderID, driveURL)
 	}
