@@ -1897,7 +1897,7 @@ func handleAdminUpdateOrder(c *gin.Context) {
 			"Ready to Ship": {"Shipped", "Pending", "Cancelled"},
 			"Shipped":       {"Delivered", "Ready to Ship", "Returned"},
 			"Delivered":     {"Returned"},
-			"Returned":      {"Delivered", "Shipped", "Ready to Ship", "Pending"},
+			"Returned":      {"Delivered", "Shipped", "Ready to Ship", "Pending", "Cancelled"},
 			"Cancelled":     {"Pending", "Scheduled"},
 		}
 
