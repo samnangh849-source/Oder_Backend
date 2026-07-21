@@ -280,6 +280,8 @@ func mapToDBColumn(key string, sheetName string) string {
 		"Delivery Telegram Message ID": "delivery_telegram_message_id",
 		"Delivery Daily Sequence":      "delivery_daily_sequence",
 		"Delivery Telegram Date":       "delivery_telegram_date",
+		"PackingStartTime":             "packing_start_time",
+		"LastTelegramReminderTime":     "last_telegram_reminder_time",
 		"Driver Name":                  "driver_name",
 		"Tracking Number":              "tracking_number",
 		"Dispatched Time":              "dispatched_time",
@@ -474,6 +476,7 @@ func isValidOrderColumn(col string) bool {
 		"packed_by": true, "packed_time": true, "package_photo_url": true, "driver_name": true, "tracking_number": true,
 		"dispatched_time": true, "dispatched_by": true, "delivered_time": true, "delivery_photo_url": true,
 		"cancel_reason": true, "return_reason": true, "return_photo_url": true, "return_received_by": true, "return_received_time": true,
+		"packing_start_time": true, "last_telegram_reminder_time": true,
 	}
 	return validCols[col]
 }
@@ -963,6 +966,108 @@ func startScheduler() {
 		}
 	}()
 }
+
+func checkPackingDelaysLoop() {
+	ticker := time.NewTicker(1 * time.Minute)
+	defer ticker.Stop()
+	for range ticker.C {
+		if backend.DB == nil {
+			continue
+		}
+		var orders []Order
+		// Query orders in Pending or Scheduled status that have a packing_start_time and packed_by but no packed_time
+		err := backend.DB.Where("fulfillment_status IN ? AND packing_start_time IS NOT NULL AND packing_start_time != '' AND packed_by IS NOT NULL AND packed_by != '' AND (packed_time IS NULL OR packed_time = '')", []string{"Pending", "Scheduled"}).Find(&orders).Error
+		if err != nil {
+			log.Printf("❌ [Delay Monitor] Error querying orders: %v", err)
+			continue
+		}
+
+		ict := time.FixedZone("ICT", 7*3600)
+		now := time.Now().In(ict)
+
+		for _, order := range orders {
+			startTime, err := time.ParseInLocation("2006-01-02 15:04:05", order.PackingStartTime, ict)
+			if err != nil {
+				log.Printf("❌ [Delay Monitor] Failed to parse packing_start_time %s: %v", order.PackingStartTime, err)
+				continue
+			}
+
+			elapsed := now.Sub(startTime)
+			if elapsed >= 30*time.Minute {
+				needReminder := false
+				if order.LastTelegramReminderTime != "" {
+					lastReminderTime, err := time.ParseInLocation("2006-01-02 15:04:05", order.LastTelegramReminderTime, ict)
+					if err == nil {
+						if now.Sub(lastReminderTime) >= 15*time.Minute {
+							needReminder = true
+						}
+					} else {
+						needReminder = true
+					}
+				} else {
+					needReminder = true
+				}
+
+				if needReminder {
+					// 1. Look up User's TelegramUsername
+					var user backend.User
+					var telegramUsername string
+					if order.PackedBy != "" {
+						err := backend.DB.Where("full_name = ? OR user_name = ?", order.PackedBy, order.PackedBy).First(&user).Error
+						if err == nil {
+							telegramUsername = user.TelegramUsername
+						}
+					}
+
+					// Format mention
+					mentionStr := order.PackedBy
+					if telegramUsername != "" {
+						telegramUsername = strings.TrimSpace(telegramUsername)
+						if !strings.HasPrefix(telegramUsername, "@") {
+							telegramUsername = "@" + telegramUsername
+						}
+						mentionStr = telegramUsername
+					} else {
+						mentionStr = "@" + strings.ReplaceAll(order.PackedBy, " ", "_")
+					}
+
+					// Let's get the Store TelegramGroupID and BotToken
+					var store backend.Store
+					if order.FulfillmentStore != "" {
+						err := backend.DB.Where("store_name = ?", order.FulfillmentStore).First(&store).Error
+						if err == nil && store.TelegramBotToken != "" && store.TelegramGroupID != "" {
+							elapsedMins := int(elapsed.Minutes())
+							msg := fmt.Sprintf("⚠️ *រំលឹកការវេចខ្ចប់យឺត (Packing Reminder)* ⚠️\n\nអ្នកវេចខ្ចប់៖ %s\nលេខ Order៖ `%s`\nស្ថានភាព៖ កំពុងវេចខ្ចប់យឺតរហូតដល់ *%d នាទី* ហើយ!\nសូមប្រញាប់វេចខ្ចប់ និងបញ្ចប់ការងារ។", mentionStr, order.OrderID, elapsedMins)
+
+							payload := map[string]interface{}{
+								"chat_id":    store.TelegramGroupID,
+								"text":       msg,
+								"parse_mode": "Markdown",
+							}
+							if store.TelegramTopicID != "" {
+								payload["message_thread_id"] = store.TelegramTopicID
+							}
+
+							apiURL := fmt.Sprintf("https://api.telegram.org/bot%s/sendMessage", store.TelegramBotToken)
+							jsonData, _ := json.Marshal(payload)
+							resp, err := http.Post(apiURL, "application/json", bytes.NewBuffer(jsonData))
+							if err == nil {
+								resp.Body.Close()
+								// Update LastTelegramReminderTime in database
+								order.LastTelegramReminderTime = now.Format("2006-01-02 15:04:05")
+								backend.DB.Model(&Order{}).Where("order_id = ?", order.OrderID).Update("last_telegram_reminder_time", order.LastTelegramReminderTime)
+								log.Printf("🔔 [Delay Monitor] Sent reminder to %s for Order %s (%d mins late)", mentionStr, order.OrderID, elapsedMins)
+							} else {
+								log.Printf("❌ [Delay Monitor] Error sending Telegram reminder: %v", err)
+							}
+						}
+					}
+				}
+			}
+		}
+	}
+}
+
 
 // =========================================================================
 // WEB SOCKET - Aliased to Backend package
@@ -1624,7 +1729,7 @@ func handleGetAllOrders(c *gin.Context) {
 	// Field Selection
 	if view == "compact" {
 		// Include products_json as it's needed for the dashboard display
-		query = query.Select("order_id, timestamp, user, page, telegram_value, customer_name, customer_phone, location, address_details, note, shipping_fee_customer, subtotal, grand_total, internal_shipping_method, internal_shipping_details, internal_cost, payment_status, payment_info, discount_usd, delivery_unpaid, delivery_paid, total_product_cost, telegram_message_id1, telegram_message_id2, telegram_message_id3, scheduled_time, fulfillment_store, team, is_verified, fulfillment_status, packed_by, packed_time, package_photo_url, driver_name, tracking_number, dispatched_time, dispatched_by, delivered_time, delivery_photo_url, products_json, cancel_reason, return_reason, return_photo_url, return_received_by, return_received_time")
+		query = query.Select("order_id, timestamp, user, page, telegram_value, customer_name, customer_phone, location, address_details, note, shipping_fee_customer, subtotal, grand_total, internal_shipping_method, internal_shipping_details, internal_cost, payment_status, payment_info, discount_usd, delivery_unpaid, delivery_paid, total_product_cost, telegram_message_id1, telegram_message_id2, telegram_message_id3, scheduled_time, fulfillment_store, team, is_verified, fulfillment_status, packed_by, packed_time, package_photo_url, driver_name, tracking_number, dispatched_time, dispatched_by, delivered_time, delivery_photo_url, products_json, cancel_reason, return_reason, return_photo_url, return_received_by, return_received_time, packing_start_time, last_telegram_reminder_time")
 	}
 
 	// Apply Pagination
@@ -1868,6 +1973,15 @@ func handleAdminUpdateOrder(c *gin.Context) {
 		authUserName = uVal.(string)
 	}
 	r.UserName = authUserName
+
+	// Auto-set PackingStartTime on backend if present in NewData
+	if val, ok := r.NewData["PackingStartTime"]; ok && val != nil {
+		valStr := fmt.Sprintf("%v", val)
+		if valStr == "NOW" || valStr == "now" {
+			ict := time.FixedZone("ICT", 7*3600)
+			r.NewData["PackingStartTime"] = time.Now().In(ict).Format("2006-01-02 15:04:05")
+		}
+	}
 
 
 	if r.NewData == nil {
@@ -3889,6 +4003,7 @@ func main() {
 	hub = NewHub()
 	backend.HubGlobal = hub
 	go hub.Run()
+	go checkPackingDelaysLoop()
 
 	r := gin.Default()
 	r.Use(cors.New(buildCORSConfig()))
