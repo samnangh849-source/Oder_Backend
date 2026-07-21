@@ -274,6 +274,8 @@ func mapToDBColumn(key string, sheetName string) string {
 		"Return Photo":                 "return_photo_url",
 		"Return Received By":           "return_received_by",
 		"Return Received Time":         "return_received_time",
+		"ReturnID":                     "id",
+		"Return ID":                    "id",
 		"Delivery Photo Sent Count":    "delivery_photo_sent_count",
 		"Delivery Telegram Message ID": "delivery_telegram_message_id",
 		"Delivery Daily Sequence":      "delivery_daily_sequence",
@@ -2162,6 +2164,7 @@ func handleAdminUpdateOrder(c *gin.Context) {
 								if err := backend.DB.Table("returns").Create(&returnItem).Error; err == nil {
 									// Sync with Google Sheets
 									go enqueueSync("addRow", map[string]interface{}{
+										"ReturnID":    returnItem.ID,
 										"Timestamp":   returnItem.Timestamp,
 										"OrderID":     returnItem.OrderID,
 										"StoreName":   returnItem.StoreName,
@@ -2213,7 +2216,12 @@ func handleAdminUpdateOrder(c *gin.Context) {
 			backend.DB.Table("returns").Where("order_id = ?", r.OrderID).Updates(returnUpdates)
 
 			// Sync with Google Sheets
-			go enqueueSync("updateSheet", sheetUpdates, "Returns", map[string]string{"OrderID": r.OrderID})
+			var returnItems []ReturnItem
+			if backend.DB.Table("returns").Where("order_id = ?", r.OrderID).Find(&returnItems).Error == nil {
+				for _, item := range returnItems {
+					go enqueueSync("updateSheet", sheetUpdates, "Returns", map[string]interface{}{"ReturnID": item.ID})
+				}
+			}
 		}
 
 		eventBytes, _ := json.Marshal(map[string]interface{}{"type": "update_order", "orderId": r.OrderID, "newData": r.NewData})
