@@ -1926,11 +1926,14 @@ func handleAdminUpdateOrder(c *gin.Context) {
 		// ✅ Validate required fields for each transition
 		switch newStatus {
 		case "Cancelled":
-			cancelReason, _ := r.NewData["Cancel Reason"]
-			if cancelReason == nil || strings.TrimSpace(fmt.Sprintf("%v", cancelReason)) == "" {
-				if strings.TrimSpace(originalOrder.CancelReason) == "" {
-					c.JSON(http.StatusBadRequest, gin.H{"status": "error", "message": "ត្រូវការមូលហេតុដែល Cancel (Cancel Reason)"})
-					return
+			// If transitioning from Returned, we do not require a new Cancel Reason (it is unpacked returned stock)
+			if currentStatus != "Returned" {
+				cancelReason, _ := r.NewData["Cancel Reason"]
+				if cancelReason == nil || strings.TrimSpace(fmt.Sprintf("%v", cancelReason)) == "" {
+					if strings.TrimSpace(originalOrder.CancelReason) == "" {
+						c.JSON(http.StatusBadRequest, gin.H{"status": "error", "message": "ត្រូវការមូលហេតុដែល Cancel (Cancel Reason)"})
+						return
+					}
 				}
 			}
 		case "Returned":
