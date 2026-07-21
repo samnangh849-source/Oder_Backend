@@ -967,6 +967,13 @@ func startScheduler() {
 	}()
 }
 
+func escapeHTML(s string) string {
+	s = strings.ReplaceAll(s, "&", "&amp;")
+	s = strings.ReplaceAll(s, "<", "&lt;")
+	s = strings.ReplaceAll(s, ">", "&gt;")
+	return s
+}
+
 func checkPackingDelaysLoop() {
 	ticker := time.NewTicker(1 * time.Minute)
 	defer ticker.Stop()
@@ -1036,12 +1043,12 @@ func checkPackingDelaysLoop() {
 					if order.FulfillmentStore != "" {
 						err := backend.DB.Where("store_name = ?", order.FulfillmentStore).First(&store).Error
 						if err == nil && store.TelegramBotToken != "" && store.TelegramGroupID != "" {
-							msg := fmt.Sprintf("%s⚠️ *កញ្ចប់ឥវ៉ាន់យឺតយ៉ាវ (Over 30m)*\nកញ្ចប់ឥវ៉ាន់ `#%s` របស់អតិថិជន *%s* មិនទាន់បានវេចខ្ចប់លើសពី %d នាទីហើយ!", mentionStr, order.OrderID, order.CustomerName, int(elapsed.Minutes()))
+							msg := fmt.Sprintf("%s⚠️ <b>កញ្ចប់ឥវ៉ាន់យឺតយ៉ាវ (Over 30m)</b>\nកញ្ចប់ឥវ៉ាន់ <code>#%s</code> របស់អតិថិជន <b>%s</b> មិនទាន់បានវេចខ្ចប់លើសពី %d នាទីហើយ!", mentionStr, escapeHTML(order.OrderID), escapeHTML(order.CustomerName), int(elapsed.Minutes()))
 
 							payload := map[string]interface{}{
 								"chat_id":    store.TelegramGroupID,
 								"text":       msg,
-								"parse_mode": "Markdown",
+								"parse_mode": "HTML",
 							}
 							if store.TelegramTopicID != "" {
 								payload["message_thread_id"] = store.TelegramTopicID
@@ -4101,12 +4108,12 @@ func main() {
 			mentionStr = "@" + strings.ReplaceAll(order.PackedBy, " ", "_")
 		}
 
-		msg := fmt.Sprintf("%s⚠️ *កញ្ចប់ឥវ៉ាន់យឺតយ៉ាវ (Over 30m)*\nកញ្ចប់ឥវ៉ាន់ `#%s` របស់អតិថិជន *%s* មិនទាន់បានវេចខ្ចប់លើសពី 30 នាទីហើយ!", mentionStr, order.OrderID, order.CustomerName)
+		msg := fmt.Sprintf("%s⚠️ <b>កញ្ចប់ឥវ៉ាន់យឺតយ៉ាវ (Over 30m)</b>\nកញ្ចប់ឥវ៉ាន់ <code>#%s</code> របស់អតិថិជន <b>%s</b> មិនទាន់បានវេចខ្ចប់លើសពី 30 នាទីហើយ!", mentionStr, escapeHTML(order.OrderID), escapeHTML(order.CustomerName))
 
 		payload := map[string]interface{}{
 			"chat_id":    strings.TrimSpace(store.TelegramGroupID),
 			"text":       msg,
-			"parse_mode": "Markdown",
+			"parse_mode": "HTML",
 		}
 		if store.TelegramTopicID != "" {
 			topicID := strings.TrimSpace(store.TelegramTopicID)
