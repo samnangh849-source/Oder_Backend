@@ -974,6 +974,22 @@ func escapeHTML(s string) string {
 	return s
 }
 
+func parseTimeResilient(timeStr string, loc *time.Location) (time.Time, error) {
+	t, err := time.ParseInLocation("2006-01-02 15:04:05", timeStr, loc)
+	if err == nil {
+		return t, nil
+	}
+	t, err = time.Parse(time.RFC3339, timeStr)
+	if err == nil {
+		return t.In(loc), nil
+	}
+	t, err = time.ParseInLocation("2006-01-02T15:04:05", timeStr, loc)
+	if err == nil {
+		return t, nil
+	}
+	return time.Time{}, fmt.Errorf("unknown time format: %s", timeStr)
+}
+
 func checkPackingDelaysLoop() {
 	ticker := time.NewTicker(1 * time.Minute)
 	defer ticker.Stop()
@@ -993,7 +1009,7 @@ func checkPackingDelaysLoop() {
 		now := time.Now().In(ict)
 
 		for _, order := range orders {
-			startTime, err := time.ParseInLocation("2006-01-02 15:04:05", order.PackingStartTime, ict)
+			startTime, err := parseTimeResilient(order.PackingStartTime, ict)
 			if err != nil {
 				log.Printf("❌ [Delay Monitor] Failed to parse packing_start_time %s: %v", order.PackingStartTime, err)
 				continue
@@ -1003,7 +1019,7 @@ func checkPackingDelaysLoop() {
 			if elapsed >= 30*time.Minute {
 				needReminder := false
 				if order.LastTelegramReminderTime != "" {
-					lastReminderTime, err := time.ParseInLocation("2006-01-02 15:04:05", order.LastTelegramReminderTime, ict)
+					lastReminderTime, err := parseTimeResilient(order.LastTelegramReminderTime, ict)
 					if err == nil {
 						if now.Sub(lastReminderTime) >= 15*time.Minute {
 							needReminder = true
@@ -1016,11 +1032,11 @@ func checkPackingDelaysLoop() {
 				}
 
 				if needReminder {
-					// 1. Look up User's TelegramUsername
+					// 1. Look up User's TelegramUsername case-insensitively
 					var user backend.User
 					var telegramUsername string
 					if order.PackedBy != "" {
-						err := backend.DB.Where("full_name = ? OR user_name = ?", order.PackedBy, order.PackedBy).First(&user).Error
+						err := backend.DB.Where("UPPER(TRIM(full_name)) = UPPER(TRIM(?)) OR UPPER(TRIM(user_name)) = UPPER(TRIM(?))", order.PackedBy, order.PackedBy).First(&user).Error
 						if err == nil {
 							telegramUsername = user.TelegramUsername
 						}
@@ -1038,12 +1054,20 @@ func checkPackingDelaysLoop() {
 						mentionStr = "@" + strings.ReplaceAll(order.PackedBy, " ", "_")
 					}
 
+					// Calculate total time since order was placed (Timestamp)
+					totalMins := int(elapsed.Minutes())
+					placementTime, err := parseTimeResilient(order.Timestamp, ict)
+					if err == nil {
+						totalMins = int(now.Sub(placementTime).Minutes())
+					}
+
 					// Let's get the Store TelegramGroupID and BotToken
 					var store backend.Store
 					if order.FulfillmentStore != "" {
 						err := backend.DB.Where("store_name = ?", order.FulfillmentStore).First(&store).Error
 						if err == nil && store.TelegramBotToken != "" && store.TelegramGroupID != "" {
-							msg := fmt.Sprintf("%s⚠️ <b>កញ្ចប់ឥវ៉ាន់យឺតយ៉ាវ (Over 30m)</b>\nកញ្ចប់ឥវ៉ាន់ <code>#%s</code> របស់អតិថិជន <b>%s</b> មិនទាន់បានវេចខ្ចប់លើសពី %d នាទីហើយ!", mentionStr, escapeHTML(order.OrderID), escapeHTML(order.CustomerName), int(elapsed.Minutes()))
+							msg := fmt.Sprintf("%s ⚠️ <b>កញ្ចប់ឥវ៉ាន់យឺតយ៉ាវ (Over 30m)</b>\nកញ្ចប់ឥវ៉ាន់ <code>#%s</code> របស់អតិថិជន <b>%s</b> មិនទាន់បានវេចខ្ចប់លើសពី %d នាទីហើយ! (សរុប %d នាទី គិតចាប់ពីម៉ោងទម្លាក់ការកម្មង់)", 
+								mentionStr, escapeHTML(order.OrderID), escapeHTML(order.CustomerName), int(elapsed.Minutes()), totalMins)
 
 							payload := map[string]interface{}{
 								"chat_id":    store.TelegramGroupID,
@@ -4049,12 +4073,17 @@ func main() {
 		ict := time.FixedZone("ICT", 7*3600)
 		testStartTime := time.Now().In(ict).Add(-35 * time.Minute).Format("2006-01-02 15:04:05")
 
+		packerName := c.Query("packer")
+		if packerName == "" {
+			packerName = "Test Packer"
+		}
+
 		// Force set status to Pending and updates columns
 		err := backend.DB.Model(&Order{}).Where("order_id = ?", order.OrderID).Updates(map[string]interface{}{
 			"fulfillment_status":          "Pending",
 			"fulfillment_store":           storeName,
 			"packing_start_time":          testStartTime,
-			"packed_by":                   "Test Packer",
+			"packed_by":                   packerName,
 			"packed_time":                 "",
 			"last_telegram_reminder_time": "",
 		}).Error
@@ -4092,7 +4121,7 @@ func main() {
 		// Look up User's TelegramUsername (if exists, else @Test_Packer)
 		var user backend.User
 		var telegramUsername string
-		err = backend.DB.Where("full_name = ? OR user_name = ?", order.PackedBy, order.PackedBy).First(&user).Error
+		err = backend.DB.Where("UPPER(TRIM(full_name)) = UPPER(TRIM(?)) OR UPPER(TRIM(user_name)) = UPPER(TRIM(?))", order.PackedBy, order.PackedBy).First(&user).Error
 		if err == nil {
 			telegramUsername = user.TelegramUsername
 		}
@@ -4108,7 +4137,15 @@ func main() {
 			mentionStr = "@" + strings.ReplaceAll(order.PackedBy, " ", "_")
 		}
 
-		msg := fmt.Sprintf("%s⚠️ <b>កញ្ចប់ឥវ៉ាន់យឺតយ៉ាវ (Over 30m)</b>\nកញ្ចប់ឥវ៉ាន់ <code>#%s</code> របស់អតិថិជន <b>%s</b> មិនទាន់បានវេចខ្ចប់លើសពី 30 នាទីហើយ!", mentionStr, escapeHTML(order.OrderID), escapeHTML(order.CustomerName))
+		// Calculate total minutes since order placed (Timestamp)
+		totalMins := 35
+		placementTime, err := parseTimeResilient(order.Timestamp, ict)
+		if err == nil {
+			totalMins = int(time.Now().In(ict).Sub(placementTime).Minutes())
+		}
+
+		msg := fmt.Sprintf("%s ⚠️ <b>កញ្ចប់ឥវ៉ាន់យឺតយ៉ាវ (Over 30m)</b>\nកញ្ចប់ឥវ៉ាន់ <code>#%s</code> របស់អតិថិជន <b>%s</b> មិនទាន់បានវេចខ្ចប់លើសពី 30 នាទីហើយ! (សរុប %d នាទី គិតចាប់ពីម៉ោងទម្លាក់ការកម្មង់)", 
+			mentionStr, escapeHTML(order.OrderID), escapeHTML(order.CustomerName), totalMins)
 
 		payload := map[string]interface{}{
 			"chat_id":    strings.TrimSpace(store.TelegramGroupID),
