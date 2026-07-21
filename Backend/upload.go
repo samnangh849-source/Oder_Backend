@@ -396,7 +396,7 @@ func processImageUploadInternal(req AppsScriptRequest, data string) (string, str
 						"Ready to Ship": {"Shipped", "Pending", "Cancelled"},
 						"Shipped":       {"Delivered", "Ready to Ship", "Returned", "Cancelled"},
 						"Delivered":     {"Returned"},
-						"Returned":      {"Delivered", "Shipped", "Ready to Ship", "Pending"},
+						"Returned":      {"Delivered", "Shipped", "Ready to Ship", "Pending", "Cancelled"},
 						"Cancelled":     {"Pending", "Scheduled"},
 					}
 
