@@ -1285,7 +1285,110 @@ func handleGetSettings(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{"status": "success", "data": settings})
 }
 
-// ── Promotion Handlers ──────────────────────────────────────────────────────
+// ── Gemini API Key Management ────────────────────────────────────────────────
+
+// GeminiAPIKey holds the runtime Gemini API key (set from env or DB setting)
+var GeminiAPIKey string
+
+func maskAPIKey(key string) string {
+	if len(key) <= 12 {
+		return strings.Repeat("•", len(key))
+	}
+	return key[:8] + strings.Repeat("•", len(key)-12) + key[len(key)-4:]
+}
+
+func handleGetGeminiAPIKey(c *gin.Context) {
+	// 1. Check env first
+	envKey := os.Getenv("GEMINI_API_KEY")
+	source := "env"
+	activeKey := envKey
+
+	// 2. Fall back to DB setting
+	var setting Setting
+	err := backend.DB.Where("config_key = ?", "GeminiAPIKey").First(&setting).Error
+	if err == nil && setting.ConfigValue != "" {
+		if envKey == "" {
+			activeKey = setting.ConfigValue
+			source = "database"
+		} else {
+			source = "env" // env overrides DB
+		}
+	}
+
+	isSet := activeKey != ""
+	masked := ""
+	if isSet {
+		masked = maskAPIKey(activeKey)
+	}
+
+	c.JSON(http.StatusOK, gin.H{
+		"status":    "success",
+		"isSet":     isSet,
+		"masked":    masked,
+		"source":    source,
+		"hasDBKey":  err == nil && setting.ConfigValue != "",
+		"hasEnvKey": envKey != "",
+	})
+}
+
+func handleSetGeminiAPIKey(c *gin.Context) {
+	var body struct {
+		APIKey string `json:"apiKey"`
+	}
+	if err := c.ShouldBindJSON(&body); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"status": "error", "message": "ទិន្នន័យមិនត្រឹមត្រូវ"})
+		return
+	}
+
+	body.APIKey = strings.TrimSpace(body.APIKey)
+
+	if body.APIKey != "" && !strings.HasPrefix(body.APIKey, "AIza") {
+		c.JSON(http.StatusBadRequest, gin.H{"status": "error", "message": "Gemini API Key មិនត្រឹមត្រូវ — ត្រូវចាប់ផ្តើមដោយ 'AIza'"})
+		return
+	}
+
+	setting := Setting{
+		ConfigKey:   "GeminiAPIKey",
+		ConfigValue: body.APIKey,
+		Description: "Gemini AI API Key used for AI features (summarization, analysis, forecasting)",
+	}
+
+	if err := backend.DB.Where("config_key = ?", "GeminiAPIKey").Assign(setting).FirstOrCreate(&setting).Error; err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"status": "error", "message": "មានបញ្ហាក្នុងការរក្សាទុក API Key"})
+		return
+	}
+
+	// Also update the runtime variable
+	if os.Getenv("GEMINI_API_KEY") == "" {
+		GeminiAPIKey = body.APIKey
+	}
+
+	userName, _ := c.Get("userName")
+	log.Printf("🔑 Gemini API Key updated by user: %v", userName)
+
+	c.JSON(http.StatusOK, gin.H{
+		"status":  "success",
+		"message": "Gemini API Key ត្រូវបានរក្សាទុករួចរាល់",
+		"masked":  maskAPIKey(body.APIKey),
+	})
+}
+
+func handleGetGeminiAPIKeyValue(c *gin.Context) {
+	// Returns the actual key value for frontend runtime use (admin only)
+	// The env key has priority
+	if envKey := os.Getenv("GEMINI_API_KEY"); envKey != "" {
+		c.JSON(http.StatusOK, gin.H{"status": "success", "apiKey": envKey, "source": "env"})
+		return
+	}
+	var setting Setting
+	if err := backend.DB.Where("config_key = ?", "GeminiAPIKey").First(&setting).Error; err != nil || setting.ConfigValue == "" {
+		c.JSON(http.StatusOK, gin.H{"status": "success", "apiKey": "", "source": "none"})
+		return
+	}
+	c.JSON(http.StatusOK, gin.H{"status": "success", "apiKey": setting.ConfigValue, "source": "database"})
+}
+
+
 
 func handleGetPromotions(c *gin.Context) {
 	var promotions []backend.Promotion
@@ -4348,6 +4451,10 @@ func main() {
 				restricted.POST("/incentive/custom-payout", handleSaveIncentiveCustomPayout)
 				restricted.POST("/incentive/lock", handleLockIncentivePayout)
 				restricted.POST("/incentive/notify", handleNotifyIncentiveUser)
+				// Gemini API Key management
+				restricted.GET("/gemini-key", handleGetGeminiAPIKey)
+				restricted.POST("/gemini-key", handleSetGeminiAPIKey)
+				restricted.GET("/gemini-key/value", handleGetGeminiAPIKeyValue)
 			}
 		}
 		profile := protected.Group("/profile")
