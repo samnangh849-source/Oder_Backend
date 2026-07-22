@@ -100,6 +100,7 @@ type ShippingMethod struct {
 	InternalCost               float64 `gorm:"column:internal_cost" json:"InternalCost"`
 	CostShortcuts              string  `gorm:"column:cost_shortcuts" json:"CostShortcuts"`
 	EnableDriverRecommendation bool    `gorm:"column:enable_driver_recommendation" json:"EnableDriverRecommendation"`
+	IsDisabled                 bool    `gorm:"column:is_disabled" json:"IsDisabled"`
 }
 
 type DeliveryGroup struct {
