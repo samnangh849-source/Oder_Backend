@@ -83,6 +83,7 @@ type Product struct {
 	Cost        float64 `gorm:"column:cost" json:"Cost"`
 	ImageURL    string  `gorm:"column:image_url" json:"ImageURL"`
 	Tags        string  `gorm:"column:tags" json:"Tags"`
+	Category    string  `gorm:"column:category" json:"Category"`
 }
 
 type Location struct {
