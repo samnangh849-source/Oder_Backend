@@ -86,6 +86,12 @@ type Product struct {
 	Category    string  `gorm:"column:category" json:"Category"`
 }
 
+type ProductCategory struct {
+	CategoryName string `gorm:"primaryKey;column:category_name" json:"CategoryName"`
+	Description  string `gorm:"column:description" json:"Description"`
+	IconURL      string `gorm:"column:icon_url" json:"IconURL"`
+}
+
 type Location struct {
 	ID       uint   `gorm:"primaryKey;autoIncrement;column:id" json:"ID"`
 	Province string `gorm:"column:province" json:"Province"`
