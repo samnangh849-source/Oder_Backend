@@ -55,6 +55,7 @@ var SheetRanges = map[string]string{
 	"Settings":               "Settings!A:Z",
 	"TeamsPages":             "TeamsPages!A:Z",
 	"Products":               "Products!A:Z",
+	"ProductCategories":      "ProductCategories!A:Z",
 	"Locations":              "Locations!A:Z",
 	"ShippingMethods":        "ShippingMethods!A:Z",
 	"DeliveryGroups":         "DeliveryGroups!A:Z",
@@ -353,6 +354,7 @@ func PerformDataMigration() {
 	tx.Session(&gorm.Session{AllowGlobalUpdate: true}).Delete(&Setting{})
 	tx.Session(&gorm.Session{AllowGlobalUpdate: true}).Delete(&TeamPage{})
 	tx.Session(&gorm.Session{AllowGlobalUpdate: true}).Delete(&Product{})
+	tx.Session(&gorm.Session{AllowGlobalUpdate: true}).Delete(&ProductCategory{})
 	tx.Session(&gorm.Session{AllowGlobalUpdate: true}).Delete(&Location{})
 	tx.Session(&gorm.Session{AllowGlobalUpdate: true}).Delete(&ShippingMethod{})
 	tx.Session(&gorm.Session{AllowGlobalUpdate: true}).Delete(&DeliveryGroup{})
@@ -559,6 +561,30 @@ func PerformDataMigration() {
 			return
 		}
 		log.Printf("✅ Products: Saved %d valid rows", len(validProducts))
+	}
+	broadcastFullSyncProgress(6, totalSteps, "កំពុងទាញ ProductCategories...", len(validProducts), time.Since(startTime).Seconds())
+
+	// ── ProductCategories ──
+	var productCategories []ProductCategory
+	if err := FetchSheetDataToStruct("ProductCategories", &productCategories); err != nil {
+		log.Printf("⚠️ ProductCategories sheet not found or empty, skipping: %v", err)
+	} else {
+		var validCats []ProductCategory
+		seenCats := make(map[string]bool)
+		for _, x := range productCategories {
+			x.CategoryName = strings.TrimSpace(x.CategoryName)
+			if x.CategoryName != "" && !seenCats[x.CategoryName] {
+				seenCats[x.CategoryName] = true
+				validCats = append(validCats, x)
+			}
+		}
+		if len(validCats) > 0 {
+			if err := tx.CreateInBatches(validCats, 100).Error; err != nil {
+				log.Printf("⚠️ Could not save ProductCategories: %v", err)
+			} else {
+				log.Printf("✅ ProductCategories: Saved %d valid rows", len(validCats))
+			}
+		}
 	}
 	broadcastFullSyncProgress(6, totalSteps, "កំពុងទាញ Locations...", len(validProducts), time.Since(startTime).Seconds())
 
