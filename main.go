@@ -131,6 +131,7 @@ type Store = backend.Store
 type Setting = backend.Setting
 type TeamPage = backend.TeamPage
 type Product = backend.Product
+type ProductCategory = backend.ProductCategory
 type Location = backend.Location
 type ShippingMethod = backend.ShippingMethod
 type DeliveryGroup = backend.DeliveryGroup
@@ -1142,6 +1143,7 @@ func handleGetStaticData(c *gin.Context) {
 
 	queries := []func(){
 		func() { var d []Product; backend.DB.Find(&d); mu.Lock(); result["products"] = d; mu.Unlock() },
+		func() { var d []ProductCategory; backend.DB.Find(&d); mu.Lock(); result["productCategories"] = d; mu.Unlock() },
 		func() { var d []Store; backend.DB.Find(&d); mu.Lock(); result["stores"] = d; mu.Unlock() },
 		func() { var d []TeamPage; backend.DB.Find(&d); mu.Lock(); result["pages"] = d; mu.Unlock() },
 		func() { var d []Location; backend.DB.Find(&d); mu.Lock(); result["locations"] = d; mu.Unlock() },
