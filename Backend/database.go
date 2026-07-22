@@ -171,7 +171,7 @@ func runMigrations(db *gorm.DB) {
 	}
 
 	err := db.AutoMigrate(
-		&User{}, &Store{}, &Setting{}, &TeamPage{}, &Product{}, &Location{}, &ShippingMethod{}, &DeliveryGroup{},
+		&User{}, &Store{}, &Setting{}, &TeamPage{}, &Product{}, &ProductCategory{}, &Location{}, &ShippingMethod{}, &DeliveryGroup{},
 		&Color{}, &Driver{}, &BankAccount{}, &PhoneCarrier{}, &TelegramTemplate{},
 		&Inventory{}, &StockTransfer{}, &ReturnItem{},
 		&Order{}, &RevenueEntry{}, &ChatMessage{}, &EditLog{}, &UserActivityLog{},
