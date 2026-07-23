@@ -709,9 +709,29 @@ func handleSaveIncentiveManualData(c *gin.Context) {
 	var existing IncentiveManualData
 	err := backend.DB.Where("project_id = ? AND month = ? AND metric_type = ? AND data_key = ?", req.ProjectID, req.Month, req.MetricType, req.DataKey).First(&existing).Error
 	if err == nil {
+		// Update existing row in DB
 		backend.DB.Model(&existing).Update("value", req.Value)
+		// Sync update to Google Sheets (idempotent via ID)
+		go enqueueSync("addRow", map[string]interface{}{
+			"ID":        existing.ID,
+			"ProjectID": existing.ProjectID,
+			"Month":     existing.Month,
+			"MetricType": existing.MetricType,
+			"DataKey":   existing.DataKey,
+			"Value":     req.Value,
+		}, "IncentiveManualData", nil)
 	} else {
+		// Insert new row in DB
 		backend.DB.Create(&req)
+		// Sync new row to Google Sheets
+		go enqueueSync("addRow", map[string]interface{}{
+			"ID":        req.ID,
+			"ProjectID": req.ProjectID,
+			"Month":     req.Month,
+			"MetricType": req.MetricType,
+			"DataKey":   req.DataKey,
+			"Value":     req.Value,
+		}, "IncentiveManualData", nil)
 	}
 	c.JSON(200, gin.H{"status": "success"})
 }
@@ -757,9 +777,27 @@ func handleSaveIncentiveCustomPayout(c *gin.Context) {
 	var existing IncentiveCustomPayout
 	err := backend.DB.Where("project_id = ? AND month = ? AND user_name = ?", req.ProjectID, req.Month, req.UserName).First(&existing).Error
 	if err == nil {
+		// Update existing row in DB
 		backend.DB.Model(&existing).Update("value", req.Value)
+		// Sync update to Google Sheets (idempotent via ID)
+		go enqueueSync("addRow", map[string]interface{}{
+			"ID":        existing.ID,
+			"ProjectID": existing.ProjectID,
+			"Month":     existing.Month,
+			"UserName":  existing.UserName,
+			"Value":     req.Value,
+		}, "IncentiveCustomPayouts", nil)
 	} else {
+		// Insert new row in DB
 		backend.DB.Create(&req)
+		// Sync new row to Google Sheets
+		go enqueueSync("addRow", map[string]interface{}{
+			"ID":        req.ID,
+			"ProjectID": req.ProjectID,
+			"Month":     req.Month,
+			"UserName":  req.UserName,
+			"Value":     req.Value,
+		}, "IncentiveCustomPayouts", nil)
 	}
 	c.JSON(200, gin.H{"status": "success"})
 }
